@@ -21,6 +21,14 @@ export async function GET(
       return errorResponse('League ID and User ID are required', 400);
     }
 
+    const reqUserId = await getAuthenticatedUserId(request);
+    if (!reqUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+    if (reqUserId !== userId) {
+      return errorResponse('Forbidden', 403);
+    }
+
     await ensureRosterTables();
     await processDueTeamActions(leagueId);
 

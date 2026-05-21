@@ -108,6 +108,82 @@ describe('GET /api/trades', () => {
       recipientViewedAt: '2026-03-23T09:18:00.000Z',
     });
   });
+
+  it('asks for pending review trades visible to owner reviewers in the requested league', async () => {
+    getAuthenticatedUserIdMock.mockResolvedValue('owner-1');
+    findManyMock.mockResolvedValue([]);
+    queryRawMock.mockResolvedValue([]);
+
+    const req = new NextRequest('http://localhost/api/trades?leagueId=league-1');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(findManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          leagueId: 'league-1',
+          OR: expect.arrayContaining([
+            expect.objectContaining({ proposerUserId: 'owner-1' }),
+            expect.objectContaining({ recipientUserId: 'owner-1' }),
+            expect.objectContaining({
+              status: { in: ['REVIEW_PENDING', 'REVIEW_REJECTED', 'EXECUTED'] },
+              reviewStatus: { in: ['PENDING', 'APPROVED', 'REJECTED'] },
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  reviewMode: 'ADMIN',
+                  league: expect.objectContaining({
+                    members: expect.objectContaining({
+                      some: expect.objectContaining({
+                        userId: 'owner-1',
+                        role: { in: ['OWNER', 'COMMISSIONER'] },
+                      }),
+                    }),
+                  }),
+                }),
+              ]),
+            }),
+          ]),
+        }),
+      })
+    );
+  });
+
+  it('asks for reviewed admin trades visible to owner reviewers after a decision', async () => {
+    getAuthenticatedUserIdMock.mockResolvedValue('owner-1');
+    findManyMock.mockResolvedValue([]);
+    queryRawMock.mockResolvedValue([]);
+
+    const req = new NextRequest('http://localhost/api/trades?leagueId=league-1');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(findManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          leagueId: 'league-1',
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              status: { in: ['REVIEW_PENDING', 'REVIEW_REJECTED', 'EXECUTED'] },
+              reviewStatus: { in: ['PENDING', 'APPROVED', 'REJECTED'] },
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  reviewMode: 'ADMIN',
+                  league: expect.objectContaining({
+                    members: expect.objectContaining({
+                      some: expect.objectContaining({
+                        userId: 'owner-1',
+                        role: { in: ['OWNER', 'COMMISSIONER'] },
+                      }),
+                    }),
+                  }),
+                }),
+              ]),
+            }),
+          ]),
+        }),
+      })
+    );
+  });
 });
 
 const validRequestId = '3fa85f64-5717-4562-b3fc-2c963f66afa6';

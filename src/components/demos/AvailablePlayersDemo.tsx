@@ -132,105 +132,105 @@ export default function AvailablePlayersDemo() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-muted py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Page header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Available Players Table Demo</h1>
-          <p className="text-lg text-gray-600 mt-2">
+          <h1 className="text-3xl font-bold text-foreground">Available Players Table Demo</h1>
+          <p className="text-lg text-muted-foreground mt-2">
             Demonstrating the optimized AvailablePlayersTable component with enhanced features
           </p>
         </div>
 
         {/* Demo stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-border p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-info rounded-lg flex items-center justify-center">
                   <span className="text-white text-sm font-semibold">{samplePlayers.length}</span>
                 </div>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Available Players</p>
-                <p className="text-lg font-semibold text-gray-900">Total Pool</p>
+                <p className="text-sm font-medium text-muted-foreground">Available Players</p>
+                <p className="text-lg font-semibold text-foreground">Total Pool</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-border p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-warning rounded-lg flex items-center justify-center">
                   <span className="text-white text-sm font-semibold">{watchlist.length}</span>
                 </div>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Watchlisted</p>
-                <p className="text-lg font-semibold text-gray-900">Players</p>
+                <p className="text-sm font-medium text-muted-foreground">Watchlisted</p>
+                <p className="text-lg font-semibold text-foreground">Players</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-border p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-success rounded-lg flex items-center justify-center">
                   <span className="text-white text-sm font-semibold">{draftedPlayers.length}</span>
                 </div>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Drafted</p>
-                <p className="text-lg font-semibold text-gray-900">Players</p>
+                <p className="text-sm font-medium text-muted-foreground">Drafted</p>
+                <p className="text-lg font-semibold text-foreground">Players</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Features showcase */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Enhanced Features</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-border p-6 mb-8">
+          <h2 className="text-lg font-semibold text-foreground mb-4">Enhanced Features</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div className="w-2 h-2 bg-info rounded-full mt-2 flex-shrink-0"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Advanced Search</p>
-                <p className="text-xs text-gray-600">Search by name, team, or position</p>
+                <p className="text-sm font-medium text-foreground">Advanced Search</p>
+                <p className="text-xs text-muted-foreground">Search by name, team, or position</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div className="w-2 h-2 bg-info rounded-full mt-2 flex-shrink-0"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Dynamic Filtering</p>
-                <p className="text-xs text-gray-600">Filter by position and team</p>
+                <p className="text-sm font-medium text-foreground">Dynamic Filtering</p>
+                <p className="text-xs text-muted-foreground">Filter by position and team</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div className="w-2 h-2 bg-info rounded-full mt-2 flex-shrink-0"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Column Sorting</p>
-                <p className="text-xs text-gray-600">Sort by any column ascending/descending</p>
+                <p className="text-sm font-medium text-foreground">Column Sorting</p>
+                <p className="text-xs text-muted-foreground">Sort by any column ascending/descending</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div className="w-2 h-2 bg-info rounded-full mt-2 flex-shrink-0"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">View Modes</p>
-                <p className="text-xs text-gray-600">Compact and detailed display options</p>
+                <p className="text-sm font-medium text-foreground">View Modes</p>
+                <p className="text-xs text-muted-foreground">Compact and detailed display options</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div className="w-2 h-2 bg-info rounded-full mt-2 flex-shrink-0"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Interactive Actions</p>
-                <p className="text-xs text-gray-600">Draft, watchlist, and view details</p>
+                <p className="text-sm font-medium text-foreground">Interactive Actions</p>
+                <p className="text-xs text-muted-foreground">Draft, watchlist, and view details</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div className="w-2 h-2 bg-info rounded-full mt-2 flex-shrink-0"></div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Real Rankings</p>
-                <p className="text-xs text-gray-600">Live fantasy rankings integration</p>
+                <p className="text-sm font-medium text-foreground">Real Rankings</p>
+                <p className="text-xs text-muted-foreground">Live fantasy rankings integration</p>
               </div>
             </div>
           </div>
@@ -248,9 +248,9 @@ export default function AvailablePlayersDemo() {
         />
 
         {/* Usage guide */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Usage Guide</h2>
-          <div className="space-y-3 text-sm text-gray-600">
+        <div className="bg-white rounded-lg shadow-sm border border-border p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-4">Usage Guide</h2>
+          <div className="space-y-3 text-sm text-muted-foreground">
             <p>
               <strong>Search:</strong> Use the search bar to quickly find players by name, team, or
               position.
@@ -284,7 +284,7 @@ export default function AvailablePlayersDemo() {
         {notifications.map((notification, index) => (
           <div
             key={index}
-            className="bg-gray-900 text-white px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 max-w-sm"
+            className="bg-foreground text-white px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 max-w-sm"
           >
             <p className="text-sm">{notification}</p>
           </div>

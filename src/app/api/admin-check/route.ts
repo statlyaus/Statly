@@ -1,10 +1,15 @@
 // src/app/api/admin-check/route.ts
 import { NextResponse } from 'next/server';
 
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   // --- env flags the server can actually see ---
   const env = {
     hasBase64: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64?.trim()),

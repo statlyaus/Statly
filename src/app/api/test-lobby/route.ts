@@ -1,20 +1,27 @@
 import type { NextRequest } from 'next/server';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
-import { ensureLobbyColumns, ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
 
 /**
  * Test endpoint to check and fix lobby setup
  * Development only - protected in production
  */
 export async function GET(_request: NextRequest) {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   if (process.env.NODE_ENV === 'production') {
     return errorResponse('This endpoint is only available in development', 403);
   }
 
   try {
+    const [{ ensureLobbyColumns, ensureRosterTables }, { prisma }] = await Promise.all([
+      import('@/lib/ensureLobbyColumns'),
+      import('@/lib/prisma'),
+    ]);
+
     logger.info('Testing lobby setup');
 
     // Check and ensure columns exist

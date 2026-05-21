@@ -38,7 +38,29 @@
 import type { ReactNode } from 'react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 
-import { ClockIcon } from '@heroicons/react/24/outline';
+import { Clock as ClockIcon } from 'lucide-react';
+
+const DEFAULT_DRAFT_TIME_ZONE = 'Australia/Melbourne';
+
+function formatDraftDeadlineTime(deadlineMs: number, timeZone = DEFAULT_DRAFT_TIME_ZONE) {
+  try {
+    return new Intl.DateTimeFormat('en-AU', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(deadlineMs));
+  } catch {
+    return new Intl.DateTimeFormat('en-AU', {
+      timeZone: DEFAULT_DRAFT_TIME_ZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(deadlineMs));
+  }
+}
 
 interface DraftParticipant {
   slot: number;
@@ -59,6 +81,7 @@ interface LivePickHeaderProps {
     direction: string;
     status: string; // Accept any string, validate internally
     pickDeadlineAt?: string | null;
+    timeZone?: string | null;
     participants: DraftParticipant[];
     picks: Array<{
       id: string;
@@ -132,6 +155,11 @@ export default function LivePickHeader({
     const parsed = new Date(draftData.pickDeadlineAt).getTime();
     return Number.isNaN(parsed) ? null : parsed;
   }, [draftData?.pickDeadlineAt]);
+  const deadlineLabel = useMemo(
+    () =>
+      deadlineMs ? formatDraftDeadlineTime(deadlineMs, draftData?.timeZone ?? undefined) : null,
+    [deadlineMs, draftData?.timeZone]
+  );
   const normalizedLiveTimeRemaining =
     typeof liveTimeRemaining === 'number' && Number.isFinite(liveTimeRemaining)
       ? Math.max(0, liveTimeRemaining)
@@ -351,7 +379,7 @@ export default function LivePickHeader({
   if (normalizedStatus === 'PAUSED') {
     return (
       <div className={`w-full ${className}`}>
-        <div className="rounded-3xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 text-center">
+        <div className="rounded-3xl border border-warning/20 bg-warning px-5 py-4 text-center">
           <h2 className="text-lg font-semibold text-foreground">Draft paused</h2>
           <p className="text-sm text-muted-foreground">
             The server clock and auto-pick are both stopped until the league owner resumes the room.
@@ -378,7 +406,7 @@ export default function LivePickHeader({
   if (normalizedStatus === 'COMPLETED') {
     return (
       <div className={`w-full ${className}`}>
-        <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-4 text-center">
+        <div className="rounded-3xl border border-success/20 bg-success px-5 py-4 text-center">
           <h2 className="text-lg font-semibold text-foreground">Draft complete</h2>
           <p className="text-sm text-muted-foreground">
             All picks are finalized and the room is now in its completed state.
@@ -397,7 +425,7 @@ export default function LivePickHeader({
             <div className="min-w-0 rounded-[28px] border border-border bg-background px-5 py-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
+                  <span className="inline-flex items-center rounded-full border border-success/20 bg-success/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-success">
                     Live engine
                   </span>
                   <span className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -453,7 +481,7 @@ export default function LivePickHeader({
                     </p>
                     {isYourTurn ? (
                       <div
-                        className="mt-2 inline-flex rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-slate-950"
+                        className="mt-2 inline-flex rounded-full bg-warning/10 px-3 py-1 text-sm font-semibold text-foreground"
                         role="alert"
                         aria-label="It is your turn to pick"
                       >
@@ -463,10 +491,10 @@ export default function LivePickHeader({
                       <div
                         className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
                           picksUntilYourTurn === 1
-                            ? `bg-amber-100 text-amber-900 ring-1 ring-amber-200 ${isFlashing ? 'opacity-100' : 'opacity-80'}`
+                            ? `bg-warning/10 text-warning ring-1 ring-warning ${isFlashing ? 'opacity-100' : 'opacity-80'}`
                             : picksUntilYourTurn <= 3
-                              ? 'bg-orange-100 text-orange-900 ring-1 ring-orange-200'
-                              : 'bg-slate-100 text-slate-700'
+                              ? 'bg-warning/10 text-warning ring-1 ring-warning'
+                              : 'bg-muted text-foreground'
                         }`}
                         role="status"
                         aria-live="polite"
@@ -524,10 +552,10 @@ export default function LivePickHeader({
                     <div
                       className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-mono sm:text-base ${
                         timeLeft <= 30
-                          ? 'bg-red-500/90'
+                          ? 'bg-destructive'
                           : timeLeft <= 60
-                            ? 'bg-amber-500/90'
-                            : 'bg-emerald-500/90'
+                            ? 'bg-warning'
+                            : 'bg-success'
                       }`}
                       role="timer"
                       aria-label={`Time remaining: ${formatTime(timeLeft)}`}
@@ -574,14 +602,7 @@ export default function LivePickHeader({
                     fallback will resolve the timeout automatically.
                   </p>
                   {deadlineMs ? (
-                    <p className="mt-3 text-xs text-background/70">
-                      Deadline{' '}
-                      {new Date(deadlineMs).toLocaleTimeString([], {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      })}
-                    </p>
+                    <p className="mt-3 text-xs text-background/70">Deadline {deadlineLabel}</p>
                   ) : (
                     <p className="mt-3 text-xs text-background/70">
                       Clock attached from live sync and waiting for the next deadline refresh.
@@ -597,14 +618,14 @@ export default function LivePickHeader({
 
               <div className="mt-4">
                 {hasLiveClock ? (
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-200/20">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
                       className={`h-full transition-all duration-1000 ${
                         timeLeft <= 30
-                          ? 'bg-red-500'
+                          ? 'bg-destructive'
                           : timeLeft <= 60
-                            ? 'bg-amber-500'
-                            : 'bg-emerald-500'
+                            ? 'bg-warning'
+                            : 'bg-success'
                       }`}
                       style={{
                         width: `${Math.min(100, Math.max(0, (timeLeft / Math.max(1, timePerPick)) * 100))}%`,
@@ -617,8 +638,8 @@ export default function LivePickHeader({
                     />
                   </div>
                 ) : (
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div className="h-full w-1/3 rounded-full bg-slate-300" />
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full w-1/3 rounded-full bg-muted" />
                   </div>
                 )}
               </div>
@@ -637,15 +658,15 @@ export default function LivePickHeader({
 
                 <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                   <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-slate-950" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-foreground" />
                     Current
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-warning" />
                     Next
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-success" />
                     You
                   </div>
                 </div>
@@ -657,12 +678,12 @@ export default function LivePickHeader({
                     key={team.slot}
                     className={`flex min-w-[40px] flex-col items-center rounded-2xl px-2.5 py-2 text-center transition-all ${
                       team.isCurrent
-                        ? 'bg-slate-950 text-white shadow-lg shadow-slate-900/15'
+                        ? 'bg-foreground text-white shadow-lg shadow-slate-900/15'
                         : team.isNext
-                          ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-200'
+                          ? 'bg-warning/10 text-warning ring-1 ring-warning'
                           : team.isYou
-                            ? 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200'
-                            : 'bg-slate-100 text-slate-600'
+                            ? 'bg-success/10 text-success ring-1 ring-success'
+                            : 'bg-muted text-muted-foreground'
                     }`}
                     aria-label={`Team ${team.slot}: ${team.name}${team.isCurrent ? ' (currently picking)' : ''}${team.isNext ? ' (next to pick)' : ''}${team.isYou ? ' (your team)' : ''}`}
                   >
@@ -671,7 +692,7 @@ export default function LivePickHeader({
                   </div>
                 ))}
                 {draftData.participants.length > 8 && (
-                  <span className="whitespace-nowrap pl-1 text-xs font-medium text-slate-500">
+                  <span className="whitespace-nowrap pl-1 text-xs font-medium text-muted-foreground">
                     +{draftData.participants.length - 8} more
                   </span>
                 )}

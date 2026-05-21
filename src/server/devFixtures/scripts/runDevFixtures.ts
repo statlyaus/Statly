@@ -1,11 +1,16 @@
-import { disconnectDevFixtureRunner, parseDevFixtureCliArgs, runDevFixtures } from '../core/runner';
+import {
+  disconnectDevFixtureRunner,
+  parseDevFixtureCliArgs,
+  runDevFixturesForCli,
+} from '../core/runner';
 import type { DevFixtureCliOptions } from '../core/types';
 
 let options: DevFixtureCliOptions | null = null;
 async function main() {
   options = parseDevFixtureCliArgs(process.argv.slice(2));
-  const output = await runDevFixtures(options);
+  const { output, exitCode } = await runDevFixturesForCli(options);
   console.log(output);
+  process.exitCode = exitCode;
 }
 
 main()

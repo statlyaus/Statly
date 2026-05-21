@@ -15,6 +15,19 @@ import { displayPlayerName, formatPlayerMeta, resolvePlayerMeta } from './tradeP
 import type { RosterPlayer } from './tradeUiTypes';
 
 type ActionType = 'accept' | 'decline' | 'cancel' | null;
+type ReviewActionType = 'approve-review' | 'reject-review' | 'finalize-review' | 'veto';
+
+type ReviewControls = {
+  approveEnabled: boolean;
+  rejectEnabled: boolean;
+  vetoEnabled: boolean;
+  finalizeEnabled: boolean;
+  loadingAction: ReviewActionType | null;
+  onApprove: () => Promise<void>;
+  onReject: () => Promise<void>;
+  onVeto: () => Promise<void>;
+  onFinalize: () => Promise<void>;
+};
 
 function actorLabel(
   actorUserId: string | null | undefined,
@@ -63,9 +76,9 @@ function promptToneClass(tone: 'primary' | 'warning' | 'success' | 'danger' | 'n
     case 'success':
       return 'bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]';
     case 'danger':
-      return 'bg-rose-50 text-rose-700';
+      return 'bg-destructive/10 text-destructive';
     default:
-      return 'bg-slate-100 text-slate-700';
+      return 'bg-muted text-foreground';
   }
 }
 
@@ -98,6 +111,7 @@ type TradeReviewPanelProps = {
   actionTradeId: string | null;
   runAction: (action: 'accept' | 'decline' | 'cancel') => Promise<void>;
   beginCounter: () => Promise<void>;
+  reviewControls?: ReviewControls;
 };
 
 export default function TradeReviewPanel({
@@ -125,6 +139,7 @@ export default function TradeReviewPanel({
   actionTradeId,
   runAction,
   beginCounter,
+  reviewControls,
 }: TradeReviewPanelProps): ReactElement {
   const counterpartName = selectedTrade
     ? (teamNameByUserId.get(
@@ -164,16 +179,17 @@ export default function TradeReviewPanel({
         teamNameByUserId,
       })
     : null;
+  const reviewActionBusy = Boolean(reviewControls?.loadingAction);
 
   return (
     <section aria-label="Trade review" className="xl:col-start-2">
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100">
-        <div className="border-b border-slate-200 bg-linear-to-r from-slate-50 via-white to-slate-50 px-6 py-5">
+      <div className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm divide-y divide-slate-100">
+        <div className="border-b border-border bg-linear-to-r from-muted via-white to-muted px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Trade Review</p>
-              <h2 className="text-2xl font-semibold text-gray-900">Review &amp; respond</h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Trade Review</p>
+              <h2 className="text-2xl font-semibold text-foreground">Review &amp; respond</h2>
+              <p className="text-sm text-muted-foreground">
                 {selectedTrade
                   ? 'Review this offer and decide next action.'
                   : 'Select a trade below'}
@@ -182,7 +198,7 @@ export default function TradeReviewPanel({
             {selectedTrade ? (
               <div className="flex flex-col items-end gap-1 text-right">
                 <TradeStatusBadge status={selectedTrade.status} />
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted-foreground">
                   {new Date(selectedTrade.createdAt).toLocaleString()}
                 </span>
               </div>
@@ -219,13 +235,13 @@ export default function TradeReviewPanel({
                       : `${counterpartName} sent this offer to you.`}
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <div className="rounded-2xl border border-border bg-white p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Activity
                 </p>
                 <div className="mt-3 space-y-3">
                   {auditEntries.length === 0 ? (
-                    <p className="text-sm text-slate-500">No trade activity recorded yet.</p>
+                    <p className="text-sm text-muted-foreground">No trade activity recorded yet.</p>
                   ) : (
                     auditEntries.slice(0, 4).map((entry) => (
                       <div
@@ -233,14 +249,14 @@ export default function TradeReviewPanel({
                         className="flex items-start justify-between gap-3"
                       >
                         <div>
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="text-sm font-semibold text-foreground">
                             {auditLabel(entry, currentUserId, teamNameByUserId)}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted-foreground">
                             {auditMeta(entry, teamNameByUserId)}
                           </p>
                         </div>
-                        <span className="whitespace-nowrap text-xs text-slate-400">
+                        <span className="whitespace-nowrap text-xs text-muted-foreground">
                           {new Date(entry.createdAt).toLocaleString([], {
                             month: 'short',
                             day: 'numeric',
@@ -257,20 +273,20 @@ export default function TradeReviewPanel({
           ) : null}
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+            <div className="rounded-2xl border border-border bg-muted p-5">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 You give
               </h3>
               <ul className="mt-4 space-y-3 text-sm">
                 {detailLoading ? (
-                  <li className="text-slate-400">Loading players…</li>
+                  <li className="text-muted-foreground">Loading players…</li>
                 ) : gives.length === 0 ? (
-                  <li className="text-slate-400">No outgoing players.</li>
+                  <li className="text-muted-foreground">No outgoing players.</li>
                 ) : (
                   gives.map((item) => (
                     <li
                       key={item.playerId}
-                      className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm border border-slate-100"
+                      className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm border border-border"
                     >
                       {(() => {
                         const rosterPlayer = resolvePlayerMeta(
@@ -283,8 +299,8 @@ export default function TradeReviewPanel({
                         const meta = formatPlayerMeta(rosterPlayer) || '—';
                         return (
                           <div>
-                            <div className="font-semibold text-slate-800">{displayName}</div>
-                            <div className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                            <div className="font-semibold text-foreground">{displayName}</div>
+                            <div className="mt-1 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                               {meta}
                             </div>
                           </div>
@@ -296,20 +312,20 @@ export default function TradeReviewPanel({
               </ul>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+            <div className="rounded-2xl border border-border bg-muted p-5">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 You receive
               </h3>
               <ul className="mt-4 space-y-3 text-sm">
                 {detailLoading ? (
-                  <li className="text-slate-400">Loading players…</li>
+                  <li className="text-muted-foreground">Loading players…</li>
                 ) : receives.length === 0 ? (
-                  <li className="text-slate-400">No incoming players.</li>
+                  <li className="text-muted-foreground">No incoming players.</li>
                 ) : (
                   receives.map((item) => (
                     <li
                       key={item.playerId}
-                      className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm border border-slate-100"
+                      className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm border border-border"
                     >
                       {(() => {
                         const rosterPlayer = resolvePlayerMeta(
@@ -322,8 +338,8 @@ export default function TradeReviewPanel({
                         const meta = formatPlayerMeta(rosterPlayer) || '—';
                         return (
                           <div>
-                            <div className="font-semibold text-slate-800">{displayName}</div>
-                            <div className="mt-1 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                            <div className="font-semibold text-foreground">{displayName}</div>
+                            <div className="mt-1 inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
                               {meta}
                             </div>
                           </div>
@@ -336,40 +352,40 @@ export default function TradeReviewPanel({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div className="rounded-2xl border border-border bg-white">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Trade Impact</p>
-                <p className="text-sm font-semibold text-slate-800">
+                <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Trade Impact</p>
+                <p className="text-sm font-semibold text-foreground">
                   Category deltas for your roster
                 </p>
                 {visibleKeys.length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                    <span className="font-medium text-slate-500">Net impact</span>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-muted-foreground">Net impact</span>
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${getDeltaClass(reviewNetImpact.net)}`}
                     >
                       {reviewNetImpact.label}
                     </span>
-                    <span className="text-slate-500">across selected stats</span>
+                    <span className="text-muted-foreground">across selected stats</span>
                   </div>
                 )}
               </div>
             </div>
-            <div className="px-5 py-4 border-b border-slate-100">
+            <div className="px-5 py-4 border-b border-border">
               {visibleKeys.length > 0 && (
                 <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                  <div className="rounded-xl border border-success/20 bg-success/10 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-success">
                       Top gains
                     </p>
                     <div className="mt-2 space-y-1 text-xs">
                       {reviewTopGains.length === 0 ? (
-                        <p className="text-emerald-700/70">No positive category change.</p>
+                        <p className="text-success">No positive category change.</p>
                       ) : (
                         reviewTopGains.map((row) => (
                           <div key={row.key} className="flex items-center justify-between">
-                            <span className="font-medium text-emerald-900">
+                            <span className="font-medium text-success">
                               {labels[row.key]?.label ?? row.key}
                             </span>
                             <span className="font-semibold">+{formatStatValue(row.delta)}</span>
@@ -378,17 +394,17 @@ export default function TradeReviewPanel({
                       )}
                     </div>
                   </div>
-                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700">
+                  <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-destructive">
                       Top risks
                     </p>
                     <div className="mt-2 space-y-1 text-xs">
                       {reviewTopRisks.length === 0 ? (
-                        <p className="text-rose-700/70">No negative category change.</p>
+                        <p className="text-destructive">No negative category change.</p>
                       ) : (
                         reviewTopRisks.map((row) => (
                           <div key={row.key} className="flex items-center justify-between">
-                            <span className="font-medium text-rose-900">
+                            <span className="font-medium text-destructive">
                               {labels[row.key]?.label ?? row.key}
                             </span>
                             <span className="font-semibold">{formatStatValue(row.delta)}</span>
@@ -401,10 +417,10 @@ export default function TradeReviewPanel({
               )}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 text-xs">
                 <div className="space-y-2">
-                  <p className="uppercase tracking-[0.2em] text-slate-500 text-[11px]">You send</p>
+                  <p className="uppercase tracking-[0.2em] text-muted-foreground text-[11px]">You send</p>
                   <div className="flex flex-wrap gap-2">
                     {gives.length === 0 ? (
-                      <span className="text-slate-400">No players selected.</span>
+                      <span className="text-muted-foreground">No players selected.</span>
                     ) : (
                       gives.map((item) => {
                         const meta = formatPlayerMeta(
@@ -419,12 +435,12 @@ export default function TradeReviewPanel({
                         return (
                           <div
                             key={item.playerId}
-                            className="flex min-w-[140px] flex-col rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 shadow-sm"
+                            className="flex min-w-[140px] flex-col rounded-full border border-border bg-muted px-3 py-1.5 shadow-sm"
                           >
-                            <span className="text-slate-800 font-semibold text-sm">
+                            <span className="text-foreground font-semibold text-sm">
                               {displayName}
                             </span>
-                            <span className="text-[11px] text-slate-500">{meta || '—'}</span>
+                            <span className="text-[11px] text-muted-foreground">{meta || '—'}</span>
                           </div>
                         );
                       })
@@ -432,12 +448,12 @@ export default function TradeReviewPanel({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <p className="uppercase tracking-[0.2em] text-slate-500 text-[11px]">
+                  <p className="uppercase tracking-[0.2em] text-muted-foreground text-[11px]">
                     You receive
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {receives.length === 0 ? (
-                      <span className="text-slate-400">No players selected.</span>
+                      <span className="text-muted-foreground">No players selected.</span>
                     ) : (
                       receives.map((item) => {
                         const meta = formatPlayerMeta(
@@ -452,12 +468,12 @@ export default function TradeReviewPanel({
                         return (
                           <div
                             key={item.playerId}
-                            className="flex min-w-[140px] flex-col rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 shadow-sm"
+                            className="flex min-w-[140px] flex-col rounded-full border border-success/20 bg-success/10 px-3 py-1.5 shadow-sm"
                           >
-                            <span className="text-slate-800 font-semibold text-sm">
+                            <span className="text-foreground font-semibold text-sm">
                               {displayName}
                             </span>
-                            <span className="text-[11px] text-emerald-700">{meta || '—'}</span>
+                            <span className="text-[11px] text-success">{meta || '—'}</span>
                           </div>
                         );
                       })
@@ -467,19 +483,19 @@ export default function TradeReviewPanel({
               </div>
             </div>
             <details className="px-4 py-3">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 Full category table
               </summary>
               <div className="mt-3 max-h-64 overflow-auto px-1 pt-1">
                 {reviewImpactLoading ? (
-                  <div className="px-4 py-4 text-sm text-slate-500">Computing impact…</div>
+                  <div className="px-4 py-4 text-sm text-muted-foreground">Computing impact…</div>
                 ) : visibleKeys.length === 0 ? (
-                  <div className="px-4 py-4 text-sm text-slate-500">
+                  <div className="px-4 py-4 text-sm text-muted-foreground">
                     No stat columns selected for this league.
                   </div>
                 ) : (
                   <table className="min-w-full text-xs">
-                    <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+                    <thead className="sticky top-0 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground">
                       <tr>
                         <th className="px-4 py-2 text-left font-semibold">Category</th>
                         <th className="px-4 py-2 text-right font-semibold">You send</th>
@@ -496,19 +512,19 @@ export default function TradeReviewPanel({
                       {visibleKeys.map((category) => {
                         const delta = reviewImpact.deltaTotals[category] ?? 0;
                         return (
-                          <tr key={category} className="border-t border-slate-100">
+                          <tr key={category} className="border-t border-border">
                             <td
-                              className="px-4 py-2 text-slate-700"
+                              className="px-4 py-2 text-foreground"
                               title={
                                 category === 'inside50s' ? 'Inside 50 entries per game' : undefined
                               }
                             >
                               {labels[category]?.label ?? category}
                             </td>
-                            <td className="px-4 py-2 text-right text-slate-600">
+                            <td className="px-4 py-2 text-right text-muted-foreground">
                               {formatStatValue(reviewImpact.outTotals[category])}
                             </td>
-                            <td className="px-4 py-2 text-right text-slate-600">
+                            <td className="px-4 py-2 text-right text-muted-foreground">
                               {formatStatValue(reviewImpact.inTotals[category])}
                             </td>
                             <td className="px-4 py-2 text-right font-semibold">
@@ -537,12 +553,64 @@ export default function TradeReviewPanel({
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
+            {reviewControls?.approveEnabled ? (
+              <button
+                type="button"
+                className="rounded-md bg-[color:var(--league-success)] px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-90 disabled:opacity-60"
+                disabled={reviewActionBusy}
+                onClick={() => {
+                  void reviewControls.onApprove();
+                }}
+              >
+                {reviewControls.loadingAction === 'approve-review'
+                  ? 'Approving...'
+                  : 'Approve trade'}
+              </button>
+            ) : null}
+            {reviewControls?.rejectEnabled ? (
+              <button
+                type="button"
+                className="rounded-md border border-[color:var(--league-danger)] px-4 py-2 text-sm font-semibold text-[color:var(--league-danger)] hover:bg-[color:var(--league-danger-soft)] disabled:opacity-60"
+                disabled={reviewActionBusy}
+                onClick={() => {
+                  void reviewControls.onReject();
+                }}
+              >
+                {reviewControls.loadingAction === 'reject-review' ? 'Rejecting...' : 'Reject trade'}
+              </button>
+            ) : null}
+            {reviewControls?.vetoEnabled ? (
+              <button
+                type="button"
+                className="rounded-md border border-[color:var(--league-warning)] px-4 py-2 text-sm font-semibold text-[color:var(--league-warning)] hover:bg-[color:var(--league-warning-soft)] disabled:opacity-60"
+                disabled={reviewActionBusy}
+                onClick={() => {
+                  void reviewControls.onVeto();
+                }}
+              >
+                {reviewControls.loadingAction === 'veto' ? 'Vetoing...' : 'Veto trade'}
+              </button>
+            ) : null}
+            {reviewControls?.finalizeEnabled ? (
+              <button
+                type="button"
+                className="rounded-md bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white shadow hover:bg-[color:var(--league-primary-hover)] disabled:opacity-60"
+                disabled={reviewActionBusy}
+                onClick={() => {
+                  void reviewControls.onFinalize();
+                }}
+              >
+                {reviewControls.loadingAction === 'finalize-review'
+                  ? 'Finalising...'
+                  : 'Finalize review'}
+              </button>
+            ) : null}
             <button
               type="button"
               className={`rounded-md px-4 py-2 text-sm font-semibold ${
                 acceptEnabled
-                  ? 'bg-emerald-600 text-white shadow hover:bg-emerald-700'
-                  : 'bg-slate-100 text-slate-400'
+                  ? 'bg-success text-white shadow hover:bg-success'
+                  : 'bg-muted text-muted-foreground'
               }`}
               disabled={!acceptEnabled || actionLoading}
               onClick={() => runAction('accept')}
@@ -555,8 +623,8 @@ export default function TradeReviewPanel({
               type="button"
               className={`rounded-md px-4 py-2 text-sm font-semibold ${
                 declineEnabled
-                  ? 'border border-rose-500 text-rose-600 hover:bg-rose-50'
-                  : 'bg-slate-100 text-slate-400'
+                  ? 'border border-destructive/20 text-destructive hover:bg-destructive/10'
+                  : 'bg-muted text-muted-foreground'
               }`}
               disabled={!declineEnabled || actionLoading}
               onClick={() => runAction('decline')}
@@ -569,8 +637,8 @@ export default function TradeReviewPanel({
               type="button"
               className={`rounded-md px-4 py-2 text-sm font-semibold ${
                 counterEnabled
-                  ? 'border border-slate-400 text-slate-800 hover:bg-slate-100'
-                  : 'bg-slate-100 text-slate-400'
+                  ? 'border border-border text-foreground hover:bg-muted'
+                  : 'bg-muted text-muted-foreground'
               }`}
               disabled={!counterEnabled || actionLoading}
               onClick={() => {
@@ -583,8 +651,8 @@ export default function TradeReviewPanel({
               type="button"
               className={`rounded-md px-4 py-2 text-sm font-semibold ${
                 cancelEnabled
-                  ? 'border border-slate-200 text-slate-600 hover:bg-slate-50'
-                  : 'border border-slate-200 text-slate-300'
+                  ? 'border border-border text-muted-foreground hover:bg-muted'
+                  : 'border border-border text-muted-foreground'
               }`}
               disabled={!cancelEnabled || actionLoading}
               onClick={() => runAction('cancel')}

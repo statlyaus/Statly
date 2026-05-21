@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { DRAFT_PICK_SECONDS_OPTIONS } from '@/lib/draftClock';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
 export const runtime = 'nodejs';
 
@@ -29,6 +30,22 @@ const putBodySchema = z.object({
   benchSize: z.number().int().nonnegative().optional(),
 });
 
+function mapServiceError(error: unknown) {
+  const message = error instanceof Error ? error.message : 'Internal Server Error';
+  const [code, detail] = message.includes(':') ? message.split(/:(.+)/, 2) : [null, message];
+
+  switch (code) {
+    case 'bad_request':
+      return NextResponse.json({ error: detail }, { status: 400 });
+    case 'forbidden':
+      return NextResponse.json({ error: detail }, { status: 403 });
+    case 'not_found':
+      return NextResponse.json({ error: detail }, { status: 404 });
+    default:
+      return null;
+  }
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const parsedParams = paramsSchema.safeParse(await params);
@@ -36,6 +53,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
     const { id } = parsedParams.data;
+
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const rawBody = (await request.json().catch(() => null)) as unknown;
     const parsedBody = putBodySchema.safeParse(rawBody);
     if (!parsedBody.success) {
@@ -43,18 +66,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     const body = parsedBody.data;
 
-    // For test league, just return success
-    if (id === 'test-league-id') {
-      logger.info(`Updated draft settings for test league: ${JSON.stringify(body)}`);
-
-      return NextResponse.json({
-        success: true,
-        message: 'Draft settings updated successfully',
-        data: body,
-      });
-    }
-
     const updated = await leagueApplicationService.updateDraftSettings(id, {
+      actorUserId,
       draftDate: body.draftDate,
       draftType: body.draftType,
       timePerPick: body.timePerPick,
@@ -76,6 +89,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       data: updated,
     });
   } catch (error) {
+    const mapped = mapServiceError(error);
+    if (mapped) return mapped;
+
     logger.error('Error updating draft settings:', error);
     return NextResponse.json({ error: 'Failed to update draft settings' }, { status: 500 });
   }

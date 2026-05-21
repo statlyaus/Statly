@@ -144,15 +144,8 @@ socketIOClient.setDraftRoomHandlers({
   },
 });
 
-// Make a draft pick
-socketIOClient.makeDraftPick('draft-123', 'player-789', 'user-456');
-
-// Start draft timer
-socketIOClient.startDraftTimer('draft-123', 120);
-
-// Pause/Resume draft
-socketIOClient.pauseDraft('draft-123');
-socketIOClient.resumeDraft('draft-123');
+// Mutations such as picks, pause/resume, and timer starts must use the
+// Prisma-backed draft API. Direct socket mutations are rejected by the server.
 
 // Leave draft room
 socketIOClient.leaveDraft('draft-123');
@@ -175,10 +168,10 @@ The Socket.IO server handles the following events:
 
 - `join:draft`: Join a draft room
 - `leave:draft`: Leave a draft room
-- `draft:pick`: Make a draft pick
-- `draft:timer:start`: Start draft timer
-- `draft:pause`: Pause draft
-- `draft:resume`: Resume draft
+- `draft:pick`: Rejected mutation; use the Prisma-backed draft API
+- `draft:timer:start`: Rejected mutation; draft timers are owned by the server pick-deadline contract
+- `draft:pause`: Rejected mutation; use the Prisma-backed draft API
+- `draft:resume`: Rejected mutation; use the Prisma-backed draft API
 
 #### Broadcast Events
 
@@ -217,19 +210,19 @@ Leaves a draft room.
 
 ##### `makeDraftPick(draftId: string, playerId: string, userId: string): void`
 
-Makes a draft pick.
+Legacy client method. The server rejects direct socket picks; use the Prisma-backed draft API so pick state remains authoritative.
 
 ##### `startDraftTimer(draftId: string, duration: number): void`
 
-Starts draft timer.
+Legacy client method. The server rejects direct socket timer starts; use the Prisma-backed draft API so timer authority remains the server pick-deadline contract.
 
 ##### `pauseDraft(draftId: string): void`
 
-Pauses draft.
+Legacy client method. The server rejects direct socket pause calls; use the Prisma-backed draft API.
 
 ##### `resumeDraft(draftId: string): void`
 
-Resumes draft.
+Legacy client method. The server rejects direct socket resume calls; use the Prisma-backed draft API.
 
 ##### `setEventHandlers(handlers: SocketIOEventHandlers): void`
 

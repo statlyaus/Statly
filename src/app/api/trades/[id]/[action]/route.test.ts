@@ -49,6 +49,8 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 vi.mock('@/services/tradeService', () => ({
+  canManageTradeReviewForRole: (role: string | null | undefined) =>
+    role === 'OWNER' || role === 'COMMISSIONER',
   tradeService: {
     cancelTrade: cancelTradeMock,
     acceptTrade: acceptTradeMock,
@@ -79,7 +81,16 @@ describe('POST /api/trades/[id]/[action]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getAuthenticatedUserIdMock.mockResolvedValue('user-1');
-    findUniqueMock.mockResolvedValue({ leagueId: 'league-1' });
+    findUniqueMock.mockResolvedValue({
+      leagueId: 'league-1',
+      league: {
+        members: [
+          { userId: 'user-1', role: 'OWNER' },
+          { userId: 'user-2', role: 'MANAGER' },
+          { userId: 'commissioner-1', role: 'COMMISSIONER' },
+        ],
+      },
+    });
     revalidateTagMock.mockResolvedValue(undefined);
   });
 
@@ -157,6 +168,19 @@ describe('POST /api/trades/[id]/[action]', () => {
     expect(cancelTradeMock).not.toHaveBeenCalled();
   });
 
+  it('returns 400 for an empty action body instead of a server error', async () => {
+    const req = new NextRequest('http://localhost/api/trades/trade-1/decline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ id: 'trade-1', action: 'decline' }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(declineTradeMock).not.toHaveBeenCalled();
+  });
+
   it('routes finalize-review to tradeService.finalizeTradeReview', async () => {
     finalizeTradeReviewMock.mockResolvedValue({
       tradeId: 'trade-1',
@@ -181,5 +205,53 @@ describe('POST /api/trades/[id]/[action]', () => {
       actorUserId: 'user-1',
     });
     expect(body.data).toMatchObject({ tradeId: 'trade-1', status: 'EXECUTED' });
+  });
+
+  it('rejects regular league managers before review approval mutations', async () => {
+    getAuthenticatedUserIdMock.mockResolvedValue('user-2');
+    approveTradeReviewMock.mockResolvedValue({
+      tradeId: 'trade-1',
+      status: 'EXECUTED',
+      createdAt: '2026-03-23T00:00:00.000Z',
+    });
+
+    const req = new NextRequest('http://localhost/api/trades/trade-1/approve-review', {
+      method: 'POST',
+      body: JSON.stringify({ requestId: 'req-review' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ id: 'trade-1', action: 'approve-review' }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.error).toMatchObject({ message: 'Forbidden', code: 'FORBIDDEN' });
+    expect(approveTradeReviewMock).not.toHaveBeenCalled();
+  });
+
+  it('allows commissioners to approve trade reviews', async () => {
+    getAuthenticatedUserIdMock.mockResolvedValue('commissioner-1');
+    approveTradeReviewMock.mockResolvedValue({
+      tradeId: 'trade-1',
+      status: 'EXECUTED',
+      createdAt: '2026-03-23T00:00:00.000Z',
+    });
+
+    const req = new NextRequest('http://localhost/api/trades/trade-1/approve-review', {
+      method: 'POST',
+      body: JSON.stringify({ requestId: 'req-review' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ id: 'trade-1', action: 'approve-review' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(approveTradeReviewMock).toHaveBeenCalledWith({
+      requestId: 'req-review',
+      tradeId: 'trade-1',
+      actorUserId: 'commissioner-1',
+    });
   });
 });

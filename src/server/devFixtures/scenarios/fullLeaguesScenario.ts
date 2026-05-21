@@ -62,11 +62,13 @@ export const fullLeaguesScenario: DevFixtureScenario = {
     const leagueResult = await ensureFixtureLeagues({ manifest, ownerUserId });
     steps.push(...leagueResult.steps);
     steps.push(...(await ensureFixtureMembers({ manifest, leagueIds: leagueResult.leagueIds })));
-    steps.push(...(await ensureFixtureBotProfiles({ leagueIds: leagueResult.leagueIds, ownerUserId })));
+    steps.push(
+      ...(await ensureFixtureBotProfiles({ leagueIds: leagueResult.leagueIds, ownerUserId }))
+    );
     steps.push(...(await ensureFixtureRosters({ manifest, leagueIds: leagueResult.leagueIds })));
 
     if (!steps.some((step) => step.status === 'failed')) {
-      steps.push(...(await ensureFixtureDrafts({ leagueIds: leagueResult.leagueIds })));
+      steps.push(...(await ensureFixtureDrafts({ manifest, leagueIds: leagueResult.leagueIds })));
       steps.push(...(await ensureFixtureSeasons({ leagueIds: leagueResult.leagueIds, season })));
     }
 

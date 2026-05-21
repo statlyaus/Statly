@@ -316,8 +316,6 @@ export async function PUT(
 ) {
   try {
     const { id: leagueId, userId } = await params;
-    const raw = await request.json();
-    const body = PutSchema.parse(raw);
 
     if (!leagueId || !userId) {
       return commonErrors.badRequest('League ID and User ID are required');
@@ -327,6 +325,20 @@ export async function PUT(
     const reqUserId = await getAuthenticatedUserId(request);
     if (!reqUserId) return commonErrors.unauthorized();
     if (reqUserId !== userId) return commonErrors.forbidden();
+
+    let raw: unknown;
+    try {
+      raw = await request.json();
+    } catch {
+      return commonErrors.badRequest('Invalid JSON request body');
+    }
+    const parsed = PutSchema.safeParse(raw);
+    if (!parsed.success) {
+      return commonErrors.badRequest('Invalid roster request body', {
+        issues: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const body = parsed.data;
 
     await ensureRosterTablesOnce();
 

@@ -15,8 +15,14 @@ export function mapTradeUiError(err: unknown, fallback: string): string {
   const codeMatch = message.match(/code=([A-Z0-9_]+)/i);
   const code = codeMatch?.[1]?.toUpperCase() ?? '';
 
-  if (code === 'TRADE_PLAYER_LOCKED' || /HTTP\s*409/i.test(message)) {
+  if (code === 'TRADE_PLAYER_LOCKED') {
     return 'Some selected players are already in another active trade. Remove those players or wait for that trade to resolve, then submit again.';
+  }
+  if (code === 'TRADE_INVALID_TRANSITION') {
+    return 'This trade changed before your action completed. The latest trade state has been refreshed.';
+  }
+  if (code === 'TRADE_IDEMPOTENCY_CONFLICT') {
+    return 'This trade action was already processed. The latest trade state has been refreshed.';
   }
   if (code === 'TRADE_LIMIT_REACHED') {
     return 'This move would exceed the trade limit configured for one of the teams in this league.';
@@ -27,14 +33,17 @@ export function mapTradeUiError(err: unknown, fallback: string): string {
   if (code === 'TRADE_INVALID_PAYLOAD') {
     return 'This trade offer is invalid. Review the players and teams involved, then submit again.';
   }
+  if (/HTTP\s*409/i.test(message)) {
+    return 'This trade changed before your action completed. The latest trade state has been refreshed.';
+  }
 
   return message || fallback;
 }
 
 export function getDeltaClass(delta: number) {
-  if (delta > 0) return 'text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200';
-  if (delta < 0) return 'text-rose-700 bg-rose-50 ring-1 ring-rose-200';
-  return 'text-slate-600 bg-slate-50 ring-1 ring-slate-200';
+  if (delta > 0) return 'text-success bg-success/10 ring-1 ring-success';
+  if (delta < 0) return 'text-destructive bg-destructive/10 ring-1 ring-destructive';
+  return 'text-muted-foreground bg-muted ring-1 ring-ring';
 }
 
 export function formatNetImpact(deltaTotals: Record<string, number>, keys: CanonicalStatKey[]) {

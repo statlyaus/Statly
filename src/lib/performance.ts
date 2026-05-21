@@ -1,7 +1,5 @@
 'use client';
 
-import { onCLS, onFID, onFCP, onLCP, onTTFB } from 'web-vitals';
-
 interface PerformanceMetric {
   name: string;
   value: number;
@@ -18,10 +16,37 @@ interface PerformanceConfig {
   sampleRate?: number;
 }
 
+type WebVitalName = 'CLS' | 'FID' | 'FCP' | 'INP' | 'LCP' | 'TTFB';
+
+type PerformanceEntryWithValue = PerformanceEntry & {
+  hadRecentInput?: boolean;
+  value?: number;
+  processingStart?: number;
+};
+
+const WEB_VITAL_NAMES = new Set<string>(['CLS', 'FID', 'FCP', 'INP', 'LCP', 'TTFB']);
+
+const THRESHOLDS: Record<WebVitalName, [number, number]> = {
+  CLS: [0.1, 0.25],
+  FID: [100, 300],
+  FCP: [1800, 3000],
+  INP: [200, 500],
+  LCP: [2500, 4000],
+  TTFB: [800, 1800],
+};
+
+function rateMetric(name: WebVitalName | string, value: number): PerformanceMetric['rating'] {
+  const thresholds = WEB_VITAL_NAMES.has(name) ? THRESHOLDS[name as WebVitalName] : [100, 300];
+  if (value <= thresholds[0]) return 'good';
+  if (value <= thresholds[1]) return 'needs-improvement';
+  return 'poor';
+}
+
 class PerformanceMonitor {
   private config: PerformanceConfig;
   private metrics: Map<string, PerformanceMetric> = new Map();
   private sessionId: string;
+  private observers: PerformanceObserver[] = [];
 
   constructor(config: PerformanceConfig = {}) {
     this.config = {
@@ -37,7 +62,7 @@ class PerformanceMonitor {
   }
 
   private generateSessionId(): string {
-    return `perf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `perf_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   }
 
   private shouldSample(): boolean {
@@ -46,13 +71,76 @@ class PerformanceMonitor {
 
   private initializeWebVitals(): void {
     if (!this.shouldSample()) return;
+    if (typeof window === 'undefined' || typeof performance === 'undefined') return;
 
-    // Core Web Vitals
-    onCLS(this.handleMetric.bind(this));
-    onFID(this.handleMetric.bind(this));
-    onFCP(this.handleMetric.bind(this));
-    onLCP(this.handleMetric.bind(this));
-    onTTFB(this.handleMetric.bind(this));
+    this.recordNavigationTiming();
+
+    if (typeof PerformanceObserver === 'undefined') return;
+
+    this.observe('paint', (entries) => {
+      const fcp = entries.find((entry) => entry.name === 'first-contentful-paint');
+      if (fcp) this.recordWebVital('FCP', fcp.startTime, 'navigate');
+    });
+
+    this.observe('largest-contentful-paint', (entries) => {
+      const latest = entries.at(-1);
+      if (latest) this.recordWebVital('LCP', latest.startTime, 'navigate');
+    });
+
+    let clsValue = 0;
+    this.observe('layout-shift', (entries) => {
+      for (const entry of entries as PerformanceEntryWithValue[]) {
+        if (!entry.hadRecentInput) clsValue += entry.value ?? 0;
+      }
+      this.recordWebVital('CLS', clsValue, 'navigate');
+    });
+
+    this.observe('first-input', (entries) => {
+      const firstInput = entries[0] as PerformanceEntryWithValue | undefined;
+      if (!firstInput) return;
+      const value = Math.max(0, (firstInput.processingStart ?? 0) - firstInput.startTime);
+      this.recordWebVital('FID', value, 'navigate');
+    });
+
+    this.observe('event', (entries) => {
+      const longest = Math.max(...entries.map((entry) => entry.duration).filter(Number.isFinite));
+      if (Number.isFinite(longest)) this.recordWebVital('INP', longest, 'navigate');
+    });
+  }
+
+  private observe(type: string, callback: (entries: PerformanceEntry[]) => void): void {
+    const supported = PerformanceObserver.supportedEntryTypes ?? [];
+    if (!supported.includes(type)) return;
+
+    try {
+      const observer = new PerformanceObserver((list) => callback(list.getEntries()));
+      observer.observe({ type, buffered: true });
+      this.observers.push(observer);
+    } catch {
+      // Unsupported observer options should not affect the user experience.
+    }
+  }
+
+  private recordNavigationTiming(): void {
+    const [navigation] = performance.getEntriesByType?.('navigation') ?? [];
+    if (!navigation) return;
+
+    const timing = navigation as PerformanceNavigationTiming;
+    const requestStart = timing.requestStart || timing.startTime || 0;
+    const responseStart = timing.responseStart || 0;
+    const ttfb = Math.max(0, responseStart - requestStart);
+    this.recordWebVital('TTFB', ttfb, 'navigate');
+  }
+
+  private recordWebVital(name: WebVitalName, value: number, navigationType: string): void {
+    this.handleMetric({
+      name,
+      value,
+      rating: rateMetric(name, value),
+      delta: value,
+      id: `${this.sessionId}_${name}_${Date.now()}`,
+      navigationType,
+    });
   }
 
   private handleMetric(metric: {
@@ -105,6 +193,8 @@ class PerformanceMonitor {
   }
 
   private sendToAnalytics(metric: PerformanceMetric): void {
+    if (!WEB_VITAL_NAMES.has(metric.name)) return;
+
     // Send to Google Analytics if available
     if (typeof window !== 'undefined' && 'gtag' in window) {
       const gtag = (window as unknown as { gtag: (...args: unknown[]) => void }).gtag;
@@ -154,7 +244,7 @@ class PerformanceMonitor {
     const customMetric: PerformanceMetric = {
       name: `custom_${name}`,
       value,
-      rating: value < 100 ? 'good' : value < 300 ? 'needs-improvement' : 'poor',
+      rating: rateMetric(`custom_${name}`, value),
       delta: value,
       id: `custom_${Date.now()}`,
       navigationType: 'custom',
@@ -196,40 +286,25 @@ class PerformanceMonitor {
 
     return summary;
   }
-}
 
-// No-op implementation for SSR
-class NoOpPerformanceMonitor extends PerformanceMonitor {
-  constructor() {
-    super({ enableAnalytics: false, enableConsoleLogging: false, enableLocalStorage: false });
-  }
-
-  public measureCustomMetric(): void {}
-  public startTimer(): () => void {
-    return () => {};
-  }
-  public getMetrics(): Map<string, PerformanceMetric> {
-    return new Map();
-  }
-  public getMetricsSummary(): Record<
-    string,
-    {
-      value: number;
-      rating: 'good' | 'needs-improvement' | 'poor';
+  public disconnect(): void {
+    for (const observer of this.observers) {
+      observer.disconnect();
     }
-  > {
-    return {};
+    this.observers = [];
   }
 }
 
 let performanceMonitor: PerformanceMonitor | null = null;
 
 export function initializePerformanceMonitoring(config?: PerformanceConfig): PerformanceMonitor {
-  return new NoOpPerformanceMonitor();
+  if (performanceMonitor) return performanceMonitor;
+  performanceMonitor = new PerformanceMonitor(config);
+  return performanceMonitor;
 }
 
 export function getPerformanceMonitor(): PerformanceMonitor | null {
-  return null;
+  return performanceMonitor;
 }
 
 // React hook for performance monitoring

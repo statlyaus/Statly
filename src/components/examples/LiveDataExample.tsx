@@ -41,8 +41,8 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
   if (isLoading) {
     return (
       <div className={`p-6 text-center ${className}`}>
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading live data...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-info/20 mx-auto"></div>
+        <p className="mt-4 text-muted-foreground">Loading live data...</p>
       </div>
     );
   }
@@ -50,12 +50,12 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
   if (error) {
     return (
       <div className={`p-6 text-center ${className}`}>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-red-800 font-semibold">Error Loading Live Data</h3>
-          <p className="text-red-600 mt-2">{error}</p>
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+          <h3 className="text-destructive font-semibold">Error Loading Live Data</h3>
+          <p className="text-destructive mt-2">{error}</p>
           <button
             onClick={refresh}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            className="mt-4 px-4 py-2 bg-destructive text-white rounded hover:bg-destructive"
           >
             Retry
           </button>
@@ -67,21 +67,21 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Data Status Header */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+      <div className="bg-muted border border-border rounded-lg p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Live Data Status</h2>
+            <h2 className="text-lg font-semibold text-foreground">Live Data Status</h2>
             <div className="flex items-center space-x-4 mt-2">
               <div className="flex items-center">
                 <div
-                  className={`w-3 h-3 rounded-full mr-2 ${isLive ? 'bg-green-500' : 'bg-gray-400'}`}
+                  className={`w-3 h-3 rounded-full mr-2 ${isLive ? 'bg-success' : 'bg-muted'}`}
                 ></div>
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-muted-foreground">
                   {isLive ? 'Live Data Active' : 'No Live Matches'}
                 </span>
               </div>
               {lastUpdate && (
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-muted-foreground">
                   Last update: {minutesSinceUpdate}m ago
                 </span>
               )}
@@ -89,7 +89,7 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
           </div>
           <button
             onClick={refresh}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+            className="px-4 py-2 bg-info text-white rounded hover:bg-info text-sm"
           >
             Refresh
           </button>
@@ -98,23 +98,23 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
 
       {/* Live Matches Summary */}
       {liveMatches.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white border border-border rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-4">
             Live Matches ({liveMatches.length})
           </h3>
           <div className="space-y-3">
             {liveMatches.map((match, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-3 bg-green-50 rounded-lg"
+                className="flex items-center justify-between p-3 bg-success/10 rounded-lg"
               >
                 <div>
                   <span className="font-medium">
                     {match.home_team} vs {match.away_team}
                   </span>
-                  <span className="text-sm text-gray-600 ml-2">Round {match.round_number}</span>
+                  <span className="text-sm text-muted-foreground ml-2">Round {match.round_number}</span>
                 </div>
-                <span className="bg-green-600 text-white px-2 py-1 rounded text-sm">
+                <span className="bg-success text-white px-2 py-1 rounded text-sm">
                   {match.status}
                 </span>
               </div>
@@ -125,15 +125,15 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
 
       {/* Player Statistics Summary */}
       {playerStats.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white border border-border rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-foreground mb-4">
             Recent Player Statistics ({playerStats.length} players)
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {playerStats.slice(0, 6).map((player, index) => (
-              <div key={index} className="p-3 border border-gray-200 rounded-lg">
-                <div className="font-medium text-gray-900">{player.name}</div>
-                <div className="text-sm text-gray-600">{player.team}</div>
+              <div key={index} className="p-3 border border-border rounded-lg">
+                <div className="font-medium text-foreground">{player.name}</div>
+                <div className="text-sm text-muted-foreground">{player.team}</div>
                 <div className="mt-2 space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span>Fantasy Score:</span>
@@ -156,14 +156,14 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
 
       {/* Integration Examples */}
       <div className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-900">Component Integration Examples</h3>
+        <h3 className="text-lg font-semibold text-foreground">Component Integration Examples</h3>
 
         {/* Example 1: Live data integration pattern */}
         {liveMatches.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h4 className="font-medium text-gray-900 mb-4">Live Scoring Integration Pattern</h4>
-            <div className="bg-gray-50 p-4 rounded">
-              <p className="text-sm text-gray-600">
+          <div className="bg-white border border-border rounded-lg p-6">
+            <h4 className="font-medium text-foreground mb-4">Live Scoring Integration Pattern</h4>
+            <div className="bg-muted p-4 rounded">
+              <p className="text-sm text-muted-foreground">
                 Your LiveScoringMatchup component can now access live player stats via the
                 useLiveData hook. Replace mock data with real-time statistics from the ETL pipeline.
               </p>
@@ -173,10 +173,10 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
 
         {/* Example 2: Player analysis integration pattern */}
         {samplePlayerUid && (
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h4 className="font-medium text-gray-900 mb-4">Player Analysis Integration Pattern</h4>
-            <div className="bg-gray-50 p-4 rounded">
-              <p className="text-sm text-gray-600">
+          <div className="bg-white border border-border rounded-lg p-6">
+            <h4 className="font-medium text-foreground mb-4">Player Analysis Integration Pattern</h4>
+            <div className="bg-muted p-4 rounded">
+              <p className="text-sm text-muted-foreground">
                 Your PlayerAnalysis component can now access player profiles and recent stats via
                 the usePlayerData hook. Show real player performance trends and current season
                 statistics.
@@ -187,24 +187,24 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
       </div>
 
       {/* Debug Information */}
-      <details className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <summary className="font-medium text-gray-900 cursor-pointer">Debug Information</summary>
+      <details className="bg-muted border border-border rounded-lg p-4">
+        <summary className="font-medium text-foreground cursor-pointer">Debug Information</summary>
         <div className="mt-4 space-y-4">
           <div>
-            <h4 className="font-medium text-gray-700">Raw Player Stats Sample:</h4>
+            <h4 className="font-medium text-foreground">Raw Player Stats Sample:</h4>
             <pre className="mt-2 text-xs bg-white p-3 rounded border overflow-auto max-h-40">
               {JSON.stringify(rawPlayerStats.slice(0, 2), null, 2)}
             </pre>
           </div>
           <div>
-            <h4 className="font-medium text-gray-700">Live Matches:</h4>
+            <h4 className="font-medium text-foreground">Live Matches:</h4>
             <pre className="mt-2 text-xs bg-white p-3 rounded border overflow-auto max-h-40">
               {JSON.stringify(liveMatches, null, 2)}
             </pre>
           </div>
           {playerData.profile && (
             <div>
-              <h4 className="font-medium text-gray-700">Sample Player Profile:</h4>
+              <h4 className="font-medium text-foreground">Sample Player Profile:</h4>
               <pre className="mt-2 text-xs bg-white p-3 rounded border overflow-auto max-h-40">
                 {JSON.stringify(playerData.profile, null, 2)}
               </pre>
@@ -219,14 +219,14 @@ export function LiveDataExample({ className = '' }: LiveDataExampleProps) {
 // Usage instructions component
 export function LiveDataUsageInstructions() {
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-blue-900 mb-4">
+    <div className="bg-info/10 border border-info/20 rounded-lg p-6">
+      <h3 className="text-lg font-semibold text-info mb-4">
         How to Use Live Data in Your Components
       </h3>
 
       <div className="space-y-4 text-sm">
         <div>
-          <h4 className="font-medium text-blue-800">1. Basic Live Data Hook</h4>
+          <h4 className="font-medium text-info">1. Basic Live Data Hook</h4>
           <pre className="mt-2 bg-white p-3 rounded border text-xs overflow-auto">
             {`import { useLiveData } from '@/hooks/useLiveData';
 
@@ -249,7 +249,7 @@ function MyComponent() {
         </div>
 
         <div>
-          <h4 className="font-medium text-blue-800">2. Player-Specific Data</h4>
+          <h4 className="font-medium text-info">2. Player-Specific Data</h4>
           <pre className="mt-2 bg-white p-3 rounded border text-xs overflow-auto">
             {`import { usePlayerData } from '@/hooks/useLiveData';
 
@@ -270,7 +270,7 @@ function PlayerProfile({ playerUid }) {
         </div>
 
         <div>
-          <h4 className="font-medium text-blue-800">3. Match-Specific Data</h4>
+          <h4 className="font-medium text-info">3. Match-Specific Data</h4>
           <pre className="mt-2 bg-white p-3 rounded border text-xs overflow-auto">
             {`import { useMatchData } from '@/hooks/useLiveData';
 

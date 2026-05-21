@@ -46,22 +46,22 @@ const getStatusColor = (status: EnhancedNormalizedInjuryData['status'] | undefin
   const statusInfo = STATUS_DISPLAY[key] ?? STATUS_DISPLAY.UNKNOWN;
   switch (statusInfo.color) {
     case 'green':
-      return 'bg-green-100 text-green-800 border-green-200';
+      return 'bg-success/10 text-success border-success/20';
     case 'yellow':
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      return 'bg-warning/10 text-warning border-warning/20';
     case 'red':
-      return 'bg-red-100 text-red-800 border-red-200';
+      return 'bg-destructive/10 text-destructive border-destructive/20';
     case 'orange':
-      return 'bg-orange-100 text-orange-800 border-orange-200';
+      return 'bg-warning/10 text-warning border-warning/20';
     case 'blue':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
+      return 'bg-info/10 text-info border-info/20';
     case 'purple':
-      return 'bg-purple-100 text-purple-800 border-purple-200';
+      return 'bg-primary/10 text-primary border-primary/20';
     case 'gray':
       // Map gray to the neutral slate palette used elsewhere for visual consistency
-      return 'bg-slate-100 text-slate-800 border-slate-200';
+      return 'bg-muted text-foreground border-border';
     default:
-      return 'bg-slate-100 text-slate-800 border-slate-200';
+      return 'bg-muted text-foreground border-border';
   }
 };
 
@@ -69,23 +69,23 @@ const getConfidenceBadge = (confidence: EnhancedNormalizedInjuryData['matchConfi
   switch (confidence) {
     case 'exact':
       return (
-        <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
+        <span className="bg-success/10 text-success text-xs px-2 py-1 rounded-full">
           ✓ Verified
         </span>
       );
     case 'high':
       return (
-        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">High Match</span>
+        <span className="bg-info/10 text-info text-xs px-2 py-1 rounded-full">High Match</span>
       );
     case 'medium':
       return (
-        <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-1 rounded-full">
+        <span className="bg-warning/10 text-warning text-xs px-2 py-1 rounded-full">
           Likely Match
         </span>
       );
     case 'low':
       return (
-        <span className="bg-orange-100 text-orange-700 text-xs px-2 py-1 rounded-full">
+        <span className="bg-warning/10 text-warning text-xs px-2 py-1 rounded-full">
           Possible Match
         </span>
       );
@@ -123,8 +123,8 @@ function InjuryPlayerCard({
       transition={{ delay: teamIndex * 0.1 + playerIndex * 0.05 }}
       className={`p-4 transition-all duration-200 ${
         hasLinkedPlayer
-          ? 'hover:bg-blue-50 hover:shadow-md cursor-pointer border-l-4 border-l-blue-400'
-          : 'hover:bg-slate-50'
+          ? 'hover:bg-info/10 hover:shadow-md cursor-pointer border-l-4 border-l-blue-400'
+          : 'hover:bg-muted'
       }`}
     >
       <div className="flex items-start justify-between">
@@ -132,12 +132,12 @@ function InjuryPlayerCard({
           <div className="flex items-center space-x-3 mb-2">
             <div className="flex items-center space-x-2">
               <h4
-                className={`text-base font-medium ${hasLinkedPlayer ? 'text-blue-900' : 'text-slate-900'}`}
+                className={`text-base font-medium ${hasLinkedPlayer ? 'text-info' : 'text-foreground'}`}
               >
                 {injury.player}
                 {hasLinkedPlayer && (
                   <svg
-                    className="w-4 h-4 inline ml-1 text-blue-600"
+                    className="w-4 h-4 inline ml-1 text-info"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -153,15 +153,15 @@ function InjuryPlayerCard({
               </h4>
               {getConfidenceBadge(injury.matchConfidence)}
             </div>
-            <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
+            <span className="bg-info/10 text-info text-xs font-medium px-2 py-1 rounded">
               {injury.team_id}
             </span>
           </div>
 
           <div className="flex items-center space-x-4 text-sm mb-2">
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-              <span className="font-medium text-red-700">{injury.injury_raw}</span>
+              <div className="w-2 h-2 bg-destructive rounded-full"></div>
+              <span className="font-medium text-destructive">{injury.injury_raw}</span>
             </div>
 
             <div
@@ -173,13 +173,13 @@ function InjuryPlayerCard({
 
           {/* Player database info if linked */}
           {injury.linkedPlayer && (
-            <div className="mt-2 p-2 bg-blue-50 rounded-md border border-blue-200">
+            <div className="mt-2 p-2 bg-info/10 rounded-md border border-info/20">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-900">
+                  <p className="text-sm font-medium text-info">
                     Database Profile: {injury.linkedPlayer.name}
                   </p>
-                  <div className="flex items-center space-x-4 text-xs text-blue-700 mt-1">
+                  <div className="flex items-center space-x-4 text-xs text-info mt-1">
                     {injury.linkedPlayer.team && <span>Team: {injury.linkedPlayer.team}</span>}
                     {injury.linkedPlayer.position && (
                       <span>Position: {injury.linkedPlayer.position}</span>
@@ -187,13 +187,13 @@ function InjuryPlayerCard({
                     {injury.linkedPlayer.avg && <span>Avg: {injury.linkedPlayer.avg}</span>}
                   </div>
                 </div>
-                <div className="text-blue-600 text-xs">Click to view →</div>
+                <div className="text-info text-xs">Click to view →</div>
               </div>
             </div>
           )}
 
           {injury.notes && injury.notes !== injury.injury_raw && (
-            <p className="mt-2 text-sm text-slate-600">{injury.notes}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{injury.notes}</p>
           )}
         </div>
       </div>
@@ -254,19 +254,19 @@ export default function LinkedInjuryFeed({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <h2 className="text-xl font-bold text-slate-900">AFL Injury Report</h2>
+            <h2 className="text-xl font-bold text-foreground">AFL Injury Report</h2>
             {uniquePlayersCount > 0 && (
-              <span className="bg-red-100 text-red-800 text-sm font-medium px-3 py-1 rounded-full">
+              <span className="bg-destructive/10 text-destructive text-sm font-medium px-3 py-1 rounded-full">
                 {uniquePlayersCount} injured {uniquePlayersCount === 1 ? 'player' : 'players'}
               </span>
             )}
             {count > 0 && count !== uniquePlayersCount && (
-              <span className="bg-orange-100 text-orange-800 text-sm font-medium px-3 py-1 rounded-full">
+              <span className="bg-warning/10 text-warning text-sm font-medium px-3 py-1 rounded-full">
                 {count} total {count === 1 ? 'injury' : 'injuries'}
               </span>
             )}
             {linkingStats.totalLinked > 0 && (
-              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+              <span className="bg-info/10 text-info text-sm font-medium px-3 py-1 rounded-full">
                 {linkingStats.totalLinked} linked profiles
               </span>
             )}
@@ -275,7 +275,7 @@ export default function LinkedInjuryFeed({
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowLinkingStats(!showLinkingStats)}
-              className="px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+              className="px-3 py-2 text-sm font-medium text-foreground bg-white border border-border rounded-md hover:bg-muted transition-colors"
               title="Show linking statistics"
             >
               📊 Stats
@@ -283,7 +283,7 @@ export default function LinkedInjuryFeed({
             <button
               onClick={refresh}
               disabled={loading}
-              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-foreground bg-white border border-border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="Refresh injury data"
             >
               <svg
@@ -311,9 +311,9 @@ export default function LinkedInjuryFeed({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-slate-50 border border-slate-200 rounded-lg p-4"
+              className="bg-muted border border-border rounded-lg p-4"
             >
-              <h3 className="font-medium text-slate-900 mb-3">Injuries by Club</h3>
+              <h3 className="font-medium text-foreground mb-3">Injuries by Club</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 text-sm">
                 {teamNames.map((teamName) => {
                   const teamInjuries = injuriesByTeam[teamName];
@@ -325,18 +325,18 @@ export default function LinkedInjuryFeed({
                   return (
                     <div
                       key={teamName}
-                      className="text-center p-3 bg-white rounded-lg border border-slate-200"
+                      className="text-center p-3 bg-white rounded-lg border border-border"
                     >
-                      <div className="text-lg font-bold text-slate-900">{teamPlayersCount}</div>
-                      <div className="text-xs text-slate-600 font-medium mb-1">{teamName}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-lg font-bold text-foreground">{teamPlayersCount}</div>
+                      <div className="text-xs text-muted-foreground font-medium mb-1">{teamName}</div>
+                      <div className="text-xs text-muted-foreground">
                         {teamInjuries.length} {teamInjuries.length === 1 ? 'injury' : 'injuries'}
                       </div>
                     </div>
                   );
                 })}
               </div>
-              <div className="mt-3 text-xs text-slate-500">
+              <div className="mt-3 text-xs text-muted-foreground">
                 Shows injured players per team. Click on linked players (blue border) to view their
                 profiles.
               </div>
@@ -351,7 +351,7 @@ export default function LinkedInjuryFeed({
             <select
               value={selectedTeam}
               onChange={(e) => setSelectedTeam(e.target.value)}
-              className="text-sm border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="text-sm border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info focus:border-transparent"
             >
               <option value="">All Teams</option>
               {AFL_TEAMS.map((team) => (
@@ -362,13 +362,13 @@ export default function LinkedInjuryFeed({
             </select>
 
             {/* View mode toggle */}
-            <div className="flex bg-slate-100 rounded-md p-1">
+            <div className="flex bg-muted rounded-md p-1">
               <button
                 onClick={() => setViewMode('teams')}
                 className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
                   viewMode === 'teams'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 By Team
@@ -377,8 +377,8 @@ export default function LinkedInjuryFeed({
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 List View
@@ -388,14 +388,14 @@ export default function LinkedInjuryFeed({
 
           {/* Last updated */}
           {lastUpdated && (
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-muted-foreground">
               Updated: {new Date(lastUpdated).toLocaleTimeString()}
             </div>
           )}
         </div>
 
         {/* Data source */}
-        <div className="text-xs text-slate-400 border-t border-slate-200 pt-2">
+        <div className="text-xs text-muted-foreground border-t border-border pt-2">
           <span>Data source: Footywire AFL Injury List • Player profiles from Statly database</span>
         </div>
       </div>
@@ -404,8 +404,8 @@ export default function LinkedInjuryFeed({
       {loading && (
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-sm text-slate-600">Loading injury data and linking players...</p>
+            <div className="w-8 h-8 border-2 border-info/20 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-sm text-muted-foreground">Loading injury data and linking players...</p>
           </div>
         </div>
       )}
@@ -415,12 +415,12 @@ export default function LinkedInjuryFeed({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 bg-amber-50 border border-amber-200 rounded-lg"
+          className="p-4 bg-warning/10 border border-warning/20 rounded-lg"
         >
           <div className="flex items-start space-x-3">
-            <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center">
+            <div className="w-6 h-6 bg-warning/10 rounded-full flex items-center justify-center">
               <svg
-                className="w-4 h-4 text-amber-600"
+                className="w-4 h-4 text-warning"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -434,9 +434,9 @@ export default function LinkedInjuryFeed({
               </svg>
             </div>
             <div>
-              <h4 className="font-medium text-amber-900">Unable to fetch live data</h4>
-              <p className="text-sm text-amber-700 mt-1">{error}</p>
-              <p className="text-sm text-amber-600 mt-1">Showing sample data for demonstration</p>
+              <h4 className="font-medium text-warning">Unable to fetch live data</h4>
+              <p className="text-sm text-warning mt-1">{error}</p>
+              <p className="text-sm text-warning mt-1">Showing sample data for demonstration</p>
             </div>
           </div>
         </motion.div>
@@ -454,9 +454,9 @@ export default function LinkedInjuryFeed({
               exit={{ opacity: 0, scale: 0.95 }}
               className="text-center py-12"
             >
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg
-                  className="w-8 h-8 text-green-600"
+                  className="w-8 h-8 text-success"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -469,10 +469,10 @@ export default function LinkedInjuryFeed({
                   />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-slate-900 mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 {selectedTeam ? `No injuries for ${selectedTeam}!` : 'No injuries reported!'}
               </h3>
-              <p className="text-slate-600">
+              <p className="text-muted-foreground">
                 {selectedTeam
                   ? 'This team is currently injury-free.'
                   : 'All players are healthy and available.'}
@@ -493,19 +493,19 @@ export default function LinkedInjuryFeed({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: teamIndex * 0.1 }}
-                  className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm"
+                  className="bg-white border border-border rounded-lg overflow-hidden shadow-sm"
                 >
                   {/* Team Header */}
-                  <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
+                  <div className="bg-muted px-6 py-4 border-b border-border">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-slate-900">{teamName}</h3>
+                      <h3 className="text-lg font-semibold text-foreground">{teamName}</h3>
                       <div className="flex items-center space-x-2">
-                        <span className="bg-slate-100 text-slate-700 text-sm font-medium px-3 py-1 rounded-full">
+                        <span className="bg-muted text-foreground text-sm font-medium px-3 py-1 rounded-full">
                           {injuriesByTeam[teamName].length}{' '}
                           {injuriesByTeam[teamName].length === 1 ? 'injury' : 'injuries'}
                         </span>
                         {injuriesByTeam[teamName].filter((i) => i.linkedPlayer).length > 0 && (
-                          <span className="bg-blue-100 text-blue-700 text-sm font-medium px-3 py-1 rounded-full">
+                          <span className="bg-info/10 text-info text-sm font-medium px-3 py-1 rounded-full">
                             {injuriesByTeam[teamName].filter((i) => i.linkedPlayer).length} linked
                           </span>
                         )}
@@ -539,7 +539,7 @@ export default function LinkedInjuryFeed({
               {injuries.map((injury, index) => (
                 <div
                   key={generateInjuryKey(injury, index)}
-                  className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm"
+                  className="bg-white border border-border rounded-lg overflow-hidden shadow-sm"
                 >
                   <InjuryPlayerCard injury={injury} teamIndex={0} playerIndex={index} />
                 </div>

@@ -3,12 +3,12 @@ import type { ReactElement } from 'react';
 import Link from 'next/link';
 
 import {
-  ArrowRightIcon,
-  ChartBarIcon,
-  ClockIcon,
-  ShieldCheckIcon,
-  SparklesIcon,
-} from '@heroicons/react/24/outline';
+  ArrowRight as ArrowRightIcon,
+  BarChart3 as ChartBarIcon,
+  Clock as ClockIcon,
+  ShieldCheck as ShieldCheckIcon,
+  Sparkles as SparklesIcon,
+} from 'lucide-react';
 
 const trustSignals = [
   'Decision-first dashboards for roster moves, waivers, and lineup pressure',
@@ -63,20 +63,20 @@ const productPillars = [
 
 export default function FantasyEntryPage(): ReactElement {
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-[linear-gradient(180deg,#081325_0%,#0c1a31_44%,#f5f0e6_44%,#f5efe5_100%)] text-slate-950">
+    <div className="min-h-[calc(100vh-80px)] bg-[linear-gradient(180deg,var(--league-primary)_0%,var(--league-text)_44%,var(--league-page)_44%,var(--league-surface)_100%)] text-foreground">
       <section className="relative overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_34%),radial-gradient(circle_at_80%_18%,rgba(34,197,94,0.14),transparent_30%)]" />
         <div className="relative mx-auto max-w-6xl px-6 py-16 lg:px-10 lg:py-20">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] lg:items-end">
             <div className="max-w-3xl space-y-6">
-              <p className="inline-flex items-center rounded-full border border-cyan-300/35 bg-cyan-400/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
+              <p className="inline-flex items-center rounded-full border border-info/20 bg-info px-4 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-info">
                 Statly Fantasy
               </p>
               <div className="space-y-4">
                 <h1 className="max-w-4xl text-balance text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">
                   AFL fantasy for people who want faster decisions, not noisier screens.
                 </h1>
-                <p className="max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
+                <p className="max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">
                   Statly combines structured roster management, AFL-specific depth, and mobile-ready
                   live workflows so you can manage your team with more confidence during the week
                   and under pressure on game day.
@@ -86,20 +86,20 @@ export default function FantasyEntryPage(): ReactElement {
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/dashboard"
-                  className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  className="inline-flex items-center gap-2 rounded-xl bg-info px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   Open Dashboard
                   <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
                 </Link>
                 <Link
                   href="/players"
-                  className="inline-flex items-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:border-cyan-200/60 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  className="inline-flex items-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:border-info/20 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   Explore Players
                 </Link>
                 <Link
                   href="/leagues"
-                  className="inline-flex items-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:border-cyan-200/60 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  className="inline-flex items-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:border-info/20 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   Browse Leagues
                 </Link>
@@ -108,12 +108,12 @@ export default function FantasyEntryPage(): ReactElement {
 
             <aside className="rounded-[1.75rem] border border-white/10 bg-white/8 p-6 text-white shadow-[0_24px_80px_-44px_rgba(8,19,37,0.8)] backdrop-blur">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-emerald-400/18 p-2 text-emerald-200">
+                <div className="rounded-2xl bg-success p-2 text-success">
                   <ShieldCheckIcon className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">Design Goal</p>
-                  <p className="text-sm text-slate-300">
+                  <p className="text-sm text-muted-foreground">
                     Trustworthy, high-clarity, AFL-first fantasy management.
                   </p>
                 </div>
@@ -122,9 +122,9 @@ export default function FantasyEntryPage(): ReactElement {
                 {trustSignals.map((signal) => (
                   <div
                     key={signal}
-                    className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-4"
+                    className="rounded-2xl border border-white/10 bg-foreground px-4 py-4"
                   >
-                    <p className="text-sm leading-6 text-slate-200">{signal}</p>
+                    <p className="text-sm leading-6 text-muted-foreground">{signal}</p>
                   </div>
                 ))}
               </div>
@@ -138,15 +138,15 @@ export default function FantasyEntryPage(): ReactElement {
           {productPillars.map(({ icon: Icon, title, description }) => (
             <article
               key={title}
-              className="rounded-[1.5rem] border border-slate-200 bg-white/92 p-6 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.35)]"
+              className="rounded-[1.5rem] border border-border bg-white/92 p-6 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.35)]"
             >
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-slate-950 p-3 text-cyan-300">
+                <div className="rounded-2xl bg-foreground p-3 text-info">
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
+                <h2 className="text-lg font-semibold text-foreground">{title}</h2>
               </div>
-              <p className="mt-4 text-sm leading-6 text-slate-600">{description}</p>
+              <p className="mt-4 text-sm leading-6 text-muted-foreground">{description}</p>
             </article>
           ))}
         </div>
@@ -155,20 +155,20 @@ export default function FantasyEntryPage(): ReactElement {
       <section className="mx-auto max-w-6xl px-6 pb-16 lg:px-10 lg:pb-20">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Core Workflows
             </p>
-            <h2 className="text-balance text-3xl font-black text-slate-950 sm:text-4xl">
+            <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
               The product should guide the next fantasy decision, not bury it.
             </h2>
-            <p className="text-sm leading-7 text-slate-600 sm:text-base">
+            <p className="text-sm leading-7 text-muted-foreground sm:text-base">
               Every high-value Statly surface should reduce time-to-action while keeping the data
               trustworthy, structured, and readable on both desktop and mobile.
             </p>
           </div>
           <Link
             href="/live-scoring"
-            className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-950 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+            className="inline-flex items-center gap-2 self-start rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-foreground transition hover:border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Review Live Tools
             <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
@@ -181,13 +181,13 @@ export default function FantasyEntryPage(): ReactElement {
               key={card.title}
               className={`rounded-[1.75rem] border p-6 shadow-[0_24px_65px_-44px_rgba(15,23,42,0.35)] ${
                 index === 0
-                  ? 'border-slate-950 bg-slate-950 text-white'
-                  : 'border-slate-200 bg-white text-slate-950'
+                  ? 'border-border bg-foreground text-white'
+                  : 'border-border bg-white text-foreground'
               }`}
             >
               <p
                 className={`text-xs font-semibold uppercase tracking-[0.18em] ${
-                  index === 0 ? 'text-cyan-200' : 'text-slate-500'
+                  index === 0 ? 'text-info' : 'text-muted-foreground'
                 }`}
               >
                 {card.eyebrow}
@@ -195,7 +195,7 @@ export default function FantasyEntryPage(): ReactElement {
               <h3 className="mt-3 text-2xl font-bold leading-tight">{card.title}</h3>
               <p
                 className={`mt-4 text-sm leading-6 ${
-                  index === 0 ? 'text-slate-300' : 'text-slate-600'
+                  index === 0 ? 'text-muted-foreground' : 'text-muted-foreground'
                 }`}
               >
                 {card.description}
@@ -205,7 +205,7 @@ export default function FantasyEntryPage(): ReactElement {
                   <li
                     key={point}
                     className={`rounded-2xl px-4 py-3 text-sm ${
-                      index === 0 ? 'bg-white/8 text-slate-200' : 'bg-slate-50 text-slate-700'
+                      index === 0 ? 'bg-white/8 text-muted-foreground' : 'bg-muted text-foreground'
                     }`}
                   >
                     {point}

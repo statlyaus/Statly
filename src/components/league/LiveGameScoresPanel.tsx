@@ -78,7 +78,7 @@ function getScoreTone(match: LiveMatch, side: 'home' | 'away'): string {
   }
 
   if (match.home_score === match.away_score) {
-    return 'text-amber-300';
+    return 'text-warning';
   }
 
   const homeIsLeading = match.home_score > match.away_score;
@@ -289,7 +289,7 @@ export default function LiveGameScoresPanel({
                 <div className="px-4 py-2">
                   {liveProgress ? (
                     <div className="mb-0.5 flex items-center justify-center">
-                      <span className="inline-flex min-w-[154px] items-center justify-center rounded-lg bg-slate-900 px-3 py-0.5 text-[11px] font-bold tracking-[0.14em] text-white shadow-sm">
+                      <span className="inline-flex min-w-[154px] items-center justify-center rounded-lg bg-foreground px-3 py-0.5 text-[11px] font-bold tracking-[0.14em] text-white shadow-sm">
                         {liveProgress}
                       </span>
                     </div>
@@ -334,15 +334,15 @@ export default function LiveGameScoresPanel({
 
                     <div className="flex w-[154px] justify-center">
                       {hasScore ? (
-                        <div className="relative w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-800 via-slate-900 to-slate-950 px-4 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_12px_-16px_rgba(15,23,42,0.24),0_1px_2px_rgba(15,23,42,0.06)]">
+                        <div className="relative w-full overflow-hidden rounded-xl bg-gradient-to-b from-muted via-foreground to-foreground px-4 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_12px_-16px_rgba(15,23,42,0.24),0_1px_2px_rgba(15,23,42,0.06)]">
                           <div className="flex items-center justify-center gap-3 text-3xl font-black tabular-nums tracking-tight">
                             <span className={getScoreTone(match, 'home')}>{match.home_score}</span>
-                            <span className="text-slate-600">-</span>
+                            <span className="text-muted-foreground">-</span>
                             <span className={getScoreTone(match, 'away')}>{match.away_score}</span>
                           </div>
                           {scoreEvent ? (
                             <div
-                              className="pointer-events-none absolute inset-0 flex animate-[score-curtain_3000ms_cubic-bezier(0.22,1,0.36,1)_forwards] items-center justify-center bg-gradient-to-r from-black via-slate-900 to-black text-2xl font-black uppercase tracking-[0.5em] text-white shadow-[0_0_56px_rgba(255,255,255,0.14)_inset]"
+                              className="pointer-events-none absolute inset-0 flex animate-[score-curtain_3000ms_cubic-bezier(0.22,1,0.36,1)_forwards] items-center justify-center bg-gradient-to-r from-black via-foreground to-black text-2xl font-black uppercase tracking-[0.5em] text-white shadow-[0_0_56px_rgba(255,255,255,0.14)_inset]"
                               aria-hidden="true"
                             >
                               <span className="score-curtain-text">{scoreEvent.label}</span>

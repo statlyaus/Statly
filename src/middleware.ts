@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Example protected route enforcement placeholder.
-// If you move to server-verified Firebase sessions, replace the stub with real checks.
+const protectedPrefixes = ['/dashboard', '/app', '/league'];
+
+const isProtectedRoute = (pathname: string) =>
+  protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
   const pathname = url.pathname;
@@ -36,13 +39,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // List of protected route prefixes (customize to your app)
-  const protectedPrefixes = ['/dashboard', '/app', '/league'];
-  const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
+  if (!isProtectedRoute(pathname)) return NextResponse.next();
 
-  if (!isProtected) return NextResponse.next();
-
-  // Read a session cookie set by server after verifying Firebase ID token
   const session = req.cookies.get('statly_session');
   if (!session) {
     url.pathname = '/login';
@@ -50,10 +48,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Optionally: verify/refresh session via a lightweight endpoint if needed
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/dashboard/:path*', '/app/:path*', '/league/:path*'],
+  matcher: [
+    '/api/:path*',
+    '/dashboard',
+    '/dashboard/:path*',
+    '/app',
+    '/app/:path*',
+    '/league',
+    '/league/:path*',
+  ],
 };

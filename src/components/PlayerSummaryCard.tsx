@@ -60,7 +60,7 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
   const allStats: StatItem[] = [...primaryStats, ...secondaryStats];
 
   const injuryLabel = injury ? injury : 'Available';
-  const injuryTone = injury ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700';
+  const injuryTone = injury ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success';
   const initials = name
     .split(' ')
     .filter(Boolean)
@@ -78,7 +78,7 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
             </div>
             <div>
               <div className="text-xl font-semibold">{capitalizeWords(name)}</div>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-200">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 {team ? <TeamLogo team={team} size={18} withCircle decorative /> : null}
                 <span>
                   {team ? team : 'Unknown Team'} • {position || 'Unknown Position'}
@@ -110,7 +110,7 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
       </div>
 
       <div className="px-6 py-5">
-        <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+        <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
           Season Snapshot
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -118,9 +118,9 @@ const PlayerSummaryCard: React.FC<Props> = ({ player }) => {
             const value = getStatValue(item.keys);
             if (typeof value !== 'number') return null;
             return (
-              <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs text-slate-500">{item.label}</div>
-                <div className="text-lg font-semibold text-slate-900">{value}</div>
+              <div key={item.label} className="rounded-xl border border-border bg-muted p-3">
+                <div className="text-xs text-muted-foreground">{item.label}</div>
+                <div className="text-lg font-semibold text-foreground">{value}</div>
               </div>
             );
           })}

@@ -160,6 +160,54 @@ describe('LeagueMatchupTab', () => {
     });
   });
 
+  it('shows a visible unavailable state when the matchup API returns success without data', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    } as Response);
+
+    render(
+      <LeagueMatchupTab
+        leagueId="league-1"
+        categories={['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s']}
+      />
+    );
+
+    expect(await screen.findByText('Matchup data is unavailable right now.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('keeps the loaded matchup visible when a background refresh fails', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => payload,
+    } as Response);
+
+    render(
+      <LeagueMatchupTab
+        leagueId="league-1"
+        categories={['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s']}
+      />
+    );
+
+    await screen.findByText('Robbo Rockers');
+
+    fetchSpy.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({
+        success: false,
+        error: { message: 'Live matchup service unavailable' },
+      }),
+    } as Response);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh matchup' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Matchup refresh failed. Showing the last loaded matchup. Live matchup service unavailable'
+    );
+    expect(screen.getByText('Robbo Rockers')).toBeInTheDocument();
+  });
+
   it('shows played and remaining player counts for both teams', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,

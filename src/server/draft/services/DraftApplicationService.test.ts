@@ -9,6 +9,8 @@ const draftRepositoryMock = {
   removeQueuedPlayer: vi.fn(),
   removeQueuedPlayerById: vi.fn(),
   advanceDraft: vi.fn(),
+  updateDraftStatus: vi.fn(),
+  updateDraftLobbyState: vi.fn(),
   updateDraftTiming: vi.fn(),
   createDraftEvents: vi.fn(),
   toEventPick: vi.fn(),
@@ -146,6 +148,28 @@ function buildLiveDraftAggregate(
   };
 }
 
+function buildScheduledDraftAggregate(
+  overrides?: Partial<{
+    participants: Array<{
+      memberId: string;
+      userId: string;
+      slot: number;
+      displayName: string;
+      role: string;
+    }>;
+  }>
+) {
+  return {
+    ...buildLiveDraftAggregate({
+      participants: overrides?.participants,
+    }),
+    status: DraftStatus.SCHEDULED,
+    startedAt: null,
+    pickStartedAt: null,
+    pickDeadlineAt: null,
+  };
+}
+
 describe('DraftApplicationService roster sync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -172,6 +196,8 @@ describe('DraftApplicationService roster sync', () => {
     draftRepositoryMock.removeQueuedPlayer.mockResolvedValue(undefined);
     draftRepositoryMock.removeQueuedPlayerById.mockResolvedValue(undefined);
     draftRepositoryMock.advanceDraft.mockResolvedValue({ count: 1 });
+    draftRepositoryMock.updateDraftStatus.mockResolvedValue({ count: 1 });
+    draftRepositoryMock.updateDraftLobbyState.mockResolvedValue({ count: 1 });
     draftRepositoryMock.updateDraftTiming.mockResolvedValue({ count: 1 });
     draftRepositoryMock.createDraftEvents.mockResolvedValue([{ id: 'event-1' }]);
     draftRepositoryMock.toEventPick.mockReturnValue({
@@ -348,5 +374,66 @@ describe('DraftApplicationService roster sync', () => {
         }),
       })
     );
+  });
+
+  it('preserves internal worker starts without a route actor', async () => {
+    const { draftApplicationService } = await import('./DraftApplicationService');
+
+    draftRepositoryMock.getDraftAggregate.mockResolvedValue(buildScheduledDraftAggregate());
+
+    const result = await draftApplicationService.startDraft({
+      draftId: 'draft-1',
+    });
+
+    expect(result.data.status).toBe(DraftStatus.LIVE);
+    expect(draftRepositoryMock.updateDraftStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects non-commissioner draft starts before mutating draft state', async () => {
+    const { draftApplicationService } = await import('./DraftApplicationService');
+
+    draftRepositoryMock.getDraftAggregate.mockResolvedValue(buildScheduledDraftAggregate());
+
+    await expect(
+      draftApplicationService.startDraft({
+        draftId: 'draft-1',
+        actorUserId: 'user-2',
+      } as Parameters<typeof draftApplicationService.startDraft>[0])
+    ).rejects.toThrow('forbidden:Only the owner or a commissioner can start drafts');
+
+    expect(draftRepositoryMock.updateDraftStatus).not.toHaveBeenCalled();
+  });
+
+  it('allows commissioners to start a draft', async () => {
+    const { draftApplicationService } = await import('./DraftApplicationService');
+
+    draftRepositoryMock.getDraftAggregate.mockResolvedValue(
+      buildScheduledDraftAggregate({
+        participants: [
+          {
+            memberId: 'member-1',
+            userId: 'owner-1',
+            slot: 1,
+            displayName: 'Owner',
+            role: 'OWNER',
+          },
+          {
+            memberId: 'member-2',
+            userId: 'commissioner-1',
+            slot: 2,
+            displayName: 'Commissioner',
+            role: 'COMMISSIONER',
+          },
+        ],
+      })
+    );
+
+    const result = await draftApplicationService.startDraft({
+      draftId: 'draft-1',
+      actorUserId: 'commissioner-1',
+    } as Parameters<typeof draftApplicationService.startDraft>[0]);
+
+    expect(result.data.status).toBe(DraftStatus.LIVE);
+    expect(draftRepositoryMock.updateDraftStatus).toHaveBeenCalledTimes(1);
   });
 });

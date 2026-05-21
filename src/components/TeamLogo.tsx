@@ -40,7 +40,7 @@ export function TeamLogo({
   if (!withCircle) return img;
 
   return (
-    <span className="inline-flex items-center justify-center rounded-full bg-slate-100 ring-1 ring-slate-200">
+    <span className="inline-flex items-center justify-center rounded-full bg-muted ring-1 ring-ring">
       {img}
     </span>
   );

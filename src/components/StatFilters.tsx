@@ -55,13 +55,13 @@ const StatFilters: React.FC<StatFiltersProps> = ({
     <legend className="sr-only">Stat Filters</legend>
 
     {/* Stat Dropdown */}
-    <label htmlFor="statSelect" className="flex flex-col text-sm font-medium text-gray-700">
+    <label htmlFor="statSelect" className="flex flex-col text-sm font-medium text-foreground">
       Stat
       <select
         id="statSelect"
         value={statQualifier}
         onChange={(e) => setStatQualifier(e.target.value)}
-        className="mt-1 block w-32 rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="mt-1 block w-32 rounded-md border border-border bg-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-info"
       >
         {statOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -72,7 +72,7 @@ const StatFilters: React.FC<StatFiltersProps> = ({
     </label>
 
     {/* Threshold Input */}
-    <label htmlFor="minStat" className="flex flex-col text-sm font-medium text-gray-700">
+    <label htmlFor="minStat" className="flex flex-col text-sm font-medium text-foreground">
       Min
       <input
         id="minStat"
@@ -83,18 +83,18 @@ const StatFilters: React.FC<StatFiltersProps> = ({
           const value = e.target.value;
           setStatThreshold(value === '' ? 0 : Number(value));
         }}
-        className="mt-1 block w-20 rounded-md border border-gray-300 px-2 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="mt-1 block w-20 rounded-md border border-border px-2 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-info"
       />
     </label>
 
     {/* Timeframe Dropdown */}
-    <label htmlFor="timeframeSelect" className="flex flex-col text-sm font-medium text-gray-700">
+    <label htmlFor="timeframeSelect" className="flex flex-col text-sm font-medium text-foreground">
       Timeframe
       <select
         id="timeframeSelect"
         value={timeframe}
         onChange={(e) => setTimeframe(e.target.value)}
-        className="mt-1 block w-32 rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="mt-1 block w-32 rounded-md border border-border bg-white px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-info"
       >
         {timeframeOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>

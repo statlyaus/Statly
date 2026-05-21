@@ -74,7 +74,7 @@ export default function FantasyLeagueSettings({
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-2">Fantasy Scoring Categories</h3>
-        <p className="text-gray-600 text-sm mb-4">
+        <p className="text-muted-foreground text-sm mb-4">
           Select up to {maxCategories} statistical categories for fantasy scoring. Selected:{' '}
           {selectedCategories.length}/{maxCategories}
         </p>
@@ -84,7 +84,7 @@ export default function FantasyLeagueSettings({
       <div className="space-y-6">
         {/* Basic Stats */}
         <div>
-          <h4 className="font-medium text-gray-800 mb-3">Basic Statistics</h4>
+          <h4 className="font-medium text-foreground mb-3">Basic Statistics</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {(
               ['kicks', 'handballs', 'marks', 'tackles', 'goals', 'hitouts'] as FantasyCategoryKey[]
@@ -104,7 +104,7 @@ export default function FantasyLeagueSettings({
 
         {/* Advanced Stats */}
         <div>
-          <h4 className="font-medium text-gray-800 mb-3">Advanced Statistics</h4>
+          <h4 className="font-medium text-foreground mb-3">Advanced Statistics</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {(
               [
@@ -131,7 +131,7 @@ export default function FantasyLeagueSettings({
 
         {/* Discipline & Efficiency */}
         <div>
-          <h4 className="font-medium text-gray-800 mb-3">Discipline & Efficiency</h4>
+          <h4 className="font-medium text-foreground mb-3">Discipline & Efficiency</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {(
               [
@@ -158,7 +158,7 @@ export default function FantasyLeagueSettings({
 
         {/* Elite Stats */}
         <div>
-          <h4 className="font-medium text-gray-800 mb-3">Elite Statistics</h4>
+          <h4 className="font-medium text-foreground mb-3">Elite Statistics</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {(
               [
@@ -184,12 +184,12 @@ export default function FantasyLeagueSettings({
         </div>
 
         {/* League Value Information */}
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <h4 className="font-medium text-purple-800 mb-2 flex items-center gap-2">
-            <span className="w-2 h-2 bg-purple-600 rounded-full"></span>
+        <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+          <h4 className="font-medium text-primary mb-2 flex items-center gap-2">
+            <span className="w-2 h-2 bg-primary rounded-full"></span>
             League Value Guidance
           </h4>
-          <p className="text-sm text-purple-700">
+          <p className="text-sm text-primary">
             The League Value shows the combined per-game value of a player across your selected{' '}
             {selectedCategories.length} categories. This guidance metric helps you identify which
             players excel in your specific league scoring system.
@@ -199,7 +199,7 @@ export default function FantasyLeagueSettings({
 
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t">
-        <Button onClick={handleSave} className="bg-blue-600 text-white hover:bg-blue-700">
+        <Button onClick={handleSave} className="bg-info text-white hover:bg-info">
           Save Settings
         </Button>
         <Button onClick={onCancel} variant="secondary">
@@ -239,10 +239,10 @@ function CategoryCard({
     <div
       className={`border rounded-lg p-3 transition-colors ${
         isSelected
-          ? 'border-blue-500 bg-blue-50'
+          ? 'border-info/20 bg-info/10'
           : disabled
-            ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-            : 'border-gray-300 bg-white hover:border-blue-300'
+            ? 'border-border bg-muted opacity-50 cursor-not-allowed'
+            : 'border-border bg-white hover:border-info/20'
       }`}
     >
       <div className="flex items-start justify-between mb-2">
@@ -250,17 +250,17 @@ function CategoryCard({
           <div className="flex items-center gap-2">
             <UICheckbox checked={isSelected} onChange={onToggle} disabled={disabled} />
             <span className="font-medium text-sm">{categoryInfo.label}</span>
-            <span className="text-xs text-gray-500 bg-gray-100 px-1 rounded">
+            <span className="text-xs text-muted-foreground bg-muted px-1 rounded">
               {categoryInfo.abbrev}
             </span>
           </div>
-          <p className="text-xs text-gray-600 mt-1">{categoryInfo.description}</p>
+          <p className="text-xs text-muted-foreground mt-1">{categoryInfo.description}</p>
         </div>
       </div>
 
       {isSelected && (
         <div className="mt-2">
-          <label htmlFor={`weight-${category}`} className="block text-xs text-gray-600 mb-1">
+          <label htmlFor={`weight-${category}`} className="block text-xs text-muted-foreground mb-1">
             Weight:
           </label>
           <UIInput

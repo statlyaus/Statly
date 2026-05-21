@@ -4,8 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search as MagnifyingGlassIcon } from 'lucide-react';
 
 import {
   Command,
@@ -35,26 +34,26 @@ const MIN_QUERY_LENGTH = 2;
 
 const getTeamColor = (team: string): string => {
   const teamColors: Record<string, string> = {
-    Adelaide: 'bg-red-500',
-    'Brisbane Lions': 'bg-amber-600',
-    Carlton: 'bg-blue-700',
-    Collingwood: 'bg-gray-900',
-    Essendon: 'bg-red-600',
-    Fremantle: 'bg-purple-600',
-    Geelong: 'bg-blue-800',
-    'Gold Coast': 'bg-yellow-500',
-    GWS: 'bg-orange-500',
-    Hawthorn: 'bg-amber-700',
-    Melbourne: 'bg-red-700',
-    'North Melbourne': 'bg-blue-600',
+    Adelaide: 'bg-destructive',
+    'Brisbane Lions': 'bg-warning',
+    Carlton: 'bg-info',
+    Collingwood: 'bg-foreground',
+    Essendon: 'bg-destructive',
+    Fremantle: 'bg-primary',
+    Geelong: 'bg-info',
+    'Gold Coast': 'bg-warning',
+    GWS: 'bg-warning',
+    Hawthorn: 'bg-warning',
+    Melbourne: 'bg-destructive',
+    'North Melbourne': 'bg-info',
     'Port Adelaide': 'bg-teal-600',
-    Richmond: 'bg-yellow-600',
-    'St Kilda': 'bg-red-500',
-    Sydney: 'bg-red-600',
-    'West Coast': 'bg-blue-500',
-    'Western Bulldogs': 'bg-blue-600',
+    Richmond: 'bg-warning',
+    'St Kilda': 'bg-destructive',
+    Sydney: 'bg-destructive',
+    'West Coast': 'bg-info',
+    'Western Bulldogs': 'bg-info',
   };
-  return teamColors[team] || 'bg-gray-500';
+  return teamColors[team] || 'bg-muted';
 };
 
 export default function PlayerSearch({
@@ -219,8 +218,8 @@ export default function PlayerSearch({
     if (variant === 'minimal') {
       return (
         <div
-          className={`flex w-full items-start gap-2 px-4 py-2 text-left hover:bg-gray-100 ${
-            isSelected ? 'bg-blue-50 text-blue-700' : ''
+          className={`flex w-full items-start gap-2 px-4 py-2 text-left hover:bg-muted ${
+            isSelected ? 'bg-info/10 text-info' : ''
           }`}
         >
           {player.team ? (
@@ -234,7 +233,7 @@ export default function PlayerSearch({
           ) : null}
           <div className="min-w-0">
             <div className="font-medium">{player.name}</div>
-            <div className="text-sm text-gray-600">{player.team ?? '—'}</div>
+            <div className="text-sm text-muted-foreground">{player.team ?? '—'}</div>
           </div>
         </div>
       );
@@ -242,8 +241,8 @@ export default function PlayerSearch({
 
     return (
       <div
-        className={`w-full border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 ${
-          isSelected ? 'bg-blue-50 border-blue-200' : ''
+        className={`w-full border-b border-border px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted ${
+          isSelected ? 'bg-info/10 border-info/20' : ''
         }`}
       >
         <div className="flex items-center space-x-3">
@@ -263,12 +262,12 @@ export default function PlayerSearch({
             ))}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-gray-900 truncate">{player.name}</h4>
+              <h4 className="font-semibold text-foreground truncate">{player.name}</h4>
               {variant === 'detailed' && (
-                <span className="text-sm font-medium text-blue-600">{player.averageScore} avg</span>
+                <span className="text-sm font-medium text-info">{player.averageScore} avg</span>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
               {player.team ? (
                 showAvatar ? (
                   <span>{player.team}</span>
@@ -304,7 +303,7 @@ export default function PlayerSearch({
     <div ref={rootRef} className={`relative ${className}`}>
       <div className="relative">
         <MagnifyingGlassIcon
-          className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${variant === 'minimal' ? 'text-gray-300' : 'text-gray-400'}`}
+          className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${variant === 'minimal' ? 'text-muted-foreground' : 'text-muted-foreground'}`}
         />
         <input
           ref={inputRef}
@@ -320,21 +319,21 @@ export default function PlayerSearch({
           aria-controls={listboxId}
           aria-activedescendant={activeOptionId}
           className={`
-            w-full pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
-            ${variant === 'minimal' ? 'bg-black/20 border-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900'}
+            w-full pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-info focus:border-transparent
+            ${variant === 'minimal' ? 'bg-black/20 border-border text-white placeholder-gray-400' : 'border-border bg-white text-foreground'}
             ${sizeClasses[size]} ${inputClassName}
           `}
         />
       </div>
 
       {isOpen && (trimmedQuery.length >= MIN_QUERY_LENGTH || players.length > 0 || isLoading) && (
-        <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
-          <Command className="bg-white text-gray-900">
+        <div className="absolute z-50 w-full mt-1 rounded-lg border border-border bg-white shadow-lg">
+          <Command className="bg-white text-foreground">
             <ScrollArea className="max-h-96">
               <CommandList id={listboxId} role="listbox">
                 {isLoading ? (
-                  <div className="px-4 py-3 text-center text-gray-500">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-blue-600" />
+                  <div className="px-4 py-3 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-info" />
                     <span className="ml-2">Searching...</span>
                   </div>
                 ) : players.length > 0 ? (
@@ -353,7 +352,7 @@ export default function PlayerSearch({
                       </CommandItem>
                     ))}
                     {players.length === 20 && (
-                      <div className="border-t px-4 py-2 text-center text-sm text-gray-500">
+                      <div className="border-t px-4 py-2 text-center text-sm text-muted-foreground">
                         Showing top 20 results. Refine your search for more specific results.
                       </div>
                     )}

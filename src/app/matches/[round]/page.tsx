@@ -18,7 +18,7 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
     return (
       <AppLayout>
         <main className="mx-auto max-w-5xl p-4">
-          <h1 className="mb-4 text-2xl font-semibold text-red-600">Invalid round parameter.</h1>
+          <h1 className="mb-4 text-2xl font-semibold text-destructive">Invalid round parameter.</h1>
         </main>
       </AppLayout>
     );
@@ -62,7 +62,7 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
       <main className="mx-auto max-w-5xl p-4">
         <div className="flex items-center justify-between mb-4 gap-2">
           <h1 className="text-2xl font-semibold">Round {roundNumber} Matches</h1>
-          <Link href="/matches" className="text-sm text-blue-600 hover:text-blue-700">
+          <Link href="/matches" className="text-sm text-info hover:text-info">
             Back to Live Center
           </Link>
         </div>
@@ -71,14 +71,14 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
           <Link
             href={`/matches/${prevRound}`}
             aria-disabled={roundNumber <= 1}
-            className={`px-3 py-1 rounded border text-sm ${roundNumber <= 1 ? 'pointer-events-none opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+            className={`px-3 py-1 rounded border text-sm ${roundNumber <= 1 ? 'pointer-events-none opacity-50 cursor-not-allowed' : 'hover:bg-muted'}`}
             onClick={roundNumber <= 1 ? (e) => e.preventDefault() : undefined}
           >
             ← Previous
           </Link>
           <Link
             href={`/matches/${nextRound}`}
-            className="px-3 py-1 rounded border text-sm hover:bg-gray-50"
+            className="px-3 py-1 rounded border text-sm hover:bg-muted"
           >
             Next →
           </Link>

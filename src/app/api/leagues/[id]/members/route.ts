@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import { Timestamp } from 'firebase-admin/firestore';
 
 import { commonErrors } from '@/lib/apiResponse';
+import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
 import { withRequestTracing } from '@/lib/requestTracing';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { leagueDraftProvisioningService } from '@/server/draft/services/LeagueDraftProvisioningService';
@@ -17,7 +19,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
+    const userId = await getUserIdFromRequest(req);
+    if (!userId) {
+      return commonErrors.unauthorized('Must be logged in');
+    }
+
     if (leagueId === 'test-league-id') {
+      const authorization = authorizeLocalOnlyRequest();
+      if (!authorization.ok) {
+        return authorization.response;
+      }
+
       const testMembersDoc: LeagueMemberDoc[] = [
         {
           id: 'test-member-1',
@@ -71,6 +83,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
       tracer.complete(200, { memberCount: testMembers.length });
       return NextResponse.json({ success: true, data: testMembers });
+    }
+
+    const membership = await verifyLeagueMembership(leagueId, userId);
+    if (!membership.isMember) {
+      return commonErrors.forbidden('Must be a league member');
     }
 
     const members = await leagueApplicationService.getLeagueMembers(leagueId);

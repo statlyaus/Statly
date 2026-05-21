@@ -60,6 +60,8 @@
     "import:footywire-rounds": "tsx Scripts/import-footywire-rounds.ts",
     "db:check": "tsx Scripts/check-database.ts",
     "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
+    "go-live:evidence-check": "tsx Scripts/go-live-evidence-check.ts",
+    "go-live:staging-preflight": "tsx Scripts/go-live-staging-preflight.ts",
     "verify-match-logs": "tsx scripts/verify-match-logs.ts",
     "warehouse:export:player-matches": "tsx Scripts/export-firestore-canonical-player-matches.ts",
     "warehouse:load:player-matches": "tsx Scripts/load-canonical-player-matches-to-motherduck.ts",

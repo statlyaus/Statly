@@ -111,7 +111,7 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+      <div className="rounded-xl border border-border bg-muted px-4 py-5 text-sm text-muted-foreground">
         Loading draft state…
       </div>
     );
@@ -119,7 +119,7 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
 
   if (error) {
     return (
-      <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-5 text-sm text-rose-700">
+      <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-5 text-sm text-destructive">
         {error}
       </div>
     );
@@ -127,10 +127,10 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
 
   if (!draft || draft.status === 'COMPLETED') {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+      <div className="rounded-xl border border-dashed border-border bg-muted px-4 py-6 text-center">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white">
           <svg
-            className="h-6 w-6 text-slate-400"
+            className="h-6 w-6 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -143,13 +143,13 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
             />
           </svg>
         </div>
-        <h4 className="text-sm font-semibold text-slate-900">No active draft</h4>
-        <p className="mt-1 text-sm text-slate-600">
+        <h4 className="text-sm font-semibold text-foreground">No active draft</h4>
+        <p className="mt-1 text-sm text-muted-foreground">
           Create or join a draft when you want draft state to appear here.
         </p>
         <Link
           href="/drafts/create"
-          className="mt-4 inline-flex items-center rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="mt-4 inline-flex items-center rounded-xl bg-foreground px-3 py-2 text-sm font-semibold text-white transition hover:bg-muted"
         >
           Create Draft
         </Link>
@@ -162,22 +162,22 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <div className="h-2.5 w-2.5 rounded-full bg-rose-500 animate-pulse"></div>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700">
+        <div className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse"></div>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-destructive">
           Draft live
         </span>
       </div>
 
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
-          <span className="text-slate-600">Pick Progress</span>
+          <span className="text-muted-foreground">Pick Progress</span>
           <span className="font-medium">
             {draft.currentPick}/{draft.totalPicks}
           </span>
         </div>
-        <div className="h-2 w-full rounded-full bg-slate-200">
+        <div className="h-2 w-full rounded-full bg-muted">
           <motion.div
-            className="h-2 rounded-full bg-slate-950"
+            className="h-2 rounded-full bg-foreground"
             initial={{ width: 0 }}
             animate={{ width: `${(draft.currentPick / draft.totalPicks) * 100}%` }}
             transition={{ duration: 0.5 }}
@@ -187,10 +187,10 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
 
       {isParticipant ? (
         isYourTurn ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <div className="rounded-xl border border-success/20 bg-success/10 p-3">
             <div className="flex items-center gap-2">
               <svg
-                className="h-5 w-5 text-emerald-700"
+                className="h-5 w-5 text-success"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -202,35 +202,35 @@ export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModul
                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <span className="font-medium text-emerald-900">Your turn</span>
+              <span className="font-medium text-success">Your turn</span>
             </div>
-            <p className="mt-1 text-sm text-emerald-700">Time per pick: {draft.timePerPick}s</p>
+            <p className="mt-1 text-sm text-success">Time per pick: {draft.timePerPick}s</p>
           </div>
         ) : (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-sm text-slate-800">
+          <div className="rounded-xl border border-border bg-muted p-3">
+            <p className="text-sm text-foreground">
               <span className="font-medium">{picksUntilYourTurn} picks</span> until your turn
             </p>
           </div>
         )
       ) : (
         <div
-          className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+          className="rounded-xl border border-border bg-muted p-3"
           role="status"
           aria-live="polite"
         >
-          <p className="text-sm text-slate-800">You’re not in this draft. You can watch or join.</p>
+          <p className="text-sm text-foreground">You’re not in this draft. You can watch or join.</p>
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-2">
         <Link
           href={joinHref}
-          className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="inline-flex items-center justify-center rounded-xl bg-foreground px-3 py-2 text-sm font-semibold text-white transition hover:bg-muted"
         >
           Join Draft
         </Link>
-        <button className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white">
+        <button className="rounded-xl border border-border bg-muted px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-white">
           Watch Only
         </button>
       </div>

@@ -164,7 +164,10 @@ export default function LeagueSwitcher() {
             className={`h-4 w-4 text-[color:var(--league-text-muted)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
           />
         </PopoverTrigger>
-        <PopoverContent className="min-w-[20rem] rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]">
+        <PopoverContent
+          aria-label="Select league"
+          className="min-w-[20rem] rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-0 text-[color:var(--league-text)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]"
+        >
           <Command className="bg-[color:var(--league-surface)] text-[color:var(--league-text)]">
             <div className="p-2">
               <CommandInput

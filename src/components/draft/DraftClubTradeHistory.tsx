@@ -48,37 +48,37 @@ export function DraftClubTradeHistory({
     <section className="space-y-6">
       <div className={draftHubHeroShellClass}>
         <div className={draftHubHeroTopAccentClass} />
-        <div className="mb-5 flex flex-col gap-5 border-b border-sky-900/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mb-5 flex flex-col gap-5 border-b border-info/20 pb-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700/80">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-info">
               Club trade history
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <TeamLogo team={clubName} size={36} withCircle />
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                 {clubName}
               </h2>
             </div>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
               Every recorded draft trade involving {clubName}. Search by title, year, pick text, or
               trade id—then open a row for the full breakdown on the trade page.
             </p>
             <nav
-              className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600"
+              className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
               aria-label="Draft hub"
             >
               <Link
                 href="/draft/trades"
-                className="link font-medium text-sky-800 no-underline hover:underline"
+                className="link font-medium text-info no-underline hover:underline"
               >
                 All trades
               </Link>
-              <span className="text-slate-300" aria-hidden="true">
+              <span className="text-muted-foreground" aria-hidden="true">
                 ·
               </span>
               <Link
                 href="/draft/clubs"
-                className="link font-medium text-sky-800 no-underline hover:underline"
+                className="link font-medium text-info no-underline hover:underline"
               >
                 Club directory
               </Link>
@@ -93,40 +93,40 @@ export function DraftClubTradeHistory({
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="rounded-2xl border border-border bg-white/85 p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Trades on file
             </p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
               {refs.length}
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               Rows in this club&apos;s history (newest year first).
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="rounded-2xl border border-border bg-white/85 p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Year span
             </p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground tabular-nums">
               {yearSpan ? `${yearSpan.min}–${yearSpan.max}` : '—'}
             </p>
-            <p className="mt-1 text-sm text-slate-600">Coverage in the current dataset.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Coverage in the current dataset.</p>
           </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="rounded-2xl border border-border bg-white/85 p-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Export anchor year
             </p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">
+            <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground tabular-nums">
               {exportYear ?? '—'}
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               Used for the CSV export shortcut (latest season in list).
             </p>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-white/90 p-4">
+        <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-white/90 p-4">
           <label className="form-control w-full max-w-2xl" htmlFor={searchId}>
             <span className="label-text text-sm font-medium">Search</span>
             <input
@@ -140,7 +140,7 @@ export function DraftClubTradeHistory({
               spellCheck={false}
             />
           </label>
-          <p className="text-xs text-slate-500" aria-live="polite">
+          <p className="text-xs text-muted-foreground" aria-live="polite">
             {filtered.length === refs.length
               ? 'Showing all rows.'
               : `Showing ${filtered.length} of ${refs.length} rows.`}
@@ -161,15 +161,15 @@ export function DraftClubTradeHistory({
         {filtered.map((ref) => (
           <article
             key={`card-${ref.tradeId}`}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300"
+            className="rounded-2xl border border-border bg-white p-4 shadow-sm transition hover:border-border"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 tabular-nums">
+              <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground tabular-nums">
                 {ref.year}
               </span>
               <span className="badge badge-ghost badge-sm">#{ref.seqInYear}</span>
             </div>
-            <h3 className="mt-2 text-lg font-semibold leading-tight text-slate-950">
+            <h3 className="mt-2 text-lg font-semibold leading-tight text-foreground">
               <Link
                 href={`/draft/trades/${ref.tradeId}`}
                 className="link link-hover"
@@ -178,19 +178,19 @@ export function DraftClubTradeHistory({
                 {ref.title}
               </Link>
             </h3>
-            <p className="mt-2 text-sm leading-snug text-slate-600">
+            <p className="mt-2 text-sm leading-snug text-muted-foreground">
               {ref.assetsRaw || 'No raw club return recorded.'}
             </p>
-            <div className="mt-3 flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
+            <div className="mt-3 flex flex-wrap justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
               <span>
                 Expected:{' '}
-                <span className="font-medium tabular-nums text-slate-800">
+                <span className="font-medium tabular-nums text-foreground">
                   {ref.expected ?? '—'}
                 </span>
               </span>
               <span>
                 Actual:{' '}
-                <span className="font-medium tabular-nums text-slate-800">{ref.actual ?? '—'}</span>
+                <span className="font-medium tabular-nums text-foreground">{ref.actual ?? '—'}</span>
               </span>
             </div>
           </article>
@@ -205,15 +205,15 @@ export function DraftClubTradeHistory({
       <div className="hidden md:block">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Trade index
             </p>
-            <h3 className="text-xl font-semibold text-slate-950">Scan this club</h3>
-            <p className="text-sm text-slate-600">
+            <h3 className="text-xl font-semibold text-foreground">Scan this club</h3>
+            <p className="text-sm text-muted-foreground">
               Newest season first. Click a trade title for the full page.
             </p>
           </div>
-          <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-600 shadow-sm">
+          <div className="rounded-full border border-border bg-white px-3 py-1 text-sm text-muted-foreground shadow-sm">
             {filtered.length} visible
           </div>
         </div>
@@ -223,10 +223,10 @@ export function DraftClubTradeHistory({
             <p>No rows match your search.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-sm">
             <table className="table table-sm w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/90 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-slate-600">
+                <tr className="border-b border-border bg-muted [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
                   <th scope="col" className="text-left">
                     Year
                   </th>
@@ -247,25 +247,25 @@ export function DraftClubTradeHistory({
                   </th>
                 </tr>
               </thead>
-              <tbody className="[&>tr]:border-b [&>tr]:border-slate-100 [&>tr:last-child]:border-b-0">
+              <tbody className="[&>tr]:border-b [&>tr]:border-border [&>tr:last-child]:border-b-0">
                 {filtered.map((ref) => (
-                  <tr key={ref.tradeId} className="hover:bg-slate-50/80">
-                    <td className="tabular-nums text-slate-800">{ref.year}</td>
-                    <td className="tabular-nums text-slate-800">{ref.seqInYear}</td>
+                  <tr key={ref.tradeId} className="hover:bg-muted">
+                    <td className="tabular-nums text-foreground">{ref.year}</td>
+                    <td className="tabular-nums text-foreground">{ref.seqInYear}</td>
                     <td className="max-w-[min(28rem,40vw)]">
                       <Link
                         href={`/draft/trades/${ref.tradeId}`}
-                        className="link font-medium text-slate-900 no-underline hover:underline"
+                        className="link font-medium text-foreground no-underline hover:underline"
                         aria-label={clubLinkLabel(ref)}
                       >
                         {ref.title}
                       </Link>
                     </td>
-                    <td className="min-w-48 text-sm text-slate-600">{ref.assetsRaw || '—'}</td>
-                    <td className="text-right tabular-nums text-slate-800">
+                    <td className="min-w-48 text-sm text-muted-foreground">{ref.assetsRaw || '—'}</td>
+                    <td className="text-right tabular-nums text-foreground">
                       {ref.expected ?? '—'}
                     </td>
-                    <td className="text-right tabular-nums text-slate-800">{ref.actual ?? '—'}</td>
+                    <td className="text-right tabular-nums text-foreground">{ref.actual ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

@@ -73,18 +73,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 role="status"
                 className={`rounded-lg border p-3 shadow bg-white ${
                   t.variant === 'success'
-                    ? 'border-emerald-200'
+                    ? 'border-success/20'
                     : t.variant === 'warning'
-                      ? 'border-amber-200'
+                      ? 'border-warning/20'
                       : t.variant === 'error'
-                        ? 'border-red-200'
+                        ? 'border-destructive/20'
                         : 'border-neutral-200'
                 }`}
               >
                 {t.title && <div className="text-sm font-semibold mb-0.5">{t.title}</div>}
                 <div className="text-sm text-neutral-700">{t.message}</div>
                 <button
-                  className="mt-2 text-xs text-blue-700 hover:underline"
+                  className="mt-2 text-xs text-info hover:underline"
                   onClick={() => dismiss(t.id)}
                 >
                   Dismiss

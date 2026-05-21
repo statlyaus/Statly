@@ -22,9 +22,9 @@ const Pill = ({
   children: React.ReactNode;
 }) => {
   const colors = {
-    good: 'bg-green-500/10 text-green-400 ring-green-500/20',
-    bad: 'bg-red-500/10 text-red-400 ring-red-500/20',
-    neutral: 'bg-gray-500/10 text-gray-400 ring-gray-500/20',
+    good: 'bg-success text-success ring-success',
+    bad: 'bg-destructive text-destructive ring-destructive',
+    neutral: 'bg-muted text-muted-foreground ring-ring',
   };
   return (
     <span
@@ -37,7 +37,7 @@ const Pill = ({
 
 const StatBadge = ({ label, value }: { label: string; value: string | number }) => (
   <div className="rounded-lg bg-white/5 p-2 text-center ring-1 ring-white/10">
-    <div className="text-xs text-gray-400">{label}</div>
+    <div className="text-xs text-muted-foreground">{label}</div>
     <div className="text-sm font-semibold text-white">{value}</div>
   </div>
 );
@@ -330,10 +330,10 @@ export default function TradeReview(props: TradeReviewProps) {
       aria-modal="true"
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
     >
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-gray-900 ring-1 ring-white/10">
+      <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-foreground ring-1 ring-white/10">
         {/* Trade selection UI */}
         <div className="px-5 py-2 border-b border-white/10 flex flex-wrap gap-4 items-center">
-          <span className="text-sm text-gray-400">Active Trade:</span>
+          <span className="text-sm text-muted-foreground">Active Trade:</span>
           <input
             type="text"
             value={search}
@@ -384,7 +384,7 @@ export default function TradeReview(props: TradeReviewProps) {
           />
           <button
             onClick={handleCreateTrade}
-            className="rounded-md bg-blue-600 px-2 py-1 text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="rounded-md bg-info px-2 py-1 text-white hover:bg-info focus:outline-none focus-visible:ring-2 focus-visible:ring-info"
             disabled={!newTradeName.trim()}
           >
             New Trade
@@ -393,7 +393,7 @@ export default function TradeReview(props: TradeReviewProps) {
             <>
               <button
                 onClick={() => handleDeleteTrade(tradeId)}
-                className="rounded-md bg-red-600 px-2 py-1 text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                className="rounded-md bg-destructive px-2 py-1 text-white hover:bg-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                 aria-label={`Delete trade ${tradeId}`}
               >
                 Delete Trade
@@ -411,7 +411,7 @@ export default function TradeReview(props: TradeReviewProps) {
                     setTradeId('current');
                   })
                 }
-                className="rounded-md bg-gray-600 px-2 py-1 text-white hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
+                className="rounded-md bg-muted px-2 py-1 text-white hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`Archive trade ${tradeId}`}
               >
                 Archive Trade
@@ -426,7 +426,7 @@ export default function TradeReview(props: TradeReviewProps) {
             const active = availableTrades.find((t) => t.tradeId === tradeId);
             if (!active) return null;
             return (
-              <div className="text-xs text-gray-300">
+              <div className="text-xs text-muted-foreground">
                 <span className="font-semibold">Name:</span>{' '}
                 {active.summary.tradeName || active.tradeId.slice(0, 8)} |
                 <span className="font-semibold">Status:</span> {active.summary.status} |
@@ -436,7 +436,7 @@ export default function TradeReview(props: TradeReviewProps) {
                 {active.summary.lastUpdated
                   ? new Date(active.summary.lastUpdated).toLocaleString()
                   : 'N/A'}
-                {active.summary.archived && <span className="ml-2 text-red-400">(Archived)</span>}
+                {active.summary.archived && <span className="ml-2 text-destructive">(Archived)</span>}
               </div>
             );
           })()}
@@ -444,7 +444,7 @@ export default function TradeReview(props: TradeReviewProps) {
 
         {/* Archived trades section */}
         <div className="px-5 py-2 border-b border-white/10">
-          <div className="text-sm text-gray-400 mb-1">Archived Trades:</div>
+          <div className="text-sm text-muted-foreground mb-1">Archived Trades:</div>
           <select
             value={tradeId}
             onChange={(e) => setTradeId(e.target.value)}
@@ -466,22 +466,22 @@ export default function TradeReview(props: TradeReviewProps) {
 
         {/* Trade review engine state */}
         <div className="px-5 py-2 border-b border-white/10 flex gap-6 items-center">
-          <span className="text-sm text-gray-400">Trade Status:</span>
+          <span className="text-sm text-muted-foreground">Trade Status:</span>
           <span className="font-semibold text-white">{tradeState?.status ?? 'N/A'}</span>
           {typeof tradeState?.vetoCount === 'number' && (
-            <span className="text-sm text-gray-400">Vetoes: {tradeState.vetoCount}</span>
+            <span className="text-sm text-muted-foreground">Vetoes: {tradeState.vetoCount}</span>
           )}
           {tradeState?.reviewWindowExpiresAt && (
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-muted-foreground">
               Review ends: {new Date(tradeState.reviewWindowExpiresAt).toLocaleString()}
             </span>
           )}
           {tradeState?.invalidRoster && (
-            <span className="text-sm text-red-400">Roster Invalid</span>
+            <span className="text-sm text-destructive">Roster Invalid</span>
           )}
         </div>
         {error && (
-          <div className="px-5 py-2 text-sm text-red-400 border-b border-white/10">
+          <div className="px-5 py-2 text-sm text-destructive border-b border-white/10">
             Error: {error}
           </div>
         )}
@@ -491,7 +491,7 @@ export default function TradeReview(props: TradeReviewProps) {
           <h2 className="text-lg font-semibold text-white">Review trade</h2>
           <button
             onClick={onCancel}
-            className="rounded-md bg-white/10 px-2 py-1 text-sm text-gray-200 hover:bg-white/20"
+            className="rounded-md bg-white/10 px-2 py-1 text-sm text-muted-foreground hover:bg-white/20"
             aria-label="Close dialog"
             ref={initialFocusRef}
           >
@@ -503,10 +503,10 @@ export default function TradeReview(props: TradeReviewProps) {
         <div className="grid gap-4 px-5 py-4 lg:grid-cols-[1fr_1fr_18rem]">
           {/* Outgoing column */}
           <section aria-label="Trade out" className="min-w-0">
-            <h3 className="mb-2 text-sm font-medium text-gray-300">Trade out</h3>
+            <h3 className="mb-2 text-sm font-medium text-muted-foreground">Trade out</h3>
             <ul className="space-y-2">
               {outgoing.length === 0 ? (
-                <li className="rounded-lg bg-white/5 p-3 text-sm text-gray-400 ring-1 ring-white/10">
+                <li className="rounded-lg bg-white/5 p-3 text-sm text-muted-foreground ring-1 ring-white/10">
                   No players
                 </li>
               ) : (
@@ -517,7 +517,7 @@ export default function TradeReview(props: TradeReviewProps) {
                   >
                     <div className="min-w-0">
                       <div className="truncate font-medium text-white">{p.name}</div>
-                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                         {p.team ? <TeamLogo team={p.team} size={14} withCircle decorative /> : null}
                         <span>
                           {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
@@ -536,10 +536,10 @@ export default function TradeReview(props: TradeReviewProps) {
 
           {/* Incoming column */}
           <section aria-label="Trade in" className="min-w-0">
-            <h3 className="mb-2 text-sm font-medium text-gray-300">Trade in</h3>
+            <h3 className="mb-2 text-sm font-medium text-muted-foreground">Trade in</h3>
             <ul className="space-y-2">
               {incoming.length === 0 ? (
-                <li className="rounded-lg bg-white/5 p-3 text-sm text-gray-400 ring-1 ring-white/10">
+                <li className="rounded-lg bg-white/5 p-3 text-sm text-muted-foreground ring-1 ring-white/10">
                   No players
                 </li>
               ) : (
@@ -550,7 +550,7 @@ export default function TradeReview(props: TradeReviewProps) {
                   >
                     <div className="min-w-0">
                       <div className="truncate font-medium text-white">{p.name}</div>
-                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                         {p.team ? <TeamLogo team={p.team} size={14} withCircle decorative /> : null}
                         <span>
                           {p.team ?? '—'} {p.position ? `• ${p.position}` : ''}
@@ -571,10 +571,10 @@ export default function TradeReview(props: TradeReviewProps) {
           <aside className="space-y-3">
             <div className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm text-gray-300">Fairness</span>
+                <span className="text-sm text-muted-foreground">Fairness</span>
                 <Pill tone={fairness.tone}>{fairness.label}</Pill>
               </div>
-              <p className="text-[11px] text-gray-500">
+              <p className="text-[11px] text-muted-foreground">
                 Heuristic: MG + 8×Clearances • Δ {fairness.delta > 0 ? '+' : ''}
                 {Math.round(fairness.delta)}
               </p>
@@ -589,7 +589,7 @@ export default function TradeReview(props: TradeReviewProps) {
               <div className="mb-2 text-sm font-medium text-white">Constraints</div>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <dt className="text-gray-400">List spots (post)</dt>
+                  <dt className="text-muted-foreground">List spots (post)</dt>
                   <dd className="tabular-nums">
                     {Number.isFinite(constraints?.listSpotsAfter ?? NaN)
                       ? Math.round(constraints!.listSpotsAfter!)
@@ -606,7 +606,7 @@ export default function TradeReview(props: TradeReviewProps) {
           <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <div className="font-semibold text-white mb-2">Audit Log</div>
-              <ul className="text-xs text-gray-300 space-y-1 max-h-32 overflow-auto">
+              <ul className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-auto">
                 {auditLog.length === 0 ? (
                   <li>No audit log entries</li>
                 ) : (
@@ -621,7 +621,7 @@ export default function TradeReview(props: TradeReviewProps) {
             </div>
             <div>
               <div className="font-semibold text-white mb-2">Notifications</div>
-              <ul className="text-xs text-gray-300 space-y-1 max-h-32 overflow-auto">
+              <ul className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-auto">
                 {notifications.length === 0 ? (
                   <li>No notifications</li>
                 ) : (
@@ -634,7 +634,7 @@ export default function TradeReview(props: TradeReviewProps) {
           {/* Admin override controls */}
           {isAdmin && (
             <div className="mt-4 flex items-center gap-2">
-              <label htmlFor="overrideStatus" className="text-sm text-gray-300">
+              <label htmlFor="overrideStatus" className="text-sm text-muted-foreground">
                 Admin Override Status:
               </label>
               <select
@@ -653,7 +653,7 @@ export default function TradeReview(props: TradeReviewProps) {
               </select>
               <button
                 onClick={handleAdminOverride}
-                className="rounded-md bg-red-600 px-3 py-2 text-white ring-1 ring-white/15 hover:bg-red-700"
+                className="rounded-md bg-destructive px-3 py-2 text-white ring-1 ring-white/15 hover:bg-destructive"
                 disabled={loading || !overrideStatus}
                 aria-label="Override trade status"
               >
@@ -674,7 +674,7 @@ export default function TradeReview(props: TradeReviewProps) {
           </button>
           <button
             onClick={handleAccept}
-            className="rounded-md bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700"
+            className="rounded-md bg-success px-4 py-2 font-semibold text-white hover:bg-success"
             disabled={loading || tradeState?.status !== 'offered'}
             aria-label="Accept Trade"
           >
@@ -682,7 +682,7 @@ export default function TradeReview(props: TradeReviewProps) {
           </button>
           <button
             onClick={handleVeto}
-            className="rounded-md bg-yellow-600 px-4 py-2 font-semibold text-white hover:bg-yellow-700"
+            className="rounded-md bg-warning px-4 py-2 font-semibold text-white hover:bg-warning"
             disabled={loading || tradeState?.status !== 'underReview'}
             aria-label="Veto Trade"
           >
@@ -690,7 +690,7 @@ export default function TradeReview(props: TradeReviewProps) {
           </button>
           <button
             onClick={handleProcess}
-            className="rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+            className="rounded-md bg-info px-4 py-2 font-semibold text-white hover:bg-info"
             disabled={
               loading || (tradeState?.status !== 'underReview' && tradeState?.status !== 'accepted')
             }

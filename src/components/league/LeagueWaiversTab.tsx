@@ -153,7 +153,7 @@ export default function LeagueWaiversTab({
   );
 
   if (isBootstrapping) {
-    return <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">Loading waivers…</div>;
+    return <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">Loading waivers…</div>;
   }
 
   return (

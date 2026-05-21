@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
+import { syncLeagueWaiverRealtimeProjection } from '@/server/league/services/waiverRealtimeProjection';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,8 @@ export const POST = withMetrics(
       });
 
       logger.info('waivers processed', { leagueId, processed: result.processed });
+      await syncLeagueWaiverRealtimeProjection({ leagueId });
+
       try {
         revalidateTag(tags.waivers(leagueId));
         revalidateTag(tags.league(leagueId));

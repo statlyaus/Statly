@@ -122,9 +122,9 @@ export default function LiveInjuryFeedClient({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <h3 className="text-lg font-semibold text-slate-900">Live Injury Feed</h3>
+          <h3 className="text-lg font-semibold text-foreground">Live Injury Feed</h3>
           {count > 0 && (
-            <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
+            <span className="bg-destructive/10 text-destructive text-xs font-medium px-2 py-1 rounded-full">
               {count} injuries
             </span>
           )}
@@ -135,7 +135,7 @@ export default function LiveInjuryFeedClient({
             aria-label="Filter by team"
             value={selectedTeam}
             onChange={(e) => setSelectedTeam(e.target.value)}
-            className="text-sm border border-slate-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-info"
           >
             <option value="">All Teams</option>
             {AFL_TEAMS.map((team) => (
@@ -149,7 +149,7 @@ export default function LiveInjuryFeedClient({
             aria-label="Sort injuries"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortKey)}
-            className="text-sm border border-slate-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-info"
             title="Sort injuries"
           >
             <option value="team">Team</option>
@@ -163,7 +163,7 @@ export default function LiveInjuryFeedClient({
             aria-label="Refresh injuries"
             onClick={refresh}
             disabled={loading}
-            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md disabled:opacity-50"
+            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md disabled:opacity-50"
             title="Refresh injury data"
           >
             <svg
@@ -183,15 +183,15 @@ export default function LiveInjuryFeedClient({
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-slate-500">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>Source: Footywire AFL Injury List</span>
         {lastUpdated && <span>Updated: {new Date(lastUpdated).toLocaleTimeString()}</span>}
       </div>
 
       {loading && (
         <div className="text-center py-6" role="status" aria-live="polite" aria-busy="true">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full motion-safe:animate-spin mx-auto mb-2"></div>
-          <p className="text-sm text-slate-600">Loading injury data...</p>
+          <div className="w-8 h-8 border-2 border-info/20 border-t-transparent rounded-full motion-safe:animate-spin mx-auto mb-2"></div>
+          <p className="text-sm text-muted-foreground">Loading injury data...</p>
         </div>
       )}
 
@@ -199,12 +199,12 @@ export default function LiveInjuryFeedClient({
         <motion.div
           initial={reduceMotion ? undefined : { opacity: 0, y: 10 }}
           animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-          className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg"
+          className="p-4 bg-warning/10 border border-warning/20 rounded-lg"
         >
           <div className="flex items-start space-x-3">
-            <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center">
+            <div className="w-6 h-6 bg-warning/10 rounded-full flex items-center justify-center">
               <svg
-                className="w-4 h-4 text-yellow-600"
+                className="w-4 h-4 text-warning"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -218,9 +218,9 @@ export default function LiveInjuryFeedClient({
               </svg>
             </div>
             <div>
-              <h4 className="font-medium text-yellow-900">Data fetch issue</h4>
-              <p className="text-sm text-yellow-700 mt-1">{error}</p>
-              <p className="text-sm text-yellow-600 mt-1">Showing cached or sample data</p>
+              <h4 className="font-medium text-warning">Data fetch issue</h4>
+              <p className="text-sm text-warning mt-1">{error}</p>
+              <p className="text-sm text-warning mt-1">Showing cached or sample data</p>
             </div>
           </div>
         </motion.div>
@@ -230,9 +230,9 @@ export default function LiveInjuryFeedClient({
 
       {!loading && !error && injuries.length === 0 && selectedTeam && (
         <div className="text-center py-6">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-3">
             <svg
-              className="w-8 h-8 text-green-600"
+              className="w-8 h-8 text-success"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -245,8 +245,8 @@ export default function LiveInjuryFeedClient({
               />
             </svg>
           </div>
-          <h4 className="font-medium text-slate-900 mb-1">No injuries for {selectedTeam}!</h4>
-          <p className="text-sm text-slate-600">Great news - no current injury concerns</p>
+          <h4 className="font-medium text-foreground mb-1">No injuries for {selectedTeam}!</h4>
+          <p className="text-sm text-muted-foreground">Great news - no current injury concerns</p>
         </div>
       )}
     </div>

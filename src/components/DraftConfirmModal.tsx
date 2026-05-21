@@ -9,12 +9,12 @@ interface DraftConfirmModalProps {
 const DraftConfirmModal = ({ player, onCancel, onConfirm }: DraftConfirmModalProps) => {
   if (!player) return null;
   return (
-    <div className="text-base text-gray-800 dark:text-gray-100">
-      <p className="text-sm font-medium text-gray-800 dark:text-gray-100">
+    <div className="text-base text-foreground dark:text-muted-foreground">
+      <p className="text-sm font-medium text-foreground dark:text-muted-foreground">
         Are you sure you want to draft
       </p>
-      <span className="font-bold text-gray-800 dark:text-gray-100">{player.name}</span>
-      <p className="text-sm font-medium text-gray-800 dark:text-gray-100">to your team?</p>
+      <span className="font-bold text-foreground dark:text-muted-foreground">{player.name}</span>
+      <p className="text-sm font-medium text-foreground dark:text-muted-foreground">to your team?</p>
       <div className="mt-2 flex gap-2">
         <button onClick={onCancel} className="btn btn-sm">
           Cancel

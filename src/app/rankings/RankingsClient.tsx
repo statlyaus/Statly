@@ -44,11 +44,11 @@ export default function RankingsClient() {
       <AppLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="h-16 bg-gray-200 rounded"></div>
+            <div className="h-8 bg-muted rounded w-1/4"></div>
+            <div className="h-16 bg-muted rounded"></div>
             <div className="space-y-2">
               {[...Array(10)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                <div key={i} className="h-16 bg-muted rounded"></div>
               ))}
             </div>
           </div>
@@ -61,9 +61,9 @@ export default function RankingsClient() {
     return (
       <AppLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <h2 className="text-red-800 font-semibold">Error Loading Rankings</h2>
-            <p className="text-red-600">{error}</p>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+            <h2 className="text-destructive font-semibold">Error Loading Rankings</h2>
+            <p className="text-destructive">{error}</p>
           </div>
         </div>
       </AppLayout>
@@ -74,8 +74,8 @@ export default function RankingsClient() {
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Player Rankings</h1>
-          <p className="text-lg text-gray-600">
+          <h1 className="text-4xl font-bold text-foreground mb-3">Player Rankings</h1>
+          <p className="text-lg text-muted-foreground">
             Player rankings based on 9 AFL statistical categories
           </p>
         </header>

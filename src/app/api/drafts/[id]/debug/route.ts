@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
 
 const paramsSchema = z.object({
   id: z.string().min(1, 'Draft ID is required'),
@@ -13,6 +13,9 @@ const paramsSchema = z.object({
  * Debug endpoint to check draft data structure
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   const resolvedParams = await params;
   try {
     const parsedParams = paramsSchema.safeParse(resolvedParams);
@@ -20,6 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return errorResponse('Invalid draft ID', 400);
     }
     const { id: draftId } = parsedParams.data;
+    const { prisma } = await import('@/lib/prisma');
 
     // First, check if draft exists at all
     const draft = await prisma.draft.findUnique({

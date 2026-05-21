@@ -5,42 +5,8 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { socketIOConfig } from '@/lib/socketioConfig';
+import { getDraftDeltasSince } from '@/server/draft/realtime/draftDeltaLog';
 import { getRedis } from '@/server/redis';
-
-type DeltaType =
-  | 'SNAPSHOT'
-  | 'PICK_MADE'
-  | 'PLAYER_REMOVED'
-  | 'PLAYER_ADDED'
-  | 'QUEUE_UPDATED'
-  | 'STATE_PATCH';
-
-export type DraftDelta = {
-  type: DeltaType;
-  payload: any;
-  ts?: number; // epoch ms
-};
-
-const LOG_CAP = 500;
-
-async function getDeltasSince(draftId: string, since: number): Promise<DraftDelta[]> {
-  const redis = await getRedis();
-  if (!redis) {
-    return [];
-  }
-
-  const key = `draft:${draftId}:events`;
-  const vals = await redis.zRangeByScore(key, (since + 1) as number, '+inf');
-  return vals
-    .map((v) => {
-      try {
-        return JSON.parse(v) as DraftDelta;
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean) as DraftDelta[];
-}
 
 // --------------------------- HTTP handlers -------------------------------
 export async function GET(request: NextRequest) {
@@ -52,7 +18,7 @@ export async function GET(request: NextRequest) {
     const since = Number(searchParams.get('since') ?? 0);
     if (!draftId)
       return NextResponse.json({ ok: false, error: 'draftId required' }, { status: 400 });
-    const deltas = await getDeltasSince(draftId, since);
+    const deltas = await getDraftDeltasSince(draftId, since);
     return NextResponse.json({ ok: true, deltas, count: deltas.length });
   }
 

@@ -190,4 +190,35 @@ describe('GET /api/leagues/[id]/season-state', () => {
       isCurrentUser: true,
     });
   });
+
+  it('returns an empty season state when materialization is not ready yet', async () => {
+    loadMaterializedSeasonSnapshotsMock
+      .mockResolvedValueOnce({ scheduleWeeks: [], memberSnapshots: [] })
+      .mockResolvedValueOnce({ scheduleWeeks: [], memberSnapshots: [] });
+    ensureLeagueSeasonMaterializedMock.mockResolvedValue({
+      bootstrapped: false,
+      reason: 'league_not_ready',
+    });
+    const { GET } = await import('./route');
+
+    const response = await GET(
+      new NextRequest('http://localhost/api/leagues/league-1/season-state?season=2026'),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(ensureLeagueSeasonMaterializedMock).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      season: 2026,
+    });
+    expect(body.data).toMatchObject({
+      leagueId: 'league-1',
+      season: 2026,
+      currentWeek: null,
+      schedule: [],
+      ladder: [],
+    });
+  });
 });

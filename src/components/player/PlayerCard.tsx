@@ -5,8 +5,12 @@ import type { ReactNode } from 'react';
 
 import Image from 'next/image';
 
-import { StarIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
-import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
+import {
+  Star as StarIcon,
+  Star as StarIconSolid,
+  TrendingUp as ArrowTrendingUpIcon,
+  TrendingDown as ArrowTrendingDownIcon,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { TeamLogo } from '@/components/TeamLogo';
@@ -217,9 +221,9 @@ function PlayerCard({
               />
             ) : (
               <div
-                className={`${sizeConfig.avatar} rounded-full bg-gray-200 flex items-center justify-center`}
+                className={`${sizeConfig.avatar} rounded-full bg-muted flex items-center justify-center`}
               >
-                <span className="text-gray-600 font-medium">
+                <span className="text-muted-foreground font-medium">
                   {player.name
                     .split(' ')
                     .map((n) => n[0])
@@ -243,9 +247,9 @@ function PlayerCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className={`${sizeConfig.name} text-gray-900 truncate`}>{player.name}</h4>
+                <h4 className={`${sizeConfig.name} text-foreground truncate`}>{player.name}</h4>
                 <p
-                  className={`${sizeConfig.position} flex flex-wrap items-center gap-1.5 text-gray-500`}
+                  className={`${sizeConfig.position} flex flex-wrap items-center gap-1.5 text-muted-foreground`}
                 >
                   <span>{player.position}</span>
                   <span aria-hidden="true">•</span>
@@ -271,11 +275,11 @@ function PlayerCard({
               {onStar && (
                 <button
                   onClick={handleStarClick}
-                  className="p-1 text-gray-400 hover:text-yellow-500 transition-colors"
+                  className="p-1 text-muted-foreground hover:text-warning transition-colors"
                   aria-label={player.isStarred ? 'Remove from favorites' : 'Add to favorites'}
                 >
                   {player.isStarred ? (
-                    <StarIconSolid className="w-4 h-4 text-yellow-500" />
+                    <StarIconSolid className="w-4 h-4 text-warning" />
                   ) : (
                     <StarIcon className="w-4 h-4" />
                   )}
@@ -286,12 +290,12 @@ function PlayerCard({
             {/* Quick stats */}
             {showStats && player.averageScore && (
               <div className="mt-1 flex items-center space-x-3">
-                <span className={`${sizeConfig.stats} text-gray-900`}>
+                <span className={`${sizeConfig.stats} text-foreground`}>
                   Avg: {player.averageScore.toFixed(1)}
                 </span>
                 {player.trend && getTrendIcon()}
                 {player.currentPrice && (
-                  <span className={`${sizeConfig.stats} text-gray-600`}>
+                  <span className={`${sizeConfig.stats} text-muted-foreground`}>
                     ${player.currentPrice.toLocaleString()}
                   </span>
                 )}
@@ -335,9 +339,9 @@ function PlayerCard({
                 />
               ) : (
                 <div
-                  className={`${sizeConfig.avatar} rounded-full bg-gray-200 flex items-center justify-center`}
+                  className={`${sizeConfig.avatar} rounded-full bg-muted flex items-center justify-center`}
                 >
-                  <span className="text-gray-600 font-medium text-lg">
+                  <span className="text-muted-foreground font-medium text-lg">
                     {player.name
                       .split(' ')
                       .map((n) => n[0])
@@ -350,9 +354,9 @@ function PlayerCard({
 
             {/* Player details */}
             <div>
-              <h3 className={`${sizeConfig.name} text-gray-900`}>{player.name}</h3>
+              <h3 className={`${sizeConfig.name} text-foreground`}>{player.name}</h3>
               <p
-                className={`${sizeConfig.position} flex flex-wrap items-center gap-1.5 text-gray-500`}
+                className={`${sizeConfig.position} flex flex-wrap items-center gap-1.5 text-muted-foreground`}
               >
                 <span>{player.position}</span>
                 <span aria-hidden="true">•</span>
@@ -392,11 +396,11 @@ function PlayerCard({
             {onStar && (
               <button
                 onClick={handleStarClick}
-                className="p-2 text-gray-400 hover:text-yellow-500 transition-colors"
+                className="p-2 text-muted-foreground hover:text-warning transition-colors"
                 aria-label={player.isStarred ? 'Remove from favorites' : 'Add to favorites'}
               >
                 {player.isStarred ? (
-                  <StarIconSolid className="w-5 h-5 text-yellow-500" />
+                  <StarIconSolid className="w-5 h-5 text-warning" />
                 ) : (
                   <StarIcon className="w-5 h-5" />
                 )}
@@ -411,31 +415,33 @@ function PlayerCard({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             {player.averageScore && (
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{player.averageScore.toFixed(1)}</p>
-                <p className="text-xs text-gray-500">Average</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {player.averageScore.toFixed(1)}
+                </p>
+                <p className="text-xs text-muted-foreground">Average</p>
               </div>
             )}
 
             {player.totalPoints && (
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{player.totalPoints}</p>
-                <p className="text-xs text-gray-500">Total Points</p>
+                <p className="text-2xl font-bold text-foreground">{player.totalPoints}</p>
+                <p className="text-xs text-muted-foreground">Total Points</p>
               </div>
             )}
 
             {player.seasonHigh && (
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{player.seasonHigh}</p>
-                <p className="text-xs text-gray-500">Season High</p>
+                <p className="text-2xl font-bold text-foreground">{player.seasonHigh}</p>
+                <p className="text-xs text-muted-foreground">Season High</p>
               </div>
             )}
 
             {player.currentPrice && (
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-foreground">
                   ${player.currentPrice.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-500">Price</p>
+                <p className="text-xs text-muted-foreground">Price</p>
               </div>
             )}
           </div>
@@ -456,18 +462,20 @@ function PlayerCard({
 
         {/* Next game */}
         {showNextGame && player.nextGame && (
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="mb-4 p-3 bg-muted rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-foreground">
                   {player.nextGame.isHome ? 'vs' : '@'} {player.nextGame.opponent}
                 </p>
-                <p className="text-xs text-gray-500">{player.nextGame.date.toLocaleDateString()}</p>
+                <p className="text-xs text-muted-foreground">
+                  {player.nextGame.date.toLocaleDateString()}
+                </p>
               </div>
               {player.projectedScore && (
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">{player.projectedScore}</p>
-                  <p className="text-xs text-gray-500">Projected</p>
+                  <p className="text-sm font-medium text-foreground">{player.projectedScore}</p>
+                  <p className="text-xs text-muted-foreground">Projected</p>
                 </div>
               )}
             </div>
@@ -479,16 +487,16 @@ function PlayerCard({
           <div className="grid grid-cols-2 gap-4">
             {player.ownership && (
               <div>
-                <p className="text-xs text-gray-500">Ownership</p>
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-xs text-muted-foreground">Ownership</p>
+                <p className="text-sm font-medium text-foreground">
                   {formatPercentage(player.ownership)}
                 </p>
               </div>
             )}
             {player.selectedByOpponents && (
               <div>
-                <p className="text-xs text-gray-500">Selected by Opponents</p>
-                <p className="text-sm font-medium text-gray-900">{player.selectedByOpponents}</p>
+                <p className="text-xs text-muted-foreground">Selected by Opponents</p>
+                <p className="text-sm font-medium text-foreground">{player.selectedByOpponents}</p>
               </div>
             )}
           </div>
@@ -498,7 +506,7 @@ function PlayerCard({
       {/* Selection indicator */}
       {selectable && selected && (
         <div className="absolute top-2 right-2">
-          <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+          <div className="w-6 h-6 bg-info rounded-full flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"

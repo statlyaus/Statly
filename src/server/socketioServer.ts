@@ -25,8 +25,11 @@ import {
 } from '@/server/metrics';
 import { draftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
+import { getDraftDeltasSince } from '@/server/draft/realtime/draftDeltaLog';
 import { draftRoomStore, type DraftRoomState } from '@/server/roomStore';
-import { getRedis } from '@/server/redis';
+import { createSocketAuthMiddleware } from '@/server/socketioAuth';
+import { rejectSocketMutationCommand, socketMutationContext } from '@/server/socketioCommandGuards';
+import { createSocketAllowRequestLimiter } from '@/server/socketioRateLimit';
 import type { LiveDraftState } from '@/services/liveDraftEngine';
 
 // Validate configuration before starting
@@ -52,8 +55,6 @@ interface DraftRoom {
 
 // In-memory store for draft rooms (legacy/local)
 const draftRooms = new Map<string, DraftRoom>();
-// Timers tracked in-process; room state persists in Redis via room store
-const roomTimers = new Map<string, ReturnType<typeof setInterval> | undefined>();
 let draftOutboxDrainInFlight = false;
 
 async function flushDraftOutboxBatch(): Promise<void> {
@@ -77,18 +78,6 @@ async function flushDraftOutboxBatch(): Promise<void> {
     draftOutboxDrainInFlight = false;
   }
 }
-
-type DraftDelta = {
-  type:
-    | 'SNAPSHOT'
-    | 'PICK_MADE'
-    | 'PLAYER_REMOVED'
-    | 'PLAYER_ADDED'
-    | 'QUEUE_UPDATED'
-    | 'STATE_PATCH';
-  payload: any;
-  ts?: number;
-};
 
 function getActiveDraftSocketIds(draftId: string): string[] {
   return Array.from(io.sockets.adapter.rooms.get(draftId) ?? []);
@@ -127,111 +116,6 @@ async function reconcileDraftRoomMembership(draftId: string, participantId?: str
   const targetIds = participantId ? [...activeSocketIds, participantId] : activeSocketIds;
 
   return draftRoomStore.reconcileParticipants(draftId, targetIds);
-}
-
-async function getDeltasSince(draftId: string, since: number): Promise<DraftDelta[]> {
-  const redis = await getRedis();
-  if (!redis) {
-    return [];
-  }
-
-  const key = `draft:${draftId}:events`;
-  const vals = await redis.zRangeByScore(key, (since + 1) as number, '+inf');
-  return vals
-    .map((value) => {
-      try {
-        return JSON.parse(value) as DraftDelta;
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean) as DraftDelta[];
-}
-
-// Start or restart a draft timer and broadcast ticks/expiry
-async function startDraftTimer(draftId: string, opts?: { duration?: number; useLeader?: boolean }) {
-  const useLeader = !!opts?.useLeader;
-  const duration = opts?.duration;
-  // Optional leader election (for start events)
-  let leaderToken: string | null = null;
-  let lockKey = '';
-  const client = redisClient.getClient();
-  const lockMs = Number(process.env.SOCKET_TIMER_LOCK_MS || 10_000);
-  if (useLeader) {
-    leaderToken = `${process.pid}-${Math.random().toString(36).slice(2)}`;
-    lockKey = `draftroom:${draftId}:timerlock`;
-    const acquire = async (): Promise<boolean> => {
-      if (!client) return true;
-      const ok = await client.set(lockKey, leaderToken!, 'PX', lockMs, 'NX');
-      return ok === 'OK';
-    };
-    const got = await acquire();
-    if (!got) {
-      logger.info('⏱️ Timer leadership not acquired; skipping local timer', { draftId });
-      return;
-    }
-  }
-
-  const state =
-    (await draftRoomStore.getRoom(draftId)) || (await draftRoomStore.initRoomIfMissing(draftId));
-  const updated = {
-    ...state,
-    timeRemaining: duration ?? state.timePerPick ?? 120,
-    status: 'active' as const,
-    lastActivity: new Date().toISOString(),
-  };
-  await draftRoomStore.saveRoom(updated);
-
-  const existing = roomTimers.get(draftId);
-  if (existing) clearInterval(existing);
-
-  const renew = async (): Promise<boolean> => {
-    if (!useLeader || !client) return true;
-    // Atomic check-and-extend via Lua EVAL
-    const script = `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end`;
-    try {
-      const res = await (client as any).eval(script, 1, lockKey, leaderToken!, String(lockMs));
-      return res === 1 || res === '1' || res === 'OK';
-    } catch {
-      return false;
-    }
-  };
-
-  const timer = setInterval(async () => {
-    if (!(await renew())) {
-      clearInterval(timer);
-      roomTimers.delete(draftId);
-      incCounter(METRICS.leadershipLost);
-      return;
-    }
-    const cur = await draftRoomStore.getRoom(draftId);
-    if (!cur) {
-      clearInterval(timer);
-      roomTimers.delete(draftId);
-      return;
-    }
-    if (cur.timeRemaining > 0) {
-      const next = {
-        ...cur,
-        timeRemaining: cur.timeRemaining - 1,
-        lastActivity: new Date().toISOString(),
-      };
-      await draftRoomStore.saveRoom(next);
-      incCounter(METRICS.timerTicks);
-      await draftRealtimeDispatcher.publishTimerTick(draftId, next.timeRemaining);
-    } else {
-      clearInterval(timer);
-      roomTimers.delete(draftId);
-      await draftRoomStore.saveRoom({
-        ...cur,
-        status: 'waiting' as const,
-        lastActivity: new Date().toISOString(),
-      });
-      incCounter(METRICS.timerExpired);
-      await draftRealtimeDispatcher.publishTimerExpired(draftId);
-    }
-  }, 1000);
-  roomTimers.set(draftId, timer);
 }
 
 // Express app to serve health and potential aux endpoints
@@ -289,6 +173,35 @@ registerHistogram(
   [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]
 );
 
+const allowSocketRequest = createSocketAllowRequestLimiter({
+  getRedisClient: () => redisClient.getClient(),
+  onRedisFallback: (error) => {
+    logger.warn('Redis rate limiting failed, using in-memory fallback', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  },
+  onRateLimited: () => {
+    incCounter(METRICS.rateLimitRejections);
+  },
+  onOutcome: (outcome, durationSeconds) => {
+    observeHistogram('socketio_allow_request_duration_seconds', durationSeconds, { outcome });
+  },
+  onError: () => {
+    incCounter(METRICS.authFailures);
+  },
+});
+
+const authorizeSocketConnection = createSocketAuthMiddleware({
+  environment: socketIOConfig.environment,
+  validateAuthToken,
+  onAuthFailure: () => {
+    incCounter(METRICS.authFailures);
+  },
+  onObserved: (outcome, durationSeconds) => {
+    observeHistogram('socketio_allow_request_duration_seconds', durationSeconds, { outcome });
+  },
+});
+
 // Create Socket.IO server with enhanced configuration
 const io = new Server(httpServer, {
   cors: socketIOConfig.server.cors,
@@ -299,110 +212,11 @@ const io = new Server(httpServer, {
   upgradeTimeout: socketIOConfig.server.upgradeTimeout,
   maxHttpBufferSize: socketIOConfig.server.maxHttpBufferSize,
   // Additional production settings
-  allowRequest: async (req, callback) => {
-    const start = Date.now();
-    try {
-      const ip =
-        (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-        req.socket.remoteAddress ||
-        'unknown';
-      const windowSec = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_SEC || 60); // default 60s window
-      const subBucketSec = Number(process.env.SOCKET_RATE_LIMIT_SUB_BUCKET_SEC || 10); // sub-buckets 10s
-      const maxReq = Number(process.env.SOCKET_RATE_LIMIT_MAX || 100);
-      const nowMs = Date.now();
-      const currentBucket = Math.floor(nowMs / (subBucketSec * 1000));
-      const bucketsToCount = Math.ceil(windowSec / subBucketSec);
-
-      // Try Redis-based limiting first (cluster/scaling friendly)
-      try {
-        const client = redisClient.getClient();
-        if (!client) throw new Error('Redis not initialized');
-        // Increment current sub-bucket and set TTL
-        const curKey = `ratelimit:socketio:${ip}:${currentBucket}`;
-        const inc = await client.incr(curKey);
-        if (inc === 1) {
-          await client.expire(curKey, windowSec);
-        }
-        // Sum recent sub-buckets within the window
-        const keys: string[] = [];
-        for (let i = 0; i < bucketsToCount; i++) {
-          keys.push(`ratelimit:socketio:${ip}:${currentBucket - i}`);
-        }
-        const vals = await client.mget(keys);
-        const total = (vals || []).reduce((sum, v) => sum + (v ? parseInt(v, 10) : 0), 0);
-        if (total > maxReq) {
-          incCounter(METRICS.rateLimitRejections);
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-            outcome: 'ratelimited',
-          });
-          return callback('Rate limit exceeded', false);
-        }
-      } catch (error) {
-        logger.warn('Redis rate limiting failed, using in-memory fallback', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Fallback to in-memory limiter if Redis is unavailable
-        const now = Date.now();
-        const windowMs = windowSec * 1000;
-        const store: Map<string, number[]> = (io as any)._allowReqLimiter || new Map();
-        (io as any)._allowReqLimiter = store;
-        const arr = store.get(ip) || [];
-        const recent = arr.filter((t) => now - t < windowMs);
-        recent.push(now);
-        store.set(ip, recent);
-        if (recent.length > maxReq) {
-          incCounter(METRICS.rateLimitRejections);
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-            outcome: 'ratelimited',
-          });
-          return callback('Rate limit exceeded', false);
-        }
-      }
-
-      // Bearer token check; plug in real verification as needed
-      const auth = Array.isArray(req.headers['authorization'])
-        ? req.headers['authorization'][0]
-        : req.headers['authorization'];
-      if (!auth || !auth.startsWith('Bearer ') || auth.slice(7).trim().length === 0) {
-        if (socketIOConfig.environment !== 'production') {
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-            outcome: 'dev-noauth',
-          });
-          return callback(null, true);
-        }
-        incCounter(METRICS.authFailures);
-        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-          outcome: 'noauth',
-        });
-        return callback('Authentication required', false);
-      }
-      const token = auth.slice(7).trim();
-      const uid = await validateAuthToken(token);
-      if (!uid) {
-        incCounter(METRICS.authFailures);
-        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-          outcome: 'invauth',
-        });
-        return callback('Authentication required', false);
-      }
-      // Optionally attach uid for later use in connection
-      (req as any)._uid = uid;
-      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-        outcome: 'ok',
-      });
-      return callback(null, true);
-    } catch (_e) {
-      incCounter(METRICS.authFailures);
-      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-        outcome: 'error',
-      });
-      return callback('Authentication error', false);
-    }
-  },
+  allowRequest: allowSocketRequest,
 });
 
 // Middleware for authentication and logging
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const startTime = Date.now();
 
   // Log connection attempt
@@ -416,7 +230,7 @@ io.use((socket, next) => {
   // Add timing to socket for performance monitoring
   socket.data.connectionStartTime = startTime;
 
-  next();
+  return authorizeSocketConnection(socket, next);
 });
 
 draftRealtimeDispatcher.attachSocketServer(io);
@@ -504,8 +318,8 @@ io.on('connection', (socket) => {
       await draftRoomStore.addParticipant(draftId, socket.id);
       incCounter(METRICS.joins);
       // Store richer participant metadata if available
-      const uidFromReq = (socket.request as any)?._uid as string | undefined;
-      const participantUser = userId || uidFromReq || 'anonymous';
+      const authenticatedUserId = socket.data.authenticatedUserId as string | undefined;
+      const participantUser = userId || authenticatedUserId || 'anonymous';
       await draftRoomStore.setParticipantData(draftId, socket.id, {
         userId: participantUser,
         memberId,
@@ -514,7 +328,7 @@ io.on('connection', (socket) => {
         joinedAt: new Date().toISOString(),
         lastSeenAt: new Date().toISOString(),
       });
-      const participantCount = await draftRoomStore.getParticipantCount(draftId);
+      const participantCount = await draftRoomStore.getActiveParticipantCount(draftId);
       if (participantCount > state.maxParticipants) {
         await draftRoomStore.removeParticipant(draftId, socket.id);
         socket.leave(draftId);
@@ -668,7 +482,7 @@ io.on('connection', (socket) => {
       if (socket.data.draftId === draftId) {
         await draftRoomStore.touchParticipant(draftId, socket.id);
       }
-      const deltas = await getDeltasSince(draftId, Number(since ?? 0));
+      const deltas = await getDraftDeltasSince(draftId, Number(since ?? 0));
       socket.emit('draft:backfill', deltas);
     } catch (error) {
       socket.emit('draft:backfill', []);
@@ -689,7 +503,8 @@ io.on('connection', (socket) => {
       socket.leave(draftId);
       socket.leave(`draft:${draftId}`);
       await draftRoomStore.removeParticipant(draftId, socket.id);
-      const reconciled = await reconcileDraftRoomMembership(draftId);
+      await reconcileDraftRoomMembership(draftId);
+      const participantCount = await draftRoomStore.getActiveParticipantCount(draftId);
 
       // Clean up room if empty
       const room = draftRooms.get(draftId);
@@ -709,7 +524,7 @@ io.on('connection', (socket) => {
           socket.to(draftId).emit('participant:leave', {
             socketId: socket.id,
             timestamp: new Date().toISOString(),
-            participantCount: reconciled.count,
+            participantCount,
           });
         }
       }
@@ -747,7 +562,8 @@ io.on('connection', (socket) => {
     // Clean up any draft rooms this socket was in
     if (socket.data.draftId) {
       await draftRoomStore.removeParticipant(socket.data.draftId, socket.id);
-      const reconciled = await reconcileDraftRoomMembership(socket.data.draftId);
+      await reconcileDraftRoomMembership(socket.data.draftId);
+      const participantCount = await draftRoomStore.getActiveParticipantCount(socket.data.draftId);
       const room = draftRooms.get(socket.data.draftId);
       if (room) {
         room.participants.delete(socket.id);
@@ -767,7 +583,7 @@ io.on('connection', (socket) => {
             socketId: socket.id,
             reason,
             timestamp: new Date().toISOString(),
-            participantCount: reconciled.count,
+            participantCount,
           });
         }
       }
@@ -775,51 +591,52 @@ io.on('connection', (socket) => {
   });
 
   // Handle draft-specific events backed by the live draft engine
-  socket.on('draft:pick', async (data: { draftId: string; playerId: string; userId?: string }) => {
-    incCounter(METRICS.pickFailures);
-    logger.warn('Rejected socket-driven draft pick to avoid split-brain state', {
-      socketId: socket.id,
-      draftId: data.draftId,
-      userId: data.userId || (socket.request as any)?._uid || 'unknown',
-    });
-    socket.emit('draft:error', {
+  socket.on('draft:pick', async (payload: unknown) => {
+    rejectSocketMutationCommand({
+      socket,
+      logger,
+      incCounter,
+      metricName: METRICS.pickFailures,
+      logMessage: 'Rejected socket-driven draft pick to avoid split-brain state',
       error: 'Direct socket picks are disabled. Use the Prisma-backed draft API.',
+      context: {
+        ...socketMutationContext(payload, ['draftId', 'playerId', 'userId']),
+        authenticatedUserId: (socket.request as any)?._uid || 'unknown',
+      },
     });
   });
 
-  // Handle draft timer events with leader election
-  socket.on('draft:timer:start', async ({ draftId, duration }) => {
-    try {
-      await startDraftTimer(draftId, { duration, useLeader: true });
-
-      logger.info('⏰ Draft timer started', { draftId, duration, socketId: socket.id });
-    } catch (error) {
-      logger.error('❌ Error starting draft timer', {
-        socketId: socket.id,
-        draftId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  // Direct socket timer starts are disabled; pick deadlines are owned by the Prisma draft API.
+  socket.on('draft:timer:start', (payload: unknown) => {
+    rejectSocketMutationCommand({
+      socket,
+      logger,
+      incCounter,
+      metricName: METRICS.timerStartRejected,
+      logMessage: 'Rejected socket-driven draft timer start to avoid split-brain state',
+      error: 'Direct socket timer starts are disabled. Use the Prisma-backed draft API.',
+      context: socketMutationContext(payload, ['draftId', 'duration']),
+    });
   });
 
   // Handle draft pause/resume
-  socket.on('draft:pause', async ({ draftId }) => {
-    logger.warn('Rejected socket-driven draft pause to avoid split-brain state', {
-      socketId: socket.id,
-      draftId,
-    });
-    socket.emit('draft:error', {
+  socket.on('draft:pause', async (payload: unknown) => {
+    rejectSocketMutationCommand({
+      socket,
+      logger,
+      logMessage: 'Rejected socket-driven draft pause to avoid split-brain state',
       error: 'Direct socket pause is disabled. Use the Prisma-backed draft API.',
+      context: socketMutationContext(payload, ['draftId']),
     });
   });
 
-  socket.on('draft:resume', async ({ draftId }) => {
-    logger.warn('Rejected socket-driven draft resume to avoid split-brain state', {
-      socketId: socket.id,
-      draftId,
-    });
-    socket.emit('draft:error', {
+  socket.on('draft:resume', async (payload: unknown) => {
+    rejectSocketMutationCommand({
+      socket,
+      logger,
+      logMessage: 'Rejected socket-driven draft resume to avoid split-brain state',
       error: 'Direct socket resume is disabled. Use the Prisma-backed draft API.',
+      context: socketMutationContext(payload, ['draftId']),
     });
   });
 });

@@ -1,5 +1,8 @@
+import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { authorizeCronRequest } from '@/lib/operationalAuth';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
@@ -7,7 +10,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function POST(request: Request, context: any) {
+export async function POST(request: NextRequest, context: any) {
   try {
     const draftId = ((await context?.params)?.id ??
       (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as
@@ -16,6 +19,9 @@ export async function POST(request: Request, context: any) {
     if (typeof draftId !== 'string' || draftId.trim().length === 0) {
       return errorResponse('Missing or invalid draftId', 400);
     }
+
+    const authorization = authorizeCronRequest(request);
+    if (!authorization.ok) return authorization.response;
 
     const result = await draftApplicationService.autoPick({ draftId });
 
@@ -53,6 +59,7 @@ export async function POST(request: Request, context: any) {
     if (kind === 'not_found') return commonErrors.notFound(detail);
     if (kind === 'bad_request') return commonErrors.badRequest(detail);
     if (kind === 'conflict') return errorResponse(detail || 'Draft state changed', 409);
+    if (kind === 'forbidden') return commonErrors.forbidden(detail);
 
     logger.error('Failed to auto-pick', {
       error: {

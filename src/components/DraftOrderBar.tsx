@@ -140,8 +140,8 @@ const DraftOrderBar = ({
   // Handle empty state
   if (!teams || teams.length === 0) {
     return (
-      <div className={`bg-gray-50 border border-gray-200 rounded-lg p-4 text-center ${className}`}>
-        <div className="text-gray-500">
+      <div className={`bg-muted border border-border rounded-lg p-4 text-center ${className}`}>
+        <div className="text-muted-foreground">
           <div className="text-sm font-medium">No Teams Available</div>
           <div className="text-xs mt-1">Draft order will appear here once teams are set up</div>
         </div>
@@ -151,17 +151,17 @@ const DraftOrderBar = ({
 
   return (
     <div
-      className={`bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg shadow-sm ${className}`}
+      className={`bg-gradient-to-r from-muted to-info/10 border border-border rounded-lg shadow-sm ${className}`}
       role="region"
       aria-label="Draft order visualization"
     >
       {/* Header Info */}
       {!compact && (
-        <div className="flex items-center justify-between p-3 border-b border-gray-200">
+        <div className="flex items-center justify-between p-3 border-b border-border">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-gray-900">Draft Order</h3>
+            <h3 className="text-sm font-semibold text-foreground">Draft Order</h3>
             {currentRound && totalRounds && (
-              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+              <span className="text-xs bg-info/10 text-info px-2 py-1 rounded-full">
                 Round {currentRound} of {totalRounds}
               </span>
             )}
@@ -169,8 +169,8 @@ const DraftOrderBar = ({
               <span
                 className={`text-xs px-2 py-1 rounded-full ${
                   direction === 'forward'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-orange-100 text-orange-700'
+                    ? 'bg-success/10 text-success'
+                    : 'bg-warning/10 text-warning'
                 }`}
               >
                 {direction === 'forward' ? '→ Forward' : '← Reverse'}
@@ -179,7 +179,7 @@ const DraftOrderBar = ({
           </div>
 
           {teams.length > 0 && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-muted-foreground">
               Pick {currentPickIndex + 1} of {teams.length * (totalRounds || 15)}
             </span>
           )}
@@ -203,14 +203,14 @@ const DraftOrderBar = ({
                 <button
                   onClick={() => handleTeamClick(team, index)}
                   disabled={!onTeamClick}
-                  className={`relative ${compact ? 'w-8 h-8' : 'w-12 h-12'} rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                  className={`relative ${compact ? 'w-8 h-8' : 'w-12 h-12'} rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-info focus:ring-offset-1 ${
                     isCurrent
-                      ? 'bg-red-500 text-white border-red-600 animate-pulse shadow-lg ring-2 ring-red-300'
+                      ? 'bg-destructive text-white border-destructive/20 animate-pulse shadow-lg ring-2 ring-destructive'
                       : isMyTeam
-                        ? 'bg-blue-500 text-white border-blue-600 shadow-md ring-2 ring-blue-300'
+                        ? 'bg-info text-white border-info/20 shadow-md ring-2 ring-info'
                         : nextPickInfo
-                          ? 'bg-yellow-400 text-gray-900 border-yellow-500 shadow-sm'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                          ? 'bg-warning text-foreground border-warning/20 shadow-sm'
+                          : 'bg-white text-foreground border-border hover:border-border'
                   } ${onTeamClick ? 'cursor-pointer' : 'cursor-default'}`}
                   title={`${displayName}${isCurrent ? ' (Currently Picking)' : ''}${isMyTeam ? ' (Your Team)' : ''}${nextPickInfo ? ` (Pick #${nextPickInfo.pickNumber})` : ''}`}
                   aria-label={`Team ${index + 1}: ${displayName}${isCurrent ? ', currently picking' : ''}${isMyTeam ? ', your team' : ''}`}
@@ -220,7 +220,7 @@ const DraftOrderBar = ({
                   {/* Status indicators */}
                   {isCurrent && (
                     <div
-                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-red-600 rounded-full flex items-center justify-center`}
+                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-destructive rounded-full flex items-center justify-center`}
                     >
                       <div
                         className={`${compact ? 'w-1.5 h-1.5' : 'w-2 h-2'} bg-white rounded-full animate-ping`}
@@ -229,14 +229,14 @@ const DraftOrderBar = ({
                   )}
                   {isMyTeam && !isCurrent && (
                     <div
-                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-blue-600 rounded-full flex items-center justify-center`}
+                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-info rounded-full flex items-center justify-center`}
                     >
                       <span className={`text-white ${compact ? 'text-xs' : 'text-xs'}`}>★</span>
                     </div>
                   )}
                   {nextPickInfo && !isCurrent && !isMyTeam && (
                     <div
-                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-yellow-600 rounded-full flex items-center justify-center`}
+                      className={`absolute -top-1 -right-1 ${compact ? 'w-3 h-3' : 'w-4 h-4'} bg-warning rounded-full flex items-center justify-center`}
                     >
                       <span className={`text-white font-bold ${compact ? 'text-xs' : 'text-xs'}`}>
                         {nextPicksPreview.findIndex((p) => p.teamIndex === index) + 1}
@@ -250,10 +250,10 @@ const DraftOrderBar = ({
                   <span
                     className={`text-xs text-center truncate max-w-16 ${
                       isCurrent
-                        ? 'font-bold text-red-700'
+                        ? 'font-bold text-destructive'
                         : isMyTeam
-                          ? 'font-semibold text-blue-700'
-                          : 'text-gray-600'
+                          ? 'font-semibold text-info'
+                          : 'text-muted-foreground'
                     }`}
                   >
                     {displayName.length > 8 ? `${displayName.slice(0, 8)}...` : displayName}
@@ -262,7 +262,7 @@ const DraftOrderBar = ({
 
                 {/* Next pick indicator */}
                 {nextPickInfo && !compact && (
-                  <span className="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">
+                  <span className="text-xs bg-warning/10 text-warning px-1 rounded">
                     #{nextPickInfo.pickNumber}
                   </span>
                 )}
@@ -273,22 +273,22 @@ const DraftOrderBar = ({
 
         {/* Legend - Hide in compact mode */}
         {showTeamInfo && !compact && (
-          <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-gray-200">
+          <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-border">
             <div className="flex items-center gap-1 text-xs">
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="text-gray-600">Current Pick</span>
+              <div className="w-3 h-3 bg-destructive rounded-full animate-pulse"></div>
+              <span className="text-muted-foreground">Current Pick</span>
             </div>
             <div className="flex items-center gap-1 text-xs">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span className="text-gray-600">Your Team</span>
+              <div className="w-3 h-3 bg-info rounded-full"></div>
+              <span className="text-muted-foreground">Your Team</span>
             </div>
             <div className="flex items-center gap-1 text-xs">
-              <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-              <span className="text-gray-600">Next Up</span>
+              <div className="w-3 h-3 bg-warning rounded-full"></div>
+              <span className="text-muted-foreground">Next Up</span>
             </div>
             {draftType === 'snake' && (
               <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-500">🐍 Snake Draft</span>
+                <span className="text-muted-foreground">🐍 Snake Draft</span>
               </div>
             )}
           </div>

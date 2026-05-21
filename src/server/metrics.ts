@@ -100,6 +100,7 @@ export const METRICS = {
   authFailures: 'socketio_auth_failures_total',
   timerTicks: 'socketio_timer_ticks_total',
   timerExpired: 'socketio_timer_expired_total',
+  timerStartRejected: 'socketio_timer_start_rejected_total',
   picksHandled: 'socketio_picks_handled_total',
   pickFailures: 'socketio_pick_failures_total',
   leadershipAcquired: 'socketio_timer_leadership_acquired_total',

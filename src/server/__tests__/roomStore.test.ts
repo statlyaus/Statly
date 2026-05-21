@@ -30,6 +30,31 @@ describe('DraftRoomStore (in-memory fallback)', () => {
     expect(c3).toBe(1);
   });
 
+  it('counts multiple sockets for the same user-scoped participant once', async () => {
+    await draftRoomStore.initRoomIfMissing('draft-users');
+    await draftRoomStore.addParticipant('draft-users', 'socket-1');
+    await draftRoomStore.setParticipantData('draft-users', 'socket-1', {
+      socketId: 'socket-1',
+      userId: 'user-1',
+      memberId: 'member-1',
+    });
+    await draftRoomStore.addParticipant('draft-users', 'socket-2');
+    await draftRoomStore.setParticipantData('draft-users', 'socket-2', {
+      socketId: 'socket-2',
+      userId: 'user-1',
+      memberId: 'member-1',
+    });
+    await draftRoomStore.addParticipant('draft-users', 'socket-3');
+    await draftRoomStore.setParticipantData('draft-users', 'socket-3', {
+      socketId: 'socket-3',
+      userId: 'user-2',
+      memberId: 'member-2',
+    });
+
+    await expect(draftRoomStore.getParticipantCount('draft-users')).resolves.toBe(3);
+    await expect(draftRoomStore.getActiveParticipantCount('draft-users')).resolves.toBe(2);
+  });
+
   it('handles invalid or empty room IDs', async () => {
     await expect(draftRoomStore.getRoom('')).resolves.toBeNull();
     await expect(draftRoomStore.getRoom('unknown-room')).resolves.toBeNull();

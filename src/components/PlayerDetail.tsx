@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useLeagueStatColumns } from '@/hooks/useLeagueStatColumns';
 import { fetchApi } from '@/lib/api';
@@ -89,49 +89,49 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
   const [chartMetric, setChartMetric] = useState<ChartMetric>('totalValue');
   const { visibleKeys, allKeys, toggleKey, defaultKeys, labels } = useLeagueStatColumns(leagueId);
 
-  useEffect(() => {
+  const loadMatchLogs = useCallback(async () => {
     if (!player?.id) {
       setLoading(false);
       return;
     }
 
-    const getMatchLogs = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchApi(`players/${player.id}/matches`);
-        const matches = Array.isArray(data) ? data : (data?.data ?? []);
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchApi(`players/${player.id}/matches`);
+      const matches = Array.isArray(data) ? data : (data?.data ?? []);
 
-        // API now returns MatchLogRow[] directly
-        const matchRows = matches as MatchLogRow[];
+      // API now returns MatchLogRow[] directly
+      const matchRows = matches as MatchLogRow[];
 
-        // Convert MatchLogRow to MatchLog for UI compatibility
-        const processedMatches: MatchLog[] = matchRows.map((row) => ({
-          round: row.roundNumber,
-          opponent: row.opponent,
-          season: row.season,
-          matchId: row.matchId,
-          stats: row.stats,
-          matchDate: row.date,
-          totalValue: computeMatchTotalValue(row.stats),
-        }));
+      // Convert MatchLogRow to MatchLog for UI compatibility
+      const processedMatches: MatchLog[] = matchRows.map((row) => ({
+        round: row.roundNumber,
+        opponent: row.opponent,
+        season: row.season,
+        matchId: row.matchId,
+        stats: row.stats,
+        matchDate: row.date,
+        totalValue: computeMatchTotalValue(row.stats),
+      }));
 
-        processedMatches.sort((a, b) => {
-          const timeA = a.matchDate ? new Date(a.matchDate).getTime() : 0;
-          const timeB = b.matchDate ? new Date(b.matchDate).getTime() : 0;
-          if (timeA !== timeB) return timeB - timeA;
-          return (b.round ?? 0) - (a.round ?? 0);
-        });
-        setMatchLogs(processedMatches);
-      } catch (err: unknown) {
-        setError('Failed to load match history.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      processedMatches.sort((a, b) => {
+        const timeA = a.matchDate ? new Date(a.matchDate).getTime() : 0;
+        const timeB = b.matchDate ? new Date(b.matchDate).getTime() : 0;
+        if (timeA !== timeB) return timeB - timeA;
+        return (b.round ?? 0) - (a.round ?? 0);
+      });
+      setMatchLogs(processedMatches);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load match history.');
+    } finally {
+      setLoading(false);
+    }
+  }, [player?.id]);
 
-    getMatchLogs();
-  }, [player, leagueId]);
+  useEffect(() => {
+    void loadMatchLogs();
+  }, [loadMatchLogs]);
 
   const availableSeasons = useMemo(() => {
     const seasons = matchLogs
@@ -188,23 +188,44 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
     return <p>No player data available.</p>;
   }
 
+  const renderMatchHistoryError = (withRetry = false) => (
+    <div
+      role="alert"
+      className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+    >
+      <p className="font-semibold text-foreground">Match history unavailable</p>
+      <p className="mt-1 text-sm">{error}</p>
+      {withRetry && (
+        <button
+          type="button"
+          onClick={() => void loadMatchLogs()}
+          disabled={loading}
+          className="mt-3 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          aria-label="Retry match history"
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-10">
       <PlayerSummaryCard player={player} />
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="lg:col-span-6 bg-white rounded-2xl border border-border p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-slate-900">Recent Performance</h2>
-            <span className="text-xs text-slate-500">Last matches</span>
+            <h2 className="text-xl font-semibold text-foreground">Recent Performance</h2>
+            <span className="text-xs text-muted-foreground">Last matches</span>
           </div>
           <div className="mb-4 flex flex-wrap gap-3 text-sm">
             <label className="flex items-center gap-2">
-              <span className="font-semibold text-slate-600">Season:</span>
+              <span className="font-semibold text-muted-foreground">Season:</span>
               <select
                 value={seasonFilter}
                 onChange={(event) => setSeasonFilter(event.target.value)}
-                className="rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700"
+                className="rounded-md border border-border bg-white px-3 py-1 text-sm text-foreground"
               >
                 {availableSeasons.map((season) => (
                   <option key={season} value={season}>
@@ -214,7 +235,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
               </select>
             </label>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-600">Recently:</span>
+              <span className="font-semibold text-muted-foreground">Recently:</span>
               {[
                 { label: 'All', value: 0 },
                 { label: 'Last 3', value: 3 },
@@ -227,8 +248,8 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
                   onClick={() => setRecentFilter(option.value)}
                   className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                     recentFilter === option.value
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-foreground text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted'
                   }`}
                 >
                   {option.label}
@@ -236,11 +257,11 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
               ))}
             </div>
             <label className="flex items-center gap-2">
-              <span className="font-semibold text-slate-600">Stat:</span>
+              <span className="font-semibold text-muted-foreground">Stat:</span>
               <select
                 value={chartMetric}
                 onChange={(event) => setChartMetric(event.target.value as ChartMetric)}
-                className="rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700"
+                className="rounded-md border border-border bg-white px-3 py-1 text-sm text-foreground"
               >
                 {chartMetricOptions.map((metric) => (
                   <option key={metric} value={metric}>
@@ -257,7 +278,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
               <LoadingSpinner />
             </div>
           ) : error ? (
-            <p className="text-red-500">{error}</p>
+            renderMatchHistoryError()
           ) : (
             <PlayerChart
               matchData={chartData}
@@ -266,19 +287,21 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
             />
           )}
         </div>
-        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="lg:col-span-6 bg-white rounded-2xl border border-border p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-slate-900">Match Logs</h2>
+            <h2 className="text-xl font-semibold text-foreground">Match Logs</h2>
             <button
               type="button"
-              className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-              onClick={() => window.location.reload()}
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+              onClick={() => void loadMatchLogs()}
+              disabled={loading}
+              aria-label={error ? 'Retry match history' : 'Refresh match history'}
             >
-              Refresh
+              {error ? 'Retry' : 'Refresh'}
             </button>
           </div>
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               Showing {visibleKeys.length} league columns (defaults: {defaultKeys.length})
             </span>
             {allKeys.map((key) => (
@@ -288,8 +311,8 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
                 onClick={() => toggleKey(key)}
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
                   visibleKeys.includes(key)
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-700'
+                    ? 'bg-foreground text-white'
+                    : 'bg-muted text-foreground'
                 }`}
               >
                 {labels[key]?.short ?? labels[key]?.label ?? key}
@@ -301,11 +324,11 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
               <LoadingSpinner />
             </div>
           ) : error ? (
-            <p className="text-red-500">{error}</p>
+            renderMatchHistoryError()
           ) : (
-            <div className="overflow-auto max-h-[60vh] border border-slate-100 rounded-lg">
+            <div className="overflow-auto max-h-[60vh] border border-border rounded-lg">
               <table className="min-w-full text-sm">
-                <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                <thead className="sticky top-0 bg-muted text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left">Round</th>
                     <th className="px-3 py-2 text-left">Date</th>
@@ -323,7 +346,7 @@ export const PlayerDetail = ({ player, leagueId }: PlayerDetailProps) => {
                     <tr>
                       <td
                         colSpan={visibleKeys.length + 4}
-                        className="px-3 py-6 text-center text-slate-500"
+                        className="px-3 py-6 text-center text-muted-foreground"
                       >
                         No matches found.
                       </td>

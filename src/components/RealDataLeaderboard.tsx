@@ -111,7 +111,7 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
   }, [category, validatedLimit]);
 
   if (loading) return <div className="p-4">Loading leaderboard...</div>;
-  if (error) return <div className="p-4 text-red-500">{error}</div>;
+  if (error) return <div className="p-4 text-destructive">{error}</div>;
 
   const getDisplayValue = (leader: PlayerLeaderboardEntry) => {
     switch (category) {
@@ -129,13 +129,13 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
   const getValueColor = (category: string) => {
     switch (category) {
       case 'goals':
-        return 'text-green-600';
+        return 'text-success';
       case 'tackles':
-        return 'text-red-600';
+        return 'text-destructive';
       case 'inside50s':
-        return 'text-orange-600';
+        return 'text-warning';
       default:
-        return 'text-purple-600';
+        return 'text-primary';
     }
   };
 
@@ -149,20 +149,20 @@ export default function RealDataLeaderboard({ category = 'totalValue', limit = 1
         {leaders.map((leader, index) => (
           <div
             key={leader.player_id}
-            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+            className="flex items-center justify-between p-3 bg-muted rounded-lg"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold">
+              <div className="w-8 h-8 bg-info/10 rounded-full flex items-center justify-center text-sm font-bold">
                 {index + 1}
               </div>
               <div>
                 <Link
                   href={`/players/${leader.player_id}`}
-                  className="font-medium hover:text-blue-600 hover:underline"
+                  className="font-medium hover:text-info hover:underline"
                 >
                   {leader.player_name}
                 </Link>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   {leader.team ? (
                     <TeamLogo
                       team={leader.team}

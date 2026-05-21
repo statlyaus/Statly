@@ -38,6 +38,7 @@ function toDate(value: Timestamp | Date | null | undefined): Date | undefined {
 // League-Isolated Entity Interfaces
 export interface LeagueRoster {
   id: string;
+  memberId?: string;
   userId: string;
   teamName: string;
   playerIds: string[];

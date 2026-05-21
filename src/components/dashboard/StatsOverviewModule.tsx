@@ -36,9 +36,9 @@ export default function StatsOverviewModule({
   };
 
   const getChangeColor = (change: number) => {
-    if (change > 0) return 'text-green-600';
-    if (change < 0) return 'text-red-600';
-    return 'text-slate-500';
+    if (change > 0) return 'text-success';
+    if (change < 0) return 'text-destructive';
+    return 'text-muted-foreground';
   };
 
   const getChangeIcon = (change: number) => {
@@ -75,10 +75,10 @@ export default function StatsOverviewModule({
 
   if (stats.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+      <div className="rounded-xl border border-dashed border-border bg-muted px-4 py-6 text-center">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white">
           <svg
-            className="h-6 w-6 text-slate-400"
+            className="h-6 w-6 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -91,8 +91,8 @@ export default function StatsOverviewModule({
             />
           </svg>
         </div>
-        <h4 className="text-sm font-semibold text-slate-900">No account metrics yet</h4>
-        <p className="mt-1 text-sm text-slate-600">
+        <h4 className="text-sm font-semibold text-foreground">No account metrics yet</h4>
+        <p className="mt-1 text-sm text-muted-foreground">
           Counts and timing signals will appear here once league data is available.
         </p>
       </div>
@@ -107,12 +107,12 @@ export default function StatsOverviewModule({
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: index * 0.1 }}
-          className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+          className="rounded-xl border border-border bg-muted p-4"
         >
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {stat.label}
           </div>
-          <div className="mb-1 text-2xl font-semibold text-slate-950">
+          <div className="mb-1 text-2xl font-semibold text-foreground">
             {formatValue(stat.value, stat.format)}
           </div>
           {stat.change !== undefined && (

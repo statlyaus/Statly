@@ -119,18 +119,18 @@ export default function QuickActionsModule({
         >
           <Link
             href={action.href}
-            className="block rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-300 hover:bg-white hover:shadow-sm group"
+            className="block rounded-xl border border-border bg-muted p-4 transition hover:border-border hover:bg-white hover:shadow-sm group"
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition group-hover:border-slate-300 group-hover:text-slate-950">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white text-foreground transition group-hover:border-border group-hover:text-foreground">
                 {action.icon}
               </div>
-              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 ring-1 ring-inset ring-slate-200">
+              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground ring-1 ring-inset ring-ring">
                 {action.badge}
               </span>
             </div>
-            <h4 className="mt-3 text-sm font-semibold text-slate-950">{action.title}</h4>
-            <p className="mt-1 text-xs leading-5 text-slate-600">{action.description}</p>
+            <h4 className="mt-3 text-sm font-semibold text-foreground">{action.title}</h4>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{action.description}</p>
           </Link>
         </motion.div>
       ))}

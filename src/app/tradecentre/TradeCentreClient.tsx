@@ -57,10 +57,10 @@ export default function TradeCentreClient() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <div className="text-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600">Loading Trade Centre...</p>
+          <p className="mt-4 text-muted-foreground">Loading Trade Centre...</p>
         </div>
       </div>
     );

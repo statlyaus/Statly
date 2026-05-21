@@ -39,6 +39,12 @@ export async function verifyFixtureLeagues(input: {
       drafts: {
         take: 1,
         orderBy: { createdAt: 'desc' },
+        include: {
+          orders: {
+            select: { slot: true },
+            orderBy: { slot: 'asc' },
+          },
+        },
       },
     },
     orderBy: [{ name: 'asc' }, { createdAt: 'asc' }],
@@ -61,7 +67,8 @@ export async function verifyFixtureLeagues(input: {
 
     const botCount = league.members.filter((member) => member.botProfile?.enabled).length;
     const rosteredMemberCount = league.members.filter(
-      (member) => member.rosterPlayers.length >= input.manifest.rosterSize + input.manifest.benchSize
+      (member) =>
+        member.rosterPlayers.length >= input.manifest.rosterSize + input.manifest.benchSize
     ).length;
     const rosterPlayerCount = league.members.reduce(
       (total, member) => total + member.rosterPlayers.length,
@@ -71,7 +78,9 @@ export async function verifyFixtureLeagues(input: {
     const issues: string[] = [];
 
     if (league.members.length !== input.manifest.teamsPerLeague) {
-      issues.push(`Expected ${input.manifest.teamsPerLeague} members, found ${league.members.length}.`);
+      issues.push(
+        `Expected ${input.manifest.teamsPerLeague} members, found ${league.members.length}.`
+      );
     }
     if (botCount !== input.manifest.botTeamsPerLeague) {
       issues.push(`Expected ${input.manifest.botTeamsPerLeague} enabled bots, found ${botCount}.`);
@@ -83,6 +92,33 @@ export async function verifyFixtureLeagues(input: {
     }
     if (!draft) {
       issues.push('Draft is missing.');
+    } else {
+      const expectedSlots = Array.from(
+        { length: input.manifest.teamsPerLeague },
+        (_, index) => index + 1
+      );
+      const draftSlots = draft.orders
+        .map((order) => order.slot)
+        .sort((left, right) => left - right);
+      const expectedTotalPicks =
+        input.manifest.teamsPerLeague * (input.manifest.rosterSize + input.manifest.benchSize);
+
+      if (draft.orders.length !== input.manifest.teamsPerLeague) {
+        issues.push(
+          `Expected ${input.manifest.teamsPerLeague} draft order slots, found ${draft.orders.length}.`
+        );
+      }
+      if (
+        draftSlots.length !== expectedSlots.length ||
+        draftSlots.some((slot, index) => slot !== expectedSlots[index])
+      ) {
+        issues.push(
+          `Draft order slots must be contiguous 1-${input.manifest.teamsPerLeague}, found ${draftSlots.join(', ') || 'none'}.`
+        );
+      }
+      if (draft.totalPicks !== expectedTotalPicks) {
+        issues.push(`Expected ${expectedTotalPicks} draft picks, found ${draft.totalPicks}.`);
+      }
     }
     if (scheduleSnap.size === 0) {
       issues.push('Season schedule is missing.');

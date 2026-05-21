@@ -50,8 +50,8 @@ export default function MetricsCard({ errorRateThreshold = 2 }: MetricsCardProps
     return {
       label: healthy ? 'Healthy' : 'Degraded',
       className: healthy
-        ? 'bg-green-100 text-green-700 ring-1 ring-inset ring-green-200'
-        : 'bg-red-100 text-red-700 ring-1 ring-inset ring-red-200',
+        ? 'bg-success/10 text-success ring-1 ring-inset ring-success'
+        : 'bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive',
     };
   }, [data?.errorRate, errorRateThreshold]);
 
@@ -65,30 +65,30 @@ export default function MetricsCard({ errorRateThreshold = 2 }: MetricsCardProps
   return (
     <div className="rounded-lg bg-white px-6 py-5 shadow">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-700">Server Metrics</h3>
+        <h3 className="text-sm font-medium text-foreground">Server Metrics</h3>
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${health.className}`}>
           {health.label}
         </span>
       </div>
-      {error && <div className="text-sm text-red-600">Failed to load metrics</div>}
+      {error && <div className="text-sm text-destructive">Failed to load metrics</div>}
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt className="text-gray-500">Requests (1h)</dt>
-          <dd className="font-medium text-gray-900">{data?.totalRequests ?? '—'}</dd>
+          <dt className="text-muted-foreground">Requests (1h)</dt>
+          <dd className="font-medium text-foreground">{data?.totalRequests ?? '—'}</dd>
         </div>
         <div>
-          <dt className="text-gray-500">Errors (1h)</dt>
-          <dd className="font-medium text-gray-900">{data?.totalErrors ?? '—'}</dd>
+          <dt className="text-muted-foreground">Errors (1h)</dt>
+          <dd className="font-medium text-foreground">{data?.totalErrors ?? '—'}</dd>
         </div>
         <div>
-          <dt className="text-gray-500">Error Rate</dt>
-          <dd className="font-medium text-gray-900">
+          <dt className="text-muted-foreground">Error Rate</dt>
+          <dd className="font-medium text-foreground">
             {formattedErrorRate != null ? `${formattedErrorRate}%` : '—'}
           </dd>
         </div>
         <div>
-          <dt className="text-gray-500">Avg Latency</dt>
-          <dd className="font-medium text-gray-900 flex items-center gap-2">
+          <dt className="text-muted-foreground">Avg Latency</dt>
+          <dd className="font-medium text-foreground flex items-center gap-2">
             {data?.averageResponseTime ? `${Math.round(data.averageResponseTime)} ms` : '—'}
             <Sparkline values={latencySamples} />
           </dd>

@@ -78,15 +78,15 @@ function DashboardCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[1.5rem] border border-slate-200 bg-white/94 p-5 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.38)] backdrop-blur-sm">
+    <section className="rounded-[1.5rem] border border-border bg-white/94 p-5 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.38)] backdrop-blur-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {eyebrow}
           </p>
-          <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{title}</h2>
+          <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{title}</h2>
           {description ? (
-            <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
           ) : null}
         </div>
       </div>
@@ -107,14 +107,14 @@ function CommandLink({
   return (
     <Link
       href={href}
-      className="group rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
+      className="group rounded-2xl border border-border bg-muted px-4 py-3 text-left transition hover:border-border hover:bg-white hover:shadow-sm"
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-950">{title}</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">{description}</p>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
         </div>
-        <span className="text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-950">
+        <span className="text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground">
           →
         </span>
       </div>
@@ -318,42 +318,42 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   const primaryLeague = leagueSnapshots[0] ?? null;
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f7f5ef_0%,#f4f1ea_42%,#efebe3_100%)]">
+    <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_42%,var(--league-surface-muted)_100%)]">
       <section className="mx-auto max-w-[var(--app-shell-max-width)] px-4 pb-8 pt-6 sm:px-6 lg:px-8 2xl:px-10">
         <div className="space-y-6">
-          <section className="rounded-[2rem] border border-slate-200/80 bg-white/92 p-5 shadow-[0_22px_70px_-45px_rgba(15,23,42,0.35)] sm:p-6">
+          <section className="rounded-[2rem] border border-border bg-white/92 p-5 shadow-[0_22px_70px_-45px_rgba(15,23,42,0.35)] sm:p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Dashboard
                 </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-[2.5rem]">
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-[2.5rem]">
                   League command center for {displayName}
                 </h1>
-                <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+                <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
                   Start from the leagues and deadlines that need attention, then move into draft,
                   waivers, market research, or recent activity without leaving the page.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700">
+                <span className="rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-foreground">
                   {leagueStateLoading || leaguesLoading ? 'Refreshing…' : 'Current state'}
                 </span>
                 {liveLeagueCount > 0 ? (
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+                  <span className="rounded-full border border-success/20 bg-success/10 px-3 py-1 text-sm font-medium text-success">
                     {liveLeagueCount} live {liveLeagueCount === 1 ? 'league' : 'leagues'}
                   </span>
                 ) : null}
                 {draftPendingCount > 0 ? (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
+                  <span className="rounded-full border border-warning/20 bg-warning/10 px-3 py-1 text-sm font-medium text-warning">
                     {draftPendingCount} draft{draftPendingCount === 1 ? '' : 's'} pending
                   </span>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => setRefreshTrigger((prev) => prev + 1)}
-                  className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  className="inline-flex items-center justify-center rounded-full border border-border bg-foreground px-4 py-2 text-sm font-semibold text-white transition hover:bg-muted"
                 >
                   Refresh dashboard
                 </button>
@@ -363,9 +363,9 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
             <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(2,minmax(0,0.9fr))]">
               <Link
                 href={primaryLeague ? `/leagues/${primaryLeague.id}` : '/leagues'}
-                className="group rounded-[1.5rem] border border-slate-200 bg-slate-950 px-5 py-5 text-white transition hover:bg-slate-900"
+                className="group rounded-[1.5rem] border border-border bg-foreground px-5 py-5 text-white transition hover:bg-foreground"
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Primary focus
                 </p>
                 <div className="mt-3 flex items-start justify-between gap-4">
@@ -373,42 +373,42 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                     <p className="text-xl font-semibold">
                       {primaryLeague ? primaryLeague.name : 'Open your leagues'}
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {primaryLeague
                         ? `${primaryLeague.teamName} • ${primaryLeague.currentRoundLabel ?? 'Schedule pending'}`
                         : 'Jump into your active leagues, standings, and current matchups.'}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-slate-300 transition group-hover:translate-x-0.5">
+                  <span className="text-sm font-semibold text-muted-foreground transition group-hover:translate-x-0.5">
                     Open →
                   </span>
                 </div>
               </Link>
 
-              <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <div className="rounded-[1.5rem] border border-border bg-muted px-5 py-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Next waiver
                 </p>
-                <p className="mt-3 text-lg font-semibold text-slate-950">
+                <p className="mt-3 text-lg font-semibold text-foreground">
                   {nextWaiverLeague ? nextWaiverLeague.name : 'No waiver queued'}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {nextWaiverLeague
                     ? formatDateLabel(nextWaiverLeague.nextWaiverIso)
                     : 'No waiver window is currently materialized across tracked leagues.'}
                 </p>
               </div>
 
-              <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <div className="rounded-[1.5rem] border border-border bg-muted px-5 py-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Next checkpoint
                 </p>
-                <p className="mt-3 text-lg font-semibold text-slate-950">
+                <p className="mt-3 text-lg font-semibold text-foreground">
                   {nextEventLeague
                     ? (nextEventLeague.nextEventLabel ?? 'League event')
                     : 'No event queued'}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {nextEventLeague
                     ? `${nextEventLeague.name} • ${formatDateLabel(nextEventLeague.nextEventIso)}`
                     : 'No upcoming league event is currently available.'}
@@ -443,12 +443,12 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                 description="Open the right league first, with live state and the next decision visible in each row."
               >
                 {leagueStateLoading && leagueSnapshots.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-sm text-slate-600">
+                  <div className="rounded-2xl border border-border bg-white px-4 py-8 text-sm text-muted-foreground">
                     Loading league context…
                   </div>
                 ) : userLeagues.length === 0 ? (
                   <div className="space-y-3">
-                    <p className="text-sm text-slate-600">
+                    <p className="text-sm text-muted-foreground">
                       You are not currently in any leagues. Create or join one to populate the
                       dashboard.
                     </p>
@@ -461,7 +461,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                       </Link>
                       <Link
                         href="/leagues/join"
-                        className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted"
                       >
                         Join league
                       </Link>
@@ -486,68 +486,70 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                       return (
                         <div
                           key={league.id}
-                          className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_30px_-26px_rgba(15,23,42,0.28)]"
+                          className="rounded-[1.5rem] border border-border bg-white px-4 py-4 shadow-[0_10px_30px_-26px_rgba(15,23,42,0.28)]"
                         >
                           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                   {index === 0 ? 'Primary focus' : `League ${index + 1}`}
                                 </span>
                                 {league.isLive ? (
-                                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                                  <span className="rounded-full bg-success/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
                                     Live round
                                   </span>
                                 ) : null}
-                                <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+                                <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                   {league.role}
                                 </span>
                               </div>
 
                               <div className="mt-3">
-                                <h3 className="text-xl font-semibold text-slate-950">
+                                <h3 className="text-xl font-semibold text-foreground">
                                   {league.name}
                                 </h3>
-                                <p className="mt-1 text-sm text-slate-600">{league.teamName}</p>
-                                <p className="mt-2 text-sm leading-6 text-slate-600">
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  {league.teamName}
+                                </p>
+                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                                   {priorityCopy}
                                 </p>
                               </div>
 
                               <div className="mt-4 grid gap-2 md:grid-cols-3">
-                                <div className="rounded-xl bg-slate-50 px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                <div className="rounded-xl bg-muted px-3 py-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                     Current round
                                   </p>
-                                  <p className="mt-1 font-medium text-slate-900">
+                                  <p className="mt-1 font-medium text-foreground">
                                     {league.currentRoundLabel ?? 'Not materialized'}
                                   </p>
-                                  <p className="mt-1 text-xs capitalize text-slate-500">
+                                  <p className="mt-1 text-xs capitalize text-muted-foreground">
                                     {league.currentRoundStatus?.replace('_', ' ') ??
                                       'No schedule yet'}
                                   </p>
                                 </div>
-                                <div className="rounded-xl bg-slate-50 px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                <div className="rounded-xl bg-muted px-3 py-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                     Next action
                                   </p>
-                                  <p className="mt-1 font-medium text-slate-900">
+                                  <p className="mt-1 font-medium text-foreground">
                                     {nextActionLabel}
                                   </p>
-                                  <p className="mt-1 text-xs text-slate-500">
+                                  <p className="mt-1 text-xs text-muted-foreground">
                                     {league.nextWaiverIso
                                       ? formatDateLabel(league.nextWaiverIso)
                                       : formatDateLabel(league.nextEventIso)}
                                   </p>
                                 </div>
-                                <div className="rounded-xl bg-slate-50 px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                <div className="rounded-xl bg-muted px-3 py-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                     Fastest path
                                   </p>
-                                  <p className="mt-1 font-medium text-slate-900">
+                                  <p className="mt-1 font-medium text-foreground">
                                     {primaryActionLabel}
                                   </p>
-                                  <p className="mt-1 text-xs text-slate-500">
+                                  <p className="mt-1 text-xs text-muted-foreground">
                                     {league.isLive
                                       ? 'Jump straight into the current head-to-head.'
                                       : 'Open the full league workspace.'}
@@ -559,13 +561,13 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                             <div className="flex flex-col gap-2 lg:w-[190px]">
                               <Link
                                 href={primaryActionHref}
-                                className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                                className="inline-flex items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-muted"
                               >
                                 {primaryActionLabel}
                               </Link>
                               <Link
                                 href={`/leagues/${league.id}?tab=roster`}
-                                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-white"
+                                className="inline-flex items-center justify-center rounded-xl border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-white"
                               >
                                 Open roster
                               </Link>
@@ -616,40 +618,40 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                   description="The highest-signal league conditions and deadlines across your account."
                 >
                   <div className="space-y-3">
-                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-xl border border-border bg-white px-4 py-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Live leagues
                       </p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-950">
+                      <p className="mt-2 text-2xl font-semibold text-foreground">
                         {liveLeagueCount}
                       </p>
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {liveLeagueCount > 0
                           ? 'Open active matchups and current league state first.'
                           : 'No live rounds are currently in progress.'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-xl border border-border bg-white px-4 py-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Draft queue
                       </p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-950">
+                      <p className="mt-2 text-2xl font-semibold text-foreground">
                         {draftPendingCount}
                       </p>
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {draftPendingCount > 0
                           ? 'Draft attention is still required in your league list.'
                           : 'No pending drafts are flagged right now.'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-xl border border-border bg-white px-4 py-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Upcoming checkpoint
                       </p>
-                      <p className="mt-2 font-semibold text-slate-950">
+                      <p className="mt-2 font-semibold text-foreground">
                         {nextEventLeague ? nextEventLeague.name : 'No event queued'}
                       </p>
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {nextEventLeague
                           ? `${nextEventLeague.nextEventLabel ?? 'Next event'} • ${formatDateLabel(nextEventLeague.nextEventIso)}`
                           : 'League deadlines will appear here when state is available.'}

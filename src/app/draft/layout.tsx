@@ -23,7 +23,7 @@ export default function DraftLayout({ children }: { children: ReactNode }) {
     <div className={draftHubPageShellClass}>
       <header className={`${draftHubHeaderShellClass} mb-6`}>
         <div className={draftHubHeroTopAccentClass} />
-        <div className="flex flex-col gap-5 border-b border-sky-900/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 border-b border-info/20 pb-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <p className={draftHubHeaderKickerClass}>Statly Public Research Hub</p>
             <h1 className={draftHubHeaderTitleClass}>AFL Draft &amp; Trade Hub</h1>

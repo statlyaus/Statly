@@ -16,7 +16,7 @@ export default function PlayerLink({
   playerName,
   playerId,
   children,
-  className = 'text-blue-600 hover:text-blue-800 hover:underline',
+  className = 'text-info hover:text-info hover:underline',
   showTooltip = false,
 }: PlayerLinkProps) {
   const targetId = encodeURIComponent(playerId ?? playerName);

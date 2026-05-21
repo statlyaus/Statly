@@ -13,10 +13,10 @@ export default function StatusBadge({
 }) {
   // Known statuses map (hoisted to module scope)
   const STATUS_MAP = {
-    SCHEDULED: { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Scheduled' },
-    LIVE: { bg: 'bg-green-100', text: 'text-green-800', label: 'Live' },
-    PAUSED: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Paused' },
-    COMPLETED: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Completed' },
+    SCHEDULED: { bg: 'bg-info/10', text: 'text-info', label: 'Scheduled' },
+    LIVE: { bg: 'bg-success/10', text: 'text-success', label: 'Live' },
+    PAUSED: { bg: 'bg-warning/10', text: 'text-warning', label: 'Paused' },
+    COMPLETED: { bg: 'bg-muted', text: 'text-foreground', label: 'Completed' },
   } as const satisfies Record<StatusKind, { bg: string; text: string; label: string }>;
 
   // …later, inside your component’s render logic:
@@ -27,8 +27,8 @@ export default function StatusBadge({
     .toLowerCase()
     .replace(/\b\w/g, (c) => c.toUpperCase());
   const s = STATUS_MAP[key] ?? {
-    bg: 'bg-yellow-100',
-    text: 'text-yellow-800',
+    bg: 'bg-warning/10',
+    text: 'text-warning',
     label: fallbackLabel,
   };
   return (

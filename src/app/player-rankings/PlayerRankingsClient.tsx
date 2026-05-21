@@ -91,12 +91,12 @@ function LoadingSkeleton() {
   return (
     <div className="space-y-4">
       <div className="animate-pulse">
-        <div className="h-4 bg-gray-200 rounded w-1/4 mb-6"></div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="bg-gray-50 p-4">
+        <div className="h-4 bg-muted rounded w-1/4 mb-6"></div>
+        <div className="bg-white rounded-lg shadow-sm border border-border overflow-hidden">
+          <div className="bg-muted p-4">
             <div className="grid grid-cols-5 gap-4">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-4 bg-gray-200 rounded"></div>
+                <div key={i} className="h-4 bg-muted rounded"></div>
               ))}
             </div>
           </div>
@@ -104,11 +104,11 @@ function LoadingSkeleton() {
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i} className="p-4">
                 <div className="grid grid-cols-5 gap-4">
-                  <div className="h-8 bg-gray-100 rounded-full w-8"></div>
-                  <div className="h-4 bg-gray-100 rounded"></div>
-                  <div className="h-4 bg-gray-100 rounded w-16"></div>
-                  <div className="h-4 bg-gray-100 rounded w-12"></div>
-                  <div className="h-4 bg-gray-100 rounded w-20"></div>
+                  <div className="h-8 bg-muted rounded-full w-8"></div>
+                  <div className="h-4 bg-muted rounded"></div>
+                  <div className="h-4 bg-muted rounded w-16"></div>
+                  <div className="h-4 bg-muted rounded w-12"></div>
+                  <div className="h-4 bg-muted rounded w-20"></div>
                 </div>
               </div>
             ))}
@@ -149,22 +149,22 @@ export default function PlayerRankingsClient() {
     <AppLayout>
       <main className="mx-auto max-w-7xl p-6">
         <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Player Rankings</h1>
-          <p className="text-lg text-gray-600">
+          <h1 className="text-4xl font-bold text-foreground mb-3">Player Rankings</h1>
+          <p className="text-lg text-muted-foreground">
             Top performing players ranked by total fantasy points
             {season ? ` for the published ${season} season` : ''}
           </p>
           {error && (
-            <p className="text-sm text-red-600 mt-2">{error} Showing fallback if available.</p>
+            <p className="text-sm text-destructive mt-2">{error} Showing fallback if available.</p>
           )}
           {players.length > 0 && (
-            <p className="text-sm text-green-600 mt-2">
+            <p className="text-sm text-success mt-2">
               ✅ Using live ETL data ({displayPlayers.length} players
               {season ? ` • ${season} season` : ''})
             </p>
           )}
           {players.length === 0 && !error && (
-            <p className="text-sm text-yellow-600 mt-2">
+            <p className="text-sm text-warning mt-2">
               ⚠️ Using fallback data - Initialize Firebase database for live data
             </p>
           )}

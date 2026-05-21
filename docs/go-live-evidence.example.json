@@ -1,0 +1,264 @@
+{
+  "releaseId": "release-2026-05-21-example",
+  "commitSha": "abc123def456",
+  "testDate": "2026-05-21",
+  "tester": "Go Live QA",
+  "environment": "staging",
+  "baseUrl": "https://staging.statly.example",
+  "fixture": {
+    "datasetVersion": "go-live-fixtures-2026-05-21-example",
+    "smokeAccountEmail": "smoke@statly.example",
+    "leagueId": "league_123",
+    "draftId": "draft_123"
+  },
+  "commandEvidence": [
+    {
+      "command": "npm run typecheck",
+      "status": "pass",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/command-typecheck"
+    },
+    {
+      "command": "npm run lint",
+      "status": "pass",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/command-lint"
+    },
+    {
+      "command": "npm run guard:routes",
+      "status": "pass",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/command-guard-routes"
+    },
+    {
+      "command": "npm run guard:design",
+      "status": "pass",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/command-guard-design"
+    },
+    {
+      "command": "npm test",
+      "status": "pass",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/command-test"
+    },
+    {
+      "command": "npm run branch:complete",
+      "status": "pass",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/command-branch-complete"
+    }
+  ],
+  "routeCoverage": [
+    {
+      "route": "/",
+      "status": "pass",
+      "authMode": "anonymous",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/route-home"
+    },
+    {
+      "route": "/login",
+      "status": "pass",
+      "authMode": "anonymous",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/route-login"
+    },
+    {
+      "route": "/dashboard",
+      "status": "pass",
+      "authMode": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/route-dashboard"
+    },
+    {
+      "route": "/players",
+      "status": "pass",
+      "authMode": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/route-players"
+    },
+    {
+      "route": "/rankings",
+      "status": "pass",
+      "authMode": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/route-rankings"
+    },
+    {
+      "route": "/leagues/:leagueId",
+      "status": "pass",
+      "authMode": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/route-league"
+    },
+    {
+      "route": "/drafts/:draftId",
+      "status": "pass",
+      "authMode": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/route-draft"
+    },
+    {
+      "route": "/admin/workers",
+      "status": "pass",
+      "authMode": "standard-user-denied",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/route-admin-workers-denied"
+    }
+  ],
+  "accessibility": {
+    "status": "pass",
+    "keyboard": true,
+    "namedControls": true,
+    "desktop": true,
+    "mobile": true,
+    "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/accessibility"
+  },
+  "browserRuns": [
+    {
+      "browser": "chrome",
+      "platform": "desktop",
+      "viewport": "1440x900",
+      "status": "pass",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/chrome-desktop"
+    },
+    {
+      "browser": "safari",
+      "platform": "desktop",
+      "viewport": "1440x900",
+      "status": "pass",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/safari-desktop"
+    },
+    {
+      "browser": "firefox",
+      "platform": "desktop",
+      "viewport": "1440x900",
+      "status": "pass",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/firefox-desktop"
+    },
+    {
+      "browser": "mobile-safari",
+      "platform": "mobile",
+      "viewport": "390x844",
+      "status": "pass",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/mobile-safari"
+    },
+    {
+      "browser": "chrome-android",
+      "platform": "mobile",
+      "viewport": "390x844",
+      "status": "pass",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/chrome-android"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "auth-session",
+      "status": "pass",
+      "desktop": true,
+      "mobile": true,
+      "accountRole": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/auth-session"
+    },
+    {
+      "id": "dashboard",
+      "status": "pass",
+      "desktop": true,
+      "mobile": true,
+      "accountRole": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/dashboard"
+    },
+    {
+      "id": "league-switch",
+      "status": "pass",
+      "desktop": true,
+      "mobile": true,
+      "accountRole": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/league-switch"
+    },
+    {
+      "id": "draft-room",
+      "status": "pass",
+      "desktop": true,
+      "mobile": true,
+      "accountRole": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/draft-room"
+    },
+    {
+      "id": "trade-review",
+      "status": "pass",
+      "desktop": true,
+      "mobile": true,
+      "accountRole": "commissioner",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/trade-review"
+    },
+    {
+      "id": "waiver-flow",
+      "status": "pass",
+      "desktop": true,
+      "mobile": true,
+      "accountRole": "commissioner",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/waiver-flow"
+    },
+    {
+      "id": "player-rankings",
+      "status": "pass",
+      "desktop": true,
+      "mobile": true,
+      "accountRole": "smoke-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/player-rankings"
+    },
+    {
+      "id": "admin-denial",
+      "status": "pass",
+      "desktop": true,
+      "mobile": true,
+      "accountRole": "standard-user",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/admin-denial"
+    }
+  ],
+  "performance": {
+    "environment": "staging",
+    "source": "web-vitals",
+    "status": "pass",
+    "metrics": {
+      "CLS": 0.01,
+      "FCP": 1200,
+      "INP": 120,
+      "LCP": 1800,
+      "TTFB": 250
+    },
+    "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/performance"
+  },
+  "degradedStates": [
+    {
+      "id": "dashboard-api-failure",
+      "environment": "staging",
+      "status": "pass",
+      "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/degraded-dashboard-api-failure"
+    }
+  ],
+  "acceptedRisks": [
+    {
+      "id": "risk-example-1",
+      "status": "closed",
+      "owner": "Engineering",
+      "reason": "Example risk shape only",
+      "mitigation": "No active mitigation required for a closed example risk",
+      "expiry": "2026-05-21",
+      "rollbackSignal": "No rollback signal required for a closed example risk"
+    }
+  ],
+  "launchBlockers": [
+    {
+      "id": "blocker-example-1",
+      "severity": "P1",
+      "status": "closed",
+      "description": "Example closed blocker shape",
+      "retestEvidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/blocker-example-1"
+    }
+  ],
+  "finalRecommendation": {
+    "decision": "go",
+    "rationale": "Example release evidence satisfies the validator contract.",
+    "rollbackPlan": "Rollback to the previous stable deployment if P0 errors recur.",
+    "postDeploySmokePlan": "Run public, auth, dashboard, league, roster, rankings, mobile navigation, logout, and server-log smoke immediately after deploy."
+  }
+}

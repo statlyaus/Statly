@@ -10,6 +10,7 @@ type FindingCategory = DesignDriftCategory;
 
 type ProductSurface =
   | 'auth'
+  | 'admin'
   | 'dashboard'
   | 'draft'
   | 'league'
@@ -19,6 +20,8 @@ type ProductSurface =
   | 'roster'
   | 'shared-ui'
   | 'team'
+  | 'trade'
+  | 'waiver'
   | 'demo'
   | 'other';
 
@@ -62,8 +65,15 @@ function classifySurface(file: string): ProductSurface {
   if (file.startsWith('src/components/demos/')) return 'demo';
   if (file.includes('/components/ui/')) return 'shared-ui';
   if (file === 'src/app/page.tsx' || file === 'src/app/fantasy/page.tsx') return 'public';
+  if (file.includes('/admin/') || file.includes('Admin')) return 'admin';
   if (file.includes('/(auth)/') || file.includes('/Auth')) return 'auth';
   if (file.includes('/draft/') || file.includes('/Draft')) return 'draft';
+  if (file.includes('/trade') || file.includes('/trades/') || file.includes('Trade')) {
+    return 'trade';
+  }
+  if (file.includes('/waiver') || file.includes('/waivers/') || file.includes('Waiver')) {
+    return 'waiver';
+  }
   if (file.includes('/league/') || file.includes('/leagues/') || file.includes('League')) {
     return 'league';
   }

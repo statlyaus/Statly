@@ -30,7 +30,7 @@ export default function MainNav() {
                     aria-current={active ? 'page' : undefined}
                     className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
                       active
-                        ? 'text-blue-700 border-b-2 border-blue-600'
+                        ? 'text-info border-b-2 border-info/20'
                         : 'text-neutral-700 hover:text-neutral-900'
                     }`}
                   >
@@ -56,7 +56,7 @@ export default function MainNav() {
                 <Link
                   href={r.href}
                   aria-current={active ? 'page' : undefined}
-                  className={`block py-2 text-xs ${active ? 'text-blue-700 font-semibold' : 'text-neutral-700'}`}
+                  className={`block py-2 text-xs ${active ? 'text-info font-semibold' : 'text-neutral-700'}`}
                 >
                   {r.label}
                 </Link>

@@ -132,8 +132,8 @@ export default function TeamRosterClient({
 
   if (!authUser && !isAuthBypassEnabled() && !authLoading) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
-        <p className="text-sm text-slate-600">Please sign in to view this team roster.</p>
+      <div className="rounded-2xl border border-border bg-white p-6 text-center shadow-sm">
+        <p className="text-sm text-muted-foreground">Please sign in to view this team roster.</p>
       </div>
     );
   }
@@ -141,20 +141,20 @@ export default function TeamRosterClient({
   return (
     <div className="space-y-0">
       {loading && (
-        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-10 shadow-sm">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
-          <span className="ml-3 text-sm font-medium text-slate-600">Loading roster...</span>
+        <div className="flex items-center justify-center rounded-2xl border border-border bg-white py-10 shadow-sm">
+          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-info/20" />
+          <span className="ml-3 text-sm font-medium text-muted-foreground">Loading roster...</span>
         </div>
       )}
 
       {error && !loading && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
       {actionError && !loading && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {actionError}
         </div>
       )}

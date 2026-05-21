@@ -1,5 +1,9 @@
-import type { TradeDetails, TradeSummary } from '@/components/trades/tradeApi';
-import { getTrade, listTrades } from '@/components/trades/tradeApi';
+import type {
+  TradeDetails,
+  TradeReviewAction,
+  TradeSummary,
+} from '@/components/trades/tradeApi';
+import { actOnTradeReview, getTrade, listTrades } from '@/components/trades/tradeApi';
 import type { RosterPlayer } from '@/components/trades/tradeUiTypes';
 import { fetchApi } from '@/lib/api';
 
@@ -7,6 +11,7 @@ export type LeagueMember = {
   id: string;
   userId: string;
   teamName: string;
+  role?: string;
 };
 
 export function createRequestId() {
@@ -26,16 +31,25 @@ export function normalizeMembers(payload: unknown): LeagueMember[] {
   const data = raw.data ?? raw;
   if (!Array.isArray(data)) return [];
   return data
-    .map((item) => {
+    .map((item): LeagueMember | null => {
       if (!item || typeof item !== 'object') return null;
       const member = item as Record<string, unknown>;
       const id = String(member.id ?? '');
       const userId = String(member.userId ?? '');
       const teamName = String(member.teamName ?? '');
+      const role = typeof member.role === 'string' ? member.role : undefined;
       if (!id || !userId || !teamName) return null;
-      return { id, userId, teamName };
+      return { id, userId, teamName, ...(role ? { role } : {}) };
     })
     .filter((item): item is LeagueMember => Boolean(item));
+}
+
+export async function submitTradeReviewAction(params: {
+  tradeId: string;
+  action: TradeReviewAction;
+  requestId: string;
+}): Promise<void> {
+  await actOnTradeReview(params.tradeId, params.action, params.requestId);
 }
 
 export function normalizeRosterPlayers(payload: unknown): RosterPlayer[] {

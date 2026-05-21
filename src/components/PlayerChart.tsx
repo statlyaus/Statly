@@ -88,13 +88,13 @@ function renderBroadcastTooltip(
 
   tooltipEl.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#93c5fd;font-weight:700;">Focused Round</div>
-      <div style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;">Live</div>
+      <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--info);font-weight:700;">Focused Round</div>
+      <div style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);">Live</div>
     </div>
-    <div style="margin-top:4px;font-size:15px;line-height:1.1;font-weight:800;color:#f8fafc;">R${round} vs ${abbr}</div>
+    <div style="margin-top:4px;font-size:15px;line-height:1.1;font-weight:800;color:var(--primary-foreground);">R${round} vs ${abbr}</div>
     <div style="margin-top:7px;display:flex;align-items:center;gap:8px;">
-      <span style="display:inline-flex;height:10px;width:10px;border-radius:9999px;background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.25);"></span>
-      <span style="font-size:13px;font-weight:700;color:#e2e8f0;">${metricLabel}: ${value}</span>
+      <span style="display:inline-flex;height:10px;width:10px;border-radius:9999px;background:var(--success);box-shadow:0 0 0 3px rgba(16,185,129,.25);"></span>
+      <span style="font-size:13px;font-weight:700;color:var(--primary-foreground);">${metricLabel}: ${value}</span>
     </div>
   `;
 
@@ -123,26 +123,26 @@ function renderBroadcastTooltip(
 
 const getAbbrBadgeClasses = (abbr: string): string => {
   const teamColor: Record<string, string> = {
-    ADE: 'bg-red-50 text-red-700 ring-red-200',
-    BRI: 'bg-amber-50 text-amber-800 ring-amber-200',
-    CAR: 'bg-blue-50 text-blue-800 ring-blue-200',
-    COL: 'bg-slate-100 text-slate-700 ring-slate-300',
-    ESS: 'bg-rose-50 text-rose-700 ring-rose-200',
+    ADE: 'bg-destructive/10 text-destructive ring-destructive',
+    BRI: 'bg-warning/10 text-warning ring-warning',
+    CAR: 'bg-info/10 text-info ring-info',
+    COL: 'bg-muted text-foreground ring-ring',
+    ESS: 'bg-destructive/10 text-destructive ring-destructive',
     FRE: 'bg-violet-50 text-violet-700 ring-violet-200',
-    GEE: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-    GCS: 'bg-orange-50 text-orange-700 ring-orange-200',
-    GWS: 'bg-orange-50 text-orange-700 ring-orange-200',
-    HAW: 'bg-yellow-50 text-yellow-700 ring-yellow-200',
-    MEL: 'bg-red-50 text-red-700 ring-red-200',
-    NOR: 'bg-sky-50 text-sky-700 ring-sky-200',
+    GEE: 'bg-info/10 text-info ring-info',
+    GCS: 'bg-warning/10 text-warning ring-warning',
+    GWS: 'bg-warning/10 text-warning ring-warning',
+    HAW: 'bg-warning/10 text-warning ring-warning',
+    MEL: 'bg-destructive/10 text-destructive ring-destructive',
+    NOR: 'bg-info/10 text-info ring-info',
     POR: 'bg-teal-50 text-teal-700 ring-teal-200',
-    RIC: 'bg-yellow-50 text-yellow-700 ring-yellow-200',
+    RIC: 'bg-warning/10 text-warning ring-warning',
     STK: 'bg-zinc-100 text-zinc-700 ring-zinc-300',
-    SYD: 'bg-rose-50 text-rose-700 ring-rose-200',
-    WCE: 'bg-yellow-50 text-yellow-700 ring-yellow-200',
-    BUL: 'bg-blue-50 text-blue-800 ring-blue-200',
+    SYD: 'bg-destructive/10 text-destructive ring-destructive',
+    WCE: 'bg-warning/10 text-warning ring-warning',
+    BUL: 'bg-info/10 text-info ring-info',
   };
-  return teamColor[abbr] ?? 'bg-slate-100 text-slate-800 ring-slate-200';
+  return teamColor[abbr] ?? 'bg-muted text-foreground ring-ring';
 };
 
 const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'Total Value' }) => {
@@ -258,15 +258,19 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
   }, []);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
+    <div className="rounded-xl border border-border bg-white p-6">
       <div className="mb-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Player Trend</p>
-        <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900">{playerName}</h2>
-        <p className="mt-1 text-lg text-slate-600">{metricLabel} by round</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Player Trend
+        </p>
+        <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-foreground">
+          {playerName}
+        </h2>
+        <p className="mt-1 text-lg text-muted-foreground">{metricLabel} by round</p>
       </div>
 
       {hasData ? (
-        <div className="h-[26rem] rounded-lg border border-slate-100 bg-white p-3">
+        <div className="h-[26rem] rounded-lg border border-border bg-white p-3">
           <Line
             ref={chartRef}
             data={{
@@ -275,13 +279,13 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                 {
                   label: metricLabel,
                   data: values,
-                  borderColor: '#0f766e',
+                  borderColor: 'var(--success)',
                   backgroundColor: 'rgba(15, 118, 110, 0.12)',
                   fill: true,
                   spanGaps: false,
                   tension: 0.35,
-                  pointBackgroundColor: '#0f766e',
-                  pointBorderColor: '#ffffff',
+                  pointBackgroundColor: 'var(--success)',
+                  pointBorderColor: 'var(--card)',
                   pointBorderWidth: 2,
                   pointRadius: values.map((value) => (value === null ? 0 : 4)),
                   pointHoverRadius: 6,
@@ -290,8 +294,8 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                   label: 'Focused Round',
                   data: focusPointValues,
                   showLine: false,
-                  pointBackgroundColor: '#10b981',
-                  pointBorderColor: '#064e3b',
+                  pointBackgroundColor: 'var(--success)',
+                  pointBorderColor: 'var(--success)',
                   pointBorderWidth: 4,
                   pointRadius: 11,
                   pointHoverRadius: 11,
@@ -360,32 +364,32 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
           />
         </div>
       ) : (
-        <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-base text-slate-500">
+        <div className="flex h-80 items-center justify-center rounded-lg border border-dashed border-border bg-muted text-base text-muted-foreground">
           No {metricLabel.toLowerCase()} data for the selected filters.
         </div>
       )}
 
       {sortedMatches.length > 0 && (
-        <div className="mt-5 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-slate-50 p-5">
+        <div className="mt-5 rounded-xl border border-border bg-gradient-to-r from-muted via-white to-muted p-5">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:items-center">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Focused Round
               </p>
-              <h3 className="mt-1 text-2xl font-bold text-slate-900">
+              <h3 className="mt-1 text-2xl font-bold text-foreground">
                 R{focusedRound ?? '—'} vs {focusedAbbr}
               </h3>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 {activePointIndex !== null || activeRound !== null
                   ? 'Hover active'
                   : 'Showing latest by default'}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="rounded-lg border border-border bg-white px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {metricLabel}
               </p>
-              <p className="text-4xl font-extrabold text-slate-900">
+              <p className="text-4xl font-extrabold text-foreground">
                 {focusedIsDnp
                   ? 'DNP'
                   : focusedHasUnavailableValue
@@ -399,18 +403,18 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
               {focusedValue !== null && focusedDelta !== null ? (
                 <p
                   className={`text-sm font-semibold ${
-                    focusedDelta >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                    focusedDelta >= 0 ? 'text-success' : 'text-destructive'
                   }`}
                 >
                   {focusedDelta >= 0 ? '+' : ''}
                   {focusedDelta.toFixed(1)} vs avg
                 </p>
               ) : focusedHasUnavailableValue ? (
-                <p className="text-sm font-semibold text-slate-500">
+                <p className="text-sm font-semibold text-muted-foreground">
                   Stat unavailable for this match
                 </p>
               ) : (
-                <p className="text-sm font-semibold text-slate-500">No match recorded</p>
+                <p className="text-sm font-semibold text-muted-foreground">No match recorded</p>
               )}
             </div>
           </div>
@@ -419,11 +423,13 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
 
       {sortedMatches.length > 0 && (
         <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <div className="mb-2 flex items-center justify-between text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Opponents by Round</span>
             <span>Rounds 1-24</span>
           </div>
-          <p className="mb-3 text-sm text-slate-500">Hover a round to spotlight it on the chart.</p>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Hover a round to spotlight it on the chart.
+          </p>
           <div className="grid grid-cols-8 gap-2">
             {roundSlots.map((slot) => {
               const opponent = slot.match?.opposition || 'DNP';
@@ -436,7 +442,7 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                   className={`flex cursor-pointer flex-col items-center rounded-lg border px-2 py-2 transition ${
                     isActive
                       ? 'border-teal-400 bg-teal-50/60 shadow-sm'
-                      : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                      : 'border-border bg-muted hover:border-border'
                   }`}
                   title={isDnp ? `Round ${slot.round}: DNP` : `Round ${slot.round} vs ${opponent}`}
                   onMouseEnter={() => {
@@ -477,8 +483,8 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
                   >
                     {isDnp ? 'DNP' : abbr}
                   </span>
-                  <span className="mt-1 text-xs font-semibold text-slate-700">R{slot.round}</span>
-                  <span className="text-[11px] font-medium text-slate-500">
+                  <span className="mt-1 text-xs font-semibold text-foreground">R{slot.round}</span>
+                  <span className="text-[11px] font-medium text-muted-foreground">
                     {isDnp ? 'DNP' : abbr}
                   </span>
                 </div>
@@ -490,21 +496,21 @@ const PlayerChart: React.FC<Props> = ({ playerName, matchData, metricLabel = 'To
 
       {sortedMatches.length > 0 && (
         <div className="mt-5 grid grid-cols-2 gap-3 text-base md:grid-cols-4">
-          <div className="rounded-lg bg-slate-50 p-3">
-            <div className="text-slate-500">Average</div>
-            <div className="text-xl font-bold text-slate-900">{avg.toFixed(1)}</div>
+          <div className="rounded-lg bg-muted p-3">
+            <div className="text-muted-foreground">Average</div>
+            <div className="text-xl font-bold text-foreground">{avg.toFixed(1)}</div>
           </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <div className="text-slate-500">Best</div>
-            <div className="text-xl font-bold text-emerald-700">{best.toFixed(1)}</div>
+          <div className="rounded-lg bg-muted p-3">
+            <div className="text-muted-foreground">Best</div>
+            <div className="text-xl font-bold text-success">{best.toFixed(1)}</div>
           </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <div className="text-slate-500">Worst</div>
-            <div className="text-xl font-bold text-rose-700">{worst.toFixed(1)}</div>
+          <div className="rounded-lg bg-muted p-3">
+            <div className="text-muted-foreground">Worst</div>
+            <div className="text-xl font-bold text-destructive">{worst.toFixed(1)}</div>
           </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <div className="text-slate-500">Games</div>
-            <div className="text-xl font-bold text-slate-900">{sortedMatches.length}</div>
+          <div className="rounded-lg bg-muted p-3">
+            <div className="text-muted-foreground">Games</div>
+            <div className="text-xl font-bold text-foreground">{sortedMatches.length}</div>
           </div>
         </div>
       )}

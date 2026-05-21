@@ -307,6 +307,17 @@ export class DraftRoomStore {
     return set?.size || 0;
   }
 
+  async getActiveParticipantCount(draftId: string): Promise<number> {
+    const participants = await this.getParticipantsData(draftId);
+    const identities = new Set<string>();
+
+    for (const [participantId, participant] of Object.entries(participants)) {
+      identities.add(participant.memberId || participant.userId || participantId);
+    }
+
+    return identities.size;
+  }
+
   async getRoomsCount(): Promise<number> {
     const client = redisClient.getClient();
     if (client) {

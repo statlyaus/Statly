@@ -3,18 +3,15 @@ import type { NextRequest } from 'next/server';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { refreshLiveStatsIfNeeded } from '@/lib/liveStatsRefresh';
+import { authorizeCronRequest } from '@/lib/operationalAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return commonErrors.unauthorized();
-    }
+    const authorization = authorizeCronRequest(request);
+    if (!authorization.ok) return authorization.response;
 
     const result = await refreshLiveStatsIfNeeded({
       minIntervalMs: 30_000,

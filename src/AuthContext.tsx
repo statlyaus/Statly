@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect, useMemo } from 'react';
 
 import {
   onAuthStateChanged,
@@ -15,9 +15,9 @@ import {
 } from 'firebase/auth';
 
 import { getBypassUserDetails, isAuthBypassEnabled } from '@/lib/authBypass';
-import { auth } from '@/lib/firebaseClient';
+import { getClientAuth } from '@/lib/firebaseClient';
 
-import type { User, UserCredential } from 'firebase/auth';
+import type { Auth, User, UserCredential } from 'firebase/auth';
 
 interface AuthContextType {
   user: User | null;
@@ -46,6 +46,49 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
         : null,
     [bypassAuth]
   );
+  const firebaseAuth = useMemo<Auth | null>(() => {
+    if (bypassAuth) return null;
+    if (typeof window === 'undefined') return null;
+    try {
+      return getClientAuth();
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Firebase Auth initialization failed:', error);
+      }
+      return null;
+    }
+  }, [bypassAuth]);
+
+  // Create/clear server session cookie via API
+  const createServerSession = useCallback(
+    async (sessionUser?: Pick<User, 'getIdToken'> | null) => {
+      if (bypassAuth) return;
+      const activeUser = sessionUser ?? firebaseAuth?.currentUser;
+      if (!activeUser) return;
+
+      const idToken = await activeUser.getIdToken();
+      const response = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!response.ok) {
+        let responseBody = '';
+        try {
+          responseBody = await response.text();
+        } catch {
+          // Ignore body parsing failures; the status is enough for callers.
+        }
+
+        const details = [response.status, response.statusText, responseBody]
+          .filter(Boolean)
+          .join(' ');
+        throw new Error(`Failed to create server session${details ? `: ${details}` : ''}`);
+      }
+    },
+    [bypassAuth, firebaseAuth]
+  );
 
   useEffect(() => {
     if (bypassAuth && fakeUser) {
@@ -54,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
       return;
     }
     // Skip Firebase auth if not available
-    if (!auth) {
+    if (!firebaseAuth) {
       setLoading(false);
       return;
     }
@@ -65,11 +108,23 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
     }, 5000); // 5 second timeout
 
     const unsubscribe = onAuthStateChanged(
-      auth,
+      firebaseAuth,
       (user) => {
         clearTimeout(timeoutId);
-        setUser(user);
-        setLoading(false);
+        if (!user) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        void createServerSession(user)
+          .catch((error) => {
+            console.error('Failed to refresh server session:', error);
+          })
+          .finally(() => {
+            setUser(user);
+            setLoading(false);
+          });
       },
       (error) => {
         clearTimeout(timeoutId);
@@ -85,24 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
       clearTimeout(timeoutId);
       unsubscribe();
     };
-  }, [bypassAuth, fakeUser]);
-
-  // Create/clear server session cookie via API
-  const createServerSession = async () => {
-    if (bypassAuth) return;
-    if (!auth || !auth.currentUser) return;
-    try {
-      const idToken = await auth.currentUser.getIdToken();
-      await fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      });
-    } catch (error) {
-      // Non-fatal: client remains signed in, but server-side protection may redirect
-      console.error('Failed to create server session:', error);
-    }
-  };
+  }, [bypassAuth, createServerSession, fakeUser, firebaseAuth]);
 
   const clearServerSession = async () => {
     if (bypassAuth) return;
@@ -133,9 +171,10 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
         setUser(fakeUser);
         return { user: fakeUser } as UserCredential;
       }
-      if (!auth) throw new Error('Firebase Auth not available');
-      const cred = await signInWithEmailAndPassword(auth, email, pass);
-      await createServerSession();
+      if (!firebaseAuth) throw new Error('Firebase Auth not available');
+      const cred = await signInWithEmailAndPassword(firebaseAuth, email, pass);
+      await createServerSession(cred.user);
+      setUser(cred.user);
       return cred;
     },
     signup: async (email: string, pass: string) => {
@@ -143,9 +182,10 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
         setUser(fakeUser);
         return { user: fakeUser } as UserCredential;
       }
-      if (!auth) throw new Error('Firebase Auth not available');
-      const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      await createServerSession();
+      if (!firebaseAuth) throw new Error('Firebase Auth not available');
+      const cred = await createUserWithEmailAndPassword(firebaseAuth, email, pass);
+      await createServerSession(cred.user);
+      setUser(cred.user);
       return cred;
     },
     loginWithGoogle: async () => {
@@ -153,41 +193,45 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
         setUser(fakeUser);
         return;
       }
-      if (!auth) throw new Error('Firebase Auth not available');
+      if (!firebaseAuth) throw new Error('Firebase Auth not available');
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      await createServerSession();
+      const cred = await signInWithPopup(firebaseAuth, provider);
+      await createServerSession(cred.user);
+      setUser(cred.user);
     },
     loginWithFacebook: async () => {
       if (bypassAuth && fakeUser) {
         setUser(fakeUser);
         return;
       }
-      if (!auth) throw new Error('Firebase Auth not available');
+      if (!firebaseAuth) throw new Error('Firebase Auth not available');
       const provider = new FacebookAuthProvider();
-      await signInWithPopup(auth, provider);
-      await createServerSession();
+      const cred = await signInWithPopup(firebaseAuth, provider);
+      await createServerSession(cred.user);
+      setUser(cred.user);
     },
     loginWithApple: async () => {
       if (bypassAuth && fakeUser) {
         setUser(fakeUser);
         return;
       }
-      if (!auth) throw new Error('Firebase Auth not available');
+      if (!firebaseAuth) throw new Error('Firebase Auth not available');
       const provider = new OAuthProvider('apple.com');
       provider.addScope('email');
       provider.addScope('name');
-      await signInWithPopup(auth, provider);
-      await createServerSession();
+      const cred = await signInWithPopup(firebaseAuth, provider);
+      await createServerSession(cred.user);
+      setUser(cred.user);
     },
     logout: async () => {
       if (bypassAuth && fakeUser) {
         setUser(fakeUser);
         return Promise.resolve();
       }
-      if (!auth) throw new Error('Firebase Auth not available');
+      if (!firebaseAuth) throw new Error('Firebase Auth not available');
       await clearServerSession();
-      return signOut(auth);
+      await signOut(firebaseAuth);
+      setUser(null);
     },
   };
 

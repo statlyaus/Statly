@@ -5,18 +5,23 @@ import { addMinutes } from 'date-fns';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
 
 /**
  * Create a test draft for development/testing
  * Development only - protected in production
  */
 export async function POST(_request: NextRequest) {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   if (process.env.NODE_ENV === 'production') {
     return errorResponse('This endpoint is only available in development', 403);
   }
 
   try {
+    const { prisma } = await import('@/lib/prisma');
+
     logger.info('Creating test draft');
 
     // Create test draft with lobby opening in 1 minute and draft starting in 6 minutes
@@ -136,6 +141,9 @@ export async function POST(_request: NextRequest) {
  * Development only - protected in production
  */
 export async function GET(_request: NextRequest) {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   if (process.env.NODE_ENV === 'production') {
     return errorResponse('This endpoint is only available in development', 403);
   }

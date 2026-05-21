@@ -8,7 +8,7 @@ interface Props {
 export default function InjuryAlert({ injured, replacements }: Props) {
   if (!injured) return null;
   return (
-    <div className="p-4 mb-4 border-l-4 border-red-500 bg-red-50">
+    <div className="p-4 mb-4 border-l-4 border-destructive/20 bg-destructive/10">
       <p className="font-semibold">
         {injured.name} is out this week—here are 3 players to consider adding
       </p>

@@ -46,21 +46,21 @@ const AFL_TEAMS = [
 const getStatusColor = (status: string, expectedReturn?: string) => {
   // Defensive check for unexpected status values
   if (!status || typeof status !== 'string') {
-    return 'bg-slate-100 text-slate-800 border-slate-200';
+    return 'bg-muted text-foreground border-border';
   }
 
   const combined = `${status} ${expectedReturn || ''}`.toLowerCase();
 
   if (combined.includes('test') || combined.includes('available')) {
-    return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    return 'bg-warning/10 text-warning border-warning/20';
   }
   if (combined.includes('season') || combined.includes('indefinite')) {
-    return 'bg-red-100 text-red-800 border-red-200';
+    return 'bg-destructive/10 text-destructive border-destructive/20';
   }
   if (combined.includes('week')) {
-    return 'bg-orange-100 text-orange-800 border-orange-200';
+    return 'bg-warning/10 text-warning border-warning/20';
   }
-  return 'bg-slate-100 text-slate-800 border-slate-200';
+  return 'bg-muted text-foreground border-border';
 };
 
 // Memoized injury list item component for performance
@@ -85,15 +85,15 @@ const InjuryListItem = memo(
     return (
       <motion.div
         {...motionProps}
-        className="p-4 bg-white border border-slate-200 rounded-lg hover:shadow-md transition-shadow"
+        className="p-4 bg-white border border-border rounded-lg hover:shadow-md transition-shadow"
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center space-x-3 mb-2">
-              <h4 className="text-base font-medium text-slate-900">{injury.name}</h4>
-              <span className="text-sm text-slate-500">({injury.team})</span>
+              <h4 className="text-base font-medium text-foreground">{injury.name}</h4>
+              <span className="text-sm text-muted-foreground">({injury.team})</span>
               {injury.position && injury.position !== 'Unknown' && (
-                <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
+                <span className="bg-info/10 text-info text-xs font-medium px-2 py-1 rounded">
                   {injury.position}
                 </span>
               )}
@@ -101,8 +101,8 @@ const InjuryListItem = memo(
 
             <div className="flex items-center space-x-4 text-sm">
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full" aria-hidden="true"></div>
-                <span className="font-medium text-red-700">{injury.injury}</span>
+                <div className="w-2 h-2 bg-destructive rounded-full" aria-hidden="true"></div>
+                <span className="font-medium text-destructive">{injury.injury}</span>
               </div>
 
               <div
@@ -113,7 +113,7 @@ const InjuryListItem = memo(
             </div>
 
             {injury.details && injury.details !== injury.injury && (
-              <p className="mt-2 text-sm text-slate-600">{injury.details}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{injury.details}</p>
             )}
           </div>
         </div>
@@ -202,10 +202,10 @@ export default function EnhancedInjuryFeed({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <h2 className="text-xl font-bold text-slate-900">AFL Injury Report</h2>
+            <h2 className="text-xl font-bold text-foreground">AFL Injury Report</h2>
             {count > 0 && (
               <span
-                className="bg-red-100 text-red-800 text-sm font-medium px-3 py-1 rounded-full"
+                className="bg-destructive/10 text-destructive text-sm font-medium px-3 py-1 rounded-full"
                 aria-label={`${count} injured ${count === 1 ? 'player' : 'players'}`}
               >
                 {count} injured {count === 1 ? 'player' : 'players'}
@@ -216,7 +216,7 @@ export default function EnhancedInjuryFeed({
           <button
             onClick={refresh}
             disabled={loading}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-foreground bg-white border border-border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Refresh injury data"
             aria-label="Refresh injury data"
             aria-busy={loading}
@@ -251,7 +251,7 @@ export default function EnhancedInjuryFeed({
                 id="team-filter"
                 value={selectedTeam}
                 onChange={(e) => handleTeamChange(e.target.value)}
-                className="text-sm border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="text-sm border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info focus:border-transparent"
               >
                 <option value="">All Teams</option>
                 {AFL_TEAMS.map((team) => (
@@ -263,7 +263,7 @@ export default function EnhancedInjuryFeed({
               {selectedTeam && (
                 <button
                   onClick={() => handleTeamChange('')}
-                  className="text-xs text-slate-500 hover:text-slate-700 underline"
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
                   title="Clear team filter"
                 >
                   Reset
@@ -274,7 +274,7 @@ export default function EnhancedInjuryFeed({
             {/* View mode toggle - proper radiogroup */}
             <fieldset role="radiogroup" aria-label="View mode">
               <legend className="sr-only">Choose view mode</legend>
-              <div className="flex bg-slate-100 rounded-md p-1">
+              <div className="flex bg-muted rounded-md p-1">
                 <label className="cursor-pointer">
                   <input
                     type="radio"
@@ -287,8 +287,8 @@ export default function EnhancedInjuryFeed({
                   <span
                     className={`px-3 py-1 text-sm font-medium rounded transition-colors block ${
                       viewMode === 'teams'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     By Team
@@ -306,8 +306,8 @@ export default function EnhancedInjuryFeed({
                   <span
                     className={`px-3 py-1 text-sm font-medium rounded transition-colors block ${
                       viewMode === 'list'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-white text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     List View
@@ -319,7 +319,7 @@ export default function EnhancedInjuryFeed({
 
           {/* Last updated */}
           {lastUpdatedDate && (
-            <div className="text-xs text-slate-500" aria-live="polite">
+            <div className="text-xs text-muted-foreground" aria-live="polite">
               Updated:{' '}
               <time dateTime={lastUpdatedDate.toISOString()}>
                 {lastUpdatedDate.toLocaleTimeString()}
@@ -329,7 +329,7 @@ export default function EnhancedInjuryFeed({
         </div>
 
         {/* Data source */}
-        <div className="text-xs text-slate-400 border-t border-slate-200 pt-2">
+        <div className="text-xs text-muted-foreground border-t border-border pt-2">
           <span>Data source: Footywire AFL Injury List</span>
         </div>
       </div>
@@ -339,10 +339,10 @@ export default function EnhancedInjuryFeed({
         <div className="flex items-center justify-center py-12" role="status" aria-busy="true">
           <div className="text-center">
             <div
-              className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"
+              className="w-8 h-8 border-2 border-info/20 border-t-transparent rounded-full animate-spin mx-auto mb-4"
               aria-hidden="true"
             ></div>
-            <p className="text-sm text-slate-600">Loading injury data...</p>
+            <p className="text-sm text-muted-foreground">Loading injury data...</p>
           </div>
         </div>
       )}
@@ -352,14 +352,14 @@ export default function EnhancedInjuryFeed({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 bg-amber-50 border border-amber-200 rounded-lg"
+          className="p-4 bg-warning/10 border border-warning/20 rounded-lg"
           role="alert"
           aria-live="assertive"
         >
           <div className="flex items-start space-x-3">
-            <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center">
+            <div className="w-6 h-6 bg-warning/10 rounded-full flex items-center justify-center">
               <svg
-                className="w-4 h-4 text-amber-600"
+                className="w-4 h-4 text-warning"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -374,9 +374,9 @@ export default function EnhancedInjuryFeed({
               </svg>
             </div>
             <div>
-              <h4 className="font-medium text-amber-900">Unable to fetch live data</h4>
-              <p className="text-sm text-amber-700 mt-1">{error}</p>
-              <p className="text-sm text-amber-600 mt-1">Showing sample data for demonstration</p>
+              <h4 className="font-medium text-warning">Unable to fetch live data</h4>
+              <p className="text-sm text-warning mt-1">{error}</p>
+              <p className="text-sm text-warning mt-1">Showing sample data for demonstration</p>
             </div>
           </div>
         </motion.div>
@@ -396,9 +396,9 @@ export default function EnhancedInjuryFeed({
               role="status"
               aria-live="polite"
             >
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg
-                  className="w-8 h-8 text-green-600"
+                  className="w-8 h-8 text-success"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -412,10 +412,10 @@ export default function EnhancedInjuryFeed({
                   />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-slate-900 mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 {selectedTeam ? `No injuries for ${selectedTeam}!` : 'No injuries reported!'}
               </h3>
-              <p className="text-slate-600">
+              <p className="text-muted-foreground">
                 {selectedTeam
                   ? 'This team is currently injury-free. Try clearing the team filter to see all injuries.'
                   : 'All players are healthy and available.'}
@@ -436,19 +436,19 @@ export default function EnhancedInjuryFeed({
                   initial={shouldDisableAnimations ? { opacity: 0 } : { opacity: 0, y: 10 }}
                   animate={shouldDisableAnimations ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   transition={shouldDisableAnimations ? {} : { delay: teamIndex * 0.1 }}
-                  className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm"
+                  className="bg-white border border-border rounded-lg overflow-hidden shadow-sm"
                 >
                   {/* Team Header */}
-                  <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
+                  <div className="bg-muted px-6 py-4 border-b border-border">
                     <div className="flex items-center justify-between">
                       <h3
                         id={`team-${teamName.toLowerCase().replace(/\s+/g, '-')}`}
-                        className="text-lg font-semibold text-slate-900"
+                        className="text-lg font-semibold text-foreground"
                       >
                         {teamName}
                       </h3>
                       <span
-                        className="bg-slate-100 text-slate-700 text-sm font-medium px-3 py-1 rounded-full"
+                        className="bg-muted text-foreground text-sm font-medium px-3 py-1 rounded-full"
                         aria-label={`${injuriesByTeam[teamName].length} ${injuriesByTeam[teamName].length === 1 ? 'injury' : 'injuries'}`}
                       >
                         {injuriesByTeam[teamName].length}{' '}
@@ -475,16 +475,16 @@ export default function EnhancedInjuryFeed({
                               ? {}
                               : { delay: teamIndex * 0.1 + playerIndex * 0.05 }
                           }
-                          className="p-6 hover:bg-slate-50 transition-colors"
+                          className="p-6 hover:bg-muted transition-colors"
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center space-x-3 mb-2">
-                                <h4 className="text-base font-medium text-slate-900">
+                                <h4 className="text-base font-medium text-foreground">
                                   {injury.name}
                                 </h4>
                                 {injury.position && injury.position !== 'Unknown' && (
-                                  <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
+                                  <span className="bg-info/10 text-info text-xs font-medium px-2 py-1 rounded">
                                     {injury.position}
                                   </span>
                                 )}
@@ -493,10 +493,10 @@ export default function EnhancedInjuryFeed({
                               <div className="flex items-center space-x-4 text-sm">
                                 <div className="flex items-center space-x-2">
                                   <div
-                                    className="w-2 h-2 bg-red-500 rounded-full"
+                                    className="w-2 h-2 bg-destructive rounded-full"
                                     aria-hidden="true"
                                   ></div>
-                                  <span className="font-medium text-red-700">{injury.injury}</span>
+                                  <span className="font-medium text-destructive">{injury.injury}</span>
                                 </div>
 
                                 <div
@@ -507,7 +507,7 @@ export default function EnhancedInjuryFeed({
                               </div>
 
                               {injury.details && injury.details !== injury.injury && (
-                                <p className="mt-2 text-sm text-slate-600">{injury.details}</p>
+                                <p className="mt-2 text-sm text-muted-foreground">{injury.details}</p>
                               )}
                             </div>
                           </div>

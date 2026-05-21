@@ -72,6 +72,8 @@ export type TradeActionResult = {
   reviewWindowEndsAt?: string;
 };
 
+export type TradeReviewAction = 'approve-review' | 'reject-review' | 'finalize-review' | 'veto';
+
 type TradeListResponse = {
   data?: {
     trades?: TradeSummary[];
@@ -118,6 +120,25 @@ export async function actOnTrade(
     reviewStatus: data.reviewStatus ? (String(data.reviewStatus) as TradeReviewStatus) : undefined,
     reviewWindowEndsAt: data.reviewWindowEndsAt ? String(data.reviewWindowEndsAt) : undefined,
   };
+}
+
+export async function actOnTradeReview(
+  tradeId: string,
+  action: TradeReviewAction,
+  requestId: string
+): Promise<void> {
+  if (action === 'veto') {
+    await fetchApi(`trades/review?tradeId=${encodeURIComponent(tradeId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'veto', requestId }),
+    });
+    return;
+  }
+
+  await fetchApi(`trades/${tradeId}/${action}`, {
+    method: 'POST',
+    body: JSON.stringify({ requestId }),
+  });
 }
 
 export function normalizeTradeItems(items: unknown): TradeItem[] {

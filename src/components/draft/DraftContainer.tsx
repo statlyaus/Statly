@@ -135,10 +135,10 @@ export default function DraftContainer({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading draft...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-info/20 mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading draft...</p>
         </div>
       </div>
     );
@@ -148,12 +148,12 @@ export default function DraftContainer({
     // Special handling for draft not found
     if (error === 'DRAFT_NOT_FOUND') {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-muted flex items-center justify-center p-4">
           <div className="max-w-md w-full text-center">
             <div className="mb-6">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg
-                  className="w-8 h-8 text-red-600"
+                  className="w-8 h-8 text-destructive"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -166,31 +166,31 @@ export default function DraftContainer({
                   />
                 </svg>
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Not Found</h2>
-              <p className="text-gray-600 mb-6">
+              <h2 className="text-2xl font-bold text-foreground mb-4">Draft Not Found</h2>
+              <p className="text-muted-foreground mb-6">
                 The draft you&apos;re looking for doesn&apos;t exist or may have been deleted.
               </p>
-              <div className="text-sm text-gray-500 mb-6">
-                Draft ID: <code className="bg-gray-100 px-2 py-1 rounded">{draftId}</code>
+              <div className="text-sm text-muted-foreground mb-6">
+                Draft ID: <code className="bg-muted px-2 py-1 rounded">{draftId}</code>
               </div>
             </div>
 
             <div className="space-y-3">
               <a
                 href="/test-draft"
-                className="block w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                className="block w-full bg-info text-white px-4 py-2 rounded-md hover:bg-info transition-colors"
               >
                 View Available Drafts
               </a>
               <Link
                 href="/drafts"
-                className="block w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+                className="block w-full bg-muted text-white px-4 py-2 rounded-md hover:bg-muted transition-colors"
               >
                 Draft Center
               </Link>
               <button
                 onClick={() => window.location.reload()}
-                className="block w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+                className="block w-full bg-muted text-foreground px-4 py-2 rounded-md hover:bg-muted transition-colors"
               >
                 Retry
               </button>
@@ -202,13 +202,13 @@ export default function DraftContainer({
 
     // Regular error handling for other types of errors
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <Alert type="error" className="mb-4">
             {error}
           </Alert>
           <div className="text-center">
-            <p className="text-gray-600 mb-4">
+            <p className="text-muted-foreground mb-4">
               There was an issue loading the lobby. You can still access the draft directly.
             </p>
             <button
@@ -217,13 +217,13 @@ export default function DraftContainer({
                 setError(null);
                 setLobbyState({ status: 'LIVE', participantsOnline: [] });
               }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+              className="bg-info text-white px-4 py-2 rounded-md hover:bg-info mr-2"
             >
               Enter Draft Room
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+              className="bg-muted text-white px-4 py-2 rounded-md hover:bg-muted"
             >
               Retry
             </button>
@@ -297,27 +297,27 @@ export default function DraftContainer({
     }
 
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <div className="text-center max-w-md">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Not Ready</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-2xl font-bold text-foreground mb-4">Draft Not Ready</h2>
+          <p className="text-muted-foreground mb-6">
             This draft is scheduled but the lobby hasn&apos;t opened yet. The lobby will open 5
             minutes before the scheduled start time.
           </p>
           {lobbyState.draftStartsAt && (
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Scheduled for: {new Date(lobbyState.draftStartsAt).toLocaleString()}
             </p>
           )}
-          <div className="bg-yellow-100 border border-yellow-400 rounded p-3 mb-4">
-            <p className="text-sm text-yellow-800">
+          <div className="bg-warning/10 border border-warning/20 rounded p-3 mb-4">
+            <p className="text-sm text-warning">
               Debug: Status = &quot;{lobbyState.status}&quot;
             </p>
-            <p className="text-sm text-yellow-800">
+            <p className="text-sm text-warning">
               Time remaining: {lobbyState.timeRemaining || 'unknown'}
             </p>
             {isForced && (
-              <p className="text-sm text-red-800 font-bold">
+              <p className="text-sm text-destructive font-bold">
                 🔧 FORCED MODE - API polling disabled
               </p>
             )}
@@ -339,7 +339,7 @@ export default function DraftContainer({
               setIsLoading(false);
               setError(null);
             }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+            className="bg-info text-white px-4 py-2 rounded-md hover:bg-info mr-2"
           >
             🚀 Force Lobby (COUNTDOWN)
           </button>
@@ -359,7 +359,7 @@ export default function DraftContainer({
               setIsLoading(false);
               setError(null);
             }}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 mr-2"
+            className="bg-info text-white px-4 py-2 rounded-md hover:bg-info mr-2"
           >
             🎪 Force Lobby (OPEN)
           </button>
@@ -378,7 +378,7 @@ export default function DraftContainer({
               setIsLoading(false);
               setError(null);
             }}
-            className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 mr-2"
+            className="bg-success text-white px-4 py-2 rounded-md hover:bg-success mr-2"
           >
             🎯 Force Enter Draft Room
           </button>
@@ -406,7 +406,7 @@ export default function DraftContainer({
                 }
               })();
             }}
-            className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 mr-2"
+            className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary mr-2"
           >
             Test API
           </button>
@@ -422,13 +422,13 @@ export default function DraftContainer({
               setError(null);
               void fetchLobbyState();
             }}
-            className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 mr-2"
+            className="bg-warning text-white px-4 py-2 rounded-md hover:bg-warning mr-2"
           >
             🔄 Reset to API
           </button>
           <button
             onClick={() => window.location.reload()}
-            className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+            className="bg-muted text-white px-4 py-2 rounded-md hover:bg-muted"
           >
             Refresh Page
           </button>
@@ -457,13 +457,13 @@ export default function DraftContainer({
     action: 'finalFallback',
   });
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen bg-muted flex items-center justify-center">
       <div className="text-center max-w-md">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Loading Draft...</h2>
-        <p className="text-gray-600 mb-6">Preparing your draft experience...</p>
+        <h2 className="text-2xl font-bold text-foreground mb-4">Loading Draft...</h2>
+        <p className="text-muted-foreground mb-6">Preparing your draft experience...</p>
         <button
           onClick={() => window.location.reload()}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          className="bg-info text-white px-4 py-2 rounded-md hover:bg-info"
         >
           Retry
         </button>

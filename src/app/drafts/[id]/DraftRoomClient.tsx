@@ -280,12 +280,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   // Map draft status to consistent badge styles
   const renderStatusBadge = (status: string) => {
     const map: Record<string, { bg: string; text: string; label: string }> = {
-      SCHEDULED: { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Scheduled' },
-      LIVE: { bg: 'bg-green-100', text: 'text-green-800', label: 'Live' },
-      PAUSED: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Paused' },
-      COMPLETED: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Completed' },
+      SCHEDULED: { bg: 'bg-info/10', text: 'text-info', label: 'Scheduled' },
+      LIVE: { bg: 'bg-success/10', text: 'text-success', label: 'Live' },
+      PAUSED: { bg: 'bg-warning/10', text: 'text-warning', label: 'Paused' },
+      COMPLETED: { bg: 'bg-muted', text: 'text-foreground', label: 'Completed' },
     };
-    const s = map[status] || { bg: 'bg-yellow-100', text: 'text-yellow-800', label: status };
+    const s = map[status] || { bg: 'bg-warning/10', text: 'text-warning', label: status };
     return (
       <span
         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${s.bg} ${s.text}`}
@@ -1169,19 +1169,19 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         key={player.id}
         className={`border-b transition-colors ${
           isAlreadyPicked
-            ? 'bg-red-50 opacity-50'
+            ? 'bg-destructive/10 opacity-50'
             : isPlayerValid
-              ? 'hover:bg-green-50'
-              : 'hover:bg-yellow-50'
+              ? 'hover:bg-success/10'
+              : 'hover:bg-warning/10'
         }`}
       >
         <td
-          className={`sticky left-0 border-r border-gray-200 z-10 px-4 py-3 ${
+          className={`sticky left-0 border-r border-border z-10 px-4 py-3 ${
             isAlreadyPicked
-              ? 'bg-red-50'
+              ? 'bg-destructive/10'
               : isPlayerValid
-                ? 'bg-white hover:bg-green-50'
-                : 'bg-yellow-50 hover:bg-yellow-100'
+                ? 'bg-white hover:bg-success/10'
+                : 'bg-warning/10 hover:bg-warning/10'
           }`}
         >
           <div className="flex items-center space-x-3">
@@ -1196,8 +1196,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               }
               className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 playerInWatchlist
-                  ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+                  ? 'bg-info/10 text-info hover:bg-info/10'
+                  : 'bg-muted text-muted-foreground hover:bg-muted hover:text-muted-foreground'
               }`}
               title={playerInWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
             >
@@ -1210,15 +1210,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
               </svg>
             </button>
-            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-gray-600">
+            <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
+              <span className="text-sm font-medium text-muted-foreground">
                 {player.name.split(' ')[0]?.[0]}
                 {player.name.split(' ')[1]?.[0] || ''}
               </span>
             </div>
             <div>
-              <div className="font-medium text-gray-900">{player.name}</div>
-              <div className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+              <div className="font-medium text-foreground">{player.name}</div>
+              <div className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
                 <TeamLogo team={player.club} size={14} withCircle decorative />
                 <span>{player.club}</span>
                 <span aria-hidden>•</span>
@@ -1228,7 +1228,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           </div>
         </td>
         <td className="px-3 py-3 text-center">
-          <span className="text-sm font-semibold text-green-600">
+          <span className="text-sm font-semibold text-success">
             {player.stats ? calculateTotalValue(player.stats).toFixed(1) : '0.0'}
           </span>
         </td>
@@ -1251,13 +1251,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         })}
         <td className="px-3 py-3 text-center">
           {player.draftedBy ? (
-            <span className="text-xs text-gray-500 px-3 py-1 bg-gray-100 rounded">Drafted</span>
+            <span className="text-xs text-muted-foreground px-3 py-1 bg-muted rounded">
+              Drafted
+            </span>
           ) : isPlayerValid ? (
             <Button
               onClick={() => handlePlayerSelect(player)}
               disabled={isLoading || pickValidation.isPicking}
               aria-label={`Draft ${player.name}`}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+              className="bg-info hover:bg-info text-white px-3 py-1 rounded text-sm"
             >
               {pickValidation.isPicking ? 'Drafting...' : 'Draft'}
             </Button>
@@ -1265,7 +1267,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <Button
               onClick={() => handlePlayerSelect(player)}
               disabled={true}
-              className="bg-gray-400 text-gray-600 px-3 py-1 rounded text-sm cursor-not-allowed"
+              className="bg-muted text-muted-foreground px-3 py-1 rounded text-sm cursor-not-allowed"
               title={validationErrors.join(', ')}
             >
               Cannot Draft
@@ -1314,20 +1316,20 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         aria-rowindex={index + 2} // +2 because header is row 1
         className={`flex items-center border-b transition-colors ${
           isAlreadyPicked
-            ? 'bg-red-50 opacity-50'
+            ? 'bg-destructive/10 opacity-50'
             : isPlayerValid
-              ? 'hover:bg-green-50'
-              : 'hover:bg-yellow-50'
+              ? 'hover:bg-success/10'
+              : 'hover:bg-warning/10'
         }`}
       >
         {/* Player cell - sticky left */}
         <div
-          className={`sticky left-0 border-r border-gray-200 z-10 px-4 py-3 min-w-[300px] flex items-center space-x-3 ${
+          className={`sticky left-0 border-r border-border z-10 px-4 py-3 min-w-[300px] flex items-center space-x-3 ${
             isAlreadyPicked
-              ? 'bg-red-50'
+              ? 'bg-destructive/10'
               : isPlayerValid
-                ? 'bg-white hover:bg-green-50'
-                : 'bg-yellow-50 hover:bg-yellow-100'
+                ? 'bg-white hover:bg-success/10'
+                : 'bg-warning/10 hover:bg-warning/10'
           }`}
         >
           <button
@@ -1341,8 +1343,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             }
             className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               playerInWatchlist
-                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+                ? 'bg-info/10 text-info hover:bg-info/10'
+                : 'bg-muted text-muted-foreground hover:bg-muted hover:text-muted-foreground'
             }`}
             title={playerInWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
           >
@@ -1355,15 +1357,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
             </svg>
           </button>
-          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-            <span className="text-sm font-medium text-gray-600">
+          <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
+            <span className="text-sm font-medium text-muted-foreground">
               {player.name.split(' ')[0]?.[0]}
               {player.name.split(' ')[1]?.[0] || ''}
             </span>
           </div>
           <div>
-            <div className="font-medium text-gray-900">{player.name}</div>
-            <div className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+            <div className="font-medium text-foreground">{player.name}</div>
+            <div className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
               <TeamLogo team={player.club} size={14} withCircle decorative />
               <span>{player.club}</span>
               <span aria-hidden>•</span>
@@ -1374,7 +1376,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
         {/* Total cell */}
         <div className="px-3 py-3 text-center min-w-[80px]">
-          <span className="text-sm font-semibold text-green-600">
+          <span className="text-sm font-semibold text-success">
             {player.stats ? calculateTotalValue(player.stats).toFixed(1) : '0.0'}
           </span>
         </div>
@@ -1401,13 +1403,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         {/* Action cell */}
         <div className="px-3 py-3 text-center min-w-[100px]">
           {player.draftedBy ? (
-            <span className="text-xs text-gray-500 px-3 py-1 bg-gray-100 rounded">Drafted</span>
+            <span className="text-xs text-muted-foreground px-3 py-1 bg-muted rounded">
+              Drafted
+            </span>
           ) : isPlayerValid ? (
             <Button
               onClick={() => handlePlayerSelect(player)}
               disabled={isLoading || pickValidation.isPicking}
               aria-label={`Draft ${player.name}`}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+              className="bg-info hover:bg-info text-white px-3 py-1 rounded text-sm"
             >
               {pickValidation.isPicking ? 'Drafting...' : 'Draft'}
             </Button>
@@ -1415,7 +1419,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <Button
               onClick={() => handlePlayerSelect(player)}
               disabled={true}
-              className="bg-gray-400 text-gray-600 px-3 py-1 rounded text-sm cursor-not-allowed"
+              className="bg-muted text-muted-foreground px-3 py-1 rounded text-sm cursor-not-allowed"
               title={validationErrors.join(', ')}
             >
               Cannot Draft
@@ -1448,12 +1452,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-muted">
       {/* Local alert container for confirmations and errors */}
       <AlertContainer alerts={globalAlerts} onRemove={removeGlobalAlert} position="top-right" />
       {/* Draft Status Banner */}
       {draftData.status === 'SCHEDULED' && (
-        <div className="w-full px-4 py-3 bg-indigo-600 text-white">
+        <div className="w-full px-4 py-3 bg-info text-white">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1469,7 +1473,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <button
               onClick={startDraft}
               disabled={isLoading}
-              className="bg-white text-indigo-600 px-4 py-2 rounded-md font-medium hover:bg-gray-100 disabled:opacity-50"
+              className="bg-white text-info px-4 py-2 rounded-md font-medium hover:bg-muted disabled:opacity-50"
             >
               {isLoading ? 'Starting...' : 'Start Draft Now'}
             </button>
@@ -1487,7 +1491,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Draft Control Banner for League Owners */}
       {isLeagueOwner && draftData.status === 'LIVE' && (
-        <div className="w-full px-4 py-3 bg-amber-600 text-white">
+        <div className="w-full px-4 py-3 bg-warning text-white">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1504,7 +1508,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <button
                 onClick={handlePauseDraft}
                 disabled={isLoading}
-                className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
+                className="bg-warning hover:bg-warning text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -1523,7 +1527,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Draft Paused Banner */}
       {draftData.status === 'PAUSED' && (
-        <div className="w-full px-4 py-3 bg-yellow-600 text-white">
+        <div className="w-full px-4 py-3 bg-warning text-white">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1542,7 +1546,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <button
                 onClick={handleResumeDraft}
                 disabled={isLoading}
-                className="bg-yellow-700 hover:bg-yellow-800 text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
+                className="bg-warning hover:bg-warning text-white px-4 py-2 rounded-md font-medium disabled:opacity-50 flex items-center space-x-2"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -1561,11 +1565,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Draft Error Alert */}
       {draftError && (
-        <div className="w-full px-4 py-3 bg-red-50 border-b border-red-200">
+        <div className="w-full px-4 py-3 bg-destructive/10 border-b border-destructive/20">
           <div className="max-w-7xl mx-auto">
-            <div className="flex items-center space-x-2 text-red-800">
+            <div className="flex items-center space-x-2 text-destructive">
               <svg
-                className="h-5 w-5 text-red-400"
+                className="h-5 w-5 text-destructive"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1580,7 +1584,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <p className="text-sm font-medium">{draftError}</p>
               <button
                 onClick={() => setDraftError(null)}
-                className="ml-auto text-red-600 hover:text-red-800"
+                className="ml-auto text-destructive hover:text-destructive"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -1597,7 +1601,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
       )}
 
       {/* Draft Order & Turn Management */}
-      <div className="w-full px-4 py-3 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200">
+      <div className="w-full px-4 py-3 bg-gradient-to-r from-info/10 to-primary/10 border-b border-info/20">
         <div className="max-w-7xl mx-auto">
           {(() => {
             const draftState = getDraftState();
@@ -1606,7 +1610,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             if (!draftState) {
               return (
                 <div className="space-y-3">
-                  <div className="text-center text-indigo-600">
+                  <div className="text-center text-info">
                     <div className="animate-pulse">Loading draft state...</div>
                   </div>
                 </div>
@@ -1618,9 +1622,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 {/* Current Turn & Draft Progress */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <h4 className="text-sm font-semibold text-indigo-800 flex items-center">
+                    <h4 className="text-sm font-semibold text-info flex items-center">
                       <svg
-                        className="h-4 w-4 mr-2 text-indigo-600"
+                        className="h-4 w-4 mr-2 text-info"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -1639,16 +1643,16 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium ${
                           draftState.draftType === 'snake'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-green-100 text-green-700'
+                            ? 'bg-info/10 text-info'
+                            : 'bg-success/10 text-success'
                         }`}
                       >
                         {draftState.draftType === 'snake' ? '🐍 Snake Draft' : '📊 Linear Draft'}
                       </span>
-                      <span className="text-indigo-700">
+                      <span className="text-info">
                         Round {draftState.currentRound} of {draftState.maxRounds}
                       </span>
-                      <span className="text-indigo-600">
+                      <span className="text-info">
                         Pick {draftState.currentPickNumber} / {draftState.totalPossiblePicks}
                       </span>
                     </div>
@@ -1662,12 +1666,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                           onClick={() =>
                             setDraftOrderManagement((prev) => ({ ...prev, showOrderModal: true }))
                           }
-                          className="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700"
+                          className="bg-info text-white px-3 py-1 rounded text-sm hover:bg-info"
                         >
                           ⚙️ Manage Order
                         </button>
                       )}
-                    <div className="text-xs text-indigo-600">
+                    <div className="text-xs text-info">
                       {draftState.picksRemaining} picks remaining
                     </div>
                   </div>
@@ -1678,14 +1682,14 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   <div
                     className={`p-3 rounded-lg border-2 ${
                       isMyTurn
-                        ? 'bg-green-100 border-green-300 text-green-800'
-                        : 'bg-gray-100 border-gray-300 text-gray-700'
+                        ? 'bg-success/10 border-success/20 text-success'
+                        : 'bg-muted border-border text-foreground'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div
-                          className={`w-3 h-3 rounded-full ${isMyTurn ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}
+                          className={`w-3 h-3 rounded-full ${isMyTurn ? 'bg-success animate-pulse' : 'bg-muted'}`}
                         ></div>
                         <span className="font-medium">
                           {isMyTurn
@@ -1703,21 +1707,21 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 {/* Next Few Picks Preview */}
                 {draftState.nextPicks.length > 0 && (
                   <div className="bg-white/50 rounded-lg p-3">
-                    <div className="text-sm font-medium text-indigo-700 mb-2">Coming Up:</div>
+                    <div className="text-sm font-medium text-info mb-2">Coming Up:</div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       {draftState.nextPicks.map((nextPick) => (
                         <div
                           key={nextPick.pickNumber}
                           className="flex items-center space-x-2 text-sm"
                         >
-                          <span className="text-indigo-600 font-medium">
-                            #{nextPick.pickNumber}
-                          </span>
-                          <span className="text-gray-700">
+                          <span className="text-info font-medium">#{nextPick.pickNumber}</span>
+                          <span className="text-foreground">
                             {nextPick.participant.member.displayName}
                           </span>
                           {nextPick.round !== draftState.currentRound && (
-                            <span className="text-xs text-gray-500">(R{nextPick.round})</span>
+                            <span className="text-xs text-muted-foreground">
+                              (R{nextPick.round})
+                            </span>
                           )}
                         </div>
                       ))}
@@ -1732,12 +1736,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Team Category Analysis Widget */}
       {draftData.picks.some((pick) => pick.member.id === currentUserId) && (
-        <div className="w-full px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-200">
+        <div className="w-full px-4 py-3 bg-gradient-to-r from-success/10 to-info/10 border-b border-success/20">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-gray-800 flex items-center">
+              <h4 className="text-sm font-semibold text-foreground flex items-center">
                 <svg
-                  className="h-4 w-4 mr-2 text-green-600"
+                  className="h-4 w-4 mr-2 text-success"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1751,9 +1755,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 </svg>
                 Team Category Analysis
               </h4>
-              <div className="text-xs text-gray-600">
-                Focus on <span className="font-medium text-red-600">weak areas</span> • Maintain{' '}
-                <span className="font-medium text-green-600">strengths</span>
+              <div className="text-xs text-muted-foreground">
+                Focus on <span className="font-medium text-destructive">weak areas</span> • Maintain{' '}
+                <span className="font-medium text-success">strengths</span>
               </div>
             </div>
 
@@ -1763,10 +1767,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   key={category.key}
                   className={`text-center p-2 rounded-md border-2 transition-all ${
                     category.rating === 'strong'
-                      ? 'bg-green-100 border-green-300 text-green-800'
+                      ? 'bg-success/10 border-success/20 text-success'
                       : category.rating === 'weak'
-                        ? 'bg-red-100 border-red-300 text-red-800'
-                        : 'bg-gray-100 border-gray-300 text-gray-700'
+                        ? 'bg-destructive/10 border-destructive/20 text-destructive'
+                        : 'bg-muted border-border text-foreground'
                   }`}
                 >
                   <div className="text-xs font-medium">{category.name}</div>
@@ -1785,7 +1789,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <div className="mt-3 flex items-center justify-between text-sm">
               <div className="flex items-center space-x-4">
                 {getTeamCategoryAnalysis().needsImprovement.length > 0 && (
-                  <div className="flex items-center text-red-700">
+                  <div className="flex items-center text-destructive">
                     <span className="font-medium">Target:</span>
                     <span className="ml-1">
                       {getTeamCategoryAnalysis()
@@ -1796,7 +1800,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   </div>
                 )}
                 {getTeamCategoryAnalysis().strengths.length > 0 && (
-                  <div className="flex items-center text-green-700">
+                  <div className="flex items-center text-success">
                     <span className="font-medium">Strong:</span>
                     <span className="ml-1">
                       {getTeamCategoryAnalysis()
@@ -1814,12 +1818,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* AI Draft Insights Banner */}
       {showRecommendations && isMyTurn && tab === 'available' && (
-        <div className="w-full px-4 py-3 bg-gradient-to-r from-purple-50 to-blue-50 border-b border-purple-200">
+        <div className="w-full px-4 py-3 bg-gradient-to-r from-primary/10 to-info/10 border-b border-primary/20">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-start space-x-3">
               <div className="flex-shrink-0">
                 <svg
-                  className="h-6 w-6 text-purple-600"
+                  className="h-6 w-6 text-primary"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1833,8 +1837,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 </svg>
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-purple-800 mb-1">AI Draft Strategy</h4>
-                <p className="text-sm text-purple-700">
+                <h4 className="text-sm font-semibold text-primary mb-1">AI Draft Strategy</h4>
+                <p className="text-sm text-primary">
                   {(() => {
                     const teamAnalysis = getTeamCategoryAnalysis();
                     const myPicks = draftData.picks.filter(
@@ -1869,10 +1873,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         <div
           role="status"
           aria-live="polite"
-          className="w-full px-4 py-2 bg-blue-50 border-b border-blue-200"
+          className="w-full px-4 py-2 bg-info/10 border-b border-info/20"
         >
           <div className="max-w-7xl mx-auto text-center">
-            <div className="flex items-center justify-center space-x-2 text-blue-800">
+            <div className="flex items-center justify-center space-x-2 text-info">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -1887,7 +1891,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </span>
               <button
                 onClick={() => setAutoPickEnabled(false)}
-                className="ml-2 text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                className="ml-2 text-xs bg-info text-white px-2 py-1 rounded hover:bg-info"
               >
                 Disable
               </button>
@@ -1898,8 +1902,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Smart Draft Assistant - Floating Widget */}
       {showRecommendations && isMyTurn && tab === 'available' && (
-        <div className="fixed bottom-4 right-4 w-80 bg-white border border-blue-200 rounded-lg shadow-lg z-50">
-          <div className="bg-blue-600 text-white p-3 rounded-t-lg">
+        <div className="fixed bottom-4 right-4 w-80 bg-white border border-info/20 rounded-lg shadow-lg z-50">
+          <div className="bg-info text-white p-3 rounded-t-lg">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold flex items-center">
                 <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1914,7 +1918,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </h4>
               <button
                 onClick={() => setShowRecommendations(false)}
-                className="text-blue-200 hover:text-white"
+                className="text-info hover:text-white"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -1928,27 +1932,29 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             </div>
           </div>
           <div className="p-4">
-            <div className="text-sm text-gray-600 mb-3">Top recommendations for your draft:</div>
+            <div className="text-sm text-muted-foreground mb-3">
+              Top recommendations for your draft:
+            </div>
             {getPlayerRecommendations(3).map((player, index) => (
               <div
                 key={player.id}
-                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
+                className="flex items-center justify-between py-2 border-b border-border last:border-b-0"
               >
                 <div className="flex items-center space-x-2">
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                       index === 0
-                        ? 'bg-yellow-400 text-yellow-900'
+                        ? 'bg-warning text-warning'
                         : index === 1
-                          ? 'bg-gray-300 text-gray-700'
-                          : 'bg-orange-300 text-orange-700'
+                          ? 'bg-muted text-foreground'
+                          : 'bg-warning/10 text-warning'
                     }`}
                   >
                     {index + 1}
                   </div>
                   <div>
                     <div className="font-medium text-sm">{player.name}</div>
-                    <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+                    <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                       <span>{player.position}</span>
                       <span aria-hidden>-</span>
                       <TeamLogo team={player.club} size={12} withCircle decorative />
@@ -1961,15 +1967,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                     onClick={(e) => handleWatchlistToggleWithScroll(player.id, e)}
                     className={`text-sm px-2 py-1 rounded ${
                       isInWatchlist(player.id)
-                        ? 'bg-red-100 text-red-600'
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-destructive/10 text-destructive'
+                        : 'bg-muted text-muted-foreground'
                     }`}
                   >
                     {isInWatchlist(player.id) ? '★' : '☆'}
                   </button>
                   <button
                     onClick={() => handlePlayerSelect(player)}
-                    className="bg-blue-600 text-white text-sm px-2 py-1 rounded hover:bg-blue-700"
+                    className="bg-info text-white text-sm px-2 py-1 rounded hover:bg-info"
                   >
                     Draft
                   </button>
@@ -1979,7 +1985,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <div className="mt-3 text-center">
               <button
                 onClick={() => setTab('recommendations')}
-                className="text-blue-600 text-sm hover:text-blue-800"
+                className="text-info text-sm hover:text-info"
               >
                 View all recommendations →
               </button>
@@ -1998,14 +2004,14 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Real-time Draft Status Bar */}
       {liveDraftData.status === 'LIVE' && (
-        <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="bg-white border-b border-border shadow-sm">
           <div className="max-w-7xl mx-auto px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 {/* Current Turn */}
                 <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium text-gray-900">
+                  <div className="w-3 h-3 bg-success rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium text-foreground">
                     Current Turn: {liveDraftState.currentTurn?.member.displayName || 'Loading...'}
                   </span>
                 </div>
@@ -2013,7 +2019,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 {/* Live Timer */}
                 <div className="flex items-center space-x-2">
                   <svg
-                    className="h-4 w-4 text-gray-500"
+                    className="h-4 w-4 text-muted-foreground"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -2028,10 +2034,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   <span
                     className={`text-sm font-mono ${
                       liveDraftState.timeRemaining <= 30
-                        ? 'text-red-600 font-bold'
+                        ? 'text-destructive font-bold'
                         : liveDraftState.timeRemaining <= 60
-                          ? 'text-yellow-600 font-medium'
-                          : 'text-gray-700'
+                          ? 'text-warning font-medium'
+                          : 'text-foreground'
                     }`}
                   >
                     {Math.floor(liveDraftState.timeRemaining / 60)}:
@@ -2040,7 +2046,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 </div>
 
                 {/* Pick Number */}
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-muted-foreground">
                   Pick {liveDraftData.currentPick} of {liveDraftData.totalPicks}
                 </div>
               </div>
@@ -2052,31 +2058,33 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   <div
                     className={`w-2 h-2 rounded-full ${
                       connectionState.status === 'connected'
-                        ? 'bg-green-500'
+                        ? 'bg-success'
                         : connectionState.status === 'reconnecting'
-                          ? 'bg-yellow-500'
-                          : 'bg-red-500'
+                          ? 'bg-warning'
+                          : 'bg-destructive'
                     }`}
                   ></div>
-                  <span className="text-xs text-gray-500 capitalize">{connectionState.status}</span>
+                  <span className="text-xs text-muted-foreground capitalize">
+                    {connectionState.status}
+                  </span>
                 </div>
 
                 {!liveDraftState.isYourTurn && liveDraftState.picksUntilYourTurn > 0 && (
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-muted-foreground">
                     Your turn in {liveDraftState.picksUntilYourTurn} pick
                     {liveDraftState.picksUntilYourTurn !== 1 ? 's' : ''}
                   </div>
                 )}
 
                 {liveDraftState.nextTurn && (
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-muted-foreground">
                     Next: {liveDraftState.nextTurn.member.displayName}
                   </div>
                 )}
 
                 {/* Real-time Status Badge */}
-                <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-1 animate-pulse"></div>
+                <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-info/10 text-info">
+                  <div className="w-1.5 h-1.5 bg-info rounded-full mr-1 animate-pulse"></div>
                   Real-time Sync Ready
                 </div>
               </div>
@@ -2087,11 +2095,11 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
       {/* Last Pick Made Banner */}
       {lastPickMade && liveDraftData.status === 'LIVE' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 mx-4">
+        <div className="bg-info/10 border border-info/20 rounded-lg p-3 mb-4 mx-4">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-info/10 rounded-full flex items-center justify-center">
               <svg
-                className="h-4 w-4 text-blue-600"
+                className="h-4 w-4 text-info"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -2105,10 +2113,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </svg>
             </div>
             <div>
-              <p className="text-sm font-medium text-blue-900">
+              <p className="text-sm font-medium text-info">
                 {lastPickMade.member.displayName} just drafted {lastPickMade.player.name}
               </p>
-              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-blue-600">
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-info">
                 <span>{lastPickMade.player.position}</span>
                 <span aria-hidden>•</span>
                 <span className="inline-flex items-center gap-1">
@@ -2130,16 +2138,16 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div
             role="status"
             aria-live="polite"
-            className="bg-green-600 text-white p-4 rounded-lg shadow-md ring-1 ring-green-700/20"
+            className="bg-success text-white p-4 rounded-lg shadow-md ring-1 ring-success"
           >
             <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
+              <div className="w-3 h-3 bg-warning rounded-full animate-ping"></div>
               <div>
                 <h3 className="font-bold text-lg">🎯 Your Turn to Pick!</h3>
-                <p className="text-green-100">
+                <p className="text-success">
                   Browse the Available Players tab below and select your next draft pick.
                 </p>
-                <p className="text-green-200 text-sm mt-1">
+                <p className="text-success text-sm mt-1">
                   Time remaining: {Math.floor(liveDraftState.timeRemaining / 60)}:
                   {(liveDraftState.timeRemaining % 60).toString().padStart(2, '0')}
                 </p>
@@ -2153,15 +2161,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
             <div>
               <h2 className="text-xl font-bold">Draft Room</h2>
-              <p className="text-gray-600 text-sm">
+              <p className="text-muted-foreground text-sm">
                 Pick {liveDraftData.currentPick} of {liveDraftData.totalPicks} | Round{' '}
                 {Math.ceil(liveDraftData.currentPick / liveDraftData.participants.length)}
               </p>
               <div className="flex items-center space-x-2 mt-1">
                 {renderStatusBadge(liveDraftData.status)}
                 {connectionState.status === 'connected' && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></div>
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
+                    <div className="w-1.5 h-1.5 bg-success rounded-full mr-1 animate-pulse"></div>
                     Live
                   </span>
                 )}
@@ -2171,7 +2179,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               {/* Fantasy Settings Button */}
               <Button
                 onClick={() => setFantasySettingsModal(true)}
-                className="w-full sm:w-auto bg-purple-600 text-white hover:bg-purple-700 px-4 py-2 text-sm"
+                className="w-full sm:w-auto bg-primary text-white hover:bg-primary px-4 py-2 text-sm"
               >
                 ⚙️ Fantasy Settings
               </Button>
@@ -2179,7 +2187,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               {/* League Customization Button */}
               <Button
                 onClick={() => setShowCustomizationModal(true)}
-                className="w-full sm:w-auto bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 text-sm"
+                className="w-full sm:w-auto bg-info text-white hover:bg-info px-4 py-2 text-sm"
               >
                 🎛️ League Settings
               </Button>
@@ -2218,10 +2226,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Search by name..."
-                      className="w-full px-3 py-2 pl-8 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 pl-8 border rounded-md focus:outline-none focus:ring-2 focus:ring-info"
                     />
                     <svg
-                      className="absolute left-2 top-2.5 h-4 w-4 text-gray-400"
+                      className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -2236,7 +2244,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                     {search && (
                       <button
                         onClick={() => setSearch('')}
-                        className="absolute right-2 top-2.5 h-4 w-4 text-gray-400 hover:text-gray-600"
+                        className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground hover:text-muted-foreground"
                       >
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path
@@ -2356,8 +2364,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                           }}
                           className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                             quickFilters.includes(filter.id)
-                              ? 'bg-blue-100 border-blue-300 text-blue-700'
-                              : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                              ? 'bg-info/10 border-info/20 text-info'
+                              : 'bg-muted border-border text-foreground hover:bg-muted'
                           }`}
                         >
                           {filter.label}
@@ -2378,7 +2386,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                         setSortBy('name');
                         setSortOrder('asc');
                       }}
-                      className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 border rounded-md text-sm text-gray-700 transition-colors"
+                      className="w-full px-3 py-2 bg-muted hover:bg-muted border rounded-md text-sm text-foreground transition-colors"
                     >
                       Reset All Filters
                     </button>
@@ -2390,15 +2398,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             {/* Players Table */}
             <div ref={scrollContainerRef} className="bg-white rounded-lg border overflow-x-auto">
               {filteredPlayers.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-500">
+                <div className="px-4 py-8 text-center text-muted-foreground">
                   No players found matching your filters
                 </div>
               ) : (
                 <div role="table" aria-label="Available players" className="min-w-full">
                   {/* Sticky Header */}
-                  <div className="sticky top-0 z-20 bg-gray-50 border-b">
+                  <div className="sticky top-0 z-20 bg-muted border-b">
                     <div className="flex items-center">
-                      <div className="sticky left-0 bg-gray-50 px-4 py-3 font-medium text-left border-r border-gray-200 z-10 min-w-[300px]">
+                      <div className="sticky left-0 bg-muted px-4 py-3 font-medium text-left border-r border-border z-10 min-w-[300px]">
                         Player
                       </div>
                       <div className="px-3 py-3 font-medium text-center min-w-[80px]">Total</div>
@@ -2444,8 +2452,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   onClick={() => setShowRecommendations(!showRecommendations)}
                   className={`px-3 py-1 text-sm rounded ${
                     showRecommendations
-                      ? 'bg-green-100 text-green-700 border border-green-300'
-                      : 'bg-gray-100 text-gray-700 border border-gray-300'
+                      ? 'bg-success/10 text-success border border-success/20'
+                      : 'bg-muted text-foreground border border-border'
                   }`}
                 >
                   {showRecommendations ? 'Enabled' : 'Disabled'}
@@ -2497,20 +2505,20 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                             className="mr-2"
                             aria-describedby={isDisabled ? 'priority-positions-limit' : undefined}
                           />
-                          <span className={`text-sm ${isDisabled ? 'text-gray-400' : ''}`}>
+                          <span className={`text-sm ${isDisabled ? 'text-muted-foreground' : ''}`}>
                             {position}
                           </span>
                         </label>
                       );
                     })}
                   </div>
-                  <div id="priority-positions-help" className="text-xs text-gray-600 mt-1">
+                  <div id="priority-positions-help" className="text-xs text-muted-foreground mt-1">
                     Select up to {MAX_PRIORITIES} positions to prioritize
                   </div>
                   {recommendationCriteria.prioritizePositions.length >= MAX_PRIORITIES && (
                     <div
                       id="priority-positions-limit"
-                      className="text-xs text-amber-600 mt-1"
+                      className="text-xs text-warning mt-1"
                       role="alert"
                       aria-live="polite"
                     >
@@ -2579,10 +2587,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                           position as keyof typeof leagueCustomization.positionLimits
                         ] || 8;
                       return (
-                        <div key={position} className="bg-gray-50 p-2 rounded text-center">
+                        <div key={position} className="bg-muted p-2 rounded text-center">
                           <div className="font-medium">{position}</div>
                           <div
-                            className={`text-xs ${currentCount >= maxForPosition ? 'text-red-600' : 'text-green-600'}`}
+                            className={`text-xs ${currentCount >= maxForPosition ? 'text-destructive' : 'text-success'}`}
                           >
                             {currentCount}/{maxForPosition}
                           </div>
@@ -2597,16 +2605,14 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             {/* Recommended Players */}
             {showRecommendations && (
               <div className="bg-white rounded-lg border overflow-hidden">
-                <div className="p-4 bg-blue-50 border-b">
-                  <h3 className="font-bold text-blue-800">🎯 Top Recommendations</h3>
-                  <p className="text-sm text-blue-600">
-                    Based on your team needs and league settings
-                  </p>
+                <div className="p-4 bg-info/10 border-b">
+                  <h3 className="font-bold text-info">🎯 Top Recommendations</h3>
+                  <p className="text-sm text-info">Based on your team needs and league settings</p>
                 </div>
                 <div className="overflow-x-auto">
                   <Table className="text-left w-full min-w-max">
                     <thead>
-                      <tr className="bg-gray-50">
+                      <tr className="bg-muted">
                         <th className="px-4 py-3 font-medium text-center">Rank</th>
                         <th className="px-4 py-3 font-medium text-left">Player</th>
                         <th className="px-4 py-3 font-medium text-center">Position</th>
@@ -2622,18 +2628,18 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       {getPlayerRecommendations(10).map((player, index) => (
                         <tr
                           key={player.id}
-                          className={`border-b hover:bg-blue-50 ${index < 3 ? 'bg-yellow-50' : ''}`}
+                          className={`border-b hover:bg-info/10 ${index < 3 ? 'bg-warning/10' : ''}`}
                         >
                           <td className="px-4 py-3 text-center">
                             <div
                               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${
                                 index === 0
-                                  ? 'bg-yellow-400 text-yellow-900'
+                                  ? 'bg-warning text-warning'
                                   : index === 1
-                                    ? 'bg-gray-300 text-gray-700'
+                                    ? 'bg-muted text-foreground'
                                     : index === 2
-                                      ? 'bg-orange-300 text-orange-700'
-                                      : 'bg-blue-100 text-blue-700'
+                                      ? 'bg-warning/10 text-warning'
+                                      : 'bg-info/10 text-info'
                               }`}
                             >
                               {index + 1}
@@ -2644,8 +2650,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                             <span
                               className={`px-2 py-1 rounded text-xs font-medium ${
                                 recommendationCriteria.prioritizePositions.includes(player.position)
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-gray-100 text-gray-700'
+                                  ? 'bg-success/10 text-success'
+                                  : 'bg-muted text-foreground'
                               }`}
                             >
                               {player.position}
@@ -2664,10 +2670,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                             <span
                               className={`px-2 py-1 rounded text-xs font-medium ${
                                 (player.recommendationScore || 0) > 100
-                                  ? 'bg-green-100 text-green-700'
+                                  ? 'bg-success/10 text-success'
                                   : (player.recommendationScore || 0) > 75
-                                    ? 'bg-yellow-100 text-yellow-700'
-                                    : 'bg-gray-100 text-gray-700'
+                                    ? 'bg-warning/10 text-warning'
+                                    : 'bg-muted text-foreground'
                               }`}
                             >
                               {(player.recommendationScore || 0).toFixed(0)}
@@ -2676,7 +2682,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                           <td className="px-2 py-3 text-xs">
                             {(() => {
                               if (!player.stats)
-                                return <div className="text-gray-400">No data</div>;
+                                return <div className="text-muted-foreground">No data</div>;
 
                               const teamAnalysis = getTeamCategoryAnalysis();
                               const games = player.stats.games || 1;
@@ -2708,7 +2714,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                                 .slice(0, 3);
 
                               if (categoryImpacts.length === 0) {
-                                return <div className="text-gray-400">Balanced</div>;
+                                return <div className="text-muted-foreground">Balanced</div>;
                               }
 
                               return (
@@ -2717,13 +2723,13 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                                     <div
                                       key={imp.category.key}
                                       className={`flex items-center justify-between ${
-                                        imp.isWeak ? 'text-red-600' : 'text-green-600'
+                                        imp.isWeak ? 'text-destructive' : 'text-success'
                                       }`}
                                     >
                                       <span className="font-medium">{imp.category.name}</span>
                                       <span
                                         className={`px-1 rounded text-xs ${
-                                          imp.isWeak ? 'bg-red-100' : 'bg-green-100'
+                                          imp.isWeak ? 'bg-destructive/10' : 'bg-success/10'
                                         }`}
                                       >
                                         {imp.isWeak ? '🎯' : '💪'}
@@ -2790,7 +2796,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                               <Button
                                 onClick={() => handlePlayerSelect(player)}
                                 disabled={isLoading}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                                className="bg-info hover:bg-info text-white px-3 py-1 rounded text-sm"
                               >
                                 Draft
                               </Button>
@@ -2798,8 +2804,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                                 onClick={(e) => handleWatchlistToggleWithScroll(player.id, e)}
                                 className={`px-3 py-1 rounded text-sm ${
                                   isInWatchlist(player.id)
-                                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-destructive/10 text-destructive hover:bg-destructive/10'
+                                    : 'bg-muted text-foreground hover:bg-muted'
                                 }`}
                               >
                                 {isInWatchlist(player.id) ? '★' : '☆'}
@@ -2871,9 +2877,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
               if (draftData.picks.length === 0) {
                 return (
-                  <div className="p-8 text-center text-gray-500">
+                  <div className="p-8 text-center text-muted-foreground">
                     <svg
-                      className="h-12 w-12 mx-auto mb-4 text-gray-300"
+                      className="h-12 w-12 mx-auto mb-4 text-muted-foreground"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -2988,7 +2994,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                                             className="px-2 py-1 rounded text-xs font-medium"
                                             style={{
                                               backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                                              color: '#d97706',
+                                              color: 'var(--warning)',
                                             }}
                                           >
                                             Auto
@@ -3044,24 +3050,24 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             {/* Recent Activity Feed */}
             {recentActivity.length > 0 && (
               <div className="bg-white rounded-lg border p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Recent Activity</h3>
+                <h3 className="font-semibold text-foreground mb-3">Recent Activity</h3>
                 <div className="space-y-2 max-h-[200px] overflow-y-auto">
                   {recentActivity.slice(0, 10).map((activity) => (
                     <div key={activity.id} className="flex items-start space-x-2 text-sm">
                       <span
                         className={`inline-block w-2 h-2 rounded-full mt-1.5 ${
                           activity.type === 'pick'
-                            ? 'bg-green-500'
+                            ? 'bg-success'
                             : activity.type === 'join'
-                              ? 'bg-blue-500'
+                              ? 'bg-info'
                               : activity.type === 'leave'
-                                ? 'bg-red-500'
-                                : 'bg-gray-500'
+                                ? 'bg-destructive'
+                                : 'bg-muted'
                         }`}
                       ></span>
                       <div className="flex-1">
-                        <p className="text-gray-900">{activity.message}</p>
-                        <p className="text-gray-500 text-xs">
+                        <p className="text-foreground">{activity.message}</p>
+                        <p className="text-muted-foreground text-xs">
                           {new Date(activity.timestamp).toLocaleTimeString()}
                         </p>
                       </div>
@@ -3089,9 +3095,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
         {/* My Team Tab */}
         {tab === 'my-team' && (
           <div className="bg-white rounded-lg border overflow-hidden">
-            <div className="p-4 bg-green-50 border-b">
-              <h3 className="font-bold text-green-800">Your Team (Slot 1)</h3>
-              <p className="text-sm text-green-600">
+            <div className="p-4 bg-success/10 border-b">
+              <h3 className="font-bold text-success">Your Team (Slot 1)</h3>
+              <p className="text-sm text-success">
                 {liveDraftData.picks?.filter(
                   (pick) => pick.member.id === liveDraftData.participants?.[0]?.member.id
                 ).length || 0}{' '}
@@ -3100,7 +3106,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             </div>
             <Table className="text-left">
               <thead>
-                <tr className="bg-gray-50">
+                <tr className="bg-muted">
                   <th className="px-4 py-3 font-medium">Pick #</th>
                   <th className="px-4 py-3 font-medium">Round</th>
                   <th className="px-4 py-3 font-medium">Player</th>
@@ -3113,8 +3119,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 {(liveDraftData.picks || [])
                   .filter((pick) => pick.member.id === liveDraftData.participants?.[0]?.member.id)
                   .map((pick) => (
-                    <tr key={pick.id} className="odd:bg-green-25 hover:bg-green-50">
-                      <td className="px-4 py-2 font-bold text-green-700">#{pick.overall}</td>
+                    <tr key={pick.id} className="odd:bg-success/10 hover:bg-success/10">
+                      <td className="px-4 py-2 font-bold text-success">#{pick.overall}</td>
                       <td className="px-4 py-2">{pick.round}</td>
                       <td className="px-4 py-2 font-medium">{pick.player.name}</td>
                       <td className="px-4 py-2">{pick.player.position}</td>
@@ -3124,7 +3130,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                           {pick.player.club}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-sm text-gray-500">
+                      <td className="px-4 py-2 text-sm text-muted-foreground">
                         {new Date(pick.madeAt).toLocaleTimeString()}
                       </td>
                     </tr>
@@ -3133,7 +3139,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   (pick) => pick.member.id === liveDraftData.participants[0]?.member.id
                 ).length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                       No picks made yet. Make your first pick when it&apos;s your turn!
                     </td>
                   </tr>
@@ -3149,7 +3155,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <div className="p-6">
               <h3 className="text-lg font-bold mb-4 flex items-center">
                 <svg
-                  className="h-5 w-5 mr-2 text-green-600"
+                  className="h-5 w-5 mr-2 text-success"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -3165,9 +3171,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </h3>
 
               {/* Draft State Information */}
-              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="mb-4 p-3 bg-info/10 rounded-lg">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-blue-800">
+                  <span className="font-medium text-info">
                     {(() => {
                       const draftState = getDraftState();
                       return draftState
@@ -3175,7 +3181,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                         : 'Loading...';
                     })()}
                   </span>
-                  <span className="text-blue-600">
+                  <span className="text-info">
                     {(() => {
                       const draftState = getDraftState();
                       return draftState
@@ -3189,7 +3195,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </div>
 
               <div className="mb-6">
-                <p className="text-gray-600 mb-2">
+                <p className="text-muted-foreground mb-2">
                   {isMyTurn
                     ? 'You are about to draft:'
                     : `Making pick for ${(() => {
@@ -3198,12 +3204,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       })()}:`}
                 </p>
                 <div
-                  className={`p-4 rounded border-2 ${isMyTurn ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}
+                  className={`p-4 rounded border-2 ${isMyTurn ? 'bg-success/10 border-success/20' : 'bg-info/10 border-info/20'}`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-bold text-lg">{confirmModal.player.name}</p>
-                      <p className="flex flex-wrap items-center gap-2 text-gray-600">
+                      <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
                         <span>{confirmModal.player.position}</span>
                         <span className="inline-flex items-center gap-1">
                           <TeamLogo
@@ -3216,14 +3222,14 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                         </span>
                       </p>
                       {confirmModal.player.stats && (
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="text-sm text-muted-foreground mt-1">
                           Fantasy Value: {calculateTotalValue(confirmModal.player.stats).toFixed(1)}
                         </p>
                       )}
                     </div>
                     {confirmModal.player.injuryStatus &&
                       confirmModal.player.injuryStatus !== 'healthy' && (
-                        <div className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">
+                        <div className="bg-destructive/10 text-destructive px-2 py-1 rounded text-xs">
                           ⚠️ {confirmModal.player.injuryStatus}
                         </div>
                       )}
@@ -3237,15 +3243,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                     <div
                       className={`mt-3 p-3 rounded-lg ${
                         validation.isValid
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-red-50 border border-red-200'
+                          ? 'bg-success/10 border border-success/20'
+                          : 'bg-destructive/10 border border-destructive/20'
                       }`}
                     >
                       <div className="flex items-center space-x-2">
                         {validation.isValid ? (
                           <>
                             <svg
-                              className="h-4 w-4 text-green-600"
+                              className="h-4 w-4 text-success"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -3257,14 +3263,14 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                                 d="M5 13l4 4L19 7"
                               />
                             </svg>
-                            <span className="text-green-800 font-medium">
+                            <span className="text-success font-medium">
                               Pick validated - Ready to draft!
                             </span>
                           </>
                         ) : (
                           <>
                             <svg
-                              className="h-4 w-4 text-red-600"
+                              className="h-4 w-4 text-destructive"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -3276,13 +3282,15 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                                 d="M6 18L18 6M6 6l12 12"
                               />
                             </svg>
-                            <span className="text-red-800 font-medium">Pick validation failed</span>
+                            <span className="text-destructive font-medium">
+                              Pick validation failed
+                            </span>
                           </>
                         )}
                       </div>
 
                       {!validation.isValid && validation.errors?.length ? (
-                        <ul className="mt-2 list-disc pl-5 text-sm text-red-700">
+                        <ul className="mt-2 list-disc pl-5 text-sm text-destructive">
                           {validation.errors.map((error, idx) => (
                             <li key={idx}>{error}</li>
                           ))}
@@ -3303,10 +3311,10 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                       disabled={isLoading || !validation.isValid || pickValidation.isPicking}
                       className={`px-6 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed ${
                         validation.isValid && isMyTurn
-                          ? 'bg-green-600 text-white hover:bg-green-700'
+                          ? 'bg-success text-white hover:bg-success'
                           : validation.isValid
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-gray-400 text-white cursor-not-allowed'
+                            ? 'bg-info text-white hover:bg-info'
+                            : 'bg-muted text-white cursor-not-allowed'
                       }`}
                     >
                       {pickValidation.isPicking ? (
@@ -3348,7 +3356,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 })()}
                 <Button
                   onClick={() => setConfirmModal({ open: false })}
-                  className="bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700"
+                  className="bg-muted text-white px-6 py-2 rounded hover:bg-muted"
                   disabled={pickValidation.isPicking}
                 >
                   Cancel
@@ -3357,8 +3365,8 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
               {/* Time-sensitive warning */}
               {isMyTurn && autoPickEnabled && timeRemaining < 30 && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center space-x-2 text-yellow-800">
+                <div className="mt-4 p-3 bg-warning/10 border border-warning/20 rounded-lg">
+                  <div className="flex items-center space-x-2 text-warning">
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
@@ -3416,7 +3424,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Draft Settings */}
               <div className="space-y-4">
-                <h4 className="font-semibold text-gray-900 border-b pb-2">Draft Settings</h4>
+                <h4 className="font-semibold text-foreground border-b pb-2">Draft Settings</h4>
 
                 <div>
                   <label htmlFor="autoPickTime" className="block text-sm font-medium mb-1">
@@ -3478,7 +3486,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
               {/* Position Limits */}
               <div className="space-y-4">
-                <h4 className="font-semibold text-gray-900 border-b pb-2">Position Limits</h4>
+                <h4 className="font-semibold text-foreground border-b pb-2">Position Limits</h4>
 
                 {Object.entries(leagueCustomization.positionLimits).map(([position, limit]) => (
                   <div key={position}>
@@ -3508,7 +3516,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
 
               {/* Display Preferences */}
               <div className="space-y-4 md:col-span-2">
-                <h4 className="font-semibold text-gray-900 border-b pb-2">Display Preferences</h4>
+                <h4 className="font-semibold text-foreground border-b pb-2">Display Preferences</h4>
 
                 <div>
                   <label htmlFor="defaultSort" className="block text-sm font-medium mb-1">
@@ -3576,7 +3584,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <div className="mt-8 flex justify-end space-x-3">
               <Button
                 onClick={() => setShowCustomizationModal(false)}
-                className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+                className="bg-muted text-white px-4 py-2 rounded hover:bg-muted"
               >
                 Cancel
               </Button>
@@ -3587,7 +3595,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                     console.log('Saving league customization:', leagueCustomization);
                   setShowCustomizationModal(false);
                 }}
-                className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+                className="bg-info text-white px-4 py-2 rounded hover:bg-info"
               >
                 Save Settings
               </Button>
@@ -3603,7 +3611,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
           <div className="p-6 max-w-2xl">
             <h3 className="text-lg font-bold mb-4 flex items-center">
               <svg
-                className="h-5 w-5 mr-2 text-indigo-600"
+                className="h-5 w-5 mr-2 text-info"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -3623,13 +3631,13 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Current Order */}
                 <div>
-                  <h4 className="font-medium text-gray-800 mb-3">Current Order</h4>
-                  <div className="space-y-2 bg-gray-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-foreground mb-3">Current Order</h4>
+                  <div className="space-y-2 bg-muted p-3 rounded-lg">
                     {(() => {
                       const draftState = getDraftState();
                       if (!draftState) {
                         return (
-                          <div className="text-center text-gray-500 py-4">
+                          <div className="text-center text-muted-foreground py-4">
                             Loading draft order...
                           </div>
                         );
@@ -3643,7 +3651,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                             key={userId}
                             className="flex items-center space-x-3 p-2 bg-white rounded"
                           >
-                            <span className="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-sm font-medium">
+                            <span className="w-6 h-6 bg-info/10 text-info rounded-full flex items-center justify-center text-sm font-medium">
                               {index + 1}
                             </span>
                             <span className="text-sm">{participant.member.displayName}</span>
@@ -3657,21 +3665,21 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                 {/* New Order Preview */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-gray-800">New Order Preview</h4>
+                    <h4 className="font-medium text-foreground">New Order Preview</h4>
                     <button
                       onClick={randomizeDraftOrder}
                       disabled={draftOrderManagement.isRandomizing}
-                      className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+                      className="bg-primary text-white px-3 py-1 rounded text-sm hover:bg-primary disabled:opacity-50"
                     >
                       {draftOrderManagement.isRandomizing ? '🎲 Randomizing...' : '🎲 Randomize'}
                     </button>
                   </div>
 
-                  <div className="space-y-2 bg-purple-50 p-3 rounded-lg">
+                  <div className="space-y-2 bg-primary/10 p-3 rounded-lg">
                     {draftOrderManagement.isRandomizing ? (
                       <div className="text-center py-8">
-                        <div className="animate-spin w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full mx-auto mb-2"></div>
-                        <p className="text-sm text-purple-600">Shuffling order...</p>
+                        <div className="animate-spin w-8 h-8 border-4 border-primary/20 border-t-transparent rounded-full mx-auto mb-2"></div>
+                        <p className="text-sm text-primary">Shuffling order...</p>
                       </div>
                     ) : draftOrderManagement.tempOrder.length > 0 ? (
                       draftOrderManagement.tempOrder.map((userId, index) => {
@@ -3683,12 +3691,12 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                             key={userId}
                             className="flex items-center space-x-3 p-2 bg-white rounded shadow-sm"
                           >
-                            <span className="w-6 h-6 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-sm font-medium">
+                            <span className="w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-sm font-medium">
                               {index + 1}
                             </span>
                             <span className="text-sm">{participant.member.displayName}</span>
                             {index === 0 && (
-                              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                              <span className="text-xs bg-success/10 text-success px-2 py-1 rounded">
                                 First Pick
                               </span>
                             )}
@@ -3696,7 +3704,7 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                         ) : null;
                       })
                     ) : (
-                      <div className="text-center py-8 text-gray-500">
+                      <div className="text-center py-8 text-muted-foreground">
                         <p className="text-sm">
                           Click &ldquo;Randomize&rdquo; to generate a new order
                         </p>
@@ -3707,9 +3715,9 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
               </div>
 
               {/* Draft Type Info */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h5 className="font-medium text-blue-800 mb-2">Draft Format Information</h5>
-                <div className="text-sm text-blue-700 space-y-1">
+              <div className="bg-info/10 p-4 rounded-lg">
+                <h5 className="font-medium text-info mb-2">Draft Format Information</h5>
+                <div className="text-sm text-info space-y-1">
                   <p>
                     <strong>Snake Draft:</strong> Order reverses each round (1→N, then N→1).
                     Provides balanced pick values.
@@ -3741,14 +3749,14 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
                   onClick={() =>
                     setDraftOrderManagement((prev) => ({ ...prev, showOrderModal: false }))
                   }
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  className="px-4 py-2 text-muted-foreground hover:text-foreground"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={saveDraftOrder}
                   disabled={draftOrderManagement.tempOrder.length === 0}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-info text-white px-4 py-2 rounded hover:bg-info disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Apply New Order
                 </button>
@@ -3774,29 +3782,29 @@ export default function DraftRoomClient({ players, draftData }: DraftRoomClientP
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="font-medium">Search Players</span>
-                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">/</kbd>
+                <kbd className="px-2 py-1 bg-muted rounded text-xs">/</kbd>
               </div>
               <div className="flex justify-between">
                 <span className="font-medium">Undo Last Pick</span>
-                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">Ctrl + U</kbd>
+                <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl + U</kbd>
               </div>
               <div className="flex justify-between">
                 <span className="font-medium">Switch Tabs</span>
-                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">1-5</kbd>
+                <kbd className="px-2 py-1 bg-muted rounded text-xs">1-5</kbd>
               </div>
               <div className="flex justify-between">
                 <span className="font-medium">Close Modals</span>
-                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">Esc</kbd>
+                <kbd className="px-2 py-1 bg-muted rounded text-xs">Esc</kbd>
               </div>
               <div className="flex justify-between">
                 <span className="font-medium">Show This Help</span>
-                <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">?</kbd>
+                <kbd className="px-2 py-1 bg-muted rounded text-xs">?</kbd>
               </div>
             </div>
             <div className="mt-6 flex justify-end">
               <Button
                 onClick={() => setShowKeyboardHelp(false)}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                className="bg-info text-white px-4 py-2 rounded hover:bg-info"
               >
                 Got it!
               </Button>

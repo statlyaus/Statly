@@ -1,7 +1,7 @@
 import { revalidateTag } from 'next/cache';
 import type { NextRequest } from 'next/server';
 
-import { TradeErrorCode } from '@prisma/client';
+import { LeagueRole, TradeErrorCode } from '@prisma/client';
 import { z } from 'zod';
 
 import { commonErrors, errorResponse, successResponse } from '@/lib/apiResponse';
@@ -9,7 +9,11 @@ import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { tradeService, TradeServiceError } from '@/services/tradeService';
+import {
+  canManageTradeReviewForRole,
+  tradeService,
+  TradeServiceError,
+} from '@/services/tradeService';
 
 export const runtime = 'nodejs';
 
@@ -28,6 +32,14 @@ const paramsSchema = z.object({
 const bodySchema = z.object({
   requestId: z.string().min(1),
 });
+
+async function readActionBody(request: NextRequest): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    return {};
+  }
+}
 
 function errorStatus(code: TradeErrorCode): number {
   switch (code) {
@@ -58,6 +70,28 @@ function handleTradeError(error: unknown) {
   return commonErrors.internalServerError(error instanceof Error ? error.message : 'Server error');
 }
 
+function isReviewAction(action: z.infer<typeof paramsSchema>['action']) {
+  return ['approve-review', 'reject-review', 'finalize-review'].includes(action);
+}
+
+function canManageTradeReview(
+  tradeMeta:
+    | {
+        league?: {
+          members?: Array<{ userId: string; role: LeagueRole }>;
+        };
+      }
+    | null
+    | undefined,
+  actorUserId: string
+) {
+  return (
+    tradeMeta?.league?.members?.some(
+      (member) => member.userId === actorUserId && canManageTradeReviewForRole(member.role)
+    ) ?? false
+  );
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; action: string }> }
@@ -73,7 +107,7 @@ export async function POST(
       return commonErrors.badRequest('Invalid trade action');
     }
 
-    const parsedBody = bodySchema.safeParse(await request.json());
+    const parsedBody = bodySchema.safeParse(await readActionBody(request));
     if (!parsedBody.success) {
       return commonErrors.badRequest('Request ID is required');
     }
@@ -81,8 +115,24 @@ export async function POST(
     const { id: tradeId, action } = parsedParams.data;
     const tradeMeta = await prisma.trade.findUnique({
       where: { id: tradeId },
-      select: { leagueId: true },
+      select: {
+        leagueId: true,
+        league: {
+          select: {
+            members: {
+              select: {
+                userId: true,
+                role: true,
+              },
+            },
+          },
+        },
+      },
     });
+
+    if (isReviewAction(action) && !canManageTradeReview(tradeMeta, actorUserId)) {
+      return commonErrors.forbidden();
+    }
 
     const payload = {
       requestId: parsedBody.data.requestId,

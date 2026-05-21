@@ -25,7 +25,7 @@ export default function RecentActivityModule({
     switch (type) {
       case 'trade':
         return (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground">
             <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -38,7 +38,7 @@ export default function RecentActivityModule({
         );
       case 'draft':
         return (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground">
             <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -51,7 +51,7 @@ export default function RecentActivityModule({
         );
       case 'score':
         return (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground">
             <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -64,7 +64,7 @@ export default function RecentActivityModule({
         );
       case 'injury':
         return (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10 text-destructive">
             <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -77,7 +77,7 @@ export default function RecentActivityModule({
         );
       case 'waiver':
         return (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground">
             <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -90,7 +90,7 @@ export default function RecentActivityModule({
         );
       case 'admin':
         return (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-foreground">
             <svg className={iconClassName} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -125,10 +125,10 @@ export default function RecentActivityModule({
 
   if (activities.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+      <div className="rounded-xl border border-dashed border-border bg-muted px-4 py-6 text-center">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white">
           <svg
-            className="h-6 w-6 text-slate-400"
+            className="h-6 w-6 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -141,8 +141,8 @@ export default function RecentActivityModule({
             />
           </svg>
         </div>
-        <h4 className="text-sm font-semibold text-slate-900">No recent movement</h4>
-        <p className="mt-1 text-sm text-slate-600">
+        <h4 className="text-sm font-semibold text-foreground">No recent movement</h4>
+        <p className="mt-1 text-sm text-muted-foreground">
           League transactions and admin actions will appear here.
         </p>
       </div>
@@ -159,27 +159,27 @@ export default function RecentActivityModule({
           transition={{ delay: index * 0.05 }}
           className={`flex items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${
             activity.urgent
-              ? 'border-rose-200 bg-rose-50'
-              : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+              ? 'border-destructive/20 bg-destructive/10'
+              : 'border-border bg-muted hover:border-border hover:bg-white'
           }`}
         >
           {getActivityIcon(activity.type)}
           <div className="min-w-0 flex-1">
             <p
-              className={`text-sm font-medium ${activity.urgent ? 'text-rose-900' : 'text-slate-900'}`}
+              className={`text-sm font-medium ${activity.urgent ? 'text-destructive' : 'text-foreground'}`}
             >
               {activity.message}
             </p>
-            <p className="mt-1 text-xs text-slate-500">{formatTime(activity.timestamp)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{formatTime(activity.timestamp)}</p>
           </div>
-          {activity.urgent ? <div className="mt-1 h-2 w-2 rounded-full bg-rose-500"></div> : null}
+          {activity.urgent ? <div className="mt-1 h-2 w-2 rounded-full bg-destructive"></div> : null}
         </motion.div>
       ))}
 
       {activities.length > 5 && (
         <Link
           href="/leagues"
-          className="block rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-center text-sm font-medium text-slate-700 transition hover:bg-white hover:text-slate-950"
+          className="block rounded-xl border border-border bg-muted px-4 py-2 text-center text-sm font-medium text-foreground transition hover:bg-white hover:text-foreground"
         >
           Open all leagues
         </Link>

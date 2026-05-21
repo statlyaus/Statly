@@ -3,8 +3,12 @@ import type { NextRequest } from 'next/server';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
 
 export async function POST(_request: NextRequest) {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   // Only allow in development
   if (process.env.NODE_ENV !== 'development') {
     return errorResponse('Test accounts only available in development', 403);

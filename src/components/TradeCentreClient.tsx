@@ -150,7 +150,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
   return (
     <>
       {/* Sticky toolbar */}
-      <div className="sticky top-0 z-10 bg-gray-900/90 backdrop-blur supports-[backdrop-filter]:bg-gray-900/60 border-b border-gray-800">
+      <div className="sticky top-0 z-10 bg-foreground backdrop-blur supports-[backdrop-filter]:bg-foreground border-b border-border">
         <div className="mx-auto max-w-7xl p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto] items-end">
           <label className="block">
             <span className="sr-only">Search</span>
@@ -158,17 +158,17 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
               type="text"
               placeholder={TradeCentreStrings.searchPlaceholder}
               aria-label="Search by name"
-              className="p-3 border rounded w-full bg-gray-800 border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="p-3 border rounded w-full bg-muted border-border focus:outline-none focus:ring-2 focus:ring-info"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
 
           <label className="block">
-            <span className="block text-xs text-gray-400 mb-1">Sort by</span>
+            <span className="block text-xs text-muted-foreground mb-1">Sort by</span>
             <div className="flex gap-2">
               <select
-                className="p-3 border rounded w-full bg-gray-800 border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="p-3 border rounded w-full bg-muted border-border focus:outline-none focus:ring-2 focus:ring-info"
                 value={sortKey}
                 onChange={(e) => setSortKey(e.target.value as SortKey)}
                 aria-label="Sort key"
@@ -181,7 +181,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
                 <option value="scoreInvolvements">Score Involvements</option>
               </select>
               <select
-                className="p-3 border rounded bg-gray-800 border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="p-3 border rounded bg-muted border-border focus:outline-none focus:ring-2 focus:ring-info"
                 value={sortDir}
                 onChange={(e) => setSortDir(e.target.value as 'asc' | 'desc')}
                 aria-label="Sort direction"
@@ -194,22 +194,22 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
 
           <button
             type="button"
-            className="p-3 rounded bg-gray-800 border border-gray-700 hover:border-blue-500 text-left"
+            className="p-3 rounded bg-muted border border-border hover:border-info/20 text-left"
             aria-expanded={panelOpen}
             onClick={() => setPanelOpen((v) => !v)}
           >
             <div className="flex items-center justify-between">
               <span className="font-medium">Advanced filters</span>
-              <span className="text-xs text-gray-400">{appliedCount} active</span>
+              <span className="text-xs text-muted-foreground">{appliedCount} active</span>
             </div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               Set minimums (e.g., MG ≥ 250, Clearances ≥ 5)
             </div>
           </button>
 
           <button
             type="button"
-            className="p-3 rounded bg-gray-800 border border-gray-700 hover:border-blue-500"
+            className="p-3 rounded bg-muted border border-border hover:border-info/20"
             onClick={clearAll}
           >
             Clear all filters
@@ -224,11 +224,11 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
               .map(([k, v]) => (
                 <span
                   key={k}
-                  className="inline-flex items-center gap-2 rounded-full bg-blue-600/20 text-blue-300 border border-blue-600/40 px-3 py-1 text-xs"
+                  className="inline-flex items-center gap-2 rounded-full bg-info text-info border border-info/20 px-3 py-1 text-xs"
                 >
                   <strong className="font-medium">{statLabels[k] ?? k}</strong> ≥ {v}
                   <button
-                    className="rounded-full px-1 hover:bg-blue-600/30 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="rounded-full px-1 hover:bg-info focus:outline-none focus:ring-2 focus:ring-info"
                     onClick={() => removeChip(k)}
                     aria-label={`Remove filter ${statLabels[k] ?? k}`}
                   >
@@ -247,7 +247,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
             <button
               type="button"
               onClick={applyFilters}
-              className="rounded bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 disabled:opacity-50"
+              className="rounded bg-info hover:bg-info text-white px-4 py-2 disabled:opacity-50"
               disabled={!isDirty}
             >
               Apply filters
@@ -255,26 +255,26 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
             <button
               type="button"
               onClick={() => setPending(applied)}
-              className="rounded bg-gray-800 border border-gray-700 px-4 py-2 hover:border-blue-500"
+              className="rounded bg-muted border border-border px-4 py-2 hover:border-info/20"
               disabled={!isDirty}
             >
               Revert changes
             </button>
           </div>
 
-          <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
+          <div className="rounded-lg border border-border bg-foreground p-4">
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {Object.entries(statLabels).map(([key, label]) => (
                 <label key={key} className="block">
-                  <span className="block text-xs text-gray-400 mb-1">
-                    {label} <span className="text-gray-500">(min)</span>
+                  <span className="block text-xs text-muted-foreground mb-1">
+                    {label} <span className="text-muted-foreground">(min)</span>
                   </span>
                   <input
                     type="number"
                     inputMode="numeric"
                     step="any"
                     placeholder="—"
-                    className="p-2 border rounded w-full bg-gray-800 border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="p-2 border rounded w-full bg-muted border-border focus:outline-none focus:ring-2 focus:ring-info"
                     value={pending[key] ?? ''}
                     onChange={(e) => onPendingChange(key, e.target.value)}
                     aria-label={`Minimum ${label}`}
@@ -296,12 +296,12 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
             {filteredPlayers.map((player) => (
               <li
                 key={player.id}
-                className="bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col hover:shadow-blue-500/50 transition-shadow duration-300"
+                className="bg-muted rounded-lg shadow-lg p-4 flex flex-col hover:shadow-blue-500/50 transition-shadow duration-300"
               >
                 <Link href={`/players/${player.id}`} className="hover:underline">
-                  <h2 className="text-xl font-semibold text-blue-400">{player.name}</h2>
+                  <h2 className="text-xl font-semibold text-info">{player.name}</h2>
                 </Link>
-                <p className="flex flex-wrap items-center gap-2 text-gray-400">
+                <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
                   {player.team ? (
                     <TeamLogo team={player.team} size={18} withCircle decorative />
                   ) : null}
@@ -310,7 +310,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
                   </span>
                 </p>
 
-                <ul className="mt-3 space-y-1 text-sm text-gray-300">
+                <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
                   {Object.entries(statLabels).map(([key, label]) => {
                     const value = readStatRaw(player, key);
                     return <StatRow key={key} label={label} value={value} />;
@@ -320,14 +320,14 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     onClick={() => addToOffer('incoming', player)}
-                    className="w-full bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition-colors duration-200"
+                    className="w-full bg-info text-white px-3 py-2 rounded hover:bg-info transition-colors duration-200"
                     aria-label={`Add ${player.name} to Incoming`}
                   >
                     Add Incoming
                   </button>
                   <button
                     onClick={() => addToOffer('outgoing', player)}
-                    className="w-full bg-amber-600 text-white px-3 py-2 rounded hover:bg-amber-700 transition-colors duration-200"
+                    className="w-full bg-warning text-white px-3 py-2 rounded hover:bg-warning transition-colors duration-200"
                     aria-label={`Add ${player.name} to Outgoing`}
                   >
                     Add Outgoing
@@ -337,7 +337,7 @@ export default function TradeCentreClient({ initialPlayers }: TradeCentreClientP
             ))}
           </ul>
         ) : (
-          <div className="text-center text-gray-400 py-10">
+          <div className="text-center text-muted-foreground py-10">
             <h3 className="text-xl font-semibold">No players match your filters</h3>
             <p>Try lowering minimums or click “Clear all filters”.</p>
           </div>

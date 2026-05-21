@@ -3,14 +3,14 @@
 import { useState } from 'react';
 
 import {
-  CalendarIcon,
-  CodeBracketIcon,
-  SparklesIcon,
-  CheckCircleIcon,
-  ArrowPathIcon,
-  PlayIcon,
-  ExclamationTriangleIcon,
-} from '@heroicons/react/24/outline';
+  Calendar as CalendarIcon,
+  Code2 as CodeBracketIcon,
+  Sparkles as SparklesIcon,
+  CircleCheck as CheckCircleIcon,
+  RefreshCw as ArrowPathIcon,
+  Play as PlayIcon,
+  TriangleAlert as ExclamationTriangleIcon,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import {
@@ -380,17 +380,17 @@ if (schedule.success) {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="bg-gradient-to-r from-slate-900 to-slate-700 text-white py-6 px-8 rounded-lg shadow-lg inline-block w-full">
+          <div className="bg-gradient-to-r from-foreground to-muted text-white py-6 px-8 rounded-lg shadow-lg inline-block w-full">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="text-left">
                 <h1 className="text-3xl md:text-4xl font-bold">Professional Schedule Builder</h1>
-                <p className="mt-1 text-sm text-slate-200 max-w-2xl">
+                <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
                   Create an AFL-grade season schedule with fairness, balance and broadcast-ready
                   slots.
                 </p>
               </div>
               <div className="text-right md:text-right">
-                <div className="text-sm text-slate-200">League</div>
+                <div className="text-sm text-muted-foreground">League</div>
                 <div className="text-xl font-semibold">{leagueName}</div>
               </div>
             </div>

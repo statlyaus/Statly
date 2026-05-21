@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 
 import { io, type Socket } from 'socket.io-client';
 
+import { auth } from '@/lib/firebaseClient';
 import { socketIOConfig } from '@/lib/socketioConfig';
 
 type SocketCtx = { socket: Socket | null };
@@ -63,6 +64,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }): Rea
       s = io(target.url, {
         transports: socketIOConfig.client.transports,
         path: target.path,
+        auth: async (callback) => {
+          try {
+            const token = await auth.currentUser?.getIdToken();
+            callback(token ? { token } : {});
+          } catch {
+            callback({});
+          }
+        },
         // Keep cross-origin handshake compatible with wildcard CORS on socket sidecar.
         withCredentials: false,
         timeout: socketIOConfig.client.timeout,

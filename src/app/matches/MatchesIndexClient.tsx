@@ -34,7 +34,7 @@ export default function MatchesIndexClient() {
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-semibold">Live Match Center</h1>
           <div className="flex items-center gap-2">
-            <label htmlFor="league-select" className="text-sm text-gray-600">
+            <label htmlFor="league-select" className="text-sm text-muted-foreground">
               League
             </label>
             <select

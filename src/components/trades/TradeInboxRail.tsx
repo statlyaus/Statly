@@ -94,9 +94,9 @@ function promptToneClass(tone: 'primary' | 'warning' | 'success' | 'danger' | 'n
     case 'success':
       return 'bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]';
     case 'danger':
-      return 'bg-rose-50 text-rose-700';
+      return 'bg-destructive/10 text-destructive';
     default:
-      return 'bg-slate-100 text-slate-700';
+      return 'bg-muted text-foreground';
   }
 }
 
@@ -153,10 +153,10 @@ export default function TradeInboxRail({
       </div>
 
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white px-4 py-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Inbox filters</p>
-            <p className="text-sm font-semibold text-slate-800">Trade status</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Inbox filters</p>
+            <p className="text-sm font-semibold text-foreground">Trade status</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {[
@@ -170,8 +170,8 @@ export default function TradeInboxRail({
                 onClick={() => setInboxStatusFilter(filter.id as InboxFilter)}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                   inboxStatusFilter === filter.id
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'bg-foreground text-white'
+                    : 'bg-muted text-foreground hover:bg-muted'
                 }`}
               >
                 {filter.label}
@@ -181,13 +181,13 @@ export default function TradeInboxRail({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+      <div className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Incoming</p>
-            <h3 className="text-base font-semibold text-slate-900">Offers to review</h3>
+            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Incoming</p>
+            <h3 className="text-base font-semibold text-foreground">Offers to review</h3>
           </div>
-          <span className="text-xs font-semibold text-slate-500">
+          <span className="text-xs font-semibold text-muted-foreground">
             {filteredIncomingTrades.length} trades
           </span>
         </div>
@@ -195,10 +195,10 @@ export default function TradeInboxRail({
         <ScrollArea className="max-h-[360px]">
           <ul className="divide-y divide-slate-200">
             {loading ? (
-              <li className="px-4 py-8 text-sm text-slate-500">Loading trades…</li>
+              <li className="px-4 py-8 text-sm text-muted-foreground">Loading trades…</li>
             ) : filteredIncomingTrades.length === 0 ? (
               <li className="px-4 py-8 text-sm">
-                <p className="text-slate-500">No incoming trades for this filter.</p>
+                <p className="text-muted-foreground">No incoming trades for this filter.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {inboxStatusFilter !== 'ALL' ? (
                     <Button
@@ -220,7 +220,7 @@ export default function TradeInboxRail({
                 <li key={trade.tradeId}>
                   <div
                     className={`space-y-3 px-4 py-4 ${
-                      selectedTradeId === trade.tradeId ? 'bg-slate-50' : 'bg-white'
+                      selectedTradeId === trade.tradeId ? 'bg-muted' : 'bg-white'
                     }`}
                   >
                     <button
@@ -240,7 +240,7 @@ export default function TradeInboxRail({
                           });
                           return (
                             <>
-                              <p className="text-base font-semibold text-slate-900">
+                              <p className="text-base font-semibold text-foreground">
                                 From {proposerName}
                               </p>
                               <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -253,7 +253,7 @@ export default function TradeInboxRail({
                                   {describeTradeState(trade, currentUserId)}
                                 </span>
                               </div>
-                              <p className="mt-1 text-xs text-slate-500">
+                              <p className="mt-1 text-xs text-muted-foreground">
                                 {summarizeTradeFlow(trade, currentUserId, details)}
                               </p>
                             </>
@@ -262,7 +262,7 @@ export default function TradeInboxRail({
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <TradeStatusBadge status={trade.status} />
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-muted-foreground">
                           {formatCompactDate(trade.createdAt)}
                         </span>
                       </div>
@@ -271,7 +271,7 @@ export default function TradeInboxRail({
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
+                          className="rounded-md bg-success px-3 py-1.5 text-xs font-semibold text-white hover:bg-success disabled:bg-muted disabled:text-muted-foreground"
                           disabled={actionLoading}
                           onClick={() => {
                             void runActionForTrade(trade.tradeId, 'accept');
@@ -285,7 +285,7 @@ export default function TradeInboxRail({
                         </button>
                         <button
                           type="button"
-                          className="rounded-md border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:border-slate-200 disabled:text-slate-400"
+                          className="rounded-md border border-destructive/20 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:border-border disabled:text-muted-foreground"
                           disabled={actionLoading}
                           onClick={() => {
                             void runActionForTrade(trade.tradeId, 'decline');
@@ -307,13 +307,13 @@ export default function TradeInboxRail({
         </ScrollArea>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+      <div className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Outgoing</p>
-            <h3 className="text-base font-semibold text-slate-900">Trades you proposed</h3>
+            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Outgoing</p>
+            <h3 className="text-base font-semibold text-foreground">Trades you proposed</h3>
           </div>
-          <span className="text-xs font-semibold text-slate-500">
+          <span className="text-xs font-semibold text-muted-foreground">
             {filteredOutgoingTrades.length} trades
           </span>
         </div>
@@ -321,10 +321,10 @@ export default function TradeInboxRail({
         <ScrollArea className="max-h-[360px]">
           <ul className="divide-y divide-slate-200">
             {loading ? (
-              <li className="px-4 py-8 text-sm text-slate-500">Loading trades…</li>
+              <li className="px-4 py-8 text-sm text-muted-foreground">Loading trades…</li>
             ) : filteredOutgoingTrades.length === 0 ? (
               <li className="px-4 py-8 text-sm">
-                <p className="text-slate-500">No outgoing trades for this filter.</p>
+                <p className="text-muted-foreground">No outgoing trades for this filter.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {inboxStatusFilter !== 'ALL' ? (
                     <Button
@@ -346,7 +346,7 @@ export default function TradeInboxRail({
                 <li key={trade.tradeId}>
                   <div
                     className={`space-y-3 px-4 py-4 ${
-                      selectedTradeId === trade.tradeId ? 'bg-slate-50' : 'bg-white'
+                      selectedTradeId === trade.tradeId ? 'bg-muted' : 'bg-white'
                     }`}
                   >
                     <button
@@ -366,7 +366,7 @@ export default function TradeInboxRail({
                           });
                           return (
                             <>
-                              <p className="text-base font-semibold text-slate-900">
+                              <p className="text-base font-semibold text-foreground">
                                 To {recipientName}
                               </p>
                               <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -379,7 +379,7 @@ export default function TradeInboxRail({
                                   {describeTradeState(trade, currentUserId)}
                                 </span>
                               </div>
-                              <p className="mt-1 text-xs text-slate-500">
+                              <p className="mt-1 text-xs text-muted-foreground">
                                 {summarizeTradeFlow(trade, currentUserId, details)}
                               </p>
                             </>
@@ -388,7 +388,7 @@ export default function TradeInboxRail({
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <TradeStatusBadge status={trade.status} />
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-muted-foreground">
                           {formatCompactDate(trade.createdAt)}
                         </span>
                       </div>
@@ -402,7 +402,7 @@ export default function TradeInboxRail({
                         </p>
                         <button
                           type="button"
-                          className="rounded-md border border-[color:var(--league-primary)] bg-white px-3 py-1.5 text-xs font-semibold text-[color:var(--league-primary)] hover:bg-[color:var(--league-canvas)] disabled:border-slate-200 disabled:text-slate-400"
+                          className="rounded-md border border-[color:var(--league-primary)] bg-white px-3 py-1.5 text-xs font-semibold text-[color:var(--league-primary)] hover:bg-[color:var(--league-canvas)] disabled:border-border disabled:text-muted-foreground"
                           disabled={actionLoading}
                           onClick={() => {
                             void runActionForTrade(trade.tradeId, 'cancel');

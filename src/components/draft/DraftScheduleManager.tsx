@@ -168,29 +168,29 @@ export default function DraftScheduleManager({
 
   if (status === 'completed') {
     return (
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Draft Schedule</h3>
-        <p className="text-gray-600">This draft has been completed.</p>
+      <div className="bg-muted rounded-lg p-4">
+        <h3 className="text-lg font-medium text-foreground mb-2">Draft Schedule</h3>
+        <p className="text-muted-foreground">This draft has been completed.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className="bg-white rounded-lg border border-border p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900">Draft Schedule</h3>
+        <h3 className="text-lg font-medium text-foreground">Draft Schedule</h3>
         {status === 'scheduled' && !isEditing && (
           <div className="flex gap-2">
             <Button
               onClick={() => setIsEditing(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+              className="bg-info text-white px-4 py-2 rounded-md hover:bg-info"
             >
               Edit Schedule
             </Button>
             <Button
               onClick={handleCancelSchedule}
               disabled={isLoading}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50"
+              className="bg-destructive text-white px-4 py-2 rounded-md hover:bg-destructive disabled:opacity-50"
             >
               Start Now
             </Button>
@@ -213,14 +213,14 @@ export default function DraftScheduleManager({
       {!isEditing ? (
         <div className="space-y-3">
           <div>
-            <span className="text-sm font-medium text-gray-500">Status:</span>
+            <span className="text-sm font-medium text-muted-foreground">Status:</span>
             <span
               className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
                 status === 'scheduled'
-                  ? 'bg-yellow-100 text-yellow-800'
+                  ? 'bg-warning/10 text-warning'
                   : status === 'live'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-800'
+                    ? 'bg-success/10 text-success'
+                    : 'bg-muted text-foreground'
               }`}
             >
               {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -230,27 +230,27 @@ export default function DraftScheduleManager({
           {currentScheduledTime && (
             <div className="space-y-1">
               <div>
-                <span className="text-sm font-medium text-gray-500">Scheduled Start:</span>
-                <span className="ml-2 text-gray-900">
+                <span className="text-sm font-medium text-muted-foreground">Scheduled Start:</span>
+                <span className="ml-2 text-foreground">
                   {formatInTimezone(new Date(currentScheduledTime), userTimeZone, 'PPP p')}
                 </span>
               </div>
-              <div className="text-xs text-gray-500 ml-2">
+              <div className="text-xs text-muted-foreground ml-2">
                 {getTimezoneInfo(userTimeZone).name} ({getTimezoneInfo(userTimeZone).offset})
               </div>
             </div>
           )}
 
           <div>
-            <span className="text-sm font-medium text-gray-500">Time Per Pick:</span>
-            <span className="ml-2 text-gray-900">{currentTimePerPick} seconds</span>
+            <span className="text-sm font-medium text-muted-foreground">Time Per Pick:</span>
+            <span className="ml-2 text-foreground">{currentTimePerPick} seconds</span>
           </div>
 
           {status === 'live' && (
-            <div className="mt-4 p-3 bg-green-50 rounded-md">
+            <div className="mt-4 p-3 bg-success/10 rounded-md">
               <div className="flex items-center">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
-                <span className="text-sm font-medium text-green-800">Draft is currently live!</span>
+                <div className="w-2 h-2 bg-success rounded-full animate-pulse mr-2"></div>
+                <span className="text-sm font-medium text-success">Draft is currently live!</span>
               </div>
             </div>
           )}
@@ -278,7 +278,7 @@ export default function DraftScheduleManager({
                 </option>
               ))}
             </UISelect>
-            <div className="mt-1 text-xs text-gray-500">
+            <div className="mt-1 text-xs text-muted-foreground">
               Current time in selected timezone: {getTimezoneInfo(formData.timeZone).currentTime}
             </div>
           </FormField>
@@ -302,7 +302,7 @@ export default function DraftScheduleManager({
                 checked={formData.enableReminders}
                 onChange={(e) => setFormData({ ...formData, enableReminders: e.target.checked })}
               />
-              <span className="ml-2 text-sm text-gray-700">
+              <span className="ml-2 text-sm text-foreground">
                 Send email reminders (24h, 2h, 30m, 15m before draft)
               </span>
             </label>
@@ -312,14 +312,14 @@ export default function DraftScheduleManager({
             <Button
               onClick={handleUpdateSchedule}
               disabled={isLoading || !formData.scheduledTime}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="bg-info text-white px-4 py-2 rounded-md hover:bg-info disabled:opacity-50"
             >
               {isLoading ? 'Updating...' : 'Update Schedule'}
             </Button>
             <Button
               onClick={handleCancel}
               disabled={isLoading}
-              className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 disabled:opacity-50"
+              className="bg-muted text-white px-4 py-2 rounded-md hover:bg-muted disabled:opacity-50"
             >
               Cancel
             </Button>

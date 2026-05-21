@@ -46,11 +46,11 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
       <motion.div
         initial={reduceMotion ? undefined : { opacity: 0, y: 20 }}
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+        className="bg-white rounded-xl shadow-sm border border-border p-6"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Top Picks This Round</h3>
-          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">Loading...</span>
+          <h3 className="text-lg font-semibold text-foreground">Top Picks This Round</h3>
+          <span className="text-xs text-info bg-info/10 px-2 py-1 rounded">Loading...</span>
         </div>
 
         <div className="space-y-3" role="list" aria-busy="true">
@@ -58,23 +58,23 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
             <div
               key={index}
               role="listitem"
-              className="flex items-center justify-between p-3 rounded-lg bg-gray-50 animate-pulse"
+              className="flex items-center justify-between p-3 rounded-lg bg-muted animate-pulse"
             >
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+                <div className="w-8 h-8 bg-muted rounded-full"></div>
                 <div>
-                  <div className="h-4 bg-gray-200 rounded w-24 mb-1"></div>
-                  <div className="h-3 bg-gray-200 rounded w-16"></div>
+                  <div className="h-4 bg-muted rounded w-24 mb-1"></div>
+                  <div className="h-3 bg-muted rounded w-16"></div>
                 </div>
               </div>
               <div className="flex space-x-2">
                 {Array.from({ length: 5 }).map((__, i) => (
-                  <div key={i} className="w-8 h-6 bg-gray-200 rounded"></div>
+                  <div key={i} className="w-8 h-6 bg-muted rounded"></div>
                 ))}
               </div>
               <div className="text-right">
-                <div className="h-4 bg-gray-200 rounded w-12 mb-1"></div>
-                <div className="h-3 bg-gray-200 rounded w-8"></div>
+                <div className="h-4 bg-muted rounded w-12 mb-1"></div>
+                <div className="h-3 bg-muted rounded w-8"></div>
               </div>
             </div>
           ))}
@@ -88,21 +88,21 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
       <motion.div
         initial={reduceMotion ? undefined : { opacity: 0, y: 20 }}
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+        className="bg-white rounded-xl shadow-sm border border-border p-6"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Top Picks This Round</h3>
-          <span className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">Unavailable</span>
+          <h3 className="text-lg font-semibold text-foreground">Top Picks This Round</h3>
+          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">Unavailable</span>
         </div>
 
         {error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600">Failed to load live data: {error}</p>
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <p className="text-sm text-destructive">Failed to load live data: {error}</p>
           </div>
         )}
 
         <div className="space-y-3">
-          <div className="text-center py-6 text-gray-500">
+          <div className="text-center py-6 text-muted-foreground">
             <p>No player data available</p>
             <p className="text-sm">Waiting for data to load...</p>
           </div>
@@ -134,17 +134,17 @@ function DataFocusedTopPicks({
 
   return (
     <div
-      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+      className="bg-white rounded-xl shadow-sm border border-border p-6"
       role="list"
       aria-label={title}
     >
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
         <div className="flex items-center space-x-2">
-          <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded font-medium">
+          <span className="text-xs text-success bg-success/10 px-2 py-1 rounded font-medium">
             Live Data
           </span>
-          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+          <span className="text-xs text-info bg-info/10 px-2 py-1 rounded">
             {topPlayers.length} Players
           </span>
         </div>
@@ -157,17 +157,17 @@ function DataFocusedTopPicks({
             initial={reduceMotion ? undefined : { opacity: 0, x: -20 }}
             animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
             transition={reduceMotion ? undefined : { delay: index * 0.1 }}
-            className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors"
+            className="bg-muted rounded-lg p-4 hover:bg-muted transition-colors"
             role="listitem"
           >
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center space-x-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <div className="flex-shrink-0 w-8 h-8 bg-info rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">{index + 1}</span>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-gray-900">{player.player_name}</h4>
-                  <p className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                  <h4 className="font-semibold text-foreground">{player.player_name}</h4>
+                  <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     {player.team ? (
                       <TeamLogo
                         team={player.team}
@@ -184,8 +184,8 @@ function DataFocusedTopPicks({
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold text-purple-600">{player.totalValue || 0}</p>
-                <p className="text-sm text-gray-500">Total Points</p>
+                <p className="text-xl font-bold text-primary">{player.totalValue || 0}</p>
+                <p className="text-sm text-muted-foreground">Total Points</p>
               </div>
             </div>
 
@@ -193,32 +193,32 @@ function DataFocusedTopPicks({
               <StatBox
                 label="Goals"
                 value={player.categories?.goals || 0}
-                color="text-red-600"
-                bgColor="bg-red-50"
+                color="text-destructive"
+                bgColor="bg-destructive/10"
               />
               <StatBox
                 label="Tackles"
                 value={player.categories?.tackles || 0}
-                color="text-orange-600"
-                bgColor="bg-orange-50"
+                color="text-warning"
+                bgColor="bg-warning/10"
               />
               <StatBox
                 label="Inside 50s"
                 value={player.categories?.inside50s || 0}
-                color="text-blue-600"
-                bgColor="bg-blue-50"
+                color="text-info"
+                bgColor="bg-info/10"
               />
               <StatBox
                 label="Intercepts"
                 value={player.categories?.intercepts || 0}
-                color="text-purple-600"
-                bgColor="bg-purple-50"
+                color="text-primary"
+                bgColor="bg-primary/10"
               />
               <StatBox
                 label="Cont. Marks"
                 value={player.categories?.contestedMarks || 0}
-                color="text-green-600"
-                bgColor="bg-green-50"
+                color="text-success"
+                bgColor="bg-success/10"
               />
               <StatBox
                 label="Rebound 50s"
@@ -229,14 +229,14 @@ function DataFocusedTopPicks({
               <StatBox
                 label="Cont. Poss."
                 value={player.categories?.contestedPossessions || 0}
-                color="text-yellow-600"
-                bgColor="bg-yellow-50"
+                color="text-warning"
+                bgColor="bg-warning/10"
               />
               <StatBox
                 label="Eff. Disp."
                 value={player.categories?.effectiveDisposals || 0}
-                color="text-indigo-600"
-                bgColor="bg-indigo-50"
+                color="text-info"
+                bgColor="bg-info/10"
               />
               <StatBox
                 label="Score Inv."
@@ -246,8 +246,8 @@ function DataFocusedTopPicks({
               />
             </div>
 
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <p className="text-xs text-gray-500">
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-xs text-muted-foreground">
                 Round {player.round_number} vs {player.opposition} •
                 {player.tenthCell && (
                   <span className="ml-1 font-medium">
@@ -261,41 +261,41 @@ function DataFocusedTopPicks({
         ))}
       </div>
 
-      <div className="mt-6 pt-4 border-t border-gray-200">
+      <div className="mt-6 pt-4 border-t border-border">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-2xl font-bold text-foreground">
               {topPlayers.length > 0
                 ? Math.round(
                     topPlayers.reduce((sum, p) => sum + (p.totalValue || 0), 0) / topPlayers.length
                   )
                 : 0}
             </p>
-            <p className="text-sm text-gray-500">Avg Points</p>
+            <p className="text-sm text-muted-foreground">Avg Points</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-red-600">
+            <p className="text-2xl font-bold text-destructive">
               {topPlayers.length > 0
                 ? Math.max(...topPlayers.map((p) => p.categories?.goals || 0))
                 : 0}
             </p>
-            <p className="text-sm text-gray-500">Top Goals</p>
+            <p className="text-sm text-muted-foreground">Top Goals</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-orange-600">
+            <p className="text-2xl font-bold text-warning">
               {topPlayers.length > 0
                 ? Math.max(...topPlayers.map((p) => p.categories?.tackles || 0))
                 : 0}
             </p>
-            <p className="text-sm text-gray-500">Top Tackles</p>
+            <p className="text-sm text-muted-foreground">Top Tackles</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-blue-600">
+            <p className="text-2xl font-bold text-info">
               {topPlayers.length > 0
                 ? Math.max(...topPlayers.map((p) => p.categories?.inside50s || 0))
                 : 0}
             </p>
-            <p className="text-sm text-gray-500">Top I50s</p>
+            <p className="text-sm text-muted-foreground">Top I50s</p>
           </div>
         </div>
       </div>
@@ -317,7 +317,7 @@ function StatBox({
   return (
     <div className={`${bgColor} rounded-md p-2 text-center`}>
       <p className={`text-lg font-bold ${color}`}>{value}</p>
-      <p className="text-xs text-gray-600 leading-tight">{label}</p>
+      <p className="text-xs text-muted-foreground leading-tight">{label}</p>
     </div>
   );
 }

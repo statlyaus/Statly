@@ -20,9 +20,17 @@ describe('tradeUiUtils', () => {
     expect(mapTradeUiError(err, 'fallback')).toContain('already in another active trade');
   });
 
-  it('maps generic HTTP 409 to the same friendly message', () => {
+  it('maps invalid transition conflicts to stale-state copy', () => {
+    const err = new Error(
+      'HTTP 409 Conflict - Trade is not pending recipient acceptance. - code=TRADE_INVALID_TRANSITION'
+    );
+    expect(mapTradeUiError(err, 'fallback')).toContain('changed before your action completed');
+    expect(mapTradeUiError(err, 'fallback')).not.toContain('already in another active trade');
+  });
+
+  it('maps generic HTTP 409 to neutral conflict copy', () => {
     const err = new Error('HTTP 409 Conflict');
-    expect(mapTradeUiError(err, 'fallback')).toContain('already in another active trade');
+    expect(mapTradeUiError(err, 'fallback')).toContain('changed before your action completed');
   });
 
   it('returns original message when no known mapping exists', () => {
@@ -53,9 +61,9 @@ describe('tradeUiUtils', () => {
   });
 
   it('returns correct delta class', () => {
-    expect(getDeltaClass(1)).toContain('emerald');
-    expect(getDeltaClass(-1)).toContain('rose');
-    expect(getDeltaClass(0)).toContain('slate');
+    expect(getDeltaClass(1)).toContain('text-success');
+    expect(getDeltaClass(-1)).toContain('text-destructive');
+    expect(getDeltaClass(0)).toContain('text-muted-foreground');
   });
 
   it('formats compact relative trade times', () => {

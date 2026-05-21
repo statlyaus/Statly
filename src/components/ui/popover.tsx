@@ -1,7 +1,9 @@
 'use client';
 
 import React, {
+  type ButtonHTMLAttributes,
   createContext,
+  type HTMLAttributes,
   useContext,
   useEffect,
   useMemo,
@@ -68,12 +70,12 @@ export function Popover({ open, onOpenChange, children }: PopoverProps) {
   return <PopoverContext.Provider value={contextValue}>{children}</PopoverContext.Provider>;
 }
 
-type PopoverTriggerProps = {
+type PopoverTriggerProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   className?: string;
   children: ReactNode;
 };
 
-export function PopoverTrigger({ className, children }: PopoverTriggerProps) {
+export function PopoverTrigger({ className, children, onClick, ...props }: PopoverTriggerProps) {
   const context = useContext(PopoverContext);
   if (!context) {
     throw new Error('PopoverTrigger must be used within Popover');
@@ -83,9 +85,15 @@ export function PopoverTrigger({ className, children }: PopoverTriggerProps) {
     <button
       ref={context.triggerRef}
       type="button"
+      {...props}
       aria-haspopup="dialog"
       aria-expanded={context.open}
-      onClick={() => context.setOpen(!context.open)}
+      onClick={(event) => {
+        onClick?.(event);
+        if (!event.defaultPrevented) {
+          context.setOpen(!context.open);
+        }
+      }}
       className={className}
     >
       {children}
@@ -93,13 +101,18 @@ export function PopoverTrigger({ className, children }: PopoverTriggerProps) {
   );
 }
 
-type PopoverContentProps = {
+type PopoverContentProps = HTMLAttributes<HTMLDivElement> & {
   className?: string;
   align?: 'start' | 'end';
   children: ReactNode;
 };
 
-export function PopoverContent({ className, align = 'start', children }: PopoverContentProps) {
+export function PopoverContent({
+  className,
+  align = 'start',
+  children,
+  ...props
+}: PopoverContentProps) {
   const context = useContext(PopoverContext);
   if (!context) {
     throw new Error('PopoverContent must be used within Popover');
@@ -113,6 +126,7 @@ export function PopoverContent({ className, align = 'start', children }: Popover
     <div
       ref={context.contentRef}
       role="dialog"
+      {...props}
       className={cn(
         'absolute top-full z-50 mt-2 min-w-[18rem] rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md outline-none',
         align === 'end' ? 'right-0' : 'left-0',

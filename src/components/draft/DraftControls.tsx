@@ -167,7 +167,7 @@ const DraftControls = memo(function DraftControls({
       className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
         isPaused
           ? 'bg-foreground text-background hover:bg-foreground/90'
-          : 'bg-amber-600 text-white hover:bg-amber-700'
+          : 'bg-warning text-white hover:bg-warning'
       }`}
       aria-label={actionLabel}
     >
@@ -180,22 +180,22 @@ const DraftControls = memo(function DraftControls({
       <>
         {ConfirmationModal}
         {(draftStatus === 'LIVE' || isPaused) && (
-          <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white/85 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-[24px] border border-border bg-white/85 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Owner controls
                 </span>
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    isPaused ? 'bg-amber-100 text-amber-800' : 'bg-orange-100 text-orange-800'
+                    isPaused ? 'bg-warning/10 text-warning' : 'bg-warning/10 text-warning'
                   }`}
                 >
                   {statusLabel}
                 </span>
               </div>
-              <p className="mt-2 text-sm font-semibold text-slate-900">{actionLabel}</p>
-              <p className="mt-1 text-sm text-slate-600">{statusDescription}</p>
+              <p className="mt-2 text-sm font-semibold text-foreground">{actionLabel}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{statusDescription}</p>
             </div>
 
             <div className="shrink-0">{actionButton}</div>
@@ -215,8 +215,8 @@ const DraftControls = memo(function DraftControls({
               <div
                 className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
                   isPaused
-                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
-                    : 'border-orange-500/30 bg-orange-500/10 text-orange-700'
+                    ? 'border-warning/20 bg-warning text-warning'
+                    : 'border-warning/20 bg-warning text-warning'
                 }`}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,8 +236,8 @@ const DraftControls = memo(function DraftControls({
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
                       isPaused
-                        ? 'bg-amber-500/10 text-amber-700'
-                        : 'bg-orange-500/10 text-orange-700'
+                        ? 'bg-warning text-warning'
+                        : 'bg-warning text-warning'
                     }`}
                   >
                     {statusLabel}

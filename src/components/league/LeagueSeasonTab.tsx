@@ -130,13 +130,13 @@ export default function LeagueSeasonTab({
     return (
       <div className={leagueSurfacePatterns.panelSection}>
         <div className="animate-pulse space-y-4">
-          <div className="h-5 w-40 rounded bg-slate-200" />
+          <div className="h-5 w-40 rounded bg-muted" />
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="h-24 rounded-2xl bg-slate-100" />
-            <div className="h-24 rounded-2xl bg-slate-100" />
-            <div className="h-24 rounded-2xl bg-slate-100" />
+            <div className="h-24 rounded-2xl bg-muted" />
+            <div className="h-24 rounded-2xl bg-muted" />
+            <div className="h-24 rounded-2xl bg-muted" />
           </div>
-          <div className="h-64 rounded-2xl bg-slate-100" />
+          <div className="h-64 rounded-2xl bg-muted" />
         </div>
       </div>
     );
@@ -144,7 +144,7 @@ export default function LeagueSeasonTab({
 
   if (error) {
     return (
-      <div className="rounded-[28px] border border-rose-200 bg-rose-50 p-6 text-rose-700 shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]">
+      <div className="rounded-[28px] border border-destructive/20 bg-destructive/10 p-6 text-destructive shadow-[0_24px_60px_-45px_rgba(23,34,48,0.18)]">
         <h2 className="text-lg font-semibold">Season view unavailable</h2>
         <p className="mt-2 text-sm">{error}</p>
         <button
@@ -168,7 +168,7 @@ export default function LeagueSeasonTab({
               })
               .finally(() => setIsLoading(false));
           }}
-          className="mt-4 rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700"
+          className="mt-4 rounded-full bg-destructive px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-destructive"
         >
           Retry
         </button>

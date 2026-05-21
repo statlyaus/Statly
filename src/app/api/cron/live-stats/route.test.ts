@@ -20,7 +20,20 @@ describe('GET /api/cron/live-stats', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('STATLY_RUNTIME_ENV', 'preview');
     delete process.env.CRON_SECRET;
+  });
+
+  it('rejects requests without a configured cron secret outside explicit local runtime', async () => {
+    vi.stubEnv('CRON_SECRET', '');
+    const { GET } = await import('./route');
+
+    const response = await GET(new NextRequest('http://localhost/api/cron/live-stats'));
+
+    expect(response.status).toBe(401);
+    expect(refreshLiveStatsIfNeededMock).not.toHaveBeenCalled();
   });
 
   it('rejects unauthorized requests when CRON_SECRET is configured', async () => {

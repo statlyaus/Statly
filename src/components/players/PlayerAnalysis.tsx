@@ -3,12 +3,12 @@
 import React, { useState, useMemo } from 'react';
 
 import {
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  MagnifyingGlassIcon,
-  FunnelIcon,
-  ArrowsUpDownIcon,
-} from '@heroicons/react/24/outline';
+  TrendingUp as ArrowTrendingUpIcon,
+  TrendingDown as ArrowTrendingDownIcon,
+  Search as MagnifyingGlassIcon,
+  Funnel as FunnelIcon,
+  ArrowUpDown as ArrowsUpDownIcon,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { TeamLogo } from '@/components/TeamLogo';
@@ -233,43 +233,43 @@ export default function PlayerAnalysis({
   const getPositionColor = (position: string) => {
     switch (position) {
       case 'FWD':
-        return 'bg-red-100 text-red-800';
+        return 'bg-destructive/10 text-destructive';
       case 'MID':
-        return 'bg-green-100 text-green-800';
+        return 'bg-success/10 text-success';
       case 'DEF':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-info/10 text-info';
       case 'RUC':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-primary/10 text-primary';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-muted text-foreground';
     }
   };
 
   const getFormTrendIcon = (trend: string) => {
     switch (trend) {
       case 'rising':
-        return <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />;
+        return <ArrowTrendingUpIcon className="w-4 h-4 text-success" />;
       case 'falling':
-        return <ArrowTrendingDownIcon className="w-4 h-4 text-red-500" />;
+        return <ArrowTrendingDownIcon className="w-4 h-4 text-destructive" />;
       default:
-        return <div className="w-4 h-4 bg-gray-300 rounded-full" />;
+        return <div className="w-4 h-4 bg-muted rounded-full" />;
     }
   };
 
   const getDifficultyColor = (difficulty: number) => {
     switch (difficulty) {
       case 1:
-        return 'bg-green-500';
+        return 'bg-success';
       case 2:
         return 'bg-lime-500';
       case 3:
-        return 'bg-yellow-500';
+        return 'bg-warning';
       case 4:
-        return 'bg-orange-500';
+        return 'bg-warning';
       case 5:
-        return 'bg-red-500';
+        return 'bg-destructive';
       default:
-        return 'bg-gray-500';
+        return 'bg-muted';
     }
   };
 
@@ -286,8 +286,8 @@ export default function PlayerAnalysis({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Player Analysis</h1>
-          <p className="text-gray-600 mt-1">Advanced player statistics and comparisons</p>
+          <h1 className="text-3xl font-bold text-foreground">Player Analysis</h1>
+          <p className="text-muted-foreground mt-1">Advanced player statistics and comparisons</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -295,8 +295,8 @@ export default function PlayerAnalysis({
             onClick={() => setViewMode('list')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               viewMode === 'list'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-info text-white'
+                : 'bg-muted text-muted-foreground hover:bg-muted'
             }`}
           >
             List View
@@ -306,10 +306,10 @@ export default function PlayerAnalysis({
             disabled={selectedPlayers.length < 2}
             className={`px-4 py-2 rounded-lg transition-colors ${
               viewMode === 'comparison' && selectedPlayers.length >= 2
-                ? 'bg-blue-600 text-white'
+                ? 'bg-info text-white'
                 : selectedPlayers.length < 2
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                  : 'bg-muted text-muted-foreground hover:bg-muted'
             }`}
           >
             Compare ({selectedPlayers.length})
@@ -321,22 +321,22 @@ export default function PlayerAnalysis({
       <div className="bg-white rounded-xl shadow-lg p-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="relative">
-            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search players..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-info focus:border-transparent"
             />
           </div>
 
           <div className="relative">
-            <FunnelIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <FunnelIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <select
               value={filterPosition}
               onChange={(e) => setFilterPosition(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+              className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-info focus:border-transparent appearance-none"
             >
               <option value="all">All Positions</option>
               <option value="FWD">Forwards</option>
@@ -347,11 +347,11 @@ export default function PlayerAnalysis({
           </div>
 
           <div className="relative">
-            <ArrowsUpDownIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <ArrowsUpDownIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+              className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-info focus:border-transparent appearance-none"
             >
               <option value="score">Average Score</option>
               <option value="price">Price</option>
@@ -362,7 +362,7 @@ export default function PlayerAnalysis({
 
           <button
             onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-muted hover:bg-muted rounded-lg transition-colors"
           >
             {sortOrder === 'desc' ? '↓' : '↑'}{' '}
             {sortOrder === 'desc' ? 'High to Low' : 'Low to High'}
@@ -379,7 +379,7 @@ export default function PlayerAnalysis({
             exit={{ opacity: 0, y: -20 }}
             className="bg-white rounded-xl shadow-lg overflow-hidden"
           >
-            <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 text-sm font-medium text-gray-600">
+            <div className="grid grid-cols-12 gap-4 p-4 bg-muted text-sm font-medium text-muted-foreground">
               <div className="col-span-3">Player</div>
               <div className="col-span-2">Avg Score</div>
               <div className="col-span-2">Price</div>
@@ -399,22 +399,22 @@ export default function PlayerAnalysis({
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className={`grid grid-cols-12 gap-4 p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
-                    isSelected ? 'bg-blue-50 border-blue-200' : ''
+                  className={`grid grid-cols-12 gap-4 p-4 border-b border-border hover:bg-muted cursor-pointer ${
+                    isSelected ? 'bg-info/10 border-info/20' : ''
                   }`}
                   onClick={() => onPlayerSelect?.(player)}
                 >
                   <div className="col-span-3">
                     <div className="flex items-center gap-2">
                       <div>
-                        <div className="font-medium text-gray-900">{player.name}</div>
+                        <div className="font-medium text-foreground">{player.name}</div>
                         <div className="flex items-center gap-2 mt-1">
                           <span
                             className={`px-2 py-1 rounded text-xs font-medium ${getPositionColor(player.position)}`}
                           >
                             {player.position}
                           </span>
-                          <span className="inline-flex items-center gap-1.5 text-sm text-gray-600">
+                          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
                             {player.team ? (
                               <TeamLogo team={player.team} size={16} withCircle decorative />
                             ) : null}
@@ -426,21 +426,23 @@ export default function PlayerAnalysis({
                   </div>
 
                   <div className="col-span-2">
-                    <div className="font-medium text-gray-900">{player.averageScore}</div>
-                    <div className="text-sm text-gray-500">Proj: {player.projectedScore}</div>
+                    <div className="font-medium text-foreground">{player.averageScore}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Proj: {player.projectedScore}
+                    </div>
                   </div>
 
                   <div className="col-span-2">
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-foreground">
                       ${(player.price / 1000).toFixed(0)}k
                     </div>
                     <div
                       className={`text-sm ${
                         player.priceChange > 0
-                          ? 'text-green-600'
+                          ? 'text-success'
                           : player.priceChange < 0
-                            ? 'text-red-600'
-                            : 'text-gray-500'
+                            ? 'text-destructive'
+                            : 'text-muted-foreground'
                       }`}
                     >
                       {player.priceChange > 0 ? '+' : ''}${(player.priceChange / 1000).toFixed(0)}k
@@ -448,21 +450,21 @@ export default function PlayerAnalysis({
                   </div>
 
                   <div className="col-span-1">
-                    <div className="font-medium text-gray-900">{player.ownership}%</div>
+                    <div className="font-medium text-foreground">{player.ownership}%</div>
                   </div>
 
                   <div className="col-span-2">
-                    <div className="font-medium text-gray-900">{recentForm.toFixed(1)}</div>
+                    <div className="font-medium text-foreground">{recentForm.toFixed(1)}</div>
                     <div className="flex gap-1 mt-1">
                       {player.form.slice(-5).map((score, i) => (
                         <div
                           key={i}
                           className={`w-2 h-2 rounded-full ${
                             score > player.averageScore
-                              ? 'bg-green-500'
+                              ? 'bg-success'
                               : score < player.averageScore * 0.8
-                                ? 'bg-red-500'
-                                : 'bg-yellow-500'
+                                ? 'bg-destructive'
+                                : 'bg-warning'
                           }`}
                         />
                       ))}
@@ -478,9 +480,7 @@ export default function PlayerAnalysis({
                         togglePlayerSelection(player);
                       }}
                       className={`w-6 h-6 rounded border-2 transition-colors ${
-                        isSelected
-                          ? 'bg-blue-600 border-blue-600'
-                          : 'border-gray-300 hover:border-blue-400'
+                        isSelected ? 'bg-info border-info/20' : 'border-border hover:border-info/20'
                       }`}
                     >
                       {isSelected && <span className="text-white text-xs">✓</span>}
@@ -498,20 +498,20 @@ export default function PlayerAnalysis({
             exit={{ opacity: 0, y: -20 }}
             className="bg-white rounded-xl shadow-lg p-6"
           >
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Player Comparison</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-6">Player Comparison</h3>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {selectedPlayers.map((player) => (
-                <div key={player.id} className="border border-gray-200 rounded-lg p-4">
+                <div key={player.id} className="border border-border rounded-lg p-4">
                   <div className="text-center mb-4">
-                    <h4 className="font-semibold text-gray-900">{player.name}</h4>
+                    <h4 className="font-semibold text-foreground">{player.name}</h4>
                     <div className="flex items-center justify-center gap-2 mt-1">
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium ${getPositionColor(player.position)}`}
                       >
                         {player.position}
                       </span>
-                      <span className="inline-flex items-center gap-1.5 text-sm text-gray-600">
+                      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
                         {player.team ? (
                           <TeamLogo team={player.team} size={16} withCircle decorative />
                         ) : null}
@@ -522,33 +522,33 @@ export default function PlayerAnalysis({
 
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Avg Score</span>
+                      <span className="text-muted-foreground">Avg Score</span>
                       <span className="font-medium">{player.averageScore}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Price</span>
+                      <span className="text-muted-foreground">Price</span>
                       <span className="font-medium">${(player.price / 1000).toFixed(0)}k</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Ownership</span>
+                      <span className="text-muted-foreground">Ownership</span>
                       <span className="font-medium">{player.ownership}%</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Disposals</span>
+                      <span className="text-muted-foreground">Disposals</span>
                       <span className="font-medium">{player.seasonStats.disposals}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Marks</span>
+                      <span className="text-muted-foreground">Marks</span>
                       <span className="font-medium">{player.seasonStats.marks}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Goals</span>
+                      <span className="text-muted-foreground">Goals</span>
                       <span className="font-medium">{player.seasonStats.goals}</span>
                     </div>
                   </div>
 
                   <div className="mt-4">
-                    <div className="text-sm text-gray-600 mb-2">Upcoming Fixtures</div>
+                    <div className="text-sm text-muted-foreground mb-2">Upcoming Fixtures</div>
                     <div className="space-y-1">
                       {player.upcomingFixtures.slice(0, 2).map((fixture, i) => (
                         <div key={i} className="flex items-center justify-between text-sm">

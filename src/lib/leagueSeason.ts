@@ -1490,6 +1490,16 @@ export async function ensureLeagueSeasonMaterialized(params: {
     return { bootstrapped: true, reason: drift.reason };
   }
 
+  const members = await loadLeagueMembers(params.leagueId);
+  if (members.length < 4) {
+    logger.info('League season materialization skipped for underfilled league', {
+      leagueId: params.leagueId,
+      season: params.season,
+      memberCount: members.length,
+    });
+    return { bootstrapped: false, reason: 'league_not_ready' };
+  }
+
   await bootstrapLeagueSeason(params);
   logger.info('League season auto-materialized', {
     leagueId: params.leagueId,

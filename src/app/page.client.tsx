@@ -49,7 +49,7 @@ export default function LoginClient() {
 
       {process.env.NODE_ENV === 'development' && (
         <div className="border-t pt-4 mt-4 w-full max-w-sm">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">🧪 Development Tools</h3>
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">🧪 Development Tools</h3>
           <div className="space-y-2">
             <button
               onClick={async () => {
@@ -74,19 +74,19 @@ export default function LoginClient() {
                   router.push('/drafts/cme98gp7p00047gbvh741f9tm');
                 }
               }}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
+              className="w-full bg-info text-white py-2 px-4 rounded hover:bg-info"
             >
               🚀 Quick Test Draft
             </button>
             <Link
               href="/drafts/cme98gp7p00047gbvh741f9tm"
-              className="block w-full bg-purple-600 text-white text-center py-2 px-4 rounded hover:bg-purple-700"
+              className="block w-full bg-primary text-white text-center py-2 px-4 rounded hover:bg-primary"
             >
               🎯 Test Draft Room (Skip Auth)
             </Link>
             <button
               onClick={quickTestLogin}
-              className="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700"
+              className="w-full bg-success text-white py-2 px-4 rounded hover:bg-success"
             >
               ⚡ Quick Admin Login (League Owner)
             </button>
@@ -94,7 +94,7 @@ export default function LoginClient() {
         </div>
       )}
 
-      <Link href="/tradecentre" className="text-blue-600 underline">
+      <Link href="/tradecentre" className="text-info underline">
         Visit Trade Centre
       </Link>
     </div>

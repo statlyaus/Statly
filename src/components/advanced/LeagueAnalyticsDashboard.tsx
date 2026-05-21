@@ -125,21 +125,21 @@ export default function LeagueAnalyticsDashboard({
     subtitle?: string,
     trend?: 'up' | 'down' | 'neutral'
   ) => (
-    <motion.div layout className="bg-white rounded-lg border border-gray-200 p-6">
+    <motion.div layout className="bg-white rounded-lg border border-border p-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-medium text-gray-600">{title}</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{value}</div>
-          {subtitle && <div className="text-sm text-gray-500 mt-1">{subtitle}</div>}
+          <div className="text-sm font-medium text-muted-foreground">{title}</div>
+          <div className="text-2xl font-bold text-foreground mt-1">{value}</div>
+          {subtitle && <div className="text-sm text-muted-foreground mt-1">{subtitle}</div>}
         </div>
         {trend && (
           <div
             className={`p-2 rounded-full ${
               trend === 'up'
-                ? 'bg-green-100 text-green-600'
+                ? 'bg-success/10 text-success'
                 : trend === 'down'
-                  ? 'bg-red-100 text-red-600'
-                  : 'bg-gray-100 text-gray-600'
+                  ? 'bg-destructive/10 text-destructive'
+                  : 'bg-muted text-muted-foreground'
             }`}
           >
             {trend === 'up' ? '📈' : trend === 'down' ? '📉' : '➡️'}
@@ -154,25 +154,25 @@ export default function LeagueAnalyticsDashboard({
       key={team.teamName}
       layout
       className={`grid grid-cols-7 gap-4 items-center p-4 rounded-lg border transition-colors ${
-        isUserTeam ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50'
+        isUserTeam ? 'bg-info/10 border-info/20' : 'bg-white border-border hover:bg-muted'
       }`}
     >
       <div className="flex items-center gap-3">
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
             team.rank === 1
-              ? 'bg-yellow-100 text-yellow-800'
+              ? 'bg-warning/10 text-warning'
               : team.rank === 2
-                ? 'bg-gray-100 text-gray-700'
+                ? 'bg-muted text-foreground'
                 : team.rank === 3
-                  ? 'bg-orange-100 text-orange-700'
-                  : 'bg-gray-50 text-gray-600'
+                  ? 'bg-warning/10 text-warning'
+                  : 'bg-muted text-muted-foreground'
           }`}
         >
           {team.rank}
         </div>
         <div>
-          <div className={`font-semibold ${isUserTeam ? 'text-blue-900' : 'text-gray-900'}`}>
+          <div className={`font-semibold ${isUserTeam ? 'text-info' : 'text-foreground'}`}>
             {team.teamName}
           </div>
           {isUserTeam && (
@@ -184,25 +184,25 @@ export default function LeagueAnalyticsDashboard({
       </div>
 
       <div className="text-right">
-        <div className="font-semibold text-gray-900">{team.totalScore.toLocaleString()}</div>
-        <div className="text-xs text-gray-500">Total</div>
+        <div className="font-semibold text-foreground">{team.totalScore.toLocaleString()}</div>
+        <div className="text-xs text-muted-foreground">Total</div>
       </div>
 
       <div className="text-right">
-        <div className="font-medium text-gray-900">{team.averageScore}</div>
-        <div className="text-xs text-gray-500">Avg</div>
+        <div className="font-medium text-foreground">{team.averageScore}</div>
+        <div className="text-xs text-muted-foreground">Avg</div>
       </div>
 
       <div className="text-center">
-        <div className="font-medium text-gray-900">{team.trades}</div>
-        <div className="text-xs text-gray-500">Trades</div>
+        <div className="font-medium text-foreground">{team.trades}</div>
+        <div className="text-xs text-muted-foreground">Trades</div>
       </div>
 
       <div className="text-center">
-        <div className={`font-medium ${team.hits > 0 ? 'text-red-600' : 'text-green-600'}`}>
+        <div className={`font-medium ${team.hits > 0 ? 'text-destructive' : 'text-success'}`}>
           {team.hits}
         </div>
-        <div className="text-xs text-gray-500">Hits</div>
+        <div className="text-xs text-muted-foreground">Hits</div>
       </div>
 
       <div className="flex -space-x-1">
@@ -211,10 +211,10 @@ export default function LeagueAnalyticsDashboard({
             key={idx}
             className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium border-2 border-white ${
               score >= 130
-                ? 'bg-green-100 text-green-700'
+                ? 'bg-success/10 text-success'
                 : score >= 110
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-red-100 text-red-700'
+                  ? 'bg-warning/10 text-warning'
+                  : 'bg-destructive/10 text-destructive'
             }`}
             title={`Round ${idx + 1}: ${score} points`}
           >
@@ -227,39 +227,39 @@ export default function LeagueAnalyticsDashboard({
         <div
           className={`font-semibold ${
             team.differential > 0
-              ? 'text-green-600'
+              ? 'text-success'
               : team.differential < 0
-                ? 'text-red-600'
-                : 'text-gray-600'
+                ? 'text-destructive'
+                : 'text-muted-foreground'
           }`}
         >
           {team.differential > 0 ? '+' : ''}
           {team.differential}
         </div>
-        <div className="text-xs text-gray-500">Behind</div>
+        <div className="text-xs text-muted-foreground">Behind</div>
       </div>
     </motion.div>
   );
 
   const renderCaptaincyChart = () => (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Captaincy Trends</h3>
+    <div className="bg-white rounded-lg border border-border p-6">
+      <h3 className="text-lg font-semibold text-foreground mb-4">Captaincy Trends</h3>
       <div className="space-y-4">
         {mockAnalytics.captaincyTrends.map((trend, idx) => (
           <div key={idx} className="flex items-center gap-4">
-            <div className="w-24 text-sm font-medium text-gray-900 truncate">{trend.player}</div>
+            <div className="w-24 text-sm font-medium text-foreground truncate">{trend.player}</div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <div className="flex-1 bg-muted rounded-full h-2">
                   <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                    className="bg-info h-2 rounded-full transition-all duration-500"
                     style={{ width: `${trend.percentage}%` }}
                   />
                 </div>
-                <div className="text-sm font-medium text-gray-900 w-8">{trend.percentage}%</div>
+                <div className="text-sm font-medium text-foreground w-8">{trend.percentage}%</div>
               </div>
             </div>
-            <div className="text-sm text-gray-600 w-16 text-right">{trend.avgScore} avg</div>
+            <div className="text-sm text-muted-foreground w-16 text-right">{trend.avgScore} avg</div>
           </div>
         ))}
       </div>
@@ -271,12 +271,12 @@ export default function LeagueAnalyticsDashboard({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">League Analytics</h1>
-          <p className="text-gray-600 mt-1">Comprehensive insights and performance analysis</p>
+          <h1 className="text-3xl font-bold text-foreground">League Analytics</h1>
+          <p className="text-muted-foreground mt-1">Comprehensive insights and performance analysis</p>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+          <div className="flex space-x-1 bg-muted p-1 rounded-lg">
             {[
               { id: 'week', label: 'This Week' },
               { id: 'month', label: 'This Month' },
@@ -287,8 +287,8 @@ export default function LeagueAnalyticsDashboard({
                 onClick={() => setTimeframe(option.id as typeof timeframe)}
                 className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                   timeframe === option.id
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white text-info shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {option.label}
@@ -299,7 +299,7 @@ export default function LeagueAnalyticsDashboard({
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6">
+      <div className="flex space-x-1 bg-muted p-1 rounded-lg mb-6">
         {[
           { id: 'overview', label: 'Overview' },
           { id: 'ownership', label: 'Ownership' },
@@ -311,8 +311,8 @@ export default function LeagueAnalyticsDashboard({
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-info shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab.label}
@@ -348,13 +348,13 @@ export default function LeagueAnalyticsDashboard({
             </div>
 
             {/* League Standings */}
-            <div className="bg-white rounded-lg border border-gray-200">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">League Standings</h2>
-                <p className="text-gray-600 mt-1">Top teams and current form</p>
+            <div className="bg-white rounded-lg border border-border">
+              <div className="p-6 border-b border-border">
+                <h2 className="text-xl font-semibold text-foreground">League Standings</h2>
+                <p className="text-muted-foreground mt-1">Top teams and current form</p>
               </div>
               <div className="p-6">
-                <div className="grid grid-cols-7 gap-4 text-sm font-medium text-gray-500 mb-4 px-4">
+                <div className="grid grid-cols-7 gap-4 text-sm font-medium text-muted-foreground mb-4 px-4">
                   <div>Team</div>
                   <div className="text-right">Total</div>
                   <div className="text-right">Average</div>
@@ -408,8 +408,8 @@ export default function LeagueAnalyticsDashboard({
             exit={{ opacity: 0, y: -20 }}
             className="text-center py-12"
           >
-            <div className="text-gray-400 text-lg mb-2">Performance Analysis</div>
-            <div className="text-gray-500">Detailed performance metrics and trends</div>
+            <div className="text-muted-foreground text-lg mb-2">Performance Analysis</div>
+            <div className="text-muted-foreground">Detailed performance metrics and trends</div>
           </motion.div>
         )}
 
@@ -421,8 +421,8 @@ export default function LeagueAnalyticsDashboard({
             exit={{ opacity: 0, y: -20 }}
             className="text-center py-12"
           >
-            <div className="text-gray-400 text-lg mb-2">AI Insights</div>
-            <div className="text-gray-500">
+            <div className="text-muted-foreground text-lg mb-2">AI Insights</div>
+            <div className="text-muted-foreground">
               Machine learning powered league insights and recommendations
             </div>
           </motion.div>

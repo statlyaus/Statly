@@ -50,9 +50,9 @@ function formatRoundStatus(status?: string | null) {
 }
 
 function getCategoryTone(delta: number) {
-  if (delta > 0) return 'text-emerald-700 bg-emerald-50';
-  if (delta < 0) return 'text-rose-700 bg-rose-50';
-  return 'text-slate-700 bg-slate-100';
+  if (delta > 0) return 'text-success bg-success/10';
+  if (delta < 0) return 'text-destructive bg-destructive/10';
+  return 'text-foreground bg-muted';
 }
 
 export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleProps) {
@@ -147,9 +147,9 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
 
   if (!user) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center">
-        <p className="text-sm font-medium text-slate-900">Sign in required</p>
-        <p className="mt-1 text-sm text-slate-600">
+      <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-center">
+        <p className="text-sm font-medium text-foreground">Sign in required</p>
+        <p className="mt-1 text-sm text-muted-foreground">
           Live matchup state is only available for your leagues.
         </p>
       </div>
@@ -160,10 +160,10 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
     return (
       <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="animate-pulse rounded-xl bg-slate-100 p-4">
-            <div className="h-4 w-28 rounded bg-slate-200" />
-            <div className="mt-3 h-3 w-48 rounded bg-slate-200" />
-            <div className="mt-2 h-3 w-32 rounded bg-slate-200" />
+          <div key={index} className="animate-pulse rounded-xl bg-muted p-4">
+            <div className="h-4 w-28 rounded bg-muted" />
+            <div className="mt-3 h-3 w-48 rounded bg-muted" />
+            <div className="mt-2 h-3 w-32 rounded bg-muted" />
           </div>
         ))}
       </div>
@@ -173,14 +173,14 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
   if (!featured?.matchup) {
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center">
-          <p className="text-sm font-medium text-slate-900">No live matchup view available</p>
-          <p className="mt-1 text-sm text-slate-600">
+        <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-center">
+          <p className="text-sm font-medium text-foreground">No live matchup view available</p>
+          <p className="mt-1 text-sm text-muted-foreground">
             Your tracked leagues have not materialized a current matchup summary yet.
           </p>
         </div>
         {error ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
           </div>
         ) : null}
@@ -193,7 +193,7 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
           </Link>
           <Link
             href="/players"
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="rounded-xl border border-border bg-white px-3 py-2 text-center text-sm font-semibold text-foreground transition hover:bg-muted"
           >
             Research players
           </Link>
@@ -204,45 +204,45 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+      <div className="rounded-2xl border border-success/20 bg-success/10 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
               Featured matchup
             </p>
-            <p className="mt-2 text-lg font-semibold text-slate-950">{featured.leagueName}</p>
+            <p className="mt-2 text-lg font-semibold text-foreground">{featured.leagueName}</p>
           </div>
           {featured.roundStatus === 'in_progress' ? (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            <span className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-success">
               Live
             </span>
           ) : null}
         </div>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-muted-foreground">
           {featured.roundLabel ?? 'Current round'} • {formatRoundStatus(featured.roundStatus)}
         </p>
         <div className="mt-4 grid grid-cols-3 gap-3">
           <div className="rounded-xl bg-white px-3 py-3 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Opponent
             </p>
-            <p className="mt-2 text-sm font-semibold text-slate-950">
+            <p className="mt-2 text-sm font-semibold text-foreground">
               {featured.matchup.opponentTeam.name}
             </p>
           </div>
           <div className="rounded-xl bg-white px-3 py-3 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Actual
             </p>
-            <p className="mt-2 text-sm font-semibold text-slate-950">
+            <p className="mt-2 text-sm font-semibold text-foreground">
               {featured.matchup.actual != null ? Math.round(featured.matchup.actual) : 'Pending'}
             </p>
           </div>
           <div className="rounded-xl bg-white px-3 py-3 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Projected
             </p>
-            <p className="mt-2 text-sm font-semibold text-slate-950">
+            <p className="mt-2 text-sm font-semibold text-foreground">
               {featured.matchup.projected != null
                 ? Math.round(featured.matchup.projected)
                 : 'Pending'}
@@ -253,11 +253,11 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-slate-900">Category pulse</h4>
-          <span className="text-xs text-slate-500">{featured.matchup.roundLabel}</span>
+          <h4 className="text-sm font-semibold text-foreground">Category pulse</h4>
+          <span className="text-xs text-muted-foreground">{featured.matchup.roundLabel}</span>
         </div>
         {categoryLeads.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
             Category-level live scoring is not available for this matchup yet.
           </div>
         ) : (
@@ -267,11 +267,11 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
               return (
                 <div
                   key={category.key}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3"
+                  className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3"
                 >
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{category.key}</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="text-sm font-semibold text-foreground">{category.key}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       You {category.you} • Opp {category.opp}
                     </p>
                   </div>
@@ -288,16 +288,16 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
       </div>
 
       {prioritizedSnapshots.length > 1 ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-xl border border-border bg-white px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Other leagues tracked
           </p>
           <div className="mt-3 space-y-2">
             {prioritizedSnapshots.slice(1, 4).map((league) => (
               <div key={league.leagueId} className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">{league.leagueName}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="truncate text-sm font-medium text-foreground">{league.leagueName}</p>
+                  <p className="text-xs text-muted-foreground">
                     {league.roundLabel ?? 'Current round'} • {formatRoundStatus(league.roundStatus)}
                   </p>
                 </div>
@@ -314,7 +314,7 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
       ) : null}
 
       {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </div>
       ) : null}
@@ -328,7 +328,7 @@ export default function LiveScoringModule({ refreshTrigger }: LiveScoringModuleP
         </Link>
         <Link
           href="/leagues"
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          className="rounded-xl border border-border bg-white px-3 py-2 text-center text-sm font-semibold text-foreground transition hover:bg-muted"
         >
           Open leagues
         </Link>

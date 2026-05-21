@@ -3,15 +3,15 @@
 import React, { useState, useMemo } from 'react';
 
 import {
-  MagnifyingGlassIcon,
-  BookOpenIcon,
-  QuestionMarkCircleIcon,
-  ChatBubbleBottomCenterTextIcon,
-  VideoCameraIcon,
-  DocumentTextIcon,
-  StarIcon,
-  PlayIcon,
-} from '@heroicons/react/24/outline';
+  Search as MagnifyingGlassIcon,
+  BookOpen as BookOpenIcon,
+  CircleHelp as QuestionMarkCircleIcon,
+  MessageSquareText as ChatBubbleBottomCenterTextIcon,
+  Video as VideoCameraIcon,
+  FileText as DocumentTextIcon,
+  Star as StarIcon,
+  Play as PlayIcon,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import Button from '@/components/Button';
@@ -271,13 +271,13 @@ export default function HelpDocumentation({
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'beginner':
-        return 'bg-green-100 text-green-800';
+        return 'bg-success/10 text-success';
       case 'intermediate':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-warning/10 text-warning';
       case 'advanced':
-        return 'bg-red-100 text-red-800';
+        return 'bg-destructive/10 text-destructive';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-muted text-foreground';
     }
   };
 
@@ -291,7 +291,7 @@ export default function HelpDocumentation({
       <div className="max-w-4xl mx-auto p-6">
         <button
           onClick={() => setSelectedArticle(null)}
-          className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6"
+          className="flex items-center gap-2 text-info hover:text-info mb-6"
         >
           ← Back to Help
         </button>
@@ -299,8 +299,8 @@ export default function HelpDocumentation({
         <article className="bg-white rounded-xl shadow-lg p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">{selectedArticle.title}</h1>
-              <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+              <h1 className="text-3xl font-bold text-foreground">{selectedArticle.title}</h1>
+              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                 <span>{selectedArticle.readTime} min read</span>
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(selectedArticle.difficulty)}`}
@@ -311,9 +311,9 @@ export default function HelpDocumentation({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <StarIcon className="w-5 h-5 text-yellow-500" />
+              <StarIcon className="w-5 h-5 text-warning" />
               <span className="font-medium">{selectedArticle.rating}</span>
-              <span className="text-gray-500">({selectedArticle.helpful} helpful)</span>
+              <span className="text-muted-foreground">({selectedArticle.helpful} helpful)</span>
             </div>
           </div>
 
@@ -359,15 +359,18 @@ export default function HelpDocumentation({
 
           <Separator className="mt-8" />
           <div className="pt-6">
-            <p className="text-gray-600 mb-4">Was this article helpful?</p>
+            <p className="text-muted-foreground mb-4">Was this article helpful?</p>
             <div className="flex gap-2">
               <Button
                 variant="secondary"
-                className="bg-green-100 text-green-700 hover:bg-green-200"
+                className="bg-success/10 text-success hover:bg-success/10"
               >
                 👍 Yes
               </Button>
-              <Button variant="secondary" className="bg-red-100 text-red-700 hover:bg-red-200">
+              <Button
+                variant="secondary"
+                className="bg-destructive/10 text-destructive hover:bg-destructive/10"
+              >
                 👎 No
               </Button>
             </div>
@@ -381,14 +384,14 @@ export default function HelpDocumentation({
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900">Help & Documentation</h1>
-        <p className="text-gray-600 mt-2">Everything you need to master AFL Fantasy</p>
+        <h1 className="text-3xl font-bold text-foreground">Help & Documentation</h1>
+        <p className="text-muted-foreground mt-2">Everything you need to master AFL Fantasy</p>
       </div>
 
       {/* Search */}
       <div className="max-w-2xl mx-auto">
         <div className="relative">
-          <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
           <UIInput
             type="text"
             placeholder="Search help articles, videos, and FAQs..."
@@ -401,15 +404,15 @@ export default function HelpDocumentation({
 
       {/* Category Filter */}
       <div className="flex justify-center">
-        <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+        <div className="flex gap-2 p-1 bg-muted rounded-lg">
           {categories.map((category) => (
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
               className={`px-4 py-2 rounded-md font-medium transition-colors capitalize ${
                 selectedCategory === category
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white text-info shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {category}
@@ -419,7 +422,7 @@ export default function HelpDocumentation({
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg max-w-2xl mx-auto">
+      <div className="flex space-x-1 bg-muted p-1 rounded-lg max-w-2xl mx-auto">
         {[
           { id: 'articles', label: 'Articles', icon: DocumentTextIcon },
           { id: 'videos', label: 'Video Tutorials', icon: VideoCameraIcon },
@@ -431,8 +434,8 @@ export default function HelpDocumentation({
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-info shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <tab.icon className="w-4 h-4" />
@@ -460,7 +463,7 @@ export default function HelpDocumentation({
                 onClick={() => setSelectedArticle(article)}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <BookOpenIcon className="w-8 h-8 text-blue-600" />
+                  <BookOpenIcon className="w-8 h-8 text-info" />
                   <span
                     className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(article.difficulty)}`}
                   >
@@ -468,13 +471,13 @@ export default function HelpDocumentation({
                   </span>
                 </div>
 
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{article.title}</h3>
-                <p className="text-gray-600 text-sm mb-4">{article.category}</p>
+                <h3 className="text-lg font-semibold text-foreground mb-2">{article.title}</h3>
+                <p className="text-muted-foreground text-sm mb-4">{article.category}</p>
 
-                <div className="flex items-center justify-between text-sm text-gray-500">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
                   <span>{article.readTime} min read</span>
                   <div className="flex items-center gap-1">
-                    <StarIcon className="w-4 h-4 text-yellow-500" />
+                    <StarIcon className="w-4 h-4 text-warning" />
                     <span>{article.rating}</span>
                   </div>
                 </div>
@@ -499,8 +502,8 @@ export default function HelpDocumentation({
                 className="bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-shadow"
               >
                 <div className="relative">
-                  <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-                    <PlayIcon className="w-12 h-12 text-gray-400" />
+                  <div className="w-full h-48 bg-muted flex items-center justify-center">
+                    <PlayIcon className="w-12 h-12 text-muted-foreground" />
                   </div>
                   <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
                     {video.duration}
@@ -513,13 +516,13 @@ export default function HelpDocumentation({
                 </div>
 
                 <div className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{video.title}</h3>
-                  <p className="text-gray-600 text-sm mb-4">{video.description}</p>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">{video.title}</h3>
+                  <p className="text-muted-foreground text-sm mb-4">{video.description}</p>
 
-                  <div className="flex items-center justify-between text-sm text-gray-500">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>{video.views.toLocaleString()} views</span>
                     <div className="flex items-center gap-1">
-                      <StarIcon className="w-4 h-4 text-yellow-500" />
+                      <StarIcon className="w-4 h-4 text-warning" />
                       <span>{video.rating}</span>
                     </div>
                   </div>
@@ -540,13 +543,13 @@ export default function HelpDocumentation({
             <Accordion type="single" className="px-6">
               {filteredFAQs.map((faq) => (
                 <AccordionItem key={faq.id} value={faq.id} className="last:border-b-0">
-                  <AccordionTrigger className="py-6 text-lg font-semibold text-gray-900">
+                  <AccordionTrigger className="py-6 text-lg font-semibold text-foreground">
                     {faq.question}
                   </AccordionTrigger>
                   <AccordionContent>
-                    <p className="text-gray-600 mb-4">{faq.answer}</p>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span className="bg-gray-100 px-2 py-1 rounded">{faq.category}</span>
+                    <p className="text-muted-foreground mb-4">{faq.answer}</p>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span className="bg-muted px-2 py-1 rounded">{faq.category}</span>
                       <span>{faq.helpful} people found this helpful</span>
                     </div>
                   </AccordionContent>
@@ -565,9 +568,9 @@ export default function HelpDocumentation({
             className="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto"
           >
             <div className="text-center mb-8">
-              <ChatBubbleBottomCenterTextIcon className="w-16 h-16 mx-auto text-blue-600 mb-4" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Contact Support</h3>
-              <p className="text-gray-600">Need help? We&apos;re here to assist you</p>
+              <ChatBubbleBottomCenterTextIcon className="w-16 h-16 mx-auto text-info mb-4" />
+              <h3 className="text-2xl font-bold text-foreground mb-2">Contact Support</h3>
+              <p className="text-muted-foreground">Need help? We&apos;re here to assist you</p>
             </div>
 
             <div className="space-y-6">
@@ -603,8 +606,8 @@ export default function HelpDocumentation({
 
             <Separator className="mt-8" />
             <div className="pt-6 text-center">
-              <p className="text-gray-600 mb-2">Prefer live chat?</p>
-              <Button className="bg-green-600 hover:bg-green-700">Start Live Chat</Button>
+              <p className="text-muted-foreground mb-2">Prefer live chat?</p>
+              <Button className="bg-success hover:bg-success">Start Live Chat</Button>
             </div>
           </motion.div>
         )}

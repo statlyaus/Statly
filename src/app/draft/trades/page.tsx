@@ -6,8 +6,8 @@ import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/fi
 function DraftTradesExplorerFallback() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading trades explorer">
-      <div className="h-52 animate-pulse rounded-[1.75rem] bg-slate-200/50 md:h-56" />
-      <div className="h-[min(28rem,55vh)] animate-pulse rounded-2xl bg-slate-200/35" />
+      <div className="h-52 animate-pulse rounded-[1.75rem] bg-muted md:h-56" />
+      <div className="h-[min(28rem,55vh)] animate-pulse rounded-2xl bg-muted" />
     </div>
   );
 }

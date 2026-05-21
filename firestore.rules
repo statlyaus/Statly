@@ -130,6 +130,18 @@ service cloud.firestore {
         allow delete: if isAuthenticated() && 
           (isOwner(resource) || isCommissioner(leagueId));
       }
+
+      // Waiver priority projections
+      match /waiverPriorities/{userId} {
+        allow read: if isAuthenticated() && isLeagueMember(leagueId);
+        allow write: if false; // Server projection only
+      }
+
+      // League activity projections
+      match /activity/{activityId} {
+        allow read: if isAuthenticated() && isLeagueMember(leagueId);
+        allow write: if false; // Server projection only
+      }
       
       // Personal watchlists
       match /watchlists/{userId} {

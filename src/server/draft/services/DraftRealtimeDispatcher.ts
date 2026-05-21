@@ -7,6 +7,7 @@ import {
 import type { LiveDraftState } from '@/services/liveDraftEngine';
 
 import { DRAFT_BEHAVIOR_CONTRACT } from '../domain/draftTypes';
+import { appendDraftDelta } from '../realtime/draftDeltaLog';
 import type {
   DraftPickEventPayload,
   DraftQueueUpdatedDeltaPayload,
@@ -31,6 +32,55 @@ type DraftAdminMessagePayload = {
   userId: string;
 };
 
+function buildPickEventId(draftId: string, pick: DraftPickEventPayload): string {
+  return `${draftId}:pick:${pick.overall}:${pick.player.id}`;
+}
+
+function buildStatePatchEventId(draftId: string, payload: DraftStatePatchDeltaPayload): string {
+  const draftPatch = payload.draft ?? {};
+  const livePatch = payload.liveState ?? {};
+
+  return [
+    draftId,
+    'state',
+    draftPatch.status,
+    draftPatch.currentPick,
+    draftPatch.round,
+    draftPatch.direction,
+    draftPatch.pickDeadlineAt,
+    livePatch.currentPick,
+    livePatch.onClockTeamId,
+    livePatch.timeRemaining,
+  ]
+    .map((part) => (part == null ? '' : String(part)))
+    .join(':');
+}
+
+function buildQueueUpdatedEventId(draftId: string, payload: DraftQueueUpdatedDeltaPayload): string {
+  return `${draftId}:queue:${payload.userId}:${payload.queue.join(',')}`;
+}
+
+function buildTimerExpiredEventId(draftId: string, payload: DraftTimerExpiredDeltaPayload): string {
+  return `${draftId}:timer-expired:${payload.timestamp}`;
+}
+
+function toRealtimeIsoString(value: unknown): string | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+
+  if (typeof value === 'string') {
+    return Number.isNaN(Date.parse(value)) ? null : value;
+  }
+
+  if (typeof value === 'number') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  return null;
+}
+
 export class DraftRealtimeDispatcher {
   private io: SocketIOServer | null = null;
   private subscriberStarted = false;
@@ -51,7 +101,7 @@ export class DraftRealtimeDispatcher {
   }
 
   async publishState(state: LiveDraftState): Promise<void> {
-    this.dispatchToLocal(state.draftId, 'draft:state', state);
+    await this.dispatchToLocal(state.draftId, 'draft:state', state);
     await draftPubSub.publish(state.draftId, 'draft:state', state);
   }
 
@@ -66,25 +116,25 @@ export class DraftRealtimeDispatcher {
     payload?: DraftPickEventPayload
   ): Promise<void> {
     const eventPayload = payload ?? {};
-    this.dispatchToLocal(draftId, event, eventPayload);
+    await this.dispatchToLocal(draftId, event, eventPayload);
     await draftPubSub.publish(draftId, event, eventPayload);
   }
 
   async publishTimerTick(draftId: string, timeRemaining: number): Promise<void> {
     const payload = { timeRemaining };
-    this.dispatchToLocal(draftId, 'draft:timer-tick', payload);
+    await this.dispatchToLocal(draftId, 'draft:timer-tick', payload);
     await draftPubSub.publish(draftId, 'draft:timer-tick', payload);
   }
 
   async publishTimerExpired(draftId: string): Promise<void> {
     const payload = { draftId, timestamp: new Date().toISOString() };
-    this.dispatchToLocal(draftId, 'draft:timer-expired', payload);
+    await this.dispatchToLocal(draftId, 'draft:timer-expired', payload);
     await draftPubSub.publish(draftId, 'draft:timer-expired', payload);
   }
 
   async publishQueueUpdated(draftId: string, userId: string, queue: string[]): Promise<void> {
     const payload = { userId, queue };
-    this.dispatchToLocal(draftId, 'draft:queue-updated', payload);
+    await this.dispatchToLocal(draftId, 'draft:queue-updated', payload);
     await draftPubSub.publish(draftId, 'draft:queue-updated', payload);
   }
 
@@ -94,36 +144,44 @@ export class DraftRealtimeDispatcher {
     userId: string
   ): Promise<void> {
     const payload = { type, userId };
-    this.dispatchToLocal(draftId, 'draft:admin-message', payload);
+    await this.dispatchToLocal(draftId, 'draft:admin-message', payload);
     await draftPubSub.publish(draftId, 'draft:admin-message', payload);
   }
 
   private dispatchEnvelope(msg: DraftRealtimeEnvelope): void {
-    this.dispatchToLocal(msg.draftId, msg.event, msg.payload);
+    void this.dispatchToLocal(msg.draftId, msg.event, msg.payload);
   }
 
   private emitToDraftRooms(draftId: string, event: string, payload: unknown): void {
-    this.io?.to(draftId).emit(event, payload);
     this.io?.to(`draft:${draftId}`).emit(event, payload);
   }
 
-  private emitPrimaryDelta(draftId: string, delta: DraftRealtimeDelta): void {
+  private async emitPrimaryDelta(draftId: string, delta: DraftRealtimeDelta): Promise<void> {
     if (DRAFT_BEHAVIOR_CONTRACT.realtime.deliveryModel !== 'SNAPSHOT_PLUS_DELTA') {
       throw new Error('bad_state:Unsupported draft realtime delivery model');
     }
 
+    await appendDraftDelta(draftId, delta);
     this.emitToDraftRooms(draftId, 'draft:delta', delta);
   }
 
-  private emitStatePatch(draftId: string, payload: DraftStatePatchDeltaPayload): void {
-    this.emitPrimaryDelta(draftId, {
+  private async emitStatePatch(
+    draftId: string,
+    payload: DraftStatePatchDeltaPayload
+  ): Promise<void> {
+    await this.emitPrimaryDelta(draftId, {
       type: 'STATE_PATCH',
+      eventId: buildStatePatchEventId(draftId, payload),
       payload,
       ts: Date.now(),
     });
   }
 
-  private dispatchToLocal(draftId: string, event: DraftRealtimeEventType, payload: unknown): void {
+  private async dispatchToLocal(
+    draftId: string,
+    event: DraftRealtimeEventType,
+    payload: unknown
+  ): Promise<void> {
     if (!this.io) {
       logger.warn('Skipping realtime dispatch without attached Socket.IO server', {
         draftId,
@@ -147,7 +205,7 @@ export class DraftRealtimeDispatcher {
                   ? 'FORWARD'
                   : 'REVERSE',
             pickDeadlineAt:
-              state.status === 'LIVE' ? state.currentPick.expiresAt.toISOString() : null,
+              state.status === 'LIVE' ? toRealtimeIsoString(state.currentPick.expiresAt) : null,
           },
           liveState: {
             currentPick: state.currentPick.pickNumber,
@@ -155,14 +213,14 @@ export class DraftRealtimeDispatcher {
           },
         };
 
-        this.emitStatePatch(draftId, statePatch);
+        await this.emitStatePatch(draftId, statePatch);
         this.emitToDraftRooms(draftId, 'draft:state', payload);
         this.emitToDraftRooms(draftId, 'draft:update', payload);
         return;
       }
       case 'draft:timer-tick': {
         const timerPayload = payload as DraftTimerTickPayload;
-        this.emitStatePatch(draftId, {
+        await this.emitStatePatch(draftId, {
           liveState: {
             timeRemaining: timerPayload.timeRemaining,
           },
@@ -173,8 +231,9 @@ export class DraftRealtimeDispatcher {
       }
       case 'draft:timer-expired': {
         const timerExpiredPayload = payload as DraftTimerExpiredDeltaPayload;
-        this.emitPrimaryDelta(draftId, {
+        await this.emitPrimaryDelta(draftId, {
           type: 'TIMER_EXPIRED',
+          eventId: buildTimerExpiredEventId(draftId, timerExpiredPayload),
           payload: timerExpiredPayload,
           ts: Date.now(),
         });
@@ -184,8 +243,9 @@ export class DraftRealtimeDispatcher {
       }
       case 'draft:pick-made': {
         const pickPayload = payload as DraftPickEventPayload;
-        this.emitPrimaryDelta(draftId, {
+        await this.emitPrimaryDelta(draftId, {
           type: 'PICK_MADE',
+          eventId: buildPickEventId(draftId, pickPayload),
           payload: { pick: pickPayload },
           ts: Date.now(),
         });
@@ -196,8 +256,9 @@ export class DraftRealtimeDispatcher {
       }
       case 'draft:auto-pick': {
         const pickPayload = payload as DraftPickEventPayload;
-        this.emitPrimaryDelta(draftId, {
+        await this.emitPrimaryDelta(draftId, {
           type: 'PICK_MADE',
+          eventId: buildPickEventId(draftId, pickPayload),
           payload: { pick: pickPayload },
           ts: Date.now(),
         });
@@ -206,7 +267,7 @@ export class DraftRealtimeDispatcher {
         return;
       }
       case 'draft:paused': {
-        this.emitStatePatch(draftId, {
+        await this.emitStatePatch(draftId, {
           draft: {
             status: 'PAUSED',
           },
@@ -216,7 +277,7 @@ export class DraftRealtimeDispatcher {
         return;
       }
       case 'draft:resumed': {
-        this.emitStatePatch(draftId, {
+        await this.emitStatePatch(draftId, {
           draft: {
             status: 'LIVE',
           },
@@ -226,7 +287,7 @@ export class DraftRealtimeDispatcher {
         return;
       }
       case 'draft:completed': {
-        this.emitStatePatch(draftId, {
+        await this.emitStatePatch(draftId, {
           draft: {
             status: 'COMPLETED',
           },
@@ -242,8 +303,9 @@ export class DraftRealtimeDispatcher {
       case 'draft:queue-updated': {
         const queuePayload = payload as DraftQueueUpdatedDeltaPayload;
         this.emitToDraftRooms(draftId, 'draft:queue-updated', { draftId, ...queuePayload });
-        this.emitPrimaryDelta(draftId, {
+        await this.emitPrimaryDelta(draftId, {
           type: 'QUEUE_UPDATED',
+          eventId: buildQueueUpdatedEventId(draftId, queuePayload),
           payload: queuePayload,
           ts: Date.now(),
         });

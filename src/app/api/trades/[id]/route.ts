@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { Prisma } from '@prisma/client';
+import { Prisma, TradeReviewMode, TradeReviewStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
@@ -55,6 +55,28 @@ async function markTradeViewed(tradeId: string, role: 'proposer' | 'recipient', 
   `;
 }
 
+function canReviewTrade(
+  trade: {
+    reviewMode: string;
+    reviewStatus: string;
+    league?: { members?: Array<{ userId: string; role: string }> };
+  },
+  userId: string
+): boolean {
+  if (trade.reviewStatus === TradeReviewStatus.NOT_REQUIRED) return false;
+  const members = trade.league?.members ?? [];
+  if (trade.reviewMode === TradeReviewMode.VETO) {
+    return members.some((member) => member.userId === userId);
+  }
+  if (trade.reviewMode === TradeReviewMode.ADMIN) {
+    return members.some(
+      (member) =>
+        member.userId === userId && (member.role === 'OWNER' || member.role === 'COMMISSIONER')
+    );
+  }
+  return false;
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = await getAuthenticatedUserId(request);
@@ -80,6 +102,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           },
         },
         audit: { orderBy: { createdAt: 'asc' } },
+        league: {
+          select: {
+            members: {
+              select: {
+                userId: true,
+                role: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -87,16 +119,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return commonErrors.notFound('Trade not found');
     }
 
-    if (trade.proposerUserId !== userId && trade.recipientUserId !== userId) {
+    const isProposer = trade.proposerUserId === userId;
+    const isRecipient = trade.recipientUserId === userId;
+    if (!isProposer && !isRecipient && !canReviewTrade(trade, userId)) {
       return commonErrors.forbidden('Trade access denied');
     }
 
-    const viewedAt = new Date();
-    await markTradeViewed(
-      tradeId,
-      trade.proposerUserId === userId ? 'proposer' : 'recipient',
-      viewedAt
-    );
+    if (isProposer || isRecipient) {
+      const viewedAt = new Date();
+      await markTradeViewed(tradeId, isProposer ? 'proposer' : 'recipient', viewedAt);
+    }
     const receipts = await loadTradeViewReceipt(tradeId);
     const latestAudit = trade.audit[trade.audit.length - 1];
 

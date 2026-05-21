@@ -125,11 +125,21 @@ export async function GET(req: NextRequest) {
 // POST /api/leagues - Create new league
 export async function POST(req: NextRequest) {
   logger.info('League creation API called');
+  let userId: string | null = null;
 
   try {
-    const rawBody = await req.json();
-    const userId = await getUserIdFromRequest(req);
+    userId = await getUserIdFromRequest(req);
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON request body' },
+        { status: 400 }
+      );
+    }
 
     // Validate with Zod
     const parsed = CreateLeagueSchema.safeParse(rawBody);
@@ -220,7 +230,7 @@ export async function POST(req: NextRequest) {
       'Error creating league',
       error instanceof Error ? error : new Error(String(error)),
       {
-        userId: await getUserIdFromRequest(req).catch(() => null),
+        userId,
       }
     );
     return NextResponse.json({ success: false, error: 'Failed to create league' }, { status: 500 });

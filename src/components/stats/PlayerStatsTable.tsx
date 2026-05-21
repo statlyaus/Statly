@@ -186,11 +186,11 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Player Statistics</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <h1 className="text-2xl font-bold text-foreground dark:text-white">Player Statistics</h1>
+          <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
             {filteredAndSortedPlayers.length} of {players.length} players
             {selectedPlayersForComparison.length > 0 && (
-              <span className="ml-2 text-blue-600 dark:text-blue-400">
+              <span className="ml-2 text-info dark:text-info">
                 • {selectedPlayersForComparison.length} selected for comparison
               </span>
             )}
@@ -199,14 +199,14 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
         <div className="mt-4 sm:mt-0 flex items-center space-x-3">
           <button
             onClick={() => setShowComparison(true)}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="inline-flex items-center px-3 py-2 border border-border dark:border-border rounded-md shadow-sm text-sm font-medium text-foreground dark:text-muted-foreground bg-white dark:bg-muted hover:bg-muted dark:hover:bg-muted"
           >
             <BarChart3 className="w-4 h-4 mr-2" />
             Compare Players
           </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="inline-flex items-center px-3 py-2 border border-border dark:border-border rounded-md shadow-sm text-sm font-medium text-foreground dark:text-muted-foreground bg-white dark:bg-muted hover:bg-muted dark:hover:bg-muted"
           >
             <Filter className="w-4 h-4 mr-2" />
             Filters
@@ -218,13 +218,13 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
       <div className="space-y-4">
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search players or teams..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-white"
+            className="pl-10 pr-4 py-2 w-full border border-border dark:border-border rounded-md focus:ring-info focus:border-info/20 dark:bg-muted dark:text-white"
           />
         </div>
 
@@ -234,14 +234,14 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-4"
+            className="bg-muted dark:bg-muted rounded-lg p-4 space-y-4"
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Position Filter */}
               <div>
                 <label
                   htmlFor="position-filter"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  className="block text-sm font-medium text-foreground dark:text-muted-foreground mb-2"
                 >
                   Position
                 </label>
@@ -249,7 +249,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                   id="position-filter"
                   value={positionFilter}
                   onChange={(e) => setPositionFilter(e.target.value as FilterType)}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 dark:bg-gray-700 dark:text-white"
+                  className="w-full border border-border dark:border-border rounded-md px-3 py-2 dark:bg-muted dark:text-white"
                 >
                   <option value="all">All Positions</option>
                   <option value="DEF">Defender</option>
@@ -263,7 +263,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
               <div>
                 <label
                   htmlFor="team-filter"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  className="block text-sm font-medium text-foreground dark:text-muted-foreground mb-2"
                 >
                   Team
                 </label>
@@ -271,7 +271,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                   id="team-filter"
                   value={teamFilter}
                   onChange={(e) => setTeamFilter(e.target.value)}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 dark:bg-gray-700 dark:text-white"
+                  className="w-full border border-border dark:border-border rounded-md px-3 py-2 dark:bg-muted dark:text-white"
                 >
                   <option value="all">All Teams</option>
                   {TEAMS.map((team) => (
@@ -285,7 +285,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
 
             {/* Stat Column Selection */}
             <div>
-              <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <span className="block text-sm font-medium text-foreground dark:text-muted-foreground mb-2">
                 Display Statistics
               </span>
               <div className="flex flex-wrap gap-2">
@@ -295,8 +295,8 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                     onClick={() => toggleStatColumn(stat.key)}
                     className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                       selectedStats.includes(stat.key)
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                        : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        ? 'bg-info/10 text-info dark:bg-info dark:text-info'
+                        : 'bg-muted text-foreground dark:bg-muted dark:text-muted-foreground hover:bg-muted dark:hover:bg-muted'
                     }`}
                   >
                     {stat.label}
@@ -309,17 +309,17 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
       </div>
 
       {/* Stats Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+      <div className="bg-white dark:bg-muted rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
+            <thead className="bg-muted dark:bg-muted">
               <tr>
                 {/* Selection column */}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground uppercase tracking-wider">
                   <div className="flex items-center space-x-1">
                     <input
                       type="checkbox"
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-border text-info focus:ring-info"
                       checked={selectedPlayersForComparison.length > 0}
                       onChange={() => setSelectedPlayersForComparison([])}
                     />
@@ -330,7 +330,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                 {/* Fixed columns */}
                 <th
                   onClick={() => handleSort('name')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted dark:hover:bg-muted"
                 >
                   <div className="flex items-center space-x-1">
                     <span>Name</span>
@@ -339,7 +339,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                 </th>
                 <th
                   onClick={() => handleSort('team')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted dark:hover:bg-muted"
                 >
                   <div className="flex items-center space-x-1">
                     <span>Team</span>
@@ -348,7 +348,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                 </th>
                 <th
                   onClick={() => handleSort('position')}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground dark:text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted dark:hover:bg-muted"
                 >
                   <div className="flex items-center space-x-1">
                     <span>Position</span>
@@ -361,7 +361,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                   <th
                     key={stat.key}
                     onClick={() => handleSort(stat.key)}
-                    className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+                    className="px-6 py-3 text-center text-xs font-medium text-muted-foreground dark:text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted dark:hover:bg-muted"
                   >
                     <div className="flex items-center justify-center space-x-1">
                       <span>{stat.label}</span>
@@ -371,20 +371,20 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                 ))}
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-white dark:bg-muted divide-y divide-gray-200 dark:divide-gray-700">
               {filteredAndSortedPlayers.map((player, index) => (
                 <motion.tr
                   key={player.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.02 }}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="hover:bg-muted dark:hover:bg-muted"
                 >
                   {/* Selection cell */}
                   <td className="px-4 py-4 whitespace-nowrap">
                     <input
                       type="checkbox"
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-border text-info focus:ring-info"
                       checked={isPlayerSelected(player)}
                       onChange={() => togglePlayerSelection(player)}
                       disabled={
@@ -396,16 +396,16 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        <div className="text-sm font-medium text-foreground dark:text-white">
                           {player.name}
                         </div>
                         {player.injury && (
-                          <div className="text-xs text-red-600 dark:text-red-400">Injured</div>
+                          <div className="text-xs text-destructive dark:text-destructive">Injured</div>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground dark:text-muted-foreground">
                     {player.team ? (
                       <span className="inline-flex items-center gap-2" title={player.team}>
                         <TeamLogo team={player.team} size={18} withCircle decorative />
@@ -419,14 +419,14 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         player.position === 'DEF'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                          ? 'bg-info/10 text-info dark:bg-info dark:text-info'
                           : player.position === 'MID'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            ? 'bg-success/10 text-success dark:bg-success dark:text-success'
                             : player.position === 'FWD'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              ? 'bg-destructive/10 text-destructive dark:bg-destructive dark:text-destructive'
                               : player.position === 'RUC'
-                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                ? 'bg-primary/10 text-primary dark:bg-primary dark:text-primary'
+                                : 'bg-muted text-foreground dark:bg-muted dark:text-muted-foreground'
                       }`}
                     >
                       {player.position}
@@ -439,7 +439,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
                     const colorClass =
                       value !== undefined && value !== null && player.position
                         ? getStatColor(stat.key, value, player.position)
-                        : 'text-gray-500 dark:text-gray-300';
+                        : 'text-muted-foreground dark:text-muted-foreground';
 
                     return (
                       <td
@@ -462,7 +462,7 @@ export default function PlayerStatsTable({ players }: PlayerStatsTableProps) {
 
         {filteredAndSortedPlayers.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-muted-foreground dark:text-muted-foreground">
               No players match your search criteria.
             </p>
           </div>

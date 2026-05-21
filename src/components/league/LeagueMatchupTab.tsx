@@ -390,6 +390,7 @@ export default function LeagueMatchupTab({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staleError, setStaleError] = useState<string | null>(null);
   const [liveDeltas, setLiveDeltas] = useState<MatchupDelta[]>([]);
   const [playerDeltas, setPlayerDeltas] = useState<PlayerStatDelta[]>([]);
   const [leadChangeKeys, setLeadChangeKeys] = useState<string[]>([]);
@@ -431,10 +432,16 @@ export default function LeagueMatchupTab({
         if (!response.ok || !body?.success) {
           throw new Error(body?.error?.message || 'Failed to load matchup');
         }
+        if (!body.data) {
+          throw new Error('Matchup data is unavailable right now.');
+        }
         const nextData = body.data as MatchupPayload;
-        const deltas = buildMatchupDeltas(dataRef.current, nextData);
-        const nextPlayerDeltas = buildPlayerStatDeltas(dataRef.current, nextData);
-        const nextLeadChangeKeys = buildLeadChangeKeys(dataRef.current, nextData);
+        setStaleError(null);
+        const previousData = dataRef.current;
+        const deltas = buildMatchupDeltas(previousData, nextData);
+        const nextPlayerDeltas = buildPlayerStatDeltas(previousData, nextData);
+        const nextLeadChangeKeys = buildLeadChangeKeys(previousData, nextData);
+        dataRef.current = nextData;
         setData(nextData);
         if (nextLeadChangeKeys.length > 0) {
           setLeadChangeKeys(nextLeadChangeKeys);
@@ -453,8 +460,10 @@ export default function LeagueMatchupTab({
               : 'Failed to load matchup';
         if (!options?.background) {
           setData(null);
+          setError(message);
+        } else {
+          setStaleError(message);
         }
-        setError(message);
       } finally {
         window.clearTimeout(timeout);
         setRefreshing(false);
@@ -568,9 +577,11 @@ export default function LeagueMatchupTab({
     const handleMatchup = (event: MessageEvent<string>) => {
       try {
         const nextData = JSON.parse(event.data) as MatchupPayload;
-        const deltas = buildMatchupDeltas(dataRef.current, nextData);
-        const nextPlayerDeltas = buildPlayerStatDeltas(dataRef.current, nextData);
-        const nextLeadChangeKeys = buildLeadChangeKeys(dataRef.current, nextData);
+        const previousData = dataRef.current;
+        const deltas = buildMatchupDeltas(previousData, nextData);
+        const nextPlayerDeltas = buildPlayerStatDeltas(previousData, nextData);
+        const nextLeadChangeKeys = buildLeadChangeKeys(previousData, nextData);
+        dataRef.current = nextData;
         setData(nextData);
         if (nextLeadChangeKeys.length > 0) {
           setLeadChangeKeys(nextLeadChangeKeys);
@@ -648,7 +659,25 @@ export default function LeagueMatchupTab({
   }
 
   if (!data) {
-    return null;
+    return (
+      <div className={`${leagueSurfacePatterns.panelSection} p-8 text-center`}>
+        <p className="text-sm font-semibold text-[color:var(--league-text)]">
+          Matchup unavailable
+        </p>
+        <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
+          We could not load this matchup panel. Try refreshing the matchup.
+        </p>
+        <button
+          onClick={() => {
+            setLoading(true);
+            void fetchMatchup();
+          }}
+          className="mt-4 inline-flex items-center justify-center rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2 text-sm font-semibold text-[color:var(--league-text)] shadow-sm transition hover:bg-[color:var(--league-surface-muted)]"
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   const completedTeams = new Set(
@@ -729,7 +758,7 @@ export default function LeagueMatchupTab({
                 className={clsx(
                   'grid items-center gap-3 overflow-x-auto py-3 pl-4 pr-5 text-sm',
                   rowStateMeta.rowClassName,
-                  selectedCategoryKey && isTopContributor && 'ring-1 ring-inset ring-amber-300/70'
+                  selectedCategoryKey && isTopContributor && 'ring-1 ring-inset ring-warning'
                 )}
                 style={{
                   gridTemplateColumns: `minmax(180px,1.7fr) repeat(${data.categories.length}, minmax(88px, 0.75fr))`,
@@ -742,7 +771,7 @@ export default function LeagueMatchupTab({
                         {player.name}
                       </p>
                       {selectedCategoryKey && isTopContributor ? (
-                        <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 ring-1 ring-inset ring-amber-200/80">
+                        <span className="shrink-0 rounded-md bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning ring-1 ring-inset ring-warning">
                           Hot
                         </span>
                       ) : null}
@@ -804,7 +833,7 @@ export default function LeagueMatchupTab({
                     className={clsx(
                       'rounded-lg px-2 py-1 text-right transition',
                       selectedCategoryKey === category.key
-                        ? 'bg-slate-900 text-white shadow-sm'
+                        ? 'bg-foreground text-white shadow-sm'
                         : selectedCategoryKey
                           ? 'opacity-45'
                           : undefined
@@ -814,7 +843,7 @@ export default function LeagueMatchupTab({
                       className={clsx(
                         'text-[10px] uppercase tracking-wide',
                         selectedCategoryKey === category.key
-                          ? 'text-slate-300'
+                          ? 'text-muted-foreground'
                           : 'text-[color:var(--league-text-muted)]'
                       )}
                     >
@@ -830,11 +859,11 @@ export default function LeagueMatchupTab({
                             'inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold shadow-sm ring-1 ring-inset transition',
                             playerDeltaMap.get(`${player.id}:${category.key}`)!.value > 0
                               ? selectedCategoryKey === category.key
-                                ? 'bg-white/15 text-emerald-200 ring-white/10'
-                                : 'bg-emerald-100 text-emerald-700 ring-emerald-200'
+                                ? 'bg-white/15 text-success ring-white/10'
+                                : 'bg-success/10 text-success ring-success'
                               : selectedCategoryKey === category.key
-                                ? 'bg-white/15 text-rose-200 ring-white/10'
-                                : 'bg-rose-100 text-rose-700 ring-rose-200'
+                                ? 'bg-white/15 text-destructive ring-white/10'
+                                : 'bg-destructive/10 text-destructive ring-destructive'
                           )}
                         >
                           {playerDeltaMap.get(`${player.id}:${category.key}`)!.value > 0 ? '+' : ''}
@@ -864,6 +893,15 @@ export default function LeagueMatchupTab({
 
   return (
     <div className="space-y-7">
+      {staleError ? (
+        <div
+          role="status"
+          className={`rounded-2xl p-4 text-sm shadow-sm ${leagueStatusTonePatterns.warning}`}
+        >
+          Matchup refresh failed. Showing the last loaded matchup. {staleError}
+        </div>
+      ) : null}
+
       {embedded ? (
         <LeagueViewHeader
           eyebrow={data.roundLabel}
@@ -905,8 +943,8 @@ export default function LeagueMatchupTab({
                     className={clsx(
                       'inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold shadow-sm ring-1 ring-inset transition',
                       delta.value > 0
-                        ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                        : 'bg-rose-50 text-rose-700 ring-rose-200'
+                        ? 'bg-success/10 text-success ring-success'
+                        : 'bg-destructive/10 text-destructive ring-destructive'
                     )}
                   >
                     <span className="uppercase tracking-[0.2em]">{delta.label}</span>
@@ -917,7 +955,7 @@ export default function LeagueMatchupTab({
                   </span>
                 ))}
                 {lastChangeAt ? (
-                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                     {new Date(lastChangeAt).toLocaleTimeString('en-AU', {
                       hour: 'numeric',
                       minute: '2-digit',
@@ -930,17 +968,17 @@ export default function LeagueMatchupTab({
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-xl">
+        <div className="overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-foreground via-foreground to-info p-6 text-white shadow-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-blue-200/70">
+              <p className="text-xs uppercase tracking-[0.35em] text-info">
                 {data.roundLabel}
               </p>
               <h2 className="mt-2 text-3xl font-semibold">{matchupLeaderText}</h2>
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Live category scoring for Season {data.season}, Round {data.round}.
               </p>
-              <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-100/80">
+              <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-info">
                 <span className="rounded-full bg-white/10 px-3 py-1">
                   {data.home.teamName}: {homeProgress.played} played • {homeProgress.remaining}{' '}
                   remaining
@@ -950,7 +988,7 @@ export default function LeagueMatchupTab({
                   remaining
                 </span>
               </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-300">
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                 <span className="rounded-full bg-white/10 px-3 py-1 font-semibold">
                   {getStatusLabel(data.status, data.live)}
                 </span>
@@ -963,9 +1001,9 @@ export default function LeagueMatchupTab({
                     })}
                   </span>
                 ) : null}
-                {refreshing ? <span className="text-blue-200/80">Refreshing…</span> : null}
+                {refreshing ? <span className="text-info">Refreshing…</span> : null}
                 {hasLiveUpdate ? (
-                  <span className="rounded-full bg-emerald-400/15 px-3 py-1 font-semibold text-emerald-200 ring-1 ring-inset ring-emerald-300/30">
+                  <span className="rounded-full bg-success px-3 py-1 font-semibold text-success ring-1 ring-inset ring-success">
                     Live update
                   </span>
                 ) : null}
@@ -978,8 +1016,8 @@ export default function LeagueMatchupTab({
                       className={clsx(
                         'inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold shadow-sm ring-1 ring-inset transition',
                         delta.value > 0
-                          ? 'bg-emerald-400/15 text-emerald-100 ring-emerald-300/30'
-                          : 'bg-rose-400/15 text-rose-100 ring-rose-300/30'
+                          ? 'bg-success text-success ring-success'
+                          : 'bg-destructive text-destructive ring-destructive'
                       )}
                     >
                       <span className="uppercase tracking-[0.2em]">{delta.label}</span>
@@ -990,7 +1028,7 @@ export default function LeagueMatchupTab({
                     </span>
                   ))}
                   {lastChangeAt ? (
-                    <span className="text-xs uppercase tracking-[0.2em] text-blue-100/70">
+                    <span className="text-xs uppercase tracking-[0.2em] text-info">
                       {new Date(lastChangeAt).toLocaleTimeString('en-AU', {
                         hour: 'numeric',
                         minute: '2-digit',
@@ -1161,8 +1199,8 @@ export default function LeagueMatchupTab({
                 className={clsx(
                   'rounded-2xl border px-4 py-3 shadow-sm',
                   event.value > 0
-                    ? 'border-emerald-200 bg-emerald-50'
-                    : 'border-rose-200 bg-rose-50'
+                    ? 'border-success/20 bg-success/10'
+                    : 'border-destructive/20 bg-destructive/10'
                 )}
               >
                 <p className="font-semibold text-[color:var(--league-text)]">{event.playerName}</p>
@@ -1223,7 +1261,7 @@ export default function LeagueMatchupTab({
                   selectedCategoryKey === category.key &&
                     'ring-1 ring-[color:var(--league-text)] ring-offset-1 ring-offset-[color:var(--league-surface)]',
                   leadChangeKeys.includes(category.key) &&
-                    'animate-pulse ring-1 ring-amber-400/80 ring-offset-1 ring-offset-[color:var(--league-surface)]'
+                    'animate-pulse ring-1 ring-warning ring-offset-1 ring-offset-[color:var(--league-surface)]'
                 )}
               >
                 <div className="min-h-0 space-y-0.5">
@@ -1262,8 +1300,8 @@ export default function LeagueMatchupTab({
                           className={clsx(
                             'inline-flex shrink-0 items-center rounded-full px-1.5 py-px text-[10px] font-semibold ring-1 ring-inset transition',
                             liveDeltaMap.get(`${category.key}:home`)!.value > 0
-                              ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
-                              : 'bg-rose-100 text-rose-700 ring-rose-200'
+                              ? 'bg-success/10 text-success ring-success'
+                              : 'bg-destructive/10 text-destructive ring-destructive'
                           )}
                         >
                           {liveDeltaMap.get(`${category.key}:home`)!.value > 0 ? '+' : ''}
@@ -1287,8 +1325,8 @@ export default function LeagueMatchupTab({
                           className={clsx(
                             'inline-flex shrink-0 items-center rounded-full px-1.5 py-px text-[10px] font-semibold ring-1 ring-inset transition',
                             liveDeltaMap.get(`${category.key}:away`)!.value > 0
-                              ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
-                              : 'bg-rose-100 text-rose-700 ring-rose-200'
+                              ? 'bg-success/10 text-success ring-success'
+                              : 'bg-destructive/10 text-destructive ring-destructive'
                           )}
                         >
                           {liveDeltaMap.get(`${category.key}:away`)!.value > 0 ? '+' : ''}

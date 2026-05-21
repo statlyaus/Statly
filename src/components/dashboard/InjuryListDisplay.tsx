@@ -50,13 +50,13 @@ export default function InjuryListDisplay(props: InjuryListDisplayProps) {
   );
 
   const errorFallback = (
-    <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
-      <div className="font-semibold text-red-800">Failed to load injuries UI</div>
-      <div className="text-sm text-red-700 mt-1">Please check your connection and try again.</div>
+    <div className="p-4 border border-destructive/20 bg-destructive/10 rounded-lg">
+      <div className="font-semibold text-destructive">Failed to load injuries UI</div>
+      <div className="text-sm text-destructive mt-1">Please check your connection and try again.</div>
       <button
         type="button"
         onClick={() => (typeof window !== 'undefined' ? window.location.reload() : undefined)}
-        className="mt-3 inline-flex items-center px-3 py-1.5 text-sm rounded border border-red-300 text-red-800 hover:bg-red-100"
+        className="mt-3 inline-flex items-center px-3 py-1.5 text-sm rounded border border-destructive/20 text-destructive hover:bg-destructive/10"
       >
         Retry
       </button>

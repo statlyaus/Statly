@@ -94,7 +94,7 @@ export default function NewLeagueClient() {
             </UISelect>
           </FormField>
 
-          {error && <p className="text-red-500">{error}</p>}
+          {error && <p className="text-destructive">{error}</p>}
 
           <Button type="submit" disabled={isLoading} loading={isLoading}>
             {isLoading ? 'Creating...' : 'Create League'}

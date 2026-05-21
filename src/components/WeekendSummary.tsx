@@ -60,7 +60,7 @@ export const WeekendSummary = () => {
   }
 
   if (error) {
-    return <p className="text-red-500">{error}</p>;
+    return <p className="text-destructive">{error}</p>;
   }
 
   if (!summary) {
@@ -68,13 +68,13 @@ export const WeekendSummary = () => {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-      <div className="p-6 border-b border-gray-200">
+    <div className="bg-white rounded-lg border border-border shadow-sm">
+      <div className="p-6 border-b border-border">
         <h2 className="text-xl font-semibold">Weekend Wrap-Up</h2>
       </div>
       <div className="p-6 space-y-6">
         {/* Show text summary if available */}
-        {summary?.summary && <div className="text-gray-700 leading-relaxed">{summary.summary}</div>}
+        {summary?.summary && <div className="text-foreground leading-relaxed">{summary.summary}</div>}
 
         {/* Show structured data if available */}
         {(summary?.topPerformers || summary?.biggestUpset) && (
@@ -106,14 +106,14 @@ export const WeekendSummary = () => {
             {summary?.biggestUpset && (
               <div>
                 <h3 className="font-semibold text-lg mb-2">Biggest Upset</h3>
-                <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
+                <div className="flex justify-between items-center bg-muted p-3 rounded-md">
                   <div>
                     <p>
                       <span className="font-bold">{summary.biggestUpset.winner}</span> defeated
                     </p>
                     <p>{summary.biggestUpset.loser}</p>
                   </div>
-                  <p className="text-lg font-bold text-green-600">
+                  <p className="text-lg font-bold text-success">
                     by {summary.biggestUpset.margin}
                   </p>
                 </div>
@@ -124,7 +124,7 @@ export const WeekendSummary = () => {
 
         {/* Fallback message if no data */}
         {!summary?.summary && !summary?.topPerformers && !summary?.biggestUpset && (
-          <p className="text-gray-500 text-sm">No weekend summary available at this time.</p>
+          <p className="text-muted-foreground text-sm">No weekend summary available at this time.</p>
         )}
       </div>
     </div>

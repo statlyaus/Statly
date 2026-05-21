@@ -13,7 +13,7 @@ import dynamic from 'next/dynamic';
 const makePlaceholder = (minHeightPx: number) => {
   function LoadingPlaceholder() {
     return React.createElement('div', {
-      className: 'w-full rounded-lg border border-gray-200 bg-gray-50 animate-pulse',
+      className: 'w-full rounded-lg border border-border bg-muted animate-pulse',
       style: { minHeight: `${minHeightPx}px` },
       'aria-busy': true,
       'aria-live': 'polite',

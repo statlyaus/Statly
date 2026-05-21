@@ -8,7 +8,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { userProfileService } from '@/services/userProfileService';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const paramsSchema = z.object({
   userId: z.string().min(1, 'User ID is required'),
@@ -30,6 +34,14 @@ export async function GET(
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
     const { userId } = parsedParams.data;
+
+    const authUserId = await getAuthenticatedUserId(request);
+    if (!authUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (authUserId !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     logger.info('API: Getting user profile', { userId });
 
@@ -60,6 +72,15 @@ export async function PUT(
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
     const { userId } = parsedParams.data;
+
+    const authUserId = await getAuthenticatedUserId(request);
+    if (!authUserId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (authUserId !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const rawBody = (await request.json().catch(() => null)) as unknown;
     const parsedBody = updatesSchema.safeParse(rawBody);
     if (!parsedBody.success) {

@@ -47,6 +47,7 @@ type DraftDeltaType = DraftRealtimeDelta['type'] | 'SNAPSHOT';
 
 export interface DraftDelta {
   type: DraftDeltaType;
+  eventId?: string;
   payload: DraftRealtimeDelta['payload'] | DraftSnapshot;
   ts?: number;
 }
@@ -66,7 +67,7 @@ export interface DraftWatchlistItem {
   };
 }
 
-interface DraftState {
+export interface DraftState {
   draft: DraftCore | null;
   participants: DraftParticipant[];
   picks: DraftPick[];
@@ -78,6 +79,7 @@ interface DraftState {
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
+  appliedEventIds: string[];
 }
 
 interface DraftContextValue extends DraftState {
@@ -459,14 +461,24 @@ type Action =
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_ERROR'; error: string | null };
 
-function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
+export function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
   const ts = delta.ts ?? Date.now();
+  const eventId = typeof delta.eventId === 'string' ? delta.eventId : null;
+
+  if (eventId && state.appliedEventIds.includes(eventId)) {
+    return state;
+  }
+
   let next = { ...state, connection: { ...state.connection, lastEventAt: ts } };
+  const markApplied = (updated: DraftState): DraftState =>
+    eventId
+      ? { ...updated, appliedEventIds: [...updated.appliedEventIds, eventId].slice(-200) }
+      : updated;
 
   switch (delta.type) {
     case 'SNAPSHOT': {
       const snap = normalizeSnapshot(delta.payload as DraftSnapshot);
-      return {
+      return markApplied({
         ...next,
         draft: snap.draft,
         participants: snap.participants,
@@ -479,7 +491,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         error: null,
         isLoading: false,
         connection: { ...next.connection, lastEventAt: snap.ts ?? ts },
-      };
+      });
     }
     case 'PICK_MADE': {
       const rawPick = (delta.payload as { pick?: unknown })?.pick;
@@ -501,7 +513,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
           ? participant.queue.filter((queuedId) => String(queuedId) !== pid)
           : [],
       }));
-      return { ...next, picks, availablePlayers, participants };
+      return markApplied({ ...next, picks, availablePlayers, participants });
     }
     case 'QUEUE_UPDATED': {
       const { memberId, userId, queue } = delta.payload as {
@@ -515,16 +527,16 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
           ? { ...m, queue: Array.isArray(queue) ? queue : [] }
           : m
       );
-      return { ...next, participants };
+      return markApplied({ ...next, participants });
     }
     case 'TIMER_EXPIRED': {
-      return {
+      return markApplied({
         ...next,
         liveState: {
           ...(next.liveState ?? {}),
           timeRemaining: 0,
         },
-      };
+      });
     }
     case 'STATE_PATCH': {
       const { draft: draftPatch, liveState: livePatch } = (delta.payload ?? {}) as {
@@ -532,7 +544,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         liveState?: DraftLiveState;
       };
       const normalizedLivePatch = normalizeLiveState(livePatch);
-      return {
+      return markApplied({
         ...next,
         draft: mergeDraftSnapshot(
           next.draft,
@@ -545,7 +557,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         liveState: livePatch
           ? { ...(next.liveState ?? {}), ...normalizedLivePatch }
           : next.liveState,
-      };
+      });
     }
     default:
       return next;
@@ -707,6 +719,7 @@ export function DraftProvider({
       isLoading: !initialSnapshot,
       isSaving: false,
       error: null,
+      appliedEventIds: [],
     };
   }, [initialSnapshot]);
 

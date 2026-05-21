@@ -97,8 +97,8 @@ export default function DraftSettingsClient() {
       <AppLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign in Required</h1>
-            <p className="text-gray-600">Please sign in to manage your draft settings.</p>
+            <h1 className="text-2xl font-bold text-foreground mb-4">Sign in Required</h1>
+            <p className="text-muted-foreground">Please sign in to manage your draft settings.</p>
           </div>
         </div>
       </AppLayout>
@@ -109,24 +109,24 @@ export default function DraftSettingsClient() {
     <AppLayout>
       <main className="mx-auto max-w-4xl p-6">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Draft Settings</h1>
-          <p className="text-gray-600 mt-2">Customize your draft experience and preferences.</p>
+          <h1 className="text-3xl font-bold text-foreground">Draft Settings</h1>
+          <p className="text-muted-foreground mt-2">Customize your draft experience and preferences.</p>
         </header>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner />
-            <span className="ml-3 text-gray-600">Loading settings...</span>
+            <span className="ml-3 text-muted-foreground">Loading settings...</span>
           </div>
         ) : (
           <div className="space-y-8">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Auto-Pick Settings</h2>
+            <div className="bg-white rounded-lg shadow-sm border border-border p-6">
+              <h2 className="text-xl font-semibold text-foreground mb-4">Auto-Pick Settings</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Enable Auto-Pick</label>
-                    <p className="text-sm text-gray-500">
+                    <label className="text-sm font-medium text-foreground">Enable Auto-Pick</label>
+                    <p className="text-sm text-muted-foreground">
                       Automatically pick players when your time runs out
                     </p>
                   </div>
@@ -159,15 +159,15 @@ export default function DraftSettingsClient() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Notification Settings</h2>
+            <div className="bg-white rounded-lg shadow-sm border border-border p-6">
+              <h2 className="text-xl font-semibold text-foreground mb-4">Notification Settings</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">
+                    <label className="text-sm font-medium text-foreground">
                       Enable Notifications
                     </label>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       Receive browser notifications during drafts
                     </p>
                   </div>
@@ -183,8 +183,8 @@ export default function DraftSettingsClient() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Enable Sound</label>
-                    <p className="text-sm text-gray-500">Play sounds for draft events</p>
+                    <label className="text-sm font-medium text-foreground">Enable Sound</label>
+                    <p className="text-sm text-muted-foreground">Play sounds for draft events</p>
                   </div>
                   <UISwitch
                     checked={preferences.soundEnabled}
@@ -196,8 +196,8 @@ export default function DraftSettingsClient() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Default Draft Settings</h2>
+            <div className="bg-white rounded-lg shadow-sm border border-border p-6">
+              <h2 className="text-xl font-semibold text-foreground mb-4">Default Draft Settings</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField label="Default Time Per Pick">
                   <UISelect
@@ -244,7 +244,7 @@ export default function DraftSettingsClient() {
 
             {message && (
               <div
-                className={`rounded-md p-3 text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
+                className={`rounded-md p-3 text-sm ${message.type === 'success' ? 'bg-success/10 text-success border border-success/20' : 'bg-destructive/10 text-destructive border border-destructive/20'}`}
               >
                 {message.text}
               </div>

@@ -147,7 +147,7 @@ export default function TimezoneAwareDraftForm({
             </option>
           ))}
         </UISelect>
-        <div className="mt-1 text-xs text-gray-500">
+        <div className="mt-1 text-xs text-muted-foreground">
           Current time: {currentTimezoneInfo.currentTime} ({currentTimezoneInfo.name})
         </div>
       </FormField>
@@ -159,7 +159,7 @@ export default function TimezoneAwareDraftForm({
           onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
           min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
         />
-        <div className="mt-1 text-xs text-gray-500">
+        <div className="mt-1 text-xs text-muted-foreground">
           Leave empty to start lobby immediately with draft beginning in 5 minutes. Time will be
           converted to {currentTimezoneInfo.name}.
         </div>
@@ -169,14 +169,14 @@ export default function TimezoneAwareDraftForm({
             <button
               type="button"
               onClick={() => setShowOptimalTimes(!showOptimalTimes)}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-sm text-info hover:text-info"
             >
               {showOptimalTimes ? 'Hide' : 'Show'} optimal times for all participants
             </button>
 
             {showOptimalTimes && (
-              <div className="mt-2 p-3 bg-blue-50 rounded-md">
-                <div className="text-sm font-medium text-blue-900 mb-2">
+              <div className="mt-2 p-3 bg-info/10 rounded-md">
+                <div className="text-sm font-medium text-info mb-2">
                   Suggested times (based on participant timezones):
                 </div>
                 <div className="space-y-2">
@@ -186,7 +186,7 @@ export default function TimezoneAwareDraftForm({
                         <div className="font-medium">
                           {formatInTimezone(suggestion.time, formData.timeZone, 'PPP p')}
                         </div>
-                        <div className="text-xs text-gray-600">
+                        <div className="text-xs text-muted-foreground">
                           {suggestion.scores
                             .map(
                               (score: any) => `${score.timeZone.split('/')[1]}: ${score.localTime}`
@@ -197,7 +197,7 @@ export default function TimezoneAwareDraftForm({
                       <button
                         type="button"
                         onClick={() => handleOptimalTimeSelect(suggestion.time)}
-                        className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                        className="text-xs bg-info text-white px-2 py-1 rounded hover:bg-info"
                       >
                         Use This Time
                       </button>
@@ -229,7 +229,7 @@ export default function TimezoneAwareDraftForm({
             checked={formData.enableReminders}
             onChange={(e) => setFormData({ ...formData, enableReminders: e.target.checked })}
           />
-          <span className="ml-2 text-sm text-gray-700">
+          <span className="ml-2 text-sm text-foreground">
             Send email reminders (24h, 2h, 30m, 15m before draft)
           </span>
         </label>
@@ -239,7 +239,7 @@ export default function TimezoneAwareDraftForm({
         <Button
           type="submit"
           disabled={isLoading}
-          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="bg-info text-white px-6 py-2 rounded-md hover:bg-info disabled:opacity-50"
         >
           {isLoading ? 'Creating Draft...' : 'Create Draft'}
         </Button>

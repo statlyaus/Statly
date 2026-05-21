@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
+import { syncLeagueWaiverRealtimeProjection } from '@/server/league/services/waiverRealtimeProjection';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ const paramsSchema = z.object({
 });
 
 const bodySchema = z.object({
-  teamId: z.string().min(1),
+  teamId: z.string().min(1).optional(),
   playerId: z.string().min(1),
   dropPlayerId: z.string().min(1).optional(),
   priority: z.number().int().positive().optional().default(1),
@@ -57,22 +58,21 @@ export const POST = withMetrics(
       const userId = await getAuthenticatedUserId(req);
       if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+      const membership = await verifyLeagueMembership(leagueId, userId);
+      if (!membership.isMember) {
+        return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
+      }
+
       const body = (await req.json().catch(() => null)) as unknown;
       const parsedBody = bodySchema.safeParse(body);
       if (!parsedBody.success) {
         return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
       }
 
-      const membership = await verifyLeagueMembership(leagueId, userId);
-      if (!membership.isMember) {
-        return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
-      }
-
-      const { teamId, playerId, dropPlayerId, priority, bidAmount } = parsedBody.data;
+      const { playerId, dropPlayerId, priority, bidAmount } = parsedBody.data;
       const claim = await leagueApplicationService.submitWaiverClaim({
         leagueId,
         userId,
-        teamId,
         playerId,
         dropPlayerId,
         priority,
@@ -82,10 +82,12 @@ export const POST = withMetrics(
       logger.info('waiver submitted', {
         leagueId,
         userId,
-        teamId,
+        teamId: claim.teamId,
         playerId,
         claimId: claim.id,
       });
+
+      await syncLeagueWaiverRealtimeProjection({ leagueId });
 
       try {
         const results = await Promise.allSettled([

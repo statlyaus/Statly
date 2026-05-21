@@ -123,21 +123,25 @@ export interface DraftTimerExpiredDeltaPayload {
 export type DraftRealtimeDelta =
   | {
       type: 'PICK_MADE';
+      eventId: string;
       payload: { pick: DraftPickEventPayload };
       ts: number;
     }
   | {
       type: 'QUEUE_UPDATED';
+      eventId: string;
       payload: DraftQueueUpdatedDeltaPayload;
       ts: number;
     }
   | {
       type: 'STATE_PATCH';
+      eventId: string;
       payload: DraftStatePatchDeltaPayload;
       ts: number;
     }
   | {
       type: 'TIMER_EXPIRED';
+      eventId: string;
       payload: DraftTimerExpiredDeltaPayload;
       ts: number;
     };

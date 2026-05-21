@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import type { TradeDetails, TradeStatus, TradeSummary } from '@/components/trades/tradeApi';
+import type {
+  TradeDetails,
+  TradeReviewAction,
+  TradeStatus,
+  TradeSummary,
+} from '@/components/trades/tradeApi';
 import { actOnTrade } from '@/components/trades/tradeApi';
 import {
   createRequestId,
@@ -13,6 +18,7 @@ import {
   fetchTradeDetails,
   isHttp404Error,
   type LeagueMember,
+  submitTradeReviewAction,
   submitTradeRequest,
 } from '@/components/trades/tradeDataService';
 import { formatPlayerDisplay, resolvePlayerMeta } from '@/components/trades/tradePlayerUtils';
@@ -36,6 +42,19 @@ type UseLeagueTradesParams = {
 type StatsContainer = {
   stats?: Record<string, unknown>;
 };
+
+type ReviewActionLoading = TradeReviewAction | null;
+
+function canManageReviewForRole(role: string | null | undefined): boolean {
+  const normalized = String(role ?? '').toUpperCase();
+  return normalized === 'OWNER' || normalized === 'COMMISSIONER';
+}
+
+function hasReviewWindowClosed(reviewWindowEndsAt: string | undefined): boolean {
+  if (!reviewWindowEndsAt) return false;
+  const timestamp = new Date(reviewWindowEndsAt).getTime();
+  return Number.isFinite(timestamp) && timestamp <= Date.now();
+}
 
 function sumByKeys(
   players: StatsContainer[],
@@ -98,6 +117,7 @@ export function useLeagueTrades({
   const [actionLoading, setActionLoading] = useState(false);
   const [actionType, setActionType] = useState<'accept' | 'decline' | 'cancel' | null>(null);
   const [actionTradeId, setActionTradeId] = useState<string | null>(null);
+  const [reviewActionLoading, setReviewActionLoading] = useState<ReviewActionLoading>(null);
   const [inboxStatusFilter, setInboxStatusFilter] = useState<'ALL' | 'PROPOSED' | 'COMPLETED'>(
     'ALL'
   );
@@ -184,11 +204,39 @@ export function useLeagueTrades({
   const isRecipient = selectedTrade?.recipientUserId === currentUserId;
   const isPending = selectedTrade ? isTradeAwaitingManagerAction(selectedTrade) : false;
   const isReviewPending = selectedTrade?.status === 'REVIEW_PENDING';
+  const currentLeagueMember = leagueMembers.find((member) => member.userId === currentUserId);
+  const canManageSelectedReview = canManageReviewForRole(currentLeagueMember?.role);
+  const hasCurrentUserVetoed = Boolean(
+    currentUserId &&
+      selectedDetails?.reviewVotes?.some(
+        (vote) => vote.voterUserId === currentUserId && vote.voteType === 'VETO'
+      )
+  );
 
   const acceptEnabled = Boolean(isRecipient && isPending);
   const declineEnabled = Boolean(isRecipient && isPending);
   const cancelEnabled = Boolean(isProposer && (isPending || isReviewPending));
   const counterEnabled = Boolean(isRecipient && isPending);
+  const approveReviewEnabled = Boolean(
+    selectedTrade?.status === 'REVIEW_PENDING' &&
+      selectedTrade.reviewMode === 'ADMIN' &&
+      canManageSelectedReview
+  );
+  const rejectReviewEnabled = approveReviewEnabled;
+  const finalizeReviewEnabled = Boolean(
+    selectedTrade?.status === 'REVIEW_PENDING' &&
+      selectedTrade.reviewMode === 'VETO' &&
+      canManageSelectedReview &&
+      hasReviewWindowClosed(selectedTrade.reviewWindowEndsAt)
+  );
+  const vetoReviewEnabled = Boolean(
+    selectedTrade?.status === 'REVIEW_PENDING' &&
+      selectedTrade.reviewMode === 'VETO' &&
+      currentLeagueMember &&
+      !isProposer &&
+      !isRecipient &&
+      !hasCurrentUserVetoed
+  );
 
   const outgoingPlayers = rosterPlayers.filter((player) => outgoingIds.includes(player.id));
   const incomingPlayers = recipientRosterPlayers.filter((player) =>
@@ -618,6 +666,13 @@ export function useLeagueTrades({
             : trade
         )
       );
+      try {
+        await refreshTrade(tradeId);
+        const list = await fetchLeagueTrades(leagueId);
+        setTrades(list);
+      } catch {
+        // Keep the original action failure visible; polling or manual refresh can recover later.
+      }
       setError(mapTradeUiError(err, 'Trade action failed.'));
     } finally {
       setActionLoading(false);
@@ -629,6 +684,26 @@ export function useLeagueTrades({
   const runAction = async (action: 'accept' | 'decline' | 'cancel') => {
     if (!selectedTrade) return;
     await runActionForTrade(selectedTrade.tradeId, action);
+  };
+
+  const runReviewAction = async (action: TradeReviewAction) => {
+    if (!selectedTrade) return;
+
+    setSelectedTradeId(selectedTrade.tradeId);
+    setReviewActionLoading(action);
+    setError(null);
+
+    try {
+      const requestId = createRequestId();
+      await submitTradeReviewAction({ tradeId: selectedTrade.tradeId, action, requestId });
+      await refreshTrade(selectedTrade.tradeId);
+      const list = await fetchLeagueTrades(leagueId);
+      setTrades(list);
+    } catch (err) {
+      setError(mapTradeUiError(err, 'Trade review action failed.'));
+    } finally {
+      setReviewActionLoading(null);
+    }
   };
 
   const submitTrade = async () => {
@@ -778,6 +853,17 @@ export function useLeagueTrades({
     runAction,
     runActionForTrade,
     beginCounter,
+    reviewControls: {
+      approveEnabled: approveReviewEnabled,
+      rejectEnabled: rejectReviewEnabled,
+      vetoEnabled: vetoReviewEnabled,
+      finalizeEnabled: finalizeReviewEnabled,
+      loadingAction: reviewActionLoading,
+      onApprove: () => runReviewAction('approve-review'),
+      onReject: () => runReviewAction('reject-review'),
+      onVeto: () => runReviewAction('veto'),
+      onFinalize: () => runReviewAction('finalize-review'),
+    },
 
     createOptionsLoading,
     createSubmitting,

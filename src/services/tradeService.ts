@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 
 import {
+  LeagueRole,
   Prisma,
   TradeActionType,
   TradeErrorCode,
@@ -51,6 +52,10 @@ export interface TradeActionResult {
   executedAt?: string;
   reviewStatus?: TradeReviewStatus;
   reviewWindowEndsAt?: string;
+}
+
+export function canManageTradeReviewForRole(role: LeagueRole | string | null | undefined) {
+  return role === LeagueRole.OWNER || role === LeagueRole.COMMISSIONER;
 }
 
 type TradeWithItems = Prisma.TradeGetPayload<{
@@ -547,6 +552,7 @@ export const tradeService = {
   async approveTradeReview(params: TradeActionParams) {
     return prisma.$transaction(async (tx) => {
       const trade = await loadTradeForMutation(tx, params.tradeId);
+      await assertTradeReviewManager(tx, trade, params.actorUserId);
       if (trade.status !== TradeStatus.REVIEW_PENDING) {
         throw new TradeServiceError(
           TradeErrorCode.TRADE_INVALID_TRANSITION,
@@ -578,6 +584,7 @@ export const tradeService = {
   async rejectTradeReview(params: TradeActionParams) {
     return prisma.$transaction(async (tx) => {
       const trade = await loadTradeForMutation(tx, params.tradeId);
+      await assertTradeReviewManager(tx, trade, params.actorUserId);
       if (trade.status !== TradeStatus.REVIEW_PENDING) {
         throw new TradeServiceError(
           TradeErrorCode.TRADE_INVALID_TRANSITION,
@@ -744,6 +751,7 @@ export const tradeService = {
   async finalizeTradeReview(params: TradeActionParams) {
     return prisma.$transaction(async (tx) => {
       const trade = await loadTradeForMutation(tx, params.tradeId);
+      await assertTradeReviewManager(tx, trade, params.actorUserId);
       if (trade.status !== TradeStatus.REVIEW_PENDING) {
         return toTradeActionResult(trade);
       }
@@ -1597,6 +1605,29 @@ async function assertTradeReviewVoter(
     throw new TradeServiceError(
       TradeErrorCode.TRADE_FORBIDDEN,
       'Only league members can review this trade.'
+    );
+  }
+}
+
+async function assertTradeReviewManager(
+  tx: Prisma.TransactionClient,
+  trade: TradeWithItems,
+  actorUserId: string
+) {
+  const membership = await tx.leagueMember.findFirst({
+    where: {
+      leagueId: trade.leagueId,
+      userId: actorUserId,
+    },
+    select: {
+      role: true,
+    },
+  });
+
+  if (!canManageTradeReviewForRole(membership?.role)) {
+    throw new TradeServiceError(
+      TradeErrorCode.TRADE_FORBIDDEN,
+      'Only league owners and commissioners can manage trade reviews.'
     );
   }
 }

@@ -99,21 +99,21 @@ export default function TradeCreatePanel({
 }: TradeCreatePanelProps): ReactElement {
   return (
     <section aria-label="Create trade" className="min-w-0">
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100">
-        <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+      <div className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm divide-y divide-slate-100">
+        <div className="border-b border-border bg-muted px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Create Trade</p>
-              <h2 className="text-2xl font-semibold text-gray-900">Build a new offer</h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Create Trade</p>
+              <h2 className="text-2xl font-semibold text-foreground">Build a new offer</h2>
+              <p className="text-sm text-muted-foreground">
                 Select a recipient and the players you want to swap.
               </p>
             </div>
-            <label className="text-sm font-semibold text-slate-700">
+            <label className="text-sm font-semibold text-foreground">
               Recipient
               <select
                 className={`mt-2 w-full min-w-[220px] rounded-md border bg-white px-3 py-1.5 text-sm ${
-                  missingRecipient ? 'border-amber-300' : 'border-slate-200'
+                  missingRecipient ? 'border-warning/20' : 'border-border'
                 }`}
                 value={recipientUserId}
                 onChange={(event) => {
@@ -130,7 +130,7 @@ export default function TradeCreatePanel({
                   </option>
                 ))}
               </select>
-              <span className="mt-2 block text-xs text-slate-500">
+              <span className="mt-2 block text-xs text-muted-foreground">
                 {missingRecipient
                   ? 'Pick a manager first to load incoming options.'
                   : `Trading with ${selectedRecipientName ?? 'selected manager'}.`}
@@ -168,8 +168,8 @@ export default function TradeCreatePanel({
 
         <div className="px-6 py-7 space-y-8">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase text-slate-400">Columns</span>
-            <span className="text-xs text-slate-500">League defaults: {defaultKeys.length}</span>
+            <span className="text-xs font-semibold uppercase text-muted-foreground">Columns</span>
+            <span className="text-xs text-muted-foreground">League defaults: {defaultKeys.length}</span>
             {allKeys.map((key) => (
               <button
                 type="button"
@@ -177,8 +177,8 @@ export default function TradeCreatePanel({
                 onClick={() => toggleKey(key)}
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
                   visibleKeys.includes(key)
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-700'
+                    ? 'bg-foreground text-white'
+                    : 'bg-muted text-foreground'
                 }`}
               >
                 {labels[key]?.short ?? labels[key]?.label ?? key}
@@ -191,11 +191,11 @@ export default function TradeCreatePanel({
             </div>
           ) : null}
           {counterParentTradeId ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">
               <span>Counter offer mode</span>
               <button
                 type="button"
-                className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                className="rounded-md border border-border px-2 py-1 text-xs font-semibold text-foreground hover:bg-muted"
                 onClick={onClearCounter}
               >
                 Clear counter
@@ -211,22 +211,22 @@ export default function TradeCreatePanel({
           ) : null}
 
           <div className="grid gap-5 xl:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white">
-              <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+            <div className="rounded-2xl border border-border bg-white">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Your roster</p>
-                  <p className="text-sm font-semibold text-slate-800">Players you send</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Your roster</p>
+                  <p className="text-sm font-semibold text-foreground">Players you send</p>
                 </div>
-                <span className="text-xs text-slate-500">{outgoingIds.length} selected</span>
+                <span className="text-xs text-muted-foreground">{outgoingIds.length} selected</span>
               </div>
               <div className="max-h-128 overflow-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+                  <thead className="sticky top-0 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">
+                      <th className="sticky left-0 z-20 bg-muted px-3 py-2 text-left font-semibold">
                         Pick
                       </th>
-                      <th className="sticky left-12 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">
+                      <th className="sticky left-12 z-20 bg-muted px-3 py-2 text-left font-semibold">
                         Name
                       </th>
                       {visibleKeys.map((category) => (
@@ -240,25 +240,25 @@ export default function TradeCreatePanel({
                     {createOptionsLoading ? (
                       <tr>
                         <td colSpan={2 + visibleKeys.length} className="px-3 py-4">
-                          <span className="text-slate-400">Loading roster…</span>
+                          <span className="text-muted-foreground">Loading roster…</span>
                         </td>
                       </tr>
                     ) : rosterPlayers.length === 0 ? (
                       <tr>
                         <td colSpan={2 + visibleKeys.length} className="px-3 py-4">
-                          <span className="text-slate-400">No roster players loaded.</span>
+                          <span className="text-muted-foreground">No roster players loaded.</span>
                         </td>
                       </tr>
                     ) : (
                       rosterPlayers.map((player) => (
-                        <tr key={player.id} className="border-t border-slate-100">
+                        <tr key={player.id} className="border-t border-border">
                           <td className="sticky left-0 z-10 bg-white px-3 py-3">
                             {(() => {
                               const name = displayPlayerName(player);
                               return (
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                                  className="h-4 w-4 rounded border-border text-foreground"
                                   checked={outgoingIds.includes(player.id)}
                                   onChange={() => onToggleOutgoing(player.id)}
                                   disabled={!currentUserId || createSubmitting}
@@ -268,17 +268,17 @@ export default function TradeCreatePanel({
                             })()}
                           </td>
                           <td className="sticky left-12 z-10 bg-white px-3 py-3">
-                            <div className="font-semibold text-slate-800">
+                            <div className="font-semibold text-foreground">
                               {displayPlayerName(player)}
                             </div>
-                            <div className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
+                            <div className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
                               {player.position ? (
                                 <span className="rounded-full bg-[color:var(--league-accent-soft)] px-2 py-0.5 font-semibold text-[color:var(--league-accent)]">
                                   {player.position}
                                 </span>
                               ) : null}
                               {player.team ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-1 pr-2 font-semibold text-slate-700">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-muted py-0.5 pl-1 pr-2 font-semibold text-foreground">
                                   <TeamLogo team={player.team} size={14} withCircle decorative />
                                   {player.team}
                                 </span>
@@ -286,7 +286,7 @@ export default function TradeCreatePanel({
                             </div>
                           </td>
                           {visibleKeys.map((category) => (
-                            <td key={category} className="px-3 py-3 text-right text-slate-600">
+                            <td key={category} className="px-3 py-3 text-right text-muted-foreground">
                               {formatStatValue(player.stats?.[category])}
                             </td>
                           ))}
@@ -297,7 +297,7 @@ export default function TradeCreatePanel({
                 </table>
               </div>
               <p
-                className={`px-3 py-2 text-xs ${missingOutgoing ? 'text-amber-700' : 'text-slate-500'}`}
+                className={`px-3 py-2 text-xs ${missingOutgoing ? 'text-warning' : 'text-muted-foreground'}`}
               >
                 {missingOutgoing
                   ? 'Select at least one player from your roster.'
@@ -305,22 +305,22 @@ export default function TradeCreatePanel({
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white">
-              <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+            <div className="rounded-2xl border border-border bg-white">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Their roster</p>
-                  <p className="text-sm font-semibold text-slate-800">Players you receive</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Their roster</p>
+                  <p className="text-sm font-semibold text-foreground">Players you receive</p>
                 </div>
-                <span className="text-xs text-slate-500">{incomingIds.length} selected</span>
+                <span className="text-xs text-muted-foreground">{incomingIds.length} selected</span>
               </div>
               <div className="max-h-128 overflow-auto">
                 <table className="min-w-full text-xs">
-                  <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+                  <thead className="sticky top-0 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">
+                      <th className="sticky left-0 z-20 bg-muted px-3 py-2 text-left font-semibold">
                         Pick
                       </th>
-                      <th className="sticky left-12 z-20 bg-slate-50 px-3 py-2 text-left font-semibold">
+                      <th className="sticky left-12 z-20 bg-muted px-3 py-2 text-left font-semibold">
                         Name
                       </th>
                       {visibleKeys.map((category) => (
@@ -334,31 +334,31 @@ export default function TradeCreatePanel({
                     {!recipientUserId ? (
                       <tr>
                         <td colSpan={2 + visibleKeys.length} className="px-3 py-4">
-                          <span className="text-slate-400">Select a recipient first.</span>
+                          <span className="text-muted-foreground">Select a recipient first.</span>
                         </td>
                       </tr>
                     ) : recipientRosterLoading ? (
                       <tr>
                         <td colSpan={2 + visibleKeys.length} className="px-3 py-4">
-                          <span className="text-slate-400">Loading roster…</span>
+                          <span className="text-muted-foreground">Loading roster…</span>
                         </td>
                       </tr>
                     ) : recipientRosterPlayers.length === 0 ? (
                       <tr>
                         <td colSpan={2 + visibleKeys.length} className="px-3 py-4">
-                          <span className="text-slate-400">No roster players loaded.</span>
+                          <span className="text-muted-foreground">No roster players loaded.</span>
                         </td>
                       </tr>
                     ) : (
                       recipientRosterPlayers.map((player) => (
-                        <tr key={player.id} className="border-t border-slate-100">
+                        <tr key={player.id} className="border-t border-border">
                           <td className="sticky left-0 z-10 bg-white px-3 py-3">
                             {(() => {
                               const name = displayPlayerName(player);
                               return (
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                                  className="h-4 w-4 rounded border-border text-foreground"
                                   checked={incomingIds.includes(player.id)}
                                   onChange={() => onToggleIncoming(player.id)}
                                   disabled={
@@ -370,17 +370,17 @@ export default function TradeCreatePanel({
                             })()}
                           </td>
                           <td className="sticky left-12 z-10 bg-white px-3 py-3">
-                            <div className="font-semibold text-slate-800">
+                            <div className="font-semibold text-foreground">
                               {displayPlayerName(player)}
                             </div>
-                            <div className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
+                            <div className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
                               {player.position ? (
                                 <span className="rounded-full bg-[color:var(--league-accent-soft)] px-2 py-0.5 font-semibold text-[color:var(--league-accent)]">
                                   {player.position}
                                 </span>
                               ) : null}
                               {player.team ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-1 pr-2 font-semibold text-slate-700">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-muted py-0.5 pl-1 pr-2 font-semibold text-foreground">
                                   <TeamLogo team={player.team} size={14} withCircle decorative />
                                   {player.team}
                                 </span>
@@ -388,7 +388,7 @@ export default function TradeCreatePanel({
                             </div>
                           </td>
                           {visibleKeys.map((category) => (
-                            <td key={category} className="px-3 py-3 text-right text-slate-600">
+                            <td key={category} className="px-3 py-3 text-right text-muted-foreground">
                               {formatStatValue(player.stats?.[category])}
                             </td>
                           ))}
@@ -399,12 +399,12 @@ export default function TradeCreatePanel({
                 </table>
               </div>
               {recipientRosterError ? (
-                <p className="px-3 py-2 text-xs font-normal text-rose-600">
+                <p className="px-3 py-2 text-xs font-normal text-destructive">
                   {recipientRosterError}
                 </p>
               ) : null}
               <p
-                className={`px-3 py-2 text-xs ${missingIncoming ? 'text-amber-700' : 'text-slate-500'}`}
+                className={`px-3 py-2 text-xs ${missingIncoming ? 'text-warning' : 'text-muted-foreground'}`}
               >
                 {missingRecipient
                   ? 'Select a recipient to choose incoming players.'
@@ -415,28 +415,28 @@ export default function TradeCreatePanel({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Trade Impact</p>
-              <p className="text-sm font-semibold text-slate-800">You send vs you receive</p>
+          <div className="rounded-2xl border border-border bg-white">
+            <div className="border-b border-border px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Trade Impact</p>
+              <p className="text-sm font-semibold text-foreground">You send vs you receive</p>
             </div>
             <div className="px-4 py-4 space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-slate-500">You send</p>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">You send</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {outgoingPlayers.length === 0 ? (
-                      <span className="text-xs text-slate-400">No players selected.</span>
+                      <span className="text-xs text-muted-foreground">No players selected.</span>
                     ) : (
                       outgoingPlayers.map((player) => (
                         <div
                           key={player.id}
-                          className="flex min-w-[160px] flex-col rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm"
+                          className="flex min-w-[160px] flex-col rounded-xl border border-border bg-muted px-3 py-2 shadow-sm"
                         >
-                          <span className="text-sm font-semibold text-slate-800">
+                          <span className="text-sm font-semibold text-foreground">
                             {displayPlayerName(player)}
                           </span>
-                          <span className="text-[11px] text-slate-500">
+                          <span className="text-[11px] text-muted-foreground">
                             {formatPlayerMeta(player)}
                           </span>
                         </div>
@@ -445,17 +445,17 @@ export default function TradeCreatePanel({
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase text-slate-500">You receive</p>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">You receive</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {incomingPlayers.length === 0 ? (
-                      <span className="text-xs text-slate-400">No players selected.</span>
+                      <span className="text-xs text-muted-foreground">No players selected.</span>
                     ) : (
                       incomingPlayers.map((player) => (
                         <div
                           key={player.id}
                           className="flex min-w-[160px] flex-col rounded-xl border border-[color:var(--league-accent-soft)] bg-[color:var(--league-accent-soft)] px-3 py-2 shadow-sm"
                         >
-                          <span className="text-sm font-semibold text-slate-800">
+                          <span className="text-sm font-semibold text-foreground">
                             {displayPlayerName(player)}
                           </span>
                           <span className="text-[11px] text-[color:var(--league-accent)]">
@@ -469,19 +469,19 @@ export default function TradeCreatePanel({
               </div>
 
               {visibleKeys.length === 0 ? (
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-muted-foreground">
                   No stat columns selected for this league.
                 </div>
               ) : (
                 <>
-                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                    <span className="font-medium text-slate-500">Net impact</span>
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-muted-foreground">Net impact</span>
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${getDeltaClass(createNetImpact.net)}`}
                     >
                       {createNetImpact.label}
                     </span>
-                    <span className="text-slate-500">across selected stats</span>
+                    <span className="text-muted-foreground">across selected stats</span>
                   </div>
                   <div className="mb-4 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border border-[color:var(--league-success-soft)] bg-[color:var(--league-success-soft)] p-3">
@@ -505,17 +505,17 @@ export default function TradeCreatePanel({
                         )}
                       </div>
                     </div>
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700">
+                    <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-destructive">
                         Top risks
                       </p>
                       <div className="mt-2 space-y-1 text-xs">
                         {createTopRisks.length === 0 ? (
-                          <p className="text-rose-700/70">No negative category change.</p>
+                          <p className="text-destructive">No negative category change.</p>
                         ) : (
                           createTopRisks.map((row) => (
                             <div key={row.key} className="flex items-center justify-between">
-                              <span className="font-medium text-rose-900">
+                              <span className="font-medium text-destructive">
                                 {labels[row.key]?.label ?? row.key}
                               </span>
                               <span className="font-semibold">{formatStatValue(row.delta)}</span>
@@ -526,12 +526,12 @@ export default function TradeCreatePanel({
                     </div>
                   </div>
                   <details>
-                    <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       Full category table
                     </summary>
                     <div className="mt-3 max-h-64 overflow-auto">
                       <table className="min-w-full text-xs">
-                        <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+                        <thead className="sticky top-0 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground">
                           <tr>
                             <th className="px-4 py-2 text-left font-semibold">Category</th>
                             <th className="px-4 py-2 text-right font-semibold">You send</th>
@@ -548,9 +548,9 @@ export default function TradeCreatePanel({
                           {visibleKeys.map((category) => {
                             const delta = createImpact.deltaTotals[category] ?? 0;
                             return (
-                              <tr key={category} className="border-t border-slate-100">
+                              <tr key={category} className="border-t border-border">
                                 <td
-                                  className="px-4 py-2 text-slate-700"
+                                  className="px-4 py-2 text-foreground"
                                   title={
                                     category === 'inside50s'
                                       ? 'Inside 50 entries per game'
@@ -559,10 +559,10 @@ export default function TradeCreatePanel({
                                 >
                                   {labels[category]?.label ?? category}
                                 </td>
-                                <td className="px-4 py-2 text-right text-slate-600">
+                                <td className="px-4 py-2 text-right text-muted-foreground">
                                   {formatStatValue(createImpact.outTotals[category])}
                                 </td>
-                                <td className="px-4 py-2 text-right text-slate-600">
+                                <td className="px-4 py-2 text-right text-muted-foreground">
                                   {formatStatValue(createImpact.inTotals[category])}
                                 </td>
                                 <td className="px-4 py-2 text-right font-semibold">
@@ -592,8 +592,8 @@ export default function TradeCreatePanel({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-            <p className={`text-xs ${submitDisabled ? 'text-amber-700' : 'text-slate-500'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+            <p className={`text-xs ${submitDisabled ? 'text-warning' : 'text-muted-foreground'}`}>
               {missingRecipient
                 ? 'Choose a recipient to continue.'
                 : missingOutgoing
@@ -605,7 +605,7 @@ export default function TradeCreatePanel({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted"
                 onClick={onClearPlayers}
                 disabled={createSubmitting}
               >
@@ -613,7 +613,7 @@ export default function TradeCreatePanel({
               </button>
               <button
                 type="button"
-                className="rounded-md bg-[color:var(--league-primary)] px-5 py-2 text-sm font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                className="rounded-md bg-[color:var(--league-primary)] px-5 py-2 text-sm font-semibold text-white disabled:bg-muted disabled:text-muted-foreground"
                 disabled={submitDisabled}
                 onClick={onRequestSubmit}
               >

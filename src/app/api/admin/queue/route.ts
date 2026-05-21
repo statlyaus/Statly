@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { authorizeAdminRequest } from '@/lib/operationalAuth';
 import { draftQueue } from '@/server/queue/draftQueue';
 
 interface QueueStats {
@@ -34,6 +35,9 @@ interface QueueHealth {
 }
 
 export async function GET(request: NextRequest) {
+  const authorization = authorizeAdminRequest(request);
+  if (!authorization.ok) return authorization.response;
+
   try {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
@@ -338,6 +342,9 @@ async function getQueueOverview() {
 
 // POST endpoint for queue management actions
 export async function POST(request: NextRequest) {
+  const authorization = authorizeAdminRequest(request);
+  if (!authorization.ok) return authorization.response;
+
   try {
     const body = await request.json();
     const { action, jobId, data } = body;

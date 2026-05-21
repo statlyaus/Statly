@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { DEV_FIXTURE_MANIFEST, isDevFixtureScenarioId } from './manifest';
 import { formatRunResult, formatScenarioList } from './report';
 import { assertNotProduction } from './safety';
-import type { DevFixtureCliOptions, DevFixtureCommand } from './types';
+import type { DevFixtureCliOptions, DevFixtureCommand, DevFixtureRunResult } from './types';
 
 function isDevFixtureCommand(value: string): value is DevFixtureCommand {
   return value === 'list' || value === 'apply' || value === 'verify' || value === 'reset';
@@ -12,7 +12,9 @@ function isDevFixtureCommand(value: string): value is DevFixtureCommand {
 export function parseDevFixtureCliArgs(argv: string[]): DevFixtureCliOptions {
   const [commandValue, scenarioValue, ...rest] = argv;
   if (!commandValue || !isDevFixtureCommand(commandValue)) {
-    throw new Error('Usage: npm run dev:fixtures -- <list|apply|verify|reset> [scenario] [--json] [--fixture-owned]');
+    throw new Error(
+      'Usage: npm run dev:fixtures -- <list|apply|verify|reset> [scenario] [--json] [--fixture-owned]'
+    );
   }
 
   const scenarioId =
@@ -37,12 +39,30 @@ export function parseDevFixtureCliArgs(argv: string[]): DevFixtureCliOptions {
 }
 
 export async function runDevFixtures(options: DevFixtureCliOptions) {
+  const result = await runDevFixturesForCli(options);
+  return result.output;
+}
+
+export async function runDevFixturesForCli(options: DevFixtureCliOptions) {
   if (options.command === 'list') {
-    return formatScenarioList();
+    return {
+      output: formatScenarioList(),
+      exitCode: 0,
+    };
   }
 
-  assertNotProduction();
+  const result = await runDevFixtureScenario(options);
+  const output =
+    options.outputFormat === 'json' ? JSON.stringify(result, null, 2) : formatRunResult(result);
 
+  return {
+    output,
+    exitCode: options.command === 'verify' && !result.ok ? 1 : 0,
+  };
+}
+
+async function runDevFixtureScenario(options: DevFixtureCliOptions): Promise<DevFixtureRunResult> {
+  assertNotProduction();
   if (!options.scenarioId) {
     throw new Error('Scenario is required.');
   }
@@ -56,7 +76,7 @@ export async function runDevFixtures(options: DevFixtureCliOptions) {
         ? await scenario.verify()
         : await scenario.reset({ fixtureOwned: options.fixtureOwned });
 
-  return options.outputFormat === 'json' ? JSON.stringify(result, null, 2) : formatRunResult(result);
+  return result;
 }
 
 export async function disconnectDevFixtureRunner() {

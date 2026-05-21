@@ -9,9 +9,15 @@ import { getClientEnv } from '@/lib/envClient';
 import { parseHostPort, DEFAULTS } from '@/lib/firebaseEmulator';
 import { info, time, timeEnd } from '@/lib/logger';
 
-import type { FirebaseApp } from 'firebase/app';
-import type { Auth } from 'firebase/auth';
-import type { Firestore } from 'firebase/firestore';
+import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
+import {
+  browserLocalPersistence,
+  connectAuthEmulator,
+  getAuth,
+  setPersistence,
+  type Auth,
+} from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore, type Firestore } from 'firebase/firestore';
 
 let _app: FirebaseApp | null = null;
 let _auth: Auth | null = null;
@@ -47,10 +53,6 @@ function assertBrowserEnv() {
 function ensureApp(): FirebaseApp {
   assertBrowserEnv();
   if (_app) return _app;
-  // Lazy-require to avoid SSR evaluating ESM imports
-
-  const appMod = require('firebase/app') as typeof import('firebase/app');
-  const { getApps, getApp, initializeApp } = appMod;
   time('firebaseClient:init');
   _app = getApps().length
     ? getApp()
@@ -77,8 +79,6 @@ function ensureAuth(): Auth {
   if (_auth) return _auth;
   const app = ensureApp();
 
-  const { getAuth, browserLocalPersistence, setPersistence } =
-    require('firebase/auth') as typeof import('firebase/auth');
   _auth = getAuth(app);
   // Keep auth state in local storage for SPA experience; don’t block if it fails.
   try {
@@ -88,7 +88,6 @@ function ensureAuth(): Auth {
   // Optional: connect to local emulators in dev
   if (getClientEnv().NEXT_PUBLIC_USE_EMULATORS === 'true' && !_authEmuConnected) {
     try {
-      const { connectAuthEmulator } = require('firebase/auth') as typeof import('firebase/auth');
       const { host, port } = parseHostPort(
         getClientEnv().NEXT_PUBLIC_AUTH_EMULATOR_HOST,
         DEFAULTS.auth
@@ -105,9 +104,10 @@ function ensureAuth(): Auth {
 
 function ensureDb(): Firestore {
   if (_db) return _db;
+  if (getClientEnv().NEXT_PUBLIC_USE_EMULATORS === 'true') {
+    ensureAuth();
+  }
   const app = ensureApp();
-  const { getFirestore, connectFirestoreEmulator } =
-    require('firebase/firestore') as typeof import('firebase/firestore');
   _db = getFirestore(app);
 
   // Optional: connect to local emulators in dev

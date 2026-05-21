@@ -6,11 +6,11 @@
 import React, { useState, useMemo } from 'react';
 
 import {
-  MagnifyingGlassIcon,
-  ArrowsUpDownIcon,
-  SignalIcon,
-  ExclamationTriangleIcon,
-} from '@heroicons/react/24/outline';
+  Search as MagnifyingGlassIcon,
+  ArrowUpDown as ArrowsUpDownIcon,
+  Signal as SignalIcon,
+  TriangleAlert as ExclamationTriangleIcon,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { TeamLogo } from '@/components/TeamLogo';
@@ -200,13 +200,13 @@ export default function PlayerAnalysisWithLiveData({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-foreground via-info to-info p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header with Live Data Status */}
         <div className="flex justify-between items-start mb-8">
           <div>
             <h1 className="text-4xl font-bold text-white mb-4">Player Analysis {isLive && '🔴'}</h1>
-            <p className="text-xl text-slate-300">
+            <p className="text-xl text-muted-foreground">
               Advanced analytics powered by {isLive ? 'live' : 'historical'} data
             </p>
           </div>
@@ -214,21 +214,23 @@ export default function PlayerAnalysisWithLiveData({
           {/* Live Data Status Indicator */}
           <div
             className={`p-4 rounded-lg ${
-              isLive
-                ? 'bg-green-900/50 border border-green-500'
-                : 'bg-slate-800/50 border border-slate-600'
+              isLive ? 'bg-success border border-success/20' : 'bg-muted border border-border'
             }`}
           >
             <div className="flex items-center space-x-2">
-              <SignalIcon className={`w-5 h-5 ${isLive ? 'text-green-400' : 'text-slate-400'}`} />
+              <SignalIcon
+                className={`w-5 h-5 ${isLive ? 'text-success' : 'text-muted-foreground'}`}
+              />
               <div>
                 <p className="text-white font-medium">{isLive ? 'Live Data' : 'Historical Data'}</p>
                 {lastUpdate && (
-                  <p className="text-slate-300 text-sm">
+                  <p className="text-muted-foreground text-sm">
                     Updated: {new Date(lastUpdate).toLocaleTimeString()}
                   </p>
                 )}
-                <p className="text-slate-400 text-xs">{transformedPlayers.length} players loaded</p>
+                <p className="text-muted-foreground text-xs">
+                  {transformedPlayers.length} players loaded
+                </p>
               </div>
             </div>
           </div>
@@ -237,17 +239,17 @@ export default function PlayerAnalysisWithLiveData({
         {/* Loading State */}
         {isLoading && (
           <div className="text-center py-12">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-slate-300">Loading player data from Firebase...</p>
+            <div className="animate-spin w-8 h-8 border-4 border-info/20 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading player data from Firebase...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-900/50 border border-red-500 p-4 rounded-lg mb-6">
+          <div className="bg-destructive border border-destructive/20 p-4 rounded-lg mb-6">
             <div className="flex items-center space-x-2">
-              <ExclamationTriangleIcon className="w-5 h-5 text-red-400" />
-              <p className="text-red-200">
+              <ExclamationTriangleIcon className="w-5 h-5 text-destructive" />
+              <p className="text-destructive">
                 <strong>Error loading data:</strong> {error}
               </p>
             </div>
@@ -257,7 +259,7 @@ export default function PlayerAnalysisWithLiveData({
         {!isLoading && !error && (
           <>
             {/* Controls */}
-            <div className="bg-slate-800/50 rounded-lg p-6 mb-6 backdrop-blur-sm">
+            <div className="bg-muted rounded-lg p-6 mb-6 backdrop-blur-sm">
               {/* View Mode Toggle */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex space-x-2">
@@ -265,8 +267,8 @@ export default function PlayerAnalysisWithLiveData({
                     onClick={() => setViewMode('analysis')}
                     className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                       viewMode === 'analysis'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        ? 'bg-info text-white'
+                        : 'bg-muted text-muted-foreground hover:bg-muted'
                     }`}
                   >
                     Analysis
@@ -276,8 +278,8 @@ export default function PlayerAnalysisWithLiveData({
                       onClick={() => setViewMode('comparison')}
                       className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                         viewMode === 'comparison'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          ? 'bg-info text-white'
+                          : 'bg-muted text-muted-foreground hover:bg-muted'
                       }`}
                     >
                       Compare ({selectedPlayers.length})
@@ -287,8 +289,8 @@ export default function PlayerAnalysisWithLiveData({
 
                 {/* Live Match Indicator */}
                 {liveMatches.length > 0 && (
-                  <div className="bg-green-900/50 border border-green-500 px-3 py-1 rounded-lg">
-                    <span className="text-green-300 text-sm">
+                  <div className="bg-success border border-success/20 px-3 py-1 rounded-lg">
+                    <span className="text-success text-sm">
                       🏈 {liveMatches.length} live match{liveMatches.length !== 1 ? 'es' : ''}
                     </span>
                   </div>
@@ -299,13 +301,13 @@ export default function PlayerAnalysisWithLiveData({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Search */}
                 <div className="relative">
-                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <input
                     type="text"
                     placeholder="Search players..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 bg-muted border border-border rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-info"
                   />
                 </div>
 
@@ -313,7 +315,7 @@ export default function PlayerAnalysisWithLiveData({
                 <select
                   value={positionFilter}
                   onChange={(e) => setPositionFilter(e.target.value)}
-                  className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 bg-muted border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-info"
                 >
                   <option value="all">All Positions</option>
                   {positions.map((position) => (
@@ -327,7 +329,7 @@ export default function PlayerAnalysisWithLiveData({
                 <select
                   value={teamFilter}
                   onChange={(e) => setTeamFilter(e.target.value)}
-                  className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 bg-muted border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-info"
                 >
                   <option value="all">All Teams</option>
                   {teams.map((team) => (
@@ -343,7 +345,7 @@ export default function PlayerAnalysisWithLiveData({
                   onChange={(e) =>
                     setSortBy(e.target.value as 'fantasyScore' | 'name' | 'team' | 'lastUpdated')
                   }
-                  className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 bg-muted border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-info"
                 >
                   <option value="fantasyScore">Fantasy Score</option>
                   <option value="name">Name</option>
@@ -354,7 +356,7 @@ export default function PlayerAnalysisWithLiveData({
                 {/* Sort Order */}
                 <button
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="flex items-center justify-center px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex items-center justify-center px-4 py-2 bg-muted border border-border rounded-lg text-white hover:bg-muted focus:outline-none focus:ring-2 focus:ring-info"
                 >
                   <ArrowsUpDownIcon className="w-4 h-4 mr-2" />
                   {sortOrder === 'asc' ? 'Asc' : 'Desc'}
@@ -372,10 +374,8 @@ export default function PlayerAnalysisWithLiveData({
                     key={player.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`bg-slate-800/50 rounded-lg p-6 backdrop-blur-sm border-2 transition-all cursor-pointer ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-900/30'
-                        : 'border-slate-700 hover:border-slate-600'
+                    className={`bg-muted rounded-lg p-6 backdrop-blur-sm border-2 transition-all cursor-pointer ${
+                      isSelected ? 'border-info/20 bg-info' : 'border-border hover:border-border'
                     }`}
                     onClick={() => {
                       togglePlayerSelection(player);
@@ -386,7 +386,7 @@ export default function PlayerAnalysisWithLiveData({
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="text-lg font-bold text-white">{player.name}</h3>
-                        <p className="flex flex-wrap items-center gap-2 text-slate-300">
+                        <p className="flex flex-wrap items-center gap-2 text-muted-foreground">
                           {player.team ? (
                             <TeamLogo team={player.team} size={18} withCircle decorative />
                           ) : null}
@@ -396,37 +396,37 @@ export default function PlayerAnalysisWithLiveData({
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl font-bold text-blue-400">{player.fantasyScore}</p>
-                        <p className="text-slate-400 text-sm">Fantasy Score</p>
+                        <p className="text-2xl font-bold text-info">{player.fantasyScore}</p>
+                        <p className="text-muted-foreground text-sm">Fantasy Score</p>
                       </div>
                     </div>
 
                     {/* Key Stats */}
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
-                        <p className="text-slate-400 text-sm">Disposals</p>
+                        <p className="text-muted-foreground text-sm">Disposals</p>
                         <p className="text-white font-medium">{player.seasonStats.disposals}</p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm">Goals</p>
+                        <p className="text-muted-foreground text-sm">Goals</p>
                         <p className="text-white font-medium">{player.seasonStats.goals}</p>
                       </div>
                     </div>
 
                     {/* Data Source Info */}
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-500">
+                      <span className="text-muted-foreground">
                         Round {player.round} • {player.source}
                       </span>
-                      <span className="text-slate-500">
+                      <span className="text-muted-foreground">
                         {new Date(player.lastUpdated).toLocaleDateString()}
                       </span>
                     </div>
 
                     {/* Selection Indicator */}
                     {isSelected && (
-                      <div className="mt-3 p-2 bg-blue-600/50 rounded-lg">
-                        <p className="text-blue-200 text-sm text-center">Selected for comparison</p>
+                      <div className="mt-3 p-2 bg-info rounded-lg">
+                        <p className="text-info text-sm text-center">Selected for comparison</p>
                       </div>
                     )}
                   </motion.div>
@@ -441,15 +441,15 @@ export default function PlayerAnalysisWithLiveData({
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-8 bg-slate-800/50 rounded-lg p-6 backdrop-blur-sm"
+                  className="mt-8 bg-muted rounded-lg p-6 backdrop-blur-sm"
                 >
                   <h2 className="text-2xl font-bold text-white mb-6">Player Comparison</h2>
 
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-slate-600">
-                          <th className="text-left p-3 text-slate-300">Metric</th>
+                        <tr className="border-b border-border">
+                          <th className="text-left p-3 text-muted-foreground">Metric</th>
                           {selectedPlayers.map((player) => (
                             <th key={player.id} className="text-left p-3 text-white">
                               {player.name}
@@ -458,32 +458,32 @@ export default function PlayerAnalysisWithLiveData({
                         </tr>
                       </thead>
                       <tbody>
-                        <tr className="border-b border-slate-700">
-                          <td className="p-3 text-slate-300">Fantasy Score</td>
+                        <tr className="border-b border-border">
+                          <td className="p-3 text-muted-foreground">Fantasy Score</td>
                           {selectedPlayers.map((player) => (
-                            <td key={player.id} className="p-3 text-blue-400 font-bold">
+                            <td key={player.id} className="p-3 text-info font-bold">
                               {player.fantasyScore}
                             </td>
                           ))}
                         </tr>
-                        <tr className="border-b border-slate-700">
-                          <td className="p-3 text-slate-300">Disposals</td>
+                        <tr className="border-b border-border">
+                          <td className="p-3 text-muted-foreground">Disposals</td>
                           {selectedPlayers.map((player) => (
                             <td key={player.id} className="p-3 text-white">
                               {player.seasonStats.disposals}
                             </td>
                           ))}
                         </tr>
-                        <tr className="border-b border-slate-700">
-                          <td className="p-3 text-slate-300">Goals</td>
+                        <tr className="border-b border-border">
+                          <td className="p-3 text-muted-foreground">Goals</td>
                           {selectedPlayers.map((player) => (
-                            <td key={player.id} className="p-3 text-green-400">
+                            <td key={player.id} className="p-3 text-success">
                               {player.seasonStats.goals}
                             </td>
                           ))}
                         </tr>
-                        <tr className="border-b border-slate-700">
-                          <td className="p-3 text-slate-300">Tackles</td>
+                        <tr className="border-b border-border">
+                          <td className="p-3 text-muted-foreground">Tackles</td>
                           {selectedPlayers.map((player) => (
                             <td key={player.id} className="p-3 text-white">
                               {player.seasonStats.tackles}
@@ -499,7 +499,7 @@ export default function PlayerAnalysisWithLiveData({
 
             {/* Results Summary */}
             <div className="mt-6 text-center">
-              <p className="text-slate-400">
+              <p className="text-muted-foreground">
                 Showing {Math.min(filteredPlayers.length, 12)} of {filteredPlayers.length} players
                 {searchTerm && ` matching "${searchTerm}"`}
               </p>

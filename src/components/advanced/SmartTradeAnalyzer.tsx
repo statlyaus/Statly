@@ -128,19 +128,19 @@ export default function SmartTradeAnalyzer({
   };
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return 'text-green-600';
-    if (confidence >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    if (confidence >= 80) return 'text-success';
+    if (confidence >= 60) return 'text-warning';
+    return 'text-destructive';
   };
 
   const getInjuryRiskColor = (risk: Player['injuryRisk']) => {
     switch (risk) {
       case 'low':
-        return 'text-green-600';
+        return 'text-success';
       case 'medium':
-        return 'text-yellow-600';
+        return 'text-warning';
       case 'high':
-        return 'text-red-600';
+        return 'text-destructive';
     }
   };
 
@@ -161,13 +161,13 @@ export default function SmartTradeAnalyzer({
       <motion.div
         layout
         className={`bg-white rounded-lg border-2 p-4 cursor-pointer transition-all ${
-          isSelected ? 'border-blue-500 shadow-lg' : 'border-gray-200 hover:border-gray-300'
+          isSelected ? 'border-info/20 shadow-lg' : 'border-border hover:border-border'
         }`}
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="font-semibold text-gray-900">{player.name}</div>
-            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+            <div className="font-semibold text-foreground">{player.name}</div>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               {player.team ? <TeamLogo team={player.team} size={16} withCircle decorative /> : null}
               <span>{player.team}</span>
               <Badge variant="outline" size="sm">
@@ -176,24 +176,24 @@ export default function SmartTradeAnalyzer({
             </div>
           </div>
           <div className="text-right">
-            <div className="text-lg font-bold text-blue-600">{player.averageScore}</div>
-            <div className="text-xs text-gray-500">Avg</div>
+            <div className="text-lg font-bold text-info">{player.averageScore}</div>
+            <div className="text-xs text-muted-foreground">Avg</div>
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-3 text-sm mb-3">
           <div>
-            <div className="text-gray-500">Price</div>
+            <div className="text-muted-foreground">Price</div>
             <div className="font-medium">${(player.price / 1000).toFixed(0)}k</div>
           </div>
           <div>
-            <div className="text-gray-500">Ownership</div>
+            <div className="text-muted-foreground">Ownership</div>
             <div className="font-medium">{player.ownership}%</div>
           </div>
           <div>
-            <div className="text-gray-500">Form</div>
+            <div className="text-muted-foreground">Form</div>
             <div
-              className={`font-medium ${formTrend > 0 ? 'text-green-600' : formTrend < 0 ? 'text-red-600' : 'text-gray-600'}`}
+              className={`font-medium ${formTrend > 0 ? 'text-success' : formTrend < 0 ? 'text-destructive' : 'text-muted-foreground'}`}
             >
               {formTrend > 0 ? '📈' : formTrend < 0 ? '📉' : '➡️'}
             </div>
@@ -202,7 +202,7 @@ export default function SmartTradeAnalyzer({
 
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-1">
-            <span className="text-gray-500">Risk:</span>
+            <span className="text-muted-foreground">Risk:</span>
             <span className={getInjuryRiskColor(player.injuryRisk)}>{player.injuryRisk}</span>
           </div>
           <div className="flex -space-x-1">
@@ -211,10 +211,10 @@ export default function SmartTradeAnalyzer({
                 key={idx}
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
                   fixture.difficulty <= 2
-                    ? 'bg-green-100 text-green-700'
+                    ? 'bg-success/10 text-success'
                     : fixture.difficulty === 3
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-red-100 text-red-700'
+                      ? 'bg-warning/10 text-warning'
+                      : 'bg-destructive/10 text-destructive'
                 }`}
                 title={`Round ${fixture.round} vs ${fixture.opponent} (${fixture.venue})`}
               >
@@ -233,16 +233,16 @@ export default function SmartTradeAnalyzer({
       layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
+      className="bg-white rounded-lg border border-border p-6 hover:shadow-md transition-shadow"
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <span className="text-2xl">{getTradeTypeIcon(recommendation.type)}</span>
           <div>
-            <div className="font-semibold text-gray-900 capitalize">
+            <div className="font-semibold text-foreground capitalize">
               {recommendation.type} Trade
             </div>
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted-foreground">
               {recommendation.playerOut.name} → {recommendation.playerIn.name}
             </div>
           </div>
@@ -251,47 +251,47 @@ export default function SmartTradeAnalyzer({
           <div className={`text-lg font-bold ${getConfidenceColor(recommendation.confidence)}`}>
             {recommendation.confidence}%
           </div>
-          <div className="text-xs text-gray-500">Confidence</div>
+          <div className="text-xs text-muted-foreground">Confidence</div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="space-y-2">
-          <div className="text-sm font-medium text-gray-700">Out</div>
+          <div className="text-sm font-medium text-foreground">Out</div>
           {renderPlayerCard(recommendation.playerOut)}
         </div>
         <div className="space-y-2">
-          <div className="text-sm font-medium text-gray-700">In</div>
+          <div className="text-sm font-medium text-foreground">In</div>
           {renderPlayerCard(recommendation.playerIn)}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+      <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-muted rounded-lg">
         <div className="text-center">
-          <div className="text-lg font-bold text-blue-600">
+          <div className="text-lg font-bold text-info">
             {recommendation.costDifference > 0 ? '+' : ''}$
             {(recommendation.costDifference / 1000).toFixed(0)}k
           </div>
-          <div className="text-xs text-gray-500">Cost Impact</div>
+          <div className="text-xs text-muted-foreground">Cost Impact</div>
         </div>
         <div className="text-center">
-          <div className="text-lg font-bold text-green-600">
+          <div className="text-lg font-bold text-success">
             +{recommendation.projectedScoreGain.toFixed(1)}
           </div>
-          <div className="text-xs text-gray-500">Projected Gain</div>
+          <div className="text-xs text-muted-foreground">Projected Gain</div>
         </div>
         <div className="text-center">
-          <div className="text-lg font-bold text-yellow-600">{recommendation.riskScore}/5</div>
-          <div className="text-xs text-gray-500">Risk Score</div>
+          <div className="text-lg font-bold text-warning">{recommendation.riskScore}/5</div>
+          <div className="text-xs text-muted-foreground">Risk Score</div>
         </div>
       </div>
 
       <div className="mb-4">
-        <div className="text-sm font-medium text-gray-700 mb-2">Analysis</div>
+        <div className="text-sm font-medium text-foreground mb-2">Analysis</div>
         <ul className="space-y-1">
           {recommendation.reasoning.map((reason, idx) => (
-            <li key={idx} className="text-sm text-gray-600 flex items-start gap-2">
-              <span className="text-green-500 mt-0.5">✓</span>
+            <li key={idx} className="text-sm text-muted-foreground flex items-start gap-2">
+              <span className="text-success mt-0.5">✓</span>
               {reason}
             </li>
           ))}
@@ -304,7 +304,7 @@ export default function SmartTradeAnalyzer({
           setSelectedPlayerOut(recommendation.playerOut);
           setSelectedPlayerIn(recommendation.playerIn);
         }}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+        className="w-full bg-info hover:bg-info text-white py-2 px-4 rounded-lg font-medium transition-colors"
       >
         Execute Trade
       </button>
@@ -325,18 +325,18 @@ export default function SmartTradeAnalyzer({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Smart Trade Analyzer</h1>
-          <p className="text-gray-600 mt-1">AI-powered trade recommendations and analysis</p>
+          <h1 className="text-3xl font-bold text-foreground">Smart Trade Analyzer</h1>
+          <p className="text-muted-foreground mt-1">AI-powered trade recommendations and analysis</p>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="text-sm">
-            <span className="text-gray-500">Available Trades:</span>
-            <span className="font-semibold text-blue-600 ml-1">{availableTrades}</span>
+            <span className="text-muted-foreground">Available Trades:</span>
+            <span className="font-semibold text-info ml-1">{availableTrades}</span>
           </div>
           <div className="text-sm">
-            <span className="text-gray-500">Budget:</span>
-            <span className="font-semibold text-green-600 ml-1">
+            <span className="text-muted-foreground">Budget:</span>
+            <span className="font-semibold text-success ml-1">
               ${(budget / 1000).toFixed(0)}k
             </span>
           </div>
@@ -345,8 +345,8 @@ export default function SmartTradeAnalyzer({
 
       {/* Analysis Type Selector */}
       <div className="flex items-center gap-4 mb-6">
-        <span className="text-sm font-medium text-gray-700">Analysis Focus:</span>
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+        <span className="text-sm font-medium text-foreground">Analysis Focus:</span>
+        <div className="flex space-x-1 bg-muted p-1 rounded-lg">
           {[
             { id: 'short-term', label: 'Next 3 Rounds' },
             { id: 'long-term', label: 'Rest of Season' },
@@ -356,8 +356,8 @@ export default function SmartTradeAnalyzer({
               onClick={() => setAnalysisType(option.id as typeof analysisType)}
               className={`px-4 py-2 rounded-md font-medium transition-colors ${
                 analysisType === option.id
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white text-info shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {option.label}
@@ -367,7 +367,7 @@ export default function SmartTradeAnalyzer({
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6">
+      <div className="flex space-x-1 bg-muted p-1 rounded-lg mb-6">
         {[
           { id: 'recommendations', label: 'AI Recommendations' },
           { id: 'analyzer', label: 'Manual Analyzer' },
@@ -378,8 +378,8 @@ export default function SmartTradeAnalyzer({
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-info shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab.label}
@@ -400,8 +400,8 @@ export default function SmartTradeAnalyzer({
               <div className="space-y-6">{mockRecommendations.map(renderRecommendationCard)}</div>
             ) : (
               <div className="text-center py-12">
-                <div className="text-gray-400 text-lg mb-2">No recommendations available</div>
-                <div className="text-gray-500">Your team looks optimized for now!</div>
+                <div className="text-muted-foreground text-lg mb-2">No recommendations available</div>
+                <div className="text-muted-foreground">Your team looks optimized for now!</div>
               </div>
             )}
           </motion.div>
@@ -415,8 +415,8 @@ export default function SmartTradeAnalyzer({
             exit={{ opacity: 0, y: -20 }}
             className="text-center py-12"
           >
-            <div className="text-gray-400 text-lg mb-2">Manual Trade Analyzer</div>
-            <div className="text-gray-500">Select players to analyze potential trades</div>
+            <div className="text-muted-foreground text-lg mb-2">Manual Trade Analyzer</div>
+            <div className="text-muted-foreground">Select players to analyze potential trades</div>
           </motion.div>
         )}
 
@@ -428,8 +428,8 @@ export default function SmartTradeAnalyzer({
             exit={{ opacity: 0, y: -20 }}
             className="text-center py-12"
           >
-            <div className="text-gray-400 text-lg mb-2">Player Comparison Tool</div>
-            <div className="text-gray-500">Compare up to 4 players side by side</div>
+            <div className="text-muted-foreground text-lg mb-2">Player Comparison Tool</div>
+            <div className="text-muted-foreground">Compare up to 4 players side by side</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -439,25 +439,25 @@ export default function SmartTradeAnalyzer({
         {selectedPlayerOut && selectedPlayerIn && (
           <div className="space-y-4">
             <div className="text-center">
-              <div className="text-lg font-semibold text-gray-900 mb-2">
+              <div className="text-lg font-semibold text-foreground mb-2">
                 {selectedPlayerOut.name} → {selectedPlayerIn.name}
               </div>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 This will use 1 of your {availableTrades} available trades
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4">
+            <div className="bg-muted rounded-lg p-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <div className="text-gray-500">Cost Impact</div>
+                  <div className="text-muted-foreground">Cost Impact</div>
                   <div className="font-medium">
                     ${((selectedPlayerIn.price - selectedPlayerOut.price) / 1000).toFixed(0)}k
                   </div>
                 </div>
                 <div>
-                  <div className="text-gray-500">Projected Gain</div>
-                  <div className="font-medium text-green-600">
+                  <div className="text-muted-foreground">Projected Gain</div>
+                  <div className="font-medium text-success">
                     +{(selectedPlayerIn.averageScore - selectedPlayerOut.averageScore).toFixed(1)}{' '}
                     pts
                   </div>
@@ -468,13 +468,13 @@ export default function SmartTradeAnalyzer({
             <div className="flex gap-3">
               <button
                 onClick={modal.close}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="flex-1 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-muted"
               >
                 Cancel
               </button>
               <button
                 onClick={executeTrade}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="flex-1 px-4 py-2 bg-info text-white rounded-lg hover:bg-info"
               >
                 Confirm Trade
               </button>

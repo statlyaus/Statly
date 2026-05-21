@@ -268,13 +268,13 @@ export default function DraftLobby({
 
   if (isLoading && !lobbyState) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <div className="text-center max-w-md">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"></div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading Draft Lobby</h2>
-          <p className="text-gray-600 mb-4">Preparing your draft experience...</p>
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <p className="text-sm text-gray-500">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-info/20 mx-auto mb-6"></div>
+          <h2 className="text-xl font-semibold text-foreground mb-2">Loading Draft Lobby</h2>
+          <p className="text-muted-foreground mb-4">Preparing your draft experience...</p>
+          <div className="bg-white rounded-lg p-4 border border-border">
+            <p className="text-sm text-muted-foreground">
               Draft ID: <span className="font-mono">{draftId}</span>
             </p>
           </div>
@@ -285,11 +285,11 @@ export default function DraftLobby({
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <div className="max-w-md w-full">
           <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-            <div className="text-red-500 text-5xl mb-4">⚠️</div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Connection Error</h2>
+            <div className="text-destructive text-5xl mb-4">⚠️</div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">Connection Error</h2>
             <Alert type="error" className="mb-6 text-left">
               {error}
             </Alert>
@@ -301,20 +301,20 @@ export default function DraftLobby({
                   setIsLoading(true);
                   fetchLobbyData();
                 }}
-                className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                className="w-full bg-info text-white px-4 py-3 rounded-lg hover:bg-info font-medium transition-colors"
               >
                 🔄 Try Again
               </button>
               <button
                 onClick={() => void startDraftNow()}
-                className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 font-medium transition-colors"
+                className="w-full bg-success text-white px-4 py-3 rounded-lg hover:bg-success font-medium transition-colors"
               >
                 🚀 Start Draft Now
               </button>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <p className="text-xs text-gray-500">
+            <div className="mt-6 pt-4 border-t border-border">
+              <p className="text-xs text-muted-foreground">
                 Draft ID: <span className="font-mono">{draftId}</span>
               </p>
             </div>
@@ -326,15 +326,15 @@ export default function DraftLobby({
 
   if (lobbyState?.status === 'CLOSED') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <div className="text-center max-w-md">
           <div className="text-6xl mb-6">🚪</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Lobby Closed</h2>
-          <div className="bg-white rounded-lg p-6 border border-gray-200">
-            <p className="text-gray-600 mb-4">
+          <h2 className="text-2xl font-bold text-foreground mb-4">Draft Lobby Closed</h2>
+          <div className="bg-white rounded-lg p-6 border border-border">
+            <p className="text-muted-foreground mb-4">
               The draft lobby will open 5 minutes before the scheduled start time.
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Check back closer to your draft time or enable notifications to be alerted when the
               lobby opens.
             </p>
@@ -345,25 +345,25 @@ export default function DraftLobby({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-muted">
       {/* Forced state indicator */}
       {forcedLobbyState && (
-        <div className="bg-yellow-100 border-b border-yellow-300 px-4 py-2">
-          <p className="text-center text-yellow-800 text-sm font-medium">
+        <div className="bg-warning/10 border-b border-warning/20 px-4 py-2">
+          <p className="text-center text-warning text-sm font-medium">
             🔧 DEMO MODE - Using forced lobby state (Status: {lobbyState?.status})
           </p>
         </div>
       )}
 
       {/* Header with countdown - Enhanced UI */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+      <header className="bg-white border-b border-border sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-4 gap-4 sm:gap-0 sm:h-20">
             <div className="flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground flex items-center gap-2">
                 🏟️ Draft Lobby
               </h1>
-              <p className="text-sm sm:text-base text-gray-600 mt-1">
+              <p className="text-sm sm:text-base text-muted-foreground mt-1">
                 Prepare your strategy for the upcoming draft
               </p>
             </div>
@@ -374,26 +374,26 @@ export default function DraftLobby({
                 <div
                   className={`text-2xl sm:text-3xl font-bold ${
                     timeRemaining <= 60
-                      ? 'text-red-600 animate-pulse'
+                      ? 'text-destructive animate-pulse'
                       : timeRemaining <= 300
-                        ? 'text-yellow-600'
-                        : 'text-blue-600'
+                        ? 'text-warning'
+                        : 'text-info'
                   }`}
                 >
                   {formatTime(timeRemaining)}
                 </div>
-                <div className="text-xs sm:text-sm text-gray-500 font-medium">
+                <div className="text-xs sm:text-sm text-muted-foreground font-medium">
                   {lobbyState?.status === 'COUNTDOWN' ? 'Until draft starts' : 'Remaining'}
                 </div>
               </div>
 
               {/* Online Status */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-full">
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-full">
                 <div
-                  className="w-3 h-3 bg-green-500 rounded-full animate-pulse"
+                  className="w-3 h-3 bg-success rounded-full animate-pulse"
                   aria-hidden="true"
                 ></div>
-                <span className="text-sm text-gray-700 font-medium">
+                <span className="text-sm text-foreground font-medium">
                   {lobbyState?.participantsOnline.length || 0} online
                 </span>
               </div>
@@ -408,27 +408,27 @@ export default function DraftLobby({
       {/* Main content - Enhanced Layout */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {startError && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded">
+          <div className="mb-4 bg-destructive/10 border border-destructive/20 text-destructive p-3 rounded">
             {startError}
           </div>
         )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* Left column - Instructions & Tips */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-fit">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="bg-white rounded-xl shadow-sm border border-border p-6 h-fit">
+              <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                 📋 Pre-Draft Setup
               </h2>
 
               <div className="space-y-4">
                 {/* Step 1 */}
                 <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-blue-600 font-bold text-sm">1</span>
+                  <div className="w-7 h-7 bg-info/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-info font-bold text-sm">1</span>
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 mb-1">Build Your Queue</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">
+                    <h3 className="font-medium text-foreground mb-1">Build Your Queue</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       Prioritize players in your preferred draft order. Auto-picks will use this
                       queue.
                     </p>
@@ -437,12 +437,12 @@ export default function DraftLobby({
 
                 {/* Step 2 */}
                 <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-blue-600 font-bold text-sm">2</span>
+                  <div className="w-7 h-7 bg-info/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-info font-bold text-sm">2</span>
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 mb-1">Create Watchlist</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">
+                    <h3 className="font-medium text-foreground mb-1">Create Watchlist</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       Star players you&apos;re interested in to track them during the draft.
                     </p>
                   </div>
@@ -450,12 +450,12 @@ export default function DraftLobby({
 
                 {/* Step 3 */}
                 <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-blue-600 font-bold text-sm">3</span>
+                  <div className="w-7 h-7 bg-info/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-info font-bold text-sm">3</span>
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 mb-1">Stay Ready</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">
+                    <h3 className="font-medium text-foreground mb-1">Stay Ready</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       The draft begins automatically when the countdown ends.
                     </p>
                   </div>
@@ -467,11 +467,11 @@ export default function DraftLobby({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="mt-6 p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg"
+                  className="mt-6 p-4 bg-gradient-to-r from-warning/10 to-warning/10 border border-warning/20 rounded-lg"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                    <span className="text-sm font-medium text-yellow-800">
+                    <div className="w-2 h-2 bg-warning rounded-full animate-pulse"></div>
+                    <span className="text-sm font-medium text-warning">
                       Draft starting in {formatTime(timeRemaining)}! Finalize your preparations.
                     </span>
                   </div>
@@ -479,16 +479,16 @@ export default function DraftLobby({
               )}
 
               {/* Stats Summary */}
-              <div className="mt-6 pt-4 border-t border-gray-100">
-                <h3 className="text-sm font-medium text-gray-900 mb-3">Your Progress</h3>
+              <div className="mt-6 pt-4 border-t border-border">
+                <h3 className="text-sm font-medium text-foreground mb-3">Your Progress</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-lg font-bold text-blue-600">{preDraftQueue.length}</div>
-                    <div className="text-xs text-blue-600 font-medium">Queue Players</div>
+                  <div className="text-center p-3 bg-info/10 rounded-lg">
+                    <div className="text-lg font-bold text-info">{preDraftQueue.length}</div>
+                    <div className="text-xs text-info font-medium">Queue Players</div>
                   </div>
-                  <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                    <div className="text-lg font-bold text-yellow-600">{watchlist.length}</div>
-                    <div className="text-xs text-yellow-600 font-medium">Watchlist</div>
+                  <div className="text-center p-3 bg-warning/10 rounded-lg">
+                    <div className="text-lg font-bold text-warning">{watchlist.length}</div>
+                    <div className="text-xs text-warning font-medium">Watchlist</div>
                   </div>
                 </div>
               </div>
@@ -497,16 +497,16 @@ export default function DraftLobby({
 
           {/* Right columns - Interactive Tabs */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-border overflow-hidden">
               {/* Enhanced Tabs */}
-              <div className="border-b border-gray-200 bg-gray-50">
+              <div className="border-b border-border bg-muted">
                 <div className="flex" role="tablist" aria-label="Draft preparation options">
                   <button
                     onClick={() => setActiveTab('queue')}
                     className={`flex-1 py-4 px-6 text-sm font-medium transition-all duration-200 ${
                       activeTab === 'queue'
-                        ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                        ? 'border-b-2 border-info/20 text-info bg-white'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-white/50'
                     }`}
                     role="tab"
                     aria-selected={activeTab === 'queue'}
@@ -515,7 +515,7 @@ export default function DraftLobby({
                     <span className="flex items-center justify-center gap-2">
                       🎯 Draft Queue
                       {preDraftQueue.length > 0 && (
-                        <span className="bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full font-semibold">
+                        <span className="bg-info/10 text-info text-xs px-2 py-0.5 rounded-full font-semibold">
                           {preDraftQueue.length}
                         </span>
                       )}
@@ -525,8 +525,8 @@ export default function DraftLobby({
                     onClick={() => setActiveTab('watchlist')}
                     className={`flex-1 py-4 px-6 text-sm font-medium transition-all duration-200 ${
                       activeTab === 'watchlist'
-                        ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                        ? 'border-b-2 border-info/20 text-info bg-white'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-white/50'
                     }`}
                     role="tab"
                     aria-selected={activeTab === 'watchlist'}
@@ -535,7 +535,7 @@ export default function DraftLobby({
                     <span className="flex items-center justify-center gap-2">
                       ⭐ Watchlist
                       {watchlist.length > 0 && (
-                        <span className="bg-yellow-100 text-yellow-600 text-xs px-2 py-0.5 rounded-full font-semibold">
+                        <span className="bg-warning/10 text-warning text-xs px-2 py-0.5 rounded-full font-semibold">
                           {watchlist.length}
                         </span>
                       )}
@@ -686,8 +686,8 @@ function QueueManager({
       {/* Header with status */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Your Draft Queue</h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <h3 className="text-lg font-semibold text-foreground">Your Draft Queue</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             Drag to reorder • Players will be auto-drafted in this order
           </p>
         </div>
@@ -695,13 +695,13 @@ function QueueManager({
         {/* Save status indicator */}
         <div className="flex items-center gap-2">
           {isSaving && (
-            <div className="flex items-center text-sm text-blue-600">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+            <div className="flex items-center text-sm text-info">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-info/20 mr-2"></div>
               Saving...
             </div>
           )}
           {saveError && (
-            <div className="text-sm text-red-600 flex items-center gap-1">
+            <div className="text-sm text-destructive flex items-center gap-1">
               <span>⚠️</span>
               {saveError}
             </div>
@@ -711,10 +711,10 @@ function QueueManager({
 
       {/* Queue content */}
       {localQueue.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+        <div className="text-center py-12 bg-muted rounded-lg border-2 border-dashed border-border">
           <div className="text-4xl mb-3">🎯</div>
-          <h4 className="text-lg font-medium text-gray-900 mb-2">No players in queue</h4>
-          <p className="text-gray-600 text-sm max-w-md mx-auto">
+          <h4 className="text-lg font-medium text-foreground mb-2">No players in queue</h4>
+          <p className="text-muted-foreground text-sm max-w-md mx-auto">
             Add players to your queue to set your draft priorities. The first player will be
             auto-drafted when it&apos;s your turn.
           </p>
@@ -725,7 +725,7 @@ function QueueManager({
             <motion.div
               key={item.playerId}
               layout
-              className="group relative bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200"
+              className="group relative bg-white border border-border rounded-lg p-4 hover:shadow-md transition-all duration-200"
             >
               <div className="flex items-center gap-4">
                 {/* Rank and controls */}
@@ -733,20 +733,20 @@ function QueueManager({
                   <button
                     onClick={() => index > 0 && movePlayer(index, index - 1)}
                     disabled={index === 0 || isSaving}
-                    className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-1 text-muted-foreground hover:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label={`Move ${item.player.name} up in queue`}
                   >
                     ↑
                   </button>
 
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-bold text-blue-600">#{item.rank}</span>
+                  <div className="w-8 h-8 bg-info/10 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-bold text-info">#{item.rank}</span>
                   </div>
 
                   <button
                     onClick={() => index < localQueue.length - 1 && movePlayer(index, index + 1)}
                     disabled={index === localQueue.length - 1 || isSaving}
-                    className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-1 text-muted-foreground hover:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label={`Move ${item.player.name} down in queue`}
                   >
                     ↓
@@ -755,24 +755,24 @@ function QueueManager({
 
                 {/* Player info */}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-gray-900 truncate">{item.player.name}</h4>
-                  <p className="flex flex-wrap items-center gap-1 text-sm text-gray-600">
+                  <h4 className="font-semibold text-foreground truncate">{item.player.name}</h4>
+                  <p className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
                     <span>{item.player.position}</span>
                     <span aria-hidden>•</span>
                     <TeamLogo team={item.player.club} size={14} withCircle decorative />
                     <span>{item.player.club}</span>
                   </p>
-                  {item.notes && <p className="text-xs text-gray-500 mt-1 italic">{item.notes}</p>}
+                  {item.notes && <p className="text-xs text-muted-foreground mt-1 italic">{item.notes}</p>}
                 </div>
 
                 {/* Priority badge */}
                 <div
                   className={`px-2 py-1 rounded-full text-xs font-medium ${
                     index === 0
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-success/10 text-success'
                       : index < 3
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-info/10 text-info'
+                        : 'bg-muted text-muted-foreground'
                   }`}
                 >
                   {index === 0 ? 'Next Pick' : index < 3 ? 'High Priority' : 'Queued'}
@@ -782,7 +782,7 @@ function QueueManager({
                 <button
                   onClick={() => removePlayer(item.playerId)}
                   disabled={isSaving}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-red-400 hover:text-red-600 transition-all duration-200 disabled:opacity-50"
+                  className="opacity-0 group-hover:opacity-100 p-2 text-destructive hover:text-destructive transition-all duration-200 disabled:opacity-50"
                   aria-label={`Remove ${item.player.name} from queue`}
                 >
                   ✕
@@ -795,9 +795,9 @@ function QueueManager({
 
       {/* Queue tips */}
       {localQueue.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-blue-900 mb-2">💡 Queue Tips</h4>
-          <ul className="text-sm text-blue-800 space-y-1">
+        <div className="bg-info/10 border border-info/20 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-info mb-2">💡 Queue Tips</h4>
+          <ul className="text-sm text-info space-y-1">
             <li>• Your #{localQueue[0]?.rank} player will be auto-drafted first</li>
             <li>• Reorder by clicking the ↑ ↓ buttons</li>
             <li>• Changes are saved automatically</li>
@@ -853,21 +853,21 @@ function WatchlistManager({
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h3 className="text-lg font-semibold text-gray-900">Your Watchlist</h3>
-        <p className="text-sm text-gray-600 mt-1">
+        <h3 className="text-lg font-semibold text-foreground">Your Watchlist</h3>
+        <p className="text-sm text-muted-foreground mt-1">
           Players you&apos;re interested in • Track availability during the draft
         </p>
       </div>
 
       {/* Error display */}
       {removeError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
           <div className="flex items-center gap-2">
-            <span className="text-red-600">⚠️</span>
-            <span className="text-sm text-red-700">{removeError}</span>
+            <span className="text-destructive">⚠️</span>
+            <span className="text-sm text-destructive">{removeError}</span>
             <button
               onClick={() => setRemoveError(null)}
-              className="ml-auto text-red-400 hover:text-red-600"
+              className="ml-auto text-destructive hover:text-destructive"
             >
               ✕
             </button>
@@ -877,10 +877,10 @@ function WatchlistManager({
 
       {/* Watchlist content */}
       {watchlist.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+        <div className="text-center py-12 bg-muted rounded-lg border-2 border-dashed border-border">
           <div className="text-4xl mb-3">⭐</div>
-          <h4 className="text-lg font-medium text-gray-900 mb-2">No players in watchlist</h4>
-          <p className="text-gray-600 text-sm max-w-md mx-auto">
+          <h4 className="text-lg font-medium text-foreground mb-2">No players in watchlist</h4>
+          <p className="text-muted-foreground text-sm max-w-md mx-auto">
             Add players you&apos;re interested in to track their availability during the draft.
           </p>
         </div>
@@ -890,31 +890,31 @@ function WatchlistManager({
             <motion.div
               key={item.playerId}
               layout
-              className="group relative bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200"
+              className="group relative bg-white border border-border rounded-lg p-4 hover:shadow-md transition-all duration-200"
             >
               <div className="flex items-center gap-4">
                 {/* Star icon */}
-                <div className="w-10 h-10 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 bg-gradient-to-br from-warning/10 to-warning/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-lg">⭐</span>
                 </div>
 
                 {/* Player info */}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-semibold text-gray-900 truncate">{item.player.name}</h4>
-                  <p className="flex flex-wrap items-center gap-1 text-sm text-gray-600">
+                  <h4 className="font-semibold text-foreground truncate">{item.player.name}</h4>
+                  <p className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
                     <span>{item.player.position}</span>
                     <span aria-hidden>•</span>
                     <TeamLogo team={item.player.club} size={14} withCircle decorative />
                     <span>{item.player.club}</span>
                   </p>
-                  {item.notes && <p className="text-xs text-gray-500 mt-1 italic">{item.notes}</p>}
+                  {item.notes && <p className="text-xs text-muted-foreground mt-1 italic">{item.notes}</p>}
                 </div>
 
                 {/* Priority indicator */}
                 <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">Priority</div>
-                  <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-yellow-700">#{item.priority}</span>
+                  <div className="text-xs text-muted-foreground mb-1">Priority</div>
+                  <div className="w-8 h-8 bg-warning/10 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-warning">#{item.priority}</span>
                   </div>
                 </div>
 
@@ -922,11 +922,11 @@ function WatchlistManager({
                 <button
                   onClick={() => removeFromWatchlist(item.playerId)}
                   disabled={isRemoving === item.playerId}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-red-400 hover:text-red-600 transition-all duration-200 disabled:opacity-50"
+                  className="opacity-0 group-hover:opacity-100 p-2 text-destructive hover:text-destructive transition-all duration-200 disabled:opacity-50"
                   aria-label={`Remove ${item.player.name} from watchlist`}
                 >
                   {isRemoving === item.playerId ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-destructive/20"></div>
                   ) : (
                     '✕'
                   )}
@@ -939,9 +939,9 @@ function WatchlistManager({
 
       {/* Watchlist tips */}
       {watchlist.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-yellow-900 mb-2">⭐ Watchlist Tips</h4>
-          <ul className="text-sm text-yellow-800 space-y-1">
+        <div className="bg-warning/10 border border-warning/20 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-warning mb-2">⭐ Watchlist Tips</h4>
+          <ul className="text-sm text-warning space-y-1">
             <li>• Starred players will be highlighted during the draft</li>
             <li>• You&apos;ll get notifications when watchlist players are drafted</li>
             <li>• Use this to track backup options for each position</li>

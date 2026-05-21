@@ -92,20 +92,20 @@ export function WaiverManager({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-gray-600">Loading waivers...</span>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-info/20"></div>
+        <span className="ml-3 text-muted-foreground">Loading waivers...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <h3 className="text-red-800 font-medium">Error Loading Waivers</h3>
-        <p className="text-red-600 text-sm mt-1">{error}</p>
+      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+        <h3 className="text-destructive font-medium">Error Loading Waivers</h3>
+        <p className="text-destructive text-sm mt-1">{error}</p>
         <button
           onClick={refreshData}
-          className="mt-3 text-red-600 hover:text-red-800 text-sm font-medium"
+          className="mt-3 text-destructive hover:text-destructive text-sm font-medium"
         >
           Try Again
         </button>
@@ -119,8 +119,8 @@ export function WaiverManager({
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Waiver Management</h1>
-            <p className="text-gray-600">
+            <h1 className="text-2xl font-bold text-foreground">Waiver Management</h1>
+            <p className="text-muted-foreground">
               Current Priority: {userPriority?.currentPriority || 'N/A'} |
               {systemType === 'FAAB' && ` FAAB Remaining: $${userPriority?.remainingFAAB || 0}`}
             </p>
@@ -129,13 +129,13 @@ export function WaiverManager({
             <button
               onClick={() => setShowClaimForm(true)}
               disabled={!canSubmitClaim}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="bg-info text-white px-4 py-2 rounded-md hover:bg-info disabled:opacity-50"
             >
               Submit Claim
             </button>
             <button
               onClick={refreshData}
-              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
+              className="bg-muted text-foreground px-4 py-2 rounded-md hover:bg-muted"
             >
               Refresh
             </button>
@@ -143,7 +143,7 @@ export function WaiverManager({
               <button
                 onClick={handleProcessQueue}
                 disabled={processing}
-                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
+                className="bg-success text-white px-4 py-2 rounded-md hover:bg-success disabled:opacity-50"
               >
                 {processing ? 'Processing...' : 'Process Queue'}
               </button>
@@ -153,7 +153,7 @@ export function WaiverManager({
       </div>
 
       {/* Navigation Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-border mb-6">
         <nav className="-mb-px flex space-x-8">
           {[
             { id: 'queue', label: 'Waiver Queue', count: pendingRequests.length },
@@ -166,13 +166,13 @@ export function WaiverManager({
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-info/20 text-info'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
               {tab.label}
               {tab.count !== null && (
-                <span className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs">
+                <span className="ml-2 bg-muted text-muted-foreground py-0.5 px-2 rounded-full text-xs">
                   {tab.count}
                 </span>
               )}
@@ -220,7 +220,7 @@ export function WaiverManager({
               <h3 className="text-lg font-medium">Submit Waiver Claim</h3>
               <button
                 onClick={() => setShowClaimForm(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-muted-foreground hover:text-muted-foreground"
               >
                 ✕
               </button>
@@ -281,15 +281,15 @@ function WaiverQueue({
   if (requests.length === 0) {
     return (
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Waiver Queue</h2>
-        <p className="text-gray-500">No pending waiver requests.</p>
+        <h2 className="text-lg font-medium text-foreground mb-4">Waiver Queue</h2>
+        <p className="text-muted-foreground">No pending waiver requests.</p>
       </div>
     );
   }
 
   return (
     <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-lg font-medium text-gray-900 mb-4">Waiver Queue</h2>
+      <h2 className="text-lg font-medium text-foreground mb-4">Waiver Queue</h2>
 
       <ol
         className="space-y-3 list-none"
@@ -301,25 +301,25 @@ function WaiverQueue({
             <li
               key={request.id}
               className={`border rounded-lg p-4 ${
-                request.userId === userId ? 'border-blue-200 bg-blue-50' : 'border-gray-200'
+                request.userId === userId ? 'border-info/20 bg-info/10' : 'border-border'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3">
                     <span
-                      className="bg-gray-100 text-gray-800 text-xs font-medium px-2 py-1 rounded"
+                      className="bg-muted text-foreground text-xs font-medium px-2 py-1 rounded"
                       aria-hidden="true"
                     >
                       #{index + 1}
                     </span>
                     <span className="font-medium">Claim Player #{request.targetPlayerId}</span>
                     {request.dropPlayerId && (
-                      <span className="text-gray-600 text-sm">→ Drop #{request.dropPlayerId}</span>
+                      <span className="text-muted-foreground text-sm">→ Drop #{request.dropPlayerId}</span>
                     )}
                   </div>
 
-                  <div className="mt-2 text-sm text-gray-600">
+                  <div className="mt-2 text-sm text-muted-foreground">
                     <span>Priority: {request.priority}</span>
                     {request.bidAmount != null && (
                       <span className="ml-4">Bid: ${request.bidAmount}</span>
@@ -339,7 +339,7 @@ function WaiverQueue({
                   <button
                     onClick={() => handleCancel(request)}
                     type="button"
-                    className="text-red-600 hover:text-red-800 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-destructive hover:text-destructive text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive rounded disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label={`Cancel waiver claim for player ${request.targetPlayerId}`}
                     disabled={isCancelling}
                     aria-disabled={isCancelling}
@@ -391,11 +391,11 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
 
   return (
     <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-lg font-medium text-gray-900 mb-4">Submit Waiver Claim</h2>
+      <h2 className="text-lg font-medium text-foreground mb-4">Submit Waiver Claim</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="targetPlayer" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="targetPlayer" className="block text-sm font-medium text-foreground">
             Target Player ID
           </label>
           <input
@@ -404,13 +404,13 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
             value={targetPlayerId}
             onChange={(e) => setTargetPlayerId(e.target.value)}
             required
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            className="mt-1 block w-full border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-info focus:border-info/20"
             placeholder="Enter player ID to claim"
           />
         </div>
 
         <div>
-          <label htmlFor="dropPlayer" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="dropPlayer" className="block text-sm font-medium text-foreground">
             Drop Player ID (optional)
           </label>
           <input
@@ -418,14 +418,14 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
             type="text"
             value={dropPlayerId}
             onChange={(e) => setDropPlayerId(e.target.value)}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            className="mt-1 block w-full border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-info focus:border-info/20"
             placeholder="Enter player ID to drop"
           />
         </div>
 
         {systemType === 'FAAB' && (
           <div>
-            <label htmlFor="bidAmount" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="bidAmount" className="block text-sm font-medium text-foreground">
               Bid Amount (${userPriority?.remainingFAAB || 0} remaining)
             </label>
             <input
@@ -436,13 +436,13 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
               value={bidAmount}
               onChange={(e) => setBidAmount(e.target.value ? Number(e.target.value) : '')}
               required
-              className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-info focus:border-info/20"
             />
           </div>
         )}
 
         <div>
-          <label htmlFor="claimReason" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="claimReason" className="block text-sm font-medium text-foreground">
             Reason (optional)
           </label>
           <textarea
@@ -450,14 +450,14 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
             value={claimReason}
             onChange={(e) => setClaimReason(e.target.value)}
             rows={3}
-            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            className="mt-1 block w-full border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-info focus:border-info/20"
             placeholder="Why do you want this player?"
           />
         </div>
 
-        <div className="bg-gray-50 rounded-md p-4">
-          <h4 className="text-sm font-medium text-gray-900 mb-2">Your Waiver Info</h4>
-          <div className="text-sm text-gray-600">
+        <div className="bg-muted rounded-md p-4">
+          <h4 className="text-sm font-medium text-foreground mb-2">Your Waiver Info</h4>
+          <div className="text-sm text-muted-foreground">
             <p>Current Priority: {userPriority?.currentPriority || 'N/A'}</p>
             <p>Total Claims This Season: {userPriority?.totalClaims || 0}</p>
             {systemType === 'FAAB' && <p>FAAB Remaining: ${userPriority?.remainingFAAB || 0}</p>}
@@ -467,7 +467,7 @@ function WaiverClaimForm({ onSubmit, submitting, userPriority, systemType }: Wai
         <button
           type="submit"
           disabled={submitting || !targetPlayerId}
-          className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="w-full bg-info text-white px-4 py-2 rounded-md hover:bg-info disabled:opacity-50"
         >
           {submitting ? 'Submitting...' : 'Submit Waiver Claim'}
         </button>
@@ -484,42 +484,42 @@ function WaiverHistory({ requests }: WaiverHistoryProps) {
   if (requests.length === 0) {
     return (
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">My Waiver Claims</h2>
-        <p className="text-gray-500">No waiver claims submitted yet.</p>
+        <h2 className="text-lg font-medium text-foreground mb-4">My Waiver Claims</h2>
+        <p className="text-muted-foreground">No waiver claims submitted yet.</p>
       </div>
     );
   }
 
   return (
     <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-lg font-medium text-gray-900 mb-4">My Waiver Claims</h2>
+      <h2 className="text-lg font-medium text-foreground mb-4">My Waiver Claims</h2>
 
       <div className="space-y-3">
         {sortedRequests.map((request) => (
-          <div key={request.id} className="border border-gray-200 rounded-lg p-4">
+          <div key={request.id} className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center space-x-3">
                   <span
                     className={`px-2 py-1 text-xs font-medium rounded ${
                       request.status === 'APPROVED'
-                        ? 'bg-green-100 text-green-800'
+                        ? 'bg-success/10 text-success'
                         : request.status === 'REJECTED'
-                          ? 'bg-red-100 text-red-800'
+                          ? 'bg-destructive/10 text-destructive'
                           : request.status === 'EXPIRED'
-                            ? 'bg-gray-100 text-gray-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                            ? 'bg-muted text-foreground'
+                            : 'bg-warning/10 text-warning'
                     }`}
                   >
                     {request.status}
                   </span>
                   <span className="font-medium">Claim Player #{request.targetPlayerId}</span>
                   {request.dropPlayerId && (
-                    <span className="text-gray-600 text-sm">→ Drop #{request.dropPlayerId}</span>
+                    <span className="text-muted-foreground text-sm">→ Drop #{request.dropPlayerId}</span>
                   )}
                 </div>
 
-                <div className="mt-2 text-sm text-gray-600">
+                <div className="mt-2 text-sm text-muted-foreground">
                   <span>Priority: {request.priority}</span>
                   {request.bidAmount != null && (
                     <span className="ml-4">Bid: ${request.bidAmount}</span>
@@ -535,7 +535,7 @@ function WaiverHistory({ requests }: WaiverHistoryProps) {
                 </div>
 
                 {request.reason && (
-                  <div className="mt-2 text-sm text-gray-600">Reason: {request.reason}</div>
+                  <div className="mt-2 text-sm text-muted-foreground">Reason: {request.reason}</div>
                 )}
               </div>
             </div>
@@ -563,27 +563,27 @@ function WaiverAdmin({
   return (
     <div className="space-y-6">
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Commissioner Tools</h2>
+        <h2 className="text-lg font-medium text-foreground mb-4">Commissioner Tools</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-blue-50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-blue-600">{pendingCount}</div>
-            <div className="text-sm text-blue-800">Pending Claims</div>
+          <div className="bg-info/10 rounded-lg p-4">
+            <div className="text-2xl font-bold text-info">{pendingCount}</div>
+            <div className="text-sm text-info">Pending Claims</div>
           </div>
-          <div className="bg-green-50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-green-600">{processedToday}</div>
-            <div className="text-sm text-green-800">Processed Today</div>
+          <div className="bg-success/10 rounded-lg p-4">
+            <div className="text-2xl font-bold text-success">{processedToday}</div>
+            <div className="text-sm text-success">Processed Today</div>
           </div>
-          <div className="bg-purple-50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-purple-600">{requests.length}</div>
-            <div className="text-sm text-purple-800">Total Requests</div>
+          <div className="bg-primary/10 rounded-lg p-4">
+            <div className="text-2xl font-bold text-primary">{requests.length}</div>
+            <div className="text-sm text-primary">Total Requests</div>
           </div>
         </div>
 
         <button
           onClick={onProcessQueue}
           disabled={processing || pendingCount === 0}
-          className="bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 disabled:opacity-50 font-medium"
+          className="bg-success text-white px-6 py-3 rounded-md hover:bg-success disabled:opacity-50 font-medium"
         >
           {processing ? 'Processing Queue...' : `Process ${pendingCount} Pending Claims`}
         </button>

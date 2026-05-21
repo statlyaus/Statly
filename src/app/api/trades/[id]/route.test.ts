@@ -96,4 +96,91 @@ describe('GET /api/trades/[id]', () => {
     expect(executeRawMock).toHaveBeenCalled();
     expect(body.data.recipientViewedAt).toBe('2026-03-23T09:12:00.000Z');
   });
+
+  it('allows owner reviewers to inspect pending review trades they are not part of', async () => {
+    getAuthenticatedUserIdMock.mockResolvedValue('owner-1');
+    findUniqueMock.mockResolvedValue({
+      id: 'trade-1',
+      proposerUserId: 'user-1',
+      recipientUserId: 'user-2',
+      status: 'REVIEW_PENDING',
+      createdAt: new Date('2026-03-23T09:00:00.000Z'),
+      executedAt: null,
+      acceptedAt: null,
+      reviewMode: 'ADMIN',
+      reviewStatus: 'PENDING',
+      reviewRequestedAt: new Date('2026-03-23T09:05:00.000Z'),
+      reviewWindowEndsAt: null,
+      reviewDecidedAt: null,
+      items: [],
+      reviewVotes: [],
+      audit: [],
+      league: {
+        members: [{ userId: 'owner-1', role: 'OWNER' }],
+      },
+    });
+    queryRawMock.mockResolvedValue([
+      {
+        id: 'trade-1',
+        proposerViewedAt: null,
+        recipientViewedAt: null,
+      },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/trades/trade-1');
+    const res = await GET(req, { params: Promise.resolve({ id: 'trade-1' }) });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(executeRawMock).not.toHaveBeenCalled();
+    expect(body.data).toMatchObject({
+      tradeId: 'trade-1',
+      status: 'REVIEW_PENDING',
+      reviewMode: 'ADMIN',
+    });
+  });
+
+  it('allows owner reviewers to inspect rejected review trades they are not part of', async () => {
+    getAuthenticatedUserIdMock.mockResolvedValue('owner-1');
+    findUniqueMock.mockResolvedValue({
+      id: 'trade-1',
+      proposerUserId: 'user-1',
+      recipientUserId: 'user-2',
+      status: 'REVIEW_REJECTED',
+      createdAt: new Date('2026-03-23T09:00:00.000Z'),
+      executedAt: null,
+      acceptedAt: new Date('2026-03-23T09:04:00.000Z'),
+      reviewMode: 'ADMIN',
+      reviewStatus: 'REJECTED',
+      reviewRequestedAt: new Date('2026-03-23T09:05:00.000Z'),
+      reviewWindowEndsAt: null,
+      reviewDecidedAt: new Date('2026-03-23T09:06:00.000Z'),
+      items: [],
+      reviewVotes: [],
+      audit: [],
+      league: {
+        members: [{ userId: 'owner-1', role: 'OWNER' }],
+      },
+    });
+    queryRawMock.mockResolvedValue([
+      {
+        id: 'trade-1',
+        proposerViewedAt: null,
+        recipientViewedAt: null,
+      },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/trades/trade-1');
+    const res = await GET(req, { params: Promise.resolve({ id: 'trade-1' }) });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(executeRawMock).not.toHaveBeenCalled();
+    expect(body.data).toMatchObject({
+      tradeId: 'trade-1',
+      status: 'REVIEW_REJECTED',
+      reviewMode: 'ADMIN',
+      reviewStatus: 'REJECTED',
+    });
+  });
 });

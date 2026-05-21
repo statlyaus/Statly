@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   // Only return non-sensitive info and presence flags
   const nodeEnv = process.env.NODE_ENV || 'development';
 

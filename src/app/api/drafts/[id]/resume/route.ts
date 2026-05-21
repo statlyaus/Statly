@@ -58,9 +58,17 @@ export async function POST(request: NextRequest, context: any) {
       },
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const [kind, detail] = msg.includes(':') ? msg.split(':', 2) : ['internal', msg];
+
+    if (kind === 'forbidden') return commonErrors.forbidden(detail);
+    if (kind === 'not_found') return commonErrors.notFound(detail);
+    if (kind === 'bad_request') return commonErrors.badRequest(detail);
+    if (kind === 'conflict') return errorResponse(detail || 'Draft state changed', 409);
+
     logger.error('Failed to resume draft', {
       draftId,
-      error: error instanceof Error ? error.message : String(error),
+      error: msg,
     });
 
     return errorResponse('Failed to resume draft', 500);

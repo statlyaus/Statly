@@ -5,12 +5,12 @@ import React from 'react';
 import Link from 'next/link';
 
 import {
-  ChartBarIcon,
-  TrophyIcon,
-  FireIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-} from '@heroicons/react/24/outline';
+  BarChart3 as ChartBarIcon,
+  Trophy as TrophyIcon,
+  Flame as FireIcon,
+  TrendingUp as ArrowTrendingUpIcon,
+  TrendingDown as ArrowTrendingDownIcon,
+} from 'lucide-react';
 
 interface TeamAnalyticsModuleProps {
   refreshTrigger: number;
@@ -42,50 +42,44 @@ export default function TeamAnalyticsModuleClient({
   const getPositionColor = (position: string) => {
     switch (position) {
       case 'FWD':
-        return 'bg-red-100 text-red-800';
+        return 'bg-destructive/10 text-destructive';
       case 'MID':
-        return 'bg-green-100 text-green-800';
+        return 'bg-success/10 text-success';
       case 'DEF':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-info/10 text-info';
       case 'RUC':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-primary/10 text-primary';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-muted text-foreground';
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-blue-50 rounded-lg p-3">
+        <div className="bg-info/10 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">
-                Weekly Score
-              </p>
-              <p className="text-lg font-bold text-blue-900">
-                {teamData.weeklyScore.toLocaleString()}
-              </p>
+              <p className="text-xs font-medium text-info uppercase tracking-wide">Weekly Score</p>
+              <p className="text-lg font-bold text-info">{teamData.weeklyScore.toLocaleString()}</p>
             </div>
-            <ChartBarIcon className="w-6 h-6 text-blue-600" />
+            <ChartBarIcon className="w-6 h-6 text-info" />
           </div>
           <div className="mt-1">
-            <span className="text-xs text-blue-700">{deltaDisplay} projected</span>
+            <span className="text-xs text-info">{deltaDisplay} projected</span>
           </div>
         </div>
 
-        <div className="bg-green-50 rounded-lg p-3">
+        <div className="bg-success/10 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-green-600 uppercase tracking-wide">
-                Team Rank
-              </p>
-              <p className="text-lg font-bold text-green-900">#{teamData.rank.toLocaleString()}</p>
+              <p className="text-xs font-medium text-success uppercase tracking-wide">Team Rank</p>
+              <p className="text-lg font-bold text-success">#{teamData.rank.toLocaleString()}</p>
             </div>
-            <TrophyIcon className="w-6 h-6 text-green-600" />
+            <TrophyIcon className="w-6 h-6 text-success" />
           </div>
           <div className="mt-1">
-            <span className="text-xs text-green-700">
+            <span className="text-xs text-success">
               ${(teamData.teamValue / 1000000).toFixed(2)}M value
             </span>
           </div>
@@ -93,35 +87,35 @@ export default function TeamAnalyticsModuleClient({
       </div>
 
       <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-gray-900">Team Insights</h4>
+        <h4 className="text-sm font-semibold text-foreground">Team Insights</h4>
 
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2">
-            <ArrowTrendingUpIcon className="w-4 h-4 text-green-500" />
-            <span className="text-sm text-gray-700">Rising Stars</span>
+            <ArrowTrendingUpIcon className="w-4 h-4 text-success" />
+            <span className="text-sm text-foreground">Rising Stars</span>
           </div>
-          <span className="text-sm font-medium text-gray-900">{teamData.risingStars}</span>
+          <span className="text-sm font-medium text-foreground">{teamData.risingStars}</span>
         </div>
 
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2">
-            <ArrowTrendingDownIcon className="w-4 h-4 text-red-500" />
-            <span className="text-sm text-gray-700">Form Concerns</span>
+            <ArrowTrendingDownIcon className="w-4 h-4 text-destructive" />
+            <span className="text-sm text-foreground">Form Concerns</span>
           </div>
-          <span className="text-sm font-medium text-gray-900">{teamData.formConcerns}</span>
+          <span className="text-sm font-medium text-foreground">{teamData.formConcerns}</span>
         </div>
 
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2">
-            <FireIcon className="w-4 h-4 text-orange-500" />
-            <span className="text-sm text-gray-700">Injury Watch</span>
+            <FireIcon className="w-4 h-4 text-warning" />
+            <span className="text-sm text-foreground">Injury Watch</span>
           </div>
-          <span className="text-sm font-medium text-gray-900">{teamData.injuryConcerns}</span>
+          <span className="text-sm font-medium text-foreground">{teamData.injuryConcerns}</span>
         </div>
       </div>
 
       <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-gray-900">Top Performers</h4>
+        <h4 className="text-sm font-semibold text-foreground">Top Performers</h4>
         {teamData.topPerformers.map((player) => (
           <div key={player.name} className="flex items-center justify-between py-1">
             <div className="flex items-center gap-2">
@@ -130,16 +124,16 @@ export default function TeamAnalyticsModuleClient({
               >
                 {player.position}
               </span>
-              <span className="text-sm text-gray-700 truncate">{player.name}</span>
+              <span className="text-sm text-foreground truncate">{player.name}</span>
             </div>
-            <span className="text-sm font-medium text-gray-900">{player.score}</span>
+            <span className="text-sm font-medium text-foreground">{player.score}</span>
           </div>
         ))}
       </div>
 
       <Link
         href="/team-analytics"
-        className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+        className="block w-full text-center bg-info hover:bg-info text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
       >
         View Full Analytics
       </Link>

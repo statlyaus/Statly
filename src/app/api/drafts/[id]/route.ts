@@ -32,6 +32,32 @@ function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
   return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
 }
 
+async function runDraftReadMaintenance(draftId: string): Promise<void> {
+  try {
+    const overdueStart = await draftApplicationService.startDraftIfOverdue({ draftId });
+    if (overdueStart) {
+      await draftRealtimePublisher.publishCommandResult(overdueStart);
+    }
+  } catch (error) {
+    logger.warn('Draft read skipped overdue-start maintenance after failure', {
+      draftId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  try {
+    const expiredPick = await draftApplicationService.autoPickIfExpired({ draftId });
+    if (expiredPick) {
+      await draftRealtimePublisher.publishCommandResult(expiredPick);
+    }
+  } catch (error) {
+    logger.warn('Draft read skipped expired-pick maintenance after failure', {
+      draftId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -41,15 +67,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return errorResponse('Invalid draft id', 400);
     }
 
-    const overdueStart = await draftApplicationService.startDraftIfOverdue({ draftId: id });
-    if (overdueStart) {
-      await draftRealtimePublisher.publishCommandResult(overdueStart);
-    }
-
-    const expiredPick = await draftApplicationService.autoPickIfExpired({ draftId: id });
-    if (expiredPick) {
-      await draftRealtimePublisher.publishCommandResult(expiredPick);
-    }
+    await runDraftReadMaintenance(id);
 
     // Parse query params (lean meta only cares about updatedSince)
     const url = new URL(request.url);

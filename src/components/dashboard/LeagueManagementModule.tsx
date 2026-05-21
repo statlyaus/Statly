@@ -61,18 +61,18 @@ export default function LeagueManagementModule({
 
   if (loading) {
     return (
-      <div className="flex min-h-36 items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-slate-700"></div>
+      <div className="flex min-h-36 items-center justify-center rounded-xl border border-border bg-muted">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-slate-700"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-5 text-center">
+      <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-5 text-center">
         <div>
-          <p className="text-sm font-semibold text-rose-700">League list unavailable</p>
-          <p className="mt-1 text-sm text-rose-600">{error}</p>
+          <p className="text-sm font-semibold text-destructive">League list unavailable</p>
+          <p className="mt-1 text-sm text-destructive">{error}</p>
         </div>
       </div>
     );
@@ -80,10 +80,10 @@ export default function LeagueManagementModule({
 
   if (leagues.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+      <div className="rounded-xl border border-dashed border-border bg-muted px-4 py-6 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white">
           <svg
-            className="h-7 w-7 text-slate-400"
+            className="h-7 w-7 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -97,20 +97,20 @@ export default function LeagueManagementModule({
           </svg>
         </div>
         <div className="mt-4">
-          <h3 className="text-sm font-semibold text-slate-900">No leagues yet</h3>
-          <p className="mt-1 text-sm text-slate-600">
+          <h3 className="text-sm font-semibold text-foreground">No leagues yet</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
             Create or join your first league to start building your workspace.
           </p>
           <div className="mt-4 flex flex-col gap-2">
             <Link
               href="/leagues/new"
-              className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="inline-flex items-center justify-center rounded-xl bg-foreground px-3 py-2 text-sm font-semibold text-white transition hover:bg-muted"
             >
               Create League
             </Link>
             <Link
               href="/leagues/join"
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex items-center justify-center rounded-xl border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-muted"
             >
               Join League
             </Link>
@@ -125,15 +125,15 @@ export default function LeagueManagementModule({
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
-          <div className="text-lg font-semibold text-slate-950">{leagues.length}</div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+        <div className="rounded-xl border border-border bg-muted p-3 text-center">
+          <div className="text-lg font-semibold text-foreground">{leagues.length}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Active Leagues
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
-          <div className="text-lg font-semibold text-slate-950">{adminLeagueCount}</div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+        <div className="rounded-xl border border-border bg-muted p-3 text-center">
+          <div className="text-lg font-semibold text-foreground">{adminLeagueCount}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Admin Of
           </div>
         </div>
@@ -152,27 +152,27 @@ export default function LeagueManagementModule({
             >
               <Link
                 href={`/leagues/${league.id}`}
-                className="block rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 transition hover:border-slate-300 hover:bg-white"
+                className="block rounded-xl border border-border bg-muted px-3 py-3 transition hover:border-border hover:bg-white"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h4 className="truncate text-sm font-semibold text-slate-950">{league.name}</h4>
-                    <p className="mt-1 text-xs text-slate-600">
+                    <h4 className="truncate text-sm font-semibold text-foreground">{league.name}</h4>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {league.memberCount} / {league.maxTeams} teams
                     </p>
                   </div>
                   {isAdmin ? (
-                    <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
+                    <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
                       Admin
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                   <span className="truncate font-mono uppercase">{league.code}</span>
-                  <span className="font-medium text-slate-700">Open →</span>
+                  <span className="font-medium text-foreground">Open →</span>
                 </div>
                 {league.description ? (
-                  <p className="mt-2 truncate text-xs text-slate-500">{league.description}</p>
+                  <p className="mt-2 truncate text-xs text-muted-foreground">{league.description}</p>
                 ) : null}
               </Link>
             </motion.div>
@@ -180,26 +180,26 @@ export default function LeagueManagementModule({
         })}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-slate-200 pt-4">
+      <div className="grid grid-cols-2 gap-2 border-t border-border pt-4">
         <Link
           href="/leagues/new"
-          className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+          className="inline-flex items-center justify-center rounded-xl bg-foreground px-3 py-2 text-xs font-semibold text-white transition hover:bg-muted"
         >
           Create
         </Link>
         <Link
           href="/leagues"
-          className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-white"
+          className="inline-flex items-center justify-center rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white"
         >
           Browse leagues
         </Link>
       </div>
 
       {leagues.length > 4 ? (
-        <div className="border-t border-slate-200 pt-3">
+        <div className="border-t border-border pt-3">
           <Link
             href="/leagues"
-            className="block text-center text-sm font-medium text-slate-700 transition hover:text-slate-950"
+            className="block text-center text-sm font-medium text-foreground transition hover:text-foreground"
           >
             View all {leagues.length} leagues
           </Link>

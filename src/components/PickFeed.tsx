@@ -126,24 +126,24 @@ export default function PickFeed({
 
   return (
     <aside
-      className={`overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm ${className}`}
+      className={`overflow-hidden rounded-3xl border border-border bg-white/95 shadow-sm ${className}`}
       aria-label="Pick feed"
     >
-      <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-4">
+      <div className="border-b border-border bg-muted px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
               <Clock3 className="h-3.5 w-3.5" />
               Activity rail
             </div>
-            <h3 className="mt-2 text-base font-semibold text-slate-950">Pick Feed</h3>
-            <p className="mt-1 text-sm text-slate-600">
+            <h3 className="mt-2 text-base font-semibold text-foreground">Pick Feed</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
               Recent picks, auto-picks, and watchlist hits.
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-right">
-            <div className="text-[10px] uppercase tracking-[0.22em] text-slate-400">Visible</div>
-            <div className="text-base font-semibold leading-none text-slate-950">
+          <div className="rounded-2xl border border-border bg-white px-3 py-2 text-right">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Visible</div>
+            <div className="text-base font-semibold leading-none text-foreground">
               {filteredPicks.length}
             </div>
           </div>
@@ -159,15 +159,15 @@ export default function PickFeed({
                 onClick={() => setFilter(key)}
                 className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
                   selected
-                    ? 'border-slate-300 bg-white text-slate-950 shadow-sm'
-                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white'
+                    ? 'border-border bg-white text-foreground shadow-sm'
+                    : 'border-border bg-muted text-foreground hover:border-border hover:bg-white'
                 }`}
                 aria-pressed={selected}
               >
                 <div className="text-xs font-medium">{label}</div>
                 <div
                   className={`mt-1 text-lg font-semibold leading-none ${
-                    selected ? 'text-slate-950' : 'text-slate-700'
+                    selected ? 'text-foreground' : 'text-foreground'
                   }`}
                 >
                   {count}
@@ -177,10 +177,10 @@ export default function PickFeed({
           })}
         </div>
 
-        <div className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2">
+        <div className="mt-4 flex items-center justify-between rounded-2xl border border-border bg-white px-3 py-2">
           <div>
-            <div className="text-xs font-medium text-slate-700">Live rail</div>
-            <div className="text-[11px] text-slate-500">
+            <div className="text-xs font-medium text-foreground">Live rail</div>
+            <div className="text-[11px] text-muted-foreground">
               {autoScroll ? 'Auto-scroll on new picks' : 'Manual scroll mode'}
             </div>
           </div>
@@ -188,7 +188,7 @@ export default function PickFeed({
             type="button"
             onClick={() => setAutoScroll((value) => !value)}
             className={`inline-flex h-7 w-12 items-center rounded-full px-1 transition-colors ${
-              autoScroll ? 'bg-emerald-500' : 'bg-slate-300'
+              autoScroll ? 'bg-success' : 'bg-muted'
             }`}
             aria-pressed={autoScroll}
             aria-label="Toggle auto-scroll"
@@ -204,11 +204,11 @@ export default function PickFeed({
 
       <div id="pick-feed-content" className="max-h-[calc(100vh-220px)] overflow-y-auto">
         {filteredPicks.length === 0 ? (
-          <div className="px-6 py-14 text-center text-slate-500">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+          <div className="px-6 py-14 text-center text-muted-foreground">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
               <Sparkles className="h-7 w-7" />
             </div>
-            <p className="text-lg font-semibold text-slate-900 mb-1">No picks yet</p>
+            <p className="text-lg font-semibold text-foreground mb-1">No picks yet</p>
             <p className="text-sm leading-6">
               {filter === 'all'
                 ? 'Draft selections will appear here as they happen'
@@ -224,45 +224,45 @@ export default function PickFeed({
                 key={pick.id}
                 className={`rounded-2xl border p-4 transition-colors ${
                   isMyPick(pick)
-                    ? 'border-emerald-200 bg-emerald-50/60'
+                    ? 'border-success/20 bg-success/10'
                     : isWatchlistPick(pick)
-                      ? 'border-amber-200 bg-amber-50/60'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      ? 'border-warning/20 bg-warning/10'
+                      : 'border-border bg-white hover:border-border hover:bg-muted'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-foreground text-sm font-semibold text-white">
                       {pick.overall}
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="truncate text-sm font-semibold text-slate-950">
+                        <h4 className="truncate text-sm font-semibold text-foreground">
                           {pick.player.name}
                         </h4>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
                           {pick.player.position}
                         </span>
                         {pick.auto && (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
                             Auto
                           </span>
                         )}
                         {isMyPick(pick) && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
                             <User className="h-3 w-3" />
                             Mine
                           </span>
                         )}
                         {isWatchlistPick(pick) && !isMyPick(pick) && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
                             <Star className="h-3 w-3" />
                             Watchlist
                           </span>
                         )}
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                        <span className="font-medium text-slate-700">{getTeamName(pick.slot)}</span>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">{getTeamName(pick.slot)}</span>
                         <span>Round {pick.round}</span>
                         <span className="inline-flex items-center gap-1">
                           <TeamLogo team={pick.player.club} size={14} withCircle decorative />
@@ -272,10 +272,10 @@ export default function PickFeed({
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs font-medium text-slate-500">
+                    <div className="text-xs font-medium text-muted-foreground">
                       {formatTimeAgo(pick.madeAt)}
                     </div>
-                    <div className="mt-1 text-[11px] text-slate-400">
+                    <div className="mt-1 text-[11px] text-muted-foreground">
                       {new Date(pick.madeAt).toLocaleTimeString([], {
                         hour: 'numeric',
                         minute: '2-digit',
@@ -283,13 +283,13 @@ export default function PickFeed({
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <div className="mt-3 flex items-center justify-between rounded-2xl border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
                   <span>
                     Slot {pick.slot}
-                    <span className="mx-1.5 text-slate-300">•</span>
+                    <span className="mx-1.5 text-muted-foreground">•</span>
                     Pick {pick.overall}
                   </span>
-                  <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                  <span className="inline-flex items-center gap-1 font-medium text-foreground">
                     View context
                     <ChevronRight className="h-3.5 w-3.5" />
                   </span>
@@ -301,7 +301,7 @@ export default function PickFeed({
       </div>
 
       {filteredPicks.length > 0 && (
-        <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-500">
+        <div className="border-t border-border bg-muted px-4 py-3 text-center text-xs text-muted-foreground">
           Showing {filteredPicks.length} of {picks.length} total picks
         </div>
       )}

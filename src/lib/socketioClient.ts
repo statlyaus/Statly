@@ -519,7 +519,7 @@ export class SocketIOClientManager {
   }
 
   /**
-   * Make a draft pick
+   * Legacy method. Server rejects direct socket picks; use the draft API.
    */
   public makeDraftPick(draftId: string, playerId: string, userId: string): void {
     if (!this.socket?.connected) {
@@ -527,7 +527,7 @@ export class SocketIOClientManager {
       return;
     }
 
-    logger.info('🎯 Making draft pick', {
+    logger.warn('Rejected legacy direct socket draft pick call; use the draft API', {
       draftId,
       playerId,
       userId,
@@ -539,7 +539,7 @@ export class SocketIOClientManager {
   }
 
   /**
-   * Start draft timer
+   * Legacy method. Server rejects direct socket timer starts; use the draft API.
    */
   public startDraftTimer(draftId: string, duration: number): void {
     if (!this.socket?.connected) {
@@ -547,7 +547,7 @@ export class SocketIOClientManager {
       return;
     }
 
-    logger.info('⏰ Starting draft timer', {
+    logger.warn('Rejected legacy direct socket timer call; use the draft API', {
       draftId,
       duration,
       socketId: this.socket.id,
@@ -558,7 +558,7 @@ export class SocketIOClientManager {
   }
 
   /**
-   * Pause draft
+   * Legacy method. Server rejects direct socket pause; use the draft API.
    */
   public pauseDraft(draftId: string): void {
     if (!this.socket?.connected) {
@@ -566,7 +566,7 @@ export class SocketIOClientManager {
       return;
     }
 
-    logger.info('⏸️ Pausing draft', {
+    logger.warn('Rejected legacy direct socket pause call; use the draft API', {
       draftId,
       socketId: this.socket.id,
       timestamp: new Date().toISOString(),
@@ -576,7 +576,7 @@ export class SocketIOClientManager {
   }
 
   /**
-   * Resume draft
+   * Legacy method. Server rejects direct socket resume; use the draft API.
    */
   public resumeDraft(draftId: string): void {
     if (!this.socket?.connected) {
@@ -584,7 +584,7 @@ export class SocketIOClientManager {
       return;
     }
 
-    logger.info('▶️ Resuming draft', {
+    logger.warn('Rejected legacy direct socket resume call; use the draft API', {
       draftId,
       socketId: this.socket.id,
       timestamp: new Date().toISOString(),

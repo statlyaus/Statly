@@ -5,7 +5,7 @@
 
 import type React from 'react';
 
-import { ExclamationTriangleIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { TriangleAlert as ExclamationTriangleIcon, Clock as ClockIcon } from 'lucide-react';
 
 import { leagueDesignTokens, componentSizes } from '@/styles/leagueDesignSystem';
 
@@ -101,7 +101,7 @@ export const SIZE_CONFIG = {
  */
 export const CARD_STYLES = {
   // Base style components for better readability
-  foundation: 'relative bg-white border border-gray-200',
+  foundation: 'relative bg-white border border-border',
   shape: leagueDesignTokens.rounded.lg,
   animation: 'transition-all duration-200',
 
@@ -114,12 +114,12 @@ export const CARD_STYLES = {
   },
 
   // Legacy interaction states (kept for backward compatibility)
-  interactive: 'cursor-pointer hover:border-blue-300 hover:shadow-sm group',
+  interactive: 'cursor-pointer hover:border-info/20 hover:shadow-sm group',
   interactiveDetailed:
-    'cursor-pointer hover:border-blue-300 hover:shadow-md group-hover:scale-[1.01] group',
+    'cursor-pointer hover:border-info/20 hover:shadow-md group-hover:scale-[1.01] group',
 
   // State styles
-  selected: 'ring-2 ring-blue-500 border-blue-500',
+  selected: 'ring-2 ring-info border-info/20',
   disabled: 'opacity-50 cursor-not-allowed',
 
   // Shadow variations
@@ -132,7 +132,7 @@ export const CARD_STYLES = {
    */
   compact: {
     get interactive() {
-      return 'cursor-pointer hover:border-blue-300 hover:shadow-sm hover:bg-gray-50 group';
+      return 'cursor-pointer hover:border-info/20 hover:shadow-sm hover:bg-muted group';
     },
     get base() {
       return [
@@ -150,7 +150,7 @@ export const CARD_STYLES = {
    */
   detailed: {
     get interactive() {
-      return 'cursor-pointer hover:border-blue-300 hover:shadow-lg hover:transform hover:scale-[1.02] group';
+      return 'cursor-pointer hover:border-info/20 hover:shadow-lg hover:transform hover:scale-[1.02] group';
     },
     get base() {
       return [

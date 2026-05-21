@@ -60,9 +60,9 @@ interface TooltipProps {
 // Variant configurations
 const VARIANT_CONFIG = {
   default: {
-    background: 'bg-gray-900',
+    background: 'bg-foreground',
     text: 'text-white',
-    border: 'border-gray-900',
+    border: 'border-border',
   },
   dark: {
     background: 'bg-black',
@@ -71,28 +71,28 @@ const VARIANT_CONFIG = {
   },
   light: {
     background: 'bg-white',
-    text: 'text-gray-900',
-    border: 'border-gray-200',
+    text: 'text-foreground',
+    border: 'border-border',
   },
   info: {
-    background: 'bg-blue-600',
+    background: 'bg-info',
     text: 'text-white',
-    border: 'border-blue-600',
+    border: 'border-info/20',
   },
   success: {
-    background: 'bg-green-600',
+    background: 'bg-success',
     text: 'text-white',
-    border: 'border-green-600',
+    border: 'border-success/20',
   },
   warning: {
-    background: 'bg-yellow-600',
+    background: 'bg-warning',
     text: 'text-white',
-    border: 'border-yellow-600',
+    border: 'border-warning/20',
   },
   error: {
-    background: 'bg-red-600',
+    background: 'bg-destructive',
     text: 'text-white',
-    border: 'border-red-600',
+    border: 'border-destructive/20',
   },
 };
 
@@ -442,7 +442,7 @@ export function InfoTooltip({
     >
       <button
         type="button"
-        className="inline-flex items-center justify-center w-4 h-4 text-blue-500 hover:text-blue-600 transition-colors"
+        className="inline-flex items-center justify-center w-4 h-4 text-info hover:text-info transition-colors"
         aria-label="More information"
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -477,7 +477,7 @@ export function PlayerStatTooltip({
       <div className="space-y-1">
         {Object.entries(stats).map(([key, value]) => (
           <div key={key} className="flex justify-between text-xs">
-            <span className="text-gray-300">{key}:</span>
+            <span className="text-muted-foreground">{key}:</span>
             <span className="font-medium">{value}</span>
           </div>
         ))}

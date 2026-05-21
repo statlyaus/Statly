@@ -2,13 +2,19 @@
 
 import '../src/lib/loadEnv';
 
-import {
-  publishLeagueRosterSummaries,
-  publishPlayerRankings,
-  refreshPlayerReadModels,
-} from '../src/server/readModels/playerReadModels';
+import { pathToFileURL } from 'node:url';
 
-function parseArgs(argv: string[]) {
+export interface BuildPlayerReadModelArgs {
+  season?: number;
+  rounds?: number[];
+  playerIds?: string[];
+  leagueId?: string;
+  scope: string;
+  mode: string;
+  allowLiveFirebase: boolean;
+}
+
+export function parseArgs(argv: string[]): BuildPlayerReadModelArgs {
   const readArgValue = (name: string): string | undefined => {
     const equalsValue = argv.find((arg) => arg.startsWith(`${name}=`))?.split('=')[1];
     if (equalsValue != null) return equalsValue;
@@ -22,6 +28,10 @@ function parseArgs(argv: string[]) {
   const leagueId = readArgValue('--leagueId') ?? readArgValue('--league-id');
   const scope = readArgValue('--scope') ?? 'season';
   const mode = readArgValue('--mode') ?? 'full';
+  const allowLiveFirebase =
+    argv.includes('--allow-live-firebase') ||
+    readArgValue('--allow-live-firebase') === 'true' ||
+    readArgValue('--allow-live-firebase') === '1';
 
   return {
     season: seasonArg ? Number(seasonArg) : undefined,
@@ -36,34 +46,58 @@ function parseArgs(argv: string[]) {
     leagueId,
     scope,
     mode,
+    allowLiveFirebase,
   };
+}
+
+export function assertSafeFirebaseTarget(
+  args: Pick<BuildPlayerReadModelArgs, 'allowLiveFirebase'>,
+  env: NodeJS.ProcessEnv = process.env
+) {
+  const runtime = env.STATLY_RUNTIME_ENV || env.VERCEL_ENV || env.NODE_ENV;
+  const isLocalRuntime = runtime === 'local';
+  const hasPrivateFirestoreEmulator = Boolean(env.FIRESTORE_EMULATOR_HOST?.trim());
+  const envOverride = env.STATLY_ALLOW_LIVE_FIREBASE_READ_MODELS === 'true';
+
+  if (isLocalRuntime && !hasPrivateFirestoreEmulator && !args.allowLiveFirebase && !envOverride) {
+    throw new Error(
+      [
+        'Refusing to build player read models against live Firebase from local runtime.',
+        'Set FIRESTORE_EMULATOR_HOST for emulator-safe local runs,',
+        'or pass --allow-live-firebase / set STATLY_ALLOW_LIVE_FIREBASE_READ_MODELS=true for an intentional live-target operation.',
+      ].join(' ')
+    );
+  }
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  assertSafeFirebaseTarget(args);
   const startedAt = Date.now();
+  const { publishLeagueRosterSummaries, publishPlayerRankings, refreshPlayerReadModels } =
+    await import('../src/server/readModels/playerReadModels');
 
   let result: Record<string, unknown>;
 
   if (args.mode === 'refresh') {
-    result = await refreshPlayerReadModels({
+    result = (await refreshPlayerReadModels({
       season: args.season,
       scope: args.scope,
       leagueId: args.leagueId,
       rounds: args.rounds,
       playerIds: args.playerIds,
-    }) as unknown as Record<string, unknown>;
+    })) as unknown as Record<string, unknown>;
   } else if (args.mode === 'rankings') {
-    result = await publishPlayerRankings({
+    result = (await publishPlayerRankings({
       season: args.season,
       scope: args.scope,
-    }) as unknown as Record<string, unknown>;
+    })) as unknown as Record<string, unknown>;
   } else if (args.mode === 'rosters') {
-    result = await publishLeagueRosterSummaries({
+    result = (await publishLeagueRosterSummaries({
       season: args.season,
       scope: args.scope,
       leagueId: args.leagueId,
-    }) as unknown as Record<string, unknown>;
+    })) as unknown as Record<string, unknown>;
   } else {
     const refreshResult = await refreshPlayerReadModels({
       season: args.season,
@@ -103,6 +137,7 @@ async function main() {
           rounds: args.rounds ?? [],
           playerIds: args.playerIds ?? [],
           leagueId: args.leagueId ?? null,
+          allowLiveFirebase: args.allowLiveFirebase,
           verifierCommand,
         },
         ...result,
@@ -113,16 +148,18 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(
-    JSON.stringify(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      },
-      null,
-      2
-    )
-  );
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(
+      JSON.stringify(
+        {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
+  });
+}

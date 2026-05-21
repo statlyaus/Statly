@@ -2,6 +2,7 @@ import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
 
 import { adminDb as db } from '@/lib/firebaseAdmin';
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
 
 import type * as FirebaseFirestore from 'firebase-admin/firestore';
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -70,6 +71,12 @@ interface TradeReviewDoc {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) {
+    res.status(authorization.response.status).json({ error: 'Not found' });
+    return;
+  }
+
   if (req.method !== 'GET') {
     res.status(405).end();
     return;

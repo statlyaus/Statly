@@ -123,8 +123,8 @@ export default function CommissionerClient() {
       <AppLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-            <p className="text-gray-600">Please sign in to access commissioner tools.</p>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
+            <p className="text-muted-foreground">Please sign in to access commissioner tools.</p>
           </div>
         </div>
       </AppLayout>
@@ -136,8 +136,8 @@ export default function CommissionerClient() {
       <AppLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">No Leagues Found</h2>
-            <p className="text-gray-600">
+            <h2 className="text-2xl font-bold text-foreground mb-2">No Leagues Found</h2>
+            <p className="text-muted-foreground">
               You need to be a league owner to access commissioner tools.
             </p>
           </div>
@@ -151,7 +151,7 @@ export default function CommissionerClient() {
       <div className="space-y-6">
         {leagues.length > 1 && (
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <label htmlFor="league-select" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="league-select" className="block text-sm font-medium text-foreground mb-2">
               Select League to Manage
             </label>
             <select
@@ -161,7 +161,7 @@ export default function CommissionerClient() {
                 setSelectedLeagueId(e.target.value);
               }}
               disabled={detailLoading}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="block w-full px-3 py-2 border border-border rounded-md shadow-sm focus:outline-none focus:ring-info focus:border-info/20"
             >
               {leagues.map((league) => (
                 <option key={league.id} value={league.id}>
@@ -170,7 +170,7 @@ export default function CommissionerClient() {
               ))}
             </select>
             {detailLoading ? (
-              <p className="mt-2 text-xs text-gray-500">Loading league details…</p>
+              <p className="mt-2 text-xs text-muted-foreground">Loading league details…</p>
             ) : null}
           </div>
         )}
@@ -179,7 +179,7 @@ export default function CommissionerClient() {
           <div className="flex min-h-[16rem] items-center justify-center rounded-lg bg-white p-6 shadow-sm">
             <div className="text-center">
               <LoadingSpinner />
-              <p className="mt-3 text-sm text-gray-600">Loading league details…</p>
+              <p className="mt-3 text-sm text-muted-foreground">Loading league details…</p>
             </div>
           </div>
         ) : null}

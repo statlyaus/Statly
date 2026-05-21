@@ -142,7 +142,7 @@ export default function AdminWorkersClient() {
       <header className="flex items-center justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Worker Pool</h1>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted-foreground">
             Monitor and control draft worker pool. Polls every {Math.round(POLL_INTERVAL_MS / 1000)}
             s.
           </p>
@@ -152,19 +152,19 @@ export default function AdminWorkersClient() {
           <span
             className={clsx(
               'inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium',
-              poolHealthy ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              poolHealthy ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
             )}
             aria-label={poolHealthy ? 'Pool healthy' : 'Pool unhealthy'}
             role="status"
           >
             <span
-              className={clsx('h-2 w-2 rounded-full', poolHealthy ? 'bg-green-500' : 'bg-red-500')}
+              className={clsx('h-2 w-2 rounded-full', poolHealthy ? 'bg-success' : 'bg-destructive')}
             />
             {poolHealthy ? 'Healthy' : 'Unhealthy'}
           </span>
 
           <div className="flex items-center gap-2">
-            <label htmlFor="poll-toggle" className="text-sm text-gray-700">
+            <label htmlFor="poll-toggle" className="text-sm text-foreground">
               Auto-refresh
             </label>
             <button
@@ -173,7 +173,7 @@ export default function AdminWorkersClient() {
               aria-label={isPolling ? 'Disable auto refresh' : 'Enable auto refresh'}
               className={clsx(
                 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-                isPolling ? 'bg-blue-600' : 'bg-gray-200'
+                isPolling ? 'bg-info' : 'bg-muted'
               )}
               onClick={() => setIsPolling((s) => !s)}
               onKeyDown={(e) => handleKeyDown(e, () => setIsPolling((s) => !s))}
@@ -191,33 +191,46 @@ export default function AdminWorkersClient() {
       </header>
 
       {errorMessage && (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {errorMessage}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          <span>{errorMessage}</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void fetchData()}
+            disabled={isLoading}
+            loading={isLoading}
+            loadingText="Retrying"
+          >
+            Retry
+          </Button>
         </div>
       )}
 
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-medium text-gray-700">Pool Summary</h2>
+          <h2 className="text-sm font-medium text-foreground">Pool Summary</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
             <div>
-              <div className="text-gray-500">Workers</div>
+              <div className="text-muted-foreground">Workers</div>
               <div className="font-semibold">{data?.stats.workerCount ?? '-'}</div>
             </div>
             <div>
-              <div className="text-gray-500">Success Rate</div>
+              <div className="text-muted-foreground">Success Rate</div>
               <div className="font-semibold">
                 {data ? `${Math.round((data.stats.successRate ?? 0) * 100)}%` : '-'}
               </div>
             </div>
             <div>
-              <div className="text-gray-500">Avg Time</div>
+              <div className="text-muted-foreground">Avg Time</div>
               <div className="font-semibold">
                 {data ? formatMs(data.stats.averageProcessingTime ?? 0) : '-'}
               </div>
             </div>
             <div>
-              <div className="text-gray-500">Total Jobs</div>
+              <div className="text-muted-foreground">Total Jobs</div>
               <div className="font-semibold">{data ? data.stats.totalJobsProcessed : '-'}</div>
             </div>
           </div>
@@ -225,15 +238,33 @@ export default function AdminWorkersClient() {
 
         <div className="md:col-span-2 rounded-lg border bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-gray-700">Workers</h2>
+            <h2 className="text-sm font-medium text-foreground">Workers</h2>
             <div className="flex items-center gap-2">
-              <Button size="sm" onClick={() => void handleAction('add')}>
+              <Button
+                size="sm"
+                onClick={() => void handleAction('add')}
+                disabled={Boolean(actionLoading)}
+                loading={actionLoading === 'add'}
+                loadingText="Adding"
+              >
                 Add Worker
               </Button>
-              <Button size="sm" onClick={() => void handleAction('restart')}>
+              <Button
+                size="sm"
+                onClick={() => void handleAction('restart')}
+                disabled={Boolean(actionLoading)}
+                loading={actionLoading === 'restart'}
+                loadingText="Restarting"
+              >
                 Restart All
               </Button>
-              <Button size="sm" onClick={() => void handleAction('stop')}>
+              <Button
+                size="sm"
+                onClick={() => void handleAction('stop')}
+                disabled={Boolean(actionLoading)}
+                loading={actionLoading === 'stop'}
+                loadingText="Stopping"
+              >
                 Stop All
               </Button>
             </div>
@@ -245,42 +276,54 @@ export default function AdminWorkersClient() {
                   <span
                     className={clsx(
                       'h-2 w-2 rounded-full',
-                      w.health?.healthy ? 'bg-green-500' : 'bg-red-500'
+                      w.health?.healthy ? 'bg-success' : 'bg-destructive'
                     )}
                   />
                   <div>
                     <div className="font-medium">{w.workerId}</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       Last activity {timeAgo(w.lastActivity)}
                     </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
-                    <div className="text-gray-500">Processed</div>
+                    <div className="text-muted-foreground">Processed</div>
                     <div className="font-semibold">{w.jobsProcessed}</div>
                   </div>
                   <div>
-                    <div className="text-gray-500">Failed</div>
+                    <div className="text-muted-foreground">Failed</div>
                     <div className="font-semibold">{w.jobsFailed}</div>
                   </div>
                   <div>
-                    <div className="text-gray-500">Avg</div>
+                    <div className="text-muted-foreground">Avg</div>
                     <div className="font-semibold">{formatMs(w.averageProcessingTime)}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => void handleAction('restart', w.workerId)}>
+                  <Button
+                    size="sm"
+                    onClick={() => void handleAction('restart', w.workerId)}
+                    disabled={Boolean(actionLoading)}
+                    loading={actionLoading === 'restart'}
+                    loadingText="Restarting"
+                  >
                     Restart
                   </Button>
-                  <Button size="sm" onClick={() => void handleAction('remove', w.workerId)}>
+                  <Button
+                    size="sm"
+                    onClick={() => void handleAction('remove', w.workerId)}
+                    disabled={Boolean(actionLoading)}
+                    loading={actionLoading === `remove:${w.workerId}`}
+                    loadingText="Removing"
+                  >
                     Remove
                   </Button>
                 </div>
               </div>
             ))}
             {!mergedWorkers.length && (
-              <div className="py-6 text-center text-sm text-gray-500">No workers</div>
+              <div className="py-6 text-center text-sm text-muted-foreground">No workers</div>
             )}
           </div>
         </div>

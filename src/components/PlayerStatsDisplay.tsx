@@ -26,7 +26,7 @@ export default function PlayerStatsDisplay({
   className = '',
 }: PlayerStatsDisplayProps) {
   if (!selectedCategories.length) {
-    return <div className={`text-xs text-gray-500 ${className}`}>No categories selected</div>;
+    return <div className={`text-xs text-muted-foreground ${className}`}>No categories selected</div>;
   }
 
   // Calculate total value using your weighted scoring system
@@ -51,7 +51,7 @@ export default function PlayerStatsDisplay({
         }`}
       >
         {showLabels && (
-          <span className={`text-xs font-medium text-gray-500 ${compact ? 'min-w-8' : 'min-w-12'}`}>
+          <span className={`text-xs font-medium text-muted-foreground ${compact ? 'min-w-8' : 'min-w-12'}`}>
             {compact ? categoryData.abbrev : categoryData.label}
           </span>
         )}
@@ -84,8 +84,8 @@ export default function PlayerStatsDisplay({
       {selectedCategories.map(renderStat)}
       {totalValue > 0 && (
         <div className="flex items-center gap-1 border-l pl-3 ml-1">
-          <span className="text-gray-500 font-medium text-xs">Total Value:</span>
-          <span className="font-bold text-purple-600 text-xs">{totalValue.toFixed(0)}</span>
+          <span className="text-muted-foreground font-medium text-xs">Total Value:</span>
+          <span className="font-bold text-primary text-xs">{totalValue.toFixed(0)}</span>
         </div>
       )}
     </div>
@@ -122,12 +122,12 @@ export function CompactStatsRow({
 
         return (
           <div key={category} className="flex items-center gap-1">
-            <span className="text-gray-500 font-medium min-w-6">{categoryData.abbrev}:</span>
+            <span className="text-muted-foreground font-medium min-w-6">{categoryData.abbrev}:</span>
             <span className={`font-semibold ${colorClass} min-w-6`}>{displayValue}</span>
           </div>
         );
       })}
-      {remainingCount > 0 && <span className="text-gray-400 text-xs">+{remainingCount} more</span>}
+      {remainingCount > 0 && <span className="text-muted-foreground text-xs">+{remainingCount} more</span>}
     </div>
   );
 }
@@ -145,7 +145,7 @@ export function FantasyPointsSummary({
   className?: string;
 }) {
   if (!stats) {
-    return <div className={`text-xs text-gray-500 ${className}`}>No stats available</div>;
+    return <div className={`text-xs text-muted-foreground ${className}`}>No stats available</div>;
   }
 
   const lastGame = stats.lastGameFantasyPoints;
@@ -154,14 +154,14 @@ export function FantasyPointsSummary({
     <div className={`flex items-center gap-3 text-xs ${className}`}>
       {lastGame && (
         <div className="flex items-center gap-1">
-          <span className="text-gray-500 font-medium">Last:</span>
-          <span className="font-semibold text-gray-700">{lastGame.toFixed(1)}</span>
+          <span className="text-muted-foreground font-medium">Last:</span>
+          <span className="font-semibold text-foreground">{lastGame.toFixed(1)}</span>
         </div>
       )}
       {stats.seasonTotal && (
         <div className="flex items-center gap-1">
-          <span className="text-gray-500 font-medium">Total:</span>
-          <span className="font-semibold text-gray-700">{Math.round(stats.seasonTotal)}</span>
+          <span className="text-muted-foreground font-medium">Total:</span>
+          <span className="font-semibold text-foreground">{Math.round(stats.seasonTotal)}</span>
         </div>
       )}
     </div>

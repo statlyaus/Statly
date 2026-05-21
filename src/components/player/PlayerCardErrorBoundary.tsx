@@ -6,7 +6,7 @@
 import React, { Component } from 'react';
 import type { ReactNode } from 'react';
 
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { TriangleAlert as ExclamationTriangleIcon } from 'lucide-react';
 
 import { leagueDesignTokens, componentSizes } from '@/styles/leagueDesignSystem';
 
@@ -60,7 +60,7 @@ export class PlayerCardErrorBoundary extends Component<
 // Default skeleton fallback component
 function PlayerCardSkeleton({ error }: { error?: Error }) {
   // Token-driven class names
-  const SKELETON_CLASSES = `relative bg-white border border-gray-200 ${leagueDesignTokens.rounded.lg} ${leagueDesignTokens.spacing.md} ${leagueDesignTokens.shadows.sm}`;
+  const SKELETON_CLASSES = `relative bg-white border border-border ${leagueDesignTokens.rounded.lg} ${leagueDesignTokens.spacing.md} ${leagueDesignTokens.shadows.sm}`;
   const AVATAR_CLASSES = `${componentSizes.avatar.lg} ${leagueDesignTokens.rounded.full} ${leagueDesignTokens.colors.error[50]} flex items-center justify-center`;
   const ICON_CLASSES = `${componentSizes.icon.lg} text-current`;
   const TITLE_CLASSES = `text-sm font-medium ${leagueDesignTokens.colors.gray[900]}`;

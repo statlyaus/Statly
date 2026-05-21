@@ -98,13 +98,13 @@ export default function LeagueTradesClient({
       ) : (
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm text-gray-500">League</p>
-            <h1 className="text-2xl font-semibold text-gray-900">Trades</h1>
-            <p className="text-sm text-gray-500">{leagueName || 'League trading center'}</p>
+            <p className="text-sm text-muted-foreground">League</p>
+            <h1 className="text-2xl font-semibold text-foreground">Trades</h1>
+            <p className="text-sm text-muted-foreground">{leagueName || 'League trading center'}</p>
           </div>
           <button
             type="button"
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            className="rounded-md bg-info px-4 py-2 text-sm font-semibold text-white hover:bg-info"
             onClick={() => {
               if (activeTab === 'create') {
                 openOffersTab();
@@ -120,18 +120,21 @@ export default function LeagueTradesClient({
       )}
 
       {!currentUserId ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+        <div className="rounded-2xl border border-border bg-white p-4 text-sm text-muted-foreground">
           Sign in to view and manage trades.
         </div>
       ) : null}
 
       {trades.error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div
+          role="alert"
+          className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
           {trades.error}
         </div>
       ) : null}
 
-      <div className="rounded-[1.5rem] border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="rounded-[1.5rem] border border-border bg-white p-2 shadow-sm">
         <div className="grid gap-2 md:grid-cols-2">
           <button
             type="button"
@@ -139,18 +142,18 @@ export default function LeagueTradesClient({
             className={`rounded-[1.1rem] px-4 py-4 text-left transition ${
               activeTab === 'offers'
                 ? 'bg-[color:var(--league-primary)] text-white shadow-[0_18px_40px_-28px_rgba(23,34,48,0.35)]'
-                : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                : 'bg-muted text-foreground hover:bg-muted'
             }`}
             aria-pressed={activeTab === 'offers'}
           >
             <p
-              className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${activeTab === 'offers' ? 'text-white/60' : 'text-slate-500'}`}
+              className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${activeTab === 'offers' ? 'text-white/60' : 'text-muted-foreground'}`}
             >
               Trade Desk
             </p>
             <h2 className="mt-1 text-lg font-semibold">Pending and sent offers</h2>
             <p
-              className={`mt-1 text-sm ${activeTab === 'offers' ? 'text-white/75' : 'text-slate-600'}`}
+              className={`mt-1 text-sm ${activeTab === 'offers' ? 'text-white/75' : 'text-muted-foreground'}`}
             >
               Review incoming proposals, track what you have sent, and respond quickly.
             </p>
@@ -162,18 +165,18 @@ export default function LeagueTradesClient({
             className={`rounded-[1.1rem] px-4 py-4 text-left transition ${
               activeTab === 'create'
                 ? 'bg-[color:var(--league-accent)] text-white shadow-[0_18px_40px_-28px_rgba(127,96,53,0.35)]'
-                : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                : 'bg-muted text-foreground hover:bg-muted'
             }`}
             aria-pressed={activeTab === 'create'}
           >
             <p
-              className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${activeTab === 'create' ? 'text-white/65' : 'text-slate-500'}`}
+              className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${activeTab === 'create' ? 'text-white/65' : 'text-muted-foreground'}`}
             >
               Compose
             </p>
             <h2 className="mt-1 text-lg font-semibold">Create trade</h2>
             <p
-              className={`mt-1 text-sm ${activeTab === 'create' ? 'text-white/80' : 'text-slate-600'}`}
+              className={`mt-1 text-sm ${activeTab === 'create' ? 'text-white/80' : 'text-muted-foreground'}`}
             >
               Build a fresh offer in a dedicated workspace with both rosters side by side.
             </p>
@@ -189,10 +192,10 @@ export default function LeagueTradesClient({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-accent)]">
                   Compose Mode
                 </p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
                   Build new offer
                 </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                   This is the primary workspace. Choose the other manager, compare both rosters, and
                   shape the offer before you return to the inbox.
                 </p>
@@ -203,7 +206,7 @@ export default function LeagueTradesClient({
                 </span>
                 <button
                   type="button"
-                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted"
                   onClick={openOffersTab}
                 >
                   Back to review
@@ -300,6 +303,7 @@ export default function LeagueTradesClient({
               actionTradeId={trades.actionTradeId}
               runAction={trades.runAction}
               beginCounter={trades.beginCounter}
+              reviewControls={trades.reviewControls}
             />
 
             <TradeInboxRail
@@ -378,6 +382,7 @@ export default function LeagueTradesClient({
             actionTradeId={trades.actionTradeId}
             runAction={trades.runAction}
             beginCounter={trades.beginCounter}
+            reviewControls={trades.reviewControls}
           />
         </div>
       )}

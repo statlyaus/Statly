@@ -35,6 +35,7 @@ interface SSRMemberLite {
   userId: string;
   teamId?: string;
   teamName?: string;
+  role?: string;
 }
 
 interface SSRWaiverOrderEntry {
@@ -65,6 +66,7 @@ export default async function LeagueWaiversPage({ params }: { params: Promise<{ 
         userId: member.userId,
         teamId: member.id,
         teamName: member.teamName,
+        role: member.role,
       },
     ])
   );

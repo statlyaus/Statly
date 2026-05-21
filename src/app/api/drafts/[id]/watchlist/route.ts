@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { addToWatchlist, removeFromWatchlist, getWatchlist } from '@/lib/draftLobby';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 interface WatchlistRequest {
   playerId: string;
@@ -11,18 +16,57 @@ interface WatchlistRequest {
   notes?: string;
 }
 
+async function requireBoundDraftMember(draftId: string, memberId: string, actorUserId: string) {
+  const draft = await prisma.draft.findUnique({
+    where: { id: draftId },
+    include: {
+      league: {
+        include: {
+          members: {
+            where: { id: memberId, userId: actorUserId },
+            select: { id: true, userId: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!draft) {
+    return errorResponse('Draft not found', 404);
+  }
+
+  const isBoundMember =
+    draft.league?.members.some(
+      (member) => member.id === memberId && member.userId === actorUserId
+    ) ?? false;
+
+  if (!isBoundMember) {
+    return errorResponse('Not a member of this draft', 403);
+  }
+
+  return null;
+}
+
 /**
  * Get member's watchlist
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: draftId } = await params;
   try {
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
 
     if (!memberId) {
       return errorResponse('Missing memberId parameter', 400);
     }
+
+    const memberError = await requireBoundDraftMember(draftId, memberId, actorUserId);
+    if (memberError) return memberError;
 
     const watchlist = await getWatchlist(draftId, memberId);
 
@@ -43,11 +87,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: draftId } = await params;
   try {
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
     const body: WatchlistRequest = await request.json();
 
     if (!body.playerId || !body.memberId) {
       return errorResponse('Missing playerId or memberId', 400);
     }
+
+    const memberError = await requireBoundDraftMember(draftId, body.memberId, actorUserId);
+    if (memberError) return memberError;
 
     const watchlistItem = await addToWatchlist(
       draftId,
@@ -77,6 +129,11 @@ export async function DELETE(
 ) {
   const { id: draftId } = await params;
   try {
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
     const url = new URL(request.url);
     const memberId = url.searchParams.get('memberId');
     const playerId = url.searchParams.get('playerId');
@@ -84,6 +141,9 @@ export async function DELETE(
     if (!memberId || !playerId) {
       return errorResponse('Missing memberId or playerId parameters', 400);
     }
+
+    const memberError = await requireBoundDraftMember(draftId, memberId, actorUserId);
+    if (memberError) return memberError;
 
     await removeFromWatchlist(draftId, memberId, playerId);
 

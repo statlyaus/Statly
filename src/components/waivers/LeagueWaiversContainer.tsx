@@ -7,6 +7,7 @@ import { type DocumentSnapshot } from 'firebase/firestore';
 import { useAuth } from '@/AuthContext';
 import { LoadingSpinner } from '@/components/ui';
 import WaiverFAABSystem from '@/components/waivers/WaiverFAABSystem';
+import { cn } from '@/lib/utils';
 import {
   LeagueDataService,
   type LeagueWaiverClaim,
@@ -71,7 +72,10 @@ interface Props {
       };
     }
   >;
-  membersIndex?: Record<string, { userId: string; teamId?: string; teamName?: string }>;
+  membersIndex?: Record<
+    string,
+    { userId: string; teamId?: string; teamName?: string; role?: string }
+  >;
   initialWaiverOrder?: Array<{
     userId: string;
     teamId?: string;
@@ -217,6 +221,11 @@ type WaiversSnapshotResponse = {
   }>;
 };
 
+type ProcessWaiversResponse = {
+  processed?: number;
+  results?: Array<{ id: string; status: string; reason?: string }>;
+};
+
 export default function LeagueWaiversContainer({
   leagueId,
   embedded = false,
@@ -277,6 +286,10 @@ export default function LeagueWaiversContainer({
       })) as LeagueWaiverPriorityEntry[]
   );
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [dataRefreshError, setDataRefreshError] = useState<string | null>(null);
+  const [processingClaims, setProcessingClaims] = useState(false);
+  const [processResult, setProcessResult] = useState<string | null>(null);
+  const [realtimeFallbackEnabled, setRealtimeFallbackEnabled] = useState(false);
 
   // Activity paging state
   const ACTIVITY_PAGE_SIZE = 50;
@@ -307,10 +320,32 @@ export default function LeagueWaiversContainer({
         }),
       ]);
 
+      if (!rosterRes.ok || !waiversRes.ok) {
+        const failedResponse = !rosterRes.ok ? rosterRes : waiversRes;
+        const payload = (await failedResponse.json().catch(() => ({}))) as { error?: string };
+        const reason =
+          payload?.error || `HTTP ${failedResponse.status}`;
+        throw new Error(
+          `Waiver data is temporarily unavailable. Showing the last loaded state. ${reason}`
+        );
+      }
+
       if (rosterRes.ok) {
         const payload = (await rosterRes.json()) as {
-          data?: { roster?: { id?: string; teamName?: string; players?: Array<{ id: string }> } };
-          roster?: { id?: string; teamName?: string; players?: Array<{ id: string }> };
+          data?: {
+            roster?: {
+              id?: string;
+              memberId?: string;
+              teamName?: string;
+              players?: Array<{ id: string }>;
+            };
+          };
+          roster?: {
+            id?: string;
+            memberId?: string;
+            teamName?: string;
+            players?: Array<{ id: string }>;
+          };
         };
         const rosterRaw = payload?.data?.roster ?? payload?.roster;
         if (rosterRaw) {
@@ -319,6 +354,7 @@ export default function LeagueWaiversContainer({
             : [];
           setRoster({
             id: String(rosterRaw.id ?? ''),
+            memberId: rosterRaw.memberId ? String(rosterRaw.memberId) : undefined,
             userId: user.uid,
             teamName: String(rosterRaw.teamName ?? ''),
             playerIds,
@@ -364,10 +400,17 @@ export default function LeagueWaiversContainer({
           : [];
         setWaiverPriorities(nextPriorities);
       }
+      setDataRefreshError(null);
     } catch (error) {
-      if (isAbortLikeError(error) || isNetworkFetchError(error)) {
+      if (isAbortLikeError(error)) {
         return;
       }
+      const message = isNetworkFetchError(error)
+        ? 'Waiver data is temporarily unavailable. Showing the last loaded state.'
+        : error instanceof Error
+          ? error.message
+          : 'Waiver data is temporarily unavailable. Showing the last loaded state.';
+      setDataRefreshError(message);
       console.error('Failed to refresh API-only waiver state', error);
     } finally {
       if (refreshAbortRef.current === abortController) {
@@ -379,7 +422,7 @@ export default function LeagueWaiversContainer({
 
   useEffect(() => {
     if (!user?.uid) return;
-    if (disableRealtime) {
+    if (disableRealtime || realtimeFallbackEnabled) {
       let active = true;
       void refreshApiOnlyState();
       const intervalId = window.setInterval(() => {
@@ -398,66 +441,97 @@ export default function LeagueWaiversContainer({
     let activityKey: string | null = null;
     let faabKey: string | null = null;
     let prioritiesKey: string | null = null;
+    let active = true;
+    const handleRealtimeError = (label: string, error: Error) => {
+      console.error(label, error);
+      setRealtimeFallbackEnabled(true);
+    };
 
-    try {
-      subKey = leagueDataService.subscribeToLeagueWaivers(
-        leagueId,
-        (c) => setClaims(c),
-        undefined,
-        (err) => console.error('Waivers sub error', err)
-      );
+    void user
+      .getIdToken()
+      .then(() => {
+        if (!active) return;
 
-      rosterKey = leagueDataService.subscribeToUserRoster(
-        leagueId,
-        user.uid,
-        (r) => setRoster(r),
-        (err) => console.error('Roster sub error', err)
-      );
+        try {
+          subKey = leagueDataService.subscribeToLeagueWaivers(
+            leagueId,
+            (c) => setClaims(c),
+            undefined,
+            (err) => handleRealtimeError('Waivers sub error', err)
+          );
 
-      activityKey = leagueDataService.subscribeToLeagueActivity(
-        leagueId,
-        (items, pageMeta) => {
-          // Merge latest snapshot with any previously loaded older items (dedupe by id)
-          setActivity((prev) => {
-            const latestIds = new Set(items.map((i) => i.id));
-            const preservedOlder = prev.filter((p) => !latestIds.has(p.id));
-            return [...items, ...preservedOlder];
-          });
-          // Only update the paging cursor if we haven't paged older items yet
-          if (!hasLoadedMoreActivity) {
-            setActivityLastDoc(pageMeta?.lastDoc ?? null);
-          }
-          // Heuristic: if we received a full page, likely more exist
-          setActivityHasMore((items?.length ?? 0) === ACTIVITY_PAGE_SIZE);
-        },
-        { pageSize: ACTIVITY_PAGE_SIZE },
-        (err) => console.error('Activity sub error', err)
-      );
+          rosterKey = leagueDataService.subscribeToUserRoster(
+            leagueId,
+            user.uid,
+            (r) => setRoster(r),
+            (err) => handleRealtimeError('Roster sub error', err)
+          );
 
-      faabKey = leagueDataService.subscribeToWaiverPriority(
-        leagueId,
-        user.uid,
-        (remaining) => setRemainingFAAB(remaining),
-        (err) => console.error('Waiver priority sub error', err)
-      );
+          activityKey = leagueDataService.subscribeToLeagueActivity(
+            leagueId,
+            (items, pageMeta) => {
+              // Merge latest snapshot with any previously loaded older items (dedupe by id)
+              setActivity((prev) => {
+                const latestIds = new Set(items.map((i) => i.id));
+                const preservedOlder = prev.filter((p) => !latestIds.has(p.id));
+                return [...items, ...preservedOlder];
+              });
+              // Only update the paging cursor if we haven't paged older items yet
+              if (!hasLoadedMoreActivity) {
+                setActivityLastDoc(pageMeta?.lastDoc ?? null);
+              }
+              // Heuristic: if we received a full page, likely more exist
+              setActivityHasMore((items?.length ?? 0) === ACTIVITY_PAGE_SIZE);
+            },
+            { pageSize: ACTIVITY_PAGE_SIZE },
+            (err) => handleRealtimeError('Activity sub error', err)
+          );
 
-      prioritiesKey = leagueDataService.subscribeToLeagueWaiverPriorities(
-        leagueId,
-        (items) => setWaiverPriorities(items),
-        (err) => console.error('Waiver priorities sub error', err)
-      );
-    } catch (error) {
-      console.error('Failed to initialize waiver subscriptions', error);
-    }
+          faabKey = leagueDataService.subscribeToWaiverPriority(
+            leagueId,
+            user.uid,
+            (remaining) => setRemainingFAAB(remaining),
+            (err) => handleRealtimeError('Waiver priority sub error', err)
+          );
+
+          prioritiesKey = leagueDataService.subscribeToLeagueWaiverPriorities(
+            leagueId,
+            (items) => setWaiverPriorities(items),
+            (err) => handleRealtimeError('Waiver priorities sub error', err)
+          );
+        } catch (error) {
+          console.error('Failed to initialize waiver subscriptions', error);
+          setDataRefreshError(
+            'Realtime waiver updates are unavailable. Falling back to periodic refresh.'
+          );
+          setRealtimeFallbackEnabled(true);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to prepare waiver realtime auth', error);
+        setDataRefreshError(
+          'Realtime waiver updates are unavailable. Falling back to periodic refresh.'
+        );
+        setRealtimeFallbackEnabled(true);
+      });
 
     return () => {
+      active = false;
       if (subKey) leagueDataService.unsubscribe(subKey);
       if (rosterKey) leagueDataService.unsubscribe(rosterKey);
       if (activityKey) leagueDataService.unsubscribe(activityKey);
       if (faabKey) leagueDataService.unsubscribe(faabKey);
       if (prioritiesKey) leagueDataService.unsubscribe(prioritiesKey);
     };
-  }, [leagueId, user?.uid, hasLoadedMoreActivity, disableRealtime, refreshApiOnlyState]);
+  }, [
+    leagueId,
+    user,
+    user?.uid,
+    hasLoadedMoreActivity,
+    disableRealtime,
+    realtimeFallbackEnabled,
+    refreshApiOnlyState,
+  ]);
 
   const handleLoadMoreActivity = async () => {
     if (!activityLastDoc || loadingMoreActivity) return;
@@ -620,6 +694,19 @@ export default function LeagueWaiversContainer({
       .sort((a, b) => (a.currentPriority ?? 9999) - (b.currentPriority ?? 9999));
   }, [claims, membersIndex, waiverPriorities]);
 
+  const canProcessClaims = useMemo(() => {
+    const role = user?.uid ? membersIndex?.[user.uid]?.role : undefined;
+    if (typeof role !== 'string') return false;
+    return ['owner', 'commissioner'].includes(role.toLowerCase());
+  }, [membersIndex, user?.uid]);
+
+  const formatProcessResult = (result: ProcessWaiversResponse) => {
+    const processed = result.processed ?? result.results?.length ?? 0;
+    if (processed === 0) return 'No pending waiver claims to process.';
+    const label = processed === 1 ? 'waiver claim' : 'waiver claims';
+    return `Processed ${processed} ${label}.`;
+  };
+
   const handleSubmitClaim = async (claim: Partial<UIWaiverClaim>) => {
     if (!user?.uid || !leagueId) return;
 
@@ -642,7 +729,7 @@ export default function LeagueWaiversContainer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.uid,
-          teamId: roster.id,
+          teamId: roster.memberId ?? roster.id,
           playerId: String(claim.playerId),
           dropPlayerId: claim.dropPlayerId,
           priority: claim.priority ?? 1,
@@ -656,9 +743,7 @@ export default function LeagueWaiversContainer({
         setSubmitError(msg);
         return;
       }
-      if (disableRealtime) {
-        await refreshApiOnlyState();
-      }
+      await refreshApiOnlyState();
     } catch (err) {
       setSubmitError('Failed to submit waiver claim');
       console.error('[handleSubmitClaim] Error:', err);
@@ -668,20 +753,49 @@ export default function LeagueWaiversContainer({
   const handleCancelClaim = async (id: string) => {
     if (!user?.uid || !leagueId) return;
     try {
+      setSubmitError(null);
       const res = await fetch(`/api/leagues/${leagueId}/waivers/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.uid, claimId: id }),
       });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
         console.error('Cancel claim failed', j);
+        setSubmitError(j?.error || 'Failed to cancel waiver claim');
+        return;
       }
-      if (disableRealtime) {
-        await refreshApiOnlyState();
-      }
+      await refreshApiOnlyState();
+      setSubmitError(null);
     } catch (err) {
+      setSubmitError('Failed to cancel waiver claim');
       console.error('Failed to cancel waiver claim', err);
+    }
+  };
+
+  const handleProcessClaims = async () => {
+    if (!user?.uid || !leagueId || !canProcessClaims || processingClaims) return;
+    try {
+      setProcessingClaims(true);
+      setSubmitError(null);
+      setProcessResult(null);
+      const res = await fetch(`/api/leagues/${leagueId}/waivers/process`, {
+        method: 'POST',
+      });
+      const payload = (await res.json().catch(() => ({}))) as ProcessWaiversResponse & {
+        error?: string;
+      };
+      if (!res.ok) {
+        setSubmitError(payload?.error || 'Failed to process waiver claims');
+        return;
+      }
+      setProcessResult(formatProcessResult(payload));
+      await refreshApiOnlyState();
+    } catch (err) {
+      setSubmitError('Failed to process waiver claims');
+      console.error('Failed to process waiver claims', err);
+    } finally {
+      setProcessingClaims(false);
     }
   };
 
@@ -812,10 +926,18 @@ export default function LeagueWaiversContainer({
     <>
       {submitError && (
         <div
-          className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700 text-sm"
+          className="mb-4 rounded-md border border-[color:var(--league-danger-soft)] bg-[color:var(--league-danger-soft)] p-3 text-sm text-[color:var(--league-danger)]"
           role="alert"
         >
           {submitError}
+        </div>
+      )}
+      {dataRefreshError && (
+        <div
+          className="mb-4 rounded-md border border-[color:var(--league-warning-soft)] bg-[color:var(--league-warning-soft)] p-3 text-sm text-[color:var(--league-warning)]"
+          role="status"
+        >
+          {dataRefreshError}
         </div>
       )}
       <WaiverFAABSystem
@@ -827,6 +949,10 @@ export default function LeagueWaiversContainer({
         rosterDropOptions={rosterDropOptions}
         onSubmitClaim={handleSubmitClaim}
         onCancelClaim={handleCancelClaim}
+        onProcessClaims={handleProcessClaims}
+        canProcessClaims={canProcessClaims}
+        processingClaims={processingClaims}
+        processResult={processResult}
         activityItems={namedActivity}
         currentBalance={remainingFAAB}
         pendingBids={pendingBids}
@@ -847,7 +973,12 @@ export default function LeagueWaiversContainer({
             type="button"
             onClick={handleLoadMoreActivity}
             disabled={loadingMoreActivity}
-            className={`px-4 py-2 rounded-md text-sm font-medium border ${loadingMoreActivity ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+            className={cn(
+              'rounded-md border border-[color:var(--league-border)] px-4 py-2 text-sm font-medium text-[color:var(--league-text)]',
+              loadingMoreActivity
+                ? 'cursor-not-allowed opacity-60'
+                : 'hover:bg-[color:var(--league-surface-muted)]'
+            )}
           >
             {loadingMoreActivity ? 'Loading…' : 'Load older activity'}
           </button>

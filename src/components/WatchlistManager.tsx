@@ -150,17 +150,17 @@ export function WatchlistManager({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-gray-600">Loading watchlists...</span>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-info/20"></div>
+        <span className="ml-3 text-muted-foreground">Loading watchlists...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <h3 className="text-red-800 font-medium">Error Loading Watchlists</h3>
-        <p className="text-red-600 text-sm mt-1">{error}</p>
+      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+        <h3 className="text-destructive font-medium">Error Loading Watchlists</h3>
+        <p className="text-destructive text-sm mt-1">{error}</p>
       </div>
     );
   }
@@ -170,8 +170,8 @@ export function WatchlistManager({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-medium text-gray-900">Player Watchlists</h2>
-          <p className="text-sm text-gray-600">
+          <h2 className="text-lg font-medium text-foreground">Player Watchlists</h2>
+          <p className="text-sm text-muted-foreground">
             Organize and prioritize players for drafts and trades
           </p>
         </div>
@@ -203,7 +203,7 @@ export function WatchlistManager({
 
       {/* Watchlist Form */}
       {showForm && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-border rounded-lg p-6">
           <WatchlistForm
             watchlist={editingWatchlist || undefined}
             leagues={leagues}
@@ -220,9 +220,9 @@ export function WatchlistManager({
 
       {/* Watchlist Cards */}
       {filteredWatchlists.length === 0 ? (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-          <h3 className="text-gray-800 font-medium">No Watchlists Found</h3>
-          <p className="text-gray-600 text-sm mt-1">
+        <div className="bg-muted border border-border rounded-lg p-8 text-center">
+          <h3 className="text-foreground font-medium">No Watchlists Found</h3>
+          <p className="text-muted-foreground text-sm mt-1">
             Create your first watchlist to start organizing players.
           </p>
         </div>
@@ -323,10 +323,10 @@ function WatchlistCard({
   }, []);
 
   const getPriorityColor = (priority: number) => {
-    if (priority >= 8) return 'bg-red-100 text-red-800';
-    if (priority >= 5) return 'bg-yellow-100 text-yellow-800';
-    if (priority >= 2) return 'bg-green-100 text-green-800';
-    return 'bg-gray-100 text-gray-800';
+    if (priority >= 8) return 'bg-destructive/10 text-destructive';
+    if (priority >= 5) return 'bg-warning/10 text-warning';
+    if (priority >= 2) return 'bg-success/10 text-success';
+    return 'bg-muted text-foreground';
   };
 
   const getPriorityLabel = (priority: number) => {
@@ -337,14 +337,14 @@ function WatchlistCard({
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+    <div className="bg-white border border-border rounded-lg p-4 shadow-sm">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-gray-900 truncate">{watchlist.name}</h3>
+          <h3 className="font-medium text-foreground truncate">{watchlist.name}</h3>
           <div className="flex items-center gap-2 mt-1">
             {watchlist.isDraftList && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-info/10 text-info">
                 Draft List
               </span>
             )}
@@ -354,7 +354,7 @@ function WatchlistCard({
               {getPriorityLabel(watchlist.priority)}
             </span>
             {watchlist.leagueId && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
                 League
               </span>
             )}
@@ -364,7 +364,7 @@ function WatchlistCard({
         <div className="flex items-center gap-2 ml-2">
           <button
             onClick={() => onEdit(watchlist)}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-muted-foreground hover:text-muted-foreground"
             title="Edit watchlist"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -378,7 +378,7 @@ function WatchlistCard({
           </button>
           <button
             onClick={() => onDelete(watchlist.id)}
-            className="text-gray-400 hover:text-red-600"
+            className="text-muted-foreground hover:text-destructive"
             title="Delete watchlist"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -395,7 +395,7 @@ function WatchlistCard({
 
       {/* Description */}
       {watchlist.description && (
-        <p className="text-sm text-gray-600 mb-3">{watchlist.description}</p>
+        <p className="text-sm text-muted-foreground mb-3">{watchlist.description}</p>
       )}
 
       {/* Tags */}
@@ -404,7 +404,7 @@ function WatchlistCard({
           {watchlist.tags.map((tag, index) => (
             <span
               key={index}
-              className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-800"
+              className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-muted text-foreground"
             >
               #{tag}
             </span>
@@ -415,14 +415,14 @@ function WatchlistCard({
       {/* Players */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-600">Players ({playerIds.length})</span>
+          <span className="text-muted-foreground">Players ({playerIds.length})</span>
           {watchlist.isDraftList && (
-            <span className="text-xs text-blue-600">Drag to reorder priority</span>
+            <span className="text-xs text-info">Drag to reorder priority</span>
           )}
         </div>
 
         {playerIds.length === 0 ? (
-          <div className="text-center py-4 text-gray-500 text-sm">No players added yet</div>
+          <div className="text-center py-4 text-muted-foreground text-sm">No players added yet</div>
         ) : (
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {playerIds.slice(0, compact ? 5 : playerIds.length).map((playerId, index) => (
@@ -444,19 +444,19 @@ function WatchlistCard({
                 }}
                 className={`
                   flex items-center justify-between p-2 rounded text-sm cursor-pointer
-                  ${dragState.hoverIndex === index ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 hover:bg-gray-100'}
+                  ${dragState.hoverIndex === index ? 'bg-info/10 border-info/20' : 'bg-muted hover:bg-muted'}
                   ${dragState.dragIndex === index ? 'opacity-50' : ''}
                   ${watchlist.isDraftList ? 'cursor-grab active:cursor-grabbing' : ''}
-                  ${onPlayerSelect ? 'hover:bg-blue-50' : ''}
+                  ${onPlayerSelect ? 'hover:bg-info/10' : ''}
                 `}
               >
                 <div className="flex items-center gap-2">
                   {watchlist.isDraftList && (
-                    <span className="text-xs text-gray-400 w-4">{index + 1}</span>
+                    <span className="text-xs text-muted-foreground w-4">{index + 1}</span>
                   )}
                   {watchlist.isDraftList && (
                     <svg
-                      className="w-3 h-3 text-gray-400"
+                      className="w-3 h-3 text-muted-foreground"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -469,17 +469,17 @@ function WatchlistCard({
                       />
                     </svg>
                   )}
-                  <span className="font-medium text-gray-900">Player {playerId.slice(-4)}</span>
+                  <span className="font-medium text-foreground">Player {playerId.slice(-4)}</span>
                 </div>
 
                 {index === 0 && watchlist.isDraftList && (
-                  <span className="text-xs text-blue-600 font-medium">Next Pick</span>
+                  <span className="text-xs text-info font-medium">Next Pick</span>
                 )}
               </div>
             ))}
 
             {compact && playerIds.length > 5 && (
-              <div className="text-center py-2 text-sm text-gray-500">
+              <div className="text-center py-2 text-sm text-muted-foreground">
                 +{playerIds.length - 5} more players
               </div>
             )}
@@ -489,8 +489,8 @@ function WatchlistCard({
 
       {/* Footer */}
       {watchlist.lastUsedAt && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-500">
+        <div className="mt-3 pt-3 border-t border-border">
+          <p className="text-xs text-muted-foreground">
             Last used: {new Date(watchlist.lastUsedAt).toLocaleDateString()}
           </p>
         </div>
@@ -535,7 +535,7 @@ function WatchlistForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">
+        <h3 className="text-lg font-medium text-foreground">
           {watchlist ? 'Edit Watchlist' : 'Create New Watchlist'}
         </h3>
       </div>
@@ -581,7 +581,7 @@ function WatchlistForm({
             checked={isDraftList}
             onChange={(e) => setIsDraftList(e.target.checked)}
           />
-          <label htmlFor="isDraftList" className="ml-2 text-sm text-gray-700">
+          <label htmlFor="isDraftList" className="ml-2 text-sm text-foreground">
             Use for Auto-Draft
           </label>
         </div>

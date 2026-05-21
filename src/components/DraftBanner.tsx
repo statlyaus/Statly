@@ -117,14 +117,14 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
         className="relative flex flex-col lg:flex-row justify-between items-center p-6 lg:py-8 lg:px-8"
         style={{
           background: isYourTurn
-            ? 'linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)'
-            : 'linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%)',
+            ? 'linear-gradient(135deg, var(--success) 0%, var(--success) 50%, color-mix(in oklab, var(--success) 75%, white) 100%)'
+            : 'linear-gradient(135deg, var(--league-primary) 0%, var(--league-text) 50%, var(--league-primary-hover) 100%)',
           minHeight: 120,
           borderRadius: 20,
           boxShadow: isYourTurn
             ? '0 20px 40px rgba(16, 185, 129, 0.3), 0 8px 16px rgba(16, 185, 129, 0.2)'
             : '0 20px 40px rgba(0, 0, 0, 0.3), 0 8px 16px rgba(0, 0, 0, 0.1)',
-          border: isYourTurn ? '3px solid #10b981' : '2px solid #475569',
+          border: isYourTurn ? '3px solid var(--success)' : '2px solid var(--league-primary-hover)',
         }}
       >
         {/* Animated Background Pattern */}
@@ -159,7 +159,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
 
             <div className="flex items-center justify-center lg:justify-start gap-4">
               <span
-                className={`flex items-center gap-1 ${isYourTurn ? 'text-green-100' : 'text-white/80'}`}
+                className={`flex items-center gap-1 ${isYourTurn ? 'text-success' : 'text-white/80'}`}
               >
                 {isYourTurn
                   ? '🔥 YOUR TURN!'
@@ -168,7 +168,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
 
               {participantsOnline > 0 && (
                 <span className="flex items-center gap-1 text-white/70">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
                   {participantsOnline} online
                 </span>
               )}
@@ -182,13 +182,13 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
             className="relative px-6 py-4 min-w-[240px] text-center"
             style={{
               background: isYourTurn
-                ? 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)'
-                : 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                ? 'linear-gradient(135deg, var(--card) 0%, var(--success) 100%)'
+                : 'linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%)',
               borderRadius: 16,
               boxShadow: isYourTurn
                 ? '0 12px 24px rgba(16, 185, 129, 0.25), 0 4px 8px rgba(16, 185, 129, 0.1)'
                 : '0 12px 24px rgba(245, 158, 11, 0.25), 0 4px 8px rgba(245, 158, 11, 0.1)',
-              border: isYourTurn ? '2px solid #10b981' : '2px solid #f59e0b',
+              border: isYourTurn ? '2px solid var(--success)' : '2px solid var(--warning)',
               transform: 'scale(1.05)',
             }}
           >
@@ -202,18 +202,16 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
             </div>
 
             {/* Picker Name */}
-            <div
-              className={`text-lg font-black ${isYourTurn ? 'text-green-800' : 'text-yellow-900'}`}
-            >
+            <div className={`text-lg font-black ${isYourTurn ? 'text-success' : 'text-warning'}`}>
               {isYourTurn ? 'YOUR TURN' : `Team ${getTeamName(pick)}`}
             </div>
 
             {currentPickerName && !isYourTurn && (
-              <div className="text-sm font-medium text-yellow-800 mt-1">{currentPickerName}</div>
+              <div className="text-sm font-medium text-warning mt-1">{currentPickerName}</div>
             )}
 
             {draftType === 'snake' && (
-              <div className={`text-xs mt-1 ${isYourTurn ? 'text-green-600' : 'text-yellow-700'}`}>
+              <div className={`text-xs mt-1 ${isYourTurn ? 'text-success' : 'text-warning'}`}>
                 🐍 Snake Draft
               </div>
             )}
@@ -227,9 +225,9 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
             <div
               className={`text-3xl lg:text-4xl font-black mb-1 ${
                 isTimeCritical
-                  ? 'text-red-300 animate-pulse'
+                  ? 'text-destructive animate-pulse'
                   : isTimeUrgent
-                    ? 'text-yellow-300'
+                    ? 'text-warning'
                     : 'text-white'
               }`}
             >
@@ -244,7 +242,7 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
             <div className="w-32 lg:w-40 h-2 bg-white/20 rounded-full mx-auto lg:mx-0 lg:ml-auto mt-2 overflow-hidden">
               <div
                 className={`h-full transition-all duration-1000 ease-linear ${
-                  isTimeCritical ? 'bg-red-400' : isTimeUrgent ? 'bg-yellow-400' : 'bg-green-400'
+                  isTimeCritical ? 'bg-destructive' : isTimeUrgent ? 'bg-warning' : 'bg-success'
                 }`}
                 style={{ width: `${timePercentage}%` }}
               />
@@ -254,10 +252,8 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
           {/* Additional Status */}
           {isYourTurn && (
             <div className="bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm">
-              <div className="text-green-100 text-sm font-semibold">🚀 Make Your Pick!</div>
-              <div className="text-green-200 text-xs mt-1">
-                Select a player to continue the draft
-              </div>
+              <div className="text-success text-sm font-semibold">🚀 Make Your Pick!</div>
+              <div className="text-success text-xs mt-1">Select a player to continue the draft</div>
             </div>
           )}
         </div>
@@ -265,8 +261,8 @@ const DraftBanner: React.FC<DraftBannerProps> = ({
         {/* Urgent Alert Overlay */}
         {isTimeCritical && (
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-0 bg-red-500/20 animate-pulse rounded-[20px]" />
-            <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold animate-bounce">
+            <div className="absolute inset-0 bg-destructive animate-pulse rounded-[20px]" />
+            <div className="absolute top-4 right-4 bg-destructive text-white px-3 py-1 rounded-full text-sm font-bold animate-bounce">
               ⚠️ TIME RUNNING OUT!
             </div>
           </div>

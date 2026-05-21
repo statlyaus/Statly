@@ -127,14 +127,14 @@ export default function PlayerGrid({
   // Empty state
   if (filteredPlayers.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white px-6 py-12 text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl">
+      <div className="rounded-lg border border-border bg-white px-6 py-12 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-2xl">
           🔍
         </div>
-        <h3 className="text-lg font-semibold text-gray-900">
+        <h3 className="text-lg font-semibold text-foreground">
           {hasActiveFilters ? 'No players match your filters' : 'No players found'}
         </h3>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-600">
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
           {hasActiveFilters
             ? 'Clear your search or filters to bring the full board back into view.'
             : 'The player pool is empty right now. Refresh the draft room or try again once players are loaded.'}
@@ -148,14 +148,14 @@ export default function PlayerGrid({
                 onPositionFilterChange('ALL');
                 onSortChange('adp');
               }}
-              className="inline-flex items-center rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+              className="inline-flex items-center rounded-full bg-foreground px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-muted"
             >
               Clear filters
             </button>
             <button
               type="button"
               onClick={() => rowRefs.current[0]?.scrollIntoView({ block: 'start' })}
-              className="inline-flex items-center rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
+              className="inline-flex items-center rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
               Scroll to top
             </button>
@@ -166,9 +166,9 @@ export default function PlayerGrid({
   }
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm">
       {/* Search and Filter Controls */}
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3.5 sm:px-5">
+      <div className="border-b border-border bg-muted px-4 py-3.5 sm:px-5">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_11rem_11rem]">
           {/* Search Input */}
           <div className="flex-1">
@@ -178,7 +178,7 @@ export default function PlayerGrid({
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg
-                  className="h-5 w-5 text-gray-400"
+                  className="h-5 w-5 text-muted-foreground"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -199,7 +199,7 @@ export default function PlayerGrid({
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Search players by name, position, or club..."
-                className="block w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3 leading-5 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="block w-full rounded-xl border border-border bg-white py-2.5 pl-10 pr-3 leading-5 text-foreground placeholder-slate-400 focus:border-info/20 focus:outline-none focus:ring-1 focus:ring-info"
               />
             </div>
           </div>
@@ -213,7 +213,7 @@ export default function PlayerGrid({
               id="position-filter"
               value={positionFilter}
               onChange={(e) => onPositionFilterChange(e.target.value)}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 leading-5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="block w-full rounded-xl border border-border bg-white px-3 py-2.5 leading-5 focus:border-info/20 focus:outline-none focus:ring-1 focus:ring-info"
             >
               {availablePositions.map((position) => (
                 <option key={position} value={position}>
@@ -232,7 +232,7 @@ export default function PlayerGrid({
               id="sort-by"
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value as typeof sortBy)}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 leading-5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="block w-full rounded-xl border border-border bg-white px-3 py-2.5 leading-5 focus:border-info/20 focus:outline-none focus:ring-1 focus:ring-info"
             >
               <option value="adp">Sort by ADP</option>
               <option value="name">Sort by Name</option>
@@ -243,19 +243,19 @@ export default function PlayerGrid({
         </div>
 
         {/* Results Count */}
-        <div className="mt-3 flex flex-col gap-2 text-sm text-slate-600 xl:flex-row xl:items-center xl:justify-between">
+        <div className="mt-3 flex flex-col gap-2 text-sm text-muted-foreground xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <span className="font-medium text-slate-700">Showing {filteredPlayers.length}</span> of{' '}
+            <span className="font-medium text-foreground">Showing {filteredPlayers.length}</span> of{' '}
             {totalPlayers} players
             {hasActiveFilters && (
-              <span className="ml-2 text-slate-500">Filtered by your current search and sort.</span>
+              <span className="ml-2 text-muted-foreground">Filtered by your current search and sort.</span>
             )}
           </div>
           <div className="flex flex-wrap gap-1.5 xl:max-w-[32rem]">
             {visibleCategories.map((category) => (
               <span
                 key={category}
-                className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200"
+                className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-foreground ring-1 ring-ring"
               >
                 {FANTASY_CATEGORIES[category].shortLabel || FANTASY_CATEGORIES[category].label}
               </span>
@@ -267,7 +267,7 @@ export default function PlayerGrid({
       {/* Virtualized Player List */}
       <div className="relative">
         {/* Column Headers */}
-        <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-4 py-3 text-sm font-medium text-slate-700 backdrop-blur sm:px-5">
+        <div className="sticky top-0 z-10 border-b border-border bg-muted px-4 py-3 text-sm font-medium text-foreground backdrop-blur sm:px-5">
           <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(280px,1.7fr)_auto] items-center gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,1.85fr)_auto]">
             <div>Player</div>
             <div>League Stats</div>
@@ -288,9 +288,9 @@ export default function PlayerGrid({
                 ref={(element) => {
                   rowRefs.current[index] = element;
                 }}
-                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(280px,1.7fr)_auto] items-center gap-3 border-b border-slate-100 px-4 py-4 transition-colors [content-visibility:auto] xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,1.85fr)_auto] ${
-                  isFocused ? 'ring-2 ring-blue-200 bg-blue-50' : ''
-                } ${isSelected ? 'bg-green-50 border-green-200' : ''}`}
+                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(280px,1.7fr)_auto] items-center gap-3 border-b border-border px-4 py-4 transition-colors [content-visibility:auto] xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,1.85fr)_auto] ${
+                  isFocused ? 'ring-2 ring-info bg-info/10' : ''
+                } ${isSelected ? 'bg-success/10 border-success/20' : ''}`}
                 role="row"
                 tabIndex={0}
                 onKeyDown={(e) => handleKeyDown(e, index)}
@@ -303,15 +303,15 @@ export default function PlayerGrid({
                 aria-rowindex={index + 1}
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200">
-                    <span className="text-base font-bold text-blue-600">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-info/10 to-info/10">
+                    <span className="text-base font-bold text-info">
                       {player.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="min-w-0">
-                    <h3 className="truncate font-semibold text-slate-900">{player.name}</h3>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                      <span className="rounded bg-gray-100 px-2 py-1 text-[11px] font-medium">
+                    <h3 className="truncate font-semibold text-foreground">{player.name}</h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      <span className="rounded bg-muted px-2 py-1 text-[11px] font-medium">
                         {player.position}
                       </span>
                       {player.club ? (
@@ -323,18 +323,18 @@ export default function PlayerGrid({
                         <span>—</span>
                       )}
                       {player.adp && <span>ADP: {player.adp}</span>}
-                      {isQueued && <span className="font-medium text-blue-600">Queued</span>}
-                      {isWatched && <span className="font-medium text-amber-600">Watchlist</span>}
+                      {isQueued && <span className="font-medium text-info">Queued</span>}
+                      {isWatched && <span className="font-medium text-warning">Watchlist</span>}
                     </div>
                     {player.injuryStatus && player.injuryStatus !== 'healthy' && (
                       <div className="mt-2">
                         <span
                           className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                             player.injuryStatus === 'out'
-                              ? 'bg-red-100 text-red-800'
+                              ? 'bg-destructive/10 text-destructive'
                               : player.injuryStatus === 'injured'
-                                ? 'bg-orange-100 text-orange-800'
-                                : 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-warning/10 text-warning'
+                                : 'bg-warning/10 text-warning'
                           }`}
                         >
                           {player.injuryStatus === 'out'
@@ -372,12 +372,12 @@ export default function PlayerGrid({
                           return (
                             <div
                               key={category}
-                              className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2"
+                              className="rounded-xl border border-border bg-muted px-2.5 py-2"
                             >
-                              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                 {categoryMeta.shortLabel || categoryMeta.label}
                               </div>
-                              <div className="mt-1 text-sm font-semibold text-slate-900">
+                              <div className="mt-1 text-sm font-semibold text-foreground">
                                 {displayValue}
                               </div>
                             </div>
@@ -387,10 +387,10 @@ export default function PlayerGrid({
                       {(typeof player.avgPoints === 'number' ||
                         typeof player.averagePoints === 'number' ||
                         typeof player.gamesPlayed === 'number') && (
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                           <span>
                             Avg:{' '}
-                            <span className="font-semibold text-slate-700">
+                            <span className="font-semibold text-foreground">
                               {typeof player.avgPoints === 'number'
                                 ? player.avgPoints.toFixed(1)
                                 : typeof player.averagePoints === 'number'
@@ -400,7 +400,7 @@ export default function PlayerGrid({
                           </span>
                           <span>
                             Games:{' '}
-                            <span className="font-semibold text-slate-700">
+                            <span className="font-semibold text-foreground">
                               {typeof player.gamesPlayed === 'number' ? player.gamesPlayed : '—'}
                             </span>
                           </span>
@@ -408,14 +408,14 @@ export default function PlayerGrid({
                       )}
                     </div>
                   ) : (
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm text-muted-foreground">
                       League categories not configured yet.
                     </div>
                   )}
                 </div>
 
                 <div className="flex items-center justify-end gap-1.5">
-                  <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+                  <div className="inline-flex items-center rounded-xl border border-border bg-muted p-0.5">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -424,10 +424,10 @@ export default function PlayerGrid({
                       disabled={isLoading}
                       className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
                         !isLoading && isWatched
-                          ? 'bg-amber-100 text-amber-800'
+                          ? 'bg-warning/10 text-warning'
                           : !isLoading
-                            ? 'text-slate-700 hover:bg-white'
-                            : 'text-slate-400 cursor-not-allowed'
+                            ? 'text-foreground hover:bg-white'
+                            : 'text-muted-foreground cursor-not-allowed'
                       }`}
                       aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
                     >
@@ -441,10 +441,10 @@ export default function PlayerGrid({
                       disabled={isLoading || isQueued}
                       className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
                         !isLoading && isQueued
-                          ? 'bg-blue-100 text-blue-800'
+                          ? 'bg-info/10 text-info'
                           : !isLoading
-                            ? 'text-slate-700 hover:bg-white'
-                            : 'text-slate-400 cursor-not-allowed'
+                            ? 'text-foreground hover:bg-white'
+                            : 'text-muted-foreground cursor-not-allowed'
                       }`}
                       aria-label={
                         isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`
@@ -461,8 +461,8 @@ export default function PlayerGrid({
                     disabled={!canMakePick || isLoading}
                     className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                       canMakePick && !isLoading
-                        ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        ? 'bg-info text-white hover:bg-info focus:ring-2 focus:ring-info focus:ring-offset-2'
+                        : 'bg-muted text-muted-foreground cursor-not-allowed'
                     }`}
                     aria-label={`Select ${player.name}`}
                   >
@@ -479,10 +479,10 @@ export default function PlayerGrid({
           <div className="absolute inset-0 bg-white/75 flex items-center justify-center">
             <div className="text-center">
               <div
-                className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"
+                className="animate-spin rounded-full h-8 w-8 border-b-2 border-info/20 mx-auto mb-2"
                 aria-hidden="true"
               ></div>
-              <p className="text-sm text-gray-600">Processing...</p>
+              <p className="text-sm text-muted-foreground">Processing...</p>
             </div>
           </div>
         )}

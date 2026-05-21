@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
 
 import { useAuth } from '@/AuthContext';
@@ -21,6 +22,7 @@ export default function PlayerPageClient({ initialLeagueId }: { initialLeagueId?
   const [player, setPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const canonicalizedRouteRef = useRef(false);
   const selectedLeague = leagues.find((league) => league.id === leagueId);
   const effectiveLeagueId = selectedLeague?.id;
@@ -66,7 +68,7 @@ export default function PlayerPageClient({ initialLeagueId }: { initialLeagueId?
         if (controller.signal.aborted) {
           return;
         }
-        setError('Failed to fetch player data.');
+        setError(err instanceof Error ? err.message : 'Failed to fetch player data.');
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -79,7 +81,7 @@ export default function PlayerPageClient({ initialLeagueId }: { initialLeagueId?
     return () => {
       controller.abort();
     };
-  }, [effectiveLeagueId, id, params, router]);
+  }, [effectiveLeagueId, id, params, reloadNonce, router]);
 
   if (loading) {
     return (
@@ -90,7 +92,33 @@ export default function PlayerPageClient({ initialLeagueId }: { initialLeagueId?
   }
 
   if (error) {
-    return <p className="text-red-500 text-center">{error}</p>;
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-destructive"
+        >
+          <h1 className="text-lg font-semibold text-foreground">Player unavailable</h1>
+          <p className="mt-2 text-sm">{error}</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setReloadNonce((current) => current + 1)}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+              aria-label="Retry player load"
+            >
+              Retry
+            </button>
+            <Link
+              href="/players"
+              className="rounded-md border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted"
+            >
+              Back to players
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!player) {

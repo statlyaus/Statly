@@ -63,7 +63,7 @@ export default function TeamSwitcher() {
             className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
           />
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 p-0">
+        <PopoverContent align="end" aria-label="Select team" className="w-72 p-0">
           <Command>
             <div className="p-2">
               <CommandInput

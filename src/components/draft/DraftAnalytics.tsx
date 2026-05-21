@@ -92,12 +92,12 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
     <div className="space-y-6">
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-lg shadow-sm border border-border p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-info/10 rounded-full flex items-center justify-center">
                 <svg
-                  className="w-5 h-5 text-blue-600"
+                  className="w-5 h-5 text-info"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -112,20 +112,20 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
               </div>
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Draft Progress</p>
-              <p className="text-2xl font-semibold text-gray-900">
+              <p className="text-sm font-medium text-muted-foreground">Draft Progress</p>
+              <p className="text-2xl font-semibold text-foreground">
                 {analytics.draftProgress.toFixed(1)}%
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-lg shadow-sm border border-border p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-success/10 rounded-full flex items-center justify-center">
                 <svg
-                  className="w-5 h-5 text-green-600"
+                  className="w-5 h-5 text-success"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -140,20 +140,20 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
               </div>
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Completed Rounds</p>
-              <p className="text-2xl font-semibold text-gray-900">
+              <p className="text-sm font-medium text-muted-foreground">Completed Rounds</p>
+              <p className="text-2xl font-semibold text-foreground">
                 {analytics.completedRounds}/{draft.settings?.totalRounds ?? 0}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-lg shadow-sm border border-border p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-warning/10 rounded-full flex items-center justify-center">
                 <svg
-                  className="w-5 h-5 text-yellow-600"
+                  className="w-5 h-5 text-warning"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -168,20 +168,20 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
               </div>
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Avg Pick Time</p>
-              <p className="text-2xl font-semibold text-gray-900">
+              <p className="text-sm font-medium text-muted-foreground">Avg Pick Time</p>
+              <p className="text-2xl font-semibold text-foreground">
                 {analytics.avgPickTime > 0 ? `${analytics.avgPickTime.toFixed(1)}s` : 'N/A'}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-lg shadow-sm border border-border p-6">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
                 <svg
-                  className="w-5 h-5 text-purple-600"
+                  className="w-5 h-5 text-primary"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -196,8 +196,8 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
               </div>
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Auto-Picks</p>
-              <p className="text-2xl font-semibold text-gray-900">
+              <p className="text-sm font-medium text-muted-foreground">Auto-Picks</p>
+              <p className="text-2xl font-semibold text-foreground">
                 {analytics.autoPickPercentage.toFixed(1)}%
               </p>
             </div>
@@ -206,36 +206,36 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
       </div>
 
       {/* Round Progress */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Round Progress</h3>
+      <div className="bg-white rounded-lg shadow-sm border border-border p-6">
+        <h3 className="text-lg font-semibold text-foreground mb-4">Round Progress</h3>
         <div className="space-y-3">
           {analytics.roundProgress.map((round) => (
             <div key={round.round} className="flex items-center space-x-4">
-              <div className="w-16 text-sm font-medium text-gray-700">Round {round.round}</div>
+              <div className="w-16 text-sm font-medium text-foreground">Round {round.round}</div>
               <div className="flex-1">
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-muted rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all duration-300 ${
                       round.isComplete
-                        ? 'bg-green-500'
+                        ? 'bg-success'
                         : round.isCurrent
-                          ? 'bg-blue-500'
-                          : 'bg-gray-300'
+                          ? 'bg-info'
+                          : 'bg-muted'
                     }`}
                     style={{ width: `${round.progress}%` }}
                   />
                 </div>
               </div>
-              <div className="w-20 text-sm text-gray-500 text-right">
+              <div className="w-20 text-sm text-muted-foreground text-right">
                 {round.picks}/{participants.length}
               </div>
               <div className="w-16 text-sm text-right">
                 {round.isComplete ? (
-                  <span className="text-green-600">✓</span>
+                  <span className="text-success">✓</span>
                 ) : round.isCurrent ? (
-                  <span className="text-blue-600">●</span>
+                  <span className="text-info">●</span>
                 ) : (
-                  <span className="text-gray-400">○</span>
+                  <span className="text-muted-foreground">○</span>
                 )}
               </div>
             </div>
@@ -244,14 +244,14 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
       </div>
 
       {/* Position Distribution */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Position Distribution</h3>
+      <div className="bg-white rounded-lg shadow-sm border border-border p-6">
+        <h3 className="text-lg font-semibold text-foreground mb-4">Position Distribution</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Object.entries(analytics.positionCounts).map(([position, count]) => (
-            <div key={position} className="text-center p-4 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold text-gray-900">{count}</div>
-              <div className="text-sm text-gray-500">{position}</div>
-              <div className="text-xs text-gray-400">
+            <div key={position} className="text-center p-4 bg-muted rounded-lg">
+              <div className="text-2xl font-bold text-foreground">{count}</div>
+              <div className="text-sm text-muted-foreground">{position}</div>
+              <div className="text-xs text-muted-foreground">
                 {((count / analytics.totalPicks) * 100).toFixed(1)}%
               </div>
             </div>
@@ -260,25 +260,25 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
       </div>
 
       {/* Participant Performance */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Participant Performance</h3>
+      <div className="bg-white rounded-lg shadow-sm border border-border p-6">
+        <h3 className="text-lg font-semibold text-foreground mb-4">Participant Performance</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-muted">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Participant
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Picks
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Avg Time
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Auto-Picks
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Status
                 </th>
               </tr>
@@ -289,8 +289,8 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-8 w-8">
-                        <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                          <span className="text-sm font-medium text-gray-700">
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                          <span className="text-sm font-medium text-foreground">
                             {participant.displayName?.trim()?.charAt(0) ||
                               participant.id?.charAt(0) ||
                               '?'}
@@ -298,28 +298,28 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
                         </div>
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-foreground">
                           {participant.displayName}
                         </div>
-                        <div className="text-sm text-gray-500">{participant.teamName}</div>
+                        <div className="text-sm text-muted-foreground">{participant.teamName}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                     {participant.picks}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                     {participant.avgPickTime > 0 ? `${participant.avgPickTime.toFixed(1)}s` : 'N/A'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                     {participant.autoPicks}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         participant.isOnline
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+                          ? 'bg-success/10 text-success'
+                          : 'bg-destructive/10 text-destructive'
                       }`}
                     >
                       {participant.isOnline ? 'Online' : 'Offline'}

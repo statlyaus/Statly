@@ -8,6 +8,7 @@ import { DRAFT_PICK_SECONDS_OPTIONS } from '@/lib/draftClock';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { updateDraftReminders } from '@/lib/reminders';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 
@@ -18,9 +19,31 @@ interface UpdateScheduleRequest {
   enableReminders?: boolean;
 }
 
+function canManageDraftSchedule(
+  draft: {
+    league?: {
+      ownerId: string;
+      members: Array<{ userId: string; role: string }>;
+    } | null;
+  },
+  actorUserId: string
+): boolean {
+  if (draft.league?.ownerId === actorUserId) return true;
+  return (
+    draft.league?.members.some(
+      (member) => member.userId === actorUserId && member.role === 'COMMISSIONER'
+    ) ?? false
+  );
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: draftId } = await params;
   try {
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
     const body: UpdateScheduleRequest = await request.json();
 
     // Validation
@@ -73,6 +96,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!draft) {
       return errorResponse('Draft not found', 404);
+    }
+
+    if (!canManageDraftSchedule(draft, actorUserId)) {
+      return errorResponse('Only the owner or a commissioner can update draft schedule', 403);
     }
 
     if (draft.status !== DraftStatus.SCHEDULED && draft.status !== DraftStatus.LIVE) {
@@ -163,6 +190,11 @@ export async function DELETE(
 ) {
   const { id: draftId } = await params;
   try {
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return errorResponse('Unauthorized', 401);
+    }
+
     // Find the draft
     const draft = await prisma.draft.findUnique({
       where: { id: draftId },
@@ -170,6 +202,7 @@ export async function DELETE(
         league: {
           include: {
             settings: true,
+            members: true,
           },
         },
       },
@@ -177,6 +210,10 @@ export async function DELETE(
 
     if (!draft) {
       return errorResponse('Draft not found', 404);
+    }
+
+    if (!canManageDraftSchedule(draft, actorUserId)) {
+      return errorResponse('Only the owner or a commissioner can update draft schedule', 403);
     }
 
     if (draft.status !== DraftStatus.SCHEDULED) {

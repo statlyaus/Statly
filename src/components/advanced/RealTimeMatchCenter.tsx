@@ -153,13 +153,13 @@ export default function RealTimeMatchCenter({
         layout
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
+        className="bg-white rounded-lg border border-border p-4 hover:shadow-md transition-shadow cursor-pointer"
         onClick={handleClick}
       >
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="font-semibold text-gray-900">{p.name}</div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="font-semibold text-foreground">{p.name}</div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>{p.team}</span>
               <Badge variant="outline" size="sm">
                 {p.position}
@@ -167,32 +167,32 @@ export default function RealTimeMatchCenter({
             </div>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold text-green-600">{p.fantasyScore}</div>
-            <div className="text-xs text-gray-500">Fantasy Pts</div>
+            <div className="text-2xl font-bold text-success">{p.fantasyScore}</div>
+            <div className="text-xs text-muted-foreground">Fantasy Pts</div>
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-sm">
           <div className="text-center">
-            <div className="font-medium text-gray-900">{getDisposals(p)}</div>
-            <div className="text-gray-500">Disposals</div>
+            <div className="font-medium text-foreground">{getDisposals(p)}</div>
+            <div className="text-muted-foreground">Disposals</div>
           </div>
           <div className="text-center">
-            <div className="font-medium text-gray-900">{p.marks}</div>
-            <div className="text-gray-500">Marks</div>
+            <div className="font-medium text-foreground">{p.marks}</div>
+            <div className="text-muted-foreground">Marks</div>
           </div>
           <div className="text-center">
-            <div className="font-medium text-gray-900">{p.goals}</div>
-            <div className="text-gray-500">Goals</div>
+            <div className="font-medium text-foreground">{p.goals}</div>
+            <div className="text-muted-foreground">Goals</div>
           </div>
         </div>
 
         {isWatched && (
           <div className="mt-3 flex items-center gap-1">
-            <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-4 h-4 text-warning" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
             </svg>
-            <span className="text-xs text-yellow-600">Watchlist</span>
+            <span className="text-xs text-warning">Watchlist</span>
           </div>
         )}
       </motion.div>
@@ -212,7 +212,7 @@ export default function RealTimeMatchCenter({
     >
       {liveMatches.length > 0 ? (
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Live Now</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">Live Now</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {liveMatches.map((m) => (
               <motion.div
@@ -225,20 +225,20 @@ export default function RealTimeMatchCenter({
                     <Badge variant="success" className="animate-pulse">
                       LIVE
                     </Badge>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-muted-foreground">
                       {formatInTimezone(new Date(m.start_time_utc), timeZone)}
                     </span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 items-center gap-4">
                   <div className="text-right">
-                    <div className="font-semibold text-gray-900">{m.home_team}</div>
+                    <div className="font-semibold text-foreground">{m.home_team}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-gray-400 text-sm">vs</div>
+                    <div className="text-muted-foreground text-sm">vs</div>
                   </div>
                   <div className="text-left">
-                    <div className="font-semibold text-gray-900">{m.away_team}</div>
+                    <div className="font-semibold text-foreground">{m.away_team}</div>
                   </div>
                 </div>
               </motion.div>
@@ -247,8 +247,8 @@ export default function RealTimeMatchCenter({
         </div>
       ) : (
         <div className="text-center py-12">
-          <div className="text-gray-400 text-lg mb-2">No live matches</div>
-          <div className="text-gray-500">Check back during the AFL season for live updates</div>
+          <div className="text-muted-foreground text-lg mb-2">No live matches</div>
+          <div className="text-muted-foreground">Check back during the AFL season for live updates</div>
         </div>
       )}
     </motion.div>
@@ -291,8 +291,8 @@ export default function RealTimeMatchCenter({
         </div>
       ) : (
         <div className="text-center py-12">
-          <div className="text-gray-400 text-lg mb-2">Your watchlist is empty</div>
-          <div className="text-gray-500">
+          <div className="text-muted-foreground text-lg mb-2">Your watchlist is empty</div>
+          <div className="text-muted-foreground">
             Add players to your watchlist to see their live scores here
           </div>
         </div>
@@ -309,10 +309,10 @@ export default function RealTimeMatchCenter({
     <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Live Match Center</h1>
-          <p className="text-gray-600 mt-1">Real-time scores and fantasy updates</p>
+          <h1 className="text-3xl font-bold text-foreground">Live Match Center</h1>
+          <p className="text-muted-foreground mt-1">Real-time scores and fantasy updates</p>
         </div>
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-muted-foreground">
           {isLoading ? (
             'Loading…'
           ) : error ? (
@@ -320,7 +320,7 @@ export default function RealTimeMatchCenter({
               Error loading live data
               <button
                 onClick={refresh}
-                className="ml-2 text-blue-600 hover:underline disabled:opacity-60"
+                className="ml-2 text-info hover:underline disabled:opacity-60"
                 disabled={isLoading}
               >
                 Retry
@@ -335,7 +335,7 @@ export default function RealTimeMatchCenter({
       </div>
 
       <div
-        className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6"
+        className="flex space-x-1 bg-muted p-1 rounded-lg mb-6"
         role="tablist"
         aria-label="Live sections"
       >
@@ -354,8 +354,8 @@ export default function RealTimeMatchCenter({
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-info shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <span>{tab.label}</span>

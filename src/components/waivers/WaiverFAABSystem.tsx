@@ -2,21 +2,15 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  CheckCircleIcon,
-  ClockIcon,
-  ExclamationTriangleIcon,
-  MagnifyingGlassIcon,
-  MinusIcon,
-  PlusIcon,
-  XCircleIcon,
-} from '@heroicons/react/24/outline';
+import { CheckCircle2, CircleAlert, CircleX, Clock, Minus, Plus, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import LeagueViewHeader from '@/components/league/LeagueViewHeader';
 import { TeamLogo } from '@/components/TeamLogo';
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
+import { cn } from '@/lib/utils';
 import { type LeagueActivityItem } from '@/services/leagueDataService';
+import { leagueStatusTonePatterns, leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
 
 interface WaiverClaim {
   id: string;
@@ -86,6 +80,10 @@ interface WaiverFAABSystemProps {
   rosterDropOptions?: PlayerOption[];
   onSubmitClaim?: (claim: Partial<WaiverClaim>) => void;
   onCancelClaim?: (id: string) => void;
+  onProcessClaims?: () => void;
+  canProcessClaims?: boolean;
+  processingClaims?: boolean;
+  processResult?: string | null;
   activityItems?: ActivityFeedItem[];
   onLoadMorePlayers?: () => void;
   loadingMorePlayers?: boolean;
@@ -94,6 +92,37 @@ interface WaiverFAABSystemProps {
 }
 
 const DEFAULT_MIN_BID = 1;
+const textMuted = 'text-[color:var(--league-text-muted)]';
+const textStrong = 'text-[color:var(--league-text)]';
+const borderToken = 'border-[color:var(--league-border)]';
+const surface = 'bg-[color:var(--league-surface)]';
+const surfaceMuted = 'bg-[color:var(--league-surface-muted)]';
+const pageSurface = 'bg-[color:var(--league-page)]';
+const primarySurface = 'bg-[color:var(--league-primary)]';
+const primaryText = 'text-[color:var(--league-primary)]';
+const primaryForeground = 'text-[color:var(--league-primary-foreground)]';
+const accentSurface = 'bg-[color:var(--league-accent-soft)]';
+const accentText = 'text-[color:var(--league-accent)]';
+const dangerTone = leagueStatusTonePatterns.danger;
+const warningTone = leagueStatusTonePatterns.warning;
+const successTone = leagueStatusTonePatterns.success;
+const neutralTone = leagueStatusTonePatterns.neutral;
+const subtleChip = cn(
+  'rounded-full px-3 py-1 text-xs font-semibold',
+  'bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)]'
+);
+const fieldClass = cn(
+  'rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-[color:var(--league-accent)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+  borderToken,
+  pageSurface,
+  textStrong
+);
+const sectionClass = cn('overflow-hidden', leagueSurfacePatterns.panel);
+const sectionHeaderClass = cn(
+  'flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between',
+  'border-b',
+  borderToken
+);
 
 export default function WaiverFAABSystem({
   embedded = false,
@@ -110,6 +139,10 @@ export default function WaiverFAABSystem({
   rosterDropOptions = [],
   onSubmitClaim,
   onCancelClaim,
+  onProcessClaims,
+  canProcessClaims = false,
+  processingClaims = false,
+  processResult,
   activityItems = [],
   onLoadMorePlayers,
   loadingMorePlayers,
@@ -241,30 +274,30 @@ export default function WaiverFAABSystem({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending':
-        return <ClockIcon className="h-5 w-5 text-amber-500" />;
+        return <Clock className="h-5 w-5 text-[color:var(--league-warning)]" aria-hidden />;
       case 'successful':
-        return <CheckCircleIcon className="h-5 w-5 text-emerald-500" />;
+        return <CheckCircle2 className="h-5 w-5 text-[color:var(--league-success)]" aria-hidden />;
       case 'failed':
-        return <XCircleIcon className="h-5 w-5 text-red-500" />;
+        return <CircleX className="h-5 w-5 text-[color:var(--league-danger)]" aria-hidden />;
       case 'outbid':
-        return <ExclamationTriangleIcon className="h-5 w-5 text-orange-500" />;
+        return <CircleAlert className="h-5 w-5 text-[color:var(--league-warning)]" aria-hidden />;
       default:
-        return <ClockIcon className="h-5 w-5 text-slate-400" />;
+        return <Clock className={cn('h-5 w-5', textMuted)} aria-hidden />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'bg-amber-100 text-amber-800';
+        return warningTone;
       case 'successful':
-        return 'bg-emerald-100 text-emerald-800';
+        return successTone;
       case 'failed':
-        return 'bg-red-100 text-red-800';
+        return dangerTone;
       case 'outbid':
-        return 'bg-orange-100 text-orange-800';
+        return warningTone;
       default:
-        return 'bg-slate-100 text-slate-700';
+        return neutralTone;
     }
   };
 
@@ -361,51 +394,81 @@ export default function WaiverFAABSystem({
               <button
                 type="button"
                 onClick={() => setActiveTab('claim-centre')}
-                className="rounded-full bg-[color:var(--league-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                className={cn(
+                  'rounded-full px-5 py-2.5 text-sm font-semibold transition hover:bg-[color:var(--league-primary-hover)]',
+                  primarySurface,
+                  primaryForeground
+                )}
               >
                 Build claim
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('waiver-order')}
-                className="rounded-full border border-[color:var(--league-border)] bg-white px-5 py-2.5 text-sm font-semibold text-[color:var(--league-text-muted)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] hover:text-[color:var(--league-text)]"
+                className={cn(
+                  'rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] hover:text-[color:var(--league-text)]',
+                  borderToken,
+                  surface,
+                  textMuted
+                )}
               >
                 Review order
               </button>
+              {canProcessClaims ? (
+                <button
+                  type="button"
+                  onClick={onProcessClaims}
+                  disabled={processingClaims || pendingClaimCount === 0}
+                  className={cn(
+                    'rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[color:var(--league-primary)] hover:text-[color:var(--league-primary-foreground)] disabled:cursor-not-allowed disabled:bg-[color:var(--league-surface-muted)] disabled:text-[color:var(--league-text-muted)]',
+                    'border-[color:var(--league-primary)] bg-[color:var(--league-primary-soft)]',
+                    primaryText,
+                    'disabled:border-[color:var(--league-border)]'
+                  )}
+                >
+                  {processingClaims ? 'Processing claims...' : 'Process claims'}
+                </button>
+              ) : null}
             </>
           }
           aside={
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">FAAB live</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
+              <div className={cn('rounded-2xl border px-4 py-3', borderToken, surface)}>
+                <div className={cn('text-xs uppercase tracking-[0.2em]', textMuted)}>FAAB live</div>
+                <div className={cn('mt-1 text-lg font-semibold', textStrong)}>
                   ${currentBalance ?? totalBudget ?? 0}
                 </div>
-                <div className="mt-1 text-sm text-slate-500">${pendingBids || 0} pending</div>
+                <div className={cn('mt-1 text-sm', textMuted)}>${pendingBids || 0} pending</div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Open claims</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">{pendingClaimCount}</div>
-                <div className="mt-1 text-sm text-slate-500">
+              <div className={cn('rounded-2xl border px-4 py-3', borderToken, surface)}>
+                <div className={cn('text-xs uppercase tracking-[0.2em]', textMuted)}>
+                  Open claims
+                </div>
+                <div className={cn('mt-1 text-lg font-semibold', textStrong)}>
+                  {pendingClaimCount}
+                </div>
+                <div className={cn('mt-1 text-sm', textMuted)}>
                   {leagueClaims.filter((claim) => claim.status === 'pending').length} league-wide
                   pending
                 </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Market size</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
+              <div className={cn('rounded-2xl border px-4 py-3', borderToken, surface)}>
+                <div className={cn('text-xs uppercase tracking-[0.2em]', textMuted)}>
+                  Market size
+                </div>
+                <div className={cn('mt-1 text-lg font-semibold', textStrong)}>
                   {availablePlayers.length}
                 </div>
-                <div className="mt-1 text-sm text-slate-500">players currently loaded</div>
+                <div className={cn('mt-1 text-sm', textMuted)}>players currently loaded</div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+              <div className={cn('rounded-2xl border px-4 py-3', borderToken, surface)}>
+                <div className={cn('text-xs uppercase tracking-[0.2em]', textMuted)}>
                   Waiver cadence
                 </div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
+                <div className={cn('mt-1 text-lg font-semibold', textStrong)}>
                   {timeUntilProcessing}
                 </div>
-                <div className="mt-1 text-sm text-slate-500">
+                <div className={cn('mt-1 text-sm', textMuted)}>
                   {waiverSettings?.processTime || 'Next processing window'}
                 </div>
               </div>
@@ -413,17 +476,34 @@ export default function WaiverFAABSystem({
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white shadow-[0_28px_80px_-42px_rgba(15,23,42,0.75)]">
+        <div
+          className={cn(
+            'overflow-hidden rounded-[28px] border bg-[linear-gradient(135deg,var(--league-primary),var(--league-text),var(--league-success))] shadow-2xl',
+            borderToken,
+            primaryForeground
+          )}
+        >
           <div className="grid gap-6 px-6 py-7 lg:grid-cols-[1.4fr_0.9fr] lg:px-8">
             <div className="space-y-4">
-              <div className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-100">
+              <div
+                className={cn(
+                  'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em]',
+                  'border-[color:var(--league-primary-soft)] bg-[color:var(--league-primary-soft)]',
+                  primaryText
+                )}
+              >
                 League Waivers
               </div>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                   Run claims with league context on screen.
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm text-slate-200 sm:text-base">
+                <p
+                  className={cn(
+                    'mt-2 max-w-2xl text-sm opacity-75 sm:text-base',
+                    primaryForeground
+                  )}
+                >
                   Review your queue, track the live waiver order, and compare claim targets before
                   you commit FAAB.
                   {userTeamName ? ` Managing ${userTeamName}.` : ''}
@@ -433,17 +513,35 @@ export default function WaiverFAABSystem({
                 <button
                   type="button"
                   onClick={() => setActiveTab('claim-centre')}
-                  className="rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+                  className="rounded-full bg-[color:var(--league-accent-soft)] px-5 py-2.5 text-sm font-semibold text-[color:var(--league-accent)] transition hover:bg-[color:var(--league-surface)]"
                 >
                   Build claim
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('waiver-order')}
-                  className="rounded-full border border-white/20 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                  className={cn(
+                    'rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[color:var(--league-primary-soft)] hover:text-[color:var(--league-primary)]',
+                    'border-[color:var(--league-primary-soft)]',
+                    primaryForeground
+                  )}
                 >
                   Review order
                 </button>
+                {canProcessClaims ? (
+                  <button
+                    type="button"
+                    onClick={onProcessClaims}
+                    disabled={processingClaims || pendingClaimCount === 0}
+                    className={cn(
+                      'rounded-full border px-5 py-2.5 text-sm font-semibold transition hover:bg-[color:var(--league-primary-soft)] hover:text-[color:var(--league-primary)] disabled:cursor-not-allowed disabled:opacity-50',
+                      'border-[color:var(--league-primary-soft)] bg-[color:var(--league-primary-soft)]',
+                      primaryText
+                    )}
+                  >
+                    {processingClaims ? 'Processing claims...' : 'Process claims'}
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -474,12 +572,18 @@ export default function WaiverFAABSystem({
       )}
 
       <div
-        className={`rounded-3xl border border-[color:var(--league-border)] p-6 ${embedded ? 'bg-white shadow-sm' : 'bg-[linear-gradient(90deg,var(--league-accent-soft),var(--league-surface),var(--league-primary-soft))]'}`}
+        className={cn(
+          'rounded-3xl border p-6',
+          borderToken,
+          embedded
+            ? cn(surface, 'shadow-sm')
+            : 'bg-[linear-gradient(90deg,var(--league-accent-soft),var(--league-surface),var(--league-primary-soft))]'
+        )}
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Current waiver settings</h2>
-            <p className="text-sm text-slate-600">
+            <h2 className={cn('text-lg font-semibold', textStrong)}>Current waiver settings</h2>
+            <p className={cn('text-sm', textMuted)}>
               {waiverSettings?.system || 'League waivers'} • Minimum bid ${effectiveMinimumBid}
               {typeof waiverSettings?.waiverPeriod === 'number'
                 ? ` • ${waiverSettings.waiverPeriod}h hold`
@@ -492,10 +596,22 @@ export default function WaiverFAABSystem({
             <MetricInset label="Loaded pool" value={`${filteredAvailablePlayers.length}`} />
           </div>
         </div>
+        {processResult ? (
+          <div
+            className="mt-4 rounded-2xl border border-[color:var(--league-success-soft)] bg-[color:var(--league-success-soft)] px-4 py-3 text-sm font-semibold text-[color:var(--league-success)]"
+            role="status"
+          >
+            {processResult}
+          </div>
+        ) : null}
       </div>
 
       <div
-        className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
+        className={cn(
+          'flex flex-wrap gap-2 rounded-2xl border p-2 shadow-sm',
+          borderToken,
+          surface
+        )}
         role="tablist"
         aria-label="Waiver sections"
       >
@@ -514,7 +630,7 @@ export default function WaiverFAABSystem({
             onClick={() => setActiveTab(tab.id)}
             className={`rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-[color:var(--league-primary)] text-white shadow-sm'
+                ? 'bg-[color:var(--league-primary)] text-[color:var(--league-primary-foreground)] shadow-sm'
                 : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
             }`}
           >
@@ -533,31 +649,35 @@ export default function WaiverFAABSystem({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+            className={sectionClass}
           >
-            <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className={sectionHeaderClass}>
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">My current waivers</h3>
-                <p className="text-sm text-slate-600">
+                <h3 className={cn('text-lg font-semibold', textStrong)}>My current waivers</h3>
+                <p className={cn('text-sm', textMuted)}>
                   Track your pending bids and final outcomes before processing runs.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveTab('claim-centre')}
-                className="rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                className={cn(
+                  'rounded-full px-4 py-2 text-sm font-semibold transition hover:bg-[color:var(--league-primary-hover)]',
+                  primarySurface,
+                  primaryForeground
+                )}
               >
                 Create claim
               </button>
             </div>
 
             {userClaims.length === 0 ? (
-              <div className="p-10 text-center text-slate-500">
-                <ClockIcon className="mx-auto mb-4 h-12 w-12 text-slate-300" />
+              <div className={cn('p-10 text-center', textMuted)}>
+                <Clock className={cn('mx-auto mb-4 h-12 w-12', textMuted)} aria-hidden />
                 <p>No current waiver claims.</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-[color:var(--league-border)]">
                 {userClaims.map((claim) => (
                   <div
                     key={claim.id}
@@ -566,8 +686,8 @@ export default function WaiverFAABSystem({
                     <div className="flex items-start gap-4">
                       {getStatusIcon(claim.status)}
                       <div>
-                        <div className="font-semibold text-slate-900">{claim.playerName}</div>
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                        <div className={cn('font-semibold', textStrong)}>{claim.playerName}</div>
+                        <div className={cn('flex flex-wrap items-center gap-2 text-sm', textMuted)}>
                           {claim.playerTeam ? (
                             <TeamLogo team={claim.playerTeam} size={16} withCircle decorative />
                           ) : null}
@@ -576,15 +696,15 @@ export default function WaiverFAABSystem({
                             {claim.dropPlayerName ? ` • Drop ${claim.dropPlayerName}` : ''}
                           </span>
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">
+                        <div className={cn('mt-1 text-xs', textMuted)}>
                           Submitted {formatInTimezone(claim.submittedAt, timeZone, 'PP p')}
                         </div>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
-                        <div className="font-bold text-slate-900">${claim.bidAmount ?? 0}</div>
-                        <div className="text-sm text-slate-500">Priority {claim.priority}</div>
+                      <div className={cn('rounded-2xl px-4 py-3 text-right', surfaceMuted)}>
+                        <div className={cn('font-bold', textStrong)}>${claim.bidAmount ?? 0}</div>
+                        <div className={cn('text-sm', textMuted)}>Priority {claim.priority}</div>
                       </div>
                       <span
                         className={`rounded-full px-3 py-1 text-sm font-medium ${getStatusColor(claim.status)}`}
@@ -595,7 +715,7 @@ export default function WaiverFAABSystem({
                         <button
                           type="button"
                           onClick={() => onCancelClaim?.(claim.id)}
-                          className="text-sm font-medium text-red-600 hover:text-red-800"
+                          className="text-sm font-medium text-[color:var(--league-danger)] hover:text-[color:var(--league-text)]"
                         >
                           Cancel
                         </button>
@@ -619,28 +739,35 @@ export default function WaiverFAABSystem({
             exit={{ opacity: 0, y: -20 }}
             className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]"
           >
-            <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-6 py-5">
-                <h3 className="text-lg font-semibold text-slate-900">Live league waiver order</h3>
-                <p className="text-sm text-slate-600">
+            <section className={sectionClass}>
+              <div className={cn('border-b px-6 py-5', borderToken)}>
+                <h3 className={cn('text-lg font-semibold', textStrong)}>
+                  Live league waiver order
+                </h3>
+                <p className={cn('text-sm', textMuted)}>
                   Priority position, pending claim pressure, and FAAB posture in one list.
                 </p>
               </div>
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-[color:var(--league-border)]">
                 {waiverOrder.map((entry, index) => (
                   <div
                     key={entry.userId}
                     className="flex items-center justify-between gap-4 px-6 py-4"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
+                      <div
+                        className={cn(
+                          'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold',
+                          neutralTone
+                        )}
+                      >
                         {entry.currentPriority ?? index + 1}
                       </div>
                       <div>
-                        <div className="font-semibold text-slate-900">
+                        <div className={cn('font-semibold', textStrong)}>
                           {entry.teamName || 'League team'}
                         </div>
-                        <div className="text-sm text-slate-500">
+                        <div className={cn('text-sm', textMuted)}>
                           {entry.pendingClaims || 0} pending
                           {typeof entry.pendingBidTotal === 'number'
                             ? ` • $${entry.pendingBidTotal} pending`
@@ -650,10 +777,10 @@ export default function WaiverFAABSystem({
                     </div>
                     {typeof entry.remainingFAAB === 'number' && (
                       <div className="text-right">
-                        <div className="text-sm font-semibold text-slate-900">
+                        <div className={cn('text-sm font-semibold', textStrong)}>
                           ${entry.remainingFAAB}
                         </div>
-                        <div className="text-xs text-slate-500">FAAB left</div>
+                        <div className={cn('text-xs', textMuted)}>FAAB left</div>
                       </div>
                     )}
                   </div>
@@ -661,37 +788,37 @@ export default function WaiverFAABSystem({
               </div>
             </section>
 
-            <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-6 py-5">
-                <h3 className="text-lg font-semibold text-slate-900">League queue</h3>
-                <p className="text-sm text-slate-600">
+            <section className={sectionClass}>
+              <div className={cn('border-b px-6 py-5', borderToken)}>
+                <h3 className={cn('text-lg font-semibold', textStrong)}>League queue</h3>
+                <p className={cn('text-sm', textMuted)}>
                   Every active claim in the order it currently sits.
                 </p>
               </div>
               {leagueClaims.length === 0 ? (
-                <div className="p-8 text-sm text-slate-500">No live waiver activity.</div>
+                <div className={cn('p-8 text-sm', textMuted)}>No live waiver activity.</div>
               ) : (
-                <div className="max-h-[42rem] divide-y divide-slate-100 overflow-y-auto">
+                <div className="max-h-[42rem] divide-y divide-[color:var(--league-border)] overflow-y-auto">
                   {leagueClaims.map((claim) => (
                     <div
                       key={claim.id}
                       className="flex items-center justify-between gap-4 px-6 py-4"
                     >
                       <div className="min-w-0">
-                        <div className="truncate font-semibold text-slate-900">
+                        <div className={cn('truncate font-semibold', textStrong)}>
                           {claim.playerName}
                         </div>
-                        <div className="text-sm text-slate-600">
+                        <div className={cn('text-sm', textMuted)}>
                           {claim.userName}
                           {claim.dropPlayerName ? ` • Drop ${claim.dropPlayerName}` : ''}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right text-sm">
-                          <div className="font-semibold text-slate-900">
+                          <div className={cn('font-semibold', textStrong)}>
                             ${claim.bidAmount ?? 0}
                           </div>
-                          <div className="text-slate-500">Prio {claim.priority}</div>
+                          <div className={textMuted}>Prio {claim.priority}</div>
                         </div>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusColor(claim.status)}`}
@@ -716,11 +843,11 @@ export default function WaiverFAABSystem({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+            className={sectionClass}
           >
-            <div className="border-b border-slate-200 px-6 py-5">
-              <h3 className="text-lg font-semibold text-slate-900">Claim centre</h3>
-              <p className="text-sm text-slate-600">
+            <div className={cn('border-b px-6 py-5', borderToken)}>
+              <h3 className={cn('text-lg font-semibold', textStrong)}>Claim centre</h3>
+              <p className={cn('text-sm', textMuted)}>
                 Review the player pool, inspect production signals, and submit without leaving the
                 page.
               </p>
@@ -731,19 +858,26 @@ export default function WaiverFAABSystem({
                 <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
                   <label className="relative block">
                     <span className="sr-only">Search available players</span>
-                    <MagnifyingGlassIcon className="pointer-events-none absolute left-4 top-3.5 h-5 w-5 text-slate-400" />
+                    <Search
+                      className={cn(
+                        'pointer-events-none absolute left-4 top-3.5 h-5 w-5',
+                        textMuted
+                      )}
+                      aria-hidden
+                    />
                     <input
                       type="search"
                       value={playerSearch}
                       onChange={(event) => setPlayerSearch(event.target.value)}
                       placeholder="Search available players"
-                      className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+                      className={cn('w-full pl-11 pr-4', fieldClass)}
                     />
                   </label>
                   <select
+                    aria-label="Filter available players by position"
                     value={positionFilter}
                     onChange={(event) => setPositionFilter(event.target.value)}
-                    className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+                    className={fieldClass}
                   >
                     {positionOptions.map((option) => (
                       <option key={option} value={option}>
@@ -759,16 +893,16 @@ export default function WaiverFAABSystem({
                   <MetricInset label="Roster exits" value={`${rosterDropOptions.length}`} />
                 </div>
 
-                <div className="rounded-3xl border border-slate-200 bg-slate-50/70">
-                  <div className="border-b border-slate-200 px-5 py-4">
-                    <h4 className="font-semibold text-slate-900">Available players</h4>
-                    <p className="text-sm text-slate-600">
+                <div className={cn('rounded-3xl border', borderToken, surfaceMuted)}>
+                  <div className={cn('border-b px-5 py-4', borderToken)}>
+                    <h4 className={cn('font-semibold', textStrong)}>Available players</h4>
+                    <p className={cn('text-sm', textMuted)}>
                       Every loaded claim target, with quick production context.
                     </p>
                   </div>
 
                   {filteredAvailablePlayers.length === 0 ? (
-                    <div className="px-5 py-12 text-center text-sm text-slate-500">
+                    <div className={cn('px-5 py-12 text-center text-sm', textMuted)}>
                       No players matched this view.
                     </div>
                   ) : (
@@ -779,18 +913,31 @@ export default function WaiverFAABSystem({
                           <button
                             key={player.id}
                             type="button"
+                            aria-pressed={isSelected}
                             onClick={() => selectAddPlayer(player.id)}
-                            className={`w-full rounded-2xl border p-4 text-left transition ${
+                            className={cn(
+                              'w-full rounded-2xl border p-4 text-left transition',
                               isSelected
-                                ? 'border-[color:var(--league-primary)] bg-[color:var(--league-primary)] text-white shadow-lg shadow-[color:var(--league-primary)]/10'
-                                : 'border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-50'
-                            }`}
+                                ? cn(
+                                    'border-[color:var(--league-primary)] shadow-lg shadow-[color:var(--league-primary)]/10',
+                                    primarySurface,
+                                    primaryForeground
+                                  )
+                                : cn(
+                                    borderToken,
+                                    surface,
+                                    'hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]'
+                                  )
+                            )}
                           >
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                               <div>
                                 <div className="text-base font-semibold">{player.name}</div>
                                 <div
-                                  className={`flex flex-wrap items-center gap-2 text-sm ${isSelected ? 'text-slate-200' : 'text-slate-600'}`}
+                                  className={cn(
+                                    'flex flex-wrap items-center gap-2 text-sm',
+                                    isSelected ? cn(primaryForeground, 'opacity-75') : textMuted
+                                  )}
                                 >
                                   {player.team ? (
                                     <TeamLogo team={player.team} size={16} withCircle decorative />
@@ -804,21 +951,23 @@ export default function WaiverFAABSystem({
                               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                                 {typeof player.avg === 'number' && (
                                   <span
-                                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                    className={cn(
+                                      'rounded-full px-3 py-1 text-xs font-semibold',
                                       isSelected
-                                        ? 'bg-white/15 text-white'
-                                        : 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]'
-                                    }`}
+                                        ? cn(accentSurface, accentText)
+                                        : cn(accentSurface, accentText)
+                                    )}
                                   >
                                     Avg {player.avg.toFixed(1)}
                                   </span>
                                 )}
                                 <span
-                                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                  className={cn(
+                                    'rounded-full px-3 py-1 text-xs font-semibold',
                                     isSelected
-                                      ? 'bg-white/15 text-white'
-                                      : 'bg-slate-100 text-slate-700'
-                                  }`}
+                                      ? cn(accentSurface, accentText)
+                                      : cn(surfaceMuted, textMuted)
+                                  )}
                                 >
                                   {typeof player.ownership === 'number'
                                     ? `${player.ownership}% rostered`
@@ -832,11 +981,12 @@ export default function WaiverFAABSystem({
                                   typeof value === 'number' ? (
                                     <span
                                       key={key}
-                                      className={`rounded-full px-3 py-1 text-xs ${
+                                      className={cn(
+                                        'rounded-full px-3 py-1 text-xs',
                                         isSelected
-                                          ? 'bg-white/10 text-slate-100'
-                                          : 'bg-slate-100 text-slate-700'
-                                      }`}
+                                          ? cn(accentSurface, accentText)
+                                          : cn(surfaceMuted, textMuted)
+                                      )}
                                     >
                                       {labelForStat(key)} {value}
                                     </span>
@@ -853,11 +1003,16 @@ export default function WaiverFAABSystem({
                             type="button"
                             onClick={onLoadMorePlayers}
                             disabled={loadingMorePlayers}
-                            className={`rounded-full border px-4 py-2 text-sm font-medium ${
+                            className={cn(
+                              'rounded-full border px-4 py-2 text-sm font-medium',
                               loadingMorePlayers
-                                ? 'cursor-not-allowed border-slate-200 text-slate-400'
-                                : 'border-slate-300 text-slate-700 hover:bg-white'
-                            }`}
+                                ? cn('cursor-not-allowed', borderToken, textMuted)
+                                : cn(
+                                    borderToken,
+                                    textStrong,
+                                    'hover:bg-[color:var(--league-accent-soft)]'
+                                  )
+                            )}
                           >
                             {loadingMorePlayers ? 'Loading more…' : 'Load more players'}
                           </button>
@@ -870,27 +1025,43 @@ export default function WaiverFAABSystem({
               </div>
 
               <div className="space-y-4 xl:sticky xl:top-6">
-                <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <section className={cn('rounded-3xl border p-5 shadow-sm', borderToken, surface)}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h4 className="text-base font-semibold text-slate-900">Player review</h4>
-                      <p className="text-sm text-slate-600">
+                      <h4 className={cn('text-base font-semibold', textStrong)}>Player review</h4>
+                      <p className={cn('text-sm', textMuted)}>
                         Stat snapshot for the current claim target.
                       </p>
                     </div>
-                    <span className="rounded-full bg-[color:var(--league-accent-soft)] px-3 py-1 text-xs font-semibold text-[color:var(--league-accent)]">
+                    <span
+                      className={cn(
+                        'rounded-full px-3 py-1 text-xs font-semibold',
+                        accentSurface,
+                        accentText
+                      )}
+                    >
                       Priority {newClaim.priority}
                     </span>
                   </div>
 
-                  <div className="mt-5 rounded-2xl bg-[color:var(--league-primary)] p-4 text-white">
-                    <div className="text-xs uppercase tracking-[0.18em] text-slate-300">
+                  <div className={cn('mt-5 rounded-2xl p-4', primarySurface, primaryForeground)}>
+                    <div
+                      className={cn(
+                        'text-xs uppercase tracking-[0.18em] opacity-[0.65]',
+                        primaryForeground
+                      )}
+                    >
                       Target add
                     </div>
                     <div className="mt-2 text-xl font-semibold">
                       {selectedAddPlayer?.name || 'Select a player from the market'}
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                    <div
+                      className={cn(
+                        'mt-1 flex flex-wrap items-center gap-2 text-sm opacity-70',
+                        primaryForeground
+                      )}
+                    >
                       {selectedAddPlayer?.team ? (
                         <TeamLogo team={selectedAddPlayer.team} size={18} withCircle decorative />
                       ) : null}
@@ -901,7 +1072,13 @@ export default function WaiverFAABSystem({
                       </span>
                     </div>
                     {typeof selectedAddPlayer?.avg === 'number' && (
-                      <div className="mt-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-sm font-semibold text-white">
+                      <div
+                        className={cn(
+                          'mt-4 inline-flex rounded-full px-3 py-1 text-sm font-semibold',
+                          accentSurface,
+                          accentText
+                        )}
+                      >
                         Avg {selectedAddPlayer.avg.toFixed(1)}
                       </div>
                     )}
@@ -910,10 +1087,7 @@ export default function WaiverFAABSystem({
                   {statChips.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {statChips.map((chip) => (
-                        <span
-                          key={chip.label}
-                          className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
-                        >
+                        <span key={chip.label} className={subtleChip}>
                           {chip.label} {chip.value}
                         </span>
                       ))}
@@ -924,7 +1098,7 @@ export default function WaiverFAABSystem({
                     <div>
                       <label
                         htmlFor="dropPlayerSelect"
-                        className="mb-2 block text-sm font-medium text-slate-700"
+                        className={cn('mb-2 block text-sm font-medium', textStrong)}
                       >
                         Player to drop
                       </label>
@@ -932,7 +1106,7 @@ export default function WaiverFAABSystem({
                         id="dropPlayerSelect"
                         value={newClaim.dropPlayerId}
                         onChange={(event) => selectDropPlayer(event.target.value)}
-                        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+                        className={cn('w-full', fieldClass)}
                       >
                         <option value="">None selected</option>
                         {rosterDropOptions.map((player) => (
@@ -947,7 +1121,7 @@ export default function WaiverFAABSystem({
                     <div>
                       <label
                         htmlFor="bidAmount"
-                        className="mb-2 block text-sm font-medium text-slate-700"
+                        className={cn('mb-2 block text-sm font-medium', textStrong)}
                       >
                         FAAB bid
                       </label>
@@ -960,9 +1134,13 @@ export default function WaiverFAABSystem({
                               bidAmount: Math.max(effectiveMinimumBid, previous.bidAmount - 1),
                             }))
                           }
-                          className="rounded-2xl border border-slate-300 p-3 hover:bg-slate-50"
+                          className={cn(
+                            'rounded-2xl border p-3 hover:bg-[color:var(--league-accent-soft)]',
+                            borderToken
+                          )}
+                          aria-label="Decrease FAAB bid"
                         >
-                          <MinusIcon className="h-4 w-4" />
+                          <Minus className="h-4 w-4" aria-hidden />
                         </button>
                         <input
                           id="bidAmount"
@@ -975,7 +1153,7 @@ export default function WaiverFAABSystem({
                             }))
                           }
                           min={effectiveMinimumBid}
-                          className="flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-center text-lg font-semibold text-slate-900 outline-none transition focus:border-slate-500"
+                          className={cn('flex-1 text-center text-lg font-semibold', fieldClass)}
                         />
                         <button
                           type="button"
@@ -985,20 +1163,24 @@ export default function WaiverFAABSystem({
                               bidAmount: previous.bidAmount + 1,
                             }))
                           }
-                          className="rounded-2xl border border-slate-300 p-3 hover:bg-slate-50"
+                          className={cn(
+                            'rounded-2xl border p-3 hover:bg-[color:var(--league-accent-soft)]',
+                            borderToken
+                          )}
+                          aria-label="Increase FAAB bid"
                         >
-                          <PlusIcon className="h-4 w-4" />
+                          <Plus className="h-4 w-4" aria-hidden />
                         </button>
                       </div>
-                      <p className="mt-2 text-xs text-slate-500">
+                      <p className={cn('mt-2 text-xs', textMuted)}>
                         Minimum bid: ${effectiveMinimumBid}
                       </p>
                     </div>
                   </div>
                 </section>
 
-                <section className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                  <h4 className="text-base font-semibold text-slate-900">Claim summary</h4>
+                <section className={cn('rounded-3xl border p-5', borderToken, surfaceMuted)}>
+                  <h4 className={cn('text-base font-semibold', textStrong)}>Claim summary</h4>
                   <div className="mt-4 space-y-3 text-sm">
                     <SummaryRow label="Add" value={newClaim.playerName || 'Unselected'} />
                     <SummaryRow label="Drop" value={selectedDropPlayer?.name || 'None'} />
@@ -1007,13 +1189,15 @@ export default function WaiverFAABSystem({
                       <SummaryRow
                         label="Projected FAAB"
                         value={`$${projectedBalance}`}
-                        valueClassName={bidWouldExceedBalance ? 'text-red-600' : 'text-slate-900'}
+                        valueClassName={
+                          bidWouldExceedBalance ? 'text-[color:var(--league-danger)]' : textStrong
+                        }
                       />
                     )}
                   </div>
 
                   {bidWouldExceedBalance && (
-                    <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <div className={cn('mt-4 rounded-2xl px-4 py-3 text-sm', dangerTone)}>
                       This bid exceeds your remaining FAAB once pending claims are included.
                     </div>
                   )}
@@ -1026,7 +1210,12 @@ export default function WaiverFAABSystem({
                       newClaim.bidAmount < effectiveMinimumBid ||
                       bidWouldExceedBalance
                     }
-                    className="mt-5 w-full rounded-2xl bg-[color:var(--league-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className={cn(
+                      'mt-5 w-full rounded-2xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed',
+                      primarySurface,
+                      primaryForeground,
+                      'hover:bg-[color:var(--league-primary-hover)] disabled:bg-[color:var(--league-surface-muted)] disabled:text-[color:var(--league-text-muted)]'
+                    )}
                   >
                     Submit claim
                   </button>
@@ -1045,13 +1234,13 @@ export default function WaiverFAABSystem({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+            className={cn('rounded-3xl border p-6 shadow-sm', borderToken, surface)}
           >
-            <h3 className="mb-2 text-lg font-semibold text-slate-900">League activity</h3>
+            <h3 className={cn('mb-2 text-lg font-semibold', textStrong)}>League activity</h3>
             {activityItems.length === 0 ? (
-              <p className="text-sm text-slate-600">No recent activity.</p>
+              <p className={cn('text-sm', textMuted)}>No recent activity.</p>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-[color:var(--league-border)]">
                 {activityItems.map((item) => (
                   <li key={item.id} className="flex items-start justify-between py-3">
                     <div className="flex items-start gap-3">
@@ -1063,13 +1252,13 @@ export default function WaiverFAABSystem({
                             : 'pending'
                       )}
                       <div>
-                        <div className="text-sm text-slate-900">
+                        <div className={cn('text-sm', textStrong)}>
                           <span className="font-medium">
                             {item.teamName || item.userId || 'Team'}
                           </span>{' '}
                           {describeActivity(item)}
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className={cn('text-xs', textMuted)}>
                           {formatInTimezone(item.timestamp, timeZone, 'PP p')}
                           {typeof item.bidAmount === 'number' ? ` • $${item.bidAmount}` : ''}
                           {item.reason ? ` • ${item.reason}` : ''}
@@ -1127,19 +1316,27 @@ function MetricCard({
   sublabel: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-      <div className="text-xs uppercase tracking-[0.2em] text-slate-300">{label}</div>
+    <div
+      className={cn(
+        'rounded-2xl border p-4 backdrop-blur',
+        'border-[color:var(--league-primary-soft)] bg-[color:var(--league-primary-soft)]',
+        primaryText
+      )}
+    >
+      <div className={cn('text-xs uppercase tracking-[0.2em] opacity-70', primaryText)}>
+        {label}
+      </div>
       <div className="mt-2 text-3xl font-semibold">{value}</div>
-      <div className="mt-1 text-sm text-slate-300">{sublabel}</div>
+      <div className={cn('mt-1 text-sm opacity-70', primaryText)}>{sublabel}</div>
     </div>
   );
 }
 
 function MetricInset({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white/80 px-4 py-3">
-      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</div>
-      <div className="mt-1 truncate text-xl font-semibold text-slate-900">{value}</div>
+    <div className={cn('rounded-2xl px-4 py-3', surface)}>
+      <div className={cn('text-xs uppercase tracking-[0.18em]', textMuted)}>{label}</div>
+      <div className={cn('mt-1 truncate text-xl font-semibold', textStrong)}>{value}</div>
     </div>
   );
 }
@@ -1155,8 +1352,8 @@ function SummaryRow({
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-slate-500">{label}</span>
-      <span className={`font-medium ${valueClassName || 'text-slate-900'}`}>{value}</span>
+      <span className={textMuted}>{label}</span>
+      <span className={cn('font-medium', valueClassName || textStrong)}>{value}</span>
     </div>
   );
 }

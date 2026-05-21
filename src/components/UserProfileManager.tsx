@@ -75,26 +75,26 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-gray-600">Loading profile...</span>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-info/20"></div>
+        <span className="ml-3 text-muted-foreground">Loading profile...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <h3 className="text-red-800 font-medium">Error Loading Profile</h3>
-        <p className="text-red-600 text-sm mt-1">{error}</p>
+      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+        <h3 className="text-destructive font-medium">Error Loading Profile</h3>
+        <p className="text-destructive text-sm mt-1">{error}</p>
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-        <h3 className="text-gray-800 font-medium">Profile Not Found</h3>
-        <p className="text-gray-600 text-sm mt-1">User profile could not be loaded.</p>
+      <div className="bg-muted border border-border rounded-lg p-8 text-center">
+        <h3 className="text-foreground font-medium">Profile Not Found</h3>
+        <p className="text-muted-foreground text-sm mt-1">User profile could not be loaded.</p>
       </div>
     );
   }
@@ -136,9 +136,9 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
             />
           )}
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{profile.displayName}</h1>
-            <p className="text-gray-600">{profile.email}</p>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-foreground">{profile.displayName}</h1>
+            <p className="text-muted-foreground">{profile.email}</p>
+            <p className="text-sm text-muted-foreground">
               Member since {new Date(profile.createdAt).toLocaleDateString()}
             </p>
           </div>
@@ -146,7 +146,7 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
       </div>
 
       {/* Navigation Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-border mb-6">
         <nav className="-mb-px flex space-x-8">
           {[
             { id: 'profile', label: 'Profile', count: null },
@@ -164,13 +164,13 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
               }
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 selectedTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-info/20 text-info'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
               {tab.label}
               {tab.count !== null && (
-                <span className="ml-2 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs">
+                <span className="ml-2 bg-muted text-muted-foreground py-0.5 px-2 rounded-full text-xs">
                   {tab.count}
                 </span>
               )}
@@ -200,15 +200,15 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
         {selectedTab === 'dashboard' && (
           <div className="space-y-4">
             {activeLeagues.length === 0 ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-                <h3 className="text-gray-800 font-medium">No Active Leagues</h3>
-                <p className="text-gray-600 text-sm mt-1">Join a league to view the dashboard.</p>
+              <div className="bg-muted border border-border rounded-lg p-8 text-center">
+                <h3 className="text-foreground font-medium">No Active Leagues</h3>
+                <p className="text-muted-foreground text-sm mt-1">Join a league to view the dashboard.</p>
               </div>
             ) : (
               <>
                 {/* League Selection for Dashboard */}
                 <div className="bg-white shadow rounded-lg p-6">
-                  <h2 className="text-lg font-medium text-gray-900 mb-4">
+                  <h2 className="text-lg font-medium text-foreground mb-4">
                     Select League Dashboard
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -218,15 +218,15 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
                         onClick={() => setSelectedLeagueForWaivers(league.leagueId)}
                         className={`p-4 rounded-lg border-2 text-left transition-colors ${
                           selectedLeagueForWaivers === league.leagueId
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-info/20 bg-info/10'
+                            : 'border-border hover:border-border'
                         }`}
                       >
-                        <h3 className="font-medium text-gray-900">{league.league.name}</h3>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h3 className="font-medium text-foreground">{league.league.name}</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
                           {league.leagueSettings.format} • {league.role}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">Real-time league data & sync</p>
+                        <p className="text-xs text-muted-foreground mt-1">Real-time league data & sync</p>
                       </button>
                     ))}
                   </div>
@@ -248,15 +248,15 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
         {selectedTab === 'waivers' && (
           <div className="space-y-4">
             {activeLeagues.length === 0 ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-                <h3 className="text-gray-800 font-medium">No Active Leagues</h3>
-                <p className="text-gray-600 text-sm mt-1">Join a league to manage waivers.</p>
+              <div className="bg-muted border border-border rounded-lg p-8 text-center">
+                <h3 className="text-foreground font-medium">No Active Leagues</h3>
+                <p className="text-muted-foreground text-sm mt-1">Join a league to manage waivers.</p>
               </div>
             ) : (
               <>
                 {/* League Selection for Waivers */}
                 <div className="bg-white shadow rounded-lg p-6">
-                  <h2 className="text-lg font-medium text-gray-900 mb-4">
+                  <h2 className="text-lg font-medium text-foreground mb-4">
                     Select League for Waiver Management
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -266,15 +266,15 @@ export function UserProfileManager({ userId, onProfileUpdate }: UserProfileManag
                         onClick={() => setSelectedLeagueForWaivers(league.leagueId)}
                         className={`p-4 rounded-lg border-2 text-left transition-colors ${
                           selectedLeagueForWaivers === league.leagueId
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-info/20 bg-info/10'
+                            : 'border-border hover:border-border'
                         }`}
                       >
-                        <h3 className="font-medium text-gray-900">{league.league.name}</h3>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h3 className="font-medium text-foreground">{league.league.name}</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
                           {league.leagueSettings.format} • {league.role}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           Waiver System: {league.leagueSettings.waiverRules.system}
                         </p>
                       </button>
@@ -332,7 +332,7 @@ function ProfileSettings({ profile, onUpdate, updating }: ProfileSettingsProps) 
 
   return (
     <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-lg font-medium text-gray-900 mb-4">Profile Settings</h2>
+      <h2 className="text-lg font-medium text-foreground mb-4">Profile Settings</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <FormField label="Display Name">
@@ -375,17 +375,17 @@ function LeagueManagement({
     <div className="space-y-6">
       {/* Pending Invites */}
       {pendingInvites.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h3 className="text-yellow-800 font-medium mb-2">Pending League Invites</h3>
+        <div className="bg-warning/10 border border-warning/20 rounded-lg p-4">
+          <h3 className="text-warning font-medium mb-2">Pending League Invites</h3>
           <div className="space-y-2">
             {pendingInvites.map((league: LeagueMembership) => (
               <div key={league.id} className="flex items-center justify-between">
-                <span className="text-yellow-700">{league.league.name}</span>
+                <span className="text-warning">{league.league.name}</span>
                 <div className="space-x-2">
-                  <button className="text-green-600 hover:text-green-800 text-sm font-medium">
+                  <button className="text-success hover:text-success text-sm font-medium">
                     Accept
                   </button>
-                  <button className="text-red-600 hover:text-red-800 text-sm font-medium">
+                  <button className="text-destructive hover:text-destructive text-sm font-medium">
                     Decline
                   </button>
                 </div>
@@ -397,31 +397,31 @@ function LeagueManagement({
 
       {/* Active Leagues */}
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Active Leagues</h2>
+        <h2 className="text-lg font-medium text-foreground mb-4">Active Leagues</h2>
 
         {activeLeagues.length === 0 ? (
-          <p className="text-gray-500">No active leagues found.</p>
+          <p className="text-muted-foreground">No active leagues found.</p>
         ) : (
           <div className="space-y-4">
             {activeLeagues.map((league: LeagueMembership) => (
-              <div key={league.leagueId} className="border border-gray-200 rounded-lg p-4">
+              <div key={league.leagueId} className="border border-border rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-gray-900">{league.league.name}</h3>
-                    <p className="text-sm text-gray-600">
+                    <h3 className="font-medium text-foreground">{league.league.name}</h3>
+                    <p className="text-sm text-muted-foreground">
                       {league.leagueSettings.format} • {league.role}
                     </p>
                   </div>
                   <div className="space-x-2">
                     <button
                       onClick={() => setEditingLeague(league.leagueId)}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      className="text-info hover:text-info text-sm font-medium"
                     >
                       Settings
                     </button>
                     <button
                       onClick={() => onLeaveLeague(league.leagueId)}
-                      className="text-red-600 hover:text-red-800 text-sm font-medium"
+                      className="text-destructive hover:text-destructive text-sm font-medium"
                     >
                       Leave
                     </button>
@@ -429,7 +429,7 @@ function LeagueManagement({
                 </div>
 
                 {editingLeague === league.leagueId && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="mt-4 pt-4 border-t border-border">
                     <LeagueSettingsForm
                       league={league}
                       onSave={(settings: Partial<LeagueSpecificSettings>) =>
@@ -472,7 +472,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-border">
         <nav className="-mb-px flex space-x-8">
           {[
             { id: 'basic', label: 'Basic Settings' },
@@ -486,8 +486,8 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-info/20 text-info'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
               {tab.label}
@@ -520,8 +520,8 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
         {activeTab === 'roster' && (
           <div className="space-y-4">
             <div>
-              <fieldset className="border border-gray-200 rounded-md p-4">
-                <legend className="block text-sm font-medium text-gray-700 px-2">
+              <fieldset className="border border-border rounded-md p-4">
+                <legend className="block text-sm font-medium text-foreground px-2">
                   Starting Lineup
                 </legend>
                 <div className="grid grid-cols-2 gap-4">
@@ -679,7 +679,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                 }
                 aria-labelledby="autodraftEnabled"
               />
-              <label id="autodraftEnabled" className="text-sm text-gray-700">
+              <label id="autodraftEnabled" className="text-sm text-foreground">
                 Enable Autodraft
               </label>
             </div>
@@ -705,13 +705,13 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
               </UISelect>
             </FormField>
             <div>
-              <fieldset className="border border-gray-200 rounded-md p-4">
-                <legend className="block text-sm font-medium text-gray-700 px-2">
+              <fieldset className="border border-border rounded-md p-4">
+                <legend className="block text-sm font-medium text-foreground px-2">
                   Point Values
                 </legend>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <label htmlFor="kicks-points" className="block text-xs text-gray-600">
+                    <label htmlFor="kicks-points" className="block text-xs text-muted-foreground">
                       Kicks
                     </label>
                     <UIInput
@@ -741,7 +741,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     />
                   </div>
                   <div>
-                    <label htmlFor="handballs-points" className="block text-xs text-gray-600">
+                    <label htmlFor="handballs-points" className="block text-xs text-muted-foreground">
                       Handballs
                     </label>
                     <UIInput
@@ -771,7 +771,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     />
                   </div>
                   <div>
-                    <label htmlFor="goals-points" className="block text-xs text-gray-600">
+                    <label htmlFor="goals-points" className="block text-xs text-muted-foreground">
                       Goals
                     </label>
                     <UIInput
@@ -801,7 +801,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
                     />
                   </div>
                   <div>
-                    <label htmlFor="tackles-points" className="block text-xs text-gray-600">
+                    <label htmlFor="tackles-points" className="block text-xs text-muted-foreground">
                       Tackles
                     </label>
                     <UIInput
@@ -896,7 +896,7 @@ function LeagueSettingsForm({ league, onSave, onCancel, updating }: LeagueSettin
       </div>
 
       {/* Action Buttons */}
-      <div className="flex space-x-3 pt-4 border-t border-gray-200">
+      <div className="flex space-x-3 pt-4 border-t border-border">
         <Button onClick={handleSave} disabled={updating} loading={updating}>
           {updating ? 'Saving...' : 'Save Settings'}
         </Button>

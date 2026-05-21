@@ -47,6 +47,7 @@ type LifecycleCommandData = {
 };
 
 type TxClient = PrismaNS.TransactionClient;
+type StartDraftInput = { draftId: string; actorUserId?: string; system?: true };
 
 function buildPickDeadline(startedAt: Date, pickSeconds: number): Date {
   if (DRAFT_BEHAVIOR_CONTRACT.timing.timerAuthority !== 'SERVER_PICK_DEADLINE') {
@@ -70,6 +71,15 @@ function calculatePausedRemainingSeconds(deadline: Date | null, fallbackSeconds:
 
 function buildCommandEvents(...events: DraftCommandEventType[]): DraftCommandEventType[] {
   return events;
+}
+
+function canManageDraftLifecycle(input: {
+  actorUserId: string | null;
+  participants: Array<{ userId: string; role: string }>;
+}): boolean {
+  if (!input.actorUserId) return false;
+  const actor = input.participants.find((participant) => participant.userId === input.actorUserId);
+  return actor?.role === 'OWNER' || actor?.role === 'COMMISSIONER';
 }
 
 function getNextSchedulingVersion(currentSchedulingVersion: number): number {
@@ -217,7 +227,7 @@ export class DraftApplicationService {
     }
 
     try {
-      return await this.startDraft({ draftId: targetDraftId });
+      return await this.startDraft({ draftId: targetDraftId, system: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (
@@ -265,13 +275,22 @@ export class DraftApplicationService {
     }
   }
 
-  async startDraft(input: { draftId: string }): Promise<DraftCommandResult<LifecycleCommandData>> {
+  async startDraft(input: StartDraftInput): Promise<DraftCommandResult<LifecycleCommandData>> {
     const { draftId } = input;
+    const actorUserId = input.actorUserId ?? null;
+    const requiresActorAuthorization = actorUserId !== null;
 
     const result = await draftRepository.transaction(async (tx) => {
       const draft = await draftRepository.getDraftAggregate(tx, draftId);
       if (!draft) {
         throw new Error('not_found:Draft not found');
+      }
+
+      if (
+        requiresActorAuthorization &&
+        !canManageDraftLifecycle({ actorUserId, participants: draft.participants })
+      ) {
+        throw new Error('forbidden:Only the owner or a commissioner can start drafts');
       }
 
       if (draft.status !== DraftStatus.SCHEDULED) {

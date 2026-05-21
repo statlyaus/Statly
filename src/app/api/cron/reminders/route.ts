@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { authorizeCronRequest } from '@/lib/operationalAuth';
 import { processPendingReminders } from '@/lib/reminders';
 
 /**
@@ -22,18 +23,8 @@ import { processPendingReminders } from '@/lib/reminders';
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify this is a legitimate cron request
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      logger.warn('Unauthorized cron request', {
-        authHeader,
-        userAgent: request.headers.get('user-agent'),
-        ip: request.headers.get('x-forwarded-for'),
-      });
-      return errorResponse('Unauthorized', 401);
-    }
+    const authorization = authorizeCronRequest(request);
+    if (!authorization.ok) return authorization.response;
 
     logger.info('Processing draft reminders cron job');
 

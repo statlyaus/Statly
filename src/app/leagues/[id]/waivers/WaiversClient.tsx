@@ -3,6 +3,7 @@
 import React from 'react';
 
 import LeagueWaiversContainer from '@/components/waivers/LeagueWaiversContainer';
+import { isAuthBypassEnabled } from '@/lib/authBypass';
 
 export default function WaiversClient({
   leagueId,
@@ -66,7 +67,10 @@ export default function WaiversClient({
       };
     }
   >;
-  membersIndex?: Record<string, { userId: string; teamId?: string; teamName?: string }>;
+  membersIndex?: Record<
+    string,
+    { userId: string; teamId?: string; teamName?: string; role?: string }
+  >;
   initialWaiverOrder?: Array<{
     userId: string;
     teamId?: string;
@@ -76,9 +80,12 @@ export default function WaiversClient({
   }>;
   initialPlayersCursor?: string | null;
 }) {
+  const disableRealtime = isAuthBypassEnabled();
+
   return (
     <LeagueWaiversContainer
       leagueId={leagueId}
+      disableRealtime={disableRealtime}
       initialClaims={initialClaims}
       initialSettings={initialSettings ?? undefined}
       availablePlayers={availablePlayers}

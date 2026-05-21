@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { middlewareConfigs, createResponse } from '@/lib/apiMiddleware';
 import { logger } from '@/lib/logger';
 import { leagueApplicationService } from '@/server/league/services/LeagueApplicationService';
-import type { LeagueMember } from '@/types/leagues';
 
 export const runtime = 'nodejs';
 
@@ -34,41 +33,6 @@ export const POST = middlewareConfigs.private(async ({ req, user }) => {
   const normalizedCode = code.toUpperCase();
 
   logger.debug('Looking for league with code', { code: normalizedCode, userId });
-
-  if (normalizedCode === '123ABC') {
-    logger.info('Using test mode for code 123ABC', { userId });
-
-    const testLeague = {
-      id: 'test-league-id',
-      name: 'Test AFL Champions League',
-      code: '123ABC',
-      type: 'public' as const,
-      ownerId: 'test-owner',
-      maxTeams: 12,
-      status: 'preseason' as const,
-      categories: ['disposals', 'goals', 'marks', 'tackles', 'inside_50s'],
-      createdAt: new Date().toISOString(),
-    };
-
-    const member: LeagueMember = {
-      id: userId,
-      leagueId: testLeague.id,
-      userId,
-      role: 'member',
-      teamName: teamName?.trim() || `${testLeague.name} Team 1`,
-      joinedAt: new Date().toISOString(),
-      isActive: true,
-    };
-
-    return createResponse(
-      {
-        message: `Successfully joined ${testLeague.name}`,
-        league: testLeague,
-        member,
-      },
-      201
-    );
-  }
 
   try {
     const result = await leagueApplicationService.joinLeague({

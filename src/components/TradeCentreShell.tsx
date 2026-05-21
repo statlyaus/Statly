@@ -59,7 +59,7 @@ export default function TradeCentreShell({ initialPlayers, myTeam }: TradeCentre
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-white">Trade Centre</h1>
-            <p className="mt-1 text-sm text-gray-300">
+            <p className="mt-1 text-sm text-muted-foreground">
               Compare rosters, build an offer, and send the trade. Click stat chips to sort.
             </p>
           </div>
@@ -73,7 +73,7 @@ export default function TradeCentreShell({ initialPlayers, myTeam }: TradeCentre
             </button>
             <button
               type="button"
-              className="rounded-md bg-white/5 px-3 py-1.5 text-sm font-medium text-gray-300 ring-1 ring-white/10 hover:bg-white/10"
+              className="rounded-md bg-white/5 px-3 py-1.5 text-sm font-medium text-muted-foreground ring-1 ring-white/10 hover:bg-white/10"
             >
               Market (browse all)
             </button>
@@ -85,7 +85,7 @@ export default function TradeCentreShell({ initialPlayers, myTeam }: TradeCentre
           <div>
             <label
               htmlFor="your-team"
-              className="block text-xs font-medium uppercase tracking-wide text-gray-300"
+              className="block text-xs font-medium uppercase tracking-wide text-muted-foreground"
             >
               Your team
             </label>
@@ -93,7 +93,7 @@ export default function TradeCentreShell({ initialPlayers, myTeam }: TradeCentre
               id="your-team"
               readOnly
               value={lockedLeftTeam || '—'}
-              className="mt-1 w-full rounded-md bg-slate-900/80 px-3 py-2 text-white ring-1 ring-white/10 focus:outline-none"
+              className="mt-1 w-full rounded-md bg-foreground px-3 py-2 text-white ring-1 ring-white/10 focus:outline-none"
               aria-readonly="true"
             />
           </div>
@@ -101,13 +101,13 @@ export default function TradeCentreShell({ initialPlayers, myTeam }: TradeCentre
           <div>
             <label
               htmlFor="target-team"
-              className="block text-xs font-medium uppercase tracking-wide text-gray-300"
+              className="block text-xs font-medium uppercase tracking-wide text-muted-foreground"
             >
               Target team
             </label>
             <select
               id="target-team"
-              className="mt-1 w-full rounded-md bg-slate-900/80 px-3 py-2 text-white ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md bg-foreground px-3 py-2 text-white ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-info"
               value={rightTeam}
               onChange={(e) => setRightTeam(e.target.value)}
               aria-label="Select target team"
@@ -134,7 +134,7 @@ export default function TradeCentreShell({ initialPlayers, myTeam }: TradeCentre
       <button
         type="button"
         onClick={() => setOfferOpen(true)}
-        className="fixed bottom-6 right-6 z-40 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/30"
+        className="fixed bottom-6 right-6 z-40 rounded-full bg-info px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 hover:bg-info focus:outline-none focus:ring-4 focus:ring-info"
         aria-haspopup="dialog"
         aria-expanded={offerOpen}
       >
@@ -156,13 +156,13 @@ export default function TradeCentreShell({ initialPlayers, myTeam }: TradeCentre
             aria-label="Close offer"
           />
           {/* Drawer */}
-          <div className="relative z-10 h-[80vh] w-full max-w-[420px] rounded-t-2xl sm:rounded-none sm:h-full sm:rounded-l-2xl bg-slate-900 ring-1 ring-white/10 p-4 overflow-auto">
+          <div className="relative z-10 h-[80vh] w-full max-w-[420px] rounded-t-2xl sm:rounded-none sm:h-full sm:rounded-l-2xl bg-foreground ring-1 ring-white/10 p-4 overflow-auto">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Offer</h2>
               <button
                 type="button"
                 onClick={() => setOfferOpen(false)}
-                className="rounded-md bg-white/5 px-2 py-1 text-sm text-gray-300 ring-1 ring-white/10 hover:bg-white/10"
+                className="rounded-md bg-white/5 px-2 py-1 text-sm text-muted-foreground ring-1 ring-white/10 hover:bg-white/10"
               >
                 Close
               </button>

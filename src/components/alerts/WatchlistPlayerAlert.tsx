@@ -30,24 +30,24 @@ export const WatchlistPlayerAlert = ({
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
       {alerts.length > 1 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 shadow-lg">
+        <div className="bg-warning/10 border border-warning/20 rounded-lg p-3 shadow-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
-              <span className="text-sm font-medium text-orange-800">
+              <AlertTriangle className="h-5 w-5 text-warning mr-2" />
+              <span className="text-sm font-medium text-warning">
                 {alerts.length} watchlist players drafted
               </span>
             </div>
             <button
               onClick={onDismissAll}
-              className="text-orange-400 hover:text-orange-600 transition-colors"
+              className="text-warning hover:text-warning transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
           <button
             onClick={onDismissAll}
-            className="mt-2 text-xs text-orange-600 hover:text-orange-800 underline"
+            className="mt-2 text-xs text-warning hover:text-warning underline"
           >
             Dismiss all
           </button>
@@ -57,17 +57,17 @@ export const WatchlistPlayerAlert = ({
       {alerts.map((player) => (
         <div
           key={player.id}
-          className="bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg animate-slide-in-right"
+          className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 shadow-lg animate-slide-in-right"
         >
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="flex items-center mb-2">
-                <User className="h-4 w-4 text-red-500 mr-2" />
-                <h4 className="text-sm font-semibold text-red-800">Watchlist Player Drafted!</h4>
+                <User className="h-4 w-4 text-destructive mr-2" />
+                <h4 className="text-sm font-semibold text-destructive">Watchlist Player Drafted!</h4>
               </div>
-              <div className="text-sm text-red-700">
+              <div className="text-sm text-destructive">
                 <p className="font-medium">{player.name}</p>
-                <p className="flex flex-wrap items-center gap-2 text-red-600">
+                <p className="flex flex-wrap items-center gap-2 text-destructive">
                   <span>{player.position}</span>
                   <span className="inline-flex items-center gap-1">
                     <TeamLogo team={player.club} size={14} withCircle decorative />
@@ -75,7 +75,7 @@ export const WatchlistPlayerAlert = ({
                   </span>
                 </p>
                 {player.draftedBy && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-destructive mt-1">
                     Drafted by {player.draftedBy}
                     {player.pickNumber && ` (Pick #${player.pickNumber})`}
                   </p>
@@ -84,7 +84,7 @@ export const WatchlistPlayerAlert = ({
             </div>
             <button
               onClick={() => onDismiss(player.id)}
-              className="text-red-400 hover:text-red-600 transition-colors ml-2"
+              className="text-destructive hover:text-destructive transition-colors ml-2"
             >
               <X className="h-4 w-4" />
             </button>

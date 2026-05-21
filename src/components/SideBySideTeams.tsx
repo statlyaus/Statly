@@ -27,7 +27,7 @@ function Badge({ children, title }: { children: ReactNode; title?: string }) {
   return (
     <span
       title={title}
-      className="inline-flex min-w-[56px] items-center justify-center rounded-md bg-white/5 px-2 py-1 text-xs font-medium text-gray-200 ring-1 ring-white/10"
+      className="inline-flex min-w-[56px] items-center justify-center rounded-md bg-white/5 px-2 py-1 text-xs font-medium text-muted-foreground ring-1 ring-white/10"
     >
       {children}
     </span>
@@ -84,8 +84,8 @@ function SortChip({
       }}
       className={`rounded px-2 py-1 text-xs ring-1 transition ${
         active
-          ? 'bg-blue-600/20 text-blue-300 ring-blue-600/40'
-          : 'bg-white/5 text-gray-300 ring-white/10 hover:bg-white/10'
+          ? 'bg-info text-info ring-info'
+          : 'bg-white/5 text-muted-foreground ring-white/10 hover:bg-white/10'
       }`}
       aria-pressed={active}
     >
@@ -122,14 +122,14 @@ export function Column({ title, side, players }: ColumnProps) {
   }, [players, pos, sortActive, sortKey, dir]);
 
   return (
-    <section className="rounded-xl bg-gray-900 ring-1 ring-white/10">
+    <section className="rounded-xl bg-foreground ring-1 ring-white/10">
       {/* Column header with team name big + player count */}
-      <header className="rounded-t-xl bg-gradient-to-r from-gray-800 to-gray-700 p-4">
+      <header className="rounded-t-xl bg-gradient-to-r from-muted to-muted p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div
               aria-hidden
-              className="grid h-9 w-9 place-items-center rounded-full bg-blue-500/20 text-blue-300 ring-1 ring-blue-400/30"
+              className="grid h-9 w-9 place-items-center rounded-full bg-info text-info ring-1 ring-info"
             >
               <span className="text-base font-bold">{title?.[0] ?? '?'}</span>
             </div>
@@ -140,7 +140,7 @@ export function Column({ title, side, players }: ColumnProps) {
               {title}
             </h2>
           </div>
-          <span className="shrink-0 rounded-md bg-gray-900/40 px-2 py-1 text-xs text-gray-300">
+          <span className="shrink-0 rounded-md bg-foreground px-2 py-1 text-xs text-muted-foreground">
             {players.length} players
           </span>
         </div>
@@ -157,7 +157,7 @@ export function Column({ title, side, players }: ColumnProps) {
               className={`rounded px-2 py-1 text-xs ring-1 transition ${
                 pos === k
                   ? 'bg-white/20 text-white ring-white/30'
-                  : 'bg-white/5 text-gray-300 ring-white/10 hover:bg-white/10'
+                  : 'bg-white/5 text-muted-foreground ring-white/10 hover:bg-white/10'
               }`}
               aria-pressed={pos === k}
             >
@@ -209,12 +209,12 @@ export function Column({ title, side, players }: ColumnProps) {
           return (
             <li
               key={p.id}
-              className="rounded-lg bg-slate-800/60 p-3 ring-1 ring-white/5 hover:bg-slate-800"
+              className="rounded-lg bg-muted p-3 ring-1 ring-white/5 hover:bg-muted"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-white">{p.name}</div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-muted-foreground">
                     {teamBadge} • {posBadge}
                   </div>
                 </div>
@@ -225,8 +225,8 @@ export function Column({ title, side, players }: ColumnProps) {
                     type="button"
                     className={`ml-1 rounded px-3 py-1.5 text-sm font-medium ${
                       side === 'incoming'
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : 'bg-amber-600 hover:bg-amber-700 text-white'
+                        ? 'bg-info hover:bg-info text-white'
+                        : 'bg-warning hover:bg-warning text-white'
                     }`}
                     onClick={() => add(side, p)}
                   >

@@ -1,6 +1,12 @@
+import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 interface QueueRequest {
   playerId: string;
@@ -8,8 +14,29 @@ interface QueueRequest {
   rank?: number;
 }
 
-export async function POST(request: Request, context: any) {
+function isBoundMember(
+  draft: {
+    league?: {
+      members: Array<{ id: string; userId: string }>;
+    } | null;
+  },
+  memberId: string,
+  actorUserId: string
+) {
+  return (
+    draft.league?.members.some(
+      (member) => member.id === memberId && member.userId === actorUserId
+    ) ?? false
+  );
+}
+
+export async function POST(request: NextRequest, context: any) {
   try {
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return commonErrors.unauthorized();
+    }
+
     const draftId = ((await context?.params)?.id ??
       (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as
       | string
@@ -31,7 +58,8 @@ export async function POST(request: Request, context: any) {
         league: {
           include: {
             members: {
-              where: { id: memberId },
+              where: { id: memberId, userId: actorUserId },
+              select: { id: true, userId: true },
             },
           },
         },
@@ -45,7 +73,7 @@ export async function POST(request: Request, context: any) {
       return commonErrors.notFound('Draft not found');
     }
 
-    if (draft.league?.members.length === 0) {
+    if (!isBoundMember(draft, memberId, actorUserId)) {
       return commonErrors.forbidden('Not a member of this draft');
     }
 
@@ -136,8 +164,13 @@ export async function POST(request: Request, context: any) {
   }
 }
 
-export async function DELETE(request: Request, context: any) {
+export async function DELETE(request: NextRequest, context: any) {
   try {
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return commonErrors.unauthorized();
+    }
+
     const draftId = ((await context?.params)?.id ??
       (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as
       | string
@@ -157,7 +190,8 @@ export async function DELETE(request: Request, context: any) {
         league: {
           include: {
             members: {
-              where: { id: memberId },
+              where: { id: memberId, userId: actorUserId },
+              select: { id: true, userId: true },
             },
           },
         },
@@ -168,7 +202,7 @@ export async function DELETE(request: Request, context: any) {
       return commonErrors.notFound('Draft not found');
     }
 
-    if (draft.league?.members.length === 0) {
+    if (!isBoundMember(draft, memberId, actorUserId)) {
       return commonErrors.forbidden('Not a member of this draft');
     }
 
@@ -209,8 +243,13 @@ export async function DELETE(request: Request, context: any) {
   }
 }
 
-export async function GET(request: Request, context: any) {
+export async function GET(request: NextRequest, context: any) {
   try {
+    const actorUserId = await getAuthenticatedUserId(request);
+    if (!actorUserId) {
+      return commonErrors.unauthorized();
+    }
+
     const draftId = ((await context?.params)?.id ??
       (Array.isArray((await context?.params)?.id) ? (await context.params).id[0] : undefined)) as
       | string
@@ -223,6 +262,28 @@ export async function GET(request: Request, context: any) {
 
     if (!memberId) {
       return commonErrors.badRequest('Missing memberId');
+    }
+
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        league: {
+          include: {
+            members: {
+              where: { id: memberId, userId: actorUserId },
+              select: { id: true, userId: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!draft) {
+      return commonErrors.notFound('Draft not found');
+    }
+
+    if (!isBoundMember(draft, memberId, actorUserId)) {
+      return commonErrors.forbidden('Not a member of this draft');
     }
 
     // Get member's queue (draft-scoped) with players in one query

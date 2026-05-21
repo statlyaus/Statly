@@ -67,14 +67,14 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
         {Array.from({ length: 5 }).map((_, index) => (
           <div
             key={index}
-            className="animate-pulse rounded-xl border border-slate-200 bg-slate-50 p-4"
+            className="animate-pulse rounded-xl border border-border bg-muted p-4"
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-slate-200" />
-                <div className="h-4 w-28 rounded bg-slate-200" />
+                <div className="h-8 w-8 rounded-full bg-muted" />
+                <div className="h-4 w-28 rounded bg-muted" />
               </div>
-              <div className="h-4 w-16 rounded bg-slate-200" />
+              <div className="h-4 w-16 rounded bg-muted" />
             </div>
           </div>
         ))}
@@ -82,11 +82,35 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
     );
   }
 
+  if (error) {
+    return (
+      <div className="space-y-3">
+        <div
+          role="alert"
+          className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-6 text-center"
+        >
+          <p className="text-sm font-semibold text-destructive">Leaderboard unavailable</p>
+          <p className="mt-1 text-sm text-destructive">
+            Failed to load leaderboard: {error}
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href="/rankings"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-muted"
+          >
+            Open rankings
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (leaderboard.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
-        <p className="text-sm font-semibold text-slate-900">No season leaders yet</p>
-        <p className="mt-1 text-sm text-slate-600">
+      <div className="rounded-xl border border-dashed border-border bg-muted px-4 py-6 text-center">
+        <p className="text-sm font-semibold text-foreground">No season leaders yet</p>
+        <p className="mt-1 text-sm text-muted-foreground">
           Player leaderboard data will appear once season aggregates are available.
         </p>
       </div>
@@ -96,10 +120,10 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {season ? `${season} season leaders` : 'Season leaders'}
         </p>
-        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
+        <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           Live aggregate
         </span>
       </div>
@@ -111,15 +135,15 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.06 }}
-            className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+            className="flex items-center justify-between rounded-xl border border-border bg-muted px-4 py-3"
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-700">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white text-sm font-semibold text-foreground">
                 {entry.rank}
               </div>
               <div>
-                <p className="font-medium text-slate-900">{entry.name}</p>
-                <p className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <p className="font-medium text-foreground">{entry.name}</p>
+                <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   {entry.team ? (
                     <TeamLogo
                       team={entry.team}
@@ -136,23 +160,17 @@ export default function LeaderboardModule({ refreshTrigger }: LeaderboardModuleP
               </div>
             </div>
             <div className="text-right">
-              <p className="font-semibold text-slate-900">{entry.points.toLocaleString()}</p>
-              <p className="text-xs text-slate-500">fantasy pts</p>
+              <p className="font-semibold text-foreground">{entry.points.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">fantasy pts</p>
             </div>
           </motion.div>
         ))}
       </div>
 
-      {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          Failed to load leaderboard: {error}
-        </div>
-      ) : null}
-
       <div className="pt-2">
         <Link
           href="/rankings"
-          className="inline-flex w-full items-center justify-center rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="inline-flex w-full items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-muted"
         >
           Open rankings
         </Link>

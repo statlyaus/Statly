@@ -62,9 +62,9 @@ export default function LeaderboardClient() {
     <AppLayout>
       <main className="p-6">
         <h1 className="text-2xl font-bold mb-4">Leaderboard</h1>
-        <table className="min-w-full border border-gray-300">
+        <table className="min-w-full border border-border">
           <thead>
-            <tr className="bg-gray-100">
+            <tr className="bg-muted">
               <th className="p-2 border">Rank</th>
               <th className="p-2 border">Team</th>
               <th className="p-2 border">W-L-T</th>

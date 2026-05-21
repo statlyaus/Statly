@@ -3,20 +3,20 @@
 import { useState, useMemo } from 'react';
 
 import {
-  ChevronUpIcon,
-  ChevronDownIcon,
-  FunnelIcon,
-  MagnifyingGlassIcon,
-  ArrowPathIcon,
-  ChartBarIcon,
-  TrophyIcon,
-  FireIcon,
-  EyeIcon,
-  CalendarIcon,
-  UserIcon,
-  XMarkIcon,
-  InformationCircleIcon,
-} from '@heroicons/react/24/outline';
+  ChevronUp as ChevronUpIcon,
+  ChevronDown as ChevronDownIcon,
+  Funnel as FunnelIcon,
+  Search as MagnifyingGlassIcon,
+  RefreshCw as ArrowPathIcon,
+  BarChart3 as ChartBarIcon,
+  Trophy as TrophyIcon,
+  Flame as FireIcon,
+  Eye as EyeIcon,
+  Calendar as CalendarIcon,
+  User as UserIcon,
+  X as XMarkIcon,
+  Info as InformationCircleIcon,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import type { MatchLog } from '@/types/matchLogs';

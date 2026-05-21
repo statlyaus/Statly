@@ -114,9 +114,9 @@ export default function Watchlist({
   // Get player availability status
   const getAvailabilityStatus = (player: DraftPlayer) => {
     if (draftedPlayerIds.includes(player.id)) {
-      return { status: 'drafted', color: 'bg-red-500', label: 'Drafted' };
+      return { status: 'drafted', color: 'bg-destructive', label: 'Drafted' };
     }
-    return { status: 'available', color: 'bg-green-500', label: 'Available' };
+    return { status: 'available', color: 'bg-success', label: 'Available' };
   };
 
   // Get injury status styling
@@ -124,9 +124,9 @@ export default function Watchlist({
     switch (player.injuryStatus) {
       case 'injured':
       case 'out':
-        return { color: 'text-red-600', icon: AlertCircle, label: 'Injured' };
+        return { color: 'text-destructive', icon: AlertCircle, label: 'Injured' };
       case 'questionable':
-        return { color: 'text-orange-600', icon: AlertCircle, label: 'Questionable' };
+        return { color: 'text-warning', icon: AlertCircle, label: 'Questionable' };
       default:
         return null;
     }
@@ -145,17 +145,17 @@ export default function Watchlist({
   return (
     <div className={`bg-white rounded-lg border h-full flex flex-col ${className}`}>
       {/* Header */}
-      <div className="p-4 border-b bg-gradient-to-r from-yellow-50 to-amber-50">
+      <div className="p-4 border-b bg-gradient-to-r from-warning/10 to-warning/10">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <Star className="w-5 h-5 text-yellow-600" />
+            <Star className="w-5 h-5 text-warning" />
             My Watchlist
           </h3>
           <div className="flex items-center gap-2 text-sm">
-            <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full">
+            <span className="bg-success/10 text-success px-2 py-1 rounded-full">
               {availableCount} available
             </span>
-            <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full">
+            <span className="bg-destructive/10 text-destructive px-2 py-1 rounded-full">
               {draftedCount} drafted
             </span>
           </div>
@@ -187,7 +187,7 @@ export default function Watchlist({
       {/* Watchlist Content */}
       <div className="flex-1 overflow-y-auto">
         {watchlistedPlayers.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-muted-foreground">
             <Star className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p className="text-lg font-medium mb-1">No players in watchlist</p>
             <p className="text-sm">
@@ -203,7 +203,7 @@ export default function Watchlist({
                 <div
                   {...provided.droppableProps}
                   ref={provided.innerRef}
-                  className={`min-h-full ${snapshot.isDraggingOver ? 'bg-blue-50' : ''}`}
+                  className={`min-h-full ${snapshot.isDraggingOver ? 'bg-info/10' : ''}`}
                 >
                   {watchlistedPlayers.map((player, index) => {
                     if (!player) return null;
@@ -226,10 +226,10 @@ export default function Watchlist({
                             {...provided.draggableProps}
                             className={`m-2 p-4 rounded-lg border transition-all ${
                               snapshot.isDragging
-                                ? 'shadow-lg bg-white border-blue-300'
+                                ? 'shadow-lg bg-white border-info/20'
                                 : isDrafted
-                                  ? 'bg-gray-50 border-gray-300 opacity-75'
-                                  : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
+                                  ? 'bg-muted border-border opacity-75'
+                                  : 'bg-white border-border hover:border-border hover:shadow-md'
                             }`}
                           >
                             <div className="flex items-start gap-3">
@@ -238,8 +238,8 @@ export default function Watchlist({
                                 {...provided.dragHandleProps}
                                 className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                                   isDrafted
-                                    ? 'bg-gray-300 text-gray-500'
-                                    : 'bg-blue-100 text-blue-800'
+                                    ? 'bg-muted text-muted-foreground'
+                                    : 'bg-info/10 text-info'
                                 }`}
                               >
                                 {player.watchlistItem.rank}
@@ -249,7 +249,7 @@ export default function Watchlist({
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
                                   <h4
-                                    className={`font-bold truncate ${isDrafted ? 'text-gray-500' : 'text-gray-900'}`}
+                                    className={`font-bold truncate ${isDrafted ? 'text-muted-foreground' : 'text-foreground'}`}
                                   >
                                     {player.name}
                                   </h4>
@@ -261,17 +261,17 @@ export default function Watchlist({
                                   )}
                                   {isBye && (
                                     <div title="Bye week">
-                                      <Clock className="w-4 h-4 text-orange-600" />
+                                      <Clock className="w-4 h-4 text-warning" />
                                     </div>
                                   )}
                                   {isDrafted && (
-                                    <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                                    <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">
                                       DRAFTED
                                     </span>
                                   )}
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mb-2">
                                   <span className="font-medium">{player.position}</span>
                                   <span className="inline-flex items-center gap-1">
                                     <TeamLogo team={player.club} size={14} withCircle decorative />
@@ -287,7 +287,7 @@ export default function Watchlist({
 
                                 {/* Quick Stats */}
                                 {(player.lastGamePoints || player.avgPoints) && (
-                                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                     {player.lastGamePoints && (
                                       <span>Last: {player.lastGamePoints} pts</span>
                                     )}
@@ -301,7 +301,7 @@ export default function Watchlist({
                                 {!isDrafted && canDraft && (
                                   <button
                                     onClick={() => onDraftPlayer(player)}
-                                    className="bg-green-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-1"
+                                    className="bg-success text-white px-3 py-1 rounded text-sm font-medium hover:bg-success transition-colors flex items-center gap-1"
                                     title="Draft this player now"
                                   >
                                     <Zap className="w-3 h-3" />
@@ -311,7 +311,7 @@ export default function Watchlist({
 
                                 <button
                                   onClick={() => removeFromWatchlist(player.id)}
-                                  className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                                  className="text-muted-foreground hover:text-destructive transition-colors p-1"
                                   title="Remove from watchlist"
                                 >
                                   <X className="w-4 h-4" />
@@ -333,7 +333,7 @@ export default function Watchlist({
 
       {/* Footer */}
       {watchlistedPlayers.length > 0 && (
-        <div className="p-3 border-t bg-gray-50 text-center text-xs text-gray-500">
+        <div className="p-3 border-t bg-muted text-center text-xs text-muted-foreground">
           {watchlistedPlayers.length} players • Drag to reorder • Click ⭐ to add more players
         </div>
       )}

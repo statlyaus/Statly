@@ -101,9 +101,9 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
   if (!user) {
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center">
-          <p className="text-sm font-medium text-slate-900">Sign in required</p>
-          <p className="mt-1 text-sm text-slate-600">
+        <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-center">
+          <p className="text-sm font-medium text-foreground">Sign in required</p>
+          <p className="mt-1 text-sm text-muted-foreground">
             Waiver state is tied to your league memberships.
           </p>
         </div>
@@ -115,9 +115,9 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
     return (
       <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="animate-pulse rounded-xl bg-slate-100 p-4">
-            <div className="h-4 w-28 rounded bg-slate-200" />
-            <div className="mt-3 h-3 w-40 rounded bg-slate-200" />
+          <div key={index} className="animate-pulse rounded-xl bg-muted p-4">
+            <div className="h-4 w-28 rounded bg-muted" />
+            <div className="mt-3 h-3 w-40 rounded bg-muted" />
           </div>
         ))}
       </div>
@@ -127,9 +127,9 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
   if (!nextRun) {
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center">
-          <p className="text-sm font-medium text-slate-900">No waiver run scheduled</p>
-          <p className="mt-1 text-sm text-slate-600">
+        <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-center">
+          <p className="text-sm font-medium text-foreground">No waiver run scheduled</p>
+          <p className="mt-1 text-sm text-muted-foreground">
             Tracked leagues have not materialized their next waiver processing window yet.
           </p>
         </div>
@@ -142,7 +142,7 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
           </Link>
           <Link
             href="/leagues"
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="rounded-xl border border-border bg-white px-3 py-2 text-center text-sm font-semibold text-foreground transition hover:bg-muted"
           >
             Open leagues
           </Link>
@@ -153,36 +153,36 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+      <div className="rounded-2xl border border-success/20 bg-success/10 px-4 py-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
           Next run
         </p>
-        <p className="mt-2 text-lg font-semibold text-slate-950">{nextRun.leagueName}</p>
-        <p className="mt-1 text-sm text-slate-600">{formatDateLabel(nextRun.nextRunIso)}</p>
+        <p className="mt-2 text-lg font-semibold text-foreground">{nextRun.leagueName}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{formatDateLabel(nextRun.nextRunIso)}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-xl border border-border bg-white px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Tracked leagues
           </p>
-          <p className="mt-2 text-xl font-semibold text-slate-950">{snapshots.length}</p>
+          <p className="mt-2 text-xl font-semibold text-foreground">{snapshots.length}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <div className="rounded-xl border border-border bg-white px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Order shown
           </p>
-          <p className="mt-2 text-xl font-semibold text-slate-950">{topOrder.length}</p>
+          <p className="mt-2 text-xl font-semibold text-foreground">{topOrder.length}</p>
         </div>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-slate-900">Waiver order preview</h4>
-          <span className="text-xs text-slate-500">{nextRun.leagueName}</span>
+          <h4 className="text-sm font-semibold text-foreground">Waiver order preview</h4>
+          <span className="text-xs text-muted-foreground">{nextRun.leagueName}</span>
         </div>
         {topOrder.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
             No waiver priority order is materialized for the next run yet.
           </div>
         ) : (
@@ -190,13 +190,13 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
             {topOrder.map((team, index) => (
               <div
                 key={`${team.teamId}-${index}`}
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3"
+                className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                     {index + 1}
                   </span>
-                  <span className="text-sm font-medium text-slate-900">{team.teamName}</span>
+                  <span className="text-sm font-medium text-foreground">{team.teamName}</span>
                 </div>
               </div>
             ))}
@@ -205,7 +205,7 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </div>
       ) : null}
@@ -219,7 +219,7 @@ export default function WaiversModule({ refreshTrigger }: WaiversModuleProps) {
         </Link>
         <Link
           href={`/leagues/${nextRun.leagueId}?tab=waivers`}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          className="rounded-xl border border-border bg-white px-3 py-2 text-center text-sm font-semibold text-foreground transition hover:bg-muted"
         >
           Open league
         </Link>

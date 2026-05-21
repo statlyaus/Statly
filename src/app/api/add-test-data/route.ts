@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { revalidatePlayersTags } from '@/lib/cache';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
 
 export const runtime = 'nodejs';
 
@@ -55,10 +54,17 @@ const testData = [
 ];
 
 export async function POST(_request: NextRequest) {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   try {
     if (process.env.NODE_ENV !== 'development') {
       return NextResponse.json({ success: false, error: 'forbidden' }, { status: 403 });
     }
+    const [{ adminDb }, { revalidatePlayersTags }] = await Promise.all([
+      import('@/lib/firebaseAdmin'),
+      import('@/lib/cache'),
+    ]);
     const db = adminDb;
 
     logger.info('Adding test data to Firebase...');
@@ -92,6 +98,9 @@ export async function POST(_request: NextRequest) {
 }
 
 export async function GET() {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) return authorization.response;
+
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ success: false, error: 'forbidden' }, { status: 403 });
   }

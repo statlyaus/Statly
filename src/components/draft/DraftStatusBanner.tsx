@@ -59,7 +59,7 @@ export default function DraftStatusBanner({
       label: 'Live',
       title: 'Draft is in progress',
       description: 'The clock is active and picks, queues, and auto-picks are live.',
-      tone: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700',
+      tone: 'border-success/20 bg-success text-success',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -75,7 +75,7 @@ export default function DraftStatusBanner({
       label: 'Completed',
       title: 'Draft is complete',
       description: 'All picks have been finalized and the room is now read-only.',
-      tone: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700',
+      tone: 'border-success/20 bg-success text-success',
       icon: (
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path

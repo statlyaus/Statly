@@ -5,21 +5,21 @@ import type { TradeStatus } from '@/components/trades/tradeApi';
 function statusTone(status: TradeStatus) {
   switch (status) {
     case 'PROPOSED':
-      return 'bg-amber-500/15 text-amber-300 ring-amber-400/30';
+      return 'bg-warning text-warning ring-warning';
     case 'REVIEW_PENDING':
-      return 'bg-sky-500/15 text-sky-300 ring-sky-400/30';
+      return 'bg-info text-info ring-info';
     case 'EXECUTED':
-      return 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/30';
+      return 'bg-success text-success ring-success';
     case 'REVIEW_REJECTED':
-      return 'bg-orange-500/15 text-orange-300 ring-orange-400/30';
+      return 'bg-warning text-warning ring-warning';
     case 'DECLINED':
     case 'CANCELLED':
-      return 'bg-rose-500/15 text-rose-300 ring-rose-400/30';
+      return 'bg-destructive text-destructive ring-destructive';
     case 'SUPERSEDED':
     case 'EXPIRED':
-      return 'bg-slate-500/15 text-slate-300 ring-slate-400/30';
+      return 'bg-muted text-muted-foreground ring-ring';
     default:
-      return 'bg-slate-500/15 text-slate-300 ring-slate-400/30';
+      return 'bg-muted text-muted-foreground ring-ring';
   }
 }
 

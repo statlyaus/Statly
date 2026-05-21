@@ -1,7 +1,13 @@
 import { revalidateTag } from 'next/cache';
 import type { NextRequest } from 'next/server';
 
-import { Prisma, TradeErrorCode, TradeReviewStatus, TradeStatus } from '@prisma/client';
+import {
+  Prisma,
+  TradeErrorCode,
+  TradeReviewMode,
+  TradeReviewStatus,
+  TradeStatus,
+} from '@prisma/client';
 import { z } from 'zod';
 
 import { commonErrors, errorResponse, successResponse } from '@/lib/apiResponse';
@@ -137,7 +143,43 @@ export async function GET(request: NextRequest) {
       where: {
         ...(leagueId ? { leagueId } : {}),
         ...(status ? { status } : {}),
-        OR: [{ proposerUserId: userId }, { recipientUserId: userId }],
+        OR: [
+          { proposerUserId: userId },
+          { recipientUserId: userId },
+          {
+            status: {
+              in: [TradeStatus.REVIEW_PENDING, TradeStatus.REVIEW_REJECTED, TradeStatus.EXECUTED],
+            },
+            reviewStatus: {
+              in: [
+                TradeReviewStatus.PENDING,
+                TradeReviewStatus.APPROVED,
+                TradeReviewStatus.REJECTED,
+              ],
+            },
+            OR: [
+              {
+                reviewMode: TradeReviewMode.ADMIN,
+                league: {
+                  members: {
+                    some: {
+                      userId,
+                      role: { in: ['OWNER', 'COMMISSIONER'] },
+                    },
+                  },
+                },
+              },
+              {
+                reviewMode: TradeReviewMode.VETO,
+                league: {
+                  members: {
+                    some: { userId },
+                  },
+                },
+              },
+            ],
+          },
+        ],
       },
       include: {
         audit: {
@@ -165,11 +207,16 @@ export async function GET(request: NextRequest) {
         createdAt: trade.createdAt.toISOString(),
         acceptedAt: trade.acceptedAt ? trade.acceptedAt.toISOString() : undefined,
         executedAt: trade.executedAt ? trade.executedAt.toISOString() : undefined,
+        reviewMode: trade.reviewMode,
         reviewStatus:
           trade.reviewStatus !== TradeReviewStatus.NOT_REQUIRED ? trade.reviewStatus : undefined,
+        reviewRequestedAt: trade.reviewRequestedAt
+          ? trade.reviewRequestedAt.toISOString()
+          : undefined,
         reviewWindowEndsAt: trade.reviewWindowEndsAt
           ? trade.reviewWindowEndsAt.toISOString()
           : undefined,
+        reviewDecidedAt: trade.reviewDecidedAt ? trade.reviewDecidedAt.toISOString() : undefined,
         proposerViewedAt: toIso(receipt?.proposerViewedAt),
         recipientViewedAt: toIso(receipt?.recipientViewedAt),
         latestActivityAt: (latestAudit?.createdAt ?? trade.createdAt).toISOString(),

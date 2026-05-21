@@ -71,8 +71,8 @@ export default function OfferDock({ players = [] }: OfferDockProps) {
   }
 
   return (
-    <section aria-label="Offer Dock" className="rounded-xl border border-gray-200 bg-white">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 p-3">
+    <section aria-label="Offer Dock" className="rounded-xl border border-border bg-white">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
         <h2 className="text-sm font-semibold">Your Offer</h2>
 
         {/* Sorting controls */}
@@ -81,14 +81,14 @@ export default function OfferDock({ players = [] }: OfferDockProps) {
           onSubmit={(e) => e.preventDefault()}
           aria-label="Sort players"
         >
-          <label htmlFor="od-sort-key" className="text-gray-600">
+          <label htmlFor="od-sort-key" className="text-muted-foreground">
             Sort by
           </label>
           <select
             id="od-sort-key"
             value={sortKey}
             onChange={onSortKeyChange}
-            className="rounded border border-gray-300 bg-white px-2 py-1"
+            className="rounded border border-border bg-white px-2 py-1"
           >
             <option value="totalValue">Total Value</option>
             <option value="rank">Rank</option>
@@ -99,7 +99,7 @@ export default function OfferDock({ players = [] }: OfferDockProps) {
           <button
             type="button"
             onClick={onSortDirToggle}
-            className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 hover:bg-muted"
             aria-label={`Toggle sort direction (currently ${sortDir})`}
             title={`Toggle sort direction (currently ${sortDir})`}
           >
@@ -121,7 +121,7 @@ export default function OfferDock({ players = [] }: OfferDockProps) {
                 <ValueChip playerId={String(player.id)} compact />
               </div>
               {player.team ? (
-                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <TeamLogo team={String(player.team)} size={14} withCircle decorative />
                   <span>{String(player.team)}</span>
                 </div>

@@ -53,7 +53,7 @@ export default function CreateDraftClient() {
       <main className="mx-auto max-w-2xl p-6">
         <header className="mb-8">
           <h1 className="text-3xl font-bold">Create New Draft</h1>
-          <p className="text-gray-600 mt-2">Set up a new fantasy AFL draft for your league.</p>
+          <p className="text-muted-foreground mt-2">Set up a new fantasy AFL draft for your league.</p>
         </header>
         <form onSubmit={handleSubmit} className="space-y-6">
           <FormField label="Draft Name" required>

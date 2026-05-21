@@ -38,9 +38,9 @@ function PlayerCard({ player }: { player: RosterPlayer }) {
     <div className="p-4 border rounded shadow-sm bg-white">
       <h2 className="font-semibold text-lg">
         {player.name}
-        {player.injury && <span className="ml-2 text-sm text-red-600">{player.injury}</span>}
+        {player.injury && <span className="ml-2 text-sm text-destructive">{player.injury}</span>}
       </h2>
-      <p className="flex items-center gap-2 text-sm text-gray-600">
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
         {player.team ? (
           <img
             src={getTeamLogo(player.team)}
@@ -170,7 +170,7 @@ export default async function RostersPage({
         {/* Simple GET form so filtering works without client JS */}
         <form className="flex flex-wrap items-end gap-4 mb-6" method="get">
           <label className="flex flex-col gap-1">
-            <span className="text-sm text-gray-600">Team</span>
+            <span className="text-sm text-muted-foreground">Team</span>
             <input
               type="text"
               name="team"
@@ -180,7 +180,7 @@ export default async function RostersPage({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-sm text-gray-600">Position</span>
+            <span className="text-sm text-muted-foreground">Position</span>
             <input
               type="text"
               name="position"
@@ -190,7 +190,7 @@ export default async function RostersPage({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-sm text-gray-600">Page size</span>
+            <span className="text-sm text-muted-foreground">Page size</span>
             <input
               type="number"
               name="limit"
@@ -205,7 +205,7 @@ export default async function RostersPage({
           {/* Preserve stack when applying filters so people can tweak within the same page */}
           {stack.length > 0 && <input type="hidden" name="stack" value={stack.join(',')} />}
 
-          <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white">
+          <button type="submit" className="px-4 py-2 rounded bg-info text-white">
             Apply
           </button>
         </form>
@@ -214,7 +214,7 @@ export default async function RostersPage({
           {players.length > 0 ? (
             players.map((player) => <PlayerCard key={player.id} player={player} />)
           ) : (
-            <p className="col-span-full text-center text-gray-500">No players found.</p>
+            <p className="col-span-full text-center text-muted-foreground">No players found.</p>
           )}
         </div>
 
@@ -223,23 +223,23 @@ export default async function RostersPage({
           {canPrev ? (
             <a
               href={linkWith({ toPrev: true })}
-              className="px-4 py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200"
+              className="px-4 py-2 rounded bg-muted text-foreground hover:bg-muted"
             >
               ← Previous
             </a>
           ) : (
-            <span className="px-4 py-2 rounded bg-gray-200 text-gray-500">← Previous</span>
+            <span className="px-4 py-2 rounded bg-muted text-muted-foreground">← Previous</span>
           )}
 
           {canNext ? (
             <a
               href={linkWith({ toNext: true })}
-              className="px-4 py-2 rounded bg-blue-600 text-white"
+              className="px-4 py-2 rounded bg-info text-white"
             >
               Next →
             </a>
           ) : (
-            <span className="px-4 py-2 rounded bg-gray-200 text-gray-500">Next →</span>
+            <span className="px-4 py-2 rounded bg-muted text-muted-foreground">Next →</span>
           )}
         </div>
       </main>

@@ -5,8 +5,10 @@ import { z } from 'zod';
 import { getDefaultAflSeason } from '@/lib/aflSeason';
 import { createSuccessResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { prisma } from '@/lib/prisma';
 import { CANONICAL_STAT_KEYS, type CanonicalStatKey } from '@/lib/stats/statColumns';
+import { normalizeTeamName } from '@shared/player-identity/teamNames';
 import {
   ensurePlayerSeasonSummariesMaterialized,
   getPlayerSeasonSummaryMap,
@@ -41,6 +43,32 @@ function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
 
   const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
   return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
+}
+
+type DraftBoardPlayer = { id: string; name: string; position: string; club: string };
+
+function draftPlayerIdentityKey(player: { name: string; club: string }): string {
+  return `${buildCanonicalPlayerId(player.name)}|${normalizeTeamName(player.club)}`;
+}
+
+function canonicalPreference(player: DraftBoardPlayer): number {
+  const canonicalId = buildCanonicalPlayerId(player.name);
+  if (player.id === canonicalId) return 3;
+  if (!player.id.startsWith('ply_') && !player.id.includes('-')) return 2;
+  if (!player.id.startsWith('ply_')) return 1;
+  return 0;
+}
+
+function chooseCanonicalPlayer(current: DraftBoardPlayer | undefined, next: DraftBoardPlayer) {
+  if (!current) return next;
+
+  const currentPreference = canonicalPreference(current);
+  const nextPreference = canonicalPreference(next);
+  if (nextPreference !== currentPreference) {
+    return nextPreference > currentPreference ? next : current;
+  }
+
+  return next.id.localeCompare(current.id) < 0 ? next : current;
 }
 
 // GET /api/drafts/[id]/available-players?page=1&pageSize=100
@@ -89,94 +117,60 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const selectedCategories = parseSelectedCategories(draft.league?.categoriesJson);
     const pickedIds = picks.map((pick) => pick.playerId);
+    const exactPickedWhere: Prisma.PlayerWhereInput =
+      pickedIds.length > 0 ? { id: { in: pickedIds } } : { id: { in: [] } };
+    const activeWhere: Prisma.PlayerWhereInput = { active: true };
+    const pickedPlayers =
+      pickedIds.length > 0
+        ? await prisma.player.findMany({
+            where: exactPickedWhere,
+            select: { id: true, name: true, position: true, club: true },
+          })
+        : [];
+    const pickedIdentityKeys = new Set(pickedPlayers.map(draftPlayerIdentityKey));
 
-    const where: Prisma.PlayerWhereInput =
-      pickedIds.length > 0 ? { active: true, id: { notIn: pickedIds } } : { active: true };
-
-    const skip = (page - 1) * pageSize;
     const season = await resolveLatestProjectedSeason(prisma, getDefaultAflSeason());
     await ensurePlayerSeasonSummariesMaterialized(prisma, season);
 
-    let players: Array<{ id: string; name: string; position: string; club: string }> = [];
-    let totalCount = 0;
+    const activePlayers = await prisma.player.findMany({
+      where: activeWhere,
+      select: { id: true, name: true, position: true, club: true },
+    });
+    const byIdentity = new Map<string, DraftBoardPlayer>();
 
-    if (sort === 'averagePoints' || sort === 'tier') {
-      const orderByField = sort === 'averagePoints' ? 'averageScore' : 'totalValue';
-      const [summaryRows, summaryCount, playerCount] = await Promise.all([
-        prisma.playerSeasonSummary.findMany({
-          where: {
-            season,
-            player: where,
-          },
-          orderBy: { [orderByField]: order },
-          skip,
-          take: pageSize,
-          select: {
-            playerId: true,
-            playerName: true,
-            club: true,
-            position: true,
-          },
-        }),
-        prisma.playerSeasonSummary.count({
-          where: {
-            season,
-            player: where,
-          },
-        }),
-        prisma.player.count({ where }),
-      ]);
-
-      players = summaryRows.map((row) => ({
-        id: row.playerId,
-        name: row.playerName,
-        position: row.position,
-        club: row.club,
-      }));
-      totalCount = playerCount;
-
-      const remaining = pageSize - players.length;
-      if (remaining > 0) {
-        const unsummarizedSkip = Math.max(0, skip - summaryCount);
-        const unsummarizedPlayers = await prisma.player.findMany({
-          where: {
-            ...where,
-            seasonSummaries: {
-              none: {
-                season,
-              },
-            },
-          },
-          orderBy: { name: 'asc' },
-          skip: unsummarizedSkip,
-          take: remaining,
-        });
-
-        players = players.concat(
-          unsummarizedPlayers.map((player) => ({
-            id: player.id,
-            name: player.name,
-            position: player.position,
-            club: player.club,
-          }))
-        );
-      }
-    } else {
-      const [dbPlayers, playerCount] = await Promise.all([
-        prisma.player.findMany({ where, orderBy: { name: order }, skip, take: pageSize }),
-        prisma.player.count({ where }),
-      ]);
-      players = dbPlayers.map((player) => ({
-        id: player.id,
-        name: player.name,
-        position: player.position,
-        club: player.club,
-      }));
-      totalCount = playerCount;
+    for (const player of activePlayers) {
+      const key = draftPlayerIdentityKey(player);
+      if (pickedIdentityKeys.has(key)) continue;
+      byIdentity.set(key, chooseCanonicalPlayer(byIdentity.get(key), player));
     }
 
-    const playerIds = players.map((player) => player.id);
-    const statsById = await getPlayerSeasonSummaryMap(prisma, season, playerIds);
+    const dedupedPlayers = [...byIdentity.values()];
+    const statsById = await getPlayerSeasonSummaryMap(
+      prisma,
+      season,
+      dedupedPlayers.map((player) => player.id)
+    );
+
+    dedupedPlayers.sort((left, right) => {
+      if (sort === 'averagePoints' || sort === 'tier') {
+        const field = sort === 'averagePoints' ? 'averageScore' : 'totalValue';
+        const leftValue = statsById.get(left.id)?.[field] ?? null;
+        const rightValue = statsById.get(right.id)?.[field] ?? null;
+        if (leftValue !== rightValue) {
+          if (leftValue === null) return 1;
+          if (rightValue === null) return -1;
+          return order === 'asc' ? leftValue - rightValue : rightValue - leftValue;
+        }
+      }
+
+      return order === 'asc'
+        ? left.name.localeCompare(right.name)
+        : right.name.localeCompare(left.name);
+    });
+
+    const totalCount = dedupedPlayers.length;
+    const skip = (page - 1) * pageSize;
+    const players = dedupedPlayers.slice(skip, skip + pageSize);
 
     const data = {
       draftId,

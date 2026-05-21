@@ -25,9 +25,9 @@ export function GroupedListSkeleton({
       aria-label={ariaLabel}
     >
       {Array.from({ length: groups }, (_, i) => (
-        <div key={i} className="border border-slate-200 rounded-lg overflow-hidden animate-pulse">
+        <div key={i} className="border border-border rounded-lg overflow-hidden animate-pulse">
           <div
-            className="bg-slate-50 border-b border-slate-200 flex items-center px-4"
+            className="bg-muted border-b border-border flex items-center px-4"
             style={{ height: headerHeight }}
           >
             <Skeleton width="w-32" height="h-4" />
@@ -60,7 +60,7 @@ export function FlatListSkeleton({
   return (
     <div
       className={clsx(
-        'border border-slate-200 rounded-lg overflow-hidden animate-pulse',
+        'border border-border rounded-lg overflow-hidden animate-pulse',
         className
       )}
       role="list"
@@ -68,7 +68,7 @@ export function FlatListSkeleton({
       aria-label={ariaLabel}
     >
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="border-b border-slate-200 p-4" style={{ height: rowHeight }}>
+        <div key={i} className="border-b border-border p-4" style={{ height: rowHeight }}>
           <Skeleton width="w-40" height="h-4" className="mb-2" />
           <Skeleton width="w-64" height="h-3" />
         </div>

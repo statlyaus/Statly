@@ -239,6 +239,10 @@ function hasCommissionerPrivileges(input: {
   return actorMember?.role === LeagueRole.COMMISSIONER;
 }
 
+export function canProcessWaiverClaimsForRole(role: LeagueRole | string | null | undefined) {
+  return role === LeagueRole.OWNER || role === LeagueRole.COMMISSIONER;
+}
+
 function toLeagueSummary(
   league: Awaited<ReturnType<typeof leagueRepository.findLeagueById>> extends infer T
     ? Exclude<T, null>
@@ -526,6 +530,7 @@ export class LeagueApplicationService {
   async updateDraftSettings(
     leagueId: string,
     input: {
+      actorUserId: string;
       draftDate?: string;
       draftType?: 'snake' | 'linear';
       timePerPick?: number;
@@ -539,6 +544,15 @@ export class LeagueApplicationService {
       const league = await leagueRepository.findLeagueById(tx, leagueId);
       if (!league) {
         return null;
+      }
+
+      const canManageLeague = hasCommissionerPrivileges({
+        actorUserId: input.actorUserId,
+        ownerId: league.ownerId,
+        members: league.members,
+      });
+      if (!canManageLeague) {
+        throw new Error('forbidden:Only the owner or a commissioner can update draft settings');
       }
 
       const updated = await leagueRepository.updateLeagueAndSettings(tx, {
@@ -1292,7 +1306,7 @@ export class LeagueApplicationService {
   async submitWaiverClaim(input: {
     leagueId: string;
     userId: string;
-    teamId: string;
+    teamId?: string;
     playerId: string;
     dropPlayerId?: string;
     priority?: number;
@@ -1302,7 +1316,7 @@ export class LeagueApplicationService {
       const [member, league, ownership] = await Promise.all([
         leagueRepository.findLeagueMemberByReference(tx, {
           leagueId: input.leagueId,
-          memberIdOrUserId: input.teamId,
+          memberIdOrUserId: input.userId,
         }),
         leagueRepository.getLeagueWaiverConfig(tx, input.leagueId),
         this.getLeagueOwnershipStats({
@@ -1311,7 +1325,7 @@ export class LeagueApplicationService {
         }),
       ]);
 
-      if (!member || member.userId !== input.userId) {
+      if (!member) {
         throw new Error('forbidden:Not a league member');
       }
       if (!league) {
@@ -1497,7 +1511,7 @@ export class LeagueApplicationService {
         leagueRepository.listWaiverClaims(tx, input.leagueId),
       ]);
 
-      if (!callerMember || callerMember.role !== LeagueRole.OWNER) {
+      if (!callerMember || !canProcessWaiverClaimsForRole(callerMember.role)) {
         throw new Error('forbidden:Forbidden');
       }
       if (!league) {

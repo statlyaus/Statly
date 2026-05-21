@@ -48,7 +48,7 @@ export default function FormField({
       className: cn(
         isNativeControl && nativeControlClassName,
         element.props.className as string,
-        error && 'border-red-500 focus:border-red-500 focus:ring-red-500'
+        error && 'border-destructive/20 focus:border-destructive/20 focus:ring-destructive'
       ),
     });
   }
@@ -58,7 +58,7 @@ export default function FormField({
       <UILabel htmlFor={fieldId} className="block">
         {label}
         {required && (
-          <span className="text-red-500 ml-1" aria-label="required">
+          <span className="text-destructive ml-1" aria-label="required">
             *
           </span>
         )}

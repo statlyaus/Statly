@@ -14,7 +14,7 @@ export default function ConnectionStatus({ status, onRefresh }: ConnectionStatus
     switch (status) {
       case 'connecting':
         return {
-          bgColor: 'bg-blue-600',
+          bgColor: 'bg-info',
           icon: (
             <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
               <circle
@@ -36,7 +36,7 @@ export default function ConnectionStatus({ status, onRefresh }: ConnectionStatus
         };
       case 'reconnecting':
         return {
-          bgColor: 'bg-yellow-600',
+          bgColor: 'bg-warning',
           icon: (
             <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
               <circle
@@ -58,7 +58,7 @@ export default function ConnectionStatus({ status, onRefresh }: ConnectionStatus
         };
       case 'disconnected':
         return {
-          bgColor: 'bg-red-600',
+          bgColor: 'bg-destructive',
           icon: (
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -73,7 +73,7 @@ export default function ConnectionStatus({ status, onRefresh }: ConnectionStatus
         };
       default:
         return {
-          bgColor: 'bg-gray-600',
+          bgColor: 'bg-muted',
           icon: null,
           message: 'Unknown connection status',
         };
@@ -82,13 +82,23 @@ export default function ConnectionStatus({ status, onRefresh }: ConnectionStatus
 
   const config = getStatusConfig();
 
+  const liveRegionProps =
+    status === 'disconnected'
+      ? ({ role: 'alert' } as const)
+      : ({ role: 'status', 'aria-live': 'polite' } as const);
+
   return (
-    <div className={`w-full px-4 py-2 text-center text-white ${config.bgColor}`}>
+    <div className={`w-full px-4 py-2 text-center text-white ${config.bgColor}`} {...liveRegionProps}>
       <div className="flex items-center justify-center space-x-2">
-        {config.icon}
+        <span aria-hidden="true">{config.icon}</span>
         <span>{config.message}</span>
         {status === 'disconnected' && onRefresh && (
-          <button onClick={onRefresh} className="ml-2 underline hover:no-underline">
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="ml-2 underline hover:no-underline"
+            aria-label="Refresh draft state"
+          >
             Refresh
           </button>
         )}

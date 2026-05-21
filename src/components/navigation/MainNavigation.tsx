@@ -679,7 +679,7 @@ export default function MainNavigation(): ReactNode {
               className="ml-auto inline-flex items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-2 text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)] lg:hidden"
               aria-expanded={isMobileOpen}
               aria-controls="mobile-main-navigation"
-              aria-label="Open navigation"
+              aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {isMobileOpen ? (

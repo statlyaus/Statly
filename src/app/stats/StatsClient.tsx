@@ -75,7 +75,7 @@ export default function StatsClient() {
   }
 
   if (error) {
-    return <p className="text-red-500 text-center">{error}</p>;
+    return <p className="text-destructive text-center">{error}</p>;
   }
 
   return (

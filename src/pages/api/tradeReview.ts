@@ -1,4 +1,5 @@
 import { adminDb as db } from '@/lib/firebaseAdmin';
+import { authorizeLocalOnlyRequest } from '@/lib/operationalAuth';
 import { TradeReviewEngine } from '@/lib/tradeReviewEngine';
 import type { TradeStatus } from '@/lib/tradeReviewEngine';
 import type { Player } from '@/types/players';
@@ -12,6 +13,12 @@ function getTradeId(req: NextApiRequest): string {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const authorization = authorizeLocalOnlyRequest();
+  if (!authorization.ok) {
+    res.status(authorization.response.status).json({ error: 'Not found' });
+    return;
+  }
+
   res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=30');
   const tradeId = getTradeId(req);
   // Use per-trade in-memory store (not persistent across server restarts, but avoids cross-trade state)

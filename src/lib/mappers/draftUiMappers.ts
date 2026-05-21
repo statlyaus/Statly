@@ -13,6 +13,7 @@ export type LivePickHeaderData = {
   direction: string;
   status: string;
   pickDeadlineAt?: string | null;
+  timeZone?: string | null;
   participants: Array<{
     slot: number;
     member: { id: string; userId: string; displayName: string; email: string };
@@ -42,6 +43,7 @@ export function toLivePickHeaderData(
     direction: draft.direction,
     status: draft.status,
     pickDeadlineAt: draft.pickDeadlineAt ? formatDateToIso(draft.pickDeadlineAt) : null,
+    timeZone: draft.settings?.timeZone ?? null,
     participants: participants.map((p) => ({
       slot: p.draftOrder,
       member: { id: p.id, userId: p.userId, displayName: p.displayName, email: '' },

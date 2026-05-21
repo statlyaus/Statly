@@ -1079,7 +1079,7 @@ export default function LeagueTabs({
                   <span>{tab.name}</span>
                   {tab.badge ? (
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-red-100 text-red-600'}`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-destructive/10 text-destructive'}`}
                     >
                       {tab.badge}
                     </span>
@@ -1197,7 +1197,7 @@ export default function LeagueTabs({
                           </div>
                           {tab.badge ? (
                             <span
-                              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-red-100 text-red-600'}`}
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${activeTab === tab.id ? 'bg-white/15 text-white' : 'bg-destructive/10 text-destructive'}`}
                             >
                               {tab.badge}
                             </span>
@@ -2300,7 +2300,7 @@ export default function LeagueTabs({
                         className={`rounded-2xl border px-4 py-3 text-sm ${
                           settingsMessage === 'League setup saved.' ||
                           settingsMessage === 'League setup saved. A new invite code is now active.'
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            ? 'border-success/20 bg-success/10 text-success'
                             : 'border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] text-[color:var(--league-text-muted)]'
                         }`}
                       >
@@ -2709,16 +2709,16 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
 
   if (!currentUserId) {
     return (
-      <div className="bg-gray-50 rounded-lg p-8 text-center">
-        <p className="text-gray-600">Please sign in to manage your roster.</p>
+      <div className="bg-muted rounded-lg p-8 text-center">
+        <p className="text-muted-foreground">Please sign in to manage your roster.</p>
       </div>
     );
   }
 
   if (!currentUserTeam) {
     return (
-      <div className="bg-gray-50 rounded-lg p-8 text-center">
-        <p className="text-gray-600">You are not a member of this league.</p>
+      <div className="bg-muted rounded-lg p-8 text-center">
+        <p className="text-muted-foreground">You are not a member of this league.</p>
       </div>
     );
   }
@@ -2754,7 +2754,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         <button
           onClick={() => handleTeamAction('optimize')}
           disabled={loading}
-          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+          className="rounded-xl border border-success/20 bg-success/10 px-4 py-3 text-sm font-semibold text-success hover:bg-success/10 disabled:opacity-50"
         >
           Optimize Lineup
         </button>
@@ -2768,7 +2768,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         <button
           onClick={() => handleTeamAction('waivers')}
           disabled={loading}
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          className="rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm font-semibold text-warning hover:bg-warning/10 disabled:opacity-50"
         >
           Waiver Claims
         </button>

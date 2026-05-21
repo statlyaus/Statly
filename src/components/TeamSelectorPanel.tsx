@@ -22,12 +22,12 @@ export default function TeamSelectorPanel({
   onRightChange,
   compact = false,
 }: TeamSelectorPanelProps) {
-  const cls = 'bg-gray-900 text-white ring-1 ring-white/10' + (compact ? ' text-sm' : '');
+  const cls = 'bg-foreground text-white ring-1 ring-white/10' + (compact ? ' text-sm' : '');
 
   return (
     <div id={id} className="grid grid-cols-2 gap-3">
       <label className="block">
-        <span className="mb-1 block text-xs text-gray-400">Your team</span>
+        <span className="mb-1 block text-xs text-muted-foreground">Your team</span>
         <UISelect
           className={cls}
           value={leftTeam}
@@ -42,7 +42,7 @@ export default function TeamSelectorPanel({
         </UISelect>
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs text-gray-400">Target team</span>
+        <span className="mb-1 block text-xs text-muted-foreground">Target team</span>
         <UISelect
           className={cls}
           value={rightTeam}

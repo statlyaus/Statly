@@ -95,22 +95,22 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
     <section className="space-y-6" aria-labelledby="club-directory-heading">
       <header className={draftHubHeroShellClass}>
         <div className={draftHubHeroTopAccentClass} />
-        <div className="flex flex-col gap-5 border-b border-sky-900/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-5 border-b border-info/20 pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700/80">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-info">
               Club lens
             </p>
             <h2
               id="club-directory-heading"
-              className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl"
+              className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl"
             >
               Club trade directory
             </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600 md:text-base">
+            <p className="mt-2 text-sm leading-6 text-muted-foreground md:text-base">
               Browse every AFL club and open its full draft trade history—same data model as the
               season explorer.
             </p>
-            <p className="mt-2 text-xs text-slate-500">{sortSummaryLine(tableSort)}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{sortSummaryLine(tableSort)}</p>
           </div>
           <div
             className="flex shrink-0 flex-wrap gap-2 sm:justify-end"
@@ -144,12 +144,12 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
           {sortedClubs.map((club) => (
             <article
               key={club.clubSlug}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:bg-slate-50/60"
+              className="rounded-2xl border border-border bg-white p-4 shadow-sm transition hover:border-border hover:bg-muted"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <Link
                   href={`/draft/clubs/${club.clubSlug}`}
-                  className="group flex min-w-0 items-center gap-2 rounded-lg text-base font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  className="group flex min-w-0 items-center gap-2 rounded-lg text-base font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                   aria-label={clubLinkLabel(club)}
                 >
                   <TeamLogo team={club.clubName} size={20} withCircle />
@@ -164,29 +164,29 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
                       {club.firstYear}–{club.lastYear}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-600">
+                    <span className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
                       Years TBC
                     </span>
                   )}
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-3 text-center shadow-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <div className="rounded-2xl border border-border bg-white/85 p-3 text-center shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Assets
                   </p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-slate-950">
+                  <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-foreground">
                     {club.assetCount}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-3 text-center shadow-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <div className="rounded-2xl border border-border bg-white/85 p-3 text-center shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Club sides
                   </p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-slate-950">
+                  <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-foreground">
                     {club.partyCount}
                   </p>
-                  <p className="mt-0.5 text-[10px] leading-tight text-slate-500">Rows as a party</p>
+                  <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">Rows as a party</p>
                 </div>
               </div>
             </article>
@@ -195,7 +195,7 @@ export function DraftClubsDirectory({ clubs }: { clubs: DraftClubListItem[] }) {
       ) : (
         <div
           id={tablePanelId}
-          className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm"
+          className="overflow-x-auto rounded-2xl border border-border bg-white shadow-sm"
           role="region"
           aria-label="Club directory as a table"
         >
