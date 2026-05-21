@@ -161,3 +161,25 @@ if (process.env.NODE_ENV !== 'production') console.debug('Auth emulator connect 
 
 The Admin SDK auto-targets the emulators when `FIRESTORE_EMULATOR_HOST`/`FIREBASE_AUTH_EMULATOR_HOST` are set. No code changes are required in `src/lib/firebaseAdmin.ts`.
 ```
+
+## Staging Firebase
+
+Staging must use a separate Firebase project from production. Do not point staging at the production Firestore or Auth tenant.
+
+Required staging settings:
+
+- Firebase Auth enabled for the same providers intended for launch.
+- Firestore rules and indexes deployed to the staging project before browser smoke.
+- A Firebase Admin service account scoped to the staging project.
+- `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` in the Vercel staging environment only.
+- Client SDK variables must all point at the staging Firebase web app.
+
+Forbidden staging settings:
+
+- `FIRESTORE_EMULATOR_HOST`
+- `FIREBASE_AUTH_EMULATOR_HOST`
+- `NEXT_PUBLIC_USE_EMULATORS=true`
+- `BYPASS_AUTH=true`
+- `NEXT_PUBLIC_BYPASS_AUTH=true`
+
+Before go-live evidence is accepted, run `npm run go-live:staging-preflight` with staging environment variables loaded and confirm it passes.

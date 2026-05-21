@@ -1,6 +1,7 @@
 {
   "projects": {
-    "default": "statly-4cbed"
+    "default": "statly-4cbed",
+    "staging": "statly-staging"
   },
   "targets": {},
   "etags": {}
