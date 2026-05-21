@@ -94,3 +94,6 @@ lint.config.js
 .eslintcache
 
 .vibe/
+
+# Local Netlify folder
+.netlify
