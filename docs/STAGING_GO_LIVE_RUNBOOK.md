@@ -14,3 +14,30 @@ Use this runbook to deploy Statly to a production-like staging environment, run 
 - Browser matrix: `chrome,safari,firefox,mobile-safari,chrome-android`.
 - Firebase emulators are forbidden in staging.
 - Production Firebase and production databases are forbidden in staging.
+
+## Deploy And Preflight
+
+Run local release gates before staging deployment:
+
+```bash
+npm run typecheck
+npm run lint
+npm run guard:routes
+npm run guard:design
+npm test
+npm run build:release
+```
+
+Deploy staging:
+
+```bash
+vercel deploy
+```
+
+Run preflight with staging environment variables loaded:
+
+```bash
+npm run go-live:staging-preflight
+```
+
+Preflight must return `ok: true` before browser smoke starts.
