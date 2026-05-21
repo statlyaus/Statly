@@ -22,10 +22,28 @@ export interface CommandEvidenceRun {
 }
 
 export interface FixtureEvidence {
+  stagingFirebaseProjectId: string;
   datasetVersion: string;
+  fixtureLabelOrPrefix: string;
+  ownerEmail: string;
+  creationMethod: string;
   smokeAccountEmail: string;
+  smokeUserUid: string;
   leagueId: string;
   draftId: string;
+  seededCollectionPrefixes: string[];
+}
+
+export interface CleanupEvidence {
+  status: EvidenceStatus;
+  ownerEmail: string;
+  cleanupMethod: string;
+  cleanupTimestamp: string;
+  stagingFirebaseProjectId: string;
+  fixtureLabelOrPrefix: string;
+  affectedArtifacts: string[];
+  postCleanupVerification: string;
+  evidenceUrl?: string;
 }
 
 export interface RouteCoverageEvidence {
@@ -101,6 +119,7 @@ export interface GoLiveEvidenceDocument {
   environment: string;
   baseUrl: string;
   fixture: FixtureEvidence;
+  cleanupEvidence: CleanupEvidence;
   commandEvidence: CommandEvidenceRun[];
   routeCoverage: RouteCoverageEvidence[];
   accessibility: AccessibilityEvidence;
@@ -240,7 +259,7 @@ export function parseEvidenceInitConfig(
       '<draft-id>',
     buildId:
       readFirst(argv, env, ['--build-id', 'GO_LIVE_BUILD_ID', 'RELEASE_ID', 'VERCEL_GIT_COMMIT_SHA']) ??
-      '<build-id>',
+      '<commit-sha>',
   };
 }
 
@@ -256,10 +275,27 @@ export function buildEvidenceScaffold(config: EvidenceInitConfig): GoLiveEvidenc
     environment: config.environment,
     baseUrl: config.baseUrl,
     fixture: {
+      stagingFirebaseProjectId: '<staging-firebase-project-id>',
       datasetVersion: '<fixture-dataset-version>',
+      fixtureLabelOrPrefix: '<fixture-label-or-prefix>',
+      ownerEmail: '<fixture-owner-email>',
+      creationMethod: '<fixture-creation-method>',
       smokeAccountEmail: config.smokeAccountEmail,
+      smokeUserUid: '<smoke-user-uid>',
       leagueId: config.smokeLeagueId,
       draftId: config.smokeDraftId,
+      seededCollectionPrefixes: [],
+    },
+    cleanupEvidence: {
+      status: 'not-run',
+      ownerEmail: '<fixture-owner-email>',
+      cleanupMethod: '<cleanup-method>',
+      cleanupTimestamp: '<cleanup-timestamp>',
+      stagingFirebaseProjectId: '<staging-firebase-project-id>',
+      fixtureLabelOrPrefix: '<fixture-label-or-prefix>',
+      affectedArtifacts: [],
+      postCleanupVerification: '<post-cleanup-verification>',
+      evidenceUrl: `${evidenceBase}/cleanup`,
     },
     commandEvidence: REQUIRED_COMMANDS.map((command) => ({
       command,
@@ -327,6 +363,50 @@ function pushMissingText(blockers: string[], field: string, value: unknown) {
   if (!hasText(value)) {
     blockers.push(`${field} is required.`);
   }
+}
+
+function pushInvalidPlaceholderText(blockers: string[], field: string, value: unknown) {
+  if (!hasText(value)) {
+    blockers.push(`${field} is required.`);
+    return;
+  }
+
+  if (isPlaceholderText(String(value))) {
+    blockers.push(`${field} must be a real value.`);
+  }
+}
+
+function isPlaceholderText(value: string): boolean {
+  const text = value.trim().toLowerCase();
+  return (
+    text.includes('<') ||
+    text.includes('>') ||
+    text.startsWith('replace-with') ||
+    text.includes('replace-with-')
+  );
+}
+
+function validateRealTextList(
+  blockers: string[],
+  field: string,
+  values: unknown,
+  options: { required: boolean }
+) {
+  if (!Array.isArray(values)) {
+    blockers.push(`${field} must be an array.`);
+    return;
+  }
+
+  if (options.required && values.length === 0) {
+    blockers.push(`${field} must list at least one real value.`);
+    return;
+  }
+
+  values.forEach((value, index) => {
+    if (!hasText(value) || isPlaceholderText(String(value))) {
+      blockers.push(`${field}[${index}] must be a real value.`);
+    }
+  });
 }
 
 function pushInvalidEvidenceUrl(
@@ -409,10 +489,61 @@ function validateFixtureEvidence(evidence: GoLiveEvidenceDocument, blockers: str
     return;
   }
 
-  pushMissingText(blockers, 'fixture datasetVersion', fixture.datasetVersion);
-  pushMissingText(blockers, 'fixture smokeAccountEmail', fixture.smokeAccountEmail);
-  pushMissingText(blockers, 'fixture leagueId', fixture.leagueId);
-  pushMissingText(blockers, 'fixture draftId', fixture.draftId);
+  pushInvalidPlaceholderText(
+    blockers,
+    'fixture stagingFirebaseProjectId',
+    fixture.stagingFirebaseProjectId
+  );
+  pushInvalidPlaceholderText(blockers, 'fixture datasetVersion', fixture.datasetVersion);
+  pushInvalidPlaceholderText(blockers, 'fixture fixtureLabelOrPrefix', fixture.fixtureLabelOrPrefix);
+  pushInvalidPlaceholderText(blockers, 'fixture ownerEmail', fixture.ownerEmail);
+  pushInvalidPlaceholderText(blockers, 'fixture creationMethod', fixture.creationMethod);
+  pushInvalidPlaceholderText(blockers, 'fixture smokeAccountEmail', fixture.smokeAccountEmail);
+  pushInvalidPlaceholderText(blockers, 'fixture smokeUserUid', fixture.smokeUserUid);
+  pushInvalidPlaceholderText(blockers, 'fixture leagueId', fixture.leagueId);
+  pushInvalidPlaceholderText(blockers, 'fixture draftId', fixture.draftId);
+
+  validateRealTextList(blockers, 'fixture seededCollectionPrefixes', fixture.seededCollectionPrefixes, {
+    required: true,
+  });
+}
+
+function validateCleanupEvidence(evidence: GoLiveEvidenceDocument, blockers: string[]) {
+  const cleanup = evidence.cleanupEvidence;
+
+  if (!cleanup) {
+    blockers.push('cleanupEvidence is required.');
+    return;
+  }
+
+  if (!isPass(cleanup.status)) {
+    blockers.push('cleanupEvidence did not pass.');
+  }
+
+  pushInvalidPlaceholderText(blockers, 'cleanupEvidence ownerEmail', cleanup.ownerEmail);
+  pushInvalidPlaceholderText(blockers, 'cleanupEvidence cleanupMethod', cleanup.cleanupMethod);
+  pushInvalidPlaceholderText(blockers, 'cleanupEvidence cleanupTimestamp', cleanup.cleanupTimestamp);
+  pushInvalidPlaceholderText(
+    blockers,
+    'cleanupEvidence stagingFirebaseProjectId',
+    cleanup.stagingFirebaseProjectId
+  );
+  pushInvalidPlaceholderText(
+    blockers,
+    'cleanupEvidence fixtureLabelOrPrefix',
+    cleanup.fixtureLabelOrPrefix
+  );
+  pushInvalidPlaceholderText(
+    blockers,
+    'cleanupEvidence postCleanupVerification',
+    cleanup.postCleanupVerification
+  );
+
+  validateRealTextList(blockers, 'cleanupEvidence affectedArtifacts', cleanup.affectedArtifacts, {
+    required: true,
+  });
+
+  pushInvalidEvidenceUrl(blockers, evidence, 'cleanupEvidence evidenceUrl', cleanup.evidenceUrl);
 }
 
 function validateRouteCoverage(evidence: GoLiveEvidenceDocument, blockers: string[]) {
@@ -614,6 +745,7 @@ export function validateGoLiveEvidence(evidence: GoLiveEvidenceDocument): GoLive
   }
 
   validateFixtureEvidence(evidence, blockers);
+  validateCleanupEvidence(evidence, blockers);
   validateCommandEvidence(evidence, blockers);
   validateRouteCoverage(evidence, blockers);
   validateAccessibility(evidence, blockers);

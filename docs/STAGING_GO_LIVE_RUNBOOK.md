@@ -58,3 +58,19 @@ Fixture inventory must be recorded in the release evidence before use and includ
 The first staging preflight is read-only. Any later mutation smoke must be owned by the release captain or named fixture owner listed in the inventory. Cleanup ownership is recorded beside the fixture inventory and must name the responsible owner email.
 
 Cleanup must remove or reset every mutation-scoped fixture artifact: smoke users, league and draft documents, seeded player/roster/trade/waiver/admin-test documents, auth claims, storage objects, scheduled jobs, and any fixture-prefixed documents created during smoke. Cleanup is complete only when evidence shows the cleanup command or manual checklist, timestamp, staging project identifier, affected fixture label or prefix, owner email, and post-cleanup verification that the smoke ids and fixture-prefixed records no longer exist or have been reset to the documented baseline.
+
+## Evidence
+
+Generate the staging evidence scaffold:
+
+```bash
+npm run go-live:evidence-check -- --init --output docs/go-live-evidence.staging.template.json
+```
+
+Validate completed evidence:
+
+```bash
+npm run go-live:evidence-check -- --file docs/go-live-evidence.staging.template.json
+```
+
+The evidence check must return `ok: true` before a go recommendation. Completed evidence must include command logs, route coverage, workflow proof, browser matrix proof, accessibility proof, Web Vitals metrics, degraded-state proof, accepted risks if any, launch blockers, rollback plan, and post-deploy smoke plan.

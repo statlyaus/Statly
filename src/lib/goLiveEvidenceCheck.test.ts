@@ -48,10 +48,27 @@ function buildValidEvidence(overrides: Partial<GoLiveEvidenceDocument> = {}): Go
     environment: 'staging',
     baseUrl: 'https://staging.statly.test',
     fixture: {
+      stagingFirebaseProjectId: 'statly-staging',
       datasetVersion: 'go-live-fixtures-2026-05-21',
+      fixtureLabelOrPrefix: 'go-live-2026-05-21',
+      ownerEmail: 'release-captain@statly.test',
+      creationMethod: 'staging UI',
       smokeAccountEmail: 'smoke@statly.test',
+      smokeUserUid: 'smoke_uid_123',
       leagueId: 'league_123',
       draftId: 'draft_123',
+      seededCollectionPrefixes: ['go-live-2026-05-21'],
+    },
+    cleanupEvidence: {
+      status: 'pass',
+      ownerEmail: 'release-captain@statly.test',
+      cleanupMethod: 'manual checklist',
+      cleanupTimestamp: '2026-05-21T00:00:00.000Z',
+      stagingFirebaseProjectId: 'statly-staging',
+      fixtureLabelOrPrefix: 'go-live-2026-05-21',
+      affectedArtifacts: ['league_123', 'draft_123', 'smoke_uid_123'],
+      postCleanupVerification: 'Smoke ids and go-live-2026-05-21 records reset.',
+      evidenceUrl: 'https://evidence.statly.test/cleanup',
     },
     commandEvidence: requiredCommands.map((command) => ({
       command,
@@ -321,10 +338,16 @@ describe('go-live evidence check', () => {
         testDate: '',
         tester: '',
         fixture: {
+          stagingFirebaseProjectId: '',
           datasetVersion: '',
+          fixtureLabelOrPrefix: '',
+          ownerEmail: '',
+          creationMethod: '',
           smokeAccountEmail: '',
+          smokeUserUid: '',
           leagueId: '',
           draftId: '',
+          seededCollectionPrefixes: [],
         },
         routeCoverage: [
           {
@@ -355,11 +378,84 @@ describe('go-live evidence check', () => {
     expect(result.blockers).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/commitSha is required/),
+        expect.stringMatching(/fixture stagingFirebaseProjectId is required/),
         expect.stringMatching(/fixture datasetVersion is required/),
+        expect.stringMatching(/fixture ownerEmail is required/),
         expect.stringMatching(/route coverage \/login did not pass/),
         expect.stringMatching(/route coverage is missing \/dashboard/),
         expect.stringMatching(/accessibility evidence did not pass/),
         expect.stringMatching(/accessibility evidence is missing keyboard coverage/),
+      ])
+    );
+  });
+
+  it('requires cleanup evidence for staging smoke fixtures', () => {
+    const result = validateGoLiveEvidence(
+      buildValidEvidence({
+        cleanupEvidence: {
+          status: 'not-run',
+          ownerEmail: '',
+          cleanupMethod: '',
+          cleanupTimestamp: '',
+          stagingFirebaseProjectId: '',
+          fixtureLabelOrPrefix: '',
+          affectedArtifacts: [],
+          postCleanupVerification: '',
+          evidenceUrl: 'replace-with-evidence-url/release-2026-05-21/cleanup',
+        },
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/cleanupEvidence did not pass/),
+        expect.stringMatching(/cleanupEvidence ownerEmail is required/),
+        expect.stringMatching(/cleanupEvidence affectedArtifacts must list at least one real value/),
+        expect.stringMatching(/cleanupEvidence evidenceUrl must be a real evidence URL/),
+      ])
+    );
+  });
+
+  it('rejects placeholder fixture and cleanup inventory values', () => {
+    const result = validateGoLiveEvidence(
+      buildValidEvidence({
+        fixture: {
+          stagingFirebaseProjectId: '<staging-firebase-project-id>',
+          datasetVersion: '<fixture-dataset-version>',
+          fixtureLabelOrPrefix: '<fixture-label-or-prefix>',
+          ownerEmail: '<fixture-owner-email>',
+          creationMethod: '<fixture-creation-method>',
+          smokeAccountEmail: 'smoke@statly.test',
+          smokeUserUid: '<smoke-user-uid>',
+          leagueId: 'league_123',
+          draftId: 'draft_123',
+          seededCollectionPrefixes: ['<fixture-prefix>'],
+        },
+        cleanupEvidence: {
+          status: 'pass',
+          ownerEmail: '<fixture-owner-email>',
+          cleanupMethod: '<cleanup-method>',
+          cleanupTimestamp: '<cleanup-timestamp>',
+          stagingFirebaseProjectId: '<staging-firebase-project-id>',
+          fixtureLabelOrPrefix: '<fixture-label-or-prefix>',
+          affectedArtifacts: ['<league-id>'],
+          postCleanupVerification: '<post-cleanup-verification>',
+          evidenceUrl: 'https://evidence.statly.test/cleanup',
+        },
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/fixture stagingFirebaseProjectId must be a real value/),
+        expect.stringMatching(/fixture datasetVersion must be a real value/),
+        expect.stringMatching(/fixture smokeUserUid must be a real value/),
+        expect.stringMatching(/fixture seededCollectionPrefixes\[0\] must be a real value/),
+        expect.stringMatching(/cleanupEvidence cleanupMethod must be a real value/),
+        expect.stringMatching(/cleanupEvidence affectedArtifacts\[0\] must be a real value/),
+        expect.stringMatching(/cleanupEvidence postCleanupVerification must be a real value/),
       ])
     );
   });
@@ -399,9 +495,25 @@ describe('go-live evidence check', () => {
     expect(scaffold.releaseId).toBe('release-123');
     expect(scaffold.baseUrl).toBe('https://staging.statly.test');
     expect(scaffold.fixture).toMatchObject({
+      stagingFirebaseProjectId: '<staging-firebase-project-id>',
+      fixtureLabelOrPrefix: '<fixture-label-or-prefix>',
+      ownerEmail: '<fixture-owner-email>',
+      creationMethod: '<fixture-creation-method>',
       smokeAccountEmail: 'smoke@statly.test',
+      smokeUserUid: '<smoke-user-uid>',
       leagueId: 'league_123',
       draftId: 'draft_123',
+      seededCollectionPrefixes: [],
+    });
+    expect(scaffold.cleanupEvidence).toMatchObject({
+      status: 'not-run',
+      ownerEmail: '<fixture-owner-email>',
+      cleanupMethod: '<cleanup-method>',
+      cleanupTimestamp: '<cleanup-timestamp>',
+      stagingFirebaseProjectId: '<staging-firebase-project-id>',
+      fixtureLabelOrPrefix: '<fixture-label-or-prefix>',
+      affectedArtifacts: [],
+      postCleanupVerification: '<post-cleanup-verification>',
     });
     expect(scaffold.routeCoverage).toHaveLength(8);
     expect(scaffold.accessibility).toMatchObject({

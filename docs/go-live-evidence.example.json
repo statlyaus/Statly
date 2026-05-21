@@ -6,10 +6,33 @@
   "environment": "staging",
   "baseUrl": "https://staging.statly.example",
   "fixture": {
+    "stagingFirebaseProjectId": "statly-staging-example",
     "datasetVersion": "go-live-fixtures-2026-05-21-example",
+    "fixtureLabelOrPrefix": "go-live-2026-05-21-example",
+    "ownerEmail": "release-captain@statly.example",
+    "creationMethod": "staging UI",
     "smokeAccountEmail": "smoke@statly.example",
+    "smokeUserUid": "smoke_user_uid_example",
     "leagueId": "league_123",
-    "draftId": "draft_123"
+    "draftId": "draft_123",
+    "seededCollectionPrefixes": [
+      "go-live-2026-05-21-example"
+    ]
+  },
+  "cleanupEvidence": {
+    "status": "pass",
+    "ownerEmail": "release-captain@statly.example",
+    "cleanupMethod": "manual checklist",
+    "cleanupTimestamp": "2026-05-21T00:00:00.000Z",
+    "stagingFirebaseProjectId": "statly-staging-example",
+    "fixtureLabelOrPrefix": "go-live-2026-05-21-example",
+    "affectedArtifacts": [
+      "smoke_user_uid_example",
+      "league_123",
+      "draft_123"
+    ],
+    "postCleanupVerification": "Example smoke ids and fixture-prefixed records were removed or reset.",
+    "evidenceUrl": "https://evidence.statly.example/releases/release-2026-05-21-example/cleanup"
   },
   "commandEvidence": [
     {

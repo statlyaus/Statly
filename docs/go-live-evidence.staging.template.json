@@ -1,0 +1,257 @@
+{
+  "releaseId": "<release-id>",
+  "commitSha": "<commit-sha>",
+  "testDate": "2026-05-21",
+  "tester": "<tester>",
+  "environment": "staging",
+  "baseUrl": "<base-url>",
+  "fixture": {
+    "stagingFirebaseProjectId": "<staging-firebase-project-id>",
+    "datasetVersion": "<fixture-dataset-version>",
+    "fixtureLabelOrPrefix": "<fixture-label-or-prefix>",
+    "ownerEmail": "<fixture-owner-email>",
+    "creationMethod": "<fixture-creation-method>",
+    "smokeAccountEmail": "<smoke-account-email>",
+    "smokeUserUid": "<smoke-user-uid>",
+    "leagueId": "<league-id>",
+    "draftId": "<draft-id>",
+    "seededCollectionPrefixes": []
+  },
+  "cleanupEvidence": {
+    "status": "not-run",
+    "ownerEmail": "<fixture-owner-email>",
+    "cleanupMethod": "<cleanup-method>",
+    "cleanupTimestamp": "<cleanup-timestamp>",
+    "stagingFirebaseProjectId": "<staging-firebase-project-id>",
+    "fixtureLabelOrPrefix": "<fixture-label-or-prefix>",
+    "affectedArtifacts": [],
+    "postCleanupVerification": "<post-cleanup-verification>",
+    "evidenceUrl": "replace-with-evidence-url/<release-id>/cleanup"
+  },
+  "commandEvidence": [
+    {
+      "command": "npm run typecheck",
+      "status": "not-run",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/command-npm-run-typecheck"
+    },
+    {
+      "command": "npm run lint",
+      "status": "not-run",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/command-npm-run-lint"
+    },
+    {
+      "command": "npm run guard:routes",
+      "status": "not-run",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/command-npm-run-guard:routes"
+    },
+    {
+      "command": "npm run guard:design",
+      "status": "not-run",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/command-npm-run-guard:design"
+    },
+    {
+      "command": "npm test",
+      "status": "not-run",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/command-npm-test"
+    },
+    {
+      "command": "npm run branch:complete",
+      "status": "not-run",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/command-npm-run-branch:complete"
+    }
+  ],
+  "routeCoverage": [
+    {
+      "route": "/",
+      "status": "not-run",
+      "authMode": "smoke-user",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/route--"
+    },
+    {
+      "route": "/login",
+      "status": "not-run",
+      "authMode": "smoke-user",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/route--login"
+    },
+    {
+      "route": "/dashboard",
+      "status": "not-run",
+      "authMode": "smoke-user",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/route--dashboard"
+    },
+    {
+      "route": "/players",
+      "status": "not-run",
+      "authMode": "smoke-user",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/route--players"
+    },
+    {
+      "route": "/rankings",
+      "status": "not-run",
+      "authMode": "smoke-user",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/route--rankings"
+    },
+    {
+      "route": "/leagues/:leagueId",
+      "status": "not-run",
+      "authMode": "smoke-user",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/route--leagues-:leagueId"
+    },
+    {
+      "route": "/drafts/:draftId",
+      "status": "not-run",
+      "authMode": "smoke-user",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/route--drafts-:draftId"
+    },
+    {
+      "route": "/admin/workers",
+      "status": "not-run",
+      "authMode": "standard-user-denied",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/route--admin-workers"
+    }
+  ],
+  "accessibility": {
+    "status": "not-run",
+    "keyboard": false,
+    "namedControls": false,
+    "desktop": false,
+    "mobile": false,
+    "evidenceUrl": "replace-with-evidence-url/<release-id>/accessibility"
+  },
+  "browserRuns": [
+    {
+      "browser": "chrome",
+      "platform": "desktop",
+      "viewport": "1440x900",
+      "status": "not-run",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/browser-chrome"
+    },
+    {
+      "browser": "safari",
+      "platform": "desktop",
+      "viewport": "1440x900",
+      "status": "not-run",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/browser-safari"
+    },
+    {
+      "browser": "firefox",
+      "platform": "desktop",
+      "viewport": "1440x900",
+      "status": "not-run",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/browser-firefox"
+    },
+    {
+      "browser": "mobile-safari",
+      "platform": "mobile",
+      "viewport": "390x844",
+      "status": "not-run",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/browser-mobile-safari"
+    },
+    {
+      "browser": "chrome-android",
+      "platform": "mobile",
+      "viewport": "390x844",
+      "status": "not-run",
+      "consoleErrors": 0,
+      "failedNetworkRequests": 0,
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/browser-chrome-android"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "auth-session",
+      "status": "not-run",
+      "desktop": false,
+      "mobile": false,
+      "accountRole": "<smoke-account-email>",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/workflow-auth-session"
+    },
+    {
+      "id": "dashboard",
+      "status": "not-run",
+      "desktop": false,
+      "mobile": false,
+      "accountRole": "<smoke-account-email>",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/workflow-dashboard"
+    },
+    {
+      "id": "league-switch",
+      "status": "not-run",
+      "desktop": false,
+      "mobile": false,
+      "accountRole": "<smoke-account-email>",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/workflow-league-switch"
+    },
+    {
+      "id": "draft-room",
+      "status": "not-run",
+      "desktop": false,
+      "mobile": false,
+      "accountRole": "<smoke-account-email>",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/workflow-draft-room"
+    },
+    {
+      "id": "trade-review",
+      "status": "not-run",
+      "desktop": false,
+      "mobile": false,
+      "accountRole": "<smoke-account-email>",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/workflow-trade-review"
+    },
+    {
+      "id": "waiver-flow",
+      "status": "not-run",
+      "desktop": false,
+      "mobile": false,
+      "accountRole": "<smoke-account-email>",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/workflow-waiver-flow"
+    },
+    {
+      "id": "player-rankings",
+      "status": "not-run",
+      "desktop": false,
+      "mobile": false,
+      "accountRole": "<smoke-account-email>",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/workflow-player-rankings"
+    },
+    {
+      "id": "admin-denial",
+      "status": "not-run",
+      "desktop": false,
+      "mobile": false,
+      "accountRole": "standard-user",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/workflow-admin-denial"
+    }
+  ],
+  "performance": {
+    "environment": "staging",
+    "source": "web-vitals",
+    "status": "not-run",
+    "metrics": {},
+    "evidenceUrl": "replace-with-evidence-url/<release-id>/performance-web-vitals"
+  },
+  "degradedStates": [
+    {
+      "id": "dashboard-api-failure",
+      "environment": "staging",
+      "status": "not-run",
+      "evidenceUrl": "replace-with-evidence-url/<release-id>/degraded-dashboard-api-failure"
+    }
+  ],
+  "acceptedRisks": [],
+  "launchBlockers": [],
+  "finalRecommendation": {
+    "decision": "no-go",
+    "rationale": "",
+    "rollbackPlan": "",
+    "postDeploySmokePlan": ""
+  }
+}
