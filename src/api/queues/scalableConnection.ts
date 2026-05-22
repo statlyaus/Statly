@@ -172,7 +172,10 @@ class ScalableRedisConnection {
           return delay;
         },
         redisOptions: {
-          ...((config.cluster.options as Record<string, unknown>)?.redisOptions as Record<string, unknown> ?? {}),
+          ...(((config.cluster.options as Record<string, unknown>)?.redisOptions as Record<
+            string,
+            unknown
+          >) ?? {}),
           maxRetriesPerRequest: null,
           lazyConnect: true,
           connectTimeout: 10000,

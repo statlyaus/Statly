@@ -13,7 +13,12 @@ import React, {
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
-import type { DraftState as DraftCore, DraftPlayer, DraftPick, DraftParticipant } from '@/types/draft';
+import type {
+  DraftState as DraftCore,
+  DraftPlayer,
+  DraftPick,
+  DraftParticipant,
+} from '@/types/draft';
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
@@ -25,7 +30,10 @@ export interface DraftLiveState {
 
 export interface DraftSnapshot {
   draft: DraftCore | null;
-  participants: DraftParticipant[] | Record<string, DraftParticipant> | Map<string, DraftParticipant>;
+  participants:
+    | DraftParticipant[]
+    | Record<string, DraftParticipant>
+    | Map<string, DraftParticipant>;
   picks: DraftPick[] | Record<string, DraftPick> | Map<string, DraftPick>;
   availablePlayers: DraftPlayer[] | Record<string, DraftPlayer> | Map<string, DraftPlayer>;
   selectedCategories?: FantasyCategoryKey[] | null;
@@ -113,7 +121,8 @@ function normalizeParticipants(raw: unknown): DraftParticipant[] {
   return toArray<any>(raw).map((participant, index) => {
     const member = participant?.member ?? participant;
     const draftOrder =
-      Number(participant?.draftOrder ?? participant?.slot ?? member?.draftOrder ?? index + 1) || index + 1;
+      Number(participant?.draftOrder ?? participant?.slot ?? member?.draftOrder ?? index + 1) ||
+      index + 1;
 
     return {
       id: String(member?.id ?? participant?.id ?? `participant-${draftOrder}`),
@@ -128,7 +137,9 @@ function normalizeParticipants(raw: unknown): DraftParticipant[] {
         typeof (participant?.timeRemaining ?? member?.timeRemaining) === 'number'
           ? Number(participant?.timeRemaining ?? member?.timeRemaining)
           : undefined,
-      queue: Array.isArray(participant?.queue ?? member?.queue) ? (participant?.queue ?? member?.queue) : [],
+      queue: Array.isArray(participant?.queue ?? member?.queue)
+        ? (participant?.queue ?? member?.queue)
+        : [],
     };
   });
 }
@@ -162,7 +173,10 @@ function toOptionalDate(value: unknown): Date | undefined {
 
 function normalizeDraftCore(raw: unknown): DraftCore | null {
   if (!raw || typeof raw !== 'object') return null;
-  if (!('id' in (raw as Record<string, unknown>)) || !('currentPick' in (raw as Record<string, unknown>))) {
+  if (
+    !('id' in (raw as Record<string, unknown>)) ||
+    !('currentPick' in (raw as Record<string, unknown>))
+  ) {
     return null;
   }
 
@@ -179,12 +193,14 @@ function normalizeDraftCore(raw: unknown): DraftCore | null {
     totalPicks: Number(source.totalPicks ?? 0),
     round: Number(source.round ?? 0),
     direction: String(source.direction ?? 'FORWARD') as DraftCore['direction'],
-    pickDeadlineAt: source.pickDeadlineAt ? toOptionalDate(source.pickDeadlineAt) ?? null : null,
+    pickDeadlineAt: source.pickDeadlineAt ? (toOptionalDate(source.pickDeadlineAt) ?? null) : null,
     settings: {
       name: String(source.settings?.name ?? source.name ?? 'Draft'),
       leagueId: String(source.settings?.leagueId ?? source.leagueId ?? ''),
       leagueSize: Number(source.settings?.leagueSize ?? participants.length),
-      draftType: String(source.settings?.draftType ?? source.draftType ?? 'SNAKE') as DraftCore['settings']['draftType'],
+      draftType: String(
+        source.settings?.draftType ?? source.draftType ?? 'SNAKE'
+      ) as DraftCore['settings']['draftType'],
       timePerPick: Number(source.settings?.timePerPick ?? source.timePerPick ?? 120),
       timeZone: String(source.settings?.timeZone ?? 'Australia/Melbourne'),
       enableReminders: Boolean(source.settings?.enableReminders ?? true),
@@ -238,11 +254,13 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   const participants = normalizeParticipants((raw as any).participants);
   const includesParticipantQueues = participantQueueIncluded((raw as any).participants);
 
-  const picks = toArray<DraftPick>(raw.picks).slice().sort((a, b) => {
-    const ap = Number((a as any).pickNo ?? 0);
-    const bp = Number((b as any).pickNo ?? 0);
-    return ap - bp;
-  });
+  const picks = toArray<DraftPick>(raw.picks)
+    .slice()
+    .sort((a, b) => {
+      const ap = Number((a as any).pickNo ?? 0);
+      const bp = Number((b as any).pickNo ?? 0);
+      return ap - bp;
+    });
 
   const pickedIds = new Set<string>(
     picks.map((pk) => String((pk as any).player?.id ?? (pk as any).playerId))
@@ -273,10 +291,7 @@ function computeCurrentSlotFromSnake(currentPick: number, teamCount: number): nu
   return fwd ? idx : teamCount - ((currentPick - 1) % teamCount);
 }
 
-function normalizeCommandPick(
-  raw: unknown,
-  participants: DraftParticipant[]
-): DraftPick | null {
+function normalizeCommandPick(raw: unknown, participants: DraftParticipant[]): DraftPick | null {
   const pick = raw as Partial<DraftPick> & {
     player?: Partial<DraftPlayer>;
     member?: Partial<DraftPick['member']>;
@@ -287,9 +302,7 @@ function normalizeCommandPick(
     return null;
   }
 
-  const participant = participants.find(
-    (entry) => String(entry.id) === String(pick.member?.id)
-  );
+  const participant = participants.find((entry) => String(entry.id) === String(pick.member?.id));
 
   return {
     id: String(pick.id),
@@ -328,7 +341,11 @@ function normalizeCommandPick(
 
 type Action =
   | { type: 'SET_SNAPSHOT'; snapshot: ReturnType<typeof normalizeSnapshot> }
-  | { type: 'SET_AVAILABLE_PLAYERS'; players: DraftPlayer[]; selectedCategories?: FantasyCategoryKey[] }
+  | {
+      type: 'SET_AVAILABLE_PLAYERS';
+      players: DraftPlayer[];
+      selectedCategories?: FantasyCategoryKey[];
+    }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
@@ -359,7 +376,10 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
       const rawPick = (delta.payload as { pick?: unknown })?.pick;
       const pick = normalizeCommandPick(rawPick, next.participants);
       if (!pick) return next;
-      const picks = [...next.picks.filter((existing) => String(existing.id) !== String(pick.id)), pick].sort((a, b) => {
+      const picks = [
+        ...next.picks.filter((existing) => String(existing.id) !== String(pick.id)),
+        pick,
+      ].sort((a, b) => {
         const ap = Number((a as any).pickNo ?? 0);
         const bp = Number((b as any).pickNo ?? 0);
         return ap - bp;
@@ -409,7 +429,8 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
       return { ...next, participants };
     }
     case 'STATE_PATCH': {
-      const { draft: draftPatch, liveState: livePatch } = (delta.payload ?? {}) as Partial<DraftState>;
+      const { draft: draftPatch, liveState: livePatch } = (delta.payload ??
+        {}) as Partial<DraftState>;
       return {
         ...next,
         draft:
@@ -582,7 +603,9 @@ export function DraftProvider({
   const [state, dispatch] = useReducer(reducer, initial);
 
   const memberId = useMemo(() => {
-    const me = state.participants.find((participant) => String((participant as any).userId) === String(userId));
+    const me = state.participants.find(
+      (participant) => String((participant as any).userId) === String(userId)
+    );
     return me ? String((me as any).id) : null;
   }, [state.participants, userId]);
 
@@ -606,12 +629,9 @@ export function DraftProvider({
   }, []);
 
   // Stable callbacks for socket handlers
-  const handleSnapshot = useCallback(
-    (snapshot: DraftSnapshot) => {
-      dispatch({ type: 'SET_SNAPSHOT', snapshot: normalizeSnapshot(snapshot) });
-    },
-    []
-  );
+  const handleSnapshot = useCallback((snapshot: DraftSnapshot) => {
+    dispatch({ type: 'SET_SNAPSHOT', snapshot: normalizeSnapshot(snapshot) });
+  }, []);
 
   const handleDelta = useCallback(
     (delta: DraftDelta) => {
@@ -769,7 +789,7 @@ export function DraftProvider({
         return;
       }
 
-      const playerExists = state.availablePlayers.some(p => String(p.id) === playerId);
+      const playerExists = state.availablePlayers.some((p) => String(p.id) === playerId);
       if (!playerExists) {
         dispatch({
           type: 'SET_ERROR',
@@ -778,41 +798,41 @@ export function DraftProvider({
         return;
       }
 
-       dispatch({ type: 'SET_SAVING', saving: true });
-       try {
-         const res = await fetchApi(`drafts/${draftId}/picks`, {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ playerId }),
-         });
-         const pick = normalizeCommandPick(res?.data?.pick ?? res?.pick, state.participants);
-         if (pick) {
-           const delta: DraftDelta = { type: 'PICK_MADE', payload: { pick }, ts: Date.now() };
-           dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
-         } else if (isMounted.current) {
-           dispatch({
-             type: 'SET_ERROR',
-             error: 'Draft pick succeeded but returned an invalid payload. Refresh the room.',
-           });
-         }
-       } catch (err: any) {
-         if (isMounted.current) {
-           dispatch({
-             type: 'SET_ERROR',
-             error:
-               err?.status === 409
-                 ? 'That player was just drafted by someone else.'
-                 : err?.status === 423
-                 ? 'Not your turn to pick.'
-                 : err?.message ?? 'Failed to make pick',
-           });
-         }
-       } finally {
-         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
-       }
-     },
+      dispatch({ type: 'SET_SAVING', saving: true });
+      try {
+        const res = await fetchApi(`drafts/${draftId}/picks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId }),
+        });
+        const pick = normalizeCommandPick(res?.data?.pick ?? res?.pick, state.participants);
+        if (pick) {
+          const delta: DraftDelta = { type: 'PICK_MADE', payload: { pick }, ts: Date.now() };
+          dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
+        } else if (isMounted.current) {
+          dispatch({
+            type: 'SET_ERROR',
+            error: 'Draft pick succeeded but returned an invalid payload. Refresh the room.',
+          });
+        }
+      } catch (err: any) {
+        if (isMounted.current) {
+          dispatch({
+            type: 'SET_ERROR',
+            error:
+              err?.status === 409
+                ? 'That player was just drafted by someone else.'
+                : err?.status === 423
+                  ? 'Not your turn to pick.'
+                  : (err?.message ?? 'Failed to make pick'),
+          });
+        }
+      } finally {
+        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+      }
+    },
     [draftId, state.availablePlayers]
-   );
+  );
 
   const updateQueue = useCallback(
     async (queue: string[]) => {
@@ -824,8 +844,8 @@ export function DraftProvider({
         return;
       }
 
-      const availableIds = new Set(state.availablePlayers.map(p => String(p.id)));
-      const invalidIds = queue.filter(id => !availableIds.has(id));
+      const availableIds = new Set(state.availablePlayers.map((p) => String(p.id)));
+      const invalidIds = queue.filter((id) => !availableIds.has(id));
       if (invalidIds.length > 0) {
         dispatch({
           type: 'SET_ERROR',

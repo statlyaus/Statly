@@ -7,7 +7,10 @@ import type {
   DraftTypeValue,
 } from './draftTypes';
 
-function calculateLinearTurn(currentPick: number, participants: DraftParticipantSnapshot[]): DraftTurn {
+function calculateLinearTurn(
+  currentPick: number,
+  participants: DraftParticipantSnapshot[]
+): DraftTurn {
   const teamCount = participants.length;
   if (teamCount === 0) {
     throw new Error('Draft has no participants');
@@ -28,7 +31,10 @@ function calculateLinearTurn(currentPick: number, participants: DraftParticipant
   };
 }
 
-export function calculateSnakeTurn(currentPick: number, participants: DraftParticipantSnapshot[]): DraftTurn {
+export function calculateSnakeTurn(
+  currentPick: number,
+  participants: DraftParticipantSnapshot[]
+): DraftTurn {
   const teamCount = participants.length;
   if (teamCount === 0) {
     throw new Error('Draft has no participants');

@@ -28,8 +28,10 @@ export async function getPubSub(): Promise<{ pub: AnyRedisClient; sub: AnyRedisC
     return { pub: globalThis.__statly_redis_pub__!, sub: globalThis.__statly_redis_sub__! };
   }
 
-  const pub: AnyRedisClient = globalThis.__statly_redis_pub__ || createClient(url ? { url } : undefined);
-  const sub: AnyRedisClient = globalThis.__statly_redis_sub__ || createClient(url ? { url } : undefined);
+  const pub: AnyRedisClient =
+    globalThis.__statly_redis_pub__ || createClient(url ? { url } : undefined);
+  const sub: AnyRedisClient =
+    globalThis.__statly_redis_sub__ || createClient(url ? { url } : undefined);
 
   pub.on('error', (e) => console.error('[redis:pub] error', e));
   sub.on('error', (e) => console.error('[redis:sub] error', e));

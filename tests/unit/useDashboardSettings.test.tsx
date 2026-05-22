@@ -29,10 +29,9 @@ describe('useDashboardSettings', () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
     );
-    const { result } = renderHook(
-      () => useDashboardSettings('u1', defaultDashboardSettings),
-      { wrapper }
-    );
+    const { result } = renderHook(() => useDashboardSettings('u1', defaultDashboardSettings), {
+      wrapper,
+    });
     await act(async () => {
       await expect(result.current.updateSettings({ theme: 'dark' })).resolves.toBeDefined();
     });

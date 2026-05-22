@@ -93,7 +93,10 @@ class EnhancedDraftWorker {
     );
   }
 
-  private getStartJobData(job: Job<DraftJobData>, inferredKind: 'draft:start-lobby' | 'draft:start') {
+  private getStartJobData(
+    job: Job<DraftJobData>,
+    inferredKind: 'draft:start-lobby' | 'draft:start'
+  ) {
     if ('leagueId' in job.data && 'pickClock' in job.data) {
       return job.data as DraftStartJobData;
     }
@@ -190,15 +193,10 @@ class EnhancedDraftWorker {
           const { draftId, leagueId } = this.getStartJobData(job, inferredKind);
           const scheduledDraft =
             draftId ||
-            (
-              await draftRepository.transaction(async (tx) => {
-                const draft = await draftRepository.findDraftScheduleByLeagueId(
-                  tx,
-                  leagueId
-                );
-                return draft?.id ?? null;
-              })
-            );
+            (await draftRepository.transaction(async (tx) => {
+              const draft = await draftRepository.findDraftScheduleByLeagueId(tx, leagueId);
+              return draft?.id ?? null;
+            }));
 
           if (!scheduledDraft) {
             logger.warn('Skipping scheduled draft start for missing draft', {
@@ -245,7 +243,9 @@ class EnhancedDraftWorker {
       }
     } catch (error) {
       this.updateMetrics(Date.now() - start, true);
-      logger.error('Draft job failed', { error: error instanceof Error ? error.message : String(error) });
+      logger.error('Draft job failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
     this.updateMetrics(Date.now() - start, false);
@@ -305,24 +305,29 @@ class EnhancedDraftWorker {
       this.metrics.jobsProcessed++;
       const n = this.metrics.jobsProcessed;
       this.metrics.averageProcessingTime =
-        n === 1 ? processingTime : (this.metrics.averageProcessingTime * (n - 1) + processingTime) / n;
+        n === 1
+          ? processingTime
+          : (this.metrics.averageProcessingTime * (n - 1) + processingTime) / n;
     }
   }
 
   private startCleanupJob(): void {
-    this.cleanupInterval = setInterval(() => {
-      void (async () => {
-        try {
-          await draftQueue.clean(24 * 60 * 60 * 1000, 100);
-          logger.info('Queue cleanup completed', { workerId: this.metrics.workerId });
-        } catch (error) {
-          logger.error('Queue cleanup failed', {
-            error: error instanceof Error ? error.message : String(error),
-            workerId: this.metrics.workerId,
-          });
-        }
-      })();
-    }, 60 * 60 * 1000);
+    this.cleanupInterval = setInterval(
+      () => {
+        void (async () => {
+          try {
+            await draftQueue.clean(24 * 60 * 60 * 1000, 100);
+            logger.info('Queue cleanup completed', { workerId: this.metrics.workerId });
+          } catch (error) {
+            logger.error('Queue cleanup failed', {
+              error: error instanceof Error ? error.message : String(error),
+              workerId: this.metrics.workerId,
+            });
+          }
+        })();
+      },
+      60 * 60 * 1000
+    );
   }
 
   public async shutdown(): Promise<void> {
@@ -331,7 +336,9 @@ class EnhancedDraftWorker {
       this.cleanupInterval = undefined;
     }
     await Promise.all([this.worker.close(), this.queueEvents.close()]).catch((err) => {
-      logger.warn('Error during worker shutdown', { error: err instanceof Error ? err.message : String(err) });
+      logger.warn('Error during worker shutdown', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     });
     this.started = false;
     this.metrics.ready = false;

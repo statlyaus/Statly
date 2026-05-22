@@ -9,7 +9,6 @@ import type {
   RedisOptions,
 } from 'ioredis';
 
-
 // Lightweight interface describing the methods we use from ioredis clients
 type RedisLike = { ping: () => Promise<string>; quit: () => Promise<void> };
 
@@ -190,7 +189,10 @@ class ScalableRedisConnection {
           return delay;
         },
         redisOptions: {
-          ...((config.cluster.options as Record<string, unknown>)?.redisOptions as Record<string, unknown> ?? {}),
+          ...(((config.cluster.options as Record<string, unknown>)?.redisOptions as Record<
+            string,
+            unknown
+          >) ?? {}),
           maxRetriesPerRequest: null,
           lazyConnect: true,
           connectTimeout: 10000,
@@ -259,7 +261,8 @@ class ScalableRedisConnection {
         void this.initializeHealthChecks();
         this.healthChecksStarted = true;
         logger.info('Health checks initialized', {
-          role: preferredClient === (this.workerClient as unknown as RedisLike) ? 'worker' : 'other',
+          role:
+            preferredClient === (this.workerClient as unknown as RedisLike) ? 'worker' : 'other',
         });
       }
     }

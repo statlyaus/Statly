@@ -79,7 +79,8 @@ async function createCommandOutboxEvents(
       draftId: input.draftId,
       leagueId: input.leagueId,
       event,
-      payload: event === 'draft:pick-made' || event === 'draft:auto-pick' ? input.payload ?? null : null,
+      payload:
+        event === 'draft:pick-made' || event === 'draft:auto-pick' ? (input.payload ?? null) : null,
       publishState: input.publishState && index === input.events.length - 1,
     }))
   );
@@ -88,9 +89,7 @@ async function createCommandOutboxEvents(
 }
 
 export class DraftApplicationService {
-  async startDraft(input: {
-    draftId: string;
-  }): Promise<DraftCommandResult<LifecycleCommandData>> {
+  async startDraft(input: { draftId: string }): Promise<DraftCommandResult<LifecycleCommandData>> {
     const { draftId } = input;
 
     const result = await draftRepository.transaction(async (tx) => {
@@ -100,7 +99,9 @@ export class DraftApplicationService {
       }
 
       if (draft.status !== DraftStatus.SCHEDULED) {
-        throw new Error(`bad_request:Draft ${draftId} is not in a startable state: ${draft.status}`);
+        throw new Error(
+          `bad_request:Draft ${draftId} is not in a startable state: ${draft.status}`
+        );
       }
 
       if (draft.participants.length === 0) {
@@ -308,12 +309,7 @@ export class DraftApplicationService {
           auto: false,
         });
 
-        await draftRepository.removeQueuedPlayer(
-          tx,
-          draftId,
-          actingParticipant.memberId,
-          playerId
-        );
+        await draftRepository.removeQueuedPlayer(tx, draftId, actingParticipant.memberId, playerId);
 
         const nextState = buildNextDraftState(draft);
         const updated = await draftRepository.advanceDraft(tx, draftId, draft.currentPick, {
@@ -362,7 +358,12 @@ export class DraftApplicationService {
           nextSchedulingVersion = draft.schedulingVersion + 1;
         }
 
-        const eventPick = draftRepository.toEventPick(pick, draft.currentPick, turn.round, turn.slot);
+        const eventPick = draftRepository.toEventPick(
+          pick,
+          draft.currentPick,
+          turn.round,
+          turn.slot
+        );
         const events = nextState.isComplete
           ? buildCommandEvents('draft:pick-made', 'draft:completed')
           : buildCommandEvents('draft:pick-made');
@@ -460,7 +461,11 @@ export class DraftApplicationService {
       assertAutoPickIsAllowed(draft);
       assertCurrentPickIsOpen(draft);
 
-      const turn = calculateDraftTurn(draft.settings.draftType, draft.currentPick, draft.participants);
+      const turn = calculateDraftTurn(
+        draft.settings.draftType,
+        draft.currentPick,
+        draft.participants
+      );
       const excludedPlayerIds = draft.picks.map((pick) => pick.playerId);
 
       const queueItem = await draftRepository.findQueuedPlayer(
@@ -551,7 +556,12 @@ export class DraftApplicationService {
           nextSchedulingVersion = draft.schedulingVersion + 1;
         }
 
-        const eventPick = draftRepository.toEventPick(pick, draft.currentPick, turn.round, turn.slot);
+        const eventPick = draftRepository.toEventPick(
+          pick,
+          draft.currentPick,
+          turn.round,
+          turn.slot
+        );
         const events = nextState.isComplete
           ? buildCommandEvents('draft:auto-pick', 'draft:completed')
           : buildCommandEvents('draft:auto-pick');

@@ -114,10 +114,9 @@ export default function PlayerSearch({
 
     const searchPlayers = async () => {
       try {
-        const data = (await fetchApi(
-          `players/search?q=${encodeURIComponent(debouncedQuery)}`,
-          { signal: controller.signal }
-        )) as { players?: PlayerSearchResult[] };
+        const data = (await fetchApi(`players/search?q=${encodeURIComponent(debouncedQuery)}`, {
+          signal: controller.signal,
+        })) as { players?: PlayerSearchResult[] };
 
         if (requestIdRef.current !== requestId) {
           return;
@@ -303,9 +302,7 @@ export default function PlayerSearch({
       </div>
 
       {isOpen && (trimmedQuery.length >= MIN_QUERY_LENGTH || players.length > 0 || isLoading) && (
-        <div
-          className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg"
-        >
+        <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
           <Command className="bg-white text-gray-900">
             <ScrollArea className="max-h-96">
               <CommandList id={listboxId} role="listbox">

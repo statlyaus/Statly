@@ -38,7 +38,12 @@ export async function emitAuthoritativeDraftState(draftId: string) {
 
 export async function emitAuthoritativeDraftEvent(
   draftId: string,
-  event: 'draft:pick-made' | 'draft:auto-pick' | 'draft:paused' | 'draft:resumed' | 'draft:completed',
+  event:
+    | 'draft:pick-made'
+    | 'draft:auto-pick'
+    | 'draft:paused'
+    | 'draft:resumed'
+    | 'draft:completed',
   payload?: Parameters<typeof draftRealtimePublisher.publishDraftEvent>[2]
 ) {
   return draftRealtimePublisher.publishDraftEvent(draftId, event, payload);

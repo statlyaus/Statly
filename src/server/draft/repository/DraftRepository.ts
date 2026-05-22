@@ -82,7 +82,11 @@ function toSettingsSnapshot(settings: {
 function toParticipantSnapshot(order: {
   slot: number;
   memberId: string;
-  member: { role: string; userId: string; user: { displayName: string | null; email: string | null } };
+  member: {
+    role: string;
+    userId: string;
+    user: { displayName: string | null; email: string | null };
+  };
 }): DraftParticipantSnapshot {
   return {
     memberId: order.memberId,
@@ -288,7 +292,10 @@ export class DraftRepository {
     update: {
       nextPick: number;
       nextRound: number;
-      nextDirection: PrismaNS.EnumDraftDirectionFieldUpdateOperationsInput['set'] | 'FORWARD' | 'REVERSE';
+      nextDirection:
+        | PrismaNS.EnumDraftDirectionFieldUpdateOperationsInput['set']
+        | 'FORWARD'
+        | 'REVERSE';
       isComplete: boolean;
     }
   ) {
@@ -382,9 +389,7 @@ export class DraftRepository {
         ...(input.pausedRemainingSeconds !== undefined
           ? { pausedRemainingSeconds: input.pausedRemainingSeconds }
           : {}),
-        ...(input.incrementSchedulingVersion
-          ? { schedulingVersion: { increment: 1 } }
-          : {}),
+        ...(input.incrementSchedulingVersion ? { schedulingVersion: { increment: 1 } } : {}),
       },
     });
   }
@@ -417,10 +422,7 @@ export class DraftRepository {
     return created;
   }
 
-  async listDraftEventsByIds(
-    tx: TxClient,
-    eventIds: string[]
-  ): Promise<DraftOutboxEventRecord[]> {
+  async listDraftEventsByIds(tx: TxClient, eventIds: string[]): Promise<DraftOutboxEventRecord[]> {
     if (eventIds.length === 0) {
       return [];
     }
@@ -433,10 +435,7 @@ export class DraftRepository {
     return events.map(toOutboxEventRecord);
   }
 
-  async markDraftEventsPublished(
-    tx: TxClient,
-    eventIds: string[]
-  ): Promise<void> {
+  async markDraftEventsPublished(tx: TxClient, eventIds: string[]): Promise<void> {
     if (eventIds.length === 0) {
       return;
     }
@@ -476,10 +475,7 @@ export class DraftRepository {
     });
   }
 
-  async releaseStaleDraftEventClaims(
-    tx: TxClient,
-    staleBefore: Date
-  ): Promise<void> {
+  async releaseStaleDraftEventClaims(tx: TxClient, staleBefore: Date): Promise<void> {
     await tx.draftEvent.updateMany({
       where: {
         publishedAt: null,
@@ -569,7 +565,12 @@ export class DraftRepository {
     return events.map(toOutboxEventRecord);
   }
 
-  toEventPick(pick: PickWithRelations, overall: number, round: number, slot: number): DraftPickEventPayload {
+  toEventPick(
+    pick: PickWithRelations,
+    overall: number,
+    round: number,
+    slot: number
+  ): DraftPickEventPayload {
     return {
       id: pick.id,
       overall,

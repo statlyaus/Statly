@@ -163,7 +163,12 @@ class WorkerPool {
    */
   async checkHealth(): Promise<{
     healthy: boolean;
-    workers: Array<{ id: string; healthy: boolean; status: 'ready' | 'idle' | 'error'; error?: string }>;
+    workers: Array<{
+      id: string;
+      healthy: boolean;
+      status: 'ready' | 'idle' | 'error';
+      error?: string;
+    }>;
   }> {
     const workerHealthChecks = await Promise.all(
       Array.from(this.workers.entries()).map(async ([id, worker]) => {

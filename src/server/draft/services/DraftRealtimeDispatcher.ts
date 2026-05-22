@@ -1,5 +1,9 @@
 import { logger } from '@/lib/logger';
-import { draftPubSub, type DraftRealtimeEnvelope, type DraftRealtimeEventType } from '@/services/realtime/pubsub';
+import {
+  draftPubSub,
+  type DraftRealtimeEnvelope,
+  type DraftRealtimeEventType,
+} from '@/services/realtime/pubsub';
 import type { LiveDraftState } from '@/services/liveDraftEngine';
 
 import type { DraftPickEventPayload } from '../domain/draftTypes';
@@ -79,7 +83,12 @@ export class DraftRealtimeDispatcher {
 
   async publishDraftEvent(
     draftId: string,
-    event: 'draft:pick-made' | 'draft:auto-pick' | 'draft:paused' | 'draft:resumed' | 'draft:completed',
+    event:
+      | 'draft:pick-made'
+      | 'draft:auto-pick'
+      | 'draft:paused'
+      | 'draft:resumed'
+      | 'draft:completed',
     payload?: DraftPickEventPayload
   ): Promise<void> {
     const eventPayload = payload ?? {};
@@ -105,7 +114,11 @@ export class DraftRealtimeDispatcher {
     await draftPubSub.publish(draftId, 'draft:queue-updated', payload);
   }
 
-  async publishAdminMessage(draftId: string, type: 'joined' | 'left', userId: string): Promise<void> {
+  async publishAdminMessage(
+    draftId: string,
+    type: 'joined' | 'left',
+    userId: string
+  ): Promise<void> {
     const payload = { type, userId };
     this.dispatchToLocal(draftId, 'draft:admin-message', payload);
     await draftPubSub.publish(draftId, 'draft:admin-message', payload);
@@ -126,7 +139,10 @@ export class DraftRealtimeDispatcher {
 
   private dispatchToLocal(draftId: string, event: DraftRealtimeEventType, payload: unknown): void {
     if (!this.io) {
-      logger.warn('Skipping realtime dispatch without attached Socket.IO server', { draftId, event });
+      logger.warn('Skipping realtime dispatch without attached Socket.IO server', {
+        draftId,
+        event,
+      });
       return;
     }
 
@@ -204,7 +220,11 @@ export class DraftRealtimeDispatcher {
       }
       case 'draft:completed': {
         this.emitToDraftRooms(draftId, 'draft:completed', payload);
-        this.emitToDraftRooms(draftId, 'draft:status', this.buildStatusPayload(draftId, 'COMPLETED'));
+        this.emitToDraftRooms(
+          draftId,
+          'draft:status',
+          this.buildStatusPayload(draftId, 'COMPLETED')
+        );
         return;
       }
       case 'draft:queue-updated': {

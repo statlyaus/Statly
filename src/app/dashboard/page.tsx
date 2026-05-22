@@ -24,11 +24,7 @@ export default async function Page() {
   // Load dashboard settings with validation and error handling
   let settings: DashboardSettings;
   try {
-    const ref = adminDb
-      .collection('users')
-      .doc(uid)
-      .collection('dashboardSettings')
-      .doc('default');
+    const ref = adminDb.collection('users').doc(uid).collection('dashboardSettings').doc('default');
     const snap = await ref.get();
     if (snap.exists) {
       const parsed = dashboardSettingsSchema.safeParse(snap.data());
