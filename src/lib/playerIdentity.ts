@@ -1,13 +1,10 @@
 const UNKNOWN_PLAYER_ID = 'unknown_player';
 
-function buildStableHash(value: string): string {
-  let hash = 0;
-
-  for (const character of value) {
-    hash = (hash * 31 + (character.codePointAt(0) ?? 0)) >>> 0;
-  }
-
-  return hash.toString(36);
+function encodeCodePoints(value: string): string {
+  return Array.from(value)
+    .map((character) => character.codePointAt(0)?.toString(36))
+    .filter(Boolean)
+    .join('_');
 }
 
 export function buildCanonicalPlayerId(value: string | null | undefined): string {
@@ -27,5 +24,5 @@ export function buildCanonicalPlayerId(value: string | null | undefined): string
     return UNKNOWN_PLAYER_ID;
   }
 
-  return `${UNKNOWN_PLAYER_ID}_${buildStableHash(raw)}`;
+  return `${UNKNOWN_PLAYER_ID}_${encodeCodePoints(raw)}`;
 }

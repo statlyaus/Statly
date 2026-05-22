@@ -38,7 +38,7 @@ export default function GlobalError({
             <div className="mt-4 text-center">
               <h3 className="text-lg font-medium text-gray-900">Something went wrong!</h3>
               <p className="mt-2 text-sm text-gray-500">
-                We&apos;ve been notified and are working to fix the issue.
+                {"We've been notified and are working to fix the issue."}
               </p>
               <div className="mt-4 space-x-3">
                 <button

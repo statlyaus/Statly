@@ -425,6 +425,7 @@ io.on('connection', (socket) => {
   }) => {
     const { draftId, userId, memberId, displayName } = data;
     const startJoin = Date.now();
+    let acceptedDraftId: string | null = null;
 
     try {
       // Validate input
@@ -459,6 +460,7 @@ io.on('connection', (socket) => {
         return;
       }
 
+      acceptedDraftId = draftId;
       incCounter(METRICS.joins);
       const participantCount = participantResult.count;
 
@@ -571,6 +573,18 @@ io.on('connection', (socket) => {
         outcome: 'ok',
       });
     } catch (error) {
+      if (acceptedDraftId) {
+        try {
+          await draftRoomStore.removeParticipant(acceptedDraftId, socket.id);
+        } catch (cleanupError) {
+          logger.warn('Failed to clean up participant after draft join error', {
+            socketId: socket.id,
+            draftId: acceptedDraftId,
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        }
+      }
+
       logger.error('❌ Error joining draft', {
         socketId: socket.id,
         draftId,
@@ -610,12 +624,13 @@ io.on('connection', (socket) => {
   });
 
   // Leave draft room with cleanup
-  const leaveDraftRoom = ({ draftId }: { draftId: string }) => {
+  const leaveDraftRoom = async ({ draftId }: { draftId: string }) => {
     try {
       logger.info('👋 User leaving draft', { socketId: socket.id, draftId });
 
       socket.leave(draftId);
       socket.leave(`draft:${draftId}`);
+      const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
 
       // Clean up room if empty
       const room = draftRooms.get(draftId);
@@ -630,14 +645,15 @@ io.on('connection', (socket) => {
           }
           draftRooms.delete(draftId);
           logger.info('🗑️ Draft room cleaned up', { draftId });
-        } else {
-          // Notify remaining participants
-          socket.to(draftId).emit('participant:leave', {
-            socketId: socket.id,
-            timestamp: new Date().toISOString(),
-            participantCount: room.participants.size,
-          });
         }
+      }
+
+      if (participantCount > 0) {
+        socket.to(draftId).emit('participant:leave', {
+          socketId: socket.id,
+          timestamp: new Date().toISOString(),
+          participantCount,
+        });
       }
 
       // Clear socket data
@@ -656,7 +672,7 @@ io.on('connection', (socket) => {
   socket.on('draft:leave', leaveDraftRoom);
 
   // Handle disconnection with cleanup
-  socket.on('disconnect', (reason) => {
+  socket.on('disconnect', async (reason) => {
     const connectionDuration = socket.data.connectionStartTime
       ? Date.now() - socket.data.connectionStartTime
       : 0;
@@ -672,28 +688,40 @@ io.on('connection', (socket) => {
 
     // Clean up any draft rooms this socket was in
     if (socket.data.draftId) {
-      const room = draftRooms.get(socket.data.draftId);
-      if (room) {
-        room.participants.delete(socket.id);
+      const draftId = socket.data.draftId as string;
 
-        if (room.participants.size === 0) {
-          if (room.timer) {
-            clearInterval(room.timer);
-            room.timer = undefined;
+      try {
+        const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
+        const room = draftRooms.get(draftId);
+        if (room) {
+          room.participants.delete(socket.id);
+
+          if (room.participants.size === 0) {
+            if (room.timer) {
+              clearInterval(room.timer);
+              room.timer = undefined;
+            }
+            draftRooms.delete(draftId);
+            logger.info('🗑️ Draft room cleaned up after disconnect', {
+              draftId,
+            });
           }
-          draftRooms.delete(socket.data.draftId);
-          logger.info('🗑️ Draft room cleaned up after disconnect', {
-            draftId: socket.data.draftId,
-          });
-        } else {
-          // Notify remaining participants
-          socket.to(socket.data.draftId).emit('participant:disconnect', {
+        }
+
+        if (participantCount > 0) {
+          socket.to(draftId).emit('participant:disconnect', {
             socketId: socket.id,
             reason,
             timestamp: new Date().toISOString(),
-            participantCount: room.participants.size,
+            participantCount,
           });
         }
+      } catch (error) {
+        logger.error('❌ Error cleaning up draft disconnect', {
+          socketId: socket.id,
+          draftId,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   });
