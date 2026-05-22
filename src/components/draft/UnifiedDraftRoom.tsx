@@ -55,7 +55,17 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const participants = draft.participants as DraftParticipant[];
   const picks = draft.picks as DraftPick[];
   const playersList = draft.availablePlayers as DraftPlayer[];
-  const watchlistItems = draft.watchlistItems || [];
+  const watchlistItems = useMemo(() => draft.watchlistItems || [], [draft.watchlistItems]);
+  const legacyWatchlistItems = useMemo(
+    () =>
+      watchlistItems.map((item) => ({
+        playerId: item.playerId,
+        rank: item.priority,
+        addedAt: item.createdAt ?? item.updatedAt ?? new Date(0).toISOString(),
+        notes: item.notes,
+      })),
+    [watchlistItems]
+  );
   const selectedCategories = draft.selectedCategories || [];
 
   // Derive "me", ownership, and your slot once
@@ -154,17 +164,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     [draft, me?.queue]
   );
 
-  const handleAddWatchlistPlayerToQueue = useCallback(
-    async (player: { id: string }) => {
-      const draftPlayer = playersList.find((entry) => String(entry.id) === String(player.id));
-      if (!draftPlayer) return;
-      await handleAddToQueue(draftPlayer);
-    },
-    [handleAddToQueue, playersList]
-  );
-
-  const queuePlayerIds = me?.queue || [];
-
   const handleToggleWatchlist = useCallback(
     async (player: DraftPlayer) => {
       try {
@@ -252,6 +251,19 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         (lastFocusedRef.current || openFeedBtnRef.current)?.focus();
       });
     }
+  }, [isPickFeedOpen]);
+
+  useEffect(() => {
+    if (!isPickFeedOpen) return;
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsPickFeedOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isPickFeedOpen]);
 
   // Loading
@@ -476,6 +488,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 className="flex flex-col gap-1 sm:flex-row"
                 role="tablist"
                 aria-orientation="horizontal"
+                tabIndex={-1}
                 onKeyDown={onTabsKeyDown}
               >
                 {tabs.map((tab) => {
@@ -572,11 +585,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     void handlePlayerSelectById(player.id);
                   }}
                   canDraft={draft.canMakePick}
-                  watchlistItems={watchlistItems}
-                  onAddToQueue={handleAddWatchlistPlayerToQueue}
-                  queuedPlayerIds={queuePlayerIds}
+                  watchlistItems={legacyWatchlistItems}
                   onRemoveFromWatchlist={draft.removeFromWatchlist}
-                  isLoading={draft.isSaving}
                 />
               )}
 
@@ -622,16 +632,14 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           <div
             className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50"
             role="presentation"
-            onClick={() => setIsPickFeedOpen(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
                 setIsPickFeedOpen(false);
               }
             }}
           >
             <div
               className="absolute right-0 top-0 h-full w-80 overflow-y-auto bg-slate-50 p-4 shadow-lg"
-              onMouseDown={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
               aria-labelledby="pickFeedTitle"
@@ -676,6 +684,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           </div>
         )}
       </div>
+      {ConfirmationModal}
     </DraftErrorBoundary>
   );
 }

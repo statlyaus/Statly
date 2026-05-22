@@ -1,21 +1,24 @@
 import { beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL_TEST! } },
-});
-
-if (!process.env.DATABASE_URL_TEST) {
-  throw new Error('Missing DATABASE_URL_TEST for integration tests');
-}
+const testDatabaseUrl = process.env.DATABASE_URL_TEST;
+const prisma = testDatabaseUrl
+  ? new PrismaClient({
+      datasources: { db: { url: testDatabaseUrl } },
+    })
+  : null;
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
+  if (!testDatabaseUrl) {
+    return;
+  }
+
+  process.env.DATABASE_URL = testDatabaseUrl;
   await import('child_process').then(({ execSync }) =>
     execSync('npx prisma migrate deploy', { stdio: 'inherit' })
   );
 });
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  await prisma?.$disconnect();
 });

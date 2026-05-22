@@ -7,14 +7,6 @@ import { useRouter } from 'next/navigation';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { Loader2 } from 'lucide-react';
 
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-  ScrollArea,
-} from '@/components/ui';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fetchApi } from '@/lib/api';
 import type { PlayerSearchResult } from '@/types/players';
@@ -125,7 +117,7 @@ export default function PlayerSearch({
         const nextPlayers = Array.isArray(data?.players) ? data.players : [];
         setPlayers(nextPlayers);
         setSelectedIndex(nextPlayers.length > 0 ? 0 : -1);
-      } catch (error) {
+      } catch (_error) {
         if (controller.signal.aborted || requestIdRef.current !== requestId) {
           return;
         }
@@ -241,7 +233,7 @@ export default function PlayerSearch({
             >
               {player.name
                 .split(' ')
-                .map((n) => n[0])
+                .map((n: string) => n[0])
                 .join('')
                 .slice(0, 2)}
             </div>
@@ -303,41 +295,50 @@ export default function PlayerSearch({
 
       {isOpen && (trimmedQuery.length >= MIN_QUERY_LENGTH || players.length > 0 || isLoading) && (
         <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
-          <Command className="bg-white text-gray-900">
-            <ScrollArea className="max-h-96">
-              <CommandList id={listboxId} role="listbox">
+          <div className="bg-white text-gray-900">
+            <div className="max-h-96 overflow-y-auto">
+              <div id={listboxId} role="listbox">
                 {isLoading ? (
                   <div className="px-4 py-3 text-center text-gray-500">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin text-blue-600" />
                     <span className="ml-2">Searching...</span>
                   </div>
                 ) : players.length > 0 ? (
-                  <CommandGroup className="p-0">
+                  <div className="p-0">
                     {players.map((player, index) => (
-                      <CommandItem
+                      <div
                         key={player.id}
                         id={`${listboxId}-option-${player.id}`}
                         role="option"
                         aria-selected={index === selectedIndex}
+                        tabIndex={-1}
                         className="block rounded-none px-0 py-0 hover:bg-transparent"
                         onMouseEnter={() => handleOptionHover(index)}
                         onClick={() => handlePlayerSelect(player)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handlePlayerSelect(player);
+                          }
+                        }}
                       >
                         {renderPlayerItem(player, index)}
-                      </CommandItem>
+                      </div>
                     ))}
                     {players.length === 20 && (
                       <div className="border-t px-4 py-2 text-center text-sm text-gray-500">
                         Showing top 20 results. Refine your search for more specific results.
                       </div>
                     )}
-                  </CommandGroup>
+                  </div>
                 ) : trimmedQuery.length >= MIN_QUERY_LENGTH ? (
-                  <CommandEmpty>No players found for &ldquo;{query}&rdquo;</CommandEmpty>
+                  <div className="px-4 py-3 text-center text-gray-500">
+                    No players found for &ldquo;{query}&rdquo;
+                  </div>
                 ) : null}
-              </CommandList>
-            </ScrollArea>
-          </Command>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

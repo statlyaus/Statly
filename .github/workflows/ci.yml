@@ -11,19 +11,6 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: statly
-          POSTGRES_PASSWORD: statly
-          POSTGRES_DB: statly_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U statly -d statly_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
       redis:
         image: redis:7-alpine
         ports:
@@ -36,8 +23,8 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL_TEST: postgresql://statly:statly@localhost:5432/stalty_test?schema=public
-      # Correct the typo above: statly_test (Actions env is per job; we re-export below)
+      DATABASE_URL: 'file:./ci-test.db'
+      DATABASE_URL_TEST: 'file:./ci-test.db'
       REDIS_URL: redis://localhost:6379
 
     steps:
@@ -48,17 +35,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Fix DB env (typo guard)
-        run: |
-          echo "DATABASE_URL_TEST=postgresql://statly:statly@localhost:5432/statly_test?schema=public" >> $GITHUB_ENV
-
       - name: Install deps
         run: npm ci
 
       - name: Prisma migrate (test DB)
-        run: |
-          export DATABASE_URL="$DATABASE_URL_TEST"
-          npx prisma migrate deploy
+        run: npx prisma migrate deploy
 
       - name: Run full test suite
         run: npm run test:all

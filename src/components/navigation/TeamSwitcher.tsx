@@ -15,7 +15,6 @@ export default function TeamSwitcher() {
           aria-haspopup="menu"
           aria-expanded="false"
           aria-controls="team-switcher-menu"
-          role="button"
         >
           {activeLeague ? `League ${activeLeague.slice(0, 6)}…` : 'Select Team'}
         </button>

@@ -96,7 +96,7 @@ async function getDeltasSince(draftId: string, since: number): Promise<DraftDelt
   }
 
   const key = `draft:${draftId}:events`;
-  const vals = await redis.zRangeByScore(key, (since + 1) as number, '+inf');
+  const vals = await redis.zrangebyscore(key, since + 1, '+inf');
   return vals
     .map((value) => {
       try {
@@ -423,7 +423,7 @@ io.on('connection', (socket) => {
     displayName?: string;
     authToken?: string;
   }) => {
-    const { draftId, userId, memberId, displayName, authToken } = data;
+    const { draftId, userId, memberId, displayName } = data;
     const startJoin = Date.now();
 
     try {
@@ -806,17 +806,19 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Start the server
 httpServer.listen(PORT, () => {
+  const corsOrigins = socketIOConfig.server.cors.origin;
+
   logger.info('🚀 Enhanced Socket.IO server started', {
     port: PORT,
     environment: socketIOConfig.environment,
-    cors: socketIOConfig.server.cors.origin,
+    cors: corsOrigins,
     transports: socketIOConfig.server.transports,
     timestamp: new Date().toISOString(),
   });
 
   console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);
+  console.log(`🌐 CORS enabled for: ${corsOrigins.join(', ')}`);
   console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
   console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
 });

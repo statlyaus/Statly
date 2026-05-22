@@ -1,3 +1,4 @@
+-- Historical manual SQL retained outside Prisma's directory-based migrations.
 -- Add draft lobby and pre-draft functionality
 ALTER TABLE "Draft" ADD COLUMN "lobbyOpenAt" TIMESTAMP(3);
 ALTER TABLE "Draft" ADD COLUMN "lobbyStatus" TEXT DEFAULT 'CLOSED'; -- 'CLOSED', 'OPEN', 'COUNTDOWN', 'LIVE'

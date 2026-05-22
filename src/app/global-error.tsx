@@ -16,7 +16,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html>
+    <html lang="en">
       <body>
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
@@ -38,7 +38,7 @@ export default function GlobalError({
             <div className="mt-4 text-center">
               <h3 className="text-lg font-medium text-gray-900">Something went wrong!</h3>
               <p className="mt-2 text-sm text-gray-500">
-                We've been notified and are working to fix the issue.
+                We&apos;ve been notified and are working to fix the issue.
               </p>
               <div className="mt-4 space-x-3">
                 <button

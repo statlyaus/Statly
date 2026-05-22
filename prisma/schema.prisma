@@ -38,10 +38,12 @@ model League {
   name          String
   inviteCode    String   @unique
   ownerId       String
+  categoriesJson String?
   settingsId    String   @unique
   members       LeagueMember[]
   settings      LeagueSettings @relation(fields: [settingsId], references: [id])
   drafts        Draft[]
+  draftEvents   DraftEvent[]
   createdAt     DateTime @default(now())
 
   @@index([ownerId])
@@ -129,6 +131,9 @@ model Draft {
   createdAt    DateTime @default(now())
   startedAt    DateTime?
   completedAt  DateTime?
+  pickStartedAt DateTime?
+  pickDeadlineAt DateTime?
+  pausedRemainingSeconds Int?
   // Version counter used to atomically claim scheduling of the next pick
   schedulingVersion Int @default(0)
 
@@ -140,11 +145,35 @@ model Draft {
   watchlists   DraftWatchlist[]
   preDraftQueues PreDraftQueue[]
   lobbyActivities LobbyActivity[]
+  events       DraftEvent[]
 
   @@index([status])
   @@index([leagueId])
   @@index([createdAt])
   @@index([leagueId, status])
+}
+
+model DraftEvent {
+  id           String   @id @default(cuid())
+  draftId       String
+  leagueId      String
+  event         String
+  payload       String?
+  publishState  Boolean  @default(false)
+  attempts      Int      @default(0)
+  lastError     String?
+  lockedAt      DateTime?
+  lockedBy      String?
+  publishedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  draft  Draft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@index([draftId, createdAt])
+  @@index([leagueId, createdAt])
+  @@index([lockedAt, createdAt])
+  @@index([publishedAt, createdAt])
 }
 
 enum DraftStatus { 

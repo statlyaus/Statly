@@ -1,6 +1,5 @@
 import { DraftStatus, DraftType } from '@prisma/client';
 
-import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import type { LiveDraftState } from '@/services/liveDraftEngine';
 
@@ -143,11 +142,6 @@ export class DraftProjectionService {
     const turn = calculateDraftTurn(draftType, safePickNumber, participants);
     const timerAnchor = draft.pickStartedAt ?? draft.startedAt ?? draft.createdAt;
     const pickTimeLimit = draft.league.settings.pickSeconds;
-    const timeRemaining =
-      draft.status === DraftStatus.LIVE && draft.pickDeadlineAt
-        ? Math.max(0, Math.floor((draft.pickDeadlineAt.getTime() - Date.now()) / 1000))
-        : 0;
-
     return {
       leagueId: draft.leagueId,
       draftId: draft.id,

@@ -474,7 +474,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           player.name
             .toLowerCase()
             .split(' ')
-            .some((part) => part.includes(queryLower))
+            .some((part: string) => part.includes(queryLower))
       )
       .sort((a, b) => {
         // Sort by relevance: exact match first, then starts with, then by average score

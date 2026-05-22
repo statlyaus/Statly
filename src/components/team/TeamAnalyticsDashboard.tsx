@@ -769,8 +769,8 @@ export default function TeamAnalyticsDashboard({
                 </div>
 
                 {/* sentinel that focuses the active row when tabbing in */}
-                <div
-                  tabIndex={0}
+                <button
+                  type="button"
                   className="sr-only"
                   aria-label="Enter players list"
                   onFocus={() => {
@@ -797,8 +797,8 @@ export default function TeamAnalyticsDashboard({
                 </List>
 
                 {/* sentinel after list to focus last row when tabbing out backwards */}
-                <div
-                  tabIndex={0}
+                <button
+                  type="button"
                   className="sr-only"
                   aria-label="Exit players list"
                   onFocus={() => {

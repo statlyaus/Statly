@@ -449,7 +449,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
 
 function reducer(state: DraftState, action: Action): DraftState {
   switch (action.type) {
-    case 'SET_SNAPSHOT':
+    case 'SET_SNAPSHOT': {
       const participants = action.snapshot.includesParticipantQueues
         ? action.snapshot.participants
         : mergeParticipantQueues(action.snapshot.participants, state.participants);
@@ -471,6 +471,7 @@ function reducer(state: DraftState, action: Action): DraftState {
           lastEventAt: action.snapshot.ts ?? state.connection.lastEventAt,
         },
       };
+    }
     case 'SET_AVAILABLE_PLAYERS':
       return {
         ...state,

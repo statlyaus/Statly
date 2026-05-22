@@ -1,3 +1,4 @@
+-- Historical manual SQL retained outside Prisma's directory-based migrations.
 -- Add timezone support to drafts and users
 ALTER TABLE "LeagueSettings" ADD COLUMN "timeZone" TEXT DEFAULT 'UTC';
 ALTER TABLE "User" ADD COLUMN "preferredTimeZone" TEXT DEFAULT 'UTC';

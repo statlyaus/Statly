@@ -3,18 +3,10 @@
 import { useState } from 'react';
 import PlayerSearch from '@/components/PlayerSearch';
 import PlayerLink from '@/components/PlayerLink';
-
-interface Player {
-  name: string;
-  team: string;
-  position: string;
-  totalGames: number;
-  averageScore: number;
-  latestRound: number;
-}
+import type { PlayerSearchResult } from '@/types/players';
 
 export default function PlayerSearchExample() {
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerSearchResult | null>(null);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
