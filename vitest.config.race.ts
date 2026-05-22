@@ -16,5 +16,6 @@ export default defineConfig({
     hookTimeout: 60000,
     retry: 0,
     reporters: ['default'],
+    passWithNoTests: true,
   },
 });

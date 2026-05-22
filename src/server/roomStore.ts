@@ -15,6 +15,11 @@ export interface DraftRoomState {
   timePerPick: number;
 }
 
+export interface AddParticipantResult {
+  accepted: boolean;
+  count: number;
+}
+
 const MEM_STORE = {
   rooms: new Map<string, DraftRoomState>(),
   participants: new Map<string, Set<string>>(),
@@ -138,6 +143,90 @@ export class DraftRoomStore {
     set.add(participantId);
     MEM_STORE.participants.set(draftId, set);
     return set.size;
+  }
+
+  async addParticipantIfUnderLimit(
+    draftId: string,
+    participantId: string,
+    maxParticipants: number
+  ): Promise<AddParticipantResult> {
+    const limit = Math.max(0, Math.floor(maxParticipants));
+    const client = redisClient.getClient();
+
+    if (limit <= 0) {
+      return { accepted: false, count: await this.getParticipantCount(draftId) };
+    }
+
+    const payload = JSON.stringify({
+      participantId,
+      joinedAt: new Date().toISOString(),
+    });
+
+    if (client) {
+      const result = await client.eval(
+        `
+local participantsKey = KEYS[1]
+local participantDataKey = KEYS[2]
+local participantId = ARGV[1]
+local maxParticipants = tonumber(ARGV[2])
+local ttlSeconds = tonumber(ARGV[3])
+local payload = ARGV[4]
+
+if redis.call('SISMEMBER', participantsKey, participantId) == 1 then
+  redis.call('HSET', participantDataKey, participantId, payload)
+  redis.call('EXPIRE', participantsKey, ttlSeconds)
+  redis.call('EXPIRE', participantDataKey, ttlSeconds)
+  return {1, redis.call('SCARD', participantsKey)}
+end
+
+local participantCount = redis.call('SCARD', participantsKey)
+if participantCount >= maxParticipants then
+  return {0, participantCount}
+end
+
+redis.call('SADD', participantsKey, participantId)
+redis.call('HSET', participantDataKey, participantId, payload)
+redis.call('EXPIRE', participantsKey, ttlSeconds)
+redis.call('EXPIRE', participantDataKey, ttlSeconds)
+
+return {1, participantCount + 1}
+        `,
+        2,
+        participantsKey(draftId),
+        this.partDataKey(draftId),
+        participantId,
+        String(limit),
+        String(this.getTTL()),
+        payload
+      );
+      const [accepted, count] = Array.isArray(result) ? result : [0, 0];
+
+      return {
+        accepted: accepted === 1 || accepted === '1',
+        count: Number(count) || 0,
+      };
+    }
+
+    const set = MEM_STORE.participants.get(draftId) || new Set<string>();
+    const draftMap = MEM_STORE.participantData.get(draftId) || new Map<string, string>();
+
+    if (set.has(participantId)) {
+      draftMap.set(participantId, payload);
+      MEM_STORE.participants.set(draftId, set);
+      MEM_STORE.participantData.set(draftId, draftMap);
+      return { accepted: true, count: set.size };
+    }
+
+    if (set.size >= limit) {
+      return { accepted: false, count: set.size };
+    }
+
+    set.add(participantId);
+    draftMap.set(participantId, payload);
+    MEM_STORE.participants.set(draftId, set);
+    MEM_STORE.participantData.set(draftId, draftMap);
+
+    return { accepted: true, count: set.size };
   }
 
   async removeParticipant(draftId: string, participantId: string): Promise<number> {

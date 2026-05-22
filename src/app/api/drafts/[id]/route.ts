@@ -27,15 +27,10 @@ function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
   if (!Array.isArray(parsed)) return [];
 
   const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
-  return parsed
-    .map(String)
-    .filter((value): value is FantasyCategoryKey => validKeys.has(value));
+  return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

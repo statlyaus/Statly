@@ -112,7 +112,7 @@ export default function SentryTestPage() {
                 </h3>
                 <ErrorTestButton />
                 <p className="text-sm text-gray-500 mt-2">
-                  This will throw an error and test Sentry's error boundary
+                  {"This will throw an error and test Sentry's error boundary"}
                 </p>
               </div>
             </div>

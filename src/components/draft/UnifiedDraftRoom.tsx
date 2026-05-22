@@ -1,14 +1,7 @@
 'use client';
 
 import type { KeyboardEvent } from 'react';
-import React, {
-  useMemo,
-  useCallback,
-  useState,
-  useDeferredValue,
-  useRef,
-  useEffect,
-} from 'react';
+import React, { useMemo, useCallback, useState, useDeferredValue, useRef, useEffect } from 'react';
 
 import Link from 'next/link';
 
@@ -34,7 +27,6 @@ import DraftQueue from './DraftQueue';
 import DraftStatusBanner from './DraftStatusBanner';
 import PlayerGrid from './PlayerGrid';
 
-
 interface UnifiedDraftRoomProps {
   draftId: string;
   userId: string;
@@ -44,8 +36,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
 
-  const [activeTab, setActiveTab] =
-    useState<'players' | 'queue' | 'watchlist' | 'analytics'>('players');
+  const [activeTab, setActiveTab] = useState<'players' | 'queue' | 'watchlist' | 'analytics'>(
+    'players'
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
@@ -62,14 +55,21 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const participants = draft.participants as DraftParticipant[];
   const picks = draft.picks as DraftPick[];
   const playersList = draft.availablePlayers as DraftPlayer[];
-  const watchlistItems = draft.watchlistItems || [];
+  const watchlistItems = useMemo(() => draft.watchlistItems || [], [draft.watchlistItems]);
+  const legacyWatchlistItems = useMemo(
+    () =>
+      watchlistItems.map((item) => ({
+        playerId: item.playerId,
+        rank: item.priority,
+        addedAt: item.createdAt ?? item.updatedAt ?? new Date(0).toISOString(),
+        notes: item.notes,
+      })),
+    [watchlistItems]
+  );
   const selectedCategories = draft.selectedCategories || [];
 
   // Derive "me", ownership, and your slot once
-  const me = useMemo(
-    () => participants.find((p) => p.userId === userId),
-    [participants, userId]
-  );
+  const me = useMemo(() => participants.find((p) => p.userId === userId), [participants, userId]);
   const yourSlot = me?.draftOrder;
   const isOwner = (me as any)?.role === 'OWNER' || (yourSlot ?? 0) === 1;
 
@@ -164,17 +164,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     [draft, me?.queue]
   );
 
-  const handleAddWatchlistPlayerToQueue = useCallback(
-    async (player: { id: string }) => {
-      const draftPlayer = playersList.find((entry) => String(entry.id) === String(player.id));
-      if (!draftPlayer) return;
-      await handleAddToQueue(draftPlayer);
-    },
-    [handleAddToQueue, playersList]
-  );
-
-  const queuePlayerIds = me?.queue || [];
-
   const handleToggleWatchlist = useCallback(
     async (player: DraftPlayer) => {
       try {
@@ -200,10 +189,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   // Memoized feed props (perf + stability)
   const feedPicks = useMemo(() => toFeedPicks(picks), [picks]);
-  const feedParticipants = useMemo(
-    () => toFeedParticipants(participants),
-    [participants]
-  );
+  const feedParticipants = useMemo(() => toFeedParticipants(participants), [participants]);
   const userMemberId = me?.id || '';
   const draftState = draft.draft;
   const draftStatus = draftState?.status ?? 'LOBBY';
@@ -243,9 +229,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     const idx = tabs.findIndex((t) => t.id === activeTab);
     if (idx === -1) return;
     const nextIdx =
-      e.key === 'ArrowRight'
-        ? (idx + 1) % tabs.length
-        : (idx - 1 + tabs.length) % tabs.length;
+      e.key === 'ArrowRight' ? (idx + 1) % tabs.length : (idx - 1 + tabs.length) % tabs.length;
     const next = tabs[nextIdx].id as typeof activeTab;
     setActiveTab(next);
     // move focus to the newly selected tab
@@ -267,6 +251,19 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         (lastFocusedRef.current || openFeedBtnRef.current)?.focus();
       });
     }
+  }, [isPickFeedOpen]);
+
+  useEffect(() => {
+    if (!isPickFeedOpen) return;
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsPickFeedOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isPickFeedOpen]);
 
   // Loading
@@ -395,7 +392,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
+                  >
                     {draftStatus}
                   </span>
                   <span className="text-sm font-semibold text-slate-900">{displayDraftTitle}</span>
@@ -425,7 +424,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                     Progress
                   </span>
-                  <span className="text-lg font-semibold text-slate-900">{draftProgress.toFixed(1)}%</span>
+                  <span className="text-lg font-semibold text-slate-900">
+                    {draftProgress.toFixed(1)}%
+                  </span>
                 </div>
                 <div className="mt-3 h-2 rounded-full bg-slate-200">
                   <div
@@ -441,7 +442,9 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 </div>
                 <div className="mt-2 text-xl font-semibold text-slate-900">
                   {activeDraft.round}
-                  <span className="ml-2 text-sm font-medium text-slate-500">/ {totalRounds ?? '—'}</span>
+                  <span className="ml-2 text-sm font-medium text-slate-500">
+                    / {totalRounds ?? '—'}
+                  </span>
                 </div>
                 <div className="mt-1 text-sm text-slate-600">Current snake or linear cycle.</div>
               </div>
@@ -477,11 +480,15 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           {/* Tabs */}
           <div className="mb-6 mt-6">
-            <nav className="bg-white rounded-2xl border border-slate-200 p-1 shadow-sm" aria-label="Draft room sections">
+            <nav
+              className="bg-white rounded-2xl border border-slate-200 p-1 shadow-sm"
+              aria-label="Draft room sections"
+            >
               <div
                 className="flex flex-col gap-1 sm:flex-row"
                 role="tablist"
                 aria-orientation="horizontal"
+                tabIndex={-1}
                 onKeyDown={onTabsKeyDown}
               >
                 {tabs.map((tab) => {
@@ -578,11 +585,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     void handlePlayerSelectById(player.id);
                   }}
                   canDraft={draft.canMakePick}
-                  watchlistItems={watchlistItems}
-                  onAddToQueue={handleAddWatchlistPlayerToQueue}
-                  queuedPlayerIds={queuePlayerIds}
+                  watchlistItems={legacyWatchlistItems}
                   onRemoveFromWatchlist={draft.removeFromWatchlist}
-                  isLoading={draft.isSaving}
                 />
               )}
 
@@ -628,16 +632,14 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           <div
             className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50"
             role="presentation"
-            onClick={() => setIsPickFeedOpen(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
                 setIsPickFeedOpen(false);
               }
             }}
           >
             <div
               className="absolute right-0 top-0 h-full w-80 overflow-y-auto bg-slate-50 p-4 shadow-lg"
-              onMouseDown={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
               aria-labelledby="pickFeedTitle"
@@ -650,8 +652,19 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
                   aria-label="Close Pick Feed"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -671,6 +684,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           </div>
         )}
       </div>
+      {ConfirmationModal}
     </DraftErrorBoundary>
   );
 }

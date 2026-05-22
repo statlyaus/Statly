@@ -55,7 +55,8 @@ export default function PlayerGrid({
   const visibleCategories = useMemo(() => selectedCategories.slice(0, 4), [selectedCategories]);
   const filteredPlayers = players;
 
-  const hasActiveFilters = searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'adp';
+  const hasActiveFilters =
+    searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'adp';
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -309,19 +310,13 @@ export default function PlayerGrid({
                   <div className="min-w-0">
                     <h3 className="truncate font-semibold text-slate-900">{player.name}</h3>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                        <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
-                          {player.position}
-                        </span>
-                        <span>{player.club}</span>
-                        {player.adp && (
-                          <span>ADP: {player.adp}</span>
-                        )}
-                        {isQueued && (
-                          <span className="font-medium text-blue-600">Queued</span>
-                        )}
-                        {isWatched && (
-                          <span className="font-medium text-amber-600">Watchlist</span>
-                        )}
+                      <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
+                        {player.position}
+                      </span>
+                      <span>{player.club}</span>
+                      {player.adp && <span>ADP: {player.adp}</span>}
+                      {isQueued && <span className="font-medium text-blue-600">Queued</span>}
+                      {isWatched && <span className="font-medium text-amber-600">Watchlist</span>}
                     </div>
                   </div>
                 </div>
@@ -335,7 +330,9 @@ export default function PlayerGrid({
                         : 'No average yet'}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
-                    {player.gamesPlayed ? `${player.gamesPlayed} games tracked` : 'Season profile loading'}
+                    {player.gamesPlayed
+                      ? `${player.gamesPlayed} games tracked`
+                      : 'Season profile loading'}
                   </div>
 
                   {player.injuryStatus && player.injuryStatus !== 'healthy' && (
@@ -368,7 +365,9 @@ export default function PlayerGrid({
                       className="flex-wrap gap-x-3 gap-y-2"
                     />
                   ) : (
-                    <div className="text-sm text-slate-500">League categories not configured yet.</div>
+                    <div className="text-sm text-slate-500">
+                      League categories not configured yet.
+                    </div>
                   )}
                 </div>
 
@@ -401,7 +400,9 @@ export default function PlayerGrid({
                         ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2'
                         : 'border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
-                    aria-label={isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`}
+                    aria-label={
+                      isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`
+                    }
                   >
                     {isQueued ? 'Queued' : 'Queue'}
                   </button>
@@ -430,7 +431,10 @@ export default function PlayerGrid({
         {isLoading && (
           <div className="absolute inset-0 bg-white/75 flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2" aria-hidden="true"></div>
+              <div
+                className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"
+                aria-hidden="true"
+              ></div>
               <p className="text-sm text-gray-600">Processing...</p>
             </div>
           </div>

@@ -1,7 +1,6 @@
 export const runtime = 'nodejs';
 
 import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { z } from 'zod';
@@ -10,13 +9,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { getLobbyState } from '@/lib/draftLobby';
 import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
-import { prisma } from '@/lib/prisma';
-import { draftRoomStore } from '@/server/roomStore';
-import { revalidateTag } from 'next/cache';
-import { tags } from '@/lib/cacheTags';
-import { draftPubSub } from '@/services/realtime/pubsub';
-import { incCounter, observeHistogram, registerHistogram } from '@/server/metrics';
-import { executeSafely } from '@/lib/errorHandling';
+import { observeHistogram, registerHistogram } from '@/server/metrics';
 
 // Register histograms once in this module context
 registerHistogram('lobby_action_duration_seconds', [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]);
@@ -40,7 +33,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Optional auth check
     try {
-      const sessionCookie = cookies().get('statly_session')?.value;
+      const cookieStore = await cookies();
+      const sessionCookie = cookieStore.get('statly_session')?.value;
       if (sessionCookie) {
         await adminAuth.verifySessionCookie(sessionCookie, true);
       }

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import {
-  Hydrate,
+  HydrationBoundary,
   QueryClient,
   QueryClientProvider,
   type DehydratedState,
@@ -13,7 +13,7 @@ interface Props {
   state?: DehydratedState;
 }
 
-export function QueryProvider({ children, state }: Props) {
+export function QueryProvider({ children, state }: Props): ReactElement {
   const [client] = useState(
     () =>
       new QueryClient({
@@ -29,7 +29,7 @@ export function QueryProvider({ children, state }: Props) {
 
   return (
     <QueryClientProvider client={client}>
-      <Hydrate state={state}>{children}</Hydrate>
+      <HydrationBoundary state={state}>{children}</HydrationBoundary>
     </QueryClientProvider>
   );
 }

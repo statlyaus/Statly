@@ -45,7 +45,9 @@ interface PlayerAggregationData {
 }
 
 function normalizeLookupPart(value: string | undefined): string {
-  return String(value ?? '').trim().toLowerCase();
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 function readNumberField(data: Record<string, unknown>, key: string): number | undefined {
@@ -125,7 +127,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     let useFirestore = true;
     try {
       snapshot = await adminDb.collection('player_match_stats').get();
-      
+
       // Log collection status for debugging
       logger.debug('Player search query', {
         query,
@@ -179,14 +181,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           playersMap.set(resolvedPlayer.id, {
             id: resolvedPlayer.id,
             name: resolvedPlayer.name,
-            team:
-              (typeof data.team === 'string' && data.team) ||
-              resolvedPlayer.team ||
-              '',
+            team: (typeof data.team === 'string' && data.team) || resolvedPlayer.team || '',
             position:
-              (typeof data.position === 'string' && data.position) ||
-              resolvedPlayer.position ||
-              '',
+              (typeof data.position === 'string' && data.position) || resolvedPlayer.position || '',
             totalGames: 0,
             latestRound: 0,
             totalGoals: 0,
@@ -227,7 +224,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           player.totalHandballs +=
             stats.handballs ?? (typeof data.handballs === 'number' ? data.handballs : 0);
           player.totalMarks += stats.marks ?? (typeof data.marks === 'number' ? data.marks : 0);
-          player.totalTackles += stats.tackles ?? (typeof data.tackles === 'number' ? data.tackles : 0);
+          player.totalTackles +=
+            stats.tackles ?? (typeof data.tackles === 'number' ? data.tackles : 0);
           player.totalHitouts +=
             stats.hitouts ??
             stats.hit_outs ??
@@ -248,31 +246,40 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             readNumberField(data, 'rebound50s') ??
             readNumberField(data, 'rebound_50s') ??
             0;
-          player.totalClangers += stats.clangers ?? (typeof data.clangers === 'number' ? data.clangers : 0);
+          player.totalClangers +=
+            stats.clangers ?? (typeof data.clangers === 'number' ? data.clangers : 0);
           player.totalContested +=
             stats.contested_possessions ??
             (typeof data.contested_possessions === 'number' ? data.contested_possessions : 0);
           player.totalUncontested +=
             stats.uncontested_possessions ??
             (typeof data.uncontested_possessions === 'number' ? data.uncontested_possessions : 0);
-          player.totalFreesFor += stats.frees_for ?? (typeof data.frees_for === 'number' ? data.frees_for : 0);
+          player.totalFreesFor +=
+            stats.frees_for ?? (typeof data.frees_for === 'number' ? data.frees_for : 0);
           player.totalFreesAgainst +=
-            stats.frees_against ?? (typeof data.frees_against === 'number' ? data.frees_against : 0);
+            stats.frees_against ??
+            (typeof data.frees_against === 'number' ? data.frees_against : 0);
           player.totalOnePercenters +=
-            stats.one_percenters ?? (typeof data.one_percenters === 'number' ? data.one_percenters : 0);
+            stats.one_percenters ??
+            (typeof data.one_percenters === 'number' ? data.one_percenters : 0);
           player.totalGoalAssists +=
             stats.goal_assists ?? (typeof data.goal_assists === 'number' ? data.goal_assists : 0);
-          player.totalTurnovers += stats.turnovers ?? (typeof data.turnovers === 'number' ? data.turnovers : 0);
-          player.totalIntercepts += stats.intercepts ?? (typeof data.intercepts === 'number' ? data.intercepts : 0);
+          player.totalTurnovers +=
+            stats.turnovers ?? (typeof data.turnovers === 'number' ? data.turnovers : 0);
+          player.totalIntercepts +=
+            stats.intercepts ?? (typeof data.intercepts === 'number' ? data.intercepts : 0);
           player.totalMetresGained +=
-            stats.metres_gained ?? (typeof data.metres_gained === 'number' ? data.metres_gained : 0);
+            stats.metres_gained ??
+            (typeof data.metres_gained === 'number' ? data.metres_gained : 0);
           player.totalContestedMarks +=
-            stats.contested_marks ?? (typeof data.contested_marks === 'number' ? data.contested_marks : 0);
+            stats.contested_marks ??
+            (typeof data.contested_marks === 'number' ? data.contested_marks : 0);
           player.totalEffectiveDisposals +=
             stats.effective_disposals ??
             (typeof data.effective_disposals === 'number' ? data.effective_disposals : 0);
           player.totalScoreInvolvements +=
-            stats.score_involvements ?? (typeof data.score_involvements === 'number' ? data.score_involvements : 0);
+            stats.score_involvements ??
+            (typeof data.score_involvements === 'number' ? data.score_involvements : 0);
           player.totalTimeOnGround +=
             stats.tog_pct ??
             stats.time_on_ground_percentage ??
@@ -280,9 +287,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             readNumberField(data, 'time_on_ground_percentage') ??
             85;
           player.totalDisposalEfficiency +=
-            stats.disposal_efficiency ??
-            readNumberField(data, 'disposal_efficiency') ??
-            75;
+            stats.disposal_efficiency ?? readNumberField(data, 'disposal_efficiency') ?? 75;
 
           // Use most recent team/position if available
           if (typeof data.team === 'string' && data.team) player.team = data.team;
@@ -293,25 +298,84 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       // Fallback to JSON file data
       logger.info('Using JSON file data for player search');
       const jsonPlayers = knownPlayers;
-      
+
       jsonPlayers.forEach((player) => {
         if (!playersMap.has(player.id)) {
           // Calculate stats from player data
-          const goals = typeof player.goals === 'number' ? player.goals : typeof player.stats?.goals === 'number' ? player.stats.goals : 0;
-          const kicks = typeof player.kicks === 'number' ? player.kicks : typeof player.stats?.kicks === 'number' ? player.stats.kicks : 0;
-          const handballs = typeof player.handballs === 'number' ? player.handballs : typeof player.stats?.handballs === 'number' ? player.stats.handballs : 0;
-          const marks = typeof player.marks === 'number' ? player.marks : typeof player.stats?.marks === 'number' ? player.stats.marks : 0;
-          const tackles = typeof player.tackles === 'number' ? player.tackles : typeof player.stats?.tackles === 'number' ? player.stats.tackles : 0;
-          const hitouts = typeof player.hitouts === 'number' ? player.hitouts : typeof player.stats?.hitouts === 'number' ? player.stats.hitouts : 0;
-          const clearances = typeof player.clearances === 'number' ? player.clearances : typeof player.stats?.clearances === 'number' ? player.stats.clearances : 0;
-          const inside50s = typeof player.inside50s === 'number' ? player.inside50s : typeof player.stats?.inside50s === 'number' ? player.stats.inside50s : 0;
-          const rebound50s = typeof player.rebound50s === 'number' ? player.rebound50s : typeof player.stats?.rebound50s === 'number' ? player.stats.rebound50s : 0;
-          const contestedPossessions = typeof player.contestedPossessions === 'number' ? player.contestedPossessions : typeof player.stats?.contestedPossessions === 'number' ? player.stats.contestedPossessions : 0;
-          const effectiveDisposals = typeof player.stats?.effectiveDisposals === 'number' ? player.stats.effectiveDisposals : 0;
-          const scoreInvolvements = typeof player.stats?.scoreInvolvements === 'number' ? player.stats.scoreInvolvements : 0;
-          const intercepts = typeof player.stats?.intercepts === 'number' ? player.stats.intercepts : 0;
-          const contestedMarks = typeof player.stats?.contestedMarks === 'number' ? player.stats.contestedMarks : 0;
-          const metresGained = typeof player.stats?.metresGained === 'number' ? player.stats.metresGained : 0;
+          const goals =
+            typeof player.goals === 'number'
+              ? player.goals
+              : typeof player.stats?.goals === 'number'
+                ? player.stats.goals
+                : 0;
+          const kicks =
+            typeof player.kicks === 'number'
+              ? player.kicks
+              : typeof player.stats?.kicks === 'number'
+                ? player.stats.kicks
+                : 0;
+          const handballs =
+            typeof player.handballs === 'number'
+              ? player.handballs
+              : typeof player.stats?.handballs === 'number'
+                ? player.stats.handballs
+                : 0;
+          const marks =
+            typeof player.marks === 'number'
+              ? player.marks
+              : typeof player.stats?.marks === 'number'
+                ? player.stats.marks
+                : 0;
+          const tackles =
+            typeof player.tackles === 'number'
+              ? player.tackles
+              : typeof player.stats?.tackles === 'number'
+                ? player.stats.tackles
+                : 0;
+          const hitouts =
+            typeof player.hitouts === 'number'
+              ? player.hitouts
+              : typeof player.stats?.hitouts === 'number'
+                ? player.stats.hitouts
+                : 0;
+          const clearances =
+            typeof player.clearances === 'number'
+              ? player.clearances
+              : typeof player.stats?.clearances === 'number'
+                ? player.stats.clearances
+                : 0;
+          const inside50s =
+            typeof player.inside50s === 'number'
+              ? player.inside50s
+              : typeof player.stats?.inside50s === 'number'
+                ? player.stats.inside50s
+                : 0;
+          const rebound50s =
+            typeof player.rebound50s === 'number'
+              ? player.rebound50s
+              : typeof player.stats?.rebound50s === 'number'
+                ? player.stats.rebound50s
+                : 0;
+          const contestedPossessions =
+            typeof player.contestedPossessions === 'number'
+              ? player.contestedPossessions
+              : typeof player.stats?.contestedPossessions === 'number'
+                ? player.stats.contestedPossessions
+                : 0;
+          const effectiveDisposals =
+            typeof player.stats?.effectiveDisposals === 'number'
+              ? player.stats.effectiveDisposals
+              : 0;
+          const scoreInvolvements =
+            typeof player.stats?.scoreInvolvements === 'number'
+              ? player.stats.scoreInvolvements
+              : 0;
+          const intercepts =
+            typeof player.stats?.intercepts === 'number' ? player.stats.intercepts : 0;
+          const contestedMarks =
+            typeof player.stats?.contestedMarks === 'number' ? player.stats.contestedMarks : 0;
+          const metresGained =
+            typeof player.stats?.metresGained === 'number' ? player.stats.metresGained : 0;
 
           playersMap.set(player.id, {
             id: player.id,
@@ -407,12 +471,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           (player.team ?? '').toLowerCase().includes(queryLower) ||
           (player.position ?? '').toLowerCase().includes(queryLower) ||
           // Also check if any part of the name matches (e.g., "naughton" matches "Aaron Naughton")
-          player.name.toLowerCase().split(' ').some((part) => part.includes(queryLower))
+          player.name
+            .toLowerCase()
+            .split(' ')
+            .some((part: string) => part.includes(queryLower))
       )
       .sort((a, b) => {
         // Sort by relevance: exact match first, then starts with, then by average score
-        const aExact = a.name.toLowerCase() === queryLower ? 2 : a.name.toLowerCase().startsWith(queryLower) ? 1 : 0;
-        const bExact = b.name.toLowerCase() === queryLower ? 2 : b.name.toLowerCase().startsWith(queryLower) ? 1 : 0;
+        const aExact =
+          a.name.toLowerCase() === queryLower
+            ? 2
+            : a.name.toLowerCase().startsWith(queryLower)
+              ? 1
+              : 0;
+        const bExact =
+          b.name.toLowerCase() === queryLower
+            ? 2
+            : b.name.toLowerCase().startsWith(queryLower)
+              ? 1
+              : 0;
 
         if (aExact !== bExact) return bExact - aExact;
         return b.averageScore - a.averageScore;
@@ -421,9 +498,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ players: filteredPlayers });
   } catch (error) {
-    logger.error('Error searching players', error instanceof Error ? error : new Error(String(error)), {
-      query: new URL(request.url).searchParams.get('q'),
-    });
+    logger.error(
+      'Error searching players',
+      error instanceof Error ? error : new Error(String(error)),
+      {
+        query: new URL(request.url).searchParams.get('q'),
+      }
+    );
     return NextResponse.json({ error: 'Failed to search players' }, { status: 500 });
   }
 }

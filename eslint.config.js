@@ -28,6 +28,7 @@ export default [
       '**/.vercel/**',
       '**/build/**',
       '**/coverage/**',
+      '**/functions/lib/**',
       '**/public/**',
       '**/out/**',
       '**/Statly.worktrees/**',
@@ -38,9 +39,6 @@ export default [
       'postcss.config.*',
       'index.tsx',
     ],
-    plugins: {
-      '@next/next': nextPlugin,
-    },
   },
 
   // 2) Base pass (no type info) — fast, runs on everything

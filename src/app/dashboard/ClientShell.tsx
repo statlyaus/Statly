@@ -4,17 +4,13 @@ import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { SocketProvider } from '@/providers/SocketProvider';
-import { useDashboardSettings, DashboardSettings } from '@/hooks/useDashboardSettings';
+import type { DashboardSettings } from '@/hooks/useDashboardSettings';
+import { useDashboardSettings } from '@/hooks/useDashboardSettings';
 import AppLayout from '@/components/navigation/AppLayout';
 
-const TopPicksModule = dynamic(
-  () => import('@/components/modules/TopPicksModule'),
-  {
-    loading: () => (
-      <div className="h-[300px]" aria-busy="true" aria-label="Loading Top Picks…" />
-    ),
-  }
-);
+const TopPicksModule = dynamic(() => import('@/components/modules/TopPicksModule'), {
+  loading: () => <div className="h-[300px]" aria-busy="true" aria-label="Loading Top Picks…" />,
+});
 
 interface Props {
   uid: string;

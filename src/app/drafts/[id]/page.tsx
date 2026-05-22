@@ -4,6 +4,7 @@ import React from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/AuthContext';
 import { DraftProvider } from '@/contexts/DraftContext';
+import { SocketProvider } from '@/contexts/SocketContext';
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 
@@ -38,9 +39,11 @@ export default function DraftPage() {
 
   return (
     <DraftErrorBoundary>
-      <DraftProvider draftId={draftId} userId={user.uid}>
-        <UnifiedDraftRoom draftId={draftId} userId={user.uid} />
-      </DraftProvider>
+      <SocketProvider uid={user.uid}>
+        <DraftProvider draftId={draftId} userId={user.uid}>
+          <UnifiedDraftRoom draftId={draftId} userId={user.uid} />
+        </DraftProvider>
+      </SocketProvider>
     </DraftErrorBoundary>
   );
 }

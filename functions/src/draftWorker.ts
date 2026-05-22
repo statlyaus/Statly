@@ -1268,7 +1268,7 @@ export const backfillOwnershipPercent = functions
           if ((decoded as any)?.admin === true || (decoded as any)?.roles?.includes?.('admin')) {
             authorized = true;
           }
-        } catch (e) {
+        } catch {
           // ignore, will result in 401 unless secret matches
         }
       }

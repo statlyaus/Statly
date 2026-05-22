@@ -1,8 +1,5 @@
 import { logger } from '@/lib/logger';
-import {
-  cancelDraftPickExpiry,
-  scheduleDraftPickExpiry,
-} from '@/server/queue/draftQueue';
+import { cancelDraftPickExpiry, scheduleDraftPickExpiry } from '@/server/queue/draftQueue';
 
 export class DraftScheduler {
   async schedulePickExpiry(input: {

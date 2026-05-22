@@ -1,4 +1,6 @@
-export async function register() {
+type RouterTransitionHandler = (href: string, navigationType: string) => void;
+
+export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'edge') {
     const Sentry = await import('@sentry/nextjs');
 
@@ -17,7 +19,14 @@ export async function register() {
   }
 }
 
-export const onRouterTransitionStart = async () => {
-  const Sentry = await import('@sentry/nextjs');
-  return Sentry.captureRouterTransitionStart();
+export const onRouterTransitionStart: RouterTransitionHandler = (href, navigationType) => {
+  void import('@sentry/nextjs').then((Sentry) => {
+    const captureRouterTransitionStart = (
+      Sentry as {
+        captureRouterTransitionStart?: RouterTransitionHandler;
+      }
+    ).captureRouterTransitionStart;
+
+    captureRouterTransitionStart?.(href, navigationType);
+  });
 };

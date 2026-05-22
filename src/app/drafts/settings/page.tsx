@@ -139,12 +139,18 @@ export default function DraftSettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Enable Auto-Pick</label>
+                    <label
+                      htmlFor="auto-pick-enabled"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Enable Auto-Pick
+                    </label>
                     <p className="text-sm text-gray-500">
                       Automatically pick players when your time runs out
                     </p>
                   </div>
                   <input
+                    id="auto-pick-enabled"
                     type="checkbox"
                     checked={preferences.autoPickEnabled}
                     onChange={(e) =>
@@ -156,10 +162,14 @@ export default function DraftSettingsPage() {
 
                 {preferences.autoPickEnabled && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      htmlFor="auto-pick-time"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
                       Auto-Pick Time (seconds)
                     </label>
                     <select
+                      id="auto-pick-time"
                       value={preferences.autoPickTime}
                       onChange={(e) =>
                         setPreferences((prev) => ({
@@ -186,7 +196,10 @@ export default function DraftSettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">
+                    <label
+                      htmlFor="notifications-enabled"
+                      className="text-sm font-medium text-gray-700"
+                    >
                       Enable Notifications
                     </label>
                     <p className="text-sm text-gray-500">
@@ -194,6 +207,7 @@ export default function DraftSettingsPage() {
                     </p>
                   </div>
                   <input
+                    id="notifications-enabled"
                     type="checkbox"
                     checked={preferences.notificationsEnabled}
                     onChange={(e) =>
@@ -208,10 +222,13 @@ export default function DraftSettingsPage() {
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Enable Sound</label>
+                    <label htmlFor="sound-enabled" className="text-sm font-medium text-gray-700">
+                      Enable Sound
+                    </label>
                     <p className="text-sm text-gray-500">Play sounds for draft events</p>
                   </div>
                   <input
+                    id="sound-enabled"
                     type="checkbox"
                     checked={preferences.soundEnabled}
                     onChange={(e) =>
@@ -228,10 +245,14 @@ export default function DraftSettingsPage() {
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Default Draft Settings</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="default-time-per-pick"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     Default Time Per Pick
                   </label>
                   <select
+                    id="default-time-per-pick"
                     value={preferences.defaultTimePerPick}
                     onChange={(e) =>
                       setPreferences((prev) => ({
@@ -250,10 +271,14 @@ export default function DraftSettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="preferred-draft-type"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     Preferred Draft Type
                   </label>
                   <select
+                    id="preferred-draft-type"
                     value={preferences.preferredDraftType}
                     onChange={(e) =>
                       setPreferences((prev) => ({

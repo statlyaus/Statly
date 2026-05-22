@@ -8,10 +8,7 @@ import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
-export async function handlePickCommand(
-  request: NextRequest,
-  params: Promise<{ id: string }>
-) {
+export async function handlePickCommand(request: NextRequest, params: Promise<{ id: string }>) {
   const requestContext: { draftId?: string; userId?: string; hasSessionCookie?: boolean } = {};
   const headerRequestId =
     request.headers.get('x-request-id') ?? request.headers.get('x-requestid') ?? undefined;

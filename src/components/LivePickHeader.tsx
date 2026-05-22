@@ -386,7 +386,9 @@ export default function LivePickHeader({
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
                   On the clock
                 </p>
-                <p className={`text-lg font-semibold ${isYourTurn ? 'text-amber-200' : 'text-white'}`}>
+                <p
+                  className={`text-lg font-semibold ${isYourTurn ? 'text-amber-200' : 'text-white'}`}
+                >
                   {currentTeam?.member.displayName || 'Unknown'}
                   {isYourTurn && ' · You'}
                 </p>
@@ -397,7 +399,11 @@ export default function LivePickHeader({
             <div className="mt-2">
               <div
                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-mono ${
-                  timeLeft <= 30 ? 'bg-red-500/85' : timeLeft <= 60 ? 'bg-amber-500/85' : 'bg-emerald-500/85'
+                  timeLeft <= 30
+                    ? 'bg-red-500/85'
+                    : timeLeft <= 60
+                      ? 'bg-amber-500/85'
+                      : 'bg-emerald-500/85'
                 }`}
                 role="timer"
                 aria-label={`Time remaining: ${formatTime(timeLeft)}`}

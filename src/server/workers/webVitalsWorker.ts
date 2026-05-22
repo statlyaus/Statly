@@ -35,7 +35,9 @@ const WebVitalJobDataSchema = z.object({
   userAgent: z.string().min(1),
 });
 
-export function createWebVitalsWorker({ concurrency = Number(process.env.METRICS_WORKER_CONCURRENCY) || 5 } = {}) {
+export function createWebVitalsWorker({
+  concurrency = Number(process.env.METRICS_WORKER_CONCURRENCY) || 5,
+} = {}) {
   const writer = getWebVitalsWriter();
   const batcher = createWebVitalsBatcher(writer);
 
@@ -44,7 +46,10 @@ export function createWebVitalsWorker({ concurrency = Number(process.env.METRICS
     async (job) => {
       const parsed = WebVitalJobDataSchema.safeParse(job.data);
       if (!parsed.success) {
-        logger.warn('Invalid web-vitals job dropped', { jobId: job.id, issues: parsed.error.issues });
+        logger.warn('Invalid web-vitals job dropped', {
+          jobId: job.id,
+          issues: parsed.error.issues,
+        });
         return;
       }
       const m = parsed.data;

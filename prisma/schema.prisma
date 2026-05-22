@@ -8,14 +8,14 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String         @id @default(cuid())
+  email        String         @unique
   passwordHash String
   displayName  String
-  timeZone     String   @default("UTC")
+  timeZone     String         @default("UTC")
   leagues      LeagueMember[]
   sessions     Session[]
-  createdAt    DateTime @default(now())
+  createdAt    DateTime       @default(now())
 
   @@index([email])
   @@index([createdAt])
@@ -34,15 +34,17 @@ model Session {
 }
 
 model League {
-  id            String   @id @default(cuid())
-  name          String
-  inviteCode    String   @unique
-  ownerId       String
-  settingsId    String   @unique
-  members       LeagueMember[]
-  settings      LeagueSettings @relation(fields: [settingsId], references: [id])
-  drafts        Draft[]
-  createdAt     DateTime @default(now())
+  id             String         @id @default(cuid())
+  name           String
+  inviteCode     String         @unique
+  ownerId        String
+  categoriesJson String?
+  settingsId     String         @unique
+  members        LeagueMember[]
+  settings       LeagueSettings @relation(fields: [settingsId], references: [id])
+  drafts         Draft[]
+  draftEvents    DraftEvent[]
+  createdAt      DateTime       @default(now())
 
   @@index([ownerId])
   @@index([createdAt])
@@ -50,21 +52,21 @@ model League {
 }
 
 model LeagueMember {
-  id        String  @id @default(cuid())
+  id        String       @id @default(cuid())
   leagueId  String
   userId    String
   role      LeagueRole
   teamName  String
   draftSlot Int?
-  joinedAt  DateTime @default(now())
-  league    League  @relation(fields: [leagueId], references: [id])
-  user      User    @relation(fields: [userId], references: [id])
+  joinedAt  DateTime     @default(now())
+  league    League       @relation(fields: [leagueId], references: [id])
+  user      User         @relation(fields: [userId], references: [id])
   picks     Pick[]
   orders    DraftOrder[]
 
   // Lobby relations
-  watchlists   DraftWatchlist[]
-  preDraftQueues PreDraftQueue[]
+  watchlists      DraftWatchlist[]
+  preDraftQueues  PreDraftQueue[]
   lobbyActivities LobbyActivity[]
 
   @@index([leagueId])
@@ -73,31 +75,31 @@ model LeagueMember {
   @@index([draftSlot])
 }
 
-enum LeagueRole { 
-  OWNER 
-  MANAGER 
+enum LeagueRole {
+  OWNER
+  MANAGER
 }
 
 model LeagueSettings {
-  id              String  @id @default(cuid())
-  rosterSize      Int
-  benchSize       Int
-  maxTeams        Int
-  pickSeconds     Int
-  allowAutoPick   Boolean @default(true)
-  draftType       DraftType
-  pickOrder       PickOrder @default(RANDOM)
-  waiverRule      WaiverRule @default(WEEKLY)
-  startAt         DateTime
-  timeZone        String   @default("UTC")
-  locked          Boolean  @default(false)
-  
+  id            String     @id @default(cuid())
+  rosterSize    Int
+  benchSize     Int
+  maxTeams      Int
+  pickSeconds   Int
+  allowAutoPick Boolean    @default(true)
+  draftType     DraftType
+  pickOrder     PickOrder  @default(RANDOM)
+  waiverRule    WaiverRule @default(WEEKLY)
+  startAt       DateTime
+  timeZone      String     @default("UTC")
+  locked        Boolean    @default(false)
+
   // Captain/Vice-Captain system (admin configurable)
-  enableCaptainSystem Boolean @default(false)
-  captainMultiplier   Float   @default(2.0)
-  viceCaptainMultiplier Float @default(1.5)
-  
-  league          League?
+  enableCaptainSystem   Boolean @default(false)
+  captainMultiplier     Float   @default(2.0)
+  viceCaptainMultiplier Float   @default(1.5)
+
+  league League?
 }
 
 enum DraftType {
@@ -116,30 +118,34 @@ enum WaiverRule {
 }
 
 model Draft {
-  id           String   @id @default(cuid())
-  leagueId     String   @unique
-  league       League   @relation(fields: [leagueId], references: [id])
-  status       DraftStatus
-  currentPick  Int      @default(1)
-  totalPicks   Int
-  round        Int      @default(1)
-  direction    DraftDirection @default(FORWARD)
-  picks        Pick[]
-  orders       DraftOrder[]
-  createdAt    DateTime @default(now())
-  startedAt    DateTime?
-  completedAt  DateTime?
+  id                     String         @id @default(cuid())
+  leagueId               String         @unique
+  league                 League         @relation(fields: [leagueId], references: [id])
+  status                 DraftStatus
+  currentPick            Int            @default(1)
+  totalPicks             Int
+  round                  Int            @default(1)
+  direction              DraftDirection @default(FORWARD)
+  picks                  Pick[]
+  orders                 DraftOrder[]
+  createdAt              DateTime       @default(now())
+  startedAt              DateTime?
+  completedAt            DateTime?
+  pickStartedAt          DateTime?
+  pickDeadlineAt         DateTime?
+  pausedRemainingSeconds Int?
   // Version counter used to atomically claim scheduling of the next pick
-  schedulingVersion Int @default(0)
+  schedulingVersion      Int            @default(0)
 
   // Lobby system fields
-  lobbyStatus  String?  @default("CLOSED")
-  lobbyOpenAt  DateTime?
+  lobbyStatus String?   @default("CLOSED")
+  lobbyOpenAt DateTime?
 
   // Lobby relations
-  watchlists   DraftWatchlist[]
-  preDraftQueues PreDraftQueue[]
+  watchlists      DraftWatchlist[]
+  preDraftQueues  PreDraftQueue[]
   lobbyActivities LobbyActivity[]
+  events          DraftEvent[]
 
   @@index([status])
   @@index([leagueId])
@@ -147,11 +153,35 @@ model Draft {
   @@index([leagueId, status])
 }
 
-enum DraftStatus { 
-  SCHEDULED 
-  LIVE 
-  PAUSED 
-  COMPLETED 
+model DraftEvent {
+  id           String    @id @default(cuid())
+  draftId      String
+  leagueId     String
+  event        String
+  payload      String?
+  publishState Boolean   @default(false)
+  attempts     Int       @default(0)
+  lastError    String?
+  lockedAt     DateTime?
+  lockedBy     String?
+  publishedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  draft  Draft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@index([draftId, createdAt])
+  @@index([leagueId, createdAt])
+  @@index([lockedAt, createdAt])
+  @@index([publishedAt, lockedAt, createdAt])
+  @@index([draftId, publishedAt, lockedAt, createdAt])
+}
+
+enum DraftStatus {
+  SCHEDULED
+  LIVE
+  PAUSED
+  COMPLETED
 }
 
 enum DraftDirection {
@@ -202,7 +232,7 @@ model LobbyActivity {
   draftId   String
   memberId  String
   action    String
-  details   String?  // JSON string
+  details   String? // JSON string
   timestamp DateTime @default(now())
 
   draft  Draft        @relation(fields: [draftId], references: [id], onDelete: Cascade)
@@ -213,13 +243,13 @@ model LobbyActivity {
 }
 
 model DraftOrder {
-  id         String  @id @default(cuid())
-  draftId    String
-  slot       Int
-  memberId   String
-  member     LeagueMember @relation(fields: [memberId], references: [id])
-  draft      Draft @relation(fields: [draftId], references: [id])
-  
+  id       String       @id @default(cuid())
+  draftId  String
+  slot     Int
+  memberId String
+  member   LeagueMember @relation(fields: [memberId], references: [id])
+  draft    Draft        @relation(fields: [draftId], references: [id])
+
   @@unique([draftId, slot])
 }
 
@@ -232,25 +262,25 @@ model Player {
   picks    Pick[]
 
   // Lobby relations
-  watchlists   DraftWatchlist[]
+  watchlists     DraftWatchlist[]
   preDraftQueues PreDraftQueue[]
 
   @@index([name])
 }
 
 model Pick {
-  id         String  @id @default(cuid())
-  draftId    String
-  overall    Int
-  round      Int
-  slot       Int
-  memberId   String
-  playerId   String
-  madeAt     DateTime @default(now())
-  auto       Boolean  @default(false)
-  draft      Draft @relation(fields: [draftId], references: [id])
-  member     LeagueMember @relation(fields: [memberId], references: [id])
-  player     Player @relation(fields: [playerId], references: [id])
+  id       String       @id @default(cuid())
+  draftId  String
+  overall  Int
+  round    Int
+  slot     Int
+  memberId String
+  playerId String
+  madeAt   DateTime     @default(now())
+  auto     Boolean      @default(false)
+  draft    Draft        @relation(fields: [draftId], references: [id])
+  member   LeagueMember @relation(fields: [memberId], references: [id])
+  player   Player       @relation(fields: [playerId], references: [id])
 
   @@unique([draftId, playerId])
   @@unique([draftId, overall])
@@ -262,26 +292,26 @@ model Pick {
 }
 
 model QueueItem {
-  id        String  @id @default(cuid())
-  memberId  String
-  playerId  String
-  rank      Int
-  
+  id       String @id @default(cuid())
+  memberId String
+  playerId String
+  rank     Int
+
   @@unique([memberId, playerId])
   @@unique([memberId, rank])
 }
 
 // League Roster Management
 model LeagueRoster {
-  id          String   @id @default(cuid())
-  leagueId    String
-  memberId    String
-  playerIds   String   // JSON array of player IDs
-  captainId   String?  // Player ID of captain
+  id            String   @id @default(cuid())
+  leagueId      String
+  memberId      String
+  playerIds     String // JSON array of player IDs
+  captainId     String? // Player ID of captain
   viceCaptainId String? // Player ID of vice-captain
-  benchOrder  String?  // JSON array for bench ordering
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  benchOrder    String? // JSON array for bench ordering
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([leagueId, memberId])
   @@index([leagueId])
@@ -290,17 +320,17 @@ model LeagueRoster {
 
 // Team Actions (trades, waivers, etc.)
 model TeamAction {
-  id          String   @id @default(cuid())
-  leagueId    String
-  memberId    String
-  actionType  TeamActionType
-  status      ActionStatus @default(PENDING)
-  details     String   // JSON details specific to action type
+  id             String         @id @default(cuid())
+  leagueId       String
+  memberId       String
+  actionType     TeamActionType
+  status         ActionStatus   @default(PENDING)
+  details        String // JSON details specific to action type
   targetMemberId String? // For trades
-  processingAt DateTime?
-  processedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  processingAt   DateTime?
+  processedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@index([leagueId, status])
   @@index([memberId])
