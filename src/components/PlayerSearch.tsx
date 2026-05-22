@@ -16,6 +16,7 @@ interface PlayerSearchProps {
   onPlayerSelect?: (player: PlayerSearchResult) => void;
   className?: string;
   inputClassName?: string;
+  ariaLabel?: string;
   showAvatar?: boolean;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'minimal' | 'detailed';
@@ -53,6 +54,7 @@ export default function PlayerSearch({
   onPlayerSelect,
   className = '',
   inputClassName = '',
+  ariaLabel = 'Search players',
   showAvatar = true,
   size = 'md',
   variant = 'default',
@@ -285,6 +287,7 @@ export default function PlayerSearch({
           aria-expanded={isOpen}
           aria-controls={listboxId}
           aria-activedescendant={activeOptionId}
+          aria-label={ariaLabel}
           className={`
             w-full pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
             ${variant === 'minimal' ? 'bg-black/20 border-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900'}
@@ -299,7 +302,7 @@ export default function PlayerSearch({
             <div className="max-h-96 overflow-y-auto">
               <div id={listboxId} role="listbox">
                 {isLoading ? (
-                  <div className="px-4 py-3 text-center text-gray-500">
+                  <div className="px-4 py-3 text-center text-gray-500" role="status">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin text-blue-600" />
                     <span className="ml-2">Searching...</span>
                   </div>

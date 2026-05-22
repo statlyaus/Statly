@@ -59,15 +59,20 @@ function parseTransports(): SocketTransport[] {
 
 function getCorsOrigins(environment: string): string[] {
   const rawOrigins = process.env.SOCKET_IO_CORS_ORIGINS ?? process.env.ALLOWED_ORIGINS ?? '';
-  let origins = parseCommaSeparated(rawOrigins);
+  const origins = new Set(parseCommaSeparated(rawOrigins));
+  const clientUrl = process.env.CLIENT_URL?.trim();
 
-  if (origins.length === 0 && environment !== 'production') {
+  if (clientUrl) {
+    origins.add(clientUrl);
+  }
+
+  if (origins.size === 0 && environment !== 'production') {
     // Dev fallback
-    origins = ['http://localhost:3000'];
+    origins.add('http://localhost:3000');
     console.warn('[socketioConfig] No SOCKET_IO_CORS_ORIGINS set, defaulting to localhost in dev.');
   }
 
-  return origins;
+  return Array.from(origins);
 }
 
 function buildSocketIOConfig(): SocketIOConfig {
@@ -117,10 +122,6 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
 
   if (origins.length === 0) {
     errors.push('At least one CORS origin must be specified');
-  }
-
-  if (config.environment === 'production' && !process.env.CLIENT_URL) {
-    errors.push('Invalid client URL');
   }
 
   if (!Number.isFinite(config.server.port) || config.server.port <= 0) {

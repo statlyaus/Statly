@@ -10,6 +10,7 @@ declare global {
 }
 
 const url = process.env.REDIS_URL;
+const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
 
 function getRedisOptions(): RedisOptions {
   return {
@@ -35,8 +36,61 @@ function createRedisClient(label = 'redis'): AnyRedisClient {
   return client;
 }
 
+function getConnectTimeoutMs(): number {
+  const timeoutMs = Number.parseInt(
+    process.env.REDIS_CONNECT_TIMEOUT_MS || String(DEFAULT_CONNECT_TIMEOUT_MS),
+    10
+  );
+
+  return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_CONNECT_TIMEOUT_MS;
+}
+
 function canReuseClient(client: AnyRedisClient | undefined): client is AnyRedisClient {
   return !!client && client.status !== 'end';
+}
+
+async function waitForReady(client: AnyRedisClient): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+
+    const cleanup = () => {
+      client.off('ready', handleReady);
+      client.off('error', handleError);
+      client.off('end', handleEnd);
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
+
+    const settle = (complete: () => void) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      complete();
+    };
+
+    const handleReady = () => settle(resolve);
+    const handleError = (error: Error) => settle(() => reject(error));
+    const handleEnd = () =>
+      settle(() => reject(new Error('Redis client connection ended before ready')));
+    const handleTimeout = () =>
+      settle(() => reject(new Error('Redis client connection timed out before ready')));
+
+    client.once('ready', handleReady);
+    client.once('error', handleError);
+    client.once('end', handleEnd);
+    timeout = setTimeout(handleTimeout, getConnectTimeoutMs());
+
+    if (client.status === 'ready') {
+      handleReady();
+    } else if (client.status === 'end') {
+      handleEnd();
+    }
+  });
 }
 
 async function ensureConnected(client: AnyRedisClient): Promise<void> {
@@ -49,27 +103,14 @@ async function ensureConnected(client: AnyRedisClient): Promise<void> {
   }
 
   if (client.status === 'wait') {
-    await client.connect();
+    const readyPromise = waitForReady(client);
+    const connectPromise = client.connect().then(() => undefined);
+    await Promise.race([readyPromise, connectPromise]);
+    await readyPromise;
     return;
   }
 
-  await new Promise<void>((resolve, reject) => {
-    const cleanup = () => {
-      client.off('ready', handleReady);
-      client.off('error', handleError);
-    };
-    const handleReady = () => {
-      cleanup();
-      resolve();
-    };
-    const handleError = (error: Error) => {
-      cleanup();
-      reject(error);
-    };
-
-    client.once('ready', handleReady);
-    client.once('error', handleError);
-  });
+  await waitForReady(client);
 }
 
 export async function getRedis(): Promise<AnyRedisClient> {

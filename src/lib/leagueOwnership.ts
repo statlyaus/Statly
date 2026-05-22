@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export interface LeagueOwnershipMap {
   totalTeams: number;
@@ -11,7 +12,11 @@ function parsePlayerIds(value: string | null | undefined): string[] {
   try {
     const parsed = JSON.parse(value);
     return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
-  } catch {
+  } catch (error) {
+    logger.debug('Failed to parse league roster playerIds JSON', {
+      value,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return [];
   }
 }

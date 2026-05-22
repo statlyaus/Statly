@@ -24,4 +24,5 @@ CREATE TABLE "DraftEvent" (
 CREATE INDEX "DraftEvent_draftId_createdAt_idx" ON "DraftEvent"("draftId", "createdAt");
 CREATE INDEX "DraftEvent_leagueId_createdAt_idx" ON "DraftEvent"("leagueId", "createdAt");
 CREATE INDEX "DraftEvent_lockedAt_createdAt_idx" ON "DraftEvent"("lockedAt", "createdAt");
-CREATE INDEX "DraftEvent_publishedAt_createdAt_idx" ON "DraftEvent"("publishedAt", "createdAt");
+CREATE INDEX "DraftEvent_publishedAt_lockedAt_createdAt_idx" ON "DraftEvent"("publishedAt", "lockedAt", "createdAt");
+CREATE INDEX "DraftEvent_draftId_publishedAt_lockedAt_createdAt_idx" ON "DraftEvent"("draftId", "publishedAt", "lockedAt", "createdAt");

@@ -29,6 +29,21 @@ describe('DraftRoomStore (in-memory fallback)', () => {
     expect(c3).toBe(1);
   });
 
+  it('adds participants only while capacity is available', async () => {
+    await draftRoomStore.initRoomIfMissing('draft-limit');
+
+    await expect(
+      draftRoomStore.addParticipantIfUnderLimit('draft-limit', 's1', 1)
+    ).resolves.toEqual({ accepted: true, count: 1 });
+    await expect(
+      draftRoomStore.addParticipantIfUnderLimit('draft-limit', 's1', 1)
+    ).resolves.toEqual({ accepted: true, count: 1 });
+    await expect(
+      draftRoomStore.addParticipantIfUnderLimit('draft-limit', 's2', 1)
+    ).resolves.toEqual({ accepted: false, count: 1 });
+    await expect(draftRoomStore.getParticipantCount('draft-limit')).resolves.toBe(1);
+  });
+
   it('handles invalid or empty room IDs', async () => {
     await expect(draftRoomStore.getRoom('')).resolves.toBeNull();
     await expect(draftRoomStore.getRoom('unknown-room')).resolves.toBeNull();

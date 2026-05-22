@@ -439,36 +439,15 @@ io.on('connection', (socket) => {
         timestamp: new Date().toISOString(),
       });
 
-      // Join the room
-      socket.join(draftId);
-      socket.join(`draft:${draftId}`);
-
-      // Store user info in socket data
-      socket.data.draftId = draftId;
-      socket.data.userId = userId;
-      socket.data.joinedAt = new Date();
-
-      const [authoritativeState, legacyUpdate] = await Promise.all([
-        buildAuthoritativeDraftState(draftId),
-        buildLegacyDraftUpdate(draftId),
-      ]);
-
       // Initialize or update draft room in Redis-backed store
       const state = await draftRoomStore.initRoomIfMissing(draftId);
-      const participantCount = await draftRoomStore.addParticipant(draftId, socket.id);
-      incCounter(METRICS.joins);
-      // Store richer participant metadata if available
-      const uidFromReq = (socket.request as any)?._uid as string | undefined;
-      const participantUser = userId || uidFromReq || 'anonymous';
-      await draftRoomStore.setParticipantData(draftId, socket.id, {
-        userId: participantUser,
-        memberId,
-        displayName,
-        socketId: socket.id,
-        joinedAt: new Date().toISOString(),
-      });
-      if (participantCount > state.maxParticipants) {
-        await draftRoomStore.removeParticipant(draftId, socket.id);
+      const participantResult = await draftRoomStore.addParticipantIfUnderLimit(
+        draftId,
+        socket.id,
+        state.maxParticipants
+      );
+
+      if (!participantResult.accepted) {
         socket.emit('draft:error', {
           error: 'Draft room is full',
           code: 'ROOM_FULL',
@@ -479,9 +458,37 @@ io.on('connection', (socket) => {
         });
         return;
       }
+
+      incCounter(METRICS.joins);
+      const participantCount = participantResult.count;
+
+      // Join the room
+      socket.join(draftId);
+      socket.join(`draft:${draftId}`);
+
+      // Store user info in socket data
+      socket.data.draftId = draftId;
+      socket.data.userId = userId;
+      socket.data.joinedAt = new Date();
+
+      // Store richer participant metadata if available
+      const uidFromReq = (socket.request as any)?._uid as string | undefined;
+      const participantUser = userId || uidFromReq || 'anonymous';
+      await draftRoomStore.setParticipantData(draftId, socket.id, {
+        userId: participantUser,
+        memberId,
+        displayName,
+        socketId: socket.id,
+        joinedAt: new Date().toISOString(),
+      });
       const room = await draftRoomStore.getRoom(draftId);
       if (!room) throw new Error('Room state unavailable');
       await draftRoomStore.saveRoom({ ...room, lastActivity: new Date().toISOString() });
+
+      const [authoritativeState, legacyUpdate] = await Promise.all([
+        buildAuthoritativeDraftState(draftId),
+        buildLegacyDraftUpdate(draftId),
+      ]);
 
       if (authoritativeState) {
         socket.emit('draft:snapshot', {
