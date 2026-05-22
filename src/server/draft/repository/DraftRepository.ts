@@ -1,4 +1,5 @@
-import { DraftStatus, Prisma as PrismaNS } from '@prisma/client';
+import type { Prisma as PrismaNS } from '@prisma/client';
+import { DraftStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 
