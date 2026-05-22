@@ -1,4 +1,4 @@
-import { DraftDirection, DraftStatus } from '@prisma/client';
+import type { DraftDirection, DraftStatus } from '@prisma/client';
 
 export type DraftTypeValue = 'SNAKE' | 'LINEAR';
 
