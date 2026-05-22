@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { mockInjuryData } from '../../../Data/mockInjuryData';
+import { mockInjuryData } from '../../../data/mockInjuryData';
 
 // UI-facing injury type shape
 type InjuryData = {

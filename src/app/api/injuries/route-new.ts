@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getInjuriesByTeam } from '../../../Data/mockInjuryData';
+import { getInjuriesByTeam } from '../../../data/mockInjuryData';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
