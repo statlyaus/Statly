@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { type ReactElement, useEffect, useId, useRef, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -59,7 +59,7 @@ export default function PlayerSearch({
   size = 'md',
   variant = 'default',
   navigateToProfile = true,
-}: PlayerSearchProps) {
+}: PlayerSearchProps): ReactElement {
   const [query, setQuery] = useState('');
   const [players, setPlayers] = useState<PlayerSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -119,7 +119,7 @@ export default function PlayerSearch({
         const nextPlayers = Array.isArray(data?.players) ? data.players : [];
         setPlayers(nextPlayers);
         setSelectedIndex(nextPlayers.length > 0 ? 0 : -1);
-      } catch (_error) {
+      } catch {
         if (controller.signal.aborted || requestIdRef.current !== requestId) {
           return;
         }
@@ -298,48 +298,40 @@ export default function PlayerSearch({
 
       {isOpen && (trimmedQuery.length >= MIN_QUERY_LENGTH || players.length > 0 || isLoading) && (
         <div className="absolute z-50 w-full mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">
-          <div className="bg-white text-gray-900">
-            <div className="max-h-96 overflow-y-auto">
-              <div id={listboxId} role="listbox">
-                {isLoading ? (
-                  <div className="px-4 py-3 text-center text-gray-500" role="status">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-blue-600" />
-                    <span className="ml-2">Searching...</span>
-                  </div>
-                ) : players.length > 0 ? (
-                  <div className="p-0">
-                    {players.map((player, index) => (
-                      <div
-                        key={player.id}
-                        id={`${listboxId}-option-${player.id}`}
-                        role="option"
-                        aria-selected={index === selectedIndex}
-                        tabIndex={-1}
-                        className="block rounded-none px-0 py-0 hover:bg-transparent"
-                        onMouseEnter={() => handleOptionHover(index)}
-                        onClick={() => handlePlayerSelect(player)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            handlePlayerSelect(player);
-                          }
-                        }}
-                      >
-                        {renderPlayerItem(player, index)}
-                      </div>
-                    ))}
-                    {players.length === 20 && (
-                      <div className="border-t px-4 py-2 text-center text-sm text-gray-500">
-                        Showing top 20 results. Refine your search for more specific results.
-                      </div>
-                    )}
-                  </div>
-                ) : trimmedQuery.length >= MIN_QUERY_LENGTH ? (
-                  <div className="px-4 py-3 text-center text-gray-500">
-                    No players found for &ldquo;{query}&rdquo;
-                  </div>
-                ) : null}
-              </div>
+          <div className="max-h-96 overflow-y-auto bg-white text-gray-900">
+            <div id={listboxId} role="listbox">
+              {isLoading ? (
+                <div className="px-4 py-3 text-center text-gray-500" role="status">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-blue-600" />
+                  <span className="ml-2">Searching...</span>
+                </div>
+              ) : players.length > 0 ? (
+                <div>
+                  {players.map((player, index) => (
+                    <button
+                      key={player.id}
+                      id={`${listboxId}-option-${player.id}`}
+                      type="button"
+                      role="option"
+                      aria-selected={index === selectedIndex}
+                      className="block w-full rounded-none px-0 py-0 hover:bg-transparent"
+                      onMouseEnter={() => handleOptionHover(index)}
+                      onClick={() => handlePlayerSelect(player)}
+                    >
+                      {renderPlayerItem(player, index)}
+                    </button>
+                  ))}
+                  {players.length === 20 && (
+                    <div className="border-t px-4 py-2 text-center text-sm text-gray-500">
+                      Showing top 20 results. Refine your search for more specific results.
+                    </div>
+                  )}
+                </div>
+              ) : trimmedQuery.length >= MIN_QUERY_LENGTH ? (
+                <div className="px-4 py-3 text-sm text-gray-500" role="status">
+                  No players found for &ldquo;{query}&rdquo;
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
