@@ -6,6 +6,9 @@ on:
   push:
     branches: [main, master]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -56,9 +59,13 @@ jobs:
 
   # Optional: comment a concise status on the PR
   pr-status:
-    if: github.event_name == 'pull_request'
+    if: ${{ always() && github.event_name == 'pull_request' }}
     needs: [build-and-test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     steps:
       - uses: actions/github-script@v7
         with:
@@ -68,9 +75,13 @@ jobs:
             const body = ok
               ? "✅ CI passed. Ready to review/merge."
               : "❌ CI failed. Please check logs in the CI run.";
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body
-            });
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body
+              });
+            } catch (error) {
+              core.warning(`Unable to post CI status comment: ${error.message}`);
+            }
