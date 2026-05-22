@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 
 import { useAuth } from '@/AuthContext';
 import DraftManager from '@/components/league/DraftManager';
+import { LeagueSetupChecklist } from '@/app/(app)/leagues/_components/LeagueSetupChecklist';
 import LeagueMatchupTab from '@/components/league/LeagueMatchupTab';
 import LeagueOverview from '@/components/league/LeagueOverview';
 import LeagueSeasonTab from '@/components/league/LeagueSeasonTab';
@@ -18,7 +19,7 @@ import { listTrades } from '@/components/trades/tradeApi';
 import { isTradeActive } from '@/components/trades/tradeUiUtils';
 import MyTeamPanel from '@/components/MyTeamPanel';
 import LeagueTradesClient from '@/components/trades/LeagueTradesClient';
-import PlayersPageClient from '@/app/players/PlayersPageClient';
+import PlayersPageClient from '@/app/(app)/players/PlayersPageClient';
 import { isAuthBypassEnabled } from '@/lib/authBypass';
 import { DRAFT_PICK_SECONDS_OPTIONS, formatDraftPickSecondsLabel } from '@/lib/draftClock';
 import { leagueSurfacePatterns } from '@/styles/leagueDesignSystem';
@@ -644,6 +645,26 @@ export default function LeagueTabs({
         : 'Set and save draft slots from the Draft tab before creating the draft.',
     },
   ];
+  const setupChecklistSteps = setupSteps.map((step) => {
+    if (step.id === 'members') {
+      return {
+        ...step,
+        action: { label: 'Review teams', href: buildTabHref('teams') },
+      };
+    }
+
+    if (step.id === 'order') {
+      return {
+        ...step,
+        action: { label: 'Open draft order', href: buildTabHref('draft') },
+      };
+    }
+
+    return {
+      ...step,
+      action: { label: 'Review settings', href: buildTabHref('settings') },
+    };
+  });
   const hasCategoryChanges =
     editableCategories.length !== savedCategories.length ||
     editableCategories.some((category) => !savedCategories.includes(category));
@@ -1435,62 +1456,11 @@ export default function LeagueTabs({
                 description="Everything tied to your league draft, from setup to live room status, sits in one place."
               >
                 <div className="space-y-6">
-                  <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                          Setup checklist
-                        </p>
-                        <h3 className="mt-2 text-xl font-semibold text-[color:var(--league-text)]">
-                          Get this league ready for draft night
-                        </h3>
-                        <p className="mt-2 max-w-2xl text-sm text-[color:var(--league-text-muted)]">
-                          Work through the flow in order: fill the league, confirm scoring, schedule
-                          the draft, then create the room.
-                        </p>
-                      </div>
-                      <Link
-                        href={buildTabHref('settings')}
-                        className="inline-flex items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-2 text-sm font-semibold text-[color:var(--league-text)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
-                      >
-                        Review league settings
-                      </Link>
-                    </div>
-                    <div className="mt-5 grid gap-3 md:grid-cols-2">
-                      {setupSteps.map((step) => (
-                        <div
-                          key={step.id}
-                          className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-4"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
-                                step.complete
-                                  ? 'bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]'
-                                  : 'bg-[color:var(--league-warning-soft)] text-[color:var(--league-warning)]'
-                              }`}
-                            >
-                              {step.complete
-                                ? '✓'
-                                : step.id === 'order'
-                                  ? '!'
-                                  : step.id === 'schedule'
-                                    ? '3'
-                                    : step.id === 'categories'
-                                      ? '2'
-                                      : '1'}
-                            </span>
-                            <p className="text-sm font-semibold text-[color:var(--league-text)]">
-                              {step.title}
-                            </p>
-                          </div>
-                          <p className="mt-3 text-sm leading-6 text-[color:var(--league-text-muted)]">
-                            {step.detail}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <LeagueSetupChecklist
+                    title="Get this league ready for draft night"
+                    description="Work through the flow in order: fill the league, confirm scoring, schedule the draft, then create the room."
+                    steps={setupChecklistSteps}
+                  />
                   <DraftManager league={league} members={members} currentUserId={currentUserId} />
                 </div>
               </LeagueTabFrame>
@@ -1681,6 +1651,12 @@ export default function LeagueTabs({
                         Save the league’s draft schedule and pick clock here. Then move to the Draft
                         tab to review order and create the draft room.
                       </p>
+                      <Link
+                        href={buildTabHref('draft')}
+                        className="mb-4 inline-flex rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-4 py-2 text-sm font-semibold text-[color:var(--league-text)] transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                      >
+                        Back to draft setup
+                      </Link>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
                           <label htmlFor="setup-draft-date" className={settingsLabelClass}>

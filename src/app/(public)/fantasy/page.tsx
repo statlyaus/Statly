@@ -69,14 +69,14 @@ export default function FantasyEntryPage(): ReactElement {
         <div className="relative mx-auto max-w-6xl px-6 py-16 lg:px-10 lg:py-20">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] lg:items-end">
             <div className="max-w-3xl space-y-6">
-              <p className="inline-flex items-center rounded-full border border-info/20 bg-info px-4 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-info">
+              <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
                 Statly Fantasy
               </p>
               <div className="space-y-4">
                 <h1 className="max-w-4xl text-balance text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">
                   AFL fantasy for people who want faster decisions, not noisier screens.
                 </h1>
-                <p className="max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">
+                <p className="max-w-2xl text-base leading-8 text-white/80 sm:text-lg">
                   Statly combines structured roster management, AFL-specific depth, and mobile-ready
                   live workflows so you can manage your team with more confidence during the week
                   and under pressure on game day.
@@ -86,7 +86,7 @@ export default function FantasyEntryPage(): ReactElement {
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/dashboard"
-                  className="inline-flex items-center gap-2 rounded-xl bg-info px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-info/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  className="inline-flex items-center gap-2 rounded-xl bg-info px-5 py-3 text-sm font-semibold text-white transition hover:bg-info/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   Open Dashboard
                   <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
@@ -108,12 +108,12 @@ export default function FantasyEntryPage(): ReactElement {
 
             <aside className="rounded-[1.75rem] border border-white/10 bg-white/8 p-6 text-white shadow-[0_24px_80px_-44px_rgba(8,19,37,0.8)] backdrop-blur">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-success p-2 text-success">
+                <div className="rounded-2xl bg-success/20 p-2 text-white">
                   <ShieldCheckIcon className="h-5 w-5" aria-hidden="true" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">Design Goal</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-white/75">
                     Trustworthy, high-clarity, AFL-first fantasy management.
                   </p>
                 </div>
@@ -124,7 +124,7 @@ export default function FantasyEntryPage(): ReactElement {
                     key={signal}
                     className="rounded-2xl border border-white/10 bg-foreground px-4 py-4"
                   >
-                    <p className="text-sm leading-6 text-muted-foreground">{signal}</p>
+                    <p className="text-sm leading-6 text-white/80">{signal}</p>
                   </div>
                 ))}
               </div>
@@ -187,7 +187,7 @@ export default function FantasyEntryPage(): ReactElement {
             >
               <p
                 className={`text-xs font-semibold uppercase tracking-[0.18em] ${
-                  index === 0 ? 'text-info' : 'text-muted-foreground'
+                  index === 0 ? 'text-white' : 'text-muted-foreground'
                 }`}
               >
                 {card.eyebrow}
@@ -195,7 +195,7 @@ export default function FantasyEntryPage(): ReactElement {
               <h3 className="mt-3 text-2xl font-bold leading-tight">{card.title}</h3>
               <p
                 className={`mt-4 text-sm leading-6 ${
-                  index === 0 ? 'text-muted-foreground' : 'text-muted-foreground'
+                  index === 0 ? 'text-white/80' : 'text-muted-foreground'
                 }`}
               >
                 {card.description}

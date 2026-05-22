@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { useRankings } from '@/app/tradecentre/RankingsContext';
+import { useRankings } from '@/app/(app)/tradecentre/RankingsContext';
 import { getTeamAbbreviation } from '@/lib/teamLogos';
 
 import TeamLogo from './TeamLogo';

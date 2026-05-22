@@ -10,8 +10,14 @@ type TeamContextValue = ReturnType<typeof useTeamSwitcher>;
 const TeamContext = createContext<TeamContextValue | null>(null);
 TeamContext.displayName = 'TeamContext';
 
-export function TeamProvider({ children }: { children: React.ReactNode }) {
-  const value = useTeamSwitcher();
+export function TeamProvider({
+  children,
+  enabled = true,
+}: {
+  children: React.ReactNode;
+  enabled?: boolean;
+}) {
+  const value = useTeamSwitcher({ enabled });
   return <TeamContext.Provider value={value}>{children}</TeamContext.Provider>;
 }
 

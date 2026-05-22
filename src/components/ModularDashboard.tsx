@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import Link from 'next/link';
 
+import { LeagueOnboardingEntry } from '@/app/(app)/leagues/_components/LeagueOnboardingEntry';
 import { fetchApi } from '@/lib/api';
 import {
   getLeagueOverview,
@@ -447,26 +448,11 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                     Loading league context…
                   </div>
                 ) : userLeagues.length === 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      You are not currently in any leagues. Create or join one to populate the
-                      dashboard.
-                    </p>
-                    <div className="flex gap-2">
-                      <Link
-                        href="/leagues/new"
-                        className="rounded-xl bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
-                      >
-                        Create league
-                      </Link>
-                      <Link
-                        href="/leagues/join"
-                        className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted"
-                      >
-                        Join league
-                      </Link>
-                    </div>
-                  </div>
+                  <LeagueOnboardingEntry
+                    variant="compact"
+                    title="Start your league workspace"
+                    description="Create a competition as commissioner or join an existing league to populate the dashboard with live league decisions."
+                  />
                 ) : (
                   <div className="space-y-3">
                     {leagueSnapshots.map((league, index) => {

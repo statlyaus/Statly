@@ -511,7 +511,7 @@ export default function MainNavigation(): ReactNode {
   }
 
   return (
-    <TeamProvider>
+    <TeamProvider enabled={showLeagueSwitcher}>
       <>
         <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
 

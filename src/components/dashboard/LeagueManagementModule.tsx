@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import Link from 'next/link';
 
 import { motion } from 'framer-motion';
 
+import { LeagueOnboardingEntry } from '@/app/(app)/leagues/_components/LeagueOnboardingEntry';
 import type { UserLeagueSummary } from '@/types/leagues';
 
 import type { User } from 'firebase/auth';
@@ -23,41 +24,41 @@ export default function LeagueManagementModule({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchUserLeagues = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchUserLeagues = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        if (!user?.uid) {
-          throw new Error('User not authenticated');
-        }
-
-        const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
-
-        if (!membershipsResponse.ok) {
-          throw new Error('Failed to fetch user league memberships');
-        }
-
-        const membershipsData = await membershipsResponse.json();
-
-        const leagues = membershipsData.leagues || membershipsData.data?.leagues || [];
-        if (!Array.isArray(leagues)) {
-          setLeagues([]);
-          return;
-        }
-
-        setLeagues(leagues);
-      } catch (err) {
-        console.error('Error fetching user leagues:', err);
-        setError('Failed to load leagues');
-      } finally {
-        setLoading(false);
+      if (!user?.uid) {
+        throw new Error('User not authenticated');
       }
-    };
 
-    fetchUserLeagues();
-  }, [user, refreshTrigger]);
+      const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
+
+      if (!membershipsResponse.ok) {
+        throw new Error('Failed to fetch user league memberships');
+      }
+
+      const membershipsData = await membershipsResponse.json();
+
+      const leagues = membershipsData.leagues || membershipsData.data?.leagues || [];
+      if (!Array.isArray(leagues)) {
+        setLeagues([]);
+        return;
+      }
+
+      setLeagues(leagues);
+    } catch (err) {
+      console.error('Error fetching user leagues:', err);
+      setError('Failed to load leagues');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void fetchUserLeagues();
+  }, [fetchUserLeagues, refreshTrigger]);
 
   if (loading) {
     return (
@@ -69,54 +70,27 @@ export default function LeagueManagementModule({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-5 text-center">
-        <div>
-          <p className="text-sm font-semibold text-destructive">League list unavailable</p>
-          <p className="mt-1 text-sm text-destructive">{error}</p>
-        </div>
-      </div>
+      <LeagueOnboardingEntry
+        variant="compact"
+        title="League list unavailable"
+        description="Retry the league lookup, or use the guided setup flow to create or join a league."
+        error={{
+          title: 'Failed to load leagues',
+          message: error,
+          retryLabel: 'Retry',
+          onRetry: fetchUserLeagues,
+        }}
+      />
     );
   }
 
   if (leagues.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-muted px-4 py-6 text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white">
-          <svg
-            className="h-7 w-7 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-            />
-          </svg>
-        </div>
-        <div className="mt-4">
-          <h3 className="text-sm font-semibold text-foreground">No leagues yet</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create or join your first league to start building your workspace.
-          </p>
-          <div className="mt-4 flex flex-col gap-2">
-            <Link
-              href="/leagues/new"
-              className="inline-flex items-center justify-center rounded-xl bg-foreground px-3 py-2 text-sm font-semibold text-white transition hover:bg-muted"
-            >
-              Create League
-            </Link>
-            <Link
-              href="/leagues/join"
-              className="inline-flex items-center justify-center rounded-xl border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-muted"
-            >
-              Join League
-            </Link>
-          </div>
-        </div>
-      </div>
+      <LeagueOnboardingEntry
+        variant="compact"
+        title="Start your league workspace"
+        description="Create a competition as commissioner or join an existing league with an invite code."
+      />
     );
   }
 

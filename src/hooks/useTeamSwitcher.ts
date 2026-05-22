@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 
 type TeamInfo = { memberId: string; leagueId: string; teamName?: string | null };
 
-export function useTeamSwitcher() {
+export function useTeamSwitcher({ enabled = true }: { enabled?: boolean } = {}) {
   const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -13,6 +13,15 @@ export function useTeamSwitcher() {
   const [activeMember, setActiveMember] = useState<string | null>(null);
 
   const refreshTeams = useCallback(async () => {
+    if (!enabled) {
+      setTeams([]);
+      setActiveLeague(null);
+      setActiveMember(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -27,13 +36,15 @@ export function useTeamSwitcher() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     void refreshTeams();
   }, [refreshTeams]);
 
   const switchTeam = useCallback(async (leagueId: string, memberId: string) => {
+    if (!enabled) return;
+
     setLoading(true);
     setError(null);
     try {
@@ -51,7 +62,7 @@ export function useTeamSwitcher() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   return { teams, loading, error, activeLeague, activeMember, refreshTeams, switchTeam };
 }

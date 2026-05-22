@@ -1,14 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import Link from 'next/link';
 
 import { useAuth } from '@/AuthContext';
 import LeagueViewHeader from '@/components/league/LeagueViewHeader';
 import { AppLayout } from '@/components/navigation';
+import { buttonVariants } from '@/components/ui/button';
 import { fetchApi } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import type { UserLeagueSummary } from '@/types/leagues';
+
+import { LeagueOnboardingEntry } from './_components/LeagueOnboardingEntry';
 
 function LeagueCardSkeleton() {
   return (
@@ -32,9 +36,7 @@ export default function LeaguesClient() {
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
 
-  useEffect(() => {
-    if (authLoading) return;
-
+  const loadLeagues = useCallback(async () => {
     if (!user) {
       setLoading(false);
       setError(null);
@@ -42,27 +44,29 @@ export default function LeaguesClient() {
       return;
     }
 
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetchApi(`leagues/user/${user.uid}`);
-        const list = Array.isArray(response)
-          ? response
-          : response?.leagues
-            ? response.leagues
-            : response?.data?.leagues || [];
-        setLeagues(list as UserLeagueSummary[]);
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : 'Failed to fetch leagues.');
-        setLeagues([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetchApi(`leagues/user/${user.uid}`);
+      const list = Array.isArray(response)
+        ? response
+        : response?.leagues
+          ? response.leagues
+          : response?.data?.leagues || [];
+      setLeagues(list as UserLeagueSummary[]);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to fetch leagues.');
+      setLeagues([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
-    void load();
-  }, [authLoading, user]);
+  useEffect(() => {
+    if (authLoading) return;
+
+    void loadLeagues();
+  }, [authLoading, loadLeagues]);
 
   const activeLeague = leagues[0] ?? null;
   const statusChips = useMemo(
@@ -91,13 +95,13 @@ export default function LeaguesClient() {
               <>
                 <Link
                   href="/leagues/join"
-                  className="inline-flex items-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
+                  className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'rounded-full')}
                 >
                   Join league
                 </Link>
                 <Link
                   href="/leagues/new"
-                  className="inline-flex items-center rounded-full bg-[color:var(--league-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                  className={cn(buttonVariants({ variant: 'primary', size: 'md' }), 'rounded-full')}
                 >
                   Create league
                 </Link>
@@ -181,14 +185,16 @@ export default function LeaguesClient() {
                 ))}
               </div>
             ) : error ? (
-              <div className="rounded-[28px] border border-[color:var(--league-danger-soft)] bg-[color:var(--league-surface)] p-6 shadow-sm">
-                <p className="text-sm font-semibold text-[color:var(--league-danger)]">
-                  Failed to load leagues
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
-                  {error}
-                </p>
-              </div>
+              <LeagueOnboardingEntry
+                title="League list unavailable"
+                description="Retry loading your memberships, or continue by creating a new league or joining with an invite code."
+                error={{
+                  title: 'Failed to load leagues',
+                  message: error,
+                  retryLabel: 'Retry',
+                  onRetry: loadLeagues,
+                }}
+              />
             ) : !user ? (
               <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center shadow-sm">
                 <h2 className="text-xl font-semibold text-[color:var(--league-text)]">
@@ -258,29 +264,10 @@ export default function LeaguesClient() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center shadow-sm">
-                <h2 className="text-xl font-semibold text-[color:var(--league-text)]">
-                  No leagues yet
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
-                  Join a league with a code or create a new competition to start using the league
-                  workspace.
-                </p>
-                <div className="mt-6 flex flex-wrap justify-center gap-3">
-                  <Link
-                    href="/leagues/join"
-                    className="inline-flex items-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2.5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
-                  >
-                    Join league
-                  </Link>
-                  <Link
-                    href="/leagues/new"
-                    className="inline-flex items-center rounded-full bg-[color:var(--league-primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
-                  >
-                    Create league
-                  </Link>
-                </div>
-              </div>
+              <LeagueOnboardingEntry
+                title="Start your league workspace"
+                description="Create a competition as commissioner or join an existing league with an invite code. Both paths keep setup, invites, and draft readiness visible."
+              />
             )}
           </section>
         </div>

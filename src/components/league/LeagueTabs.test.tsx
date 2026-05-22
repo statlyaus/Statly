@@ -60,7 +60,7 @@ vi.mock('@/components/trades/LeagueTradesClient', () => ({
   default: () => <div>Trades panel</div>,
 }));
 
-vi.mock('@/app/players/PlayersPageClient', () => ({
+vi.mock('@/app/(app)/players/PlayersPageClient', () => ({
   default: (props: Record<string, unknown>) => {
     playersPageClientMock(props);
     return <div>Players panel</div>;
@@ -206,5 +206,31 @@ describe('LeagueTabs', () => {
         embedded: true,
       })
     );
+  });
+
+  it('renders draft readiness checklist with handoff links', async () => {
+    searchParamsMock = new URLSearchParams('tab=draft');
+
+    render(
+      <LeagueTabs
+        league={{ ...league, draftDate: '2026-06-01T09:00:00.000Z' }}
+        members={members}
+        currentUserId="user-1"
+      />
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Get this league ready for draft night' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Invite managers')).toBeInTheDocument();
+    expect(screen.getByText('Confirm scoring categories')).toBeInTheDocument();
+    expect(screen.getByText('Set draft date and clock')).toBeInTheDocument();
+    expect(screen.getByText('Assign draft order')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review teams' })).toHaveAttribute(
+      'href',
+      '/leagues/league-1?tab=teams'
+    );
+    expect(screen.getAllByRole('link', { name: 'Review settings' }).length).toBeGreaterThan(0);
+    expect(screen.getByText('Draft panel')).toBeInTheDocument();
   });
 });

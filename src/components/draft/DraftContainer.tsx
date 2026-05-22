@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 import Link from 'next/link';
 
-import DraftRoomClient from '@/app/drafts/[id]/DraftRoomClient';
+import DraftRoomClient from '@/app/(app)/drafts/[id]/DraftRoomClient';
 import { Alert } from '@/components/ui';
 import type { LobbyState } from '@/lib/draftLobby';
 import { logger } from '@/lib/logger';

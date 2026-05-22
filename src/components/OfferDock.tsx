@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 
-import { useRankings } from '@/app/tradecentre/RankingsContext';
+import { useRankings } from '@/app/(app)/tradecentre/RankingsContext';
 
 import { TeamLogo } from '@/components/TeamLogo';
 import { ValueChip } from './ValueChip';
