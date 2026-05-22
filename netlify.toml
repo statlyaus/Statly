@@ -1,0 +1,34 @@
+[build]
+  command = "npm run build:production"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "/favicon.ico"
+  to = "/favicon.svg"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/xmlrpc.php"
+  to = "/not-found.txt"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/wp-includes/*"
+  to = "/not-found.txt"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/:probe/wp-includes/*"
+  to = "/not-found.txt"
+  status = 404
+  force = true

@@ -35,6 +35,9 @@ firebase-debug.log
 # --- Vercel ---
 .vercel/
 
+# --- Netlify ---
+.netlify/
+
 # --- Editor Configs ---
 .vscode/
 .idea/
