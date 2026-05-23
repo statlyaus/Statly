@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && next dev --turbopack'",
-    "build": "next build",
-    "build:production": "next build",
+    "build": "npm run prisma:generate && next build",
+    "build:production": "npm run prisma:generate && next build",
     "start": "next start",
     "socket": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts'",
     "dev:full": "concurrently \"npm run dev\" \"npm run socket\"",
