@@ -1,6 +1,6 @@
 export const revalidate = 60;
 import { AppLayout } from '@/components/navigation';
-import LeagueWaiversContainer from '../../../../components/waivers/LeagueWaiversContainer';
+import LeagueWaiversContainer from '@/components/waivers/LeagueWaiversContainer';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { firestoreTimestampToDate } from '@/utils/firestore';
 import type { FirebaseTimestamp } from '@/types/firebase';

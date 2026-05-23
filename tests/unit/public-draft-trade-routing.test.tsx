@@ -33,7 +33,7 @@ vi.mock('@/AuthContext', () => ({
   ),
 }));
 
-import HomePage from '../../src/app/page';
+import HomePage from '../../src/app/(public)/page';
 
 describe('public AFL draft trade routing', () => {
   it('links the homepage Draft & Trade Hub product card to the canonical public hub', () => {
