@@ -158,6 +158,10 @@ const dedupManager = new DeduplicationManager();
 
 dedupManager.startSweeper();
 
+function hasMetricsRedisConfig(): boolean {
+  return Boolean(process.env.REDIS_HOST || process.env.REDIS_CLUSTER_NODES);
+}
+
 function _createDeduplicationManager(
   opts?: Partial<{ ttlMs: number; maxSize: number; sweepMs: number; redisPrefix: string }>
 ) {
@@ -168,6 +172,7 @@ function _createDeduplicationManager(
 async function isDuplicate(key: string): Promise<boolean> {
   // Fast-path: local cache hit
   if (dedupManager.isDuplicateLocal(key)) return true;
+  if (!hasMetricsRedisConfig()) return false;
 
   try {
     const rawClient = getPublisherClient();
@@ -230,6 +235,10 @@ async function rateLimit(
   const reset = (windowId + 1) * windowSec; // epoch seconds of window reset
 
   try {
+    if (!hasMetricsRedisConfig()) {
+      return { allowed: true, reset };
+    }
+
     const client = getPublisherClient();
     if (!client) {
       logger.warn('Rate limiter Redis client is not available; allowing request');
@@ -314,12 +323,21 @@ function getRequestOrigin(req: NextRequest): string | undefined {
 
 function isOriginAllowed(req: NextRequest): boolean {
   const declared = process.env.METRICS_ALLOWED_ORIGINS || process.env.NEXT_PUBLIC_APP_ORIGIN || '';
+  const incoming = getRequestOrigin(req);
+  if (incoming && incoming === req.nextUrl.origin) return true;
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
+  if (incoming && host) {
+    const forwardedProto = req.headers.get('x-forwarded-proto') ?? 'https';
+    if (incoming === `${forwardedProto}://${host}` || incoming === `https://${host}`) {
+      return true;
+    }
+  }
+
   if (!declared) return true; // nothing configured -> allow
   const allowed = declared
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  const incoming = getRequestOrigin(req);
   if (!incoming) return false;
   return allowed.includes(incoming);
 }
@@ -398,19 +416,26 @@ export async function POST(request: NextRequest) {
       timestamp: new Date(metric.timestamp).toISOString(),
     });
 
-    // Enqueue to BullMQ for async processing/storage
-    await getMetricsQueue().add(
-      'metric',
-      {
-        ...metric,
-        url: sanitizedUrl,
-        sessionIdHash,
-        userAgent: ua,
-      },
-      {
-        jobId: dedupKey, // deterministic for idempotency
+    if (hasMetricsRedisConfig()) {
+      try {
+        await getMetricsQueue().add(
+          'metric',
+          {
+            ...metric,
+            url: sanitizedUrl,
+            sessionIdHash,
+            userAgent: ua,
+          },
+          {
+            jobId: dedupKey, // deterministic for idempotency
+          }
+        );
+      } catch (queueError) {
+        logger.warn('Performance metric queue unavailable; metric accepted without enqueue', {
+          error: queueError instanceof Error ? queueError.message : String(queueError),
+        });
       }
-    );
+    }
 
     return noStore({ success: true, message: 'Performance metric recorded' });
   } catch (error) {
