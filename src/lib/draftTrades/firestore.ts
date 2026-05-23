@@ -320,13 +320,12 @@ export async function listDraftTradeYears(): Promise<number[]> {
     }
   }
 
-  const latestYear = await getLatestDraftTradeYear();
-  if (!latestYear) return [];
-  const years: number[] = [];
-  for (let y = latestYear; y >= 1980; y -= 1) {
-    years.push(y);
-  }
-  return years;
+  const tradesSnap = await adminDb.collection(collections.trades).get();
+  const years = tradesSnap.docs
+    .map((doc) => asNumber((doc.data() as Record<string, unknown>).year))
+    .map((year) => Math.trunc(year))
+    .filter((year) => year > 0);
+  return Array.from(new Set(years)).sort((a, b) => b - a);
 }
 
 export async function getLatestDraftTradeYear(): Promise<number | null> {

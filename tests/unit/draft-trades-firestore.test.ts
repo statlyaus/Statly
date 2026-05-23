@@ -66,7 +66,7 @@ describe('draft trade Firestore reads', () => {
     tradesWhereMock.mockReturnValue(tradesCollection);
     tradesOrderByMock.mockReturnValue(tradesCollection);
     collectionMock.mockImplementation((name: string) => {
-      if (name === 'draftMeta') return metaCollection;
+      if (name === 'draftMeta' || name === 'draftMeta_active') return metaCollection;
       if (name === 'draftTrades_active') return tradesCollection;
       throw new Error(`Unexpected Firestore collection: ${name}`);
     });
@@ -108,5 +108,36 @@ describe('draft trade Firestore reads', () => {
     expect(tradesWhereMock).toHaveBeenCalledWith('year', '==', 2025);
     expect(tradesOrderByMock).not.toHaveBeenCalled();
     expect(trades.map((trade) => trade.tradeId)).toEqual(['trade-1']);
+  });
+
+  it('falls back to actual trade years when aggregate metadata is unavailable', async () => {
+    metaGetMock
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          collections: {
+            trades: 'draftTrades_active',
+            clubs: 'draftClubs_active',
+            meta: 'draftMeta_active',
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        exists: false,
+        data: () => undefined,
+      });
+    tradesGetMock.mockResolvedValue({
+      docs: [
+        tradeDoc('trade-2025', { year: 2025 }),
+        tradeDoc('trade-2023', { year: 2023 }),
+        tradeDoc('trade-2025-b', { year: 2025 }),
+      ],
+    });
+
+    const { listDraftTradeYears } = await import('../../src/lib/draftTrades/firestore');
+
+    await expect(listDraftTradeYears()).resolves.toEqual([2025, 2023]);
+    expect(tradesGetMock).toHaveBeenCalledTimes(1);
+    expect(tradesOrderByMock).not.toHaveBeenCalled();
   });
 });

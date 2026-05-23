@@ -83,4 +83,24 @@ describe('GET /api/draft-trades/[tradeId]/export', () => {
     expect(res.status).toBe(200);
     expect(body).toContain('title,"Trade\rOne"');
   });
+
+  it('neutralizes spreadsheet formulas in string CSV fields', async () => {
+    getDraftTradeByIdMock.mockResolvedValue({
+      trade: {
+        tradeId: 't1',
+        year: 1988,
+        seqInYear: 1,
+        title: '=HYPERLINK("https://example.test")',
+      },
+      parties: [],
+      assets: [],
+    });
+
+    const req = new NextRequest('http://localhost/api/draft-trades/t1/export');
+    const res = await GET(req, { params: Promise.resolve({ tradeId: 't1' }) });
+    const body = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(body).toContain('title,"\'=HYPERLINK(""https://example.test"")"');
+  });
 });

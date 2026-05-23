@@ -39,7 +39,7 @@ export default function DraftLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <Link href="/fantasy" className="btn btn-outline btn-sm bg-background">
+            <Link href="/dashboard" className="btn btn-outline btn-sm bg-background">
               Return to Fantasy
             </Link>
           </div>

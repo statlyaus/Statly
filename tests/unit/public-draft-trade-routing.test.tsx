@@ -33,7 +33,12 @@ vi.mock('@/AuthContext', () => ({
   ),
 }));
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/draft/trades',
+}));
+
 import HomePage from '../../src/app/(public)/page';
+import DraftLayout from '../../src/app/(public)/draft/layout';
 
 type NextRedirect = {
   source: string;
@@ -90,5 +95,18 @@ describe('public AFL draft trade routing', () => {
     expect(rootLayout).not.toContain('AuthProvider');
     expect(appLayout).toContain('AuthProvider');
     expect(authLayout).toContain('AuthProvider');
+  });
+
+  it('keeps the draft hub fantasy return CTA pointed at an existing route', () => {
+    render(
+      <DraftLayout>
+        <main>Draft child</main>
+      </DraftLayout>
+    );
+
+    expect(screen.getByRole('link', { name: /return to fantasy/i })).toHaveAttribute(
+      'href',
+      '/dashboard'
+    );
   });
 });

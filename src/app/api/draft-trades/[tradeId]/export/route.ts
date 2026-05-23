@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { commonErrors } from '@/lib/apiResponse';
+import { escapeCsvCell as csvEscape } from '@/lib/draftTrades/csv';
 import { getDraftTradeById } from '@/lib/draftTrades/firestore';
 import { logger } from '@/lib/logger';
 
@@ -17,15 +18,6 @@ const paramsSchema = z.object({
     .max(120)
     .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
 });
-
-function csvEscape(value: string | number | null | undefined): string {
-  if (value == null) return '';
-  const s = String(value);
-  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-    return `"${s.replaceAll('"', '""')}"`;
-  }
-  return s;
-}
 
 export async function GET(
   _request: NextRequest,

@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { commonErrors } from '@/lib/apiResponse';
+import { escapeCsvCell as csvEscape } from '@/lib/draftTrades/csv';
 import { listDraftTradesByYear } from '@/lib/draftTrades/firestore';
 import { logger } from '@/lib/logger';
 
@@ -15,15 +16,6 @@ const querySchema = z.object({
   type: z.enum(['player', 'pick', 'future_pick']).optional(),
   q: z.string().trim().min(1).max(120).optional(),
 });
-
-function csvEscape(value: string | number | boolean | null | undefined): string {
-  if (value == null) return '';
-  const s = String(value);
-  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-    return `"${s.replaceAll('"', '""')}"`;
-  }
-  return s;
-}
 
 export async function GET(request: NextRequest) {
   try {
