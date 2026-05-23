@@ -49,6 +49,16 @@ const nextConfig = {
     ];
   },
 
+  async redirects() {
+    return [
+      {
+        source: '/tradecentre',
+        destination: '/draft/trades',
+        permanent: false,
+      },
+    ];
+  },
+
   // Production optimizations
   output: 'standalone',
   poweredByHeader: false,

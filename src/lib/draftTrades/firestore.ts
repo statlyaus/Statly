@@ -144,19 +144,6 @@ function asNumberArray(value: unknown): number[] {
   return value.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
 }
 
-function isFirestoreIndexPendingError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const maybe = error as { code?: unknown; message?: unknown };
-  const code = typeof maybe.code === 'number' ? maybe.code : -1;
-  const message = typeof maybe.message === 'string' ? maybe.message.toLowerCase() : '';
-  return (
-    code === 9 &&
-    (message.includes('requires an index') ||
-      message.includes('index is currently building') ||
-      message.includes('failed_precondition'))
-  );
-}
-
 function defaultCollections(): DraftCollectionNames {
   return {
     trades: DRAFT_TRADE_COLLECTIONS.trades,
@@ -291,27 +278,14 @@ export async function listDraftTradesByYear(
   }
 ): Promise<DraftTradeListItem[]> {
   const collections = await resolveDraftCollections();
-  const baseCollection = adminDb.collection(collections.trades);
-  let snap: FirebaseFirestore.QuerySnapshot;
-  if (options?.clubSlug) {
-    try {
-      snap = await baseCollection
-        .where('year', '==', year)
-        .where('clubSlugs', 'array-contains', options.clubSlug)
-        .orderBy('seqInYear', 'asc')
-        .get();
-    } catch (error) {
-      if (!isFirestoreIndexPendingError(error)) {
-        throw error;
-      }
-      // Temporary degraded mode while composite index builds.
-      snap = await baseCollection.where('year', '==', year).orderBy('seqInYear', 'asc').get();
-    }
-  } else {
-    snap = await baseCollection.where('year', '==', year).orderBy('seqInYear', 'asc').get();
-  }
+  const snap = await adminDb.collection(collections.trades).where('year', '==', year).get();
 
-  const mapped = snap.docs.map((doc) => mapTrade(doc.id, doc.data() as Record<string, unknown>));
+  const mapped = snap.docs
+    .map((doc) => mapTrade(doc.id, doc.data() as Record<string, unknown>))
+    .sort((a, b) => {
+      if (a.seqInYear !== b.seqInYear) return a.seqInYear - b.seqInYear;
+      return a.tradeId.localeCompare(b.tradeId);
+    });
   const byClub = options?.clubSlug
     ? mapped.filter((trade) => trade.clubSlugs.includes(options.clubSlug as string))
     : mapped;

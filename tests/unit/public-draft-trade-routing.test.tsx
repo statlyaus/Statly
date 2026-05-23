@@ -35,6 +35,16 @@ vi.mock('@/AuthContext', () => ({
 
 import HomePage from '../../src/app/(public)/page';
 
+type NextRedirect = {
+  source: string;
+  destination: string;
+  permanent?: boolean;
+};
+
+type NextConfigWithRedirects = {
+  redirects?: () => NextRedirect[] | Promise<NextRedirect[]>;
+};
+
 describe('public AFL draft trade routing', () => {
   it('links the homepage Draft & Trade Hub product card to the canonical public hub', () => {
     render(<HomePage />);
@@ -44,12 +54,21 @@ describe('public AFL draft trade routing', () => {
     expect(tradeHubLink).not.toHaveAttribute('href', '/tradecentre');
   });
 
-  it('keeps the legacy /tradecentre URL as a public redirect to /draft/trades', () => {
+  it('keeps the legacy /tradecentre URL as a request-level redirect to /draft/trades', async () => {
+    const { default: nextConfig } = (await import(
+      '../../next.config.mjs'
+    )) as { default: NextConfigWithRedirects };
+    const redirects = await nextConfig.redirects?.();
     const tradeCentreRoute = readFileSync(
       join(process.cwd(), 'src/app/tradecentre/page.tsx'),
       'utf8'
     );
 
+    expect(redirects).toContainEqual({
+      source: '/tradecentre',
+      destination: '/draft/trades',
+      permanent: false,
+    });
     expect({
       usesClientDirective: /['"]use client['"]/.test(tradeCentreRoute),
       importsNextRedirect: /from\s+['"]next\/navigation['"]/.test(tradeCentreRoute),
