@@ -1,16 +1,27 @@
 /// <reference types="vitest" />
+import path from 'node:path';
+
 import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
   esbuild: {
     jsx: 'automatic',
   },
   test: {
     name: 'unit',
     environment: 'jsdom',
-    include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
+    include: [
+      'tests/unit/**/*.test.ts',
+      'tests/unit/**/*.test.tsx',
+      'src/app/api/draft-trades/**/*.test.ts',
+    ],
     exclude: ['node_modules'],
     globals: true,
     clearMocks: true,

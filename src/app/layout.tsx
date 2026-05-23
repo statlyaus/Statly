@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
+
 import '@/index.css';
-import { AuthProvider } from '@/AuthContext';
-import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
+
 import ClientSentryWrapper from '@/components/ClientSentryWrapper';
-import PerformanceMonitor from '@/components/PerformanceMonitor';
+import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,10 +19,7 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
     <html lang="en" data-theme="light">
       <body className={inter.className}>
         <ClientSentryWrapper>
-          <PageErrorBoundary name="RootLayout">
-            <PerformanceMonitor />
-            <AuthProvider>{children}</AuthProvider>
-          </PageErrorBoundary>
+          <PageErrorBoundary name="RootLayout">{children}</PageErrorBoundary>
         </ClientSentryWrapper>
       </body>
     </html>

@@ -3,35 +3,46 @@ import { getApps, initializeApp, applicationDefault, cert, type App } from 'fire
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 
+import { getServiceAccountFromEnv } from './serviceAccount';
+
+const FIREBASE_ADMIN_APP_NAME = 'statly-admin';
+const SERVICE_ACCOUNT_PLACEHOLDERS = new Set(['YOUR_PRODUCTION_SERVICE_ACCOUNT_BASE64']);
+const PROJECT_ID_PLACEHOLDERS = new Set(['your-production-project-id']);
+
 let serviceAccountProjectId: string | undefined;
 let credentialSource: 'base64' | 'adc' = 'adc';
 
+function hasServiceAccountCredential(value: string | undefined): boolean {
+  const trimmed = value?.trim();
+  return Boolean(trimmed && !SERVICE_ACCOUNT_PLACEHOLDERS.has(trimmed));
+}
+
+function projectIdFromEnv(): string | undefined {
+  const configured =
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (configured && !PROJECT_ID_PLACEHOLDERS.has(configured)) {
+    return configured;
+  }
+  if (SERVICE_ACCOUNT_PLACEHOLDERS.has(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64?.trim() ?? '')) {
+    return 'your-production-project-id';
+  }
+  return undefined;
+}
+
 function resolveCredential() {
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
-  const usingB64 = !!(b64 && b64.trim().length > 0);
-  try {
-    if (usingB64) {
-      const json = Buffer.from(b64, 'base64').toString('utf8');
-      const parsed = JSON.parse(json);
-      if (typeof parsed.private_key === 'string') {
-        parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
-      }
-      if (!parsed.project_id) {
-        console.warn('[firebaseAdmin] Service account JSON is missing project_id field');
-      }
-      serviceAccountProjectId = parsed.project_id;
-      credentialSource = 'base64';
-      console.log(
-        '[firebaseAdmin] Using service account credential from env (base64). Project:',
-        serviceAccountProjectId || 'unknown'
-      );
-      return cert(parsed);
-    }
-  } catch (err) {
-    console.warn(
-      '[firebaseAdmin] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, falling back to ADC.',
-      err
+  const usingB64 = hasServiceAccountCredential(b64);
+  if (usingB64) {
+    const serviceAccount = getServiceAccountFromEnv();
+    serviceAccountProjectId = serviceAccount.projectId;
+    credentialSource = 'base64';
+    console.log(
+      '[firebaseAdmin] Using service account credential from env (base64). Project:',
+      serviceAccountProjectId
     );
+    return cert(serviceAccount);
   }
   credentialSource = 'adc';
   console.log('[firebaseAdmin] Using application default credentials (ADC).');
@@ -39,40 +50,38 @@ function resolveCredential() {
 }
 
 const credential = resolveCredential();
-const projectId =
-  serviceAccountProjectId ||
-  process.env.GOOGLE_CLOUD_PROJECT ||
-  process.env.GCLOUD_PROJECT ||
-  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+const projectId = serviceAccountProjectId || projectIdFromEnv();
 
-// Validate projectId before initializing the Admin SDK
 if (!projectId) {
-  console.warn(
-    '[firebaseAdmin] No Firebase projectId resolved. Set FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 with project_id, or set GOOGLE_CLOUD_PROJECT / GCLOUD_PROJECT / NEXT_PUBLIC_FIREBASE_PROJECT_ID.'
+  throw new Error(
+    '[firebaseAdmin] Missing Firebase projectId. Set FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 with project_id, or set GOOGLE_CLOUD_PROJECT / GCLOUD_PROJECT / NEXT_PUBLIC_FIREBASE_PROJECT_ID.'
   );
-  // If strict guarantees are required, uncomment to fail fast:
-  // throw new Error('[firebaseAdmin] Missing Firebase projectId. Aborting firebase-admin initialization.');
 }
 
-const app: App =
-  getApps()[0] ??
-  initializeApp({
-    credential,
-    ...(projectId ? { projectId } : {}),
-  });
+function getConfiguredAdminApp(): App {
+  const existing = getApps().find((candidate) => candidate.name === FIREBASE_ADMIN_APP_NAME);
+  if (existing) {
+    return existing;
+  }
+
+  return initializeApp(
+    {
+      credential,
+      projectId,
+    },
+    FIREBASE_ADMIN_APP_NAME
+  );
+}
+
+const app: App = getConfiguredAdminApp();
 
 const db = getFirestore(app);
 
 try {
   const opts = (app as unknown as { options?: { projectId?: string } })?.options;
-  const debugProject =
-    opts?.projectId ||
-    process.env.GOOGLE_CLOUD_PROJECT ||
-    process.env.GCLOUD_PROJECT ||
-    process.env.FIREBASE_CONFIG;
   console.log(
     '[firebaseAdmin] Firestore initialized. Project:',
-    debugProject ? String(debugProject) : 'unknown',
+    opts?.projectId || projectId,
     '| Credential:',
     credentialSource
   );

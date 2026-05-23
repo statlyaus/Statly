@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default function TradeCentrePage() {
+export default function DraftIndexPage() {
   redirect('/draft/trades');
 }
