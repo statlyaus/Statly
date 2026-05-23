@@ -82,7 +82,7 @@ const products = [
     icon: BarChart3,
     title: 'Draft & Trade Hub',
     description: 'Research historical AFL trades, draft picks, club movement, and player deals.',
-    href: '/tradecentre',
+    href: '/draft/trades',
     action: 'Open Trade Hub',
   },
 ];
