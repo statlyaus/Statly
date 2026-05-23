@@ -21,7 +21,7 @@ const paramsSchema = z.object({
 function csvEscape(value: string | number | null | undefined): string {
   if (value == null) return '';
   const s = String(value);
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return `"${s.replaceAll('"', '""')}"`;
   }
   return s;

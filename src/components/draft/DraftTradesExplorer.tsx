@@ -1,7 +1,7 @@
 'use client';
 
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
@@ -272,7 +272,7 @@ export function DraftTradesExplorer({
   yearOptions,
   trades,
   initialSearchString,
-}: DraftTradesExplorerProps) {
+}: DraftTradesExplorerProps): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -1155,6 +1155,7 @@ export function DraftTradesExplorer({
                         <button
                           type="button"
                           className={`btn btn-sm ${isExpanded ? 'btn-primary' : 'btn-outline bg-background'}`}
+                          aria-label={`${isExpanded ? 'Close details for' : 'Open details for'} ${trade.title}`}
                           onClick={() =>
                             isExpanded ? toggleExpanded(trade.tradeId) : openTrade(trade.tradeId)
                           }
