@@ -1,71 +1,119 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { type FormEvent, type ReactElement, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+
 import { useAuth } from '@/AuthContext';
-import { fetchApi } from '@/lib/api';
 import Button from '@/components/Button';
 import { LoadingSpinner } from '@/components/ui';
-import Link from 'next/link';
 import { AppLayout } from '@/components/navigation';
+import { fetchApi } from '@/lib/api';
+import { LEAGUE_CONSTRAINTS } from '@/types/leagues';
 
-export default function JoinLeaguePage() {
+interface JoinedLeague {
+  id: string;
+  name: string;
+  draftDate?: string;
+}
+
+interface JoinLeagueResponse {
+  data?: {
+    league?: JoinedLeague;
+  };
+}
+
+export function normalizeInviteCode(value: string): string {
+  return value
+    .replace(/[^a-z0-9]/gi, '')
+    .toUpperCase()
+    .slice(0, LEAGUE_CONSTRAINTS.code.length);
+}
+
+function buildJoinReturnPath(code: string, teamName: string): string {
+  const params = new URLSearchParams();
+  const trimmedTeamName = teamName.trim();
+
+  if (code) params.set('code', code);
+  if (trimmedTeamName) params.set('team', trimmedTeamName);
+
+  const query = params.toString();
+  return query ? `/leagues/join?${query}` : '/leagues/join';
+}
+
+export default function JoinLeaguePage(): ReactElement {
   const [code, setCode] = useState('');
   const [teamName, setTeamName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [joinedLeague, setJoinedLeague] = useState<{
-    id: string;
-    name: string;
-    draftDate?: string;
-  } | null>(null);
+  const [formError, setFormError] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [joinedLeague, setJoinedLeague] = useState<JoinedLeague | null>(null);
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const normalizedCode = normalizeInviteCode(code);
+  const isInviteCodeComplete = normalizedCode.length === LEAGUE_CONSTRAINTS.code.length;
+  const codeHelpId = 'league-code-help';
+  const codeErrorId = 'league-code-error';
+  const formErrorId = 'join-league-error';
+  const loginHref = useMemo(
+    () => `/login?next=${encodeURIComponent(buildJoinReturnPath(normalizedCode, teamName))}`,
+    [normalizedCode, teamName]
+  );
 
-  // Pre-fill from URL parameters if provided
   useEffect(() => {
     const urlCode = searchParams?.get('code');
     const urlTeam = searchParams?.get('team');
     if (urlCode) {
-      setCode(urlCode.toUpperCase());
+      setCode(normalizeInviteCode(urlCode));
     }
     if (urlTeam) {
-      setTeamName(urlTeam);
+      setTeamName(urlTeam.slice(0, LEAGUE_CONSTRAINTS.teamName.maxLength));
     }
   }, [searchParams]);
 
-  const handleJoinLeague = async (e: React.FormEvent) => {
+  const handleJoinLeague = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setFormError('');
+    setCodeError('');
 
     if (!user) {
-      setError('You must be logged in to join a league');
+      setFormError('You must be logged in to join a league');
       return;
     }
 
-    if (!code.trim()) {
-      setError('Please enter a league code');
+    if (!normalizedCode) {
+      setCodeError('Please enter a league code');
+      return;
+    }
+
+    if (!isInviteCodeComplete) {
+      setCodeError(`Invite code must be ${LEAGUE_CONSTRAINTS.code.length} characters`);
       return;
     }
 
     setLoading(true);
-    setError('');
 
     try {
-      const result = await fetchApi('leagues/join', {
+      const result = (await fetchApi('leagues/join', {
         method: 'POST',
         body: JSON.stringify({
-          code: code.trim().toUpperCase(),
+          code: normalizedCode,
           teamName: teamName.trim() || undefined,
         }),
         headers: {
           'Content-Type': 'application/json',
         },
-      });
+      })) as JoinLeagueResponse;
 
-      setJoinedLeague(result.data.league);
+      const league = result.data?.league;
+      if (!league?.id || !league.name) {
+        throw new Error('League joined, but the server did not return league details');
+      }
+
+      setJoinedLeague(league);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to join league');
+      setFormError(err instanceof Error ? err.message : 'Failed to join league');
     } finally {
       setLoading(false);
     }
@@ -74,12 +122,15 @@ export default function JoinLeaguePage() {
   if (!user) {
     return (
       <AppLayout>
-        <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-          <h1 className="text-2xl font-bold text-center mb-6">Join League</h1>
-          <p className="text-gray-600 text-center mb-4">Please log in to join a league</p>
-          <Link href="/auth/login" className="block">
-            <Button className="w-full">Log In</Button>
-          </Link>
+        <div className="mx-auto mt-12 w-full max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+          <h1 className="mb-3 text-center text-2xl font-bold text-foreground">Join League</h1>
+          <p className="mb-6 text-center text-sm leading-6 text-muted-foreground">
+            Sign in to join an existing Statly league. If your invite link included a code, it will
+            be preserved after login.
+          </p>
+          <Button href={loginHref} className="w-full justify-center">
+            Log in to continue
+          </Button>
         </div>
       </AppLayout>
     );
@@ -103,14 +154,19 @@ export default function JoinLeaguePage() {
   if (joinedLeague) {
     return (
       <AppLayout>
-        <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+        <div
+          className="mx-auto mt-12 w-full max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
+          role="status"
+          aria-live="polite"
+        >
           <div className="text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-muted text-foreground">
               <svg
-                className="w-8 h-8 text-green-600"
+                className="size-8"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -120,10 +176,13 @@ export default function JoinLeaguePage() {
                 />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            <h1 className="mb-2 text-xl font-semibold text-foreground">
               Successfully Joined {joinedLeague.name}!
-            </h2>
-            <div className="flex flex-col gap-3 mt-4">
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Your team is now connected to this league workspace.
+            </p>
+            <div className="mt-4 flex flex-col gap-3">
               {joinedLeague.draftDate && (
                 <Button onClick={handleAddToCalendar}>Add Draft to Calendar</Button>
               )}
@@ -142,52 +201,85 @@ export default function JoinLeaguePage() {
 
   return (
     <AppLayout>
-      <div className="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-        <h1 className="text-2xl font-bold text-center mb-6">Join League</h1>
+      <div className="mx-auto mt-12 w-full max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+        <h1 className="mb-3 text-center text-2xl font-bold text-foreground">Join League</h1>
+        <p className="mb-6 text-center text-sm leading-6 text-muted-foreground">
+          Enter your commissioner invite code to join an existing AFL fantasy league.
+        </p>
 
         <form onSubmit={handleJoinLeague} className="space-y-4">
           <div>
-            <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="code" className="mb-1 block text-sm font-medium text-foreground">
               League Code *
             </label>
             <input
               id="code"
               type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="Enter 6-character code"
-              maxLength={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono tracking-wider text-center text-lg"
+              value={normalizedCode}
+              onChange={(e) => {
+                setCode(normalizeInviteCode(e.target.value));
+                if (codeError) setCodeError('');
+                if (formError) setFormError('');
+              }}
+              placeholder={`Enter ${LEAGUE_CONSTRAINTS.code.length}-character code`}
+              maxLength={LEAGUE_CONSTRAINTS.code.length}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-center font-mono text-lg tracking-wider text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               disabled={loading}
+              aria-describedby={codeError ? codeErrorId : codeHelpId}
+              aria-invalid={codeError ? 'true' : undefined}
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Ask the league admin for the join code</p>
+            {codeError ? (
+              <p id={codeErrorId} className="mt-1 text-sm text-destructive" role="alert">
+                {codeError}
+              </p>
+            ) : (
+              <p id={codeHelpId} className="mt-1 text-xs text-muted-foreground">
+                Ask your commissioner for the {LEAGUE_CONSTRAINTS.code.length}-character invite
+                code.
+              </p>
+            )}
           </div>
 
           <div>
-            <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="teamName" className="mb-1 block text-sm font-medium text-foreground">
               Team Name (Optional)
             </label>
             <input
               id="teamName"
               type="text"
               value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
+              onChange={(e) => {
+                setTeamName(e.target.value);
+                if (formError) setFormError('');
+              }}
               placeholder="My Awesome Team"
-              maxLength={30}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              maxLength={LEAGUE_CONSTRAINTS.teamName.maxLength}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               disabled={loading}
+              aria-describedby="team-name-help"
             />
-            <p className="text-xs text-gray-500 mt-1">Leave blank for auto-generated name</p>
+            <p id="team-name-help" className="mt-1 text-xs text-muted-foreground">
+              Leave blank for an auto-generated team name.
+            </p>
           </div>
 
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
+          {formError && (
+            <div
+              id={formErrorId}
+              className="rounded-lg border border-destructive bg-card p-3"
+              role="alert"
+            >
+              <p className="text-sm text-destructive">{formError}</p>
             </div>
           )}
 
-          <Button type="submit" disabled={loading || !code.trim()} className="w-full">
+          <Button
+            type="submit"
+            disabled={loading || !normalizedCode}
+            className="w-full justify-center"
+            aria-describedby={formError ? formErrorId : undefined}
+          >
             {loading ? (
               <>
                 <LoadingSpinner />
@@ -199,10 +291,13 @@ export default function JoinLeaguePage() {
           </Button>
         </form>
 
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <p className="text-sm text-gray-600 text-center">
+        <div className="mt-6 border-t border-border pt-6">
+          <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have a league code?{' '}
-            <Link href="/leagues/new" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link
+              href="/leagues/new"
+              className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               Create your own league
             </Link>
           </p>

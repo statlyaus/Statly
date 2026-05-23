@@ -1,239 +1,258 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { type ReactElement, useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { ArrowRight, Plus, RefreshCw, Users } from 'lucide-react';
 import type { User } from 'firebase/auth';
-import type { League, LeagueMember } from '@/types/leagues';
 
-interface LeagueWithMembers extends League {
-  members: LeagueMember[];
+import type { League } from '@/types/leagues';
+
+interface LeagueSummary extends League {
+  memberCount?: number;
+  teamName?: string;
 }
 
 interface LeagueManagementModuleProps {
   user: User;
+  refreshTrigger?: number;
 }
 
-export default function LeagueManagementModule({ user }: LeagueManagementModuleProps) {
-  const [leagues, setLeagues] = useState<LeagueWithMembers[]>([]);
+function getLeagueMemberCount(league: LeagueSummary): number {
+  if (typeof league.memberCount === 'number') return league.memberCount;
+  if (typeof league.currentTeams === 'number') return league.currentTeams;
+  return 0;
+}
+
+function OnboardingActions(): ReactElement {
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <Link
+        href="/leagues/new"
+        className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        Create league
+      </Link>
+      <Link
+        href="/leagues/join"
+        className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+      >
+        <Users className="size-4" aria-hidden="true" />
+        Join league
+      </Link>
+    </div>
+  );
+}
+
+function LeagueOnboardingPanel({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}): ReactElement {
+  return (
+    <section className="flex h-full min-h-56 flex-col justify-center rounded-lg border border-border bg-card p-5 text-card-foreground">
+      <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted text-foreground">
+        <Users className="size-6" aria-hidden="true" />
+      </div>
+      <div className="mt-4 text-center">
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+export default function LeagueManagementModule({
+  user,
+  refreshTrigger,
+}: LeagueManagementModuleProps): ReactElement {
+  const [leagues, setLeagues] = useState<LeagueSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchUserLeagues = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchUserLeagues = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Early validation
-        if (!user?.uid) {
-          console.error('User authentication error:', { user, hasUid: !!user?.uid });
-          throw new Error('User not authenticated');
-        }
-
-        console.log('Fetching leagues for user:', user.uid);
-
-        // Fetch user's league memberships
-        const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
-
-        if (!membershipsResponse.ok) {
-          throw new Error('Failed to fetch user league memberships');
-        }
-
-        const membershipsData = await membershipsResponse.json();
-        console.log('League memberships data:', membershipsData); // Debug log
-
-        // Handle the API response format - it now returns leagues directly
-        const leagues = membershipsData.leagues || membershipsData.data?.leagues || [];
-        if (!Array.isArray(leagues)) {
-          console.warn('Leagues data is not an array:', leagues);
-          setLeagues([]);
-          return;
-        }
-
-        setLeagues(leagues);
-      } catch (err) {
-        console.error('Error fetching user leagues:', err);
-        setError('Failed to load leagues');
-      } finally {
-        setLoading(false);
+      if (!user?.uid) {
+        throw new Error('User not authenticated');
       }
-    };
 
-    fetchUserLeagues();
+      const membershipsResponse = await fetch(`/api/leagues/user/${user.uid}`);
+
+      if (!membershipsResponse.ok) {
+        throw new Error('Failed to load leagues');
+      }
+
+      const membershipsData = (await membershipsResponse.json()) as {
+        leagues?: unknown;
+        data?: { leagues?: unknown };
+      };
+      const leagues = membershipsData.leagues ?? membershipsData.data?.leagues ?? [];
+
+      if (!Array.isArray(leagues)) {
+        setLeagues([]);
+        return;
+      }
+
+      setLeagues(leagues as LeagueSummary[]);
+    } catch (err) {
+      console.error('Error fetching user leagues:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load leagues');
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => {
+    void fetchUserLeagues();
+  }, [fetchUserLeagues, refreshTrigger]);
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div
+        className="flex min-h-36 items-center justify-center rounded-lg border border-border bg-card"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
+        <span className="sr-only">Loading leagues</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="h-full flex items-center justify-center text-center">
-        <div>
-          <div className="text-red-500 mb-2">⚠️</div>
-          <p className="text-sm text-slate-600">{error}</p>
+      <LeagueOnboardingPanel
+        title="League list unavailable"
+        description="Retry the league lookup, or use the setup actions to create or join a league."
+      >
+        <div className="space-y-4">
+          <div className="rounded-md border border-destructive bg-card p-3" role="alert">
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void fetchUserLeagues()}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+          >
+            <RefreshCw className="size-4" aria-hidden="true" />
+            Retry
+          </button>
+          <OnboardingActions />
         </div>
-      </div>
+      </LeagueOnboardingPanel>
     );
   }
 
   if (leagues.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-          <svg
-            className="w-8 h-8 text-slate-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-            />
-          </svg>
-        </div>
-        <div>
-          <h3 className="font-medium text-slate-900 mb-1">No Leagues Yet</h3>
-          <p className="text-sm text-slate-600 mb-3">
-            Join or create your first league to get started
-          </p>
-          <div className="flex flex-col space-y-2">
-            <Link
-              href="/leagues/new"
-              className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-            >
-              Create League
-            </Link>
-            <Link
-              href="/leagues/join"
-              className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
-            >
-              Join League
-            </Link>
-          </div>
-        </div>
-      </div>
+      <LeagueOnboardingPanel
+        title="Start your league workspace"
+        description="Create a competition as commissioner or join an existing league with an invite code."
+      >
+        <OnboardingActions />
+      </LeagueOnboardingPanel>
     );
   }
 
   const adminLeagueCount = leagues.filter((league) => league.ownerId === user.uid).length;
 
   return (
-    <div className="h-full overflow-hidden flex flex-col">
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <div className="bg-blue-50 rounded-lg p-3 text-center">
-          <div className="text-lg font-bold text-blue-600">{leagues.length}</div>
-          <div className="text-xs text-blue-600">Active Leagues</div>
+    <div className="flex h-full flex-col gap-4">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-lg border border-border bg-card p-3 text-center">
+          <div className="text-lg font-semibold text-foreground">{leagues.length}</div>
+          <div className="text-xs text-muted-foreground">Active Leagues</div>
         </div>
-        <div className="bg-green-50 rounded-lg p-3 text-center">
-          <div className="text-lg font-bold text-green-600">{adminLeagueCount}</div>
-          <div className="text-xs text-green-600">Admin Of</div>
+        <div className="rounded-lg border border-border bg-card p-3 text-center">
+          <div className="text-lg font-semibold text-foreground">{adminLeagueCount}</div>
+          <div className="text-xs text-muted-foreground">Admin Of</div>
         </div>
       </div>
 
-      {/* League List */}
-      <div className="flex-1 overflow-y-auto space-y-2">
-        {leagues.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full min-h-32 text-center space-y-3">
-            <div className="text-slate-400">
-              <svg
-                className="w-12 h-12 mx-auto mb-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm text-slate-600 font-medium">No leagues joined yet</p>
-              <p className="text-xs text-slate-500 mt-1">Create or join a league to get started</p>
-            </div>
-          </div>
-        ) : (
-          leagues.slice(0, 3).map((league, index) => {
-            const isAdmin = league.ownerId === user.uid;
+      <div className="flex-1 space-y-2 overflow-y-auto">
+        {leagues.slice(0, 4).map((league, index) => {
+          const isAdmin = league.ownerId === user.uid;
+          const memberCount = getLeagueMemberCount(league);
 
-            return (
-              <motion.div
-                key={league.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+          return (
+            <motion.div
+              key={league.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.06 }}
+            >
+              <Link
+                href={`/leagues/${league.id}`}
+                className="block rounded-lg border border-border bg-card p-3 transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                <Link
-                  href={`/leagues/${league.id}`}
-                  className="block p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <h4 className="font-medium text-slate-900 text-sm truncate group-hover:text-blue-600 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="truncate text-sm font-semibold text-foreground">
                       {league.name}
                     </h4>
-                    {isAdmin && (
-                      <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">
-                        Admin
-                      </span>
-                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {memberCount} / {league.maxTeams} teams
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>
-                      {league.currentTeams || 0} / {league.maxTeams} teams
+                  {isAdmin ? (
+                    <span className="rounded-md bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-foreground">
+                      Admin
                     </span>
-                    <span className="font-mono">{league.code}</span>
-                  </div>
-                  {league.description && (
-                    <p className="text-xs text-slate-600 mt-1 truncate">{league.description}</p>
-                  )}
-                </Link>
-              </motion.div>
-            );
-          })
-        )}
+                  ) : null}
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span className="truncate font-mono uppercase">{league.code}</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                    Open
+                    <ArrowRight className="size-3" aria-hidden="true" />
+                  </span>
+                </div>
+                {league.description ? (
+                  <p className="mt-2 truncate text-xs text-muted-foreground">
+                    {league.description}
+                  </p>
+                ) : null}
+              </Link>
+            </motion.div>
+          );
+        })}
       </div>
 
-      {/* View All Link */}
-      {leagues.length > 3 && (
-        <div className="mt-3 pt-3 border-t border-slate-200">
-          <Link
-            href="/leagues"
-            className="block text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            View All {leagues.length} Leagues →
-          </Link>
-        </div>
-      )}
-
-      {/* Quick Actions */}
-      <div className="mt-3 pt-3 border-t border-slate-200">
-        <div className="grid grid-cols-2 gap-2">
-          <Link
-            href="/leagues/new"
-            className="bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors text-center"
-          >
-            + Create
-          </Link>
-          <Link
-            href="/leagues"
-            className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors text-center"
-          >
-            Browse
-          </Link>
-        </div>
+      <div className="grid grid-cols-2 gap-2 border-t border-border pt-4">
+        <Link
+          href="/leagues/new"
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          Create
+        </Link>
+        <Link
+          href="/leagues"
+          className="inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          Browse leagues
+        </Link>
       </div>
+
+      {leagues.length > 4 ? (
+        <div className="border-t border-border pt-3">
+          <Link
+            href="/leagues"
+            className="block text-center text-sm font-medium text-foreground underline-offset-4 transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            View all {leagues.length} leagues
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }
