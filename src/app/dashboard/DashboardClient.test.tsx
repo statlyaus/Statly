@@ -1,15 +1,22 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DashboardClient from './DashboardClient';
 
 const mocks = vi.hoisted(() => ({
+  replace: vi.fn(),
   useAuth: vi.fn(),
 }));
 
 vi.mock('@/AuthContext', () => ({
   useAuth: mocks.useAuth,
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    replace: mocks.replace,
+  }),
 }));
 
 vi.mock('@/components/navigation', () => ({
@@ -29,11 +36,14 @@ describe('DashboardClient auth restore behavior', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps the dashboard shell in a restoring state while Firebase auth is absent', () => {
+  it('redirects unauthenticated users to login once Firebase auth resolves', async () => {
     mocks.useAuth.mockReturnValue({ user: null, loading: false });
 
     render(<DashboardClient />);
 
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith('/login?next=%2Fdashboard');
+    });
     expect(screen.getByText('Restoring dashboard session')).toBeInTheDocument();
   });
 

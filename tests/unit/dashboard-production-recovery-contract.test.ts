@@ -24,6 +24,8 @@ describe('dashboard production recovery route contract', () => {
     const appLayout = readRepoFile('src/components/navigation/AppLayout.tsx');
     expect(appLayout).toContain("import MainNavigation from './MainNavigation'");
     expect(appLayout).toContain('<MainNavigation />');
+    expect(appLayout).toContain('href="#main-content"');
+    expect(appLayout).toContain('Skip to content');
   });
 
   it('keeps public AFL trade history ownership on /tradecentre', () => {

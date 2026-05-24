@@ -24,6 +24,8 @@ interface LeagueLite {
   name: string;
 }
 
+const RESERVED_LEAGUE_ROUTES = new Set(['join', 'new']);
+
 function extractLeagueContext(pathname: string): {
   base: string;
   leagueId?: string;
@@ -32,6 +34,9 @@ function extractLeagueContext(pathname: string): {
   // Matches /leagues/:id or /leagues/:id/...; captures id and tail
   const m = pathname.match(/^\/(leagues)\/([^/]+)(\/.*)?$/);
   if (m) {
+    if (RESERVED_LEAGUE_ROUTES.has(m[2])) {
+      return { base: m[1], leagueId: undefined, tail: '' };
+    }
     return { base: m[1], leagueId: m[2], tail: m[3] || '' };
   }
   return { base: '', leagueId: undefined, tail: '' };
