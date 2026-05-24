@@ -1,7 +1,14 @@
 import Link from 'next/link';
+
 import { motion } from 'framer-motion';
 
-export default function QuickActionsModule() {
+interface QuickActionsModuleProps {
+  refreshTrigger: number;
+}
+
+export default function QuickActionsModule({
+  refreshTrigger: _refreshTrigger,
+}: QuickActionsModuleProps) {
   const actions = [
     {
       title: 'Create League',
@@ -17,11 +24,11 @@ export default function QuickActionsModule() {
           />
         </svg>
       ),
-      color: 'bg-purple-500',
+      badge: 'Build',
     },
     {
-      title: 'My Leagues',
-      description: 'Manage your leagues',
+      title: 'Leagues',
+      description: 'Open league workspaces',
       href: '/leagues',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -33,12 +40,12 @@ export default function QuickActionsModule() {
           />
         </svg>
       ),
-      color: 'bg-blue-500',
+      badge: 'Manage',
     },
     {
-      title: 'Trade Centre',
-      description: 'Browse and execute trades',
-      href: '/tradecentre',
+      title: 'Waivers & Trades',
+      description: 'Review claims, offers, and league movement',
+      href: '/waivers',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -49,11 +56,11 @@ export default function QuickActionsModule() {
           />
         </svg>
       ),
-      color: 'bg-green-500',
+      badge: 'Trade',
     },
     {
       title: 'Player Rankings',
-      description: 'View player rankings & stats',
+      description: 'Research season leaders',
       href: '/rankings',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -65,11 +72,11 @@ export default function QuickActionsModule() {
           />
         </svg>
       ),
-      color: 'bg-yellow-500',
+      badge: 'Scout',
     },
     {
-      title: 'Live Matches',
-      description: 'Real-time match tracking',
+      title: 'Live scores',
+      description: 'Track live AFL scoring',
       href: '/matches',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,11 +88,11 @@ export default function QuickActionsModule() {
           />
         </svg>
       ),
-      color: 'bg-red-500',
+      badge: 'Live',
     },
     {
-      title: 'Draft Room',
-      description: 'Join or create drafts',
+      title: 'Draft room',
+      description: 'Jump into active drafts',
       href: '/drafts',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,7 +104,7 @@ export default function QuickActionsModule() {
           />
         </svg>
       ),
-      color: 'bg-indigo-500',
+      badge: 'Draft',
     },
   ];
 
@@ -112,15 +119,18 @@ export default function QuickActionsModule() {
         >
           <Link
             href={action.href}
-            className="block p-4 bg-white border border-slate-200 rounded-lg hover:shadow-md hover:border-slate-300 transition-all duration-200 group"
+            className="block rounded-xl border border-border bg-muted p-4 transition hover:border-border hover:bg-white hover:shadow-sm group"
           >
-            <div
-              className={`w-10 h-10 ${action.color} rounded-lg flex items-center justify-center text-white mb-3 group-hover:scale-110 transition-transform`}
-            >
-              {action.icon}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white text-foreground transition group-hover:border-border group-hover:text-foreground">
+                {action.icon}
+              </div>
+              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground ring-1 ring-inset ring-ring">
+                {action.badge}
+              </span>
             </div>
-            <h4 className="font-medium text-slate-900 mb-1">{action.title}</h4>
-            <p className="text-xs text-slate-600">{action.description}</p>
+            <h4 className="mt-3 text-sm font-semibold text-foreground">{action.title}</h4>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{action.description}</p>
           </Link>
         </motion.div>
       ))}

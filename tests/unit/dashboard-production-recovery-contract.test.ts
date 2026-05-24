@@ -34,6 +34,10 @@ describe('dashboard production recovery route contract', () => {
     expect(navigation).not.toContain("href: '/tradecentre'");
     expect(navigation).not.toContain('href="/tradecentre"');
     expect(navigation).not.toContain("name: 'Trade Centre'");
+
+    const quickActionsModule = readRepoFile('src/components/dashboard/QuickActionsModule.tsx');
+    expect(quickActionsModule).not.toContain('/tradecentre');
+    expect(quickActionsModule).not.toContain('Trade Centre');
   });
 
   it('removes old internal/demo nav labels from production navigation', () => {

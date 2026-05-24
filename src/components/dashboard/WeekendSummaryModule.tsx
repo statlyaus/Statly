@@ -1,6 +1,12 @@
 import { WeekendSummary } from '../WeekendSummary';
 
-export default function WeekendSummaryModule() {
+interface WeekendSummaryModuleProps {
+  refreshTrigger: number;
+}
+
+export default function WeekendSummaryModule({
+  refreshTrigger: _refreshTrigger,
+}: WeekendSummaryModuleProps) {
   return (
     <div className="h-full">
       <WeekendSummary />

@@ -1,12 +1,18 @@
 'use client';
 
-import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import type { User } from 'firebase/auth';
+
+import Link from 'next/link';
+
+import { motion } from 'framer-motion';
+
 import { fetchApi } from '@/lib/api';
+import { computeSnakeState } from '@/lib/snakeDraft';
+
+import type { User } from 'firebase/auth';
 
 interface LiveDraftModuleProps {
+  refreshTrigger: number;
   user: User;
 }
 
@@ -24,28 +30,30 @@ interface DraftMeta {
   }>;
 }
 
-export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
+export default function LiveDraftModule({ refreshTrigger, user }: LiveDraftModuleProps) {
   const [draft, setDraft] = useState<DraftMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    const loadDraft = async () => {
+    const controller = new AbortController();
+    let active = true;
+
+    (async () => {
       setLoading(true);
       setError(null);
       try {
-        const listRes = await fetchApi('drafts/list');
+        const listRes = await fetchApi('drafts/list', { signal: controller.signal });
         const drafts = listRes.data?.drafts ?? [];
-        const activeDraft = drafts.find(
-          (d: { id: string; status: string }) => d.status !== 'COMPLETED'
+        const activeDraft = (drafts as Array<Pick<DraftMeta, 'id' | 'status'>>).find(
+          (d) => d.status === 'LIVE'
         );
         if (!activeDraft) {
-          if (isMounted) setDraft(null);
+          if (active) setDraft(null);
           return;
         }
 
-        const detailRes = await fetchApi(`drafts/${activeDraft.id}`);
+        const detailRes = await fetchApi(`drafts/${activeDraft.id}`, { signal: controller.signal });
         const d = detailRes.data;
         const meta: DraftMeta = {
           id: d.id,
@@ -57,19 +65,22 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
           timePerPick: d.timePerPick,
           participants: d.participants,
         };
-        if (isMounted) setDraft(meta);
+        if (active) setDraft(meta);
       } catch (e) {
-        if (isMounted) setError(e instanceof Error ? e.message : 'Failed to load draft');
+        if (active && (e as any)?.name !== 'AbortError')
+          setError(e instanceof Error ? e.message : 'Failed to load draft');
       } finally {
-        if (isMounted) setLoading(false);
+        if (active) setLoading(false);
       }
-    };
+    })();
 
-    loadDraft();
     return () => {
-      isMounted = false;
+      active = false;
+      controller.abort();
     };
-  }, []);
+  }, [refreshTrigger, user?.uid]);
+
+  const isParticipant = !!draft?.participants.find((p) => p.member.userId === user.uid);
 
   // Determine turn information
   const teamCount = draft?.participants.length ?? 0;
@@ -77,56 +88,49 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
   let picksUntilYourTurn = 0;
 
   if (draft && teamCount > 0) {
-    const round = Math.ceil(draft.currentPick / teamCount);
-    const directionForward = round % 2 === 1;
-    const currentSlot = directionForward
-      ? ((draft.currentPick - 1) % teamCount) + 1
-      : teamCount - ((draft.currentPick - 1) % teamCount);
-    const mySlot = draft.participants.find((p) => p.member.userId === user.uid)?.slot;
-    isYourTurn = mySlot === currentSlot;
+    if (isParticipant) {
+      const { slot: currentSlot } = computeSnakeState(draft.currentPick, teamCount);
+      const mySlot = draft.participants.find((p) => p.member.userId === user.uid)?.slot;
+      isYourTurn = mySlot === currentSlot;
 
-    if (!isYourTurn && mySlot) {
-      let nextPickNumber = draft.currentPick + 1;
-      let tempPicksUntilYourTurn = 0;
-      while (nextPickNumber <= draft.totalPicks) {
-        const nextRound = Math.ceil(nextPickNumber / teamCount);
-        const nextDirectionForward = nextRound % 2 === 1;
-        const nextSlot = nextDirectionForward
-          ? ((nextPickNumber - 1) % teamCount) + 1
-          : teamCount - ((nextPickNumber - 1) % teamCount);
-
-        if (nextSlot === mySlot) {
-          picksUntilYourTurn = tempPicksUntilYourTurn;
-          break;
+      if (!isYourTurn && mySlot) {
+        let nextPickNumber = draft.currentPick + 1;
+        let tempPicksUntilYourTurn = 0;
+        while (nextPickNumber <= draft.totalPicks) {
+          const { slot: nextSlot } = computeSnakeState(nextPickNumber, teamCount);
+          if (nextSlot === mySlot) {
+            picksUntilYourTurn = tempPicksUntilYourTurn;
+            break;
+          }
+          tempPicksUntilYourTurn++;
+          nextPickNumber++;
         }
-        tempPicksUntilYourTurn++;
-        nextPickNumber++;
       }
     }
   }
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <p className="text-sm text-slate-500">Loading draft...</p>
+      <div className="rounded-xl border border-border bg-muted px-4 py-5 text-sm text-muted-foreground">
+        Loading draft state…
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="space-y-4">
-        <p className="text-sm text-red-600">{error}</p>
+      <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-5 text-sm text-destructive">
+        {error}
       </div>
     );
   }
 
   if (!draft || draft.status === 'COMPLETED') {
     return (
-      <div className="text-center py-6">
-        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+      <div className="rounded-xl border border-dashed border-border bg-muted px-4 py-6 text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white">
           <svg
-            className="w-8 h-8 text-slate-400"
+            className="h-6 w-6 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -139,11 +143,13 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
             />
           </svg>
         </div>
-        <h4 className="font-medium text-slate-900 mb-1">No Active Draft</h4>
-        <p className="text-sm text-slate-600 mb-3">Create or join a draft to get started</p>
+        <h4 className="text-sm font-semibold text-foreground">No active draft</h4>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Create or join a draft when you want draft state to appear here.
+        </p>
         <Link
           href="/drafts/create"
-          className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          className="mt-4 inline-flex items-center rounded-xl bg-foreground px-3 py-2 text-sm font-semibold text-white transition hover:bg-muted"
         >
           Create Draft
         </Link>
@@ -155,23 +161,23 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
 
   return (
     <div className="space-y-4">
-      {/* Live Indicator */}
-      <div className="flex items-center space-x-2">
-        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-        <span className="text-sm font-medium text-red-600">DRAFT LIVE</span>
+      <div className="flex items-center gap-2">
+        <div className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse"></div>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-destructive">
+          Draft live
+        </span>
       </div>
 
-      {/* Draft Progress */}
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
-          <span className="text-slate-600">Pick Progress</span>
+          <span className="text-muted-foreground">Pick Progress</span>
           <span className="font-medium">
             {draft.currentPick}/{draft.totalPicks}
           </span>
         </div>
-        <div className="w-full bg-slate-200 rounded-full h-2">
+        <div className="h-2 w-full rounded-full bg-muted">
           <motion.div
-            className="bg-blue-600 h-2 rounded-full"
+            className="h-2 rounded-full bg-foreground"
             initial={{ width: 0 }}
             animate={{ width: `${(draft.currentPick / draft.totalPicks) * 100}%` }}
             transition={{ duration: 0.5 }}
@@ -179,44 +185,52 @@ export default function LiveDraftModule({ user }: LiveDraftModuleProps) {
         </div>
       </div>
 
-      {/* Turn Status */}
-      {isYourTurn ? (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <svg
-              className="w-5 h-5 text-green-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span className="font-medium text-green-800">Your Turn!</span>
+      {isParticipant ? (
+        isYourTurn ? (
+          <div className="rounded-xl border border-success/20 bg-success/10 p-3">
+            <div className="flex items-center gap-2">
+              <svg
+                className="h-5 w-5 text-success"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span className="font-medium text-success">Your turn</span>
+            </div>
+            <p className="mt-1 text-sm text-success">Time per pick: {draft.timePerPick}s</p>
           </div>
-          <p className="text-sm text-green-700 mt-1">Time per pick: {draft.timePerPick}s</p>
-        </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-muted p-3">
+            <p className="text-sm text-foreground">
+              <span className="font-medium">{picksUntilYourTurn} picks</span> until your turn
+            </p>
+          </div>
+        )
       ) : (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <span className="font-medium">{picksUntilYourTurn} picks</span> until your turn
-          </p>
+        <div
+          className="rounded-xl border border-border bg-muted p-3"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-sm text-foreground">You’re not in this draft. You can watch or join.</p>
         </div>
       )}
 
-      {/* Actions */}
       <div className="grid grid-cols-2 gap-2">
         <Link
           href={joinHref}
-          className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors text-center"
+          className="inline-flex items-center justify-center rounded-xl bg-foreground px-3 py-2 text-sm font-semibold text-white transition hover:bg-muted"
         >
           Join Draft
         </Link>
-        <button className="px-3 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+        <button className="rounded-xl border border-border bg-muted px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-white">
           Watch Only
         </button>
       </div>
