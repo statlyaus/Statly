@@ -11,7 +11,7 @@ import React, {
   type ReactNode,
 } from 'react';
 
-import clsx from 'clsx';
+import { cn } from '@/lib/utils';
 
 type PopoverContextValue = {
   open: boolean;
@@ -127,7 +127,7 @@ export function PopoverContent({
       ref={context.contentRef}
       role="dialog"
       {...props}
-      className={clsx(
+      className={cn(
         'absolute top-full z-50 mt-2 min-w-[18rem] rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md outline-none',
         align === 'end' ? 'right-0' : 'left-0',
         className

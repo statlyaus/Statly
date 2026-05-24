@@ -20,6 +20,10 @@ describe('dashboard production recovery route contract', () => {
     expect(dashboardPage).toContain("import DashboardClient from './DashboardClient'");
     expect(dashboardPage).toContain("import { AuthProvider } from '@/AuthContext'");
     expect(dashboardPage).toContain('<DashboardClient />');
+
+    const appLayout = readRepoFile('src/components/navigation/AppLayout.tsx');
+    expect(appLayout).toContain("import MainNavigation from './MainNavigation'");
+    expect(appLayout).toContain('<MainNavigation />');
   });
 
   it('keeps public AFL trade history ownership on /tradecentre', () => {

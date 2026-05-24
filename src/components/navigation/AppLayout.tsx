@@ -3,6 +3,7 @@
 import type React from 'react';
 
 import { SectionErrorBoundary } from '../ui/ErrorBoundary';
+import MainNavigation from './MainNavigation';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -12,7 +13,7 @@ export default function AppLayout({ children }: AppLayoutProps): React.ReactElem
   return (
     <SectionErrorBoundary name="AppLayout">
       <div className="min-h-screen bg-background">
-        {/* Note: MainNavigation is rendered in root layout.tsx, not here to avoid duplication */}
+        <MainNavigation />
         <main id="main-content">{children}</main>
       </div>
     </SectionErrorBoundary>
