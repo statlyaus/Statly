@@ -59,6 +59,9 @@ export default function RostersPage() {
   const [rosterPlayers, setRosterPlayers] = useState<RosterPlayer[]>([]);
   const [freeAgents, setFreeAgents] = useState<RosterPlayer[]>([]);
 
+  const buildTradeHref = (query: string) =>
+    activeLeague ? `/leagues/${activeLeague}/trades?${query}` : '/waivers';
+
   useEffect(() => {
     const load = async () => {
       if (!user || !activeLeague) return;
@@ -108,7 +111,7 @@ export default function RostersPage() {
             {rosterPlayers.map((p) => (
               <PlayerCard key={p.id} player={p}>
                 <Link
-                  href={`/tradecentre?playerOut=${p.id}`}
+                  href={buildTradeHref(`playerOut=${p.id}`)}
                   className="px-3 py-1 rounded bg-blue-600 text-white text-sm"
                 >
                   Propose Trade
@@ -142,7 +145,7 @@ export default function RostersPage() {
                     {underWaiver ? 'Claim' : 'Add FA'}
                   </button>
                   <Link
-                    href={`/tradecentre?playerIn=${p.id}`}
+                    href={buildTradeHref(`playerIn=${p.id}`)}
                     className="px-2 py-1 rounded bg-blue-600 text-white text-sm"
                   >
                     Trade

@@ -38,6 +38,13 @@ describe('dashboard production recovery route contract', () => {
     const quickActionsModule = readRepoFile('src/components/dashboard/QuickActionsModule.tsx');
     expect(quickActionsModule).not.toContain('/tradecentre');
     expect(quickActionsModule).not.toContain('Trade Centre');
+
+    const mainSidebar = readRepoFile('src/components/navigation/MainSidebar.tsx');
+    expect(mainSidebar).not.toContain('/tradecentre');
+    expect(mainSidebar).not.toContain('Trade Centre');
+
+    const rostersPage = readRepoFile('src/app/(app)/rosters/page.tsx');
+    expect(rostersPage).not.toContain('/tradecentre');
   });
 
   it('removes old internal/demo nav labels from production navigation', () => {

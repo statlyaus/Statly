@@ -51,8 +51,8 @@ const navigation: NavigationItem[] = [
     iconSolid: ChartBarSolid,
   },
   {
-    name: 'Trade Centre',
-    href: '/tradecentre',
+    name: 'Waivers & Trades',
+    href: '/waivers',
     icon: TrophyIcon,
     iconSolid: TrophySolid,
   },
