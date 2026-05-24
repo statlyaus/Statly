@@ -20,6 +20,7 @@ export default defineConfig({
     include: [
       'tests/unit/**/*.test.ts',
       'tests/unit/**/*.test.tsx',
+      'src/app/dashboard/**/*.test.tsx',
       'src/app/api/draft-trades/**/*.test.ts',
     ],
     exclude: ['node_modules'],

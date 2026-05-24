@@ -1,3 +1,13 @@
+export {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from './command';
+export { Popover, PopoverContent, PopoverTrigger } from './popover';
+
 // Core UI Components
 export { default as Badge } from './Badge';
 export {
