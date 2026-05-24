@@ -201,21 +201,6 @@ const toolsNavigationItem: NavigationItem = {
       ),
     },
     {
-      name: 'Waivers',
-      href: '/waivers',
-      description: 'Claims, order, and processing',
-      icon: (
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8c-3.314 0-6 1.79-6 4s2.686 4 6 4 6-1.79 6-4-2.686-4-6-4zm0 0V4m0 12v4"
-          />
-        </svg>
-      ),
-    },
-    {
       name: 'Rankings',
       href: '/rankings',
       description: 'Standings, ladders, and projections',
