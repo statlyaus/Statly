@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DashboardClient from './DashboardClient';
@@ -12,7 +13,7 @@ vi.mock('@/AuthContext', () => ({
 }));
 
 vi.mock('@/components/navigation', () => ({
-  AppLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AppLayout: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock('@/components/DashboardLoading', () => ({
