@@ -56,7 +56,7 @@ const CATEGORY_META = {
   rebound50s: {
     label: 'Rebound 50s',
     abbr: 'R50',
-    color: 'bg-teal-500',
+    color: 'bg-success',
     weight: 3,
     description: 'Defensive rebounds',
   },
@@ -77,7 +77,7 @@ const CATEGORY_META = {
   scoreInvolvements: {
     label: 'Score Involve.',
     abbr: 'SI',
-    color: 'bg-pink-500',
+    color: 'bg-primary',
     weight: 5,
     description: 'Score involvements (replaces goal assists)',
   },
@@ -174,7 +174,7 @@ function CompactPlayerRow({ player, index }: { player: PlayerStat; index: number
           ))}
       </div>
 
-      {/* Total Value + 10th Cell */}
+      {/* Category fit indicator + efficiency cell */}
       <div className="text-right flex-shrink-0 min-w-[4rem]">
         <p className="font-bold text-primary text-sm">{player.totalValue}</p>
         <p className="text-xs text-muted-foreground truncate">
@@ -198,7 +198,9 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
       {/* Header */}
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center space-x-3 min-w-0">
-          <span className="text-sm font-medium text-muted-foreground flex-shrink-0">#{index + 1}</span>
+          <span className="text-sm font-medium text-muted-foreground flex-shrink-0">
+            #{index + 1}
+          </span>
           <h4 className="font-semibold text-foreground truncate">{player.player_name}</h4>
           <span className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
             {player.team ? <TeamLogo team={player.team} size={16} withCircle decorative /> : null}
@@ -210,7 +212,7 @@ function DetailedPlayerRow({ player, index }: { player: PlayerStat; index: numbe
         <div className="flex items-center space-x-4 flex-shrink-0">
           <div className="text-right">
             <p className="font-bold text-primary text-base">{player.totalValue}</p>
-            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-xs text-muted-foreground">Category fit</p>
           </div>
           <div className="text-right">
             <p className="font-medium text-info text-sm">
@@ -284,11 +286,11 @@ function PlayerCard({
         ))}
       </div>
 
-      {/* Total Value + 10th Cell */}
+      {/* Category fit indicator + efficiency cell */}
       <div className="flex items-center justify-between pt-3 border-t border-border">
         <div>
           <p className="font-bold text-primary">{player.totalValue}</p>
-          <p className="text-xs text-muted-foreground">Total Value</p>
+          <p className="text-xs text-muted-foreground">Category fit</p>
         </div>
         <div className="text-right">
           <p className="font-medium text-info">

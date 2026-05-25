@@ -4,185 +4,266 @@ import type { ReactElement } from 'react';
 import Link from 'next/link';
 
 import {
+  Activity as ActivityIcon,
   ArrowRight as ArrowRightIcon,
   BarChart3 as ChartBarIcon,
+  ClipboardList as DraftBoardIcon,
   GitPullRequestArrow as TradeIcon,
-  LayoutDashboard as RectangleGroupIcon,
-  ListChecks as LineupIcon,
+  ListChecks as RosterIcon,
   Radio as LiveIcon,
-  ShieldCheck as ShieldCheckIcon,
-  Users as UsersIcon,
+  Repeat2 as WaiverIcon,
+  ShieldCheck as CategoryIcon,
+  Users as LeagueIcon,
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Statly | AFL Fantasy League Management, Player Data & Live Scoring',
+  title: 'Statly | AFL Fantasy Draft, Trades, Waivers & Category Matchups',
   description:
-    'Statly is an AFL fantasy workspace for managing leagues, rosters, trades, waivers, player research, and live scoring from one clean dashboard.',
+    'Statly is an AFL fantasy workspace for drafting players, managing rosters, reviewing trades and waivers, and tracking configurable category matchups.',
 };
 
-const decisionMoments = [
+const selectedCategories = [
+  'Goals',
+  'Tackles',
+  'Inside 50s',
+  'Intercepts',
+  'Rebound 50s',
+  'Score Involvements',
+];
+
+const categoryRows = [
+  { category: 'Goals', you: 8, opp: 6, edge: '+2' },
+  { category: 'Tackles', you: 51, opp: 58, edge: '-7' },
+  { category: 'Inside 50s', you: 43, opp: 39, edge: '+4' },
+  { category: 'Rebound 50s', you: 31, opp: 31, edge: 'Tie' },
+];
+
+const draftedPlayerRows = [
   {
-    icon: LineupIcon,
-    title: 'Before lockout',
-    description: 'Set your lineup with role, injury, form, and matchup context in view.',
+    name: 'N. Daicos',
+    aflClub: 'Collingwood',
+    eligiblePosition: 'DEF/MID',
+    signal: 'Inside 50s edge',
   },
   {
-    icon: LiveIcon,
-    title: 'During the round',
-    description: 'Track live matchup swings, player score movement, and the moments that matter.',
+    name: 'M. Bontempelli',
+    aflClub: 'Western Bulldogs',
+    eligiblePosition: 'MID',
+    signal: 'Contested profile',
   },
   {
-    icon: TradeIcon,
-    title: 'After teams and news',
-    description: 'Compare waiver and trade options before the next fantasy decision closes.',
+    name: 'E. Gulden',
+    aflClub: 'Sydney',
+    eligiblePosition: 'MID',
+    signal: 'Score involvement lift',
   },
 ];
 
-const leagueModules = [
+const workflowMoments = [
   {
-    icon: LineupIcon,
-    title: 'Rosters',
-    description: 'See starters, bench risk, coverage gaps, and lineup pressure before lockout.',
-  },
-  {
-    icon: ShieldCheckIcon,
-    title: 'Waivers',
-    description: 'Review claims, priority, and available player signals before the next run.',
-  },
-  {
-    icon: TradeIcon,
-    title: 'Trades',
-    description: 'Compare incoming and outgoing value with context managers can act on.',
+    icon: DraftBoardIcon,
+    title: 'Draft night',
+    description:
+      'Build a queue around selected categories, roster shape, eligible positions, and live pick context.',
   },
   {
     icon: LiveIcon,
-    title: 'Live scoring',
-    description: 'Follow matchup movement and player score swings while the round is active.',
+    title: 'League season round',
+    description:
+      'Track category leads, tied categories, and the roster moves that can still change the matchup.',
   },
   {
-    icon: ChartBarIcon,
-    title: 'Player research',
-    description: 'Compare role, form, injury context, ownership, rankings, and trends.',
+    icon: TradeIcon,
+    title: 'Trade review',
+    description:
+      'Compare category impact before accepting a player movement that changes your fantasy roster.',
   },
   {
-    icon: UsersIcon,
+    icon: WaiverIcon,
+    title: 'Waiver run',
+    description:
+      'Shortlist available players by category fit, fantasy roster need, and the next waiver deadline.',
+  },
+];
+
+const productModules = [
+  {
+    icon: DraftBoardIcon,
+    title: 'Draft boards',
+    description:
+      'Rank drafted-player targets by category need, AFL club context, and queue urgency.',
+  },
+  {
+    icon: CategoryIcon,
+    title: 'Category matchups',
+    description:
+      'See categories won, lost, and tied instead of reducing a round to one generic total.',
+  },
+  {
+    icon: TradeIcon,
+    title: 'Trade review',
+    description:
+      'Understand which selected categories improve or weaken before a trade is accepted.',
+  },
+  {
+    icon: WaiverIcon,
+    title: 'Waiver claims',
+    description:
+      'Review claim fit against roster balance and the categories your league actually plays.',
+  },
+  {
+    icon: RosterIcon,
+    title: 'Roster balance',
+    description: 'Keep eligible positions, drafted depth, and category pressure visible together.',
+  },
+  {
+    icon: LeagueIcon,
     title: 'League activity',
-    description: 'Keep roster moves, trade movement, and manager actions visible in one place.',
+    description: 'Follow draft picks, trade movement, waiver outcomes, and commissioner context.',
   },
-];
-
-const secondaryProduct = [
-  {
-    icon: RectangleGroupIcon,
-    title: 'Statly Fantasy',
-    description: 'Manage your league, team, trades, waivers, lineups, and live rounds.',
-    href: '/fantasy',
-    action: 'View Fantasy Workspace',
-  },
-  {
-    icon: ChartBarIcon,
-    title: 'Draft & Trade Hub',
-    description: 'Research historical AFL trades, draft picks, club movement, and player deals.',
-    href: '/draft/trades',
-    action: 'Open Trade Hub',
-  },
-];
-
-const previewRows = [
-  { name: 'N. Daicos', role: 'DEF/MID', signal: 'Role up', action: 'Compare' },
-  { name: 'M. Bontempelli', role: 'MID', signal: 'Captain tier', action: 'Shortlist' },
-  { name: 'E. Gulden', role: 'MID', signal: 'Stable role', action: 'Track live' },
 ];
 
 export default function HomePage(): ReactElement {
   return (
     <div className="min-h-[calc(100vh-80px)] bg-background text-foreground">
-      <section className="border-b border-white/10 bg-[linear-gradient(135deg,var(--league-primary)_0%,var(--league-text)_100%)]">
-        <div className="mx-auto max-w-6xl px-6 py-16 lg:px-10 lg:py-20">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-end">
-            <div className="max-w-3xl space-y-6">
-              <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                AFL draft and custom fantasy leagues
-              </p>
+      <section className="border-b border-primary-foreground/10 bg-[linear-gradient(135deg,var(--league-text)_0%,var(--league-primary)_58%,var(--league-success)_100%)] text-primary-foreground">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-10 lg:py-16">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(520px,1.08fr)] lg:items-center">
+            <div className="space-y-6">
               <div className="space-y-4">
-                <h1 className="max-w-4xl text-balance text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">
-                  AFL fantasy league management, without the clutter.
+                <h1 className="max-w-4xl text-balance text-4xl font-black leading-tight text-primary-foreground sm:text-5xl lg:text-6xl">
+                  AFL fantasy command center
                 </h1>
-                <p className="max-w-2xl text-base leading-8 text-white/80 sm:text-lg">
-                  Run your league, manage your roster, compare players, review trades, submit
-                  waiver claims, and track live scores from one AFL-first workspace.
+                <p className="max-w-2xl text-base leading-8 text-primary-foreground/80 sm:text-lg">
+                  Draft, trade, and manage your roster around the categories your league actually
+                  plays.
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/fantasy"
-                  className="inline-flex items-center gap-2 rounded-xl bg-info px-5 py-3 text-sm font-semibold text-white transition hover:bg-info/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  className="inline-flex items-center gap-2 rounded-lg bg-info px-5 py-3 text-sm font-semibold text-info-foreground transition hover:bg-info/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <span suppressHydrationWarning>View Fantasy Workspace</span>
+                  <span suppressHydrationWarning>Open Fantasy Workspace</span>
                   <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
                 </Link>
                 <Link
-                  href="#player-research-preview"
-                  className="inline-flex items-center rounded-xl border border-white/20 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:border-info/20 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  href="#category-matchups"
+                  className="inline-flex items-center rounded-lg border border-primary-foreground/20 bg-primary-foreground/5 px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <span suppressHydrationWarning>Preview Player Research</span>
+                  <span suppressHydrationWarning>Preview Category Matchups</span>
                 </Link>
               </div>
 
-              <p className="text-sm leading-6 text-white/70">
-                Built for draft, keeper, and custom AFL fantasy leagues.
-              </p>
+              <div className="grid gap-2 pt-2 sm:grid-cols-3">
+                {[
+                  { label: 'Selected categories', value: '9' },
+                  { label: 'Roster moves tracked', value: 'Drafts / Trades / Waivers' },
+                  { label: 'Round focus', value: 'Category edge' },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-lg border border-primary-foreground/15 bg-primary-foreground/10 p-3"
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-foreground/60">
+                      {item.label}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-primary-foreground">
+                      {item.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <aside
-              id="player-research-preview"
-              className="rounded-lg border border-white/15 bg-white/10 p-5 text-white shadow-sm backdrop-blur"
-              aria-label="Sample Statly player research panel"
+              id="category-matchups"
+              className="rounded-xl border border-primary-foreground/15 bg-primary-foreground/10 p-4 shadow-sm backdrop-blur"
+              aria-label="Sample Statly category matchup and roster analysis panel"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-primary-foreground/10 pb-4">
                 <div>
-                  <p className="text-sm font-semibold text-white">Player research preview</p>
-                  <p className="mt-1 text-xs leading-5 text-white/70">
-                    Example data showing the kind of AFL-first signals managers can compare.
+                  <p className="text-sm font-semibold text-primary-foreground">
+                    League season round command
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-primary-foreground/65">
+                    Example view showing category matchup state, drafted players, and next roster
+                    action.
                   </p>
                 </div>
-                <div className="rounded-md bg-success/20 p-2 text-white">
-                  <ShieldCheckIcon className="h-5 w-5" aria-hidden="true" />
-                </div>
+                <span className="rounded-full border border-success/30 bg-success/15 px-3 py-1 text-xs font-semibold text-primary-foreground">
+                  Live category matchup
+                </span>
               </div>
 
-              <div className="mt-5 overflow-hidden rounded-md border border-white/10">
-                <div className="grid grid-cols-[1.1fr_0.55fr_0.85fr_0.75fr] bg-black/25 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
-                  <span>Player</span>
-                  <span>Role</span>
-                  <span>Signal</span>
-                  <span>Action</span>
-                </div>
-                {previewRows.map((player) => (
-                  <div
-                    key={player.name}
-                    className="grid grid-cols-[1.1fr_0.55fr_0.85fr_0.75fr] border-t border-white/10 bg-white/5 px-3 py-3 text-xs sm:text-sm"
-                  >
-                    <span className="font-semibold text-white">{player.name}</span>
-                    <span className="text-white/70">{player.role}</span>
-                    <span className="font-semibold text-white">{player.signal}</span>
-                    <span className="text-white/70">{player.action}</span>
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-primary-foreground/10 bg-background/95 p-3 text-foreground">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          Category matchup
+                        </p>
+                        <p className="mt-1 text-sm font-semibold">R12: 3 categories up, 1 tied</p>
+                      </div>
+                      <ActivityIcon className="h-5 w-5 text-success" aria-hidden="true" />
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {categoryRows.map((row) => (
+                        <div
+                          key={row.category}
+                          className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md bg-muted px-3 py-2 text-xs"
+                        >
+                          <span className="font-medium text-foreground">{row.category}</span>
+                          <span className="text-muted-foreground">
+                            {row.you} - {row.opp}
+                          </span>
+                          <span className="font-semibold text-foreground">{row.edge}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
 
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                {[
-                  { label: 'Waiver options', value: '18' },
-                  { label: 'Live swing', value: '+24' },
-                  { label: 'Trade notes', value: '6' },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-md border border-white/10 bg-black/25 p-3">
-                    <p className="text-lg font-black leading-none text-white">{item.value}</p>
-                    <p className="mt-2 text-[11px] leading-4 text-white/65">{item.label}</p>
+                  <div className="overflow-hidden rounded-lg border border-primary-foreground/10 bg-background/95 text-foreground">
+                    <div className="grid grid-cols-[1fr_0.85fr_0.8fr_1fr] bg-muted px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      <span>Drafted player</span>
+                      <span>AFL club</span>
+                      <span>Eligible</span>
+                      <span>Category signal</span>
+                    </div>
+                    {draftedPlayerRows.map((player) => (
+                      <div
+                        key={player.name}
+                        className="grid grid-cols-[1fr_0.85fr_0.8fr_1fr] border-t border-border px-3 py-3 text-xs"
+                      >
+                        <span className="font-semibold text-foreground">{player.name}</span>
+                        <span className="text-muted-foreground">{player.aflClub}</span>
+                        <span className="text-muted-foreground">{player.eligiblePosition}</span>
+                        <span className="font-medium text-foreground">{player.signal}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                <div className="grid gap-3">
+                  {[
+                    { label: 'Roster category balance', value: 'Needs tackles' },
+                    { label: 'Trade impact', value: '+Inside 50s' },
+                    { label: 'Next waiver run', value: 'Tue 7:30 PM' },
+                    { label: 'Activity ticker', value: '2 trade reviews' },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-lg border border-primary-foreground/10 bg-background/95 p-3 text-foreground"
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        {item.label}
+                      </p>
+                      <p className="mt-2 text-sm font-semibold">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </aside>
           </div>
@@ -190,31 +271,28 @@ export default function HomePage(): ReactElement {
       </section>
 
       <section className="bg-background">
-        <div className="mx-auto max-w-6xl px-6 py-12 lg:px-10 lg:py-16">
-          <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Weekly Decisions
-            </p>
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-10 lg:py-16">
+          <div className="max-w-3xl space-y-3">
             <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
-              Built for weekly AFL fantasy decisions.
+              One weekly loop: draft context, category matchup, roster movement.
             </h2>
             <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-              Move from team news to lineup, live scoring, waiver, and trade decisions without
-              losing the league context around each call.
+              Statly keeps the important AFL fantasy decisions close together so managers can move
+              from selected categories to drafted-player decisions without losing league context.
             </p>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            {decisionMoments.map(({ icon: Icon, title, description }) => (
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {workflowMoments.map(({ icon: Icon, title, description }) => (
               <article
                 key={title}
-                className="mt-8 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
+                className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm"
               >
                 <div className="flex items-center gap-3">
-                  <div className="rounded-md bg-foreground p-3 text-info">
+                  <div className="rounded-md bg-muted p-2 text-foreground">
                     <Icon className="h-5 w-5" aria-hidden="true" />
                   </div>
-                  <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+                  <h3 className="text-base font-semibold text-foreground">{title}</h3>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-muted-foreground">{description}</p>
               </article>
@@ -224,80 +302,108 @@ export default function HomePage(): ReactElement {
       </section>
 
       <section className="bg-muted/35">
-        <div className="mx-auto max-w-6xl px-6 py-14 lg:px-10">
-          <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              League Workspace
-            </p>
-            <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
-              Everything your league needs in one place.
-            </h2>
-            <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-              Keep the core fantasy modules close together so managers can see the next action
-              instead of hunting through disconnected tools.
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {leagueModules.map(({ icon: Icon, title, description }) => (
-              <div
-                key={title}
-                className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="rounded-md bg-muted p-2 text-foreground">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">{title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
-                  </div>
-                </div>
+        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-10">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
+            <div className="space-y-4">
+              <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
+                Built around the categories your league selects.
+              </h2>
+              <p className="text-sm leading-7 text-muted-foreground sm:text-base">
+                Keep the category set visible across draft rooms, matchup views, trades, waivers,
+                and player research.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {selectedCategories.map((category) => (
+                  <span
+                    key={category}
+                    className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground"
+                  >
+                    {category}
+                  </span>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {productModules.map(({ icon: Icon, title, description }) => (
+                <article
+                  key={title}
+                  className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-md bg-muted p-2 text-foreground">
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">{title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       <section className="border-t border-border bg-background">
-        <div className="mx-auto max-w-6xl px-6 py-14 lg:px-10 lg:py-16">
-          <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Statly Products
-            </p>
-            <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
-              Two workspaces, one AFL-first product family.
-            </h2>
-            <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-              Use Statly Fantasy for league management and fantasy gameplay. Use the Draft &amp;
-              Trade Hub for public AFL research and historical player movement.
-            </p>
-          </div>
+        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-10 lg:py-16">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.45fr)] lg:items-center">
+            <div className="space-y-3">
+              <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
+                AFL-first tools for private fantasy leagues and public draft research.
+              </h2>
+              <p className="text-sm leading-7 text-muted-foreground sm:text-base">
+                Use Statly Fantasy for drafted rosters, category matchups, trades, and waivers. Use
+                the Draft &amp; Trade Hub for public AFL draft and player movement research.
+              </p>
+            </div>
 
-          <div className="mt-8 grid gap-5 md:grid-cols-2">
-            {secondaryProduct.map(({ icon: Icon, ...product }) => (
-              <article
-                key={product.title}
-                className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="rounded-md bg-foreground p-3 text-info">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-foreground">{product.title}</h3>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                  {product.description}
-                </p>
+            <div className="grid gap-3">
+              {[
+                {
+                  icon: ChartBarIcon,
+                  title: 'Statly Fantasy',
+                  description: 'Drafted rosters, category matchups, trades, and waivers.',
+                  href: '/fantasy',
+                  action: 'Open Fantasy Workspace',
+                },
+                {
+                  icon: TradeIcon,
+                  title: 'Draft & Trade Hub',
+                  description: 'Historical AFL draft picks, club movement, and trade research.',
+                  href: '/draft/trades',
+                  action: 'Open Trade Hub',
+                },
+              ].map(({ icon: Icon, ...product }) => (
                 <Link
+                  key={product.title}
                   href={product.href}
-                  className="mt-6 inline-flex items-center gap-2 rounded-xl border border-border bg-muted px-4 py-3 text-sm font-semibold text-foreground transition hover:border-border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="group rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <span suppressHydrationWarning>{product.action}</span>
-                  <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-md bg-muted p-2 text-foreground">
+                        <Icon className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground">{product.title}</h3>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          {product.description}
+                        </p>
+                        <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+                          <span suppressHydrationWarning>{product.action}</span>
+                          <ArrowRightIcon
+                            className="h-4 w-4 transition group-hover:translate-x-0.5"
+                            aria-hidden="true"
+                          />
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </Link>
-              </article>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>

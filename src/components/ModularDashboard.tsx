@@ -306,14 +306,23 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
   const overviewStats = [
     { label: 'My Leagues', value: userLeagues.length, format: 'number' as const },
-    { label: 'Live Rounds', value: liveLeagueCount, format: 'number' as const },
-    { label: 'Drafts Pending', value: draftPendingCount, format: 'number' as const },
+    { label: 'Live Category Matchups', value: liveLeagueCount, format: 'number' as const },
+    { label: 'Draft Queues Pending', value: draftPendingCount, format: 'number' as const },
     { label: 'Player Pool', value: players.length, format: 'number' as const },
     {
-      label: 'Next Waiver',
+      label: 'Next Waiver Run',
       value: nextWaiverLeague ? formatDateLabel(nextWaiverLeague.nextWaiverIso) : 'Not scheduled',
     },
     { label: 'Tracked Leagues', value: leagueSnapshots.length, format: 'number' as const },
+  ];
+
+  const selectedCategoryPills = [
+    'Goals',
+    'Tackles',
+    'Inside 50s',
+    'Intercepts',
+    'Rebound 50s',
+    'Score Involvements',
   ];
 
   const primaryLeague = leagueSnapshots[0] ?? null;
@@ -329,26 +338,27 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                   Dashboard
                 </p>
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-[2.5rem]">
-                  League command center for {displayName}
+                  League command center
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
-                  Start from the leagues and deadlines that need attention, then move into draft,
-                  waivers, market research, or recent activity without leaving the page.
+                  {displayName}, start with the selected categories and roster movement that need
+                  attention, then move into draft queues, waiver runs, trade review, or recent
+                  activity without leaving the page.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <span className="rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-foreground">
-                  {leagueStateLoading || leaguesLoading ? 'Refreshing…' : 'Current state'}
+                  {leagueStateLoading || leaguesLoading ? 'Refreshing…' : 'Current category state'}
                 </span>
                 {liveLeagueCount > 0 ? (
                   <span className="rounded-full border border-success/20 bg-success/10 px-3 py-1 text-sm font-medium text-success">
-                    {liveLeagueCount} live {liveLeagueCount === 1 ? 'league' : 'leagues'}
+                    {liveLeagueCount} live category {liveLeagueCount === 1 ? 'matchup' : 'matchups'}
                   </span>
                 ) : null}
                 {draftPendingCount > 0 ? (
                   <span className="rounded-full border border-warning/20 bg-warning/10 px-3 py-1 text-sm font-medium text-warning">
-                    {draftPendingCount} draft{draftPendingCount === 1 ? '' : 's'} pending
+                    {draftPendingCount} draft queue{draftPendingCount === 1 ? '' : 's'} pending
                   </span>
                 ) : null}
                 <button
@@ -367,7 +377,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                 className="group rounded-[1.5rem] border border-border bg-foreground px-5 py-5 text-white transition hover:bg-foreground"
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Primary focus
+                  Category focus
                 </p>
                 <div className="mt-3 flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -376,8 +386,8 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                     </p>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {primaryLeague
-                        ? `${primaryLeague.teamName} • ${primaryLeague.currentRoundLabel ?? 'Schedule pending'}`
-                        : 'Jump into your active leagues, standings, and current matchups.'}
+                        ? `${primaryLeague.teamName} fantasy roster • ${primaryLeague.currentRoundLabel ?? 'League season round pending'}`
+                        : 'Jump into active leagues, category matchups, and roster movement.'}
                     </p>
                   </div>
                   <span className="text-sm font-semibold text-muted-foreground transition group-hover:translate-x-0.5">
@@ -388,21 +398,21 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
               <div className="rounded-[1.5rem] border border-border bg-muted px-5 py-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Next waiver
+                  Next waiver run
                 </p>
                 <p className="mt-3 text-lg font-semibold text-foreground">
-                  {nextWaiverLeague ? nextWaiverLeague.name : 'No waiver queued'}
+                  {nextWaiverLeague ? nextWaiverLeague.name : 'No waiver run queued'}
                 </p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {nextWaiverLeague
                     ? formatDateLabel(nextWaiverLeague.nextWaiverIso)
-                    : 'No waiver window is currently materialized across tracked leagues.'}
+                    : 'Waiver fit will appear here when a tracked league has a queued run.'}
                 </p>
               </div>
 
               <div className="rounded-[1.5rem] border border-border bg-muted px-5 py-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Next checkpoint
+                  Trade / draft checkpoint
                 </p>
                 <p className="mt-3 text-lg font-semibold text-foreground">
                   {nextEventLeague
@@ -412,8 +422,26 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {nextEventLeague
                     ? `${nextEventLeague.name} • ${formatDateLabel(nextEventLeague.nextEventIso)}`
-                    : 'No upcoming league event is currently available.'}
+                    : 'Trade review and draft queue checkpoints will appear when league state is available.'}
                 </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-[1.25rem] border border-border bg-muted px-4 py-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <p className="text-sm font-semibold text-foreground">
+                  Selected-category lens for roster decisions
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedCategoryPills.map((category) => (
+                    <span
+                      key={category}
+                      className="rounded-full border border-border bg-white px-2.5 py-1 text-xs font-semibold text-foreground"
+                    >
+                      {category}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -421,17 +449,17 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
               <CommandLink
                 href="/leagues"
                 title="Open leagues"
-                description="Jump into league workspaces and standings."
+                description="Jump into league workspaces and category matchups."
               />
               <CommandLink
                 href="/waivers"
                 title="Review waivers"
-                description="Check claims, order, and the next run."
+                description="Compare waiver fit against roster category balance."
               />
               <CommandLink
                 href="/players"
                 title="Player research"
-                description="Search the player pool with live market context."
+                description="Study selected-category profiles and AFL club context."
               />
             </div>
           </section>
@@ -439,9 +467,9 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
             <div className="space-y-6">
               <DashboardCard
-                eyebrow="League Command Center"
-                title="Active leagues"
-                description="Open the right league first, with live state and the next decision visible in each row."
+                eyebrow="Category Command Center"
+                title="Active league contexts"
+                description="Open the right league first, with live category state and the next roster decision visible in each row."
               >
                 {leagueStateLoading && leagueSnapshots.length === 0 ? (
                   <div className="rounded-2xl border border-border bg-white px-4 py-8 text-sm text-muted-foreground">
@@ -464,10 +492,10 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                         ? 'Waiver run'
                         : (league.nextEventLabel ?? 'League event');
                       const priorityCopy = league.isLive
-                        ? 'Live scoring is active in this league.'
+                        ? 'Live category matchup state is active in this league.'
                         : league.nextWaiverIso
-                          ? 'This league has the clearest upcoming deadline.'
-                          : 'Use this workspace for standings, roster, and season context.';
+                          ? 'This league has the clearest upcoming waiver run.'
+                          : 'Use this workspace for standings, drafted roster, and season context.';
 
                       return (
                         <div
@@ -478,11 +506,11 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                  {index === 0 ? 'Primary focus' : `League ${index + 1}`}
+                                  {index === 0 ? 'Category focus' : `League ${index + 1}`}
                                 </span>
                                 {league.isLive ? (
                                   <span className="rounded-full bg-success/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
-                                    Live round
+                                    Live categories
                                   </span>
                                 ) : null}
                                 <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -495,7 +523,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                                   {league.name}
                                 </h3>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                  {league.teamName}
+                                  {league.teamName} fantasy roster
                                 </p>
                                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                                   {priorityCopy}
@@ -505,7 +533,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                               <div className="mt-4 grid gap-2 md:grid-cols-3">
                                 <div className="rounded-xl bg-muted px-3 py-3">
                                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                    Current round
+                                    League season round
                                   </p>
                                   <p className="mt-1 font-medium text-foreground">
                                     {league.currentRoundLabel ?? 'Not materialized'}
@@ -517,7 +545,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                                 </div>
                                 <div className="rounded-xl bg-muted px-3 py-3">
                                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                    Next action
+                                    Roster movement
                                   </p>
                                   <p className="mt-1 font-medium text-foreground">
                                     {nextActionLabel}
@@ -530,14 +558,14 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                                 </div>
                                 <div className="rounded-xl bg-muted px-3 py-3">
                                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                    Fastest path
+                                    Best next view
                                   </p>
                                   <p className="mt-1 font-medium text-foreground">
                                     {primaryActionLabel}
                                   </p>
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     {league.isLive
-                                      ? 'Jump straight into the current head-to-head.'
+                                      ? 'Jump straight into the current category matchup.'
                                       : 'Open the full league workspace.'}
                                   </p>
                                 </div>
@@ -570,7 +598,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                 <DashboardCard
                   eyebrow="Draft State"
                   title="Draft room pulse"
-                  description="Keep draft attention visible without letting it dominate the whole dashboard."
+                  description="Keep draft queue needs visible without letting them dominate the whole dashboard."
                 >
                   <LiveDraftModule user={user} refreshTrigger={refreshTrigger} />
                 </DashboardCard>
@@ -587,7 +615,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
               <DashboardCard
                 eyebrow="League Activity"
                 title="Recent movement"
-                description="Latest league transactions, waivers, and manager actions across your tracked leagues."
+                description="Latest draft picks, trade reviews, waiver outcomes, and manager actions across your tracked leagues."
               >
                 <RecentActivityModule
                   activities={dashboardActivities}
@@ -600,21 +628,21 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
               <div className="xl:sticky xl:top-24 xl:space-y-6">
                 <DashboardCard
                   eyebrow="Attention Now"
-                  title="What needs action"
-                  description="The highest-signal league conditions and deadlines across your account."
+                  title="Category decisions now"
+                  description="The highest-signal category matchups, roster movement, and deadlines across your account."
                 >
                   <div className="space-y-3">
                     <div className="rounded-xl border border-border bg-white px-4 py-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Live leagues
+                        Live category matchups
                       </p>
                       <p className="mt-2 text-2xl font-semibold text-foreground">
                         {liveLeagueCount}
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {liveLeagueCount > 0
-                          ? 'Open active matchups and current league state first.'
-                          : 'No live rounds are currently in progress.'}
+                          ? 'Open active category matchups and current league state first.'
+                          : 'No live category matchups are currently in progress.'}
                       </p>
                     </div>
                     <div className="rounded-xl border border-border bg-white px-4 py-4">
@@ -626,13 +654,13 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {draftPendingCount > 0
-                          ? 'Draft attention is still required in your league list.'
-                          : 'No pending drafts are flagged right now.'}
+                          ? 'Draft queue attention is still required in your league list.'
+                          : 'No pending draft queues are flagged right now.'}
                       </p>
                     </div>
                     <div className="rounded-xl border border-border bg-white px-4 py-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Upcoming checkpoint
+                        Trade / draft checkpoint
                       </p>
                       <p className="mt-2 font-semibold text-foreground">
                         {nextEventLeague ? nextEventLeague.name : 'No event queued'}
@@ -640,7 +668,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                       <p className="mt-1 text-sm text-muted-foreground">
                         {nextEventLeague
                           ? `${nextEventLeague.nextEventLabel ?? 'Next event'} • ${formatDateLabel(nextEventLeague.nextEventIso)}`
-                          : 'League deadlines will appear here when state is available.'}
+                          : 'Trade review and draft queue checkpoints will appear here when state is available.'}
                       </p>
                     </div>
                   </div>
@@ -664,16 +692,16 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
                 <DashboardCard
                   eyebrow="Performance Snapshot"
-                  title="Account overview"
-                  description="Current counts and timing signals across your player pool and league footprint."
+                  title="League footprint"
+                  description="Current counts and timing signals across your player pool, tracked leagues, and category surfaces."
                 >
                   <StatsOverviewModule stats={overviewStats} refreshTrigger={refreshTrigger} />
                 </DashboardCard>
 
                 <DashboardCard
                   eyebrow="Market Intel"
-                  title="Season scoring leaders"
-                  description="Top season scorers from the live aggregate player feed."
+                  title="Selected-category player signals"
+                  description="Category profiles from the live aggregate player feed."
                 >
                   <LeaderboardModule refreshTrigger={refreshTrigger} />
                 </DashboardCard>

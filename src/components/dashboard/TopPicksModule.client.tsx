@@ -10,6 +10,7 @@ import { usePlayerStatsAggregate } from '@/hooks/usePlayerStats';
 import type { AggregatedPlayerStat } from '@/hooks/usePlayerStats';
 
 const DEFAULT_TOP_PICKS_LIMIT = 8;
+const CATEGORY_SIGNAL_TITLE = 'Selected-category player signals';
 
 interface TopPicksModuleClientProps {
   refreshTrigger: number;
@@ -49,7 +50,7 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
         className="bg-white rounded-xl shadow-sm border border-border p-6"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-foreground">Top Picks This Round</h3>
+          <h3 className="text-lg font-semibold text-foreground">{CATEGORY_SIGNAL_TITLE}</h3>
           <span className="text-xs text-info bg-info/10 px-2 py-1 rounded">Loading...</span>
         </div>
 
@@ -91,8 +92,10 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
         className="bg-white rounded-xl shadow-sm border border-border p-6"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-foreground">Top Picks This Round</h3>
-          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">Unavailable</span>
+          <h3 className="text-lg font-semibold text-foreground">{CATEGORY_SIGNAL_TITLE}</h3>
+          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+            Unavailable
+          </span>
         </div>
 
         {error && (
@@ -114,7 +117,7 @@ export default function TopPicksModuleClient({ refreshTrigger }: TopPicksModuleC
   return (
     <MemoDataFocusedTopPicks
       players={filteredPlayers}
-      title="Top Picks This Round"
+      title={CATEGORY_SIGNAL_TITLE}
       limit={DEFAULT_TOP_PICKS_LIMIT}
     />
   );
@@ -142,10 +145,10 @@ function DataFocusedTopPicks({
         <h3 className="text-lg font-semibold text-foreground">{title}</h3>
         <div className="flex items-center space-x-2">
           <span className="text-xs text-success bg-success/10 px-2 py-1 rounded font-medium">
-            Live Data
+            Category Feed
           </span>
           <span className="text-xs text-info bg-info/10 px-2 py-1 rounded">
-            {topPlayers.length} Players
+            {topPlayers.length} Profiles
           </span>
         </div>
       </div>
@@ -178,14 +181,14 @@ function DataFocusedTopPicks({
                       />
                     ) : null}
                     <span>
-                      {player.team || '—'} • {player.position}
+                      {player.team || '—'} AFL club • {player.position}
                     </span>
                   </p>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-xl font-bold text-primary">{player.totalValue || 0}</p>
-                <p className="text-sm text-muted-foreground">Total Points</p>
+                <p className="text-sm text-muted-foreground">Category fit</p>
               </div>
             </div>
 
@@ -223,8 +226,8 @@ function DataFocusedTopPicks({
               <StatBox
                 label="Rebound 50s"
                 value={player.categories?.rebound50s || 0}
-                color="text-teal-600"
-                bgColor="bg-teal-50"
+                color="text-success"
+                bgColor="bg-success/10"
               />
               <StatBox
                 label="Cont. Poss."
@@ -241,8 +244,8 @@ function DataFocusedTopPicks({
               <StatBox
                 label="Score Inv."
                 value={player.categories?.scoreInvolvements || 0}
-                color="text-pink-600"
-                bgColor="bg-pink-50"
+                color="text-primary"
+                bgColor="bg-primary/10"
               />
             </div>
 
@@ -271,7 +274,7 @@ function DataFocusedTopPicks({
                   )
                 : 0}
             </p>
-            <p className="text-sm text-muted-foreground">Avg Points</p>
+            <p className="text-sm text-muted-foreground">Avg category fit</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-destructive">
