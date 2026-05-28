@@ -11,12 +11,14 @@ vi.mock('@/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 
+const routerMocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+}));
+
 // Mock useRouter
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-  }),
+  useRouter: () => routerMocks,
 }));
 
 // Mock useNotification
@@ -42,6 +44,8 @@ const mockAuthContext = {
 describe('AuthForm', () => {
   beforeEach(() => {
     (useAuth as any).mockReturnValue(mockAuthContext);
+    routerMocks.push.mockClear();
+    routerMocks.replace.mockClear();
   });
 
   afterEach(() => {
@@ -131,8 +135,35 @@ describe('AuthForm', () => {
     // Should show authenticated UI
     expect(screen.getByText('Welcome back!')).toBeInTheDocument();
     expect(screen.getByText('Test User')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue to dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign Out' })).toBeInTheDocument();
     expect(screen.getByText('Authenticated')).toBeInTheDocument();
+  });
+
+  it('lets an already authenticated user continue to the safe next destination', async () => {
+    const user = userEvent.setup();
+    const authenticatedMockContext = {
+      ...mockAuthContext,
+      user: {
+        uid: 'test-user-id',
+        email: 'test@example.com',
+        displayName: 'Test User',
+        photoURL: null,
+        emailVerified: true,
+        metadata: {
+          creationTime: '2023-01-01T00:00:00.000Z',
+          lastSignInTime: '2023-06-01T00:00:00.000Z',
+        },
+      },
+    };
+
+    (useAuth as any).mockReturnValue(authenticatedMockContext);
+
+    render(<AuthForm initialMode="login" nextUrl="/dashboard" />);
+
+    await user.click(screen.getByRole('button', { name: 'Continue to dashboard' }));
+
+    expect(routerMocks.replace).toHaveBeenCalledWith('/dashboard');
   });
 
   it('handles form submission with valid credentials', async () => {

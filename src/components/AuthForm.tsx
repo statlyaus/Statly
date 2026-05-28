@@ -87,6 +87,8 @@ const AuthForm = ({
   // Safe redirect helper to avoid open redirects
   const toSafeRedirect = (url?: string) =>
     url && url.startsWith('/') && !url.startsWith('//') ? url : undefined;
+  const redirectDestination = toSafeRedirect(nextUrl) ?? '/dashboard';
+  const continueLabel = redirectDestination === '/dashboard' ? 'Continue to dashboard' : 'Continue';
 
   // Form state
   const [isSignup, setIsSignup] = useState(initialMode === 'signup');
@@ -190,13 +192,8 @@ const AuthForm = ({
         await login(email, password);
         showNotification('success', 'Welcome back! You are now signed in.');
       }
-      if (nextUrl) {
-        const dest = toSafeRedirect(nextUrl);
-        if (dest) {
-          router.replace(dest);
-        } else {
-          onSuccess?.();
-        }
+      if (nextUrl || !onSuccess) {
+        router.replace(redirectDestination);
       } else {
         onSuccess?.();
       }
@@ -215,13 +212,8 @@ const AuthForm = ({
     try {
       await loginWithGoogle();
       showNotification('success', 'Successfully signed in with Google!');
-      if (nextUrl) {
-        const dest = toSafeRedirect(nextUrl);
-        if (dest) {
-          router.replace(dest);
-        } else {
-          onSuccess?.();
-        }
+      if (nextUrl || !onSuccess) {
+        router.replace(redirectDestination);
       } else {
         onSuccess?.();
       }
@@ -240,13 +232,8 @@ const AuthForm = ({
     try {
       await loginWithFacebook();
       showNotification('success', 'Successfully signed in with Facebook!');
-      if (nextUrl) {
-        const dest = toSafeRedirect(nextUrl);
-        if (dest) {
-          router.replace(dest);
-        } else {
-          onSuccess?.();
-        }
+      if (nextUrl || !onSuccess) {
+        router.replace(redirectDestination);
       } else {
         onSuccess?.();
       }
@@ -265,13 +252,8 @@ const AuthForm = ({
     try {
       await loginWithApple();
       showNotification('success', 'Successfully signed in with Apple!');
-      if (nextUrl) {
-        const dest = toSafeRedirect(nextUrl);
-        if (dest) {
-          router.replace(dest);
-        } else {
-          onSuccess?.();
-        }
+      if (nextUrl || !onSuccess) {
+        router.replace(redirectDestination);
       } else {
         onSuccess?.();
       }
@@ -287,10 +269,9 @@ const AuthForm = ({
   // Optional: redirect immediately if already authenticated
   useEffect(() => {
     if (autoRedirectIfAuthenticated && user) {
-      const destination = toSafeRedirect(nextUrl) || '/dashboard';
-      router.replace(destination);
+      router.replace(redirectDestination);
     }
-  }, [autoRedirectIfAuthenticated, nextUrl, router, user]);
+  }, [autoRedirectIfAuthenticated, redirectDestination, router, user]);
 
   const handleModeSwitch = () => {
     setIsSignup(!isSignup);
@@ -384,10 +365,20 @@ const AuthForm = ({
             </div>
           </div>
 
-          <UIButton onClick={handleLogout} variant="danger" className="mt-4">
-            <LogOut className="h-5 w-5" />
-            Sign Out
-          </UIButton>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <UIButton
+              onClick={() => router.replace(redirectDestination)}
+              variant="primary"
+              className="flex-1"
+            >
+              <LogIn className="h-5 w-5" />
+              {continueLabel}
+            </UIButton>
+            <UIButton onClick={handleLogout} variant="danger" className="flex-1 sm:flex-none">
+              <LogOut className="h-5 w-5" />
+              Sign Out
+            </UIButton>
+          </div>
         </div>
       </motion.div>
     );

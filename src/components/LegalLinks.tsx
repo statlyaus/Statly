@@ -1,4 +1,4 @@
-import Button from '@/components/Button';
+import Link from 'next/link';
 
 interface LegalLinksProps {
   prefix: string;
@@ -8,15 +8,21 @@ interface LegalLinksProps {
 export default function LegalLinks({ prefix, className = '' }: LegalLinksProps) {
   return (
     <div className={`text-center ${className}`}>
-      <p className="text-sm text-muted-foreground dark:text-muted-foreground">
-        {prefix}{' '}
-        <Button href="/terms" variant="ghost" className="p-0 h-auto text-sm underline">
+      <p className="text-sm text-muted-foreground">
+        <span>{prefix} </span>
+        <Link
+          href="/terms"
+          className="font-medium underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
           Terms of Service
-        </Button>{' '}
-        and{' '}
-        <Button href="/privacy" variant="ghost" className="p-0 h-auto text-sm underline">
+        </Link>
+        <span> and </span>
+        <Link
+          href="/privacy"
+          className="font-medium underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
           Privacy Policy
-        </Button>
+        </Link>
       </p>
     </div>
   );
