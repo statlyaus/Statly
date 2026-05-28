@@ -1,23 +1,52 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 
 import StatFilters from '@/components/StatFilters';
 import PlayerStatsTable from '@/components/stats/PlayerStatsTable';
 import { LoadingSpinner } from '@/components/ui';
 import { fetchApi } from '@/lib/api';
+import type { AggregatedPlayerStat, AggregatedPlayerStatsResponse } from '@/hooks/usePlayerStats';
 import type { Player } from '@/types/players';
 
-interface Match {
-  round: number;
-  homeTeam: string;
-  awayTeam: string;
-  venue: string;
-  players: Player[];
+const STATS_LIMIT = 1000;
+
+function readNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function aggregateStatToPlayer(row: AggregatedPlayerStat): Player {
+  const averages = row.averages ?? {};
+  const totals = row.totals ?? {};
+
+  return {
+    id: row.player_id || row.id,
+    name: row.player_name,
+    team: row.team,
+    position: row.position,
+    games: row.games,
+    stats: { ...totals },
+    avg: readNumber(averages.avgFantasyPoints) ?? readNumber(row.fantasy_points),
+    kicks: readNumber(averages.kicks),
+    handballs: readNumber(averages.handballs),
+    marks: readNumber(averages.marks),
+    tackles: readNumber(averages.tackles),
+    goals: readNumber(averages.goals),
+    hitouts: readNumber(averages.hitouts),
+    clearances: readNumber(averages.clearances),
+    inside50s: readNumber(averages.inside50s),
+    rebound50s: readNumber(averages.rebound50s),
+    contestedPossessions: readNumber(averages.contestedPossessions),
+  };
 }
 
 export default function StatsClient() {
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,10 +58,12 @@ export default function StatsClient() {
     const getMatchData = async () => {
       try {
         setLoading(true);
-        const allMatches = await fetchApi('matches/enhanced');
-        setMatches(allMatches);
+        const response = (await fetchApi(
+          `player-stats/aggregate?limit=${STATS_LIMIT}`
+        )) as AggregatedPlayerStatsResponse;
+        setPlayers(response.success ? response.data.map(aggregateStatToPlayer) : []);
       } catch (err: unknown) {
-        setError('Failed to load match stats.');
+        setError('Failed to load player stats.');
         console.error(err);
       } finally {
         setLoading(false);
@@ -40,31 +71,6 @@ export default function StatsClient() {
     };
     getMatchData();
   }, []);
-
-  const allPlayers = useMemo(() => {
-    if (!matches) return [];
-    const playerMap = new Map<string, Player>();
-
-    matches.forEach((match: Match) => {
-      match.players.forEach((player) => {
-        if (playerMap.has(player.id)) {
-          const existingPlayer = playerMap.get(player.id)!;
-          Object.keys(player.stats || {}).forEach((key) => {
-            const statKey = key as keyof Player['stats'];
-            const existingStats = existingPlayer.stats || {};
-            const playerStats = player.stats || {};
-            if (existingStats && playerStats) {
-              (existingStats[statKey] as number) =
-                (Number(existingStats[statKey]) || 0) + (Number(playerStats[statKey]) || 0);
-            }
-          });
-        } else {
-          playerMap.set(player.id, { ...player, stats: { ...player.stats } });
-        }
-      });
-    });
-    return Array.from(playerMap.values());
-  }, [matches]);
 
   if (loading) {
     return (
@@ -90,7 +96,7 @@ export default function StatsClient() {
         setTimeframe={setTimeframe}
       />
       <div className="mt-6">
-        <PlayerStatsTable players={allPlayers} />
+        <PlayerStatsTable players={players} />
       </div>
     </div>
   );

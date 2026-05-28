@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -210,6 +210,7 @@ export default function PlayerComparison({
   initialPlayers = [],
 }: PlayerComparisonProps) {
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>(initialPlayers.slice(0, 4));
+  const wasOpenRef = useRef(isOpen);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [_showLegend, _setShowLegend] = useState(false);
@@ -227,6 +228,25 @@ export default function PlayerComparison({
   const [draggedPlayer, setDraggedPlayer] = useState<number | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [navLayout, setNavLayout] = useState<'horizontal' | 'vertical'>('vertical'); // Default to vertical layout
+
+  const initialSelectedPlayers = useMemo(() => initialPlayers.slice(0, 4), [initialPlayers]);
+  const initialSelectedPlayerKey = useMemo(
+    () => initialSelectedPlayers.map((player) => player.id).join('|'),
+    [initialSelectedPlayers]
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    if (!wasOpenRef.current) {
+      setSelectedPlayers(initialSelectedPlayers);
+    }
+
+    wasOpenRef.current = true;
+  }, [initialSelectedPlayerKey, initialSelectedPlayers, isOpen]);
 
   // Detect mobile viewport
   useEffect(() => {
@@ -520,6 +540,7 @@ export default function PlayerComparison({
             <div className="flex items-center space-x-4">
               <button
                 onClick={onClose}
+                aria-label="Close player comparison"
                 className="p-2 hover:bg-white/50 dark:hover:bg-muted rounded-full transition-colors"
               >
                 <X className="w-6 h-6 text-muted-foreground dark:text-muted-foreground" />
@@ -540,7 +561,10 @@ export default function PlayerComparison({
               {/* Enhanced Player Card Selection Area */}
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-medium text-foreground dark:text-white">
+                  <h3
+                    id="player-comparison-selected-players-heading"
+                    className="text-base font-medium text-foreground dark:text-white"
+                  >
                     Selected Players ({selectedPlayers.length}/4)
                   </h3>
                   {selectedPlayers.length > 0 && (
@@ -554,7 +578,11 @@ export default function PlayerComparison({
                 </div>
 
                 {/* Enhanced Player Cards with Drag & Drop */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div
+                  role="group"
+                  aria-labelledby="player-comparison-selected-players-heading"
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
+                >
                   {Array.from({ length: 4 }).map((_, index) => {
                     const player = selectedPlayers[index];
 
@@ -592,6 +620,7 @@ export default function PlayerComparison({
                         {/* Remove Button */}
                         <button
                           onClick={() => removePlayer(player.id)}
+                          aria-label={`Remove ${player.name} from comparison`}
                           className="absolute top-2 right-2 w-8 h-8 bg-destructive/10 hover:bg-destructive/10 dark:bg-destructive dark:hover:bg-destructive text-destructive dark:text-destructive rounded-full flex items-center justify-center transition-colors"
                         >
                           <X className="w-4 h-4" />
