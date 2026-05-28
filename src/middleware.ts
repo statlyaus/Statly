@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { isAuthBypassEnabled } from '@/lib/authBypass';
+
 const protectedPrefixes = ['/dashboard', '/app', '/league'];
 
 const isProtectedRoute = (pathname: string) =>
@@ -40,6 +42,10 @@ export async function middleware(req: NextRequest) {
   }
 
   if (!isProtectedRoute(pathname)) return NextResponse.next();
+
+  if (isAuthBypassEnabled()) {
+    return NextResponse.next();
+  }
 
   const session = req.cookies.get('statly_session');
   if (!session) {

@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
 import Link from 'next/link';
 
 interface LegalLinksProps {
@@ -6,6 +10,16 @@ interface LegalLinksProps {
 }
 
 export default function LegalLinks({ prefix, className = '' }: LegalLinksProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className={`min-h-5 text-center ${className}`} aria-hidden="true" />;
+  }
+
   return (
     <div className={`text-center ${className}`}>
       <p className="text-sm text-muted-foreground">
