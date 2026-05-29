@@ -1,6 +1,60 @@
-import { describe, expect, it } from 'vitest';
+import React from 'react';
 
-import { mergeLeaguePlayerRows } from './PlayersPageClient';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+
+import '@testing-library/jest-dom/vitest';
+
+import PlayersPageClient, { mergeLeaguePlayerRows } from './PlayersPageClient';
+
+vi.mock('next/link', () => ({
+  default: ({
+    children,
+    href,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) =>
+    React.createElement('a', { href, ...props }, children),
+}));
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/players',
+  useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock('@/AuthContext', () => ({
+  useAuth: () => ({ user: null }),
+}));
+
+vi.mock('@/components/league/LeagueViewHeader', () => ({
+  default: ({ title }: { title: string }) => React.createElement('div', null, title),
+}));
+
+vi.mock('@/components/TeamLogo', () => ({
+  TeamLogo: () => React.createElement('span', { 'data-testid': 'team-logo' }),
+}));
+
+vi.mock('@/hooks/useLeagueStatColumns', () => ({
+  useLeagueStatColumns: () => ({
+    visibleKeys: ['goals', 'disposals'],
+    allKeys: ['goals', 'disposals'],
+    toggleKey: vi.fn(),
+    defaultKeys: ['goals', 'disposals'],
+    setVisibleKeys: vi.fn(),
+    loading: false,
+  }),
+}));
+
+vi.mock('@/hooks/useUserLeagues', () => ({
+  useUserLeagues: () => ({
+    leagues: [],
+    loading: false,
+  }),
+}));
+
+vi.mock('@/lib/api', () => ({
+  fetchApi: vi.fn(),
+}));
 
 describe('mergeLeaguePlayerRows', () => {
   it('overlays league metadata onto global player rows', () => {
@@ -114,5 +168,39 @@ describe('mergeLeaguePlayerRows', () => {
         }),
       })
     );
+  });
+});
+
+describe('PlayersPageClient table typography', () => {
+  it('renders ownership and stat values with readable numeric table classes', () => {
+    render(
+      React.createElement(PlayersPageClient, {
+        embedded: true,
+        players: [
+          {
+            id: 'player-1',
+            name: 'Player One',
+            team: 'Adelaide',
+            position: 'MID',
+            ownership: 33,
+            stats: {
+              goals: 1.25,
+              disposals: 24.4,
+            },
+          },
+        ],
+      })
+    );
+
+    const ownershipCell = screen.getByRole('cell', { name: '33%' });
+    const goalsCell = screen.getByRole('cell', { name: '1.3' });
+    const disposalsCell = screen.getByRole('cell', { name: '24.4' });
+
+    for (const numericCell of [ownershipCell, goalsCell, disposalsCell]) {
+      expect(numericCell).toHaveClass('font-medium');
+      expect(numericCell).toHaveClass('tracking-normal');
+      expect(numericCell).not.toHaveClass('font-mono');
+      expect(numericCell).not.toHaveClass('tracking-[-0.015em]');
+    }
   });
 });
