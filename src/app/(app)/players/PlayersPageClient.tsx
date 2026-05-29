@@ -556,15 +556,13 @@ export default function PlayersPageClient({
     return (
       <div className="flex items-center justify-center gap-2">
         <span
-          style={tableDataFontStyle}
-          className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] ${statusClasses}`}
+          className={`rounded-full border px-2.5 py-0.5 ${tableStatusTextClassName} ${statusClasses}`}
         >
           {status}
         </span>
         {owner ? (
           <span
-            style={tableDataFontStyle}
-            className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.04em] text-[color:var(--league-text-muted)]"
+            className={tableMetaTextClassName}
             title={owner}
           >
             {getTeamAbbreviation(owner)}
@@ -604,7 +602,6 @@ export default function PlayersPageClient({
         <button
           type="button"
           onClick={() => handleSort(columnKey)}
-          style={tableDataFontStyle}
           className={`flex w-full items-center gap-1 rounded-md px-1 py-1 transition hover:bg-[color:color-mix(in_srgb,var(--league-primary-foreground)_10%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary-foreground)] ${justifyClass}`}
           aria-label={`Sort by ${label}${isActive ? `, currently ${sortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
           title={label}
@@ -700,22 +697,22 @@ export default function PlayersPageClient({
   const tableViewportClassName = embedded
     ? 'overflow-x-auto overflow-y-visible'
     : 'max-h-[calc(100vh-18rem)] overflow-x-auto overflow-y-auto';
-  const tableDataFontStyle = {
-    fontFamily:
-      'var(--font-data-table), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
-  } as const;
   const tableHeaderTextClassName =
-    'text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--league-primary-foreground)] opacity-80';
+    'text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-primary-foreground)] opacity-85';
   const tableStatHeaderLabelClassName =
-    'text-[11px] font-semibold uppercase tracking-[0.04em] text-[color:var(--league-primary-foreground)]';
+    'text-[11px] font-semibold uppercase tracking-normal text-[color:var(--league-primary-foreground)]';
   const tableIdentifierTextClassName =
-    'text-[14px] font-semibold leading-[1.15] tracking-[-0.015em] text-[color:var(--league-text)]';
+    'text-[14px] font-semibold leading-[1.2] tracking-normal text-[color:var(--league-text)]';
   const tableMetaTextClassName =
-    'text-[11.5px] font-semibold uppercase tracking-[0.12em] text-[color:var(--league-text-muted)]';
+    'text-[11.5px] font-medium uppercase tracking-[0.08em] text-[color:var(--league-text-muted)]';
   const tableBodyTextClassName =
-    'text-[12.5px] font-medium leading-[1.2] tracking-[0.01em] text-[color:var(--league-text-muted)]';
+    'text-[12.5px] font-medium leading-[1.25] tracking-normal text-[color:var(--league-text-muted)]';
   const tableNumericTextClassName =
-    'text-center font-mono text-[13px] font-semibold tabular-nums tracking-[-0.015em] text-[color:var(--league-text)]';
+    'text-center text-[13px] font-medium tabular-nums tracking-normal text-[color:var(--league-text)]';
+  const tableStatusTextClassName =
+    'text-[10.5px] font-semibold uppercase tracking-[0.08em]';
+  const tableActionTextClassName =
+    'text-[11.5px] font-semibold uppercase tracking-[0.08em]';
 
   return (
     <div className={embedded ? undefined : 'bg-[color:var(--league-page)]'}>
@@ -1065,7 +1062,6 @@ export default function PlayersPageClient({
                   <SortableHeader columnKey="team" label="Team" />
                   <SortableHeader columnKey="position" label="Pos" />
                   <th
-                    style={tableDataFontStyle}
                     className={`px-3 py-3 text-center ${tableHeaderTextClassName}`}
                   >
                     Status
@@ -1082,7 +1078,6 @@ export default function PlayersPageClient({
                     />
                   ))}
                   <th
-                    style={tableDataFontStyle}
                     className={`px-3 py-3 text-left ${tableHeaderTextClassName}`}
                   >
                     Actions
@@ -1121,7 +1116,7 @@ export default function PlayersPageClient({
                         {player.team ? (
                           <span className="inline-flex items-center gap-2" title={player.team}>
                             <TeamLogo team={player.team} size={18} withCircle decorative />
-                            <span style={tableDataFontStyle} className={tableMetaTextClassName}>
+                            <span className={tableMetaTextClassName}>
                               {getTeamAbbreviation(player.team)}
                             </span>
                           </span>
@@ -1130,9 +1125,7 @@ export default function PlayersPageClient({
                         )}
                       </td>
                       <td className={`whitespace-nowrap px-3 py-3.5 ${tableBodyTextClassName}`}>
-                        <span style={tableDataFontStyle} className={tableMetaTextClassName}>
-                          {player.position || '-'}
-                        </span>
+                        <span className={tableMetaTextClassName}>{player.position || '-'}</span>
                       </td>
                       <td
                         className={`whitespace-nowrap px-3 py-3.5 text-center ${tableBodyTextClassName}`}
@@ -1140,8 +1133,7 @@ export default function PlayersPageClient({
                         {renderStatus(player)}
                       </td>
                       <td
-                        style={tableDataFontStyle}
-                        className="whitespace-nowrap px-3 py-3.5 text-center font-mono text-[13px] font-semibold tabular-nums tracking-[-0.015em] text-[color:var(--league-text)]"
+                        className={`whitespace-nowrap px-3 py-3.5 ${tableNumericTextClassName}`}
                       >
                         {typeof player.ownership === 'number' && Number.isFinite(player.ownership)
                           ? `${player.ownership}%`
@@ -1153,7 +1145,6 @@ export default function PlayersPageClient({
                         return (
                           <td
                             key={key}
-                            style={tableDataFontStyle}
                             className={`whitespace-nowrap px-3 py-3.5 ${tableNumericTextClassName}`}
                           >
                             {Number.isFinite(value) ? value.toFixed(1) : '-'}
@@ -1167,8 +1158,7 @@ export default function PlayersPageClient({
                               ? `/players/${player.id}?league=${encodeURIComponent(effectiveLeagueId)}`
                               : `/players/${player.id}`
                           }
-                          style={tableDataFontStyle}
-                          className="inline-flex items-center gap-1 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-1.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-[color:var(--league-text)] shadow-sm transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)]"
+                          className={`inline-flex items-center gap-1 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-1.5 text-[color:var(--league-text)] shadow-sm transition hover:border-[color:var(--league-accent)] hover:bg-[color:var(--league-accent-soft)] ${tableActionTextClassName}`}
                         >
                           View
                         </Link>
