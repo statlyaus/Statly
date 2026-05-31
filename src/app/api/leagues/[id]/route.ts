@@ -5,11 +5,33 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import type { League, LeagueMember } from '@/types/leagues';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { listActiveLeagueMembers, verifyLeagueMembership } from '@/lib/leagueMembership';
+
+async function authorizeLeagueDetailRead(request: NextRequest, leagueId: string) {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const membership = await verifyLeagueMembership(leagueId, userId);
+  if (!membership.isMember) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  return null;
+}
 
 // GET /api/leagues/[id] - Get specific league details
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
+    if (leagueId !== 'test-league-id') {
+      const authError = await authorizeLeagueDetailRead(req, leagueId);
+      if (authError) {
+        return authError;
+      }
+    }
 
     // First try to get from Prisma database
     const prismaLeague = await prisma.league.findUnique({
@@ -80,7 +102,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         { success: true, data: { league: leagueData, members: memberData } },
         {
           headers: {
-            'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60',
+            'Cache-Control': 'private, no-store',
           },
         }
       );
@@ -230,7 +252,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         { success: true, data: { league: testLeague, members: testMembers } },
         {
           headers: {
-            'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60',
+            'Cache-Control': 'private, no-store',
           },
         }
       );
@@ -250,17 +272,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ...leagueDoc.data(),
     } as League;
 
-    // Get league members
-    const membersSnapshot = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
-      .where('isActive', '==', true)
-      .get();
-
-    const members = membersSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as LeagueMember[];
+    const members = (await listActiveLeagueMembers(leagueId)).map(toApiLeagueMember);
 
     logger.info('League retrieved from Firebase', {
       leagueId,
@@ -269,7 +281,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json(
       { success: true, data: { league, members } },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=60' } }
+      { headers: { 'Cache-Control': 'private, no-store' } }
     );
   } catch (error) {
     logger.error('Failed to fetch league', {
@@ -284,4 +296,30 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       { status: 500 }
     );
   }
+}
+
+function toApiLeagueMember(member: Awaited<ReturnType<typeof listActiveLeagueMembers>>[number]) {
+  return {
+    id: member.id,
+    leagueId: member.leagueId,
+    userId: member.userId,
+    role: member.role as LeagueMember['role'],
+    teamName: member.teamName,
+    joinedAt: toIsoDate(member.joinedAt),
+    ...(member.leftAt ? { leftAt: toIsoDate(member.leftAt) } : {}),
+    isActive: member.isActive,
+  } satisfies LeagueMember;
+}
+
+function toIsoDate(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate?: unknown }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+  return typeof value === 'string' ? value : '';
 }

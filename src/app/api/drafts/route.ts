@@ -6,6 +6,7 @@ import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { createDraftReminders } from '@/lib/reminders';
+import { ensurePrismaLeagueMirror } from '@/lib/prismaLeagueBridge';
 import { addMinutes } from 'date-fns';
 
 interface CreateDraftRequest {
@@ -83,6 +84,25 @@ export async function POST(request: NextRequest) {
     const benchSize = 4; // Standard bench size
     const totalPicks = body.leagueSize * (rosterSize + benchSize);
 
+    if (body.leagueId && body.leagueId !== 'test-league-id') {
+      const existingLeague = await prisma.league.findUnique({
+        where: { id: body.leagueId },
+        select: { id: true },
+      });
+
+      if (!existingLeague) {
+        await ensurePrismaLeagueMirror({
+          leagueId: body.leagueId,
+          draftType: body.draftType,
+          timePerPick: body.timePerPick,
+          scheduledStartTime,
+          timeZone,
+          rosterSize,
+          benchSize,
+        });
+      }
+    }
+
     // Create draft in database transaction
     const result = await prisma.$transaction(async (tx) => {
       let league;
@@ -146,7 +166,7 @@ export async function POST(request: NextRequest) {
             maxTeams: body.leagueSize,
             pickSeconds: body.timePerPick,
             allowAutoPick: true,
-            draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
+            draftType: body.draftType === 'linear' ? DraftType.LINEAR : DraftType.SNAKE,
             startAt: scheduledStartTime || new Date(),
             timeZone,
             locked: false,

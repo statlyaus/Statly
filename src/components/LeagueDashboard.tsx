@@ -34,14 +34,13 @@ interface ActivityFeedProps {
 }
 
 export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'rosters' | 'draft' | 'trades' | 'waivers'>('rosters');
+  const [activeTab, setActiveTab] = useState<'rosters' | 'trades' | 'waivers'>('rosters');
   const [_selectedRoster, _setSelectedRoster] = useState<LeagueRoster | null>(null);
 
   const {
     rosters,
     userRoster,
     members,
-    draftPicks,
     trades,
     waiverClaims,
     loading,
@@ -67,11 +66,6 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
     const subscriptions: string[] = [];
 
     switch (activeTab) {
-      case 'draft':
-        if (!isSubscribed('draft')) {
-          subscriptions.push('draft');
-        }
-        break;
       case 'trades':
         if (!isSubscribed('trades')) {
           subscriptions.push('trades');
@@ -186,7 +180,6 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
             <span className="text-gray-600">
               Subscriptions: Rosters, Members
-              {isSubscribed('draft') && ', Draft'}
               {isSubscribed('trades') && ', Trades'}
               {isSubscribed('waivers') && ', Waivers'}
             </span>
@@ -254,48 +247,6 @@ export function LeagueDashboard({ leagueId, userId, onLeagueChange }: LeagueDash
               <div>
                 <MemberList members={members} currentUserId={userId} />
               </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'draft' && (
-          <div className="space-y-4" role="tabpanel" id="draft-panel" aria-labelledby="draft-tab">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-gray-900">Draft Board</h2>
-              {loading.draft && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                  Loading draft picks...
-                </div>
-              )}
-            </div>
-
-            <div className="bg-white shadow rounded-lg p-6">
-              {draftPicks.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No draft picks available</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {draftPicks.slice(0, 12).map((pick) => (
-                    <div key={pick.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        Round {pick.round}, Pick {pick.pick}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Team: {getTeamOwner(pick.teamId)?.teamName || 'Unknown'}
-                      </div>
-                      {pick.playerId ? (
-                        <div className="text-sm text-green-600 mt-1">
-                          Player {pick.playerId.slice(-4)} selected
-                        </div>
-                      ) : (
-                        <div className="text-sm text-yellow-600 mt-1">
-                          {pick.timeRemaining}s remaining
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         )}

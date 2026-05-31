@@ -8,6 +8,7 @@ import { withMetrics } from '@/lib/metrics';
 import { logLeagueActivity } from '@/lib/activity';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
+import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -50,22 +51,13 @@ export const POST = withMetrics(
       const claim = claimSnap.data() as WaiverClaimData;
 
       // AuthZ: owner of the claim or league admin/commissioner/owner
-      const memberSnap = await adminDb
-        .collection('leagueMembers')
-        .where('leagueId', '==', leagueId)
-        .where('userId', '==', callerId)
-        .limit(1)
-        .get();
-
-      if (memberSnap.empty) {
+      const membership = await getLeagueMembership(leagueId, callerId);
+      if (!membership.isMember) {
         // User is not a member of this league
         return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
       }
 
-      const role = (memberSnap.docs[0].data() as { role?: string }).role ?? 'member';
-
-      const allowedRoles = ['owner', 'commissioner', 'admin'];
-      if (claim.userId !== callerId && !allowedRoles.includes(role)) {
+      if (claim.userId !== callerId && !isLeagueManagerRole(membership.data?.role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
@@ -94,11 +86,13 @@ export const POST = withMetrics(
         // Decrement pre-aggregated pending bid total if it exists
         const bid = typeof data.bidAmount === 'number' ? data.bidAmount : 0;
         if (bid > 0) {
+          const bidCents = Math.round(bid * 100);
           const priorityRef = adminDb.doc(`leagues/${leagueId}/waiverPriorities/${data.userId}`);
           const prSnap = await tx.get(priorityRef);
           if (prSnap.exists) {
             tx.update(priorityRef, {
               pendingBidTotal: FieldValue.increment(-bid),
+              pendingBidTotalCents: FieldValue.increment(-bidCents),
               updatedAt: new Date(),
             });
           }

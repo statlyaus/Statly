@@ -6,6 +6,15 @@ import { withRequestTracing } from '@/lib/requestTracing';
 import type { LeagueMember, League, LeagueMemberDoc } from '@/types/leagues';
 import { Timestamp } from 'firebase-admin/firestore';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
+import {
+  getLeagueMemberDocId,
+  listActiveLeagueMembers,
+  queueLeagueMembershipPatch,
+  type LeagueMembershipListItem,
+  type LeagueMembershipWrite,
+  verifyLeagueMembership,
+} from '@/lib/leagueMembership';
+import { syncPrismaLeagueMember, syncPrismaLeagueOwner } from '@/lib/prismaLeagueBridge';
 
 // GET /api/leagues/[id]/members - Get league members
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -143,61 +152,32 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ success: true, data: testMembers });
     }
 
+    const userId = await getUserIdFromRequest(req);
+    if (!userId) {
+      return commonErrors.unauthorized('Must be logged in');
+    }
+
+    const membership = await verifyLeagueMembership(leagueId, userId);
+    if (!membership.isMember) {
+      return commonErrors.forbidden('Not a member of this league');
+    }
+
     // Verify league exists
     const leagueDoc = await adminDb.collection('leagues').doc(leagueId).get();
     if (!leagueDoc.exists) {
       return commonErrors.notFound('League not found');
     }
 
-    // Get all active members
-    const membersSnapshot = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
-      .where('isActive', '==', true)
-      .orderBy('joinedAt', 'asc')
-      .get();
-
-    // Convert Firestore doc shape (Timestamp) to API shape (ISO)
-    const members: LeagueMember[] = membersSnapshot.docs.map((doc) => {
-      const raw = doc.data() as Record<string, unknown>;
-      const data = {
-        leagueId: String(raw.leagueId ?? ''),
-        userId: String(raw.userId ?? ''),
-        role: String(raw.role ?? 'member') as LeagueMember['role'],
-        teamName: String(raw.teamName ?? ''),
-        joinedAt: raw.joinedAt as unknown,
-        leftAt: raw.leftAt as unknown,
-        isActive: Boolean(raw.isActive ?? true),
-      } as {
-        leagueId: string;
-        userId: string;
-        role: LeagueMember['role'];
-        teamName: string;
-        joinedAt: unknown;
-        leftAt: unknown;
-        isActive: boolean;
-      };
-      return {
-        id: doc.id,
-        leagueId: data.leagueId,
-        userId: data.userId,
-        role: data.role,
-        teamName: data.teamName,
-        joinedAt:
-          data.joinedAt instanceof Timestamp
-            ? data.joinedAt.toDate().toISOString()
-            : typeof data.joinedAt === 'string'
-              ? data.joinedAt
-              : '',
-        leftAt:
-          data.leftAt instanceof Timestamp
-            ? data.leftAt.toDate().toISOString()
-            : typeof data.leftAt === 'string'
-              ? data.leftAt
-              : undefined,
-        isActive: data.isActive,
-      };
-    });
+    const members: LeagueMember[] = (await listActiveLeagueMembers(leagueId)).map((member) => ({
+      id: member.id,
+      leagueId: member.leagueId,
+      userId: member.userId,
+      role: member.role as LeagueMember['role'],
+      teamName: member.teamName,
+      joinedAt: toIsoDate(member.joinedAt),
+      ...(member.leftAt ? { leftAt: toIsoDate(member.leftAt) } : {}),
+      isActive: member.isActive,
+    }));
 
     tracer.complete(200, { memberCount: members.length });
     return NextResponse.json({ success: true, data: members });
@@ -230,15 +210,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const league = { id: leagueDoc.id, ...leagueDoc.data() } as League;
 
-    if (action === 'updateMember') {
-      return handleUpdateMember(leagueId, userId, targetUserId, updates, league, tracer);
-    } else if (action === 'removeMember') {
-      return handleRemoveMember(leagueId, userId, targetUserId, league, tracer);
-    } else if (action === 'transferOwnership') {
-      return handleTransferOwnership(leagueId, userId, targetUserId, league, tracer);
-    } else {
+    if (!['updateMember', 'removeMember', 'transferOwnership'].includes(action)) {
       return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
     }
+
+    const activeMembers = await listActiveLeagueMembers(leagueId);
+
+    if (action === 'updateMember') {
+      return handleUpdateMember(
+        leagueId,
+        userId,
+        targetUserId,
+        updates,
+        league,
+        activeMembers,
+        tracer
+      );
+    }
+    if (action === 'removeMember') {
+      return handleRemoveMember(leagueId, userId, targetUserId, league, activeMembers, tracer);
+    }
+    return handleTransferOwnership(leagueId, userId, targetUserId, league, activeMembers, tracer);
   } catch (error) {
     tracer.error(error instanceof Error ? error : new Error(String(error)), 500);
     return commonErrors.internalServerError('Failed to process member action');
@@ -251,6 +243,7 @@ async function handleUpdateMember(
   targetUserId: string,
   updates: Partial<LeagueMember>,
   league: League,
+  activeMembers: LeagueMembershipListItem[],
   tracer: ReturnType<typeof withRequestTracing>
 ) {
   // Only owner or the member themselves can update member settings
@@ -261,79 +254,34 @@ async function handleUpdateMember(
     return commonErrors.forbidden('Not authorized to update this member');
   }
 
-  // Get member document
-  const memberSnapshot = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', targetUserId)
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
+  const member = findActiveMember(activeMembers, targetUserId);
 
-  if (memberSnapshot.empty) {
+  if (!member) {
     return commonErrors.notFound('Member not found');
   }
 
-  const rawMember = memberSnapshot.docs[0].data() as Record<string, unknown>;
-  const memberData = {
-    leagueId: String(rawMember.leagueId ?? ''),
-    userId: String(rawMember.userId ?? ''),
-    role: String(rawMember.role ?? 'member') as LeagueMember['role'],
-    teamName: String(rawMember.teamName ?? ''),
-    joinedAt: rawMember.joinedAt as unknown,
-    leftAt: rawMember.leftAt as unknown,
-    isActive: Boolean(rawMember.isActive ?? true),
-  } as {
-    leagueId: string;
-    userId: string;
-    role: LeagueMember['role'];
-    teamName: string;
-    joinedAt: unknown;
-    leftAt: unknown;
-    isActive: boolean;
-  };
-  const member: LeagueMember = {
-    id: memberSnapshot.docs[0].id,
-    leagueId: memberData.leagueId,
-    userId: memberData.userId,
-    role: memberData.role,
-    teamName: memberData.teamName,
-    joinedAt:
-      memberData.joinedAt instanceof Timestamp
-        ? memberData.joinedAt.toDate().toISOString()
-        : typeof memberData.joinedAt === 'string'
-          ? memberData.joinedAt
-          : '',
-    leftAt:
-      memberData.leftAt instanceof Timestamp
-        ? memberData.leftAt.toDate().toISOString()
-        : typeof memberData.leftAt === 'string'
-          ? memberData.leftAt
-          : undefined,
-    isActive: memberData.isActive,
-  };
+  const apiMember = toApiLeagueMember(member);
 
   // Validate updates
   const allowedUpdates: Partial<LeagueMember> = {};
 
   if (updates.teamName && updates.teamName.trim()) {
+    const requestedTeamName = updates.teamName.trim();
     // Check for duplicate team names
-    const duplicateSnapshot = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', leagueId)
-      .where('teamName', '==', updates.teamName.trim())
-      .where('isActive', '==', true)
-      .limit(1)
-      .get();
+    const duplicateMember = activeMembers.find(
+      (candidate) =>
+        candidate.userId !== targetUserId &&
+        candidate.teamName.trim().toLowerCase() === requestedTeamName.toLowerCase()
+    );
 
-    if (!duplicateSnapshot.empty && duplicateSnapshot.docs[0].id !== member.id) {
+    if (duplicateMember) {
       return NextResponse.json(
         { success: false, error: 'Team name already taken' },
         { status: 400 }
       );
     }
 
-    allowedUpdates.teamName = updates.teamName.trim();
+    allowedUpdates.teamName = requestedTeamName;
   }
 
   // Only owner can update role
@@ -342,14 +290,28 @@ async function handleUpdateMember(
   }
 
   // Update member
-  const writeUpdates: Record<string, unknown> = {};
+  const writeUpdates: Partial<LeagueMembershipWrite> = {};
   if (allowedUpdates.teamName) writeUpdates.teamName = allowedUpdates.teamName;
   if (allowedUpdates.role) writeUpdates.role = allowedUpdates.role;
-  // Optionally touch an updatedAt timestamp if schema has it
-  await adminDb.collection('leagueMembers').doc(member.id).update(writeUpdates);
+  if (Object.keys(writeUpdates).length > 0) {
+    const batch = adminDb.batch();
+    queueLeagueMembershipPatch(batch, leagueId, targetUserId, writeUpdates, {
+      topLevelMemberId: getTopLevelMemberId(leagueId, member),
+    });
+    await batch.commit();
+
+    await syncPrismaMemberBestEffort({
+      leagueId,
+      userId: targetUserId,
+      memberId: getTopLevelMemberId(leagueId, member),
+      role: allowedUpdates.role ?? apiMember.role,
+      teamName: allowedUpdates.teamName ?? apiMember.teamName,
+      isActive: true,
+    });
+  }
 
   const updatedMember: LeagueMember = {
-    ...member,
+    ...apiMember,
     ...allowedUpdates,
   };
 
@@ -365,6 +327,7 @@ async function handleRemoveMember(
   userId: string,
   targetUserId: string,
   league: League,
+  activeMembers: LeagueMembershipListItem[],
   tracer: ReturnType<typeof withRequestTracing>
 ) {
   // Only owner can remove members (or member can leave themselves)
@@ -383,24 +346,34 @@ async function handleRemoveMember(
     );
   }
 
-  // Get member document
-  const memberSnapshot = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', targetUserId)
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
+  const member = findActiveMember(activeMembers, targetUserId);
 
-  if (memberSnapshot.empty) {
+  if (!member) {
     return commonErrors.notFound('Member not found');
   }
 
   // Mark member as inactive instead of deleting
-  const memberDoc = memberSnapshot.docs[0];
-  await adminDb.collection('leagueMembers').doc(memberDoc.id).update({
+  const topLevelMemberId = getTopLevelMemberId(leagueId, member);
+  const batch = adminDb.batch();
+  queueLeagueMembershipPatch(
+    batch,
+    leagueId,
+    targetUserId,
+    {
+      isActive: false,
+      leftAt: Timestamp.now(),
+    },
+    {
+      topLevelMemberId,
+    }
+  );
+  await batch.commit();
+
+  await syncPrismaMemberBestEffort({
+    leagueId,
+    userId: targetUserId,
+    memberId: topLevelMemberId,
     isActive: false,
-    leftAt: Timestamp.now(),
   });
 
   tracer.complete(200, { action: 'member-removed' });
@@ -415,6 +388,7 @@ async function handleTransferOwnership(
   userId: string,
   targetUserId: string,
   league: League,
+  activeMembers: LeagueMembershipListItem[],
   tracer: ReturnType<typeof withRequestTracing>
 ) {
   // Only current owner can transfer ownership
@@ -422,27 +396,13 @@ async function handleTransferOwnership(
     return commonErrors.forbidden('Only league owner can transfer ownership');
   }
 
-  // Verify target is a member
-  const targetMemberSnapshot = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', targetUserId)
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
+  const targetMember = findActiveMember(activeMembers, targetUserId);
 
-  if (targetMemberSnapshot.empty) {
+  if (!targetMember) {
     return commonErrors.notFound('Target user is not a member of this league');
   }
 
-  // Get current owner member document
-  const ownerMemberSnapshot = await adminDb
-    .collection('leagueMembers')
-    .where('leagueId', '==', leagueId)
-    .where('userId', '==', userId)
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
+  const ownerMember = findActiveMember(activeMembers, userId);
 
   const batch = adminDb.batch();
 
@@ -452,24 +412,116 @@ async function handleTransferOwnership(
   });
 
   // Update target member role to owner
-  const targetMemberDoc = targetMemberSnapshot.docs[0];
-  batch.update(targetMemberDoc.ref, {
-    role: 'owner',
-  });
+  queueLeagueMembershipPatch(
+    batch,
+    leagueId,
+    targetUserId,
+    {
+      role: 'owner',
+    },
+    {
+      topLevelMemberId: getTopLevelMemberId(leagueId, targetMember),
+    }
+  );
 
   // Update current owner role to admin
-  if (!ownerMemberSnapshot.empty) {
-    const ownerMemberDoc = ownerMemberSnapshot.docs[0];
-    batch.update(ownerMemberDoc.ref, {
-      role: 'admin',
-    });
+  if (ownerMember) {
+    queueLeagueMembershipPatch(
+      batch,
+      leagueId,
+      userId,
+      {
+        role: 'admin',
+      },
+      {
+        topLevelMemberId: getTopLevelMemberId(leagueId, ownerMember),
+      }
+    );
   }
 
   await batch.commit();
+
+  await syncPrismaOwnerBestEffort({
+    leagueId,
+    ownerUserId: targetUserId,
+    previousOwnerUserId: userId,
+  });
 
   tracer.complete(200, { action: 'ownership-transferred' });
   return NextResponse.json({
     success: true,
     message: 'Ownership transferred successfully',
   });
+}
+
+async function syncPrismaMemberBestEffort(input: Parameters<typeof syncPrismaLeagueMember>[0]) {
+  try {
+    const result = await syncPrismaLeagueMember(input);
+    if (!result.synced && result.reason !== 'no-prisma-league') {
+      console.warn('Prisma league member mirror was not synced', {
+        ...input,
+        reason: result.reason,
+      });
+    }
+  } catch (syncError) {
+    console.warn('Failed to sync Prisma league member mirror', {
+      ...input,
+      error: syncError instanceof Error ? syncError.message : String(syncError),
+    });
+  }
+}
+
+function findActiveMember(
+  members: LeagueMembershipListItem[],
+  userId: string
+): LeagueMembershipListItem | undefined {
+  return members.find((member) => member.userId === userId);
+}
+
+function toApiLeagueMember(member: LeagueMembershipListItem): LeagueMember {
+  return {
+    id: member.id,
+    leagueId: member.leagueId,
+    userId: member.userId,
+    role: member.role as LeagueMember['role'],
+    teamName: member.teamName,
+    joinedAt: toIsoDate(member.joinedAt),
+    ...(member.leftAt ? { leftAt: toIsoDate(member.leftAt) } : {}),
+    isActive: member.isActive,
+  };
+}
+
+function getTopLevelMemberId(leagueId: string, member: LeagueMembershipListItem): string {
+  return member.source === 'legacy' ? member.id : getLeagueMemberDocId(leagueId, member.userId);
+}
+
+function toIsoDate(value: unknown): string {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate?: unknown }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+  return typeof value === 'string' ? value : '';
+}
+
+async function syncPrismaOwnerBestEffort(input: Parameters<typeof syncPrismaLeagueOwner>[0]) {
+  try {
+    const result = await syncPrismaLeagueOwner(input);
+    if (!result.synced && result.reason !== 'no-prisma-league') {
+      console.warn('Prisma league owner mirror was not synced', {
+        ...input,
+        reason: result.reason,
+      });
+    }
+  } catch (syncError) {
+    console.warn('Failed to sync Prisma league owner mirror', {
+      ...input,
+      error: syncError instanceof Error ? syncError.message : String(syncError),
+    });
+  }
 }

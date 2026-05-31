@@ -9,6 +9,7 @@ function formatTimestamp(lastUpdated?: { toMillis?: () => number } | number): st
 
 import { AppLayout } from '@/components/navigation';
 import { tags } from '@/lib/cacheTags';
+import { cookies } from 'next/headers';
 
 type TradeSummary = {
   tradeId: string;
@@ -28,6 +29,7 @@ export default async function LeagueTradesPage({ params }: { params: Promise<{ i
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
+    const cookieStore = await cookies();
     const isServer = typeof window === 'undefined';
     const relativePath = `/api/trades/list?leagueId=${encodeURIComponent(id)}&pageSize=50`;
     const baseUrl = !isServer
@@ -42,6 +44,7 @@ export default async function LeagueTradesPage({ params }: { params: Promise<{ i
       ? relativePath
       : new URL(relativePath, baseUrl || 'http://localhost:3000').toString();
     const res = await fetch(url, {
+      headers: { cookie: cookieStore.toString() },
       next: { tags: [tags.trades(id), tags.league(id)] },
       signal: controller.signal,
     });

@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { League, CreateLeagueRequest, LeagueMember } from '@/types/leagues';
-import { generateDeterministicMemberId } from '@/utils/firestore';
+import { queueLeagueMembershipSet } from '@/lib/leagueMembership';
 
 // Generate unique league code
 function generateLeagueCode(): string {
@@ -19,17 +19,11 @@ function generateLeagueCode(): string {
 // GET /api/leagues - List leagues
 export async function GET(req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const type = url.searchParams.get('type');
-
-    let snapshot;
-    if (type === 'public') {
-      // Get public leagues only
-      snapshot = await adminDb.collection('leagues').where('type', '==', 'public').limit(20).get();
-    } else {
-      // Get all leagues without ordering for now (to avoid index requirement)
-      snapshot = await adminDb.collection('leagues').limit(20).get();
-    }
+    const snapshot = await adminDb
+      .collection('leagues')
+      .where('type', '==', 'public')
+      .limit(20)
+      .get();
 
     const leagues = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -133,12 +127,7 @@ export async function POST(req: NextRequest) {
       isActive: true,
     };
 
-    // Backfill path for legacy collection removed; write to canonical collection only
-    // Use canonical deterministic ID with base64url encoding to prevent dupes and ensure valid ids
-    const deterministicOwnerMemberId = generateDeterministicMemberId(leagueRef.id, userId);
-
-    const ownerMemberRef = adminDb.collection('leagueMembers').doc(deterministicOwnerMemberId);
-    batch.set(ownerMemberRef, ownerMember, { merge: true });
+    queueLeagueMembershipSet(batch, ownerMember);
     await batch.commit();
 
     const createdLeague: League = {

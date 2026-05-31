@@ -3,6 +3,8 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
 
 interface SyncDraftResultsRequest {
   draftId: string;
@@ -27,6 +29,20 @@ interface SyncDraftResultsRequest {
   };
 }
 
+async function authorizeDraftResultsSync(request: NextRequest, leagueId: string) {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return errorResponse('Unauthorized', 401);
+  }
+
+  const membership = await getLeagueMembership(leagueId, userId);
+  if (!membership.isMember || !isLeagueManagerRole(membership.data?.role)) {
+    return errorResponse('Forbidden', 403);
+  }
+
+  return null;
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
@@ -34,6 +50,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!body.draftId?.trim()) {
       return errorResponse('Draft ID is required', 400);
+    }
+
+    const authError = await authorizeDraftResultsSync(request, leagueId);
+    if (authError) {
+      return authError;
     }
 
     // First try to sync with Prisma database
@@ -155,23 +176,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       updatedAt: new Date(),
     });
 
-    // Store team rosters
+    // Store league rosters for live roster views and waiver processing.
     if (body.finalRosters) {
       for (const roster of body.finalRosters) {
-        const teamRef = adminDb
-          .collection('leagues')
-          .doc(leagueId)
-          .collection('teams')
-          .doc(roster.memberId);
+        const now = new Date();
+        const rosterRef = leagueRef.collection('rosters').doc(roster.memberId);
 
-        batch.set(teamRef, {
-          memberId: roster.memberId,
-          userId: roster.userId,
-          teamName: roster.teamName,
-          roster: roster.players,
-          draftedAt: new Date(),
-          lastUpdated: new Date(),
-        });
+        batch.set(
+          rosterRef,
+          {
+            leagueId,
+            memberId: roster.memberId,
+            userId: roster.userId,
+            teamName: roster.teamName,
+            playerIds: roster.players.map((player) => String(player.playerId)),
+            players: roster.players,
+            bench: [],
+            emergencies: [],
+            draftedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
       }
     }
 

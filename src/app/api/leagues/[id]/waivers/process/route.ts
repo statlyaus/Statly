@@ -7,6 +7,7 @@ import { logger, withTiming } from '@/lib/logger';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
+import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -56,18 +57,9 @@ export const POST = withMetrics(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
 
-      // Authorization: require commissioner/owner role for this league
-      let memberSnap = await adminDb
-        .collection('leagueMembers')
-        .where('leagueId', '==', leagueId)
-        .where('userId', '==', userId)
-        .limit(1)
-        .get();
-      // TODO: remove legacy fallback once data migration completes
-      const member = memberSnap.docs[0]?.data() as { role?: string } | undefined;
-      const role = member?.role ?? 'member';
-      const allowed = role === 'owner' || role === 'commissioner' || role === 'admin';
-      if (!allowed) {
+      // Authorization: require commissioner/owner/admin role for this league
+      const membership = await getLeagueMembership(leagueId, userId);
+      if (!membership.isMember || !isLeagueManagerRole(membership.data?.role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
@@ -167,12 +159,14 @@ export const POST = withMetrics(
               if (!isFAAB) return;
               const bid = typeof freshData.bidAmount === 'number' ? freshData.bidAmount : 0;
               if (bid <= 0) return;
+              const bidCents = Math.round(bid * 100);
               const priorityRef = adminDb.doc(
                 `leagues/${leagueId}/waiverPriorities/${freshData.userId}`
               );
               const prSnap = await tx.get(priorityRef);
               const update = {
                 pendingBidTotal: FieldValue.increment(-bid),
+                pendingBidTotalCents: FieldValue.increment(-bidCents),
                 updatedAt: new Date(),
               } as const;
               if (prSnap.exists) {

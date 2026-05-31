@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
@@ -21,6 +23,34 @@ function parsePickSeconds(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+async function authorizeDraftSettingsRead(request: NextRequest, leagueId: string) {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const membership = await getLeagueMembership(leagueId, userId);
+  if (!membership.isMember) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  return null;
+}
+
+async function authorizeDraftSettingsWrite(request: NextRequest, leagueId: string) {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const membership = await getLeagueMembership(leagueId, userId);
+  if (!membership.isMember || !isLeagueManagerRole(membership.data?.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  return null;
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -28,6 +58,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!id) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
+    }
+
+    const authError = await authorizeDraftSettingsWrite(request, id);
+    if (authError) {
+      return authError;
     }
 
     // For test league, just return success
@@ -147,6 +182,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!id) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
+    }
+
+    const authError = await authorizeDraftSettingsRead(request, id);
+    if (authError) {
+      return authError;
     }
 
     // For test league

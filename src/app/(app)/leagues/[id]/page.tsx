@@ -5,6 +5,7 @@ import type React from 'react';
 import LeaguePageClient from './LeaguePageClient';
 import { tags } from '@/lib/cacheTags';
 import { z } from 'zod';
+import { cookies } from 'next/headers';
 
 export default async function LeaguePage({
   params,
@@ -23,8 +24,10 @@ export default async function LeaguePage({
     );
   }
   const url = new URL(`/api/leagues/${id}`, baseUrl).toString();
+  const cookieStore = await cookies();
 
   const res = await fetch(url, {
+    headers: { cookie: cookieStore.toString() },
     next: { tags: [tags.league(id), tags.draft(id), tags.trades(id), tags.waivers(id)] },
   });
   if (!res.ok) {

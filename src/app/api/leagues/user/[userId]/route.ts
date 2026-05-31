@@ -1,7 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
-import type { LeagueMember } from '@/types/leagues';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { listActiveUserLeagueMemberships } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 
 export async function GET(
@@ -19,6 +20,21 @@ export async function GET(
           error: 'User ID is required',
         },
         { status: 400 }
+      );
+    }
+
+    const authenticatedUserId = await getAuthenticatedUserId(request);
+    if (!authenticatedUserId) {
+      return NextResponse.json(
+        { success: false, leagues: [], error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    if (authenticatedUserId !== userId) {
+      return NextResponse.json(
+        { success: false, leagues: [], error: 'Forbidden' },
+        { status: 403 }
       );
     }
 
@@ -96,30 +112,10 @@ export async function GET(
       });
     }
 
-    // Get user's league memberships
-    const membershipsRef = adminDb.collection('leagueMembers');
-    const snapshot = await membershipsRef
-      .where('userId', '==', userId)
-      .where('isActive', '==', true)
-      .get();
-
-    const memberships: LeagueMember[] = [];
-    const leagueIds: string[] = [];
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const membership = {
-        id: doc.id,
-        leagueId: data.leagueId,
-        userId: data.userId,
-        role: data.role,
-        teamName: data.teamName,
-        joinedAt: data.joinedAt,
-        isActive: data.isActive,
-      };
-      memberships.push(membership);
-      leagueIds.push(data.leagueId);
-    });
+    const memberships = await listActiveUserLeagueMemberships(userId);
+    const leagueIds = memberships
+      .map((membership) => membership.leagueId)
+      .filter((leagueId) => leagueId.length > 0);
 
     // Fetch the actual league details for each membership
     const leagues = [];

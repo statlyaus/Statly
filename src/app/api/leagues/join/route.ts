@@ -4,7 +4,12 @@ import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { commonErrors } from '@/lib/apiResponse';
 import type { JoinLeagueRequest, League, LeagueMember } from '@/types/leagues';
-import { generateDeterministicMemberId } from '@/utils/firestore';
+import {
+  getLeagueMemberDocId,
+  listActiveLeagueMembers,
+  queueLeagueMembershipSet,
+} from '@/lib/leagueMembership';
+import { syncPrismaLeagueMember } from '@/lib/prismaLeagueBridge';
 
 export const runtime = 'nodejs';
 
@@ -50,7 +55,7 @@ export async function POST(req: NextRequest) {
       console.log('✅ Test league found, proceeding with join...');
 
       // Add member to league (simulate) with deterministic id matching production strategy
-      const deterministicMemberId = generateDeterministicMemberId(testLeague.id, userId);
+      const deterministicMemberId = getLeagueMemberDocId(testLeague.id, userId);
       const newMember: LeagueMember = {
         id: deterministicMemberId,
         leagueId: testLeague.id,
@@ -84,20 +89,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (leagueSnapshot.empty) {
-      // Let's also check what leagues exist for debugging
-      const allLeaguesSnapshot = await adminDb.collection('leagues').limit(5).get();
-      const existingLeagues = allLeaguesSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        code: doc.data().code,
-        name: doc.data().name,
-      }));
-
-      console.log('❌ League not found. Existing leagues:', existingLeagues);
+      console.log('❌ League not found for provided code');
       return NextResponse.json(
         {
           success: false,
-          error: `League with code "${code.toUpperCase()}" not found. Try the test code "123ABC" to test the join functionality!`,
-          debug: { availableLeagues: existingLeagues },
+          error: `League with code "${code.toUpperCase()}" not found.`,
         },
         { status: 400 }
       );
@@ -117,19 +113,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if league is full
-    const membersSnapshot = await adminDb
-      .collection('leagueMembers')
-      .where('leagueId', '==', league.id)
-      .where('isActive', '==', true)
-      .get();
+    const activeMembers = await listActiveLeagueMembers(league.id);
 
-    if (membersSnapshot.size >= league.maxTeams) {
+    if (activeMembers.length >= league.maxTeams) {
       return NextResponse.json({ success: false, error: 'League is full' }, { status: 400 });
     }
 
     // Check if user is already a member
-    const existingMember = membersSnapshot.docs.find((doc) => doc.data().userId === userId);
+    const existingMember = activeMembers.find((member) => member.userId === userId);
 
     if (existingMember) {
       return NextResponse.json(
@@ -141,12 +132,12 @@ export async function POST(req: NextRequest) {
     // Validate team name
     let finalTeamName = teamName?.trim();
     if (!finalTeamName) {
-      finalTeamName = `${league.name} Team ${membersSnapshot.size + 1}`;
+      finalTeamName = `${league.name} Team ${activeMembers.length + 1}`;
     }
 
     // Check for duplicate team names
-    const duplicateName = membersSnapshot.docs.find(
-      (doc) => doc.data().teamName.toLowerCase() === finalTeamName!.toLowerCase()
+    const duplicateName = activeMembers.find(
+      (member) => member.teamName.trim().toLowerCase() === finalTeamName!.toLowerCase()
     );
 
     if (duplicateName) {
@@ -166,11 +157,27 @@ export async function POST(req: NextRequest) {
       isActive: true,
     };
 
-    const deterministicMemberId = generateDeterministicMemberId(league.id, userId);
-    await adminDb
-      .collection('leagueMembers')
-      .doc(deterministicMemberId)
-      .set(newMember, { merge: true });
+    const batch = adminDb.batch();
+    const deterministicMemberId = queueLeagueMembershipSet(batch, newMember);
+    await batch.commit();
+
+    try {
+      await syncPrismaLeagueMember({
+        leagueId: league.id,
+        userId,
+        memberId: deterministicMemberId,
+        role: newMember.role,
+        teamName: newMember.teamName,
+        draftSlot: activeMembers.length + 1,
+        isActive: true,
+      });
+    } catch (syncError) {
+      console.warn('Failed to sync joined league member into Prisma mirror', {
+        leagueId: league.id,
+        userId,
+        error: syncError instanceof Error ? syncError.message : String(syncError),
+      });
+    }
 
     const createdMember: LeagueMember = {
       id: deterministicMemberId,
