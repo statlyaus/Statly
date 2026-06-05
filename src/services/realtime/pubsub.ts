@@ -64,28 +64,39 @@ function channelForDraft(draftId: string) {
   return `${prefix}:${draftId}`;
 }
 
+function isRedisDisabledForBuild(): boolean {
+  return process.env.REDIS_DISABLED === '1' || process.env.NEXT_PHASE === 'phase-production-build';
+}
+
 // We generate a simple instance id based on pid + time to de-dupe self messages
 const INSTANCE_ID = `${process.pid}-${Math.random().toString(36).slice(2)}`;
 
 export class DraftPubSub {
-  private pub: IORedisClient | IORedisCluster;
-  private sub: IORedisClient | IORedisCluster;
+  private pub?: IORedisClient | IORedisCluster;
+  private sub?: IORedisClient | IORedisCluster;
   private started = false;
 
-  constructor() {
-    this.pub = getPublisherClient();
-    this.sub = getSubscriberClient();
+  private getPublisher(): IORedisClient | IORedisCluster {
+    this.pub ??= getPublisherClient();
+    return this.pub;
+  }
+
+  private getSubscriber(): IORedisClient | IORedisCluster {
+    this.sub ??= getSubscriberClient();
+    return this.sub;
   }
 
   async start(onEvent: (msg: DraftRealtimeEnvelope) => void): Promise<void> {
+    if (isRedisDisabledForBuild()) return;
     if (this.started) return;
     this.started = true;
+    const sub = this.getSubscriber();
 
     const prefix = process.env.REALTIME_CHANNEL_PREFIX || 'draft-events';
     try {
       // Type-safe pattern subscription
-      if ('psubscribe' in this.sub && typeof this.sub.psubscribe === 'function') {
-        await this.sub.psubscribe(`${prefix}:*`);
+      if ('psubscribe' in sub && typeof sub.psubscribe === 'function') {
+        await sub.psubscribe(`${prefix}:*`);
       } else {
         throw new Error('Redis client does not support pattern subscription');
       }
@@ -107,8 +118,8 @@ export class DraftPubSub {
         }
       };
 
-      if ('on' in this.sub && typeof this.sub.on === 'function') {
-        this.sub.on('pmessage', handler);
+      if ('on' in sub && typeof sub.on === 'function') {
+        sub.on('pmessage', handler);
       } else {
         throw new Error('Redis client does not support event listeners');
       }
@@ -123,6 +134,8 @@ export class DraftPubSub {
   }
 
   async publish(draftId: string, event: DraftRealtimeEventType, payload: unknown): Promise<void> {
+    if (isRedisDisabledForBuild()) return;
+
     const envelope: DraftRealtimeEnvelope = {
       v: 1,
       event,
@@ -133,7 +146,7 @@ export class DraftPubSub {
     };
 
     try {
-      await this.pub.publish(channelForDraft(draftId), JSON.stringify(envelope));
+      await this.getPublisher().publish(channelForDraft(draftId), JSON.stringify(envelope));
     } catch (e) {
       logger.error('Failed to publish realtime event', {
         event,

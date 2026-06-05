@@ -23,15 +23,35 @@ export default [
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
+      'functions/lib/**',
+      '**/functions/lib/**',
+      '.next/**',
       '**/.next/**',
+      '.turbo/**',
       '**/.turbo/**',
+      '.netlify/**',
+      '**/.netlify/**',
+      '.vercel/**',
       '**/.vercel/**',
+      '.firebase/**',
+      '**/.firebase/**',
+      '.firebase-data/**',
+      '**/.firebase-data/**',
+      '.codex/**',
+      '**/.codex/**',
+      '.superpowers/**',
+      '**/.superpowers/**',
+      '.vibe/**',
+      '**/.vibe/**',
       '**/build/**',
       '**/coverage/**',
       '**/functions/lib/**',
       '**/public/**',
       '**/out/**',
       '**/Statly.worktrees/**',
+      '**/firebase-export-*/**',
+      '**/graphify-out/**',
+      '**/tmp/**',
       // local config/meta files
       'eslint.config.js',
       'tailwind.config.*',
@@ -79,6 +99,15 @@ export default [
 
       // Accessibility
       'jsx-a11y/scope': 'error',
+    },
+  },
+
+  // TypeScript handles symbols through the TypeScript-aware rules below.
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
     },
   },
 

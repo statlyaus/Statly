@@ -10,6 +10,10 @@ interface RedisConfig {
   maxRetriesPerRequest?: number;
 }
 
+function isRedisDisabledForBuild(): boolean {
+  return process.env.REDIS_DISABLED === '1' || process.env.NEXT_PHASE === 'phase-production-build';
+}
+
 class RedisClient {
   private client: Redis | null = null;
   private config: RedisConfig;
@@ -24,6 +28,10 @@ class RedisClient {
       enableReadyCheck: true,
       maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
     };
+
+    if (isRedisDisabledForBuild()) {
+      return;
+    }
 
     if (process.env.REDIS_URL) {
       // Parse Redis URL if provided
@@ -83,6 +91,10 @@ class RedisClient {
   }
 
   async connect(): Promise<void> {
+    if (isRedisDisabledForBuild()) {
+      return;
+    }
+
     if (this.isConnecting || this.isConnected()) {
       return;
     }
@@ -221,7 +233,7 @@ class RedisClient {
 export const redisClient = new RedisClient();
 
 // Initialize connection in development/production
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !isRedisDisabledForBuild()) {
   redisClient.connect().catch((error) => {
     logger.error('Failed to initialize Redis connection', error);
   });

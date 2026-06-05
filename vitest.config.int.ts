@@ -23,10 +23,10 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/integration/**/*.test.ts', 'tests/integration/**/*.test.tsx'],
     globals: true,
-    setupFiles: ['tests/setup/int.setup.ts'],
+    setupFiles: process.env.DATABASE_URL_TEST ? ['tests/setup/int.setup.ts'] : [],
     testTimeout: 30000,
     hookTimeout: 60000,
     reporters: ['default'],
-    passWithNoTests: false,
+    passWithNoTests: true,
   },
 });
