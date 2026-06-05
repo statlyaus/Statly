@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { getDoc } from 'firebase/firestore';
+import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import {
   useDashboardSettings,
   defaultDashboardSettings,
@@ -38,7 +39,7 @@ describe('useDashboardSettings', () => {
   });
 
   it('falls back to default when Firestore data missing', async () => {
-    vi.mocked(getDoc).mockResolvedValueOnce({ exists: () => false });
+    vi.mocked(getDoc).mockResolvedValueOnce(dashboardSettingsSnapshot(undefined, false));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
     );
@@ -49,7 +50,7 @@ describe('useDashboardSettings', () => {
   });
 
   it('falls back to default when Firestore data invalid', async () => {
-    vi.mocked(getDoc).mockResolvedValueOnce({ exists: () => true, data: () => null });
+    vi.mocked(getDoc).mockResolvedValueOnce(dashboardSettingsSnapshot(null, true));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -63,3 +64,15 @@ describe('useDashboardSettings', () => {
     });
   });
 });
+
+function dashboardSettingsSnapshot(
+  data: unknown,
+  exists: boolean
+): Awaited<ReturnType<typeof getDoc>> {
+  return {
+    exists(): this is QueryDocumentSnapshot<unknown, DocumentData> {
+      return exists;
+    },
+    data: () => data,
+  } as Awaited<ReturnType<typeof getDoc>>;
+}

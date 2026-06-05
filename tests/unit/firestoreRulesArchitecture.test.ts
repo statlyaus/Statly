@@ -17,9 +17,9 @@ describe('Firestore rules architecture', () => {
 
   it('keeps roster player ownership fields server-owned', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const rosterBlock = source.match(/match \/rosters\/\{teamId\} \{[\s\S]*?\n      \}/)?.[0];
+    const rosterBlock = source.match(/match \/rosters\/\{teamId\} \{[\s\S]*?\n {6}\}/)?.[0];
     const lineupUpdateFunction = source.match(
-      /function isRosterLineupUpdate\(leagueId\) \{[\s\S]*?\n    \}/
+      /function isRosterLineupUpdate\(leagueId\) \{[\s\S]*?\n {4}\}/
     )?.[0];
 
     expect(rosterBlock).toBeDefined();
@@ -37,9 +37,9 @@ describe('Firestore rules architecture', () => {
 
   it('keeps member administration behind server routes', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const memberBlock = source.match(/match \/members\/\{userId\} \{[\s\S]*?\n      \}/)?.[0];
+    const memberBlock = source.match(/match \/members\/\{userId\} \{[\s\S]*?\n {6}\}/)?.[0];
     const selfPreferenceFunction = source.match(
-      /function isSelfMemberPreferenceUpdate\(userId\) \{[\s\S]*?\n    \}/
+      /function isSelfMemberPreferenceUpdate\(userId\) \{[\s\S]*?\n {4}\}/
     )?.[0];
 
     expect(memberBlock).toBeDefined();
@@ -58,7 +58,7 @@ describe('Firestore rules architecture', () => {
 
   it('keeps waiver mutations behind server routes', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const waiverBlock = source.match(/match \/waivers\/\{claimId\} \{[\s\S]*?\n      \}/)?.[0];
+    const waiverBlock = source.match(/match \/waivers\/\{claimId\} \{[\s\S]*?\n {6}\}/)?.[0];
 
     expect(waiverBlock).toBeDefined();
     expect(waiverBlock).toContain('allow read: if isLeagueMember(leagueId);');
@@ -69,7 +69,7 @@ describe('Firestore rules architecture', () => {
 
   it('keeps trade mutations behind server routes', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const tradeBlock = source.match(/match \/trades\/\{tradeId\} \{[\s\S]*?\n      \}/)?.[0];
+    const tradeBlock = source.match(/match \/trades\/\{tradeId\} \{[\s\S]*?\n {6}\}/)?.[0];
 
     expect(tradeBlock).toBeDefined();
     expect(tradeBlock).toContain('allow read: if isLeagueMember(leagueId);');
@@ -81,7 +81,7 @@ describe('Firestore rules architecture', () => {
   it('keeps team action mutations behind server routes', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
     const teamActionBlock = source.match(
-      /match \/teamActions\/\{actionId\} \{[\s\S]*?\n      \}/
+      /match \/teamActions\/\{actionId\} \{[\s\S]*?\n {6}\}/
     )?.[0];
 
     expect(teamActionBlock).toBeDefined();
@@ -93,7 +93,7 @@ describe('Firestore rules architecture', () => {
 
   it('keeps retired league watchlists inaccessible to clients', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const watchlistBlock = source.match(/match \/watchlists\/\{userId\} \{[\s\S]*?\n      \}/)?.[0];
+    const watchlistBlock = source.match(/match \/watchlists\/\{userId\} \{[\s\S]*?\n {6}\}/)?.[0];
 
     expect(watchlistBlock).toBeDefined();
     expect(watchlistBlock).toContain('allow read, write: if false;');
@@ -102,7 +102,7 @@ describe('Firestore rules architecture', () => {
 
   it('keeps league config mutations behind server routes', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const configBlock = source.match(/match \/config\/\{configDoc\} \{[\s\S]*?\n      \}/)?.[0];
+    const configBlock = source.match(/match \/config\/\{configDoc\} \{[\s\S]*?\n {6}\}/)?.[0];
 
     expect(configBlock).toBeDefined();
     expect(configBlock).toContain('allow read: if isLeagueMember(leagueId);');
@@ -112,7 +112,7 @@ describe('Firestore rules architecture', () => {
 
   it('keeps league messages read-only until a send path exists', () => {
     const source = readFileSync(join(process.cwd(), 'firestore.rules'), 'utf8');
-    const messageBlock = source.match(/match \/messages\/\{messageId\} \{[\s\S]*?\n      \}/)?.[0];
+    const messageBlock = source.match(/match \/messages\/\{messageId\} \{[\s\S]*?\n {6}\}/)?.[0];
 
     expect(messageBlock).toBeDefined();
     expect(messageBlock).toContain('allow read: if isLeagueMember(leagueId);');

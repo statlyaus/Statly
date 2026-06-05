@@ -45,6 +45,7 @@ export default [
       '**/.vibe/**',
       '**/build/**',
       '**/coverage/**',
+      'tests/e2e/**',
       '**/functions/lib/**',
       '**/public/**',
       '**/out/**',

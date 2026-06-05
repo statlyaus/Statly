@@ -17,7 +17,7 @@ function generateLeagueCode(): string {
 }
 
 // GET /api/leagues - List leagues
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     const snapshot = await adminDb
       .collection('leagues')

@@ -1,4 +1,4 @@
-import type { NextRequest } from 'next/server';
+import type { NextRequest, NextResponse } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -19,7 +19,7 @@ export async function GET(
     }
 
     const authorization = await authorizeTeamActionRequest(request, leagueId, userId);
-    if ('response' in authorization) {
+    if (!authorization.authorized) {
       return authorization.response;
     }
 
@@ -81,7 +81,7 @@ export async function POST(
     }
 
     const authorization = await authorizeTeamActionRequest(request, leagueId, userId);
-    if ('response' in authorization) {
+    if (!authorization.authorized) {
       return authorization.response;
     }
 
@@ -184,22 +184,25 @@ async function authorizeTeamActionRequest(
   request: NextRequest,
   leagueId: string,
   routeUserId: string
-) {
+): Promise<{ authorized: true; userId: string } | { authorized: false; response: NextResponse }> {
   const authenticatedUserId = await getAuthenticatedUserId(request);
   if (!authenticatedUserId) {
-    return { response: errorResponse('Unauthorized', 401) };
+    return { authorized: false, response: errorResponse('Unauthorized', 401) };
   }
 
   if (authenticatedUserId !== routeUserId) {
-    return { response: errorResponse('Forbidden', 403) };
+    return { authorized: false, response: errorResponse('Forbidden', 403) };
   }
 
   const membership = await verifyLeagueMembership(leagueId, authenticatedUserId);
   if (!membership.isMember) {
-    return { response: errorResponse('User is not a member of this league', 403) };
+    return {
+      authorized: false,
+      response: errorResponse('User is not a member of this league', 403),
+    };
   }
 
-  return { userId: authenticatedUserId };
+  return { authorized: true, userId: authenticatedUserId };
 }
 
 // Validation logic for different action types
