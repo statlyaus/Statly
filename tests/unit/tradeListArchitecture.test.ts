@@ -19,7 +19,7 @@ describe('trade list Firestore architecture', () => {
       'utf8'
     );
     const pageSource = readFileSync(
-      join(process.cwd(), 'src/app/leagues/[id]/trades/page.tsx'),
+      join(process.cwd(), 'src/app/(app)/leagues/[id]/trades/page.tsx'),
       'utf8'
     );
 

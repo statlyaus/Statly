@@ -255,6 +255,10 @@ export class LeagueDataService {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'rosters');
   }
 
+  private getLeagueDraftCollection(leagueId: string): CollectionReference {
+    return collection(this.ensureFirestore(), 'leagues', leagueId, 'draft');
+  }
+
   private getLeagueTradesCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'trades');
   }
@@ -376,6 +380,51 @@ export class LeagueDataService {
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
       collection: 'roster',
+      leagueId,
+    });
+
+    return subscriptionKey;
+  }
+
+  /**
+   * Real-time subscription for league draft picks
+   */
+  subscribeToLeagueDraft(
+    leagueId: string,
+    callback: (picks: LeagueDraftPick[]) => void,
+    onError?: (error: Error) => void
+  ): string {
+    const subscriptionKey = `draft-${leagueId}`;
+
+    this.unsubscribe(subscriptionKey);
+
+    const draftRef = collection(this.getLeagueDraftCollection(leagueId), 'picks');
+    const q = query(draftRef, orderBy('overallPick'));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const picks: LeagueDraftPick[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          picks.push({
+            id: doc.id,
+            ...data,
+            pickedAt: data.pickedAt?.toDate(),
+            createdAt: data.createdAt?.toDate() || new Date(),
+          } as LeagueDraftPick);
+        });
+        callback(picks);
+      },
+      (error) => {
+        console.error(`Error in league draft subscription (${leagueId}):`, error);
+        onError?.(error);
+      }
+    );
+
+    this.subscriptions.set(subscriptionKey, {
+      unsubscribe,
+      collection: 'draft',
       leagueId,
     });
 

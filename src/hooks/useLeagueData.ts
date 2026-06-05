@@ -8,6 +8,7 @@ import {
   leagueDataService,
   type LeagueRoster,
   type LeagueMember,
+  type LeagueDraftPick,
   type LeagueTrade,
   type LeagueWaiverClaim,
   type LeagueSettings,
@@ -25,6 +26,7 @@ export interface UseLeagueDataReturn {
   rosters: LeagueRoster[];
   userRoster: LeagueRoster | null;
   members: LeagueMember[];
+  draftPicks: LeagueDraftPick[];
   trades: LeagueTrade[];
   waiverClaims: LeagueWaiverClaim[];
   teamActions: LeagueTeamAction[];
@@ -35,6 +37,7 @@ export interface UseLeagueDataReturn {
   loading: {
     rosters: boolean;
     members: boolean;
+    draft: boolean;
     trades: boolean;
     waivers: boolean;
     teamActions: boolean;
@@ -45,6 +48,7 @@ export interface UseLeagueDataReturn {
   errors: {
     rosters: Error | null;
     members: Error | null;
+    draft: Error | null;
     trades: Error | null;
     waivers: Error | null;
     teamActions: Error | null;
@@ -69,6 +73,7 @@ export interface UseLeagueDataReturn {
   getTeamOwner: (teamId: string) => LeagueMember | null;
   getUserTrades: (userId: string) => LeagueTrade[];
   getUserWaivers: (userId: string) => LeagueWaiverClaim[];
+  getDraftPicksForTeam: (teamId: string) => LeagueDraftPick[];
 }
 
 export function useLeagueData({
@@ -80,6 +85,7 @@ export function useLeagueData({
   const [rosters, setRosters] = useState<LeagueRoster[]>([]);
   const [userRoster, setUserRoster] = useState<LeagueRoster | null>(null);
   const [members, setMembers] = useState<LeagueMember[]>([]);
+  const [draftPicks, setDraftPicks] = useState<LeagueDraftPick[]>([]);
   const [trades, setTrades] = useState<LeagueTrade[]>([]);
   const [waiverClaims, setWaiverClaims] = useState<LeagueWaiverClaim[]>([]);
   const [teamActions, setTeamActions] = useState<LeagueTeamAction[]>([]);
@@ -90,6 +96,7 @@ export function useLeagueData({
   const [loading, setLoading] = useState({
     rosters: false,
     members: false,
+    draft: false,
     trades: false,
     waivers: false,
     teamActions: false,
@@ -100,6 +107,7 @@ export function useLeagueData({
   const [errors, setErrors] = useState<{
     rosters: Error | null;
     members: Error | null;
+    draft: Error | null;
     trades: Error | null;
     waivers: Error | null;
     teamActions: Error | null;
@@ -107,6 +115,7 @@ export function useLeagueData({
   }>({
     rosters: null,
     members: null,
+    draft: null,
     trades: null,
     waivers: null,
     teamActions: null,
@@ -190,6 +199,29 @@ export function useLeagueData({
 
     subscriptionsRef.current.add('members');
     subscriptionKeysRef.current.set('members', subscriptionKey);
+  }, [leagueId, setLoadingState, setErrorState]);
+
+  // Subscribe to draft
+  const subscribeToDraft = useCallback(() => {
+    if (subscriptionsRef.current.has('draft')) return;
+
+    setLoadingState('draft', true);
+    setErrorState('draft', null);
+
+    const subscriptionKey = leagueDataService.subscribeToLeagueDraft(
+      leagueId,
+      (picksData) => {
+        setDraftPicks(picksData);
+        setLoadingState('draft', false);
+      },
+      (error) => {
+        setErrorState('draft', error);
+        setLoadingState('draft', false);
+      }
+    );
+
+    subscriptionsRef.current.add('draft');
+    subscriptionKeysRef.current.set('draft', subscriptionKey);
   }, [leagueId, setLoadingState, setErrorState]);
 
   // Subscribe to trades
@@ -359,6 +391,9 @@ export function useLeagueData({
           case 'members':
             subscribeToMembers();
             break;
+          case 'draft':
+            subscribeToDraft();
+            break;
           case 'trades':
             subscribeToTrades();
             break;
@@ -378,6 +413,7 @@ export function useLeagueData({
       subscribeToRosters,
       subscribeToUserRoster,
       subscribeToMembers,
+      subscribeToDraft,
       subscribeToTrades,
       subscribeToWaivers,
       subscribeToTeamActions,
@@ -435,6 +471,13 @@ export function useLeagueData({
     [waiverClaims]
   );
 
+  const getDraftPicksForTeam = useCallback(
+    (teamId: string): LeagueDraftPick[] => {
+      return draftPicks.filter((pick) => pick.teamId === teamId);
+    },
+    [draftPicks]
+  );
+
   // Auto-subscribe on mount
   useEffect(() => {
     if (autoSubscribe) {
@@ -462,6 +505,7 @@ export function useLeagueData({
     rosters,
     userRoster,
     members,
+    draftPicks,
     trades,
     waiverClaims,
     teamActions,
@@ -490,6 +534,7 @@ export function useLeagueData({
     getTeamOwner,
     getUserTrades,
     getUserWaivers,
+    getDraftPicksForTeam,
   };
 }
 

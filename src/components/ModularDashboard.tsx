@@ -6,15 +6,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 import { fetchApi } from '@/lib/api';
-import {
-  getLeagueOverview,
-  type ActivityItem,
-  type ActivityKind,
-  type Membership,
-} from '@/lib/data/leagueApi';
-import { db } from '@/lib/firebaseClient';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { logger } from '@/lib/logger';
+import type { League, LeagueMember, MemberRole } from '@/types/leagues';
 import type { Player } from '@/types/players';
 
 import LeaderboardModule from './dashboard/LeaderboardModule';
@@ -44,11 +38,28 @@ interface SeasonStateRound {
   current: boolean;
 }
 
+type ActivityKind = 'trade' | 'waiver' | 'draft' | 'admin';
+
+interface ActivityItem {
+  id: string;
+  kind: ActivityKind;
+  iso: string;
+  text: string;
+}
+
+interface LeagueDetailPayload {
+  success: boolean;
+  data?: {
+    league: League | null;
+    members: LeagueMember[];
+  };
+}
+
 interface LeagueSnapshot {
   id: string;
   name: string;
   teamName: string;
-  role: Membership['role'];
+  role: MemberRole;
   isLive: boolean;
   currentRoundLabel: string | null;
   currentRoundStatus: string | null;
@@ -158,6 +169,17 @@ function mapActivityKind(kind: ActivityKind): DashboardActivity['type'] {
   return 'trade';
 }
 
+async function fetchLeagueDetail(leagueId: string): Promise<LeagueDetailPayload | null> {
+  return fetch(`/api/leagues/${leagueId}`, {
+    credentials: 'include',
+    cache: 'no-store',
+  })
+    .then(async (response) =>
+      response.ok ? ((await response.json()) as LeagueDetailPayload) : null
+    )
+    .catch(() => null);
+}
+
 export default function ModularDashboard({ user }: ModularDashboardProps): React.ReactElement {
   const [players, setPlayers] = useState<Player[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -194,19 +216,12 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
       setLeagueStateLoading(true);
       try {
-        if (!db) {
-          logger.warn('Dashboard league snapshots falling back without Firestore', {
-            message: 'Firebase client database is not initialized',
-          });
-        }
         const trackedLeagues = userLeagues.slice(0, 4);
 
-        const snapshots = await Promise.all(
-          trackedLeagues.map(async (league) => {
-            const [overview, seasonStatePayload] = await Promise.all([
-              db
-                ? getLeagueOverview(db, league.id, user.uid).catch(() => null)
-                : Promise.resolve(null),
+        const snapshots: LeagueSnapshot[] = await Promise.all(
+          trackedLeagues.map(async (league): Promise<LeagueSnapshot> => {
+            const [leagueDetail, seasonStatePayload] = await Promise.all([
+              fetchLeagueDetail(league.id),
               fetch(`/api/leagues/${league.id}/season-state`, {
                 credentials: 'include',
                 cache: 'no-store',
@@ -215,8 +230,9 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                 .catch(() => null),
             ]);
 
-            if (!overview) return null;
-
+            const detailLeague = leagueDetail?.data?.league ?? null;
+            const currentMembership =
+              leagueDetail?.data?.members.find((member) => member.userId === user.uid) ?? null;
             const schedule = extractSchedule(seasonStatePayload);
             const currentRound =
               schedule.find((round) => round.current) ??
@@ -226,24 +242,22 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
             return {
               id: league.id,
-              name: league.name,
-              teamName: overview?.membership.teamName || league.teamName || league.name,
-              role: overview?.membership.role ?? 'manager',
+              name: detailLeague?.name || league.name,
+              teamName: currentMembership?.teamName || league.teamName || league.name,
+              role: currentMembership?.role ?? 'manager',
               isLive: currentRound?.status === 'in_progress',
               currentRoundLabel: currentRound?.roundLabel ?? null,
               currentRoundStatus: currentRound?.status ?? null,
-              nextWaiverIso: overview?.waiver?.nextRunIso ?? null,
-              nextEventLabel: overview?.league.nextEvent?.label ?? null,
-              nextEventIso: overview?.league.nextEvent?.iso ?? null,
-              activity: overview?.activity ?? [],
+              nextWaiverIso: null,
+              nextEventLabel: detailLeague?.draftDate ? 'Draft' : null,
+              nextEventIso: detailLeague?.draftDate ?? null,
+              activity: [],
             } satisfies LeagueSnapshot;
           })
         );
 
         if (active) {
-          setLeagueSnapshots(
-            snapshots.filter((snapshot): snapshot is LeagueSnapshot => Boolean(snapshot))
-          );
+          setLeagueSnapshots(snapshots);
         }
       } catch (error) {
         logger.error('Failed to fetch dashboard league snapshots', error);

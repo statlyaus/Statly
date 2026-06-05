@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 describe('league waivers page Firestore architecture', () => {
   it('authorizes league membership before Admin SDK league reads', () => {
     const source = readFileSync(
-      join(process.cwd(), 'src/app/leagues/[id]/waivers/page.tsx'),
+      join(process.cwd(), 'src/app/(app)/leagues/[id]/waivers/page.tsx'),
       'utf8'
     );
 
