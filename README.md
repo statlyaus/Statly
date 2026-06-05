@@ -191,9 +191,27 @@ To sign out, call `DELETE /api/auth/session` which clears the cookie.
 - 403 on analytics ingestion: ensure `METRICS_ALLOWED_ORIGINS` includes the requesting origin exactly.
 - Missing env: `NEXT_PUBLIC_API_BASE_URL` can be set to your app origin; if omitted, client calls default to relative URLs.
 
-### Running the Development Server
+### Running Local UAT
 
-Run the following command to start the development server:
+Use the full-stack local process for UAT so drafts, Socket.IO updates, Redis-backed state,
+and the worker path are exercised together:
+
+```bash
+npx prisma migrate deploy
+npm run dev:full:all
+```
+
+This starts the Next.js app on `http://localhost:3000`, the Socket.IO server on its configured
+local port, and the web vitals worker. Redis must be running locally, or set the matching Redis
+environment variables before starting.
+
+With the full-stack process running, verify the socket server with:
+
+```bash
+npm run test:socket
+```
+
+For frontend-only checks that do not touch live draft/socket/worker behavior, run:
 
 ```bash
 npm run dev
