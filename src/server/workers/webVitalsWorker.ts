@@ -1,6 +1,6 @@
-import 'server-only';
-
+import { pathToFileURL } from 'node:url';
 import { Worker, QueueEvents } from 'bullmq';
+import type { QueueEventsOptions, WorkerOptions } from 'bullmq';
 import { z } from 'zod';
 
 import { logger } from '../../lib/logger';
@@ -37,7 +37,7 @@ const WebVitalJobDataSchema = z.object({
 
 export function createWebVitalsWorker({
   concurrency = Number(process.env.METRICS_WORKER_CONCURRENCY) || 5,
-} = {}) {
+}: { concurrency?: number } = {}): { worker: Worker<WebVitalJobData>; events: QueueEvents } {
   const writer = getWebVitalsWriter();
   const batcher = createWebVitalsBatcher(writer);
 
@@ -76,13 +76,13 @@ export function createWebVitalsWorker({
       }
     },
     {
-      connection: getWorkerClient() as any,
+      connection: getWorkerClient() as WorkerOptions['connection'],
       concurrency,
     }
   );
 
   const events = new QueueEvents('web-vitals', {
-    connection: getQueueEventsClient() as any,
+    connection: getQueueEventsClient() as QueueEventsOptions['connection'],
   });
   events.on('failed', ({ jobId, failedReason }) => {
     logger.error('web-vitals job failed', { jobId, failedReason });
@@ -96,3 +96,21 @@ export function createWebVitalsWorker({
 }
 
 export default createWebVitalsWorker;
+
+function isDirectWorkerEntrypoint(): boolean {
+  const entrypoint = process.argv[1];
+  return Boolean(entrypoint && import.meta.url === pathToFileURL(entrypoint).href);
+}
+
+if (isDirectWorkerEntrypoint()) {
+  const { worker, events } = createWebVitalsWorker();
+
+  const shutdown = async (signal: string): Promise<void> => {
+    logger.info('WebVitals worker shutting down', { signal });
+    await Promise.allSettled([worker.close(), events.close()]);
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+}
