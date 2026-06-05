@@ -25,7 +25,29 @@ interface Tab {
   badge?: number;
 }
 
-export default function LeagueTabs({ league, members, currentUserId }: LeagueTabsProps) {
+const TABS: Tab[] = [
+  { id: 'overview', name: 'Overview' },
+  { id: 'teams', name: 'Teams' },
+  { id: 'roster', name: 'My Roster' },
+  { id: 'trades', name: 'Trades', badge: 2 },
+  { id: 'waivers', name: 'Waivers' },
+  { id: 'draft', name: 'Draft' },
+  { id: 'settings', name: 'Settings' },
+];
+
+const TAB_IDS = new Set<TabType>(TABS.map((tab) => tab.id));
+
+type DraftReadiness = NonNullable<League['draftReadiness']>;
+
+function isTabType(value: string | null | undefined): value is TabType {
+  return Boolean(value && TAB_IDS.has(value as TabType));
+}
+
+export default function LeagueTabs({
+  league,
+  members,
+  currentUserId,
+}: LeagueTabsProps): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -33,31 +55,18 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
 
   // Handle URL tab parameter
   useEffect(() => {
-    const tabParam = searchParams?.get('tab') as TabType;
-    if (
-      tabParam &&
-      ['overview', 'teams', 'roster', 'trades', 'waivers', 'draft', 'settings'].includes(tabParam)
-    ) {
+    const tabParam = searchParams?.get('tab');
+    if (isTabType(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
 
-  const handleTabChange = (tabId: TabType) => {
+  const handleTabChange = (tabId: TabType): void => {
     setActiveTab(tabId);
     // Update URL without full page reload
     const newUrl = `${pathname}?tab=${tabId}`;
     router.push(newUrl, { scroll: false });
   };
-
-  const tabs: Tab[] = [
-    { id: 'overview', name: 'Overview' },
-    { id: 'teams', name: 'Teams' },
-    { id: 'roster', name: 'My Roster' },
-    { id: 'trades', name: 'Trades', badge: 2 },
-    { id: 'waivers', name: 'Waivers' },
-    { id: 'draft', name: 'Draft' },
-    { id: 'settings', name: 'Settings' },
-  ];
 
   const isAdmin = members.find((m) => m.userId === currentUserId)?.role === 'owner';
   const draftReadiness = league.draftReadiness ?? null;
@@ -72,7 +81,7 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
       <div className="bg-white rounded-xl shadow-lg">
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
-            {tabs.map((tab) => (
+            {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
@@ -84,11 +93,11 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
               >
                 <div className="flex items-center space-x-2">
                   <span>{tab.name}</span>
-                  {tab.badge && (
+                  {tab.badge ? (
                     <span className="bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full">
                       {tab.badge}
                     </span>
-                  )}
+                  ) : null}
                 </div>
               </button>
             ))}
@@ -103,247 +112,329 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'overview' && (
-              <LeagueOverview league={league} members={members} currentUserId={currentUserId} />
-            )}
-
-            {activeTab === 'teams' && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-gray-900">League Teams</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {members.map((member) => (
-                    <div key={member.id} className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium text-gray-900">{member.teamName}</h3>
-                        {member.role === 'owner' && (
-                          <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                            Owner
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Joined {new Date(member.joinedAt).toLocaleDateString()}
-                      </p>
-                      {league.status !== 'preseason' && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <div className="text-sm">
-                            <span className="text-gray-600">Record: </span>
-                            <span className="font-medium">4-3</span>
-                          </div>
-                          <div className="text-sm">
-                            <span className="text-gray-600">Points: </span>
-                            <span className="font-medium">823.1</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'roster' && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-gray-900">My Roster</h2>
-                <MyTeamRosterManager
-                  league={league}
-                  members={members}
-                  currentUserId={currentUserId}
-                />
-              </div>
-            )}
-
-            {activeTab === 'trades' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Trades</h2>
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                    Propose Trade
-                  </button>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <p className="text-gray-600">Trade interface coming soon...</p>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'waivers' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Waiver Wire</h2>
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                    Submit Claim
-                  </button>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <p className="text-gray-600">Waiver wire interface coming soon...</p>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'draft' && (
-              <div className="space-y-4">
-                {draftReadiness && (
-                  <div className="rounded-lg border border-gray-200 bg-white p-4">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900">
-                          {draftRoomPath ? 'Draft room ready' : 'Draft setup status'}
-                        </h2>
-                        <p className="mt-1 text-sm text-gray-600">
-                          {draftRoomPath
-                            ? draftReadiness.lifecycle.isRunning
-                              ? 'The draft is live now.'
-                              : 'The lobby is available for this league.'
-                            : (draftReadiness.blockers[0]?.message ??
-                              'Save draft settings to prepare the draft room.')}
-                        </p>
-                      </div>
-                      {draftRoomPath && (
-                        <button
-                          type="button"
-                          onClick={() => router.push(draftRoomPath)}
-                          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                        >
-                          Enter draft room
-                        </button>
-                      )}
-                    </div>
-                    {!draftRoomPath && draftReadiness.blockers.length > 1 && (
-                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600">
-                        {draftReadiness.blockers.slice(1).map((blocker) => (
-                          <li key={blocker.code}>{blocker.message}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-                <DraftManager
-                  league={league}
-                  members={members}
-                  currentUserId={currentUserId}
-                  onDraftCreated={(draftId) => router.push(`/drafts/${draftId}`)}
-                  onJoinDraftRoom={(draftId) => router.push(`/drafts/${draftId}`)}
-                />
-              </div>
-            )}
-
-            {activeTab === 'settings' && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-900">League Settings</h2>
-
-                {/* Basic Info */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Basic Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        htmlFor="league-name"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        League Name
-                      </label>
-                      <input
-                        id="league-name"
-                        type="text"
-                        value={league.name}
-                        disabled={!isAdmin}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="league-code"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        League Code
-                      </label>
-                      <input
-                        id="league-code"
-                        type="text"
-                        value={league.code}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Scoring Categories */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Scoring Categories</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {league.categories.map((category) => {
-                      const categoryData = FANTASY_CATEGORIES[category];
-                      return (
-                        <div
-                          key={category}
-                          className="flex items-center space-x-2 p-2 bg-blue-50 rounded-lg"
-                        >
-                          <span className="text-sm font-medium text-blue-900">
-                            {categoryData?.label || category}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Trade Settings */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Trade Settings</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        htmlFor="trade-limit"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Trade Limit
-                      </label>
-                      <input
-                        id="trade-limit"
-                        type="number"
-                        value={league.tradeSettings.tradeLimit}
-                        disabled={!isAdmin}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="trade-review"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Review Process
-                      </label>
-                      <select
-                        id="trade-review"
-                        value={league.tradeSettings.tradeReview}
-                        disabled={!isAdmin}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
-                      >
-                        <option value="none">None</option>
-                        <option value="admin">Admin Review</option>
-                        <option value="veto">League Veto</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {isAdmin && (
-                  <div className="flex justify-end space-x-3">
-                    <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                      Cancel
-                    </button>
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                      Save Changes
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            <LeagueTabPanel
+              activeTab={activeTab}
+              league={league}
+              members={members}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              draftReadiness={draftReadiness}
+              draftRoomPath={draftRoomPath}
+              onNavigate={(href) => router.push(href)}
+            />
           </motion.div>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface LeagueTabPanelProps extends LeagueTabsProps {
+  activeTab: TabType;
+  isAdmin: boolean;
+  draftReadiness: DraftReadiness | null;
+  draftRoomPath: string | null;
+  onNavigate: (href: string) => void;
+}
+
+function LeagueTabPanel({
+  activeTab,
+  league,
+  members,
+  currentUserId,
+  isAdmin,
+  draftReadiness,
+  draftRoomPath,
+  onNavigate,
+}: LeagueTabPanelProps): React.JSX.Element | null {
+  switch (activeTab) {
+    case 'overview':
+      return <LeagueOverview league={league} members={members} currentUserId={currentUserId} />;
+    case 'teams':
+      return <TeamsTab league={league} members={members} />;
+    case 'roster':
+      return <RosterTab league={league} members={members} currentUserId={currentUserId} />;
+    case 'trades':
+      return (
+        <ComingSoonTab
+          title="Trades"
+          actionLabel="Propose Trade"
+          message="Trade interface coming soon..."
+        />
+      );
+    case 'waivers':
+      return (
+        <ComingSoonTab
+          title="Waiver Wire"
+          actionLabel="Submit Claim"
+          message="Waiver wire interface coming soon..."
+        />
+      );
+    case 'draft':
+      return (
+        <DraftTab
+          league={league}
+          members={members}
+          currentUserId={currentUserId}
+          draftReadiness={draftReadiness}
+          draftRoomPath={draftRoomPath}
+          onNavigate={onNavigate}
+        />
+      );
+    case 'settings':
+      return <SettingsTab league={league} isAdmin={isAdmin} />;
+    default:
+      return null;
+  }
+}
+
+function TeamsTab({
+  league,
+  members,
+}: Pick<LeagueTabsProps, 'league' | 'members'>): React.JSX.Element {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-semibold text-gray-900">League Teams</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {members.map((member) => (
+          <div key={member.id} className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-gray-900">{member.teamName}</h3>
+              {member.role === 'owner' && (
+                <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                  Owner
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-600">
+              Joined {new Date(member.joinedAt).toLocaleDateString()}
+            </p>
+            {league.status !== 'preseason' && (
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                <div className="text-sm">
+                  <span className="text-gray-600">Record: </span>
+                  <span className="font-medium">4-3</span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-600">Points: </span>
+                  <span className="font-medium">823.1</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RosterTab({ league, members, currentUserId }: LeagueTabsProps): React.JSX.Element {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-semibold text-gray-900">My Roster</h2>
+      <MyTeamRosterManager league={league} members={members} currentUserId={currentUserId} />
+    </div>
+  );
+}
+
+function ComingSoonTab({
+  title,
+  actionLabel,
+  message,
+}: {
+  title: string;
+  actionLabel: string;
+  message: string;
+}): React.JSX.Element {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+          {actionLabel}
+        </button>
+      </div>
+      <div className="bg-gray-50 rounded-lg p-8 text-center">
+        <p className="text-gray-600">{message}</p>
+      </div>
+    </div>
+  );
+}
+
+interface DraftTabProps extends LeagueTabsProps {
+  draftReadiness: DraftReadiness | null;
+  draftRoomPath: string | null;
+  onNavigate: (href: string) => void;
+}
+
+function DraftTab({
+  league,
+  members,
+  currentUserId,
+  draftReadiness,
+  draftRoomPath,
+  onNavigate,
+}: DraftTabProps): React.JSX.Element {
+  return (
+    <div className="space-y-4">
+      {draftReadiness && (
+        <DraftStatusPanel
+          draftReadiness={draftReadiness}
+          draftRoomPath={draftRoomPath}
+          onNavigate={onNavigate}
+        />
+      )}
+      <DraftManager
+        league={league}
+        members={members}
+        currentUserId={currentUserId}
+        onDraftCreated={(draftId) => onNavigate(`/drafts/${draftId}`)}
+        onJoinDraftRoom={(draftId) => onNavigate(`/drafts/${draftId}`)}
+      />
+    </div>
+  );
+}
+
+function DraftStatusPanel({
+  draftReadiness,
+  draftRoomPath,
+  onNavigate,
+}: {
+  draftReadiness: DraftReadiness;
+  draftRoomPath: string | null;
+  onNavigate: (href: string) => void;
+}): React.JSX.Element {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {draftRoomPath ? 'Draft room ready' : 'Draft setup status'}
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            {draftRoomPath
+              ? draftReadiness.lifecycle.isRunning
+                ? 'The draft is live now.'
+                : 'The lobby is available for this league.'
+              : (draftReadiness.blockers[0]?.message ??
+                'Save draft settings to prepare the draft room.')}
+          </p>
+        </div>
+        {draftRoomPath && (
+          <button
+            type="button"
+            onClick={() => onNavigate(draftRoomPath)}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            Enter draft room
+          </button>
+        )}
+      </div>
+      {!draftRoomPath && draftReadiness.blockers.length > 1 && (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600">
+          {draftReadiness.blockers.slice(1).map((blocker) => (
+            <li key={blocker.code}>{blocker.message}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SettingsTab({ league, isAdmin }: { league: League; isAdmin: boolean }): React.JSX.Element {
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold text-gray-900">League Settings</h2>
+
+      <div className="bg-gray-50 rounded-lg p-6">
+        <h3 className="font-medium text-gray-900 mb-4">Basic Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="league-name" className="block text-sm font-medium text-gray-700 mb-1">
+              League Name
+            </label>
+            <input
+              id="league-name"
+              type="text"
+              value={league.name}
+              disabled={!isAdmin}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label htmlFor="league-code" className="block text-sm font-medium text-gray-700 mb-1">
+              League Code
+            </label>
+            <input
+              id="league-code"
+              type="text"
+              value={league.code}
+              disabled
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gray-50 rounded-lg p-6">
+        <h3 className="font-medium text-gray-900 mb-4">Scoring Categories</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {league.categories.map((category) => {
+            const categoryData = FANTASY_CATEGORIES[category];
+            return (
+              <div key={category} className="flex items-center space-x-2 p-2 bg-blue-50 rounded-lg">
+                <span className="text-sm font-medium text-blue-900">
+                  {categoryData?.label || category}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="bg-gray-50 rounded-lg p-6">
+        <h3 className="font-medium text-gray-900 mb-4">Trade Settings</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="trade-limit" className="block text-sm font-medium text-gray-700 mb-1">
+              Trade Limit
+            </label>
+            <input
+              id="trade-limit"
+              type="number"
+              value={league.tradeSettings.tradeLimit}
+              disabled={!isAdmin}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label htmlFor="trade-review" className="block text-sm font-medium text-gray-700 mb-1">
+              Review Process
+            </label>
+            <select
+              id="trade-review"
+              value={league.tradeSettings.tradeReview}
+              disabled={!isAdmin}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
+            >
+              <option value="none">None</option>
+              <option value="admin">Admin Review</option>
+              <option value="veto">League Veto</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {isAdmin && (
+        <div className="flex justify-end space-x-3">
+          <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancel
+          </button>
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            Save Changes
+          </button>
+        </div>
+      )}
     </div>
   );
 }

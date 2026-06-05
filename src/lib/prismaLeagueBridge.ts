@@ -68,6 +68,27 @@ export interface SyncPrismaLeagueOwnerInput {
   previousOwnerUserId?: string;
 }
 
+export interface UpsertPrismaLeagueMirrorResult {
+  leagueId: string;
+  activeMemberCount: number;
+  mirroredMemberIds: string[];
+}
+
+export type SyncPrismaLeagueMemberResult =
+  | { synced: true; action: 'deleted' | 'upserted' }
+  | {
+      synced: false;
+      reason:
+        | 'no-prisma-league'
+        | 'member-not-found'
+        | 'member-has-draft-dependencies'
+        | 'inactive-member';
+    };
+
+export type SyncPrismaLeagueOwnerResult =
+  | { synced: true; action: 'owner-updated' }
+  | { synced: false; reason: 'no-prisma-league' };
+
 interface BridgeDependencies {
   firestore?: Firestore;
   prisma?: PrismaClientLike;
@@ -183,7 +204,7 @@ export async function loadFirestoreLeagueMirrorSnapshot(
 export async function ensurePrismaLeagueMirror(
   input: EnsurePrismaLeagueMirrorInput,
   deps: BridgeDependencies = {}
-) {
+): Promise<UpsertPrismaLeagueMirrorResult> {
   const firestore = deps.firestore ?? adminDb;
   const client = deps.prisma ?? prisma;
   const snapshot = await loadFirestoreLeagueMirrorSnapshot(input, firestore);
@@ -198,7 +219,7 @@ export async function upsertPrismaLeagueMirror(
   snapshot: PrismaLeagueMirrorSnapshot,
   client: PrismaClientLike = prisma,
   options: { rosterSize?: number; benchSize?: number } = {}
-) {
+): Promise<UpsertPrismaLeagueMirrorResult> {
   return client.$transaction(async (tx) => {
     const existingLeague = await tx.league.findUnique({
       where: { id: snapshot.leagueId },
@@ -269,7 +290,7 @@ export async function upsertPrismaLeagueMirror(
 export async function syncPrismaLeagueMember(
   input: SyncPrismaLeagueMemberInput,
   deps: BridgeDependencies = {}
-) {
+): Promise<SyncPrismaLeagueMemberResult> {
   const client = deps.prisma ?? prisma;
 
   return client.$transaction(async (tx) => {
@@ -317,7 +338,7 @@ export async function syncPrismaLeagueMember(
 export async function syncPrismaLeagueOwner(
   input: SyncPrismaLeagueOwnerInput,
   deps: BridgeDependencies = {}
-) {
+): Promise<SyncPrismaLeagueOwnerResult> {
   const client = deps.prisma ?? prisma;
 
   return client.$transaction(async (tx) => {

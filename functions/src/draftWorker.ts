@@ -8,7 +8,7 @@ import type { EventContext } from 'firebase-functions/v1';
 import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
+import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import crypto from 'node:crypto';
 
 // Initialize Firebase Admin
@@ -480,7 +480,9 @@ async function syncRosterOwnershipForLeague(
 
   await Promise.all([
     ...addedPlayers.map((playerId) => updatePlayerAvailabilityForLeague(leagueId, playerId, false)),
-    ...removedPlayers.map((playerId) => updatePlayerAvailabilityForLeague(leagueId, playerId, true)),
+    ...removedPlayers.map((playerId) =>
+      updatePlayerAvailabilityForLeague(leagueId, playerId, true)
+    ),
   ]);
 }
 
@@ -726,49 +728,119 @@ export const onPlayerOwnershipWrite = functions
     );
   });
 
+function safeEquals(a?: string, b?: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const aBuf = Buffer.from(a, 'utf8');
+  const bBuf = Buffer.from(b, 'utf8');
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function getHeaderString(req: functions.https.Request, name: string): string | undefined {
+  const value = req.headers[name] ?? req.headers[name.toLowerCase()];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function getBearerToken(req: functions.https.Request): string | undefined {
+  const authHeader = getHeaderString(req, 'authorization') ?? getHeaderString(req, 'Authorization');
+  return authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : undefined;
+}
+
+function hasAdminClaim(decoded: DecodedIdToken): boolean {
+  const claims = decoded as DecodedIdToken & { admin?: unknown; roles?: unknown };
+  return claims.admin === true || (Array.isArray(claims.roles) && claims.roles.includes('admin'));
+}
+
+async function authorizeBackfillOwnershipRequest(req: functions.https.Request): Promise<boolean> {
+  const internalSecret = process.env.INTERNAL_TASK_SECRET || '';
+  const providedSecret = getHeaderString(req, 'x-internal-secret');
+
+  if (providedSecret && internalSecret && safeEquals(providedSecret, internalSecret)) {
+    return true;
+  }
+
+  const bearer = getBearerToken(req);
+  if (!bearer) {
+    return false;
+  }
+
+  try {
+    const decoded = await getAuth().verifyIdToken(bearer);
+    return hasAdminClaim(decoded);
+  } catch {
+    return false;
+  }
+}
+
+function getBackfillLeagueId(req: functions.https.Request): string | undefined {
+  const queryLeagueId = req.query.leagueId;
+  const body = req.body as { leagueId?: unknown } | undefined;
+  const bodyLeagueId = body?.leagueId;
+
+  if (typeof queryLeagueId === 'string') return queryLeagueId;
+  if (typeof bodyLeagueId === 'string') return bodyLeagueId;
+  return undefined;
+}
+
+async function loadOwnershipCounts(leagueId: string): Promise<Map<string, number>> {
+  const ownershipSnap = await db
+    .collection('leagues')
+    .doc(leagueId)
+    .collection('playerOwnerships')
+    .select('owners', 'teamId')
+    .get();
+  const ownershipMap = new Map<string, number>();
+
+  ownershipSnap.forEach((doc) => {
+    const data = doc.data() as { owners?: unknown[] };
+    const ownersCount = Array.isArray(data.owners) ? data.owners.length : 1;
+    ownershipMap.set(doc.id, ownersCount);
+  });
+
+  return ownershipMap;
+}
+
+async function updateAvailablePlayerOwnership(
+  leagueId: string,
+  ownershipMap: Map<string, number>,
+  safeTeams: number
+): Promise<number> {
+  const indexSnap = await db
+    .collection('leagues')
+    .doc(leagueId)
+    .collection('availablePlayers')
+    .get();
+  const batch = db.batch();
+
+  indexSnap.forEach((doc) => {
+    const ownersCount = ownershipMap.get(doc.id) || 0;
+    const available = ownersCount === 0;
+    const ownershipPercent = clampPercent((ownersCount / safeTeams) * 100);
+    batch.set(
+      doc.ref,
+      { available, ownershipPercent, updatedAt: Timestamp.now() },
+      { merge: true }
+    );
+  });
+
+  await batch.commit();
+  return indexSnap.size;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Internal error';
+}
+
 export const backfillOwnershipPercent = functions
   .region(REGION)
   .https.onRequest(async (req, res) => {
     try {
-      // AuthN/AuthZ: require either valid INTERNAL_TASK_SECRET (constant-time) or admin Firebase ID token
-      const internalSecret = process.env.INTERNAL_TASK_SECRET || '';
-      const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as
-        | string
-        | undefined;
-      const bearer =
-        typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-          ? authHeader.slice('Bearer '.length)
-          : undefined;
-      const providedSecret = (req.headers['x-internal-secret'] as string | undefined) ?? undefined;
-
-      function safeEquals(a?: string, b?: string): boolean {
-        if (typeof a !== 'string' || typeof b !== 'string') return false;
-        const aBuf = Buffer.from(a, 'utf8');
-        const bBuf = Buffer.from(b, 'utf8');
-        if (aBuf.length !== bBuf.length) return false;
-        return crypto.timingSafeEqual(aBuf, bBuf);
-      }
-
-      let authorized = false;
-      if (providedSecret && internalSecret && safeEquals(providedSecret, internalSecret)) {
-        authorized = true;
-      } else if (bearer) {
-        try {
-          const decoded = await getAuth().verifyIdToken(bearer);
-          if ((decoded as any)?.admin === true || (decoded as any)?.roles?.includes?.('admin')) {
-            authorized = true;
-          }
-        } catch {
-          // ignore, will result in 401 unless secret matches
-        }
-      }
-
-      if (!authorized) {
+      if (!(await authorizeBackfillOwnershipRequest(req))) {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
 
-      const leagueId = (req.query.leagueId as string) || (req.body && req.body.leagueId);
+      const leagueId = getBackfillLeagueId(req);
       if (!leagueId) {
         res.status(400).json({ error: 'leagueId is required' });
         return;
@@ -776,42 +848,11 @@ export const backfillOwnershipPercent = functions
 
       const teamCount = await getLeagueTeamCount(leagueId);
       const safeTeams = teamCount > 0 ? teamCount : 1;
+      const ownershipMap = await loadOwnershipCounts(leagueId);
+      const updated = await updateAvailablePlayerOwnership(leagueId, ownershipMap, safeTeams);
 
-      // Build a map of playerId -> ownersCount from playerOwnerships
-      const ownershipSnap = await db
-        .collection('leagues')
-        .doc(leagueId)
-        .collection('playerOwnerships')
-        .select('owners', 'teamId')
-        .get();
-      const ownershipMap = new Map<string, number>();
-      ownershipSnap.forEach((doc) => {
-        const data = doc.data() as any;
-        const ownersCount = Array.isArray(data?.owners) ? data.owners.length : 1;
-        ownershipMap.set(doc.id, ownersCount);
-      });
-
-      // Iterate availablePlayers index and update ownershipPercent + available
-      const indexSnap = await db
-        .collection('leagues')
-        .doc(leagueId)
-        .collection('availablePlayers')
-        .get();
-      const batch = db.batch();
-      indexSnap.forEach((doc) => {
-        const ownersCount = ownershipMap.get(doc.id) || 0;
-        const available = ownersCount === 0;
-        const ownershipPercent = clampPercent((ownersCount / safeTeams) * 100);
-        batch.set(
-          doc.ref,
-          { available, ownershipPercent, updatedAt: Timestamp.now() },
-          { merge: true }
-        );
-      });
-
-      await batch.commit();
-      res.status(200).json({ updated: indexSnap.size, teamCount: safeTeams });
-    } catch (e: any) {
-      res.status(500).json({ error: e?.message || 'Internal error' });
+      res.status(200).json({ updated, teamCount: safeTeams });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
     }
   });

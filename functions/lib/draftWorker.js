@@ -575,84 +575,112 @@ exports.onPlayerOwnershipWrite = functions
         updatedAt: firestore_1.Timestamp.now(),
     }, { merge: true });
 });
+function safeEquals(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string')
+        return false;
+    const aBuf = Buffer.from(a, 'utf8');
+    const bBuf = Buffer.from(b, 'utf8');
+    if (aBuf.length !== bBuf.length)
+        return false;
+    return node_crypto_1.default.timingSafeEqual(aBuf, bBuf);
+}
+function getHeaderString(req, name) {
+    var _a;
+    const value = (_a = req.headers[name]) !== null && _a !== void 0 ? _a : req.headers[name.toLowerCase()];
+    return typeof value === 'string' ? value : undefined;
+}
+function getBearerToken(req) {
+    var _a;
+    const authHeader = (_a = getHeaderString(req, 'authorization')) !== null && _a !== void 0 ? _a : getHeaderString(req, 'Authorization');
+    return (authHeader === null || authHeader === void 0 ? void 0 : authHeader.startsWith('Bearer ')) ? authHeader.slice('Bearer '.length) : undefined;
+}
+function hasAdminClaim(decoded) {
+    const claims = decoded;
+    return claims.admin === true || (Array.isArray(claims.roles) && claims.roles.includes('admin'));
+}
+async function authorizeBackfillOwnershipRequest(req) {
+    const internalSecret = process.env.INTERNAL_TASK_SECRET || '';
+    const providedSecret = getHeaderString(req, 'x-internal-secret');
+    if (providedSecret && internalSecret && safeEquals(providedSecret, internalSecret)) {
+        return true;
+    }
+    const bearer = getBearerToken(req);
+    if (!bearer) {
+        return false;
+    }
+    try {
+        const decoded = await (0, auth_1.getAuth)().verifyIdToken(bearer);
+        return hasAdminClaim(decoded);
+    }
+    catch (_a) {
+        return false;
+    }
+}
+function getBackfillLeagueId(req) {
+    const queryLeagueId = req.query.leagueId;
+    const body = req.body;
+    const bodyLeagueId = body === null || body === void 0 ? void 0 : body.leagueId;
+    if (typeof queryLeagueId === 'string')
+        return queryLeagueId;
+    if (typeof bodyLeagueId === 'string')
+        return bodyLeagueId;
+    return undefined;
+}
+async function loadOwnershipCounts(leagueId) {
+    const ownershipSnap = await db
+        .collection('leagues')
+        .doc(leagueId)
+        .collection('playerOwnerships')
+        .select('owners', 'teamId')
+        .get();
+    const ownershipMap = new Map();
+    ownershipSnap.forEach((doc) => {
+        const data = doc.data();
+        const ownersCount = Array.isArray(data.owners) ? data.owners.length : 1;
+        ownershipMap.set(doc.id, ownersCount);
+    });
+    return ownershipMap;
+}
+async function updateAvailablePlayerOwnership(leagueId, ownershipMap, safeTeams) {
+    const indexSnap = await db
+        .collection('leagues')
+        .doc(leagueId)
+        .collection('availablePlayers')
+        .get();
+    const batch = db.batch();
+    indexSnap.forEach((doc) => {
+        const ownersCount = ownershipMap.get(doc.id) || 0;
+        const available = ownersCount === 0;
+        const ownershipPercent = clampPercent((ownersCount / safeTeams) * 100);
+        batch.set(doc.ref, { available, ownershipPercent, updatedAt: firestore_1.Timestamp.now() }, { merge: true });
+    });
+    await batch.commit();
+    return indexSnap.size;
+}
+function getErrorMessage(error) {
+    return error instanceof Error ? error.message : 'Internal error';
+}
 exports.backfillOwnershipPercent = functions
     .region(REGION)
     .https.onRequest(async (req, res) => {
-    var _a, _b, _c;
     try {
-        // AuthN/AuthZ: require either valid INTERNAL_TASK_SECRET (constant-time) or admin Firebase ID token
-        const internalSecret = process.env.INTERNAL_TASK_SECRET || '';
-        const authHeader = (req.headers['authorization'] || req.headers['Authorization']);
-        const bearer = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-            ? authHeader.slice('Bearer '.length)
-            : undefined;
-        const providedSecret = (_a = req.headers['x-internal-secret']) !== null && _a !== void 0 ? _a : undefined;
-        function safeEquals(a, b) {
-            if (typeof a !== 'string' || typeof b !== 'string')
-                return false;
-            const aBuf = Buffer.from(a, 'utf8');
-            const bBuf = Buffer.from(b, 'utf8');
-            if (aBuf.length !== bBuf.length)
-                return false;
-            return node_crypto_1.default.timingSafeEqual(aBuf, bBuf);
-        }
-        let authorized = false;
-        if (providedSecret && internalSecret && safeEquals(providedSecret, internalSecret)) {
-            authorized = true;
-        }
-        else if (bearer) {
-            try {
-                const decoded = await (0, auth_1.getAuth)().verifyIdToken(bearer);
-                if ((decoded === null || decoded === void 0 ? void 0 : decoded.admin) === true || ((_c = (_b = decoded === null || decoded === void 0 ? void 0 : decoded.roles) === null || _b === void 0 ? void 0 : _b.includes) === null || _c === void 0 ? void 0 : _c.call(_b, 'admin'))) {
-                    authorized = true;
-                }
-            }
-            catch (e) {
-                // ignore, will result in 401 unless secret matches
-            }
-        }
-        if (!authorized) {
+        if (!(await authorizeBackfillOwnershipRequest(req))) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
-        const leagueId = req.query.leagueId || (req.body && req.body.leagueId);
+        const leagueId = getBackfillLeagueId(req);
         if (!leagueId) {
             res.status(400).json({ error: 'leagueId is required' });
             return;
         }
         const teamCount = await getLeagueTeamCount(leagueId);
         const safeTeams = teamCount > 0 ? teamCount : 1;
-        // Build a map of playerId -> ownersCount from playerOwnerships
-        const ownershipSnap = await db
-            .collection('leagues')
-            .doc(leagueId)
-            .collection('playerOwnerships')
-            .select('owners', 'teamId')
-            .get();
-        const ownershipMap = new Map();
-        ownershipSnap.forEach((doc) => {
-            const data = doc.data();
-            const ownersCount = Array.isArray(data === null || data === void 0 ? void 0 : data.owners) ? data.owners.length : 1;
-            ownershipMap.set(doc.id, ownersCount);
-        });
-        // Iterate availablePlayers index and update ownershipPercent + available
-        const indexSnap = await db
-            .collection('leagues')
-            .doc(leagueId)
-            .collection('availablePlayers')
-            .get();
-        const batch = db.batch();
-        indexSnap.forEach((doc) => {
-            const ownersCount = ownershipMap.get(doc.id) || 0;
-            const available = ownersCount === 0;
-            const ownershipPercent = clampPercent((ownersCount / safeTeams) * 100);
-            batch.set(doc.ref, { available, ownershipPercent, updatedAt: firestore_1.Timestamp.now() }, { merge: true });
-        });
-        await batch.commit();
-        res.status(200).json({ updated: indexSnap.size, teamCount: safeTeams });
+        const ownershipMap = await loadOwnershipCounts(leagueId);
+        const updated = await updateAvailablePlayerOwnership(leagueId, ownershipMap, safeTeams);
+        res.status(200).json({ updated, teamCount: safeTeams });
     }
-    catch (e) {
-        res.status(500).json({ error: (e === null || e === void 0 ? void 0 : e.message) || 'Internal error' });
+    catch (error) {
+        res.status(500).json({ error: getErrorMessage(error) });
     }
 });
 //# sourceMappingURL=draftWorker.js.map

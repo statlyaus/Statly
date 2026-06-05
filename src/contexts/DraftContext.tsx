@@ -120,36 +120,120 @@ function toArray<T>(v: unknown): T[] {
   return [];
 }
 
-function normalizeParticipants(raw: unknown): DraftParticipant[] {
-  return toArray<any>(raw).map((participant, index) => {
-    const member = participant?.member ?? participant;
-    const draftOrder =
-      Number(participant?.draftOrder ?? participant?.slot ?? member?.draftOrder ?? index + 1) ||
-      index + 1;
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
 
-    return {
-      id: String(member?.id ?? participant?.id ?? `participant-${draftOrder}`),
-      userId: String(member?.userId ?? participant?.userId ?? ''),
-      displayName: String(member?.displayName ?? participant?.displayName ?? `Team ${draftOrder}`),
-      teamName: member?.teamName ?? participant?.teamName ?? undefined,
-      draftOrder,
-      isOnline: Boolean(participant?.isOnline ?? member?.isOnline ?? false),
-      lastSeen: new Date(participant?.lastSeen ?? member?.lastSeen ?? 0),
-      isCurrentTurn: Boolean(participant?.isCurrentTurn ?? member?.isCurrentTurn ?? false),
-      timeRemaining:
-        typeof (participant?.timeRemaining ?? member?.timeRemaining) === 'number'
-          ? Number(participant?.timeRemaining ?? member?.timeRemaining)
-          : undefined,
-      queue: Array.isArray(participant?.queue ?? member?.queue)
-        ? (participant?.queue ?? member?.queue)
-        : [],
-    };
-  });
+function firstDefined(...values: unknown[]): unknown {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function normalizeParticipants(raw: unknown): DraftParticipant[] {
+  return toArray<unknown>(raw).map(normalizeParticipant);
+}
+
+function normalizeParticipant(rawParticipant: unknown, index: number): DraftParticipant {
+  const participant = asRecord(rawParticipant);
+  const member = asRecord(participant.member ?? participant);
+  const draftOrder = normalizeParticipantDraftOrder(participant, member, index);
+
+  return {
+    id: normalizeParticipantString(participant, member, 'id', `participant-${draftOrder}`),
+    userId: normalizeParticipantString(participant, member, 'userId', ''),
+    displayName: normalizeParticipantString(
+      participant,
+      member,
+      'displayName',
+      `Team ${draftOrder}`
+    ),
+    teamName: normalizeParticipantTeamName(participant, member),
+    draftOrder,
+    isOnline: normalizeParticipantBoolean(participant, member, 'isOnline'),
+    lastSeen: normalizeParticipantLastSeen(participant, member),
+    isCurrentTurn: normalizeParticipantBoolean(participant, member, 'isCurrentTurn'),
+    timeRemaining: normalizeParticipantTimeRemaining(participant, member),
+    queue: normalizeParticipantQueue(participant, member),
+  };
+}
+
+function normalizeParticipantString(
+  participant: Record<string, unknown>,
+  member: Record<string, unknown>,
+  key: string,
+  fallback: string
+): string {
+  return String(firstDefined(member[key], participant[key], fallback));
+}
+
+function normalizeParticipantTeamName(
+  participant: Record<string, unknown>,
+  member: Record<string, unknown>
+): DraftParticipant['teamName'] {
+  const teamName = firstDefined(member.teamName, participant.teamName);
+  return teamName === undefined ? undefined : String(teamName);
+}
+
+function normalizeParticipantBoolean(
+  participant: Record<string, unknown>,
+  member: Record<string, unknown>,
+  key: string
+): boolean {
+  return Boolean(firstDefined(participant[key], member[key], false));
+}
+
+function normalizeParticipantLastSeen(
+  participant: Record<string, unknown>,
+  member: Record<string, unknown>
+): Date {
+  const lastSeen = firstDefined(participant.lastSeen, member.lastSeen, 0) as string | number | Date;
+  return new Date(lastSeen);
+}
+
+function normalizeParticipantDraftOrder(
+  participant: Record<string, unknown>,
+  member: Record<string, unknown>,
+  index: number
+): number {
+  return (
+    Number(participant.draftOrder ?? participant.slot ?? member.draftOrder ?? index + 1) ||
+    index + 1
+  );
+}
+
+function normalizeParticipantTimeRemaining(
+  participant: Record<string, unknown>,
+  member: Record<string, unknown>
+): number | undefined {
+  const timeRemaining = participant.timeRemaining ?? member.timeRemaining;
+  return typeof timeRemaining === 'number' ? Number(timeRemaining) : undefined;
+}
+
+function normalizeParticipantQueue(
+  participant: Record<string, unknown>,
+  member: Record<string, unknown>
+): string[] {
+  const queue = participant.queue ?? member.queue;
+  return Array.isArray(queue) ? (queue as string[]) : [];
+}
+
+function getDraftPickOrder(pick: DraftPick): number {
+  const pickRecord = asRecord(pick);
+  return Number(firstDefined(pickRecord.pickNo, pick.overall, 0));
+}
+
+function getDraftPickPlayerId(pick: DraftPick): string {
+  const pickRecord = asRecord(pick);
+  const playerRecord = asRecord(pickRecord.player);
+  return String(firstDefined(playerRecord.id, pickRecord.playerId, ''));
 }
 
 function participantQueueIncluded(raw: unknown): boolean {
-  return toArray<any>(raw).some((participant) => {
-    const member = participant?.member ?? participant;
+  return toArray<unknown>(raw).some((rawParticipant) => {
+    const participant = asRecord(rawParticipant);
+    const member = asRecord(participant.member ?? participant);
     return 'queue' in (participant ?? {}) || 'queue' in (member ?? {});
   });
 }
@@ -256,27 +340,22 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
 
   const draftLike = normalizeDraftCore(raw.draft ?? raw);
 
-  const participants = normalizeParticipants((raw as any).participants);
-  const includesParticipantQueues = participantQueueIncluded((raw as any).participants);
+  const participants = normalizeParticipants(raw.participants);
+  const includesParticipantQueues = participantQueueIncluded(raw.participants);
 
   const picks = toArray<DraftPick>(raw.picks)
     .slice()
     .sort((a, b) => {
-      const ap = Number((a as any).pickNo ?? 0);
-      const bp = Number((b as any).pickNo ?? 0);
-      return ap - bp;
+      return getDraftPickOrder(a) - getDraftPickOrder(b);
     });
 
-  const pickedIds = new Set<string>(
-    picks.map((pk) => String((pk as any).player?.id ?? (pk as any).playerId))
-  );
+  const pickedIds = new Set<string>(picks.map(getDraftPickPlayerId));
 
   const availablePlayers = toArray<DraftPlayer>(raw.availablePlayers).filter(
     (pl) => !pickedIds.has(String(pl.id))
   );
-  const selectedCategories = toArray<FantasyCategoryKey>((raw as any).selectedCategories);
-  const draftReadiness =
-    ((raw as any).draftReadiness as DraftOperationalReadiness | null | undefined) ?? null;
+  const selectedCategories = toArray<FantasyCategoryKey>(raw.selectedCategories);
+  const draftReadiness = raw.draftReadiness ?? null;
 
   return {
     draft: draftLike,

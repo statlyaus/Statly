@@ -4,7 +4,11 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion';
 
 import { CompactStatsRow } from '@/components/PlayerStatsDisplay';
-import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import {
+  FANTASY_CATEGORIES,
+  type FantasyCategoryKey,
+  type PlayerStats,
+} from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
 
 interface PlayerGridProps {
@@ -47,7 +51,7 @@ export default function PlayerGrid({
   onSortChange,
   isLoading,
   emptyStateMessage,
-}: PlayerGridProps) {
+}: PlayerGridProps): React.JSX.Element {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
   const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -59,6 +63,10 @@ export default function PlayerGrid({
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'adp';
+
+  const setRowRef = useCallback((index: number, element: HTMLDivElement | null): void => {
+    rowRefs.current[index] = element;
+  }, []);
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -278,156 +286,27 @@ export default function PlayerGrid({
         </div>
 
         <div className="max-h-[680px] overflow-y-auto" role="rowgroup">
-          {filteredPlayers.map((player, index) => {
-            const isFocused = focusedRow === index;
-            const isSelected = selectedPlayerId === player.id;
-            const isQueued = queuedIds.has(player.id);
-            const isWatched = watchedIds.has(player.id);
-
-            return (
-              <motion.div
-                key={player.id}
-                ref={(element) => {
-                  rowRefs.current[index] = element;
-                }}
-                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(220px,1.4fr)_auto] items-center gap-4 border-b border-slate-100 px-4 py-4 transition-colors [content-visibility:auto] ${
-                  isFocused ? 'ring-2 ring-blue-200 bg-blue-50' : ''
-                } ${isSelected ? 'bg-green-50 border-green-200' : ''}`}
-                role="row"
-                tabIndex={0}
-                onKeyDown={(e) => handleKeyDown(e, index)}
-                onFocus={() => setFocusedRow(index)}
-                onBlur={() => setFocusedRow(null)}
-                onClick={() => {
-                  if (canMakePick) handlePlayerSelect(player);
-                }}
-                aria-selected={isSelected}
-                aria-rowindex={index + 1}
-              >
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200">
-                    <span className="text-lg font-bold text-blue-600">
-                      {player.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate font-semibold text-slate-900">{player.name}</h3>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                      <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
-                        {player.position}
-                      </span>
-                      <span>{player.club}</span>
-                      {player.adp && <span>ADP: {player.adp}</span>}
-                      {isQueued && <span className="font-medium text-blue-600">Queued</span>}
-                      {isWatched && <span className="font-medium text-amber-600">Watchlist</span>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-slate-900">
-                    {typeof player.avgPoints === 'number'
-                      ? `${player.avgPoints.toFixed(1)} avg`
-                      : typeof player.averagePoints === 'number'
-                        ? `${player.averagePoints.toFixed(1)} avg`
-                        : 'No average yet'}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {player.gamesPlayed
-                      ? `${player.gamesPlayed} games tracked`
-                      : 'Season profile loading'}
-                  </div>
-
-                  {player.injuryStatus && player.injuryStatus !== 'healthy' && (
-                    <div className="mt-2">
-                      <span
-                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          player.injuryStatus === 'out'
-                            ? 'bg-red-100 text-red-800'
-                            : player.injuryStatus === 'injured'
-                              ? 'bg-orange-100 text-orange-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                        }`}
-                      >
-                        {player.injuryStatus === 'out'
-                          ? '🚫 Out'
-                          : player.injuryStatus === 'injured'
-                            ? '🩹 Injured'
-                            : '❓ Questionable'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="min-w-0">
-                  {visibleCategories.length > 0 ? (
-                    <CompactStatsRow
-                      stats={player.stats as any}
-                      selectedCategories={visibleCategories}
-                      maxDisplay={visibleCategories.length}
-                      className="flex-wrap gap-x-3 gap-y-2"
-                    />
-                  ) : (
-                    <div className="text-sm text-slate-500">
-                      League categories not configured yet.
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleWatchlist(player);
-                    }}
-                    disabled={isLoading}
-                    className={`px-3 py-2 rounded-md font-medium transition-colors ${
-                      !isLoading && isWatched
-                        ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2'
-                        : !isLoading
-                          ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2'
-                          : 'border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                    }`}
-                    aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
-                  >
-                    {isWatched ? 'Watched' : 'Watch'}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAddToQueue(player);
-                    }}
-                    disabled={isLoading || isQueued}
-                    className={`px-3 py-2 rounded-md font-medium transition-colors ${
-                      !isLoading && !isQueued
-                        ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2'
-                        : 'border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                    }`}
-                    aria-label={
-                      isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`
-                    }
-                  >
-                    {isQueued ? 'Queued' : 'Queue'}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePlayerSelect(player);
-                    }}
-                    disabled={!canMakePick || isLoading}
-                    className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                      canMakePick && !isLoading
-                        ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                    aria-label={`Select ${player.name}`}
-                  >
-                    {isLoading ? 'Selecting...' : 'Select'}
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
+          {filteredPlayers.map((player, index) => (
+            <PlayerGridRow
+              key={player.id}
+              player={player}
+              index={index}
+              isFocused={focusedRow === index}
+              isSelected={selectedPlayerId === player.id}
+              isQueued={queuedIds.has(player.id)}
+              isWatched={watchedIds.has(player.id)}
+              canMakePick={canMakePick}
+              isLoading={isLoading}
+              visibleCategories={visibleCategories}
+              onKeyDown={handleKeyDown}
+              onFocus={setFocusedRow}
+              onBlur={() => setFocusedRow(null)}
+              onPlayerSelect={handlePlayerSelect}
+              onAddToQueue={onAddToQueue}
+              onToggleWatchlist={onToggleWatchlist}
+              setRowRef={setRowRef}
+            />
+          ))}
         </div>
 
         {/* Loading Overlay */}
@@ -445,4 +324,263 @@ export default function PlayerGrid({
       </div>
     </div>
   );
+}
+
+interface PlayerGridRowProps {
+  player: DraftPlayer;
+  index: number;
+  isFocused: boolean;
+  isSelected: boolean;
+  isQueued: boolean;
+  isWatched: boolean;
+  canMakePick: boolean;
+  isLoading: boolean;
+  visibleCategories: FantasyCategoryKey[];
+  onKeyDown: (event: React.KeyboardEvent, playerIndex: number) => void;
+  onFocus: (index: number) => void;
+  onBlur: () => void;
+  onPlayerSelect: (player: DraftPlayer) => void;
+  onAddToQueue: (player: DraftPlayer) => void;
+  onToggleWatchlist: (player: DraftPlayer) => void;
+  setRowRef: (index: number, element: HTMLDivElement | null) => void;
+}
+
+function PlayerGridRow({
+  player,
+  index,
+  isFocused,
+  isSelected,
+  isQueued,
+  isWatched,
+  canMakePick,
+  isLoading,
+  visibleCategories,
+  onKeyDown,
+  onFocus,
+  onBlur,
+  onPlayerSelect,
+  onAddToQueue,
+  onToggleWatchlist,
+  setRowRef,
+}: PlayerGridRowProps): React.JSX.Element {
+  return (
+    <motion.div
+      ref={(element) => setRowRef(index, element)}
+      className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(220px,1.4fr)_auto] items-center gap-4 border-b border-slate-100 px-4 py-4 transition-colors [content-visibility:auto] ${
+        isFocused ? 'ring-2 ring-blue-200 bg-blue-50' : ''
+      } ${isSelected ? 'bg-green-50 border-green-200' : ''}`}
+      role="row"
+      tabIndex={0}
+      onKeyDown={(event) => onKeyDown(event, index)}
+      onFocus={() => onFocus(index)}
+      onBlur={onBlur}
+      onClick={() => {
+        if (canMakePick) onPlayerSelect(player);
+      }}
+      aria-selected={isSelected}
+      aria-rowindex={index + 1}
+    >
+      <PlayerIdentity player={player} isQueued={isQueued} isWatched={isWatched} />
+      <PlayerProfile player={player} />
+      <PlayerStatsCell player={player} visibleCategories={visibleCategories} />
+      <PlayerActions
+        player={player}
+        isQueued={isQueued}
+        isWatched={isWatched}
+        canMakePick={canMakePick}
+        isLoading={isLoading}
+        onPlayerSelect={onPlayerSelect}
+        onAddToQueue={onAddToQueue}
+        onToggleWatchlist={onToggleWatchlist}
+      />
+    </motion.div>
+  );
+}
+
+function PlayerIdentity({
+  player,
+  isQueued,
+  isWatched,
+}: {
+  player: DraftPlayer;
+  isQueued: boolean;
+  isWatched: boolean;
+}): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 items-center gap-4">
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200">
+        <span className="text-lg font-bold text-blue-600">
+          {player.name.charAt(0).toUpperCase()}
+        </span>
+      </div>
+      <div className="min-w-0">
+        <h3 className="truncate font-semibold text-slate-900">{player.name}</h3>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+          <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
+            {player.position}
+          </span>
+          <span>{player.club}</span>
+          {player.adp && <span>ADP: {player.adp}</span>}
+          {isQueued && <span className="font-medium text-blue-600">Queued</span>}
+          {isWatched && <span className="font-medium text-amber-600">Watchlist</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayerProfile({ player }: { player: DraftPlayer }): React.JSX.Element {
+  return (
+    <div className="min-w-0">
+      <div className="text-sm font-medium text-slate-900">{formatPlayerAverage(player)}</div>
+      <div className="mt-1 text-xs text-slate-500">
+        {player.gamesPlayed ? `${player.gamesPlayed} games tracked` : 'Season profile loading'}
+      </div>
+      <PlayerInjuryBadge player={player} />
+    </div>
+  );
+}
+
+function formatPlayerAverage(player: DraftPlayer): string {
+  if (typeof player.avgPoints === 'number') return `${player.avgPoints.toFixed(1)} avg`;
+  if (typeof player.averagePoints === 'number') return `${player.averagePoints.toFixed(1)} avg`;
+  return 'No average yet';
+}
+
+function PlayerInjuryBadge({ player }: { player: DraftPlayer }): React.JSX.Element | null {
+  if (!player.injuryStatus || player.injuryStatus === 'healthy') return null;
+
+  const injuryStyle =
+    player.injuryStatus === 'out'
+      ? 'bg-red-100 text-red-800'
+      : player.injuryStatus === 'injured'
+        ? 'bg-orange-100 text-orange-800'
+        : 'bg-yellow-100 text-yellow-800';
+  const injuryLabel =
+    player.injuryStatus === 'out'
+      ? '🚫 Out'
+      : player.injuryStatus === 'injured'
+        ? '🩹 Injured'
+        : '❓ Questionable';
+
+  return (
+    <div className="mt-2">
+      <span
+        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${injuryStyle}`}
+      >
+        {injuryLabel}
+      </span>
+    </div>
+  );
+}
+
+function PlayerStatsCell({
+  player,
+  visibleCategories,
+}: {
+  player: DraftPlayer;
+  visibleCategories: FantasyCategoryKey[];
+}): React.JSX.Element {
+  return (
+    <div className="min-w-0">
+      {visibleCategories.length > 0 ? (
+        <CompactStatsRow
+          stats={player.stats as PlayerStats | undefined}
+          selectedCategories={visibleCategories}
+          maxDisplay={visibleCategories.length}
+          className="flex-wrap gap-x-3 gap-y-2"
+        />
+      ) : (
+        <div className="text-sm text-slate-500">League categories not configured yet.</div>
+      )}
+    </div>
+  );
+}
+
+function PlayerActions({
+  player,
+  isQueued,
+  isWatched,
+  canMakePick,
+  isLoading,
+  onPlayerSelect,
+  onAddToQueue,
+  onToggleWatchlist,
+}: {
+  player: DraftPlayer;
+  isQueued: boolean;
+  isWatched: boolean;
+  canMakePick: boolean;
+  isLoading: boolean;
+  onPlayerSelect: (player: DraftPlayer) => void;
+  onAddToQueue: (player: DraftPlayer) => void;
+  onToggleWatchlist: (player: DraftPlayer) => void;
+}): React.JSX.Element {
+  const watchButtonClassName = getWatchButtonClassName(isWatched, isLoading);
+  const queueButtonClassName = getQueueButtonClassName(isQueued, isLoading);
+  const selectButtonClassName = getSelectButtonClassName(canMakePick, isLoading);
+
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <button
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleWatchlist(player);
+        }}
+        disabled={isLoading}
+        className={watchButtonClassName}
+        aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
+      >
+        {isWatched ? 'Watched' : 'Watch'}
+      </button>
+      <button
+        onClick={(event) => {
+          event.stopPropagation();
+          onAddToQueue(player);
+        }}
+        disabled={isLoading || isQueued}
+        className={queueButtonClassName}
+        aria-label={isQueued ? `${player.name} already in queue` : `Add ${player.name} to queue`}
+      >
+        {isQueued ? 'Queued' : 'Queue'}
+      </button>
+      <button
+        onClick={(event) => {
+          event.stopPropagation();
+          onPlayerSelect(player);
+        }}
+        disabled={!canMakePick || isLoading}
+        className={selectButtonClassName}
+        aria-label={`Select ${player.name}`}
+      >
+        {isLoading ? 'Selecting...' : 'Select'}
+      </button>
+    </div>
+  );
+}
+
+function getWatchButtonClassName(isWatched: boolean, isLoading: boolean): string {
+  const base = 'px-3 py-2 rounded-md font-medium transition-colors';
+  if (isLoading)
+    return `${base} border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed`;
+  if (isWatched) {
+    return `${base} border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2`;
+  }
+  return `${base} border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2`;
+}
+
+function getQueueButtonClassName(isQueued: boolean, isLoading: boolean): string {
+  const base = 'px-3 py-2 rounded-md font-medium transition-colors';
+  if (isLoading || isQueued) {
+    return `${base} border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed`;
+  }
+  return `${base} border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus:ring-2 focus:ring-slate-400 focus:ring-offset-2`;
+}
+
+function getSelectButtonClassName(canMakePick: boolean, isLoading: boolean): string {
+  const base = 'px-4 py-2 rounded-md font-medium transition-colors';
+  if (canMakePick && !isLoading) {
+    return `${base} bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`;
+  }
+  return `${base} bg-gray-300 text-gray-500 cursor-not-allowed`;
 }
