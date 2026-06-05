@@ -60,7 +60,17 @@
     "codex:rewrite": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/rewrite.sh'",
     "codex:review:committed": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/review-against-main.sh'",
     "codex:review:branch": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/review-against-main.sh origin/main'",
-    "codex:trigger": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/trigger-review.sh'"
+    "codex:trigger": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/trigger-review.sh'",
+    "codex:council": "node Scripts/codex/council.mjs",
+    "codex:council:diff": "node Scripts/codex/council.mjs --diff",
+    "codex:council:logical": "node Scripts/codex/council.mjs --provider logical",
+    "codex:council:logical:diff": "node Scripts/codex/council.mjs --provider logical --diff",
+    "codex:council:local": "node Scripts/codex/council.mjs --provider logical",
+    "codex:council:local:diff": "node Scripts/codex/council.mjs --provider logical --diff",
+    "codex:council:ollama": "node Scripts/codex/council.mjs --provider ollama",
+    "codex:council:ollama:diff": "node Scripts/codex/council.mjs --provider ollama --diff",
+    "codex:council:openrouter": "node Scripts/codex/council.mjs --provider openrouter",
+    "codex:commit:reviewed": "node Scripts/codex/reviewed-commit.mjs"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",
