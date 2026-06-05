@@ -8,7 +8,10 @@ describe('league detail route architecture', () => {
       join(process.cwd(), 'src/app/api/leagues/[id]/route.ts'),
       'utf8'
     );
-    const pageSource = readFileSync(join(process.cwd(), 'src/app/leagues/[id]/page.tsx'), 'utf8');
+    const pageSource = readFileSync(
+      join(process.cwd(), 'src/app/(app)/leagues/[id]/page.tsx'),
+      'utf8'
+    );
 
     expect(routeSource).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
     expect(routeSource).toContain("from '@/lib/leagueMembership'");
