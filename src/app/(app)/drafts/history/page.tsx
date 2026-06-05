@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AppLayout } from '@/components/navigation';
+import type { JSX } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { AlertTriangle, Archive, CalendarClock, ChevronLeft, Loader2, Users } from 'lucide-react';
+
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
+import { AppLayout } from '@/components/navigation';
 
 interface DraftHistory {
   id: string;
@@ -28,7 +32,30 @@ interface DraftHistory {
   }>;
 }
 
-export default function DraftHistoryPage() {
+function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('en-AU', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getStatusClasses(status: string): string {
+  if (status === 'COMPLETED') {
+    return 'bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]';
+  }
+  if (status === 'PAUSED') {
+    return 'bg-[color:var(--league-warning-soft)] text-[color:var(--league-warning)]';
+  }
+  if (status === 'CANCELLED') {
+    return 'bg-[color:var(--league-danger-soft)] text-[color:var(--league-danger)]';
+  }
+  return 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]';
+}
+
+export default function DraftHistoryPage(): JSX.Element {
   const { user } = useAuth();
   const [drafts, setDrafts] = useState<DraftHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,13 +63,14 @@ export default function DraftHistoryPage() {
 
   useEffect(() => {
     const fetchDraftHistory = async () => {
-      if (!user) return;
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
         setIsLoading(true);
         setError(null);
-
-        // Fetch user's draft history
         const response = await fetchApi('drafts/history');
 
         if (response.success) {
@@ -58,167 +86,208 @@ export default function DraftHistoryPage() {
       }
     };
 
-    fetchDraftHistory();
+    void fetchDraftHistory();
   }, [user]);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-AU', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const getStatusBadge = (status: string) => {
-    const statusColors = {
-      COMPLETED: 'bg-green-100 text-green-800',
-      PAUSED: 'bg-yellow-100 text-yellow-800',
-      CANCELLED: 'bg-red-100 text-red-800',
-    };
-
-    return (
-      <span
-        className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}
-      >
-        {status}
-      </span>
-    );
-  };
 
   if (!user) {
     return (
       <AppLayout>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign in Required</h1>
-            <p className="text-gray-600">Please sign in to view your draft history.</p>
-          </div>
-        </div>
+        <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-10 text-[color:var(--league-text)]">
+          <section className="mx-auto max-w-md rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 text-center shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
+              <Archive className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in required</h1>
+            <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
+              Sign in to review completed draft rooms and archived roster outcomes.
+            </p>
+            <Link
+              href="/login"
+              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
+            >
+              Sign in
+            </Link>
+          </section>
+        </main>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
-      <main className="mx-auto max-w-7xl p-6">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Draft History</h1>
-          <p className="text-gray-600 mt-2">
-            Review your completed drafts and analyze your team selections.
-          </p>
-        </header>
-
-        {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Loading draft history...</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <svg
-                className="h-5 w-5 text-red-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19c-.77.833.192 2.5 1.732 2.5z"
-                />
-              </svg>
-              <span className="text-red-700">{error}</span>
-            </div>
-          </div>
-        )}
-
-        {!isLoading && !error && drafts.length === 0 && (
-          <div className="text-center py-12">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+      <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+          <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
+            <Link
+              href="/drafts"
+              className="inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No drafts yet</h3>
-            <p className="mt-1 text-sm text-gray-500">Complete your first draft to see it here.</p>
-          </div>
-        )}
-
-        {!isLoading && !error && drafts.length > 0 && (
-          <div className="space-y-6">
-            {drafts.map((draft) => (
-              <div
-                key={draft.id}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
-              >
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{draft.name}</h3>
-                      <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
-                        <span>Created: {formatDate(draft.createdAt)}</span>
-                        {draft.completedAt && (
-                          <span>Completed: {formatDate(draft.completedAt)}</span>
-                        )}
-                        <span>{draft.totalPicks} picks</span>
-                      </div>
-                    </div>
-                    {getStatusBadge(draft.status)}
-                  </div>
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              Draft center
+            </Link>
+            <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <div className="max-w-3xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                  Archive
+                </p>
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
+                  Draft history
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--league-text-muted)] sm:text-base">
+                  Review completed drafts, compare roster construction, and audit how each round
+                  unfolded.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:min-w-[320px]">
+                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                    Drafts
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-[color:var(--league-text)]">
+                    {drafts.length}
+                  </p>
                 </div>
-
-                <div className="px-6 py-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">Team Rosters</h4>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {draft.participants.map((participant) => (
-                      <div key={participant.id} className="border border-gray-200 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <h5 className="font-medium text-gray-900">{participant.teamName}</h5>
-                          <span className="text-xs text-gray-500">
-                            {participant.picks.length} players
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          {participant.picks
-                            .sort((a, b) => a.overall - b.overall)
-                            .map((pick) => (
-                              <div
-                                key={pick.overall}
-                                className="flex items-center justify-between text-xs"
-                              >
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-gray-500">#{pick.overall}</span>
-                                  <span className="font-medium">{pick.player.name}</span>
-                                  <span className="text-gray-500">
-                                    {pick.player.position} • {pick.player.club}
-                                  </span>
-                                </div>
-                                <span className="text-gray-400">R{pick.round}</span>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                    Picks
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-[color:var(--league-text)]">
+                    {drafts.reduce((sum, draft) => sum + draft.totalPicks, 0)}
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          </section>
+
+          {isLoading && (
+            <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center">
+              <Loader2
+                className="mx-auto h-8 w-8 animate-spin text-[color:var(--league-primary)]"
+                aria-hidden="true"
+              />
+              <p className="mt-4 text-sm font-semibold text-[color:var(--league-text)]">
+                Loading draft history
+              </p>
+            </section>
+          )}
+
+          {error && (
+            <section className="rounded-[24px] border border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] p-5 text-[color:var(--league-danger)]">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                <p className="text-sm font-semibold">{error}</p>
+              </div>
+            </section>
+          )}
+
+          {!isLoading && !error && drafts.length === 0 && (
+            <section className="rounded-[28px] border border-dashed border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
+                <Archive className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <h2 className="mt-4 text-lg font-semibold text-[color:var(--league-text)]">
+                No completed drafts yet
+              </h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[color:var(--league-text-muted)]">
+                Completed rooms will appear here with team rosters, pick counts, and round-by-round
+                selection history.
+              </p>
+              <Link
+                href="/drafts/create"
+                className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
+              >
+                Create draft
+              </Link>
+            </section>
+          )}
+
+          {!isLoading && !error && drafts.length > 0 && (
+            <section className="space-y-5">
+              {drafts.map((draft) => (
+                <article
+                  key={draft.id}
+                  className="overflow-hidden rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_18px_55px_-44px_rgba(23,34,48,0.4)]"
+                >
+                  <div className="border-b border-[color:var(--league-border)] p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold tracking-tight text-[color:var(--league-text)]">
+                          {draft.name}
+                        </h2>
+                        <div className="mt-2 flex flex-wrap gap-3 text-sm text-[color:var(--league-text-muted)]">
+                          <span className="inline-flex items-center gap-1.5">
+                            <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                            Created {formatDate(draft.createdAt)}
+                          </span>
+                          {draft.completedAt && (
+                            <span>Completed {formatDate(draft.completedAt)}</span>
+                          )}
+                          <span>{draft.totalPicks} picks</span>
+                        </div>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClasses(
+                          draft.status
+                        )}`}
+                      >
+                        {draft.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[color:var(--league-text)]">
+                      <Users
+                        className="h-4 w-4 text-[color:var(--league-text-muted)]"
+                        aria-hidden="true"
+                      />
+                      Team rosters
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      {draft.participants.map((participant) => (
+                        <div
+                          key={participant.id}
+                          className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="truncate text-sm font-semibold text-[color:var(--league-text)]">
+                              {participant.teamName}
+                            </h3>
+                            <span className="shrink-0 rounded-full bg-[color:var(--league-primary-soft)] px-2 py-1 text-xs font-semibold text-[color:var(--league-primary)]">
+                              {participant.picks.length}
+                            </span>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {[...participant.picks]
+                              .sort((a, b) => a.overall - b.overall)
+                              .map((pick) => (
+                                <div
+                                  key={pick.overall}
+                                  className="flex items-center justify-between gap-3 text-xs"
+                                >
+                                  <div className="min-w-0">
+                                    <span className="font-semibold text-[color:var(--league-text)]">
+                                      #{pick.overall} {pick.player.name}
+                                    </span>
+                                    <span className="ml-1 text-[color:var(--league-text-muted)]">
+                                      {pick.player.position} / {pick.player.club}
+                                    </span>
+                                  </div>
+                                  <span className="shrink-0 text-[color:var(--league-text-muted)]">
+                                    R{pick.round}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </section>
+          )}
+        </div>
       </main>
     </AppLayout>
   );

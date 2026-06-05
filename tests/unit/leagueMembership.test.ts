@@ -211,9 +211,7 @@ describe('leagueMembership architecture helpers', () => {
         },
       ],
     });
-    const embeddedMembers = {
-      orderBy: vi.fn(() => ({ get: embeddedGet })),
-    };
+    const embeddedMembers = { get: embeddedGet };
     const leagueDoc = {
       collection: vi.fn(() => embeddedMembers),
     };
@@ -229,7 +227,7 @@ describe('leagueMembership architecture helpers', () => {
     expect(adminMocks.collection).toHaveBeenCalledWith('leagues');
     expect(leaguesCollection.doc).toHaveBeenCalledWith('league-1');
     expect(leagueDoc.collection).toHaveBeenCalledWith('members');
-    expect(embeddedMembers.orderBy).toHaveBeenCalledWith('joinedAt', 'asc');
+    expect(embeddedMembers.get).toHaveBeenCalled();
     expect(result.map((member) => member.userId)).toEqual(['user-1', 'user-2']);
     expect(result[0]).toMatchObject({
       id: 'user-1',
@@ -239,14 +237,63 @@ describe('leagueMembership architecture helpers', () => {
     });
   });
 
+  it('keeps embedded members that are missing joinedAt instead of falling through to legacy reads', async () => {
+    const embeddedGet = vi.fn().mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'user-2',
+          data: () => ({
+            leagueId: 'league-1',
+            userId: 'user-2',
+            teamName: 'Second Team',
+            role: 'member',
+            isActive: true,
+          }),
+        },
+        {
+          id: 'user-1',
+          data: () => ({
+            leagueId: 'league-1',
+            userId: 'user-1',
+            teamName: 'First Team',
+            role: 'owner',
+            isActive: true,
+          }),
+        },
+      ],
+    });
+    const embeddedMembers = { get: embeddedGet };
+    const leagueDoc = {
+      collection: vi.fn(() => embeddedMembers),
+    };
+    const leaguesCollection = {
+      doc: vi.fn(() => leagueDoc),
+    };
+    const legacyCollection = {
+      where: vi.fn(() => legacyCollection),
+      get: vi.fn(),
+    };
+
+    adminMocks.collection.mockImplementation((collectionName: string) => {
+      if (collectionName === 'leagues') return leaguesCollection;
+      if (collectionName === 'leagueMembers') return legacyCollection;
+      throw new Error(`Unexpected collection ${collectionName}`);
+    });
+
+    const result = await listActiveLeagueMembers('league-1');
+
+    expect(embeddedMembers.get).toHaveBeenCalled();
+    expect(legacyCollection.get).not.toHaveBeenCalled();
+    expect(result.map((member) => member.userId)).toEqual(['user-2', 'user-1']);
+  });
+
   it('falls back to active legacy members only when embedded members are absent', async () => {
     const embeddedGet = vi.fn().mockResolvedValue({
       empty: true,
       docs: [],
     });
-    const embeddedMembers = {
-      orderBy: vi.fn(() => ({ get: embeddedGet })),
-    };
+    const embeddedMembers = { get: embeddedGet };
     const leagueDoc = {
       collection: vi.fn(() => embeddedMembers),
     };
@@ -275,7 +322,7 @@ describe('leagueMembership architecture helpers', () => {
     });
     const legacyQuery = {
       where: vi.fn(() => legacyQuery),
-      orderBy: vi.fn(() => ({ get: legacyGet })),
+      get: legacyGet,
     };
 
     adminMocks.collection.mockImplementation((collectionName: string) => {
@@ -288,7 +335,7 @@ describe('leagueMembership architecture helpers', () => {
 
     expect(adminMocks.collection).toHaveBeenCalledWith('leagueMembers');
     expect(legacyQuery.where).toHaveBeenCalledWith('leagueId', '==', 'league-1');
-    expect(legacyQuery.orderBy).toHaveBeenCalledWith('joinedAt', 'asc');
+    expect(legacyQuery.get).toHaveBeenCalled();
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       id: 'active-legacy',

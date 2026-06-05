@@ -67,7 +67,10 @@ export function getLeagueMembershipRefs(
   leagueId: string,
   userId: string,
   topLevelMemberId = getLeagueMemberDocId(leagueId, userId)
-) {
+): {
+  topLevelRef: FirebaseFirestore.DocumentReference;
+  embeddedRef: FirebaseFirestore.DocumentReference;
+} {
   return {
     topLevelRef: adminDb.collection('leagueMembers').doc(topLevelMemberId),
     embeddedRef: adminDb.doc(`leagues/${leagueId}/members/${userId}`),
@@ -195,7 +198,6 @@ export async function listActiveLeagueMembers(
     .collection('leagues')
     .doc(leagueId)
     .collection('members')
-    .orderBy('joinedAt', 'asc')
     .get();
 
   if (!embeddedSnap.empty) {
@@ -205,7 +207,6 @@ export async function listActiveLeagueMembers(
   const legacySnap = await adminDb
     .collection('leagueMembers')
     .where('leagueId', '==', leagueId)
-    .orderBy('joinedAt', 'asc')
     .get();
 
   return toActiveMemberList(legacySnap.docs, leagueId, 'legacy');

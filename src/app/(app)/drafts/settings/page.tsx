@@ -1,9 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AppLayout } from '@/components/navigation';
+import type { JSX } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
+  ChevronLeft,
+  Clock3,
+  Loader2,
+  RotateCcw,
+  Save,
+  Volume2,
+  Zap,
+} from 'lucide-react';
+
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
+import { AppLayout } from '@/components/navigation';
 
 interface DraftPreferences {
   autoPickEnabled: boolean;
@@ -15,17 +30,60 @@ interface DraftPreferences {
   timezone: string;
 }
 
-export default function DraftSettingsPage() {
+const defaultPreferences: DraftPreferences = {
+  autoPickEnabled: false,
+  autoPickTime: 120,
+  notificationsEnabled: true,
+  soundEnabled: true,
+  defaultTimePerPick: 120,
+  preferredDraftType: 'SNAKE',
+  timezone: 'Australia/Melbourne',
+};
+
+function ToggleField({
+  id,
+  checked,
+  title,
+  description,
+  icon: Icon,
+  onChange,
+}: {
+  id: string;
+  checked: boolean;
+  title: string;
+  description: string;
+  icon: typeof Bell;
+  onChange: (checked: boolean) => void;
+}): JSX.Element {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+      <div className="flex min-w-0 gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
+          <Icon className="h-5 w-5" aria-hidden="true" />
+        </div>
+        <div>
+          <label htmlFor={id} className="text-sm font-semibold text-[color:var(--league-text)]">
+            {title}
+          </label>
+          <p className="mt-1 text-sm leading-5 text-[color:var(--league-text-muted)]">
+            {description}
+          </p>
+        </div>
+      </div>
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-5 w-5 shrink-0 rounded border-[color:var(--league-border)] accent-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/30"
+      />
+    </div>
+  );
+}
+
+export default function DraftSettingsPage(): JSX.Element {
   const { user } = useAuth();
-  const [preferences, setPreferences] = useState<DraftPreferences>({
-    autoPickEnabled: false,
-    autoPickTime: 120,
-    notificationsEnabled: true,
-    soundEnabled: true,
-    defaultTimePerPick: 120,
-    preferredDraftType: 'SNAKE',
-    timezone: 'Australia/Melbourne',
-  });
+  const [preferences, setPreferences] = useState<DraftPreferences>(defaultPreferences);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -43,13 +101,11 @@ export default function DraftSettingsPage() {
         }
       } catch (err) {
         console.error('Error loading draft settings:', err);
-        // Use default settings if loading fails
       } finally {
         setIsLoading(false);
       }
     };
 
-    // Detect user's timezone on first load
     const detectTimezone = () => {
       try {
         const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -62,9 +118,27 @@ export default function DraftSettingsPage() {
       }
     };
 
-    loadSettings();
+    void loadSettings();
     detectTimezone();
   }, [user]);
+
+  const summaryItems = useMemo(
+    () => [
+      {
+        icon: Zap,
+        label: 'Auto-pick',
+        value: preferences.autoPickEnabled ? `${preferences.autoPickTime}s` : 'Off',
+      },
+      {
+        icon: Bell,
+        label: 'Notifications',
+        value: preferences.notificationsEnabled ? 'On' : 'Off',
+      },
+      { icon: Clock3, label: 'Default clock', value: `${preferences.defaultTimePerPick}s` },
+      { icon: Volume2, label: 'Sound', value: preferences.soundEnabled ? 'On' : 'Off' },
+    ],
+    [preferences]
+  );
 
   const handleSave = async () => {
     if (!user) return;
@@ -80,261 +154,306 @@ export default function DraftSettingsPage() {
       });
 
       if (response.success) {
-        setMessage({ type: 'success', text: 'Settings saved successfully!' });
+        setMessage({ type: 'success', text: 'Draft settings saved.' });
       } else {
-        setMessage({ type: 'error', text: response.error || 'Failed to save settings' });
+        setMessage({ type: 'error', text: response.error || 'Failed to save settings.' });
       }
     } catch (_err) {
       console.error('Failed to save draft settings:', _err);
-      setMessage({ type: 'error', text: 'Failed to save settings' });
+      setMessage({ type: 'error', text: 'Failed to save settings.' });
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleReset = () => {
-    setPreferences({
-      autoPickEnabled: false,
-      autoPickTime: 120,
-      notificationsEnabled: true,
-      soundEnabled: true,
-      defaultTimePerPick: 120,
-      preferredDraftType: 'SNAKE',
-      timezone: 'Australia/Melbourne',
-    });
+    setPreferences(defaultPreferences);
     setMessage(null);
   };
 
   if (!user) {
     return (
       <AppLayout>
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign in Required</h1>
-            <p className="text-gray-600">Please sign in to manage your draft settings.</p>
-          </div>
-        </div>
+        <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-10 text-[color:var(--league-text)]">
+          <section className="mx-auto max-w-md rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 text-center shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
+              <Clock3 className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in required</h1>
+            <p className="mt-2 text-sm leading-6 text-[color:var(--league-text-muted)]">
+              Sign in to manage draft timers, notifications, sound, and auto-pick preferences.
+            </p>
+            <Link
+              href="/login"
+              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
+            >
+              Sign in
+            </Link>
+          </section>
+        </main>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
-      <main className="mx-auto max-w-4xl p-6">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Draft Settings</h1>
-          <p className="text-gray-600 mt-2">Customize your draft experience and preferences.</p>
-        </header>
+      <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
+        <div className="mx-auto grid w-full max-w-[1180px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
+          <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
+            <Link
+              href="/drafts"
+              className="inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              Draft center
+            </Link>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Loading settings...</span>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {/* Auto-Pick Settings */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Auto-Pick Settings</h2>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label
-                      htmlFor="auto-pick-enabled"
-                      className="text-sm font-medium text-gray-700"
-                    >
-                      Enable Auto-Pick
-                    </label>
-                    <p className="text-sm text-gray-500">
-                      Automatically pick players when your time runs out
-                    </p>
-                  </div>
-                  <input
-                    id="auto-pick-enabled"
-                    type="checkbox"
-                    checked={preferences.autoPickEnabled}
-                    onChange={(e) =>
-                      setPreferences((prev) => ({ ...prev, autoPickEnabled: e.target.checked }))
-                    }
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                </div>
+            <header className="mt-6">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                Preferences
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
+                Draft settings
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[color:var(--league-text-muted)] sm:text-base">
+                Set the default draft experience for timers, auto-pick behavior, notifications, and
+                room preferences.
+              </p>
+            </header>
 
-                {preferences.autoPickEnabled && (
-                  <div>
-                    <label
-                      htmlFor="auto-pick-time"
-                      className="block text-sm font-medium text-gray-700 mb-2"
-                    >
-                      Auto-Pick Time (seconds)
-                    </label>
-                    <select
-                      id="auto-pick-time"
-                      value={preferences.autoPickTime}
-                      onChange={(e) =>
-                        setPreferences((prev) => ({
-                          ...prev,
-                          autoPickTime: parseInt(e.target.value),
-                        }))
+            {isLoading ? (
+              <div className="mt-8 rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-8 text-center">
+                <Loader2
+                  className="mx-auto h-8 w-8 animate-spin text-[color:var(--league-primary)]"
+                  aria-hidden="true"
+                />
+                <p className="mt-4 text-sm font-semibold text-[color:var(--league-text)]">
+                  Loading settings
+                </p>
+              </div>
+            ) : (
+              <div className="mt-8 space-y-6">
+                <section>
+                  <h2 className="text-base font-semibold text-[color:var(--league-text)]">
+                    Auto-pick
+                  </h2>
+                  <div className="mt-3 space-y-3">
+                    <ToggleField
+                      id="auto-pick-enabled"
+                      checked={preferences.autoPickEnabled}
+                      title="Enable auto-pick"
+                      description="Automatically select a player when your clock expires."
+                      icon={Zap}
+                      onChange={(checked) =>
+                        setPreferences((prev) => ({ ...prev, autoPickEnabled: checked }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value={30}>30 seconds</option>
-                      <option value={60}>1 minute</option>
-                      <option value={90}>1.5 minutes</option>
-                      <option value={120}>2 minutes</option>
-                      <option value={180}>3 minutes</option>
-                    </select>
+                    />
+
+                    {preferences.autoPickEnabled && (
+                      <div>
+                        <label
+                          htmlFor="auto-pick-time"
+                          className="text-sm font-semibold text-[color:var(--league-text)]"
+                        >
+                          Auto-pick time
+                        </label>
+                        <select
+                          id="auto-pick-time"
+                          value={preferences.autoPickTime}
+                          onChange={(e) =>
+                            setPreferences((prev) => ({
+                              ...prev,
+                              autoPickTime: parseInt(e.target.value),
+                            }))
+                          }
+                          className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                        >
+                          <option value={30}>30 seconds</option>
+                          <option value={60}>1 minute</option>
+                          <option value={90}>1.5 minutes</option>
+                          <option value={120}>2 minutes</option>
+                          <option value={180}>3 minutes</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <section>
+                  <h2 className="text-base font-semibold text-[color:var(--league-text)]">
+                    Alerts
+                  </h2>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <ToggleField
+                      id="notifications-enabled"
+                      checked={preferences.notificationsEnabled}
+                      title="Notifications"
+                      description="Receive browser alerts during live draft rooms."
+                      icon={Bell}
+                      onChange={(checked) =>
+                        setPreferences((prev) => ({ ...prev, notificationsEnabled: checked }))
+                      }
+                    />
+                    <ToggleField
+                      id="sound-enabled"
+                      checked={preferences.soundEnabled}
+                      title="Sound"
+                      description="Play sounds for pick and turn events."
+                      icon={Volume2}
+                      onChange={(checked) =>
+                        setPreferences((prev) => ({ ...prev, soundEnabled: checked }))
+                      }
+                    />
+                  </div>
+                </section>
+
+                <section>
+                  <h2 className="text-base font-semibold text-[color:var(--league-text)]">
+                    Defaults
+                  </h2>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="default-time-per-pick"
+                        className="text-sm font-semibold text-[color:var(--league-text)]"
+                      >
+                        Default time per pick
+                      </label>
+                      <select
+                        id="default-time-per-pick"
+                        value={preferences.defaultTimePerPick}
+                        onChange={(e) =>
+                          setPreferences((prev) => ({
+                            ...prev,
+                            defaultTimePerPick: parseInt(e.target.value),
+                          }))
+                        }
+                        className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                      >
+                        <option value={60}>1 minute</option>
+                        <option value={90}>1.5 minutes</option>
+                        <option value={120}>2 minutes</option>
+                        <option value={180}>3 minutes</option>
+                        <option value={300}>5 minutes</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="preferred-draft-type"
+                        className="text-sm font-semibold text-[color:var(--league-text)]"
+                      >
+                        Preferred draft type
+                      </label>
+                      <select
+                        id="preferred-draft-type"
+                        value={preferences.preferredDraftType}
+                        onChange={(e) =>
+                          setPreferences((prev) => ({
+                            ...prev,
+                            preferredDraftType: e.target.value as 'SNAKE' | 'LINEAR',
+                          }))
+                        }
+                        className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                      >
+                        <option value="SNAKE">Snake draft</option>
+                        <option value="LINEAR">Linear draft</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                {message && (
+                  <div
+                    className={`rounded-2xl border px-4 py-3 text-sm font-medium ${
+                      message.type === 'success'
+                        ? 'border-[color:var(--league-success)]/30 bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]'
+                        : 'border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] text-[color:var(--league-danger)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {message.type === 'success' ? (
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {message.text}
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Notification Settings */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Notification Settings</h2>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label
-                      htmlFor="notifications-enabled"
-                      className="text-sm font-medium text-gray-700"
+                <div className="flex flex-col gap-3 border-t border-[color:var(--league-border)] pt-5 sm:flex-row sm:justify-between">
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    Reset defaults
+                  </button>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => window.history.back()}
+                      className="inline-flex h-11 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                     >
-                      Enable Notifications
-                    </label>
-                    <p className="text-sm text-gray-500">
-                      Receive browser notifications during drafts
-                    </p>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isSaving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Save className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {isSaving ? 'Saving' : 'Save settings'}
+                    </button>
                   </div>
-                  <input
-                    id="notifications-enabled"
-                    type="checkbox"
-                    checked={preferences.notificationsEnabled}
-                    onChange={(e) =>
-                      setPreferences((prev) => ({
-                        ...prev,
-                        notificationsEnabled: e.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label htmlFor="sound-enabled" className="text-sm font-medium text-gray-700">
-                      Enable Sound
-                    </label>
-                    <p className="text-sm text-gray-500">Play sounds for draft events</p>
-                  </div>
-                  <input
-                    id="sound-enabled"
-                    type="checkbox"
-                    checked={preferences.soundEnabled}
-                    onChange={(e) =>
-                      setPreferences((prev) => ({ ...prev, soundEnabled: e.target.checked }))
-                    }
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Default Draft Settings */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Default Draft Settings</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="default-time-per-pick"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Default Time Per Pick
-                  </label>
-                  <select
-                    id="default-time-per-pick"
-                    value={preferences.defaultTimePerPick}
-                    onChange={(e) =>
-                      setPreferences((prev) => ({
-                        ...prev,
-                        defaultTimePerPick: parseInt(e.target.value),
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value={60}>1 minute</option>
-                    <option value={90}>1.5 minutes</option>
-                    <option value={120}>2 minutes</option>
-                    <option value={180}>3 minutes</option>
-                    <option value={300}>5 minutes</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="preferred-draft-type"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Preferred Draft Type
-                  </label>
-                  <select
-                    id="preferred-draft-type"
-                    value={preferences.preferredDraftType}
-                    onChange={(e) =>
-                      setPreferences((prev) => ({
-                        ...prev,
-                        preferredDraftType: e.target.value as 'SNAKE' | 'LINEAR',
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="SNAKE">Snake Draft</option>
-                    <option value="LINEAR">Linear Draft</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Message Display */}
-            {message && (
-              <div
-                className={`p-4 rounded-lg ${
-                  message.type === 'success'
-                    ? 'bg-green-50 border border-green-200 text-green-700'
-                    : 'bg-red-50 border border-red-200 text-red-700'
-                }`}
-              >
-                {message.text}
               </div>
             )}
+          </section>
 
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-              <button
-                onClick={handleReset}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-              >
-                Reset to Defaults
-              </button>
+          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+            {summaryItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.label}
+                  className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.35)]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)]">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
+                        {item.value}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
 
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => window.history.back()}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {isSaving ? 'Saving...' : 'Save Settings'}
-                </button>
-              </div>
+            <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)]">
+                Timezone
+              </p>
+              <p className="mt-2 text-sm font-semibold text-[color:var(--league-text)]">
+                {preferences.timezone}
+              </p>
             </div>
-          </div>
-        )}
+          </aside>
+        </div>
       </main>
     </AppLayout>
   );

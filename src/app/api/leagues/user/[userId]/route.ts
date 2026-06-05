@@ -2,13 +2,13 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { listActiveUserLeagueMemberships } from '@/lib/leagueMembership';
+import { listActiveLeagueMembers, listActiveUserLeagueMemberships } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const { userId } = await params;
 
@@ -121,14 +121,26 @@ export async function GET(
     const leagues = [];
     if (leagueIds.length > 0) {
       const leaguesRef = adminDb.collection('leagues');
-      const leagueSnapshots = await Promise.all(leagueIds.map((id) => leaguesRef.doc(id).get()));
+      const [leagueSnapshots, activeMemberCounts] = await Promise.all([
+        Promise.all(leagueIds.map((id) => leaguesRef.doc(id).get())),
+        Promise.all(
+          leagueIds.map(async (id) => {
+            const activeMembers = await listActiveLeagueMembers(id);
+            return [id, activeMembers.length] as const;
+          })
+        ),
+      ]);
+      const activeMemberCountByLeagueId = new Map(activeMemberCounts);
 
       for (const leagueDoc of leagueSnapshots) {
         if (leagueDoc.exists) {
           const data = leagueDoc.data();
+          const memberCount = activeMemberCountByLeagueId.get(leagueDoc.id) ?? 0;
           leagues.push({
             id: leagueDoc.id,
             ...data,
+            currentTeams: memberCount,
+            memberCount,
           });
         }
       }

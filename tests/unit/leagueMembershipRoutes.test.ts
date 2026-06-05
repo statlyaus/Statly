@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
+  getAuthenticatedUserId: vi.fn(),
   getUserIdFromRequest: vi.fn(),
 }));
 
@@ -15,6 +16,7 @@ const firestoreMocks = vi.hoisted(() => ({
 const membershipMocks = vi.hoisted(() => ({
   getLeagueMemberDocId: vi.fn(),
   listActiveLeagueMembers: vi.fn(),
+  listActiveUserLeagueMemberships: vi.fn(),
   queueLeagueMembershipPatch: vi.fn(),
   queueLeagueMembershipSet: vi.fn(),
   verifyLeagueMembership: vi.fn(),
@@ -26,10 +28,12 @@ const prismaMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
+  getAuthenticatedUserId: authMocks.getAuthenticatedUserId,
   getUserIdFromRequest: authMocks.getUserIdFromRequest,
 }));
 
 vi.mock('../../src/lib/serverAuth', () => ({
+  getAuthenticatedUserId: authMocks.getAuthenticatedUserId,
   getUserIdFromRequest: authMocks.getUserIdFromRequest,
 }));
 
@@ -50,6 +54,7 @@ vi.mock('../../src/lib/firebaseAdmin', () => ({
 vi.mock('@/lib/leagueMembership', () => ({
   getLeagueMemberDocId: membershipMocks.getLeagueMemberDocId,
   listActiveLeagueMembers: membershipMocks.listActiveLeagueMembers,
+  listActiveUserLeagueMemberships: membershipMocks.listActiveUserLeagueMemberships,
   queueLeagueMembershipPatch: membershipMocks.queueLeagueMembershipPatch,
   queueLeagueMembershipSet: membershipMocks.queueLeagueMembershipSet,
   verifyLeagueMembership: membershipMocks.verifyLeagueMembership,
@@ -58,6 +63,7 @@ vi.mock('@/lib/leagueMembership', () => ({
 vi.mock('../../src/lib/leagueMembership', () => ({
   getLeagueMemberDocId: membershipMocks.getLeagueMemberDocId,
   listActiveLeagueMembers: membershipMocks.listActiveLeagueMembers,
+  listActiveUserLeagueMemberships: membershipMocks.listActiveUserLeagueMemberships,
   queueLeagueMembershipPatch: membershipMocks.queueLeagueMembershipPatch,
   queueLeagueMembershipSet: membershipMocks.queueLeagueMembershipSet,
   verifyLeagueMembership: membershipMocks.verifyLeagueMembership,
@@ -114,6 +120,7 @@ describe('league membership route Firestore architecture', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     authMocks.getUserIdFromRequest.mockResolvedValue('request-user');
+    authMocks.getAuthenticatedUserId.mockResolvedValue('request-user');
     membershipMocks.getLeagueMemberDocId.mockImplementation(
       (leagueId: string, userId: string) => `${leagueId}_${userId}`
     );
@@ -315,6 +322,62 @@ describe('league membership route Firestore architecture', () => {
     expect(membershipMocks.verifyLeagueMembership).toHaveBeenCalledWith('league-1', 'outside-user');
     expect(membershipMocks.listActiveLeagueMembers).not.toHaveBeenCalled();
     expect(firestoreMocks.collection).not.toHaveBeenCalled();
+  });
+
+  it('includes canonical active member counts in user league summaries', async () => {
+    authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
+    membershipMocks.listActiveUserLeagueMemberships.mockResolvedValue([
+      {
+        id: 'league-1_user-1',
+        leagueId: 'league-1',
+        userId: 'user-1',
+        role: 'owner',
+        teamName: 'Owner Team',
+        joinedAt: '2026-05-31T00:00:00.000Z',
+        isActive: true,
+        source: 'embedded',
+      },
+    ]);
+    membershipMocks.listActiveLeagueMembers.mockResolvedValue([
+      activeMember({ id: 'league-1_user-1', userId: 'user-1', teamName: 'Owner Team' }),
+      activeMember({ id: 'league-1_user-2', userId: 'user-2', teamName: 'Second Team' }),
+    ]);
+
+    const leagueDoc = {
+      exists: true,
+      id: 'league-1',
+      data: () => ({
+        name: 'AFL Keepers',
+        status: 'preseason',
+        maxTeams: 4,
+      }),
+    };
+    const leaguesCollection = {
+      doc: vi.fn(() => ({
+        get: vi.fn().mockResolvedValue(leagueDoc),
+      })),
+    };
+    firestoreMocks.collection.mockImplementation((collectionName: string) => {
+      if (collectionName === 'leagues') return leaguesCollection;
+      throw new Error(`Unexpected collection ${collectionName}`);
+    });
+
+    const { GET: getUserLeagues } = await import('../../src/app/api/leagues/user/[userId]/route');
+    const response = await getUserLeagues(
+      new Request('https://statly.test/api/leagues/user/user-1') as NextRequest,
+      { params: Promise.resolve({ userId: 'user-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.leagues).toHaveLength(1);
+    expect(body.leagues[0]).toMatchObject({
+      id: 'league-1',
+      currentTeams: 2,
+      memberCount: 2,
+      maxTeams: 4,
+    });
+    expect(membershipMocks.listActiveLeagueMembers).toHaveBeenCalledWith('league-1');
   });
 });
 
