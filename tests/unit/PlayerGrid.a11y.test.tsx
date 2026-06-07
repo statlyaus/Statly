@@ -102,10 +102,7 @@ describe('PlayerGrid accessibility', () => {
   });
 
   it('keeps the draft player table aligned to semantic tokens and compact radii', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'),
-      'utf8'
-    );
+    const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
 
     expect(source).toContain('border border-border bg-card text-card-foreground');
     expect(source).toContain('bg-background');
