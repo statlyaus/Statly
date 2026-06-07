@@ -35,7 +35,7 @@
  * - Invalid/Unknown: Defaults to WAITING state for safety
  */
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useId, type ReactElement } from 'react';
 import { ClockIcon } from '@heroicons/react/24/outline';
 
 interface DraftParticipant {
@@ -93,7 +93,7 @@ export default function LivePickHeader({
   onTimeExpired,
   onAudioAlert,
   className = '',
-}: LivePickHeaderProps) {
+}: LivePickHeaderProps): ReactElement {
   const [timeLeft, setTimeLeft] = useState(timePerPick);
   const [isFlashing, setIsFlashing] = useState(false);
   const [hasAlerted, setHasAlerted] = useState(false);
@@ -101,6 +101,7 @@ export default function LivePickHeader({
   const onTimeExpiredRef = useRef(onTimeExpired);
   const onAudioAlertRef = useRef(onAudioAlert);
   const hasExpiredRef = useRef(false);
+  const draftOrderLabelId = useId();
 
   useEffect(() => {
     onTimeExpiredRef.current = onTimeExpired;
@@ -316,6 +317,30 @@ export default function LivePickHeader({
     }
   };
 
+  const timerPercent = Math.max(0, Math.min(100, Math.round((timeLeft / timePerPick) * 100)));
+  const timerTone =
+    timeLeft <= 30
+      ? {
+          badge: 'border-destructive/30 bg-destructive/10 text-destructive',
+          bar: 'bg-destructive',
+          rail: 'bg-destructive/15',
+          label: 'Urgent',
+        }
+      : timeLeft <= 60
+        ? {
+            badge: 'border-warning/40 bg-warning/15 text-warning-foreground',
+            bar: 'bg-warning',
+            rail: 'bg-warning/20',
+            label: 'Short clock',
+          }
+        : {
+            badge: 'border-primary/25 bg-primary/10 text-primary',
+            bar: 'bg-primary',
+            rail: 'bg-primary/15',
+            label: 'On pace',
+          };
+  const latestPick = draftData.picks[draftData.picks.length - 1];
+
   // Show paused or waiting state
   if (normalizedStatus === 'PAUSED') {
     return (
@@ -363,230 +388,240 @@ export default function LivePickHeader({
       role="banner"
       aria-label="Live draft status"
     >
-      <div className="rounded-[32px] border border-slate-800/80 bg-[linear-gradient(135deg,#2253d8_0%,#4b2be0_52%,#6b2fc8_100%)] px-5 py-5 text-white shadow-[0_18px_60px_rgba(30,41,59,0.22)] sm:px-6">
-        {/* Main Status Row */}
-        <div
-          className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:items-center"
-          role="region"
-          aria-label="Draft status overview"
-        >
-          {/* Current Pick (Left) */}
-          <div
-            className="text-center lg:text-left"
-            role="region"
-            aria-label="Current pick information"
-          >
-            <div className="flex items-center justify-center gap-3 lg:justify-start">
+      <div className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_19rem]">
+          <div className="border-b border-border p-4 sm:p-5 lg:border-b-0 lg:border-r">
+            <div
+              className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_16rem]"
+              role="region"
+              aria-label="Draft status overview"
+            >
+              <div role="region" aria-label="Current pick information">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+                    Pick {draftData.currentPick}
+                  </span>
+                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    Round {draftData.round} / {draftData.direction}
+                  </span>
+                  {isYourTurn && (
+                    <span
+                      className="rounded-full border border-warning/40 bg-warning/20 px-2.5 py-1 text-xs font-semibold text-warning-foreground"
+                      role="alert"
+                      aria-label="It is your turn to pick"
+                    >
+                      Your turn
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                      On the clock
+                    </p>
+                    <h2 className="mt-1 truncate text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                      {currentTeam?.member.displayName || 'Unknown'}
+                      {isYourTurn && <span className="text-warning-foreground"> / You</span>}
+                    </h2>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {nextTeam && draftData.currentPick < draftData.totalPicks
+                        ? `${nextTeam.member.displayName}${nextTeam.slot === yourSlot ? ' / You' : ''} picks next at #${draftData.currentPick + 1}.`
+                        : 'This is the final pick of the draft.'}
+                    </p>
+                  </div>
+
+                  <div className="w-full rounded-lg border border-border bg-background p-3 sm:w-56">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-muted-foreground">Pick clock</span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${timerTone.badge}`}
+                      >
+                        {timerTone.label}
+                      </span>
+                    </div>
+                    <div
+                      className="mt-2 flex items-baseline gap-2 font-mono text-4xl font-semibold tracking-normal text-foreground"
+                      role="timer"
+                      aria-label={`Time remaining: ${formatTime(timeLeft)}`}
+                      aria-live="polite"
+                    >
+                      <ClockIcon
+                        className={`h-6 w-6 ${timeLeft <= 10 ? 'animate-spin text-destructive' : 'text-muted-foreground'}`}
+                        aria-hidden="true"
+                      />
+                      <span className={timeLeft <= 10 ? 'animate-pulse' : ''}>
+                        {formatTime(timeLeft)}
+                      </span>
+                    </div>
+                    <div className={`mt-3 h-2 overflow-hidden rounded-full ${timerTone.rail}`}>
+                      <div
+                        className={`h-full transition-all duration-1000 ${timerTone.bar}`}
+                        style={{ width: `${timerPercent}%` }}
+                        role="progressbar"
+                        aria-valuenow={timeLeft}
+                        aria-valuemin={0}
+                        aria-valuemax={timePerPick}
+                        aria-label={`Pick timer: ${timerPercent}% remaining`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {!isYourTurn && picksUntilYourTurn > 0 && (
+                  <div
+                    className={`mt-4 inline-flex rounded-full border px-3 py-1 text-sm font-medium transition-opacity ${
+                      picksUntilYourTurn === 1
+                        ? `border-warning/50 bg-warning/20 text-warning-foreground ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse`
+                        : 'border-border bg-muted text-muted-foreground'
+                    }`}
+                    role="status"
+                    aria-live="polite"
+                    aria-label={`Your turn status: ${picksUntilYourTurn === 1 ? 'You are up next' : `${picksUntilYourTurn} picks until your turn`}`}
+                  >
+                    {picksUntilYourTurn === 1
+                      ? "You're up next"
+                      : `${picksUntilYourTurn} pick${picksUntilYourTurn > 1 ? 's' : ''} until your turn`}
+                    {estimatedTimeUntilYourTurn > 0 && (
+                      <span className="ml-1 text-muted-foreground">
+                        / about {formatTime(estimatedTimeUntilYourTurn)}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div
-                className={`h-3 w-3 rounded-full animate-pulse ${isYourTurn ? 'bg-amber-300' : 'bg-emerald-300'}`}
-                role="status"
-                aria-label={isYourTurn ? 'Your turn indicator' : 'Draft in progress indicator'}
-              />
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-                  On the clock
-                </p>
-                <p
-                  className={`text-lg font-semibold ${isYourTurn ? 'text-amber-200' : 'text-white'}`}
-                >
-                  {currentTeam?.member.displayName || 'Unknown'}
-                  {isYourTurn && ' · You'}
-                </p>
+                className="grid grid-cols-2 gap-3 xl:grid-cols-1"
+                role="region"
+                aria-label="Draft progress information"
+              >
+                <div className="rounded-lg border border-border bg-muted/50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Pick progress
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-foreground">
+                    #{draftData.currentPick}{' '}
+                    <span className="text-base font-medium text-muted-foreground">
+                      / {draftData.totalPicks}
+                    </span>
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted/50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Up next
+                  </p>
+                  <p className="mt-2 truncate text-base font-semibold text-foreground">
+                    {nextTeam && draftData.currentPick < draftData.totalPicks
+                      ? nextTeam.member.displayName
+                      : 'Draft ending'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {nextTeam && draftData.currentPick < draftData.totalPicks
+                      ? `Pick #${draftData.currentPick + 1}`
+                      : 'Final selection'}
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Countdown Timer */}
-            <div className="mt-2">
-              <div
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-mono ${
-                  timeLeft <= 30
-                    ? 'bg-red-500/85'
-                    : timeLeft <= 60
-                      ? 'bg-amber-500/85'
-                      : 'bg-emerald-500/85'
-                }`}
-                role="timer"
-                aria-label={`Time remaining: ${formatTime(timeLeft)}`}
-                aria-live="polite"
-              >
-                <ClockIcon className={`w-4 h-4 ${timeLeft <= 10 ? 'animate-spin' : ''}`} />
-                <span className={timeLeft <= 10 ? 'animate-pulse' : ''}>
-                  {formatTime(timeLeft)}
-                </span>
-              </div>
+            <div
+              className="mt-4 border-t border-border pt-4"
+              role="region"
+              aria-label="Draft order visualization"
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
+                  <span
+                    id={draftOrderLabelId}
+                    className="whitespace-nowrap text-xs font-medium text-muted-foreground"
+                  >
+                    Draft order
+                  </span>
+                  <ul className="flex items-center gap-1.5" aria-labelledby={draftOrderLabelId}>
+                    {draftOrder.map((team, index) => (
+                      <li key={team.slot} className="flex items-center">
+                        <span
+                          className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-all ${
+                            team.isCurrent
+                              ? 'border-warning bg-warning text-warning-foreground animate-pulse'
+                              : team.isNext
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : team.isYou
+                                  ? 'border-primary bg-primary text-primary-foreground'
+                                  : 'border-border bg-background text-muted-foreground'
+                          }`}
+                          title={team.name}
+                        >
+                          <span aria-hidden="true">{team.slot}</span>
+                          <span className="sr-only">
+                            {`Team ${team.slot}: ${team.name}${team.isCurrent ? ' (currently picking)' : ''}${team.isNext ? ' (next to pick)' : ''}${team.isYou ? ' (your team)' : ''}`}
+                          </span>
+                        </span>
+                        {index < draftOrder.length - 1 && (
+                          <span className="mx-1 h-px w-3 bg-border" aria-hidden="true" />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  {draftData.participants.length > 8 && (
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">
+                      +{draftData.participants.length - 8} more
+                    </span>
+                  )}
+                </div>
 
-              {/* Progress Bar */}
-              <div className="mx-auto mt-2 h-1 w-32 overflow-hidden rounded-full bg-white/20 lg:mx-0">
-                <div
-                  className={`h-full transition-all duration-1000 ${
-                    timeLeft <= 30
-                      ? 'bg-red-300'
-                      : timeLeft <= 60
-                        ? 'bg-amber-300'
-                        : 'bg-emerald-300'
-                  }`}
-                  style={{ width: `${(timeLeft / timePerPick) * 100}%` }}
-                  role="progressbar"
-                  aria-valuenow={timeLeft}
-                  aria-valuemin={0}
-                  aria-valuemax={timePerPick}
-                  aria-label={`Pick timer: ${Math.round((timeLeft / timePerPick) * 100)}% remaining`}
-                />
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-warning" aria-hidden="true" />
+                    Current
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-primary/40" aria-hidden="true" />
+                    Next
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-primary" aria-hidden="true" />
+                    You
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Draft Progress (Center) */}
-          <div className="text-center" role="region" aria-label="Draft progress information">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-              Pick progress
+          <aside className="bg-muted/40 p-4 sm:p-5" aria-label="Latest draft activity">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Latest pick
             </p>
-            <p className="text-xl font-semibold lg:text-2xl">
-              #{draftData.currentPick}{' '}
-              <span className="text-base text-white/70 lg:text-lg">of {draftData.totalPicks}</span>
-            </p>
-            <p className="text-xs text-white/70 lg:text-sm">
-              Round {draftData.round} • {draftData.direction}
-            </p>
-
-            {/* Your Turn Info */}
-            {!isYourTurn && picksUntilYourTurn > 0 && (
-              <div
-                className={`mt-2 rounded-full px-2 py-1 text-xs transition-all lg:px-3 lg:text-sm ${
-                  picksUntilYourTurn === 1
-                    ? `bg-amber-400 text-slate-950 ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse ring-2 ring-amber-200/70`
-                    : picksUntilYourTurn <= 3
-                      ? 'bg-orange-400/85'
-                      : 'bg-white/15'
-                }`}
-                role="status"
-                aria-live="polite"
-                aria-label={`Your turn status: ${picksUntilYourTurn === 1 ? 'You are up next' : `${picksUntilYourTurn} picks until your turn`}`}
-              >
-                {picksUntilYourTurn === 1
-                  ? "You're up next"
-                  : picksUntilYourTurn <= 3
-                    ? `${picksUntilYourTurn} picks until your turn`
-                    : `Your pick in ${picksUntilYourTurn} turn${picksUntilYourTurn > 1 ? 's' : ''}`}
-              </div>
-            )}
-
-            {/* Your Turn Indicator */}
-            {isYourTurn && (
-              <div
-                className="mt-2 rounded-full bg-amber-300 px-2 py-1 text-xs font-semibold text-slate-950 animate-pulse lg:px-3 lg:text-sm"
-                role="alert"
-                aria-label="It is your turn to pick"
-              >
-                Your turn to pick
-              </div>
-            )}
-          </div>
-
-          {/* Next Up (Right) */}
-          <div className="text-center lg:text-right">
-            {nextTeam && draftData.currentPick < draftData.totalPicks ? (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-                  Up next
+            {latestPick ? (
+              <div className="mt-3">
+                <p className="text-lg font-semibold leading-tight text-foreground">
+                  {latestPick.player.name}
                 </p>
-                <p className="text-lg font-semibold">
-                  {nextTeam.member.displayName}
-                  {nextTeam.slot === yourSlot && ' · You'}
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs font-medium text-foreground">
+                    {latestPick.player.position}
+                  </span>
+                  <span>{latestPick.player.club}</span>
+                </div>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Picked by{' '}
+                  <span className="font-medium text-foreground">
+                    {latestPick.member.displayName}
+                  </span>
                 </p>
-                <p className="text-sm text-white/70">Pick #{draftData.currentPick + 1}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Round {latestPick.round} / Pick {latestPick.overall}
+                  {latestPick.auto && ' / Auto-pick'}
+                </p>
               </div>
             ) : (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-                  Final pick
-                </p>
-                <p className="text-lg font-semibold">Draft ending</p>
-              </div>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                Selections will appear here as soon as the draft starts moving.
+              </p>
             )}
-
-            {/* Estimated Time to Your Turn */}
-            {!isYourTurn && estimatedTimeUntilYourTurn > 0 && (
-              <div className="mt-2 text-xs text-white/70">
-                ~{formatTime(estimatedTimeUntilYourTurn)} until your turn
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Draft Order Visualization */}
-        <div
-          className="mt-4 border-t border-white/15 pt-4"
-          role="region"
-          aria-label="Draft order visualization"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Left: Draft Order */}
-            <div className="flex items-center gap-1 overflow-x-auto lg:gap-2">
-              <span className="mr-2 whitespace-nowrap text-xs text-white/70">Draft order</span>
-              {draftOrder.map((team, index) => (
-                <div key={team.slot} className="flex items-center">
-                  <div
-                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold transition-all lg:h-8 lg:w-8 ${
-                      team.isCurrent
-                        ? 'bg-amber-300 text-slate-950 animate-pulse ring-2 ring-amber-100/80'
-                        : team.isNext
-                          ? 'bg-orange-300 text-slate-950 ring-2 ring-orange-100/80'
-                          : team.isYou
-                            ? 'bg-emerald-300 text-slate-950 ring-2 ring-emerald-100/80'
-                            : 'bg-white/15 text-white'
-                    }`}
-                    title={team.name}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Team ${team.slot}: ${team.name}${team.isCurrent ? ' (currently picking)' : ''}${team.isNext ? ' (next to pick)' : ''}${team.isYou ? ' (your team)' : ''}`}
-                  >
-                    {team.slot}
-                  </div>
-                  {index < draftOrder.length - 1 && <div className="mx-1 h-px w-2 bg-white/20" />}
-                </div>
-              ))}
-              {draftData.participants.length > 8 && (
-                <span className="ml-2 text-xs text-white/70">
-                  +{draftData.participants.length - 8} more
-                </span>
-              )}
-            </div>
-
-            {/* Right: Recent Activity */}
-            {draftData.picks.length > 0 && (
-              <div className="hidden lg:block text-right">
-                <p className="mb-1 text-xs text-white/70">Latest pick</p>
-                <div className="text-sm">
-                  <span className="font-semibold">
-                    {draftData.picks[draftData.picks.length - 1]?.player.name}
-                  </span>
-                  <span className="ml-1 text-white/70">
-                    ({draftData.picks[draftData.picks.length - 1]?.player.position})
-                  </span>
-                </div>
-                <div className="text-xs text-white/60">
-                  to {draftData.picks[draftData.picks.length - 1]?.member.displayName}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Legend */}
-          <div className="mt-2 flex items-center justify-center gap-4 text-xs text-white/70">
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-full bg-amber-300"></div>
-              <span>Current</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-full bg-orange-300"></div>
-              <span>Next</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-full bg-emerald-300"></div>
-              <span>You</span>
-            </div>
-          </div>
+          </aside>
         </div>
       </div>
     </section>

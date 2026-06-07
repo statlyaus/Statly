@@ -1,11 +1,22 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type React from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import PlayerGrid from '@/components/draft/PlayerGrid';
 import type { DraftPlayer } from '@/types/draft';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+
+vi.mock('next/image', () => ({
+  default: ({
+    alt = '',
+    unoptimized: _unoptimized,
+    ...props
+  }: React.ImgHTMLAttributes<HTMLImageElement> & { unoptimized?: boolean }) => (
+    <img alt={alt} {...props} />
+  ),
+}));
 
 const players: DraftPlayer[] = [
   {
@@ -78,6 +89,9 @@ describe('PlayerGrid accessibility', () => {
     expect(within(playerRow).getByLabelText('Inside 50s: 4.2')).toBeInTheDocument();
     expect(within(playerRow).getByLabelText('Score Involvements: 7.4')).toBeInTheDocument();
     expect(screen.queryByText(/\+\d+ more/)).not.toBeInTheDocument();
+    const logo = playerRow.querySelector('img');
+    expect(logo).toHaveAttribute('src', '/logos/Western Bulldogs.svg');
+    expect(logo).toHaveAttribute('alt', '');
 
     fireEvent.keyDown(playerRow, { key: 'Enter' });
     expect(onPlayerSelect).toHaveBeenCalledWith(players[0]);

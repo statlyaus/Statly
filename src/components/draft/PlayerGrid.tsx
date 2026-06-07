@@ -1,14 +1,14 @@
 'use client';
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
 
+import Image from 'next/image';
+
 import { motion } from 'framer-motion';
+import { CheckCircle2, ListPlus, Star } from 'lucide-react';
 
 import { CompactStatsRow } from '@/components/PlayerStatsDisplay';
-import {
-  FANTASY_CATEGORIES,
-  type FantasyCategoryKey,
-  type PlayerStats,
-} from '@/types/fantasyCategories';
+import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
+import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
 
 interface PlayerGridProps {
@@ -58,7 +58,10 @@ export default function PlayerGrid({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const queuedIds = useMemo(() => new Set(queuedPlayerIds), [queuedPlayerIds]);
   const watchedIds = useMemo(() => new Set(watchedPlayerIds), [watchedPlayerIds]);
-  const visibleCategories = selectedCategories;
+  const visibleCategories = useMemo(
+    () => selectedCategories.filter((category) => FANTASY_CATEGORIES[category]),
+    [selectedCategories]
+  );
   const filteredPlayers = players;
 
   const hasActiveFilters =
@@ -260,7 +263,7 @@ export default function PlayerGrid({
             {visibleCategories.map((category) => (
               <span
                 key={category}
-                className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-border"
+                className="rounded-md bg-background px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-border"
               >
                 {FANTASY_CATEGORIES[category].shortLabel || FANTASY_CATEGORIES[category].label}
               </span>
@@ -301,6 +304,14 @@ export default function PlayerGrid({
                 const isSelected = selectedPlayerId === player.id;
                 const isQueued = queuedIds.has(player.id);
                 const isWatched = watchedIds.has(player.id);
+                const teamLogo = getTeamLogo(player.club);
+                const teamAbbreviation = getTeamAbbreviation(player.club);
+                const averagePoints =
+                  typeof player.avgPoints === 'number'
+                    ? player.avgPoints
+                    : typeof player.averagePoints === 'number'
+                      ? player.averagePoints
+                      : null;
 
                 return (
                   <motion.tr
@@ -322,25 +333,44 @@ export default function PlayerGrid({
                     data-selected={isSelected ? 'true' : undefined}
                   >
                     <th scope="row" className="px-4 py-4 font-normal sm:px-5">
-                      <div className="flex min-w-0 items-center gap-4">
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                          <span className="text-lg font-bold">
-                            {player.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-background p-1.5 shadow-sm">
+                          <Image
+                            src={teamLogo}
+                            alt=""
+                            aria-hidden="true"
+                            width={32}
+                            height={32}
+                            unoptimized={teamLogo.endsWith('.svg')}
+                            className="h-8 w-8 object-contain"
+                          />
+                        </span>
                         <div className="min-w-0">
                           <div className="truncate font-semibold text-foreground">
                             {player.name}
                           </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                            <span className="rounded bg-muted px-2 py-1 text-xs font-medium text-foreground">
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-semibold text-foreground">
                               {player.position}
                             </span>
+                            <span className="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground">
+                              {teamAbbreviation}
+                            </span>
                             <span>{player.club}</span>
-                            {player.adp && <span>ADP: {player.adp}</span>}
-                            {isQueued && <span className="font-medium text-primary">Queued</span>}
+                            {player.adp && (
+                              <span className="rounded-md bg-muted px-2 py-0.5">
+                                ADP {player.adp}
+                              </span>
+                            )}
+                            {isQueued && (
+                              <span className="rounded-md bg-primary/10 px-2 py-0.5 font-medium text-primary">
+                                Queued
+                              </span>
+                            )}
                             {isWatched && (
-                              <span className="font-medium text-foreground">Watchlist</span>
+                              <span className="rounded-md bg-accent px-2 py-0.5 font-medium text-accent-foreground">
+                                Watchlist
+                              </span>
                             )}
                           </div>
                         </div>
@@ -348,36 +378,29 @@ export default function PlayerGrid({
                     </th>
 
                     <td className="px-4 py-4 align-middle">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-foreground">
-                          {typeof player.avgPoints === 'number'
-                            ? `${player.avgPoints.toFixed(1)} avg`
-                            : typeof player.averagePoints === 'number'
-                              ? `${player.averagePoints.toFixed(1)} avg`
-                              : 'No average yet'}
+                      <div className="min-w-0 space-y-2">
+                        <div>
+                          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            Fantasy avg
+                          </div>
+                          <div className="mt-1 text-lg font-semibold leading-none text-foreground">
+                            {averagePoints !== null ? averagePoints.toFixed(1) : '—'}
+                          </div>
                         </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           {player.gamesPlayed
                             ? `${player.gamesPlayed} games tracked`
                             : 'Season profile loading'}
                         </div>
 
                         {player.injuryStatus && player.injuryStatus !== 'healthy' && (
-                          <div className="mt-2">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                player.injuryStatus === 'out'
-                                  ? 'bg-destructive/10 text-destructive'
-                                  : player.injuryStatus === 'injured'
-                                    ? 'bg-muted text-foreground'
-                                    : 'bg-muted text-muted-foreground'
-                              }`}
-                            >
+                          <div>
+                            <span className="inline-flex items-center rounded-md border border-warning/40 bg-warning/15 px-2 py-1 text-xs font-medium text-warning-foreground">
                               {player.injuryStatus === 'out'
-                                ? '🚫 Out'
+                                ? 'Out'
                                 : player.injuryStatus === 'injured'
-                                  ? '🩹 Injured'
-                                  : '❓ Questionable'}
+                                  ? 'Injured'
+                                  : 'Questionable'}
                             </span>
                           </div>
                         )}
@@ -385,13 +408,13 @@ export default function PlayerGrid({
                     </td>
 
                     <td className="px-4 py-4 align-middle">
-                      <div className="min-w-0">
+                      <div className="min-w-0 max-w-[34rem]">
                         {visibleCategories.length > 0 ? (
                           <CompactStatsRow
-                            stats={player.stats as PlayerStats | undefined}
+                            stats={player.stats}
                             selectedCategories={visibleCategories}
                             maxDisplay={visibleCategories.length}
-                            className="flex-wrap gap-x-3 gap-y-2"
+                            className="flex-wrap gap-x-2 gap-y-2"
                           />
                         ) : (
                           <div className="text-sm text-muted-foreground">
@@ -404,12 +427,13 @@ export default function PlayerGrid({
                     <td className="px-4 py-4 align-middle sm:px-5">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             onToggleWatchlist(player);
                           }}
                           disabled={isLoading}
-                          className={`rounded-md px-3 py-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             !isLoading && isWatched
                               ? 'border border-border bg-accent text-accent-foreground hover:bg-accent/80'
                               : !isLoading
@@ -418,15 +442,21 @@ export default function PlayerGrid({
                           }`}
                           aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
                         >
+                          <Star
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                            fill={isWatched ? 'currentColor' : 'none'}
+                          />
                           {isWatched ? 'Watched' : 'Watch'}
                         </button>
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             onAddToQueue(player);
                           }}
                           disabled={isLoading || isQueued}
-                          className={`rounded-md px-3 py-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             !isLoading && !isQueued
                               ? 'border border-input bg-background text-foreground hover:bg-muted'
                               : 'cursor-not-allowed border border-border bg-muted text-muted-foreground'
@@ -437,21 +467,24 @@ export default function PlayerGrid({
                               : `Add ${player.name} to queue`
                           }
                         >
+                          <ListPlus className="h-4 w-4" aria-hidden="true" />
                           {isQueued ? 'Queued' : 'Queue'}
                         </button>
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             handlePlayerSelect(player);
                           }}
                           disabled={!canMakePick || isLoading}
-                          className={`rounded-md px-4 py-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             canMakePick && !isLoading
                               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                               : 'cursor-not-allowed bg-muted text-muted-foreground'
                           }`}
                           aria-label={`Select ${player.name}`}
                         >
+                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                           {isLoading ? 'Selecting...' : 'Select'}
                         </button>
                       </div>
