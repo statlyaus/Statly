@@ -6,7 +6,9 @@ Council gate: `CHAIRMAN DECISION 1: PROCEED`
 
 Source of truth: `docs/superpowers/specs/2026-06-07-fantasy-website-consolidation.md`
 
-Implementation base: `/Users/robert/.config/superpowers/worktrees/Statly/fantasy-hardening-readiness` on `codex/fantasy-league-draft-hardening`
+Canonical implementation: `origin/main` at PR #414 merge commit `6118fdf5` or later.
+
+Historical implementation base: `/Users/robert/.config/superpowers/worktrees/Statly/fantasy-hardening-readiness` on `codex/fantasy-league-draft-hardening`.
 
 ## Objective
 
@@ -14,7 +16,7 @@ Turn the current hardening branch into one working fantasy website experience wi
 
 ## Rules
 
-- Do not edit dirty local `main` for this work.
+- Use `origin/main` as the current fantasy website source of truth after PR #414. The old hardening branch is historical provenance only.
 - Do not rely on stale root-level "complete" markdown claims.
 - Do not introduce a new visual system.
 - Do not stage `prisma/dev.db`, `.env`, `.next`, emulator data, or unrelated dirty files.

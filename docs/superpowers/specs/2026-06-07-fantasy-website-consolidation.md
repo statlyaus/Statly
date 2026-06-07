@@ -10,11 +10,11 @@ Statly has several markdown files that describe different versions of the fantas
 
 This spec supersedes the root-level completion summaries for planning and implementation decisions. The older markdown files remain useful as historical evidence, but they are not product authority unless this file references them directly.
 
-## Canonical Branch
+## Canonical Implementation
 
-Use `/Users/robert/.config/superpowers/worktrees/Statly/fantasy-hardening-readiness` on branch `codex/fantasy-league-draft-hardening` as the implementation base.
+After PR #414 merged on 2026-06-07, use `origin/main` at merge commit `6118fdf5` or later as the canonical fantasy website implementation.
 
-Do not use local `/Users/robert/Developer/Statly` `main` for this consolidation work. That worktree is dirty and diverged from `origin/main`, and it has been the source of old/new runtime confusion.
+The former `/Users/robert/.config/superpowers/worktrees/Statly/fantasy-hardening-readiness` worktree and `codex/fantasy-league-draft-hardening` branch are historical implementation provenance only. Do not treat that branch as a separate current product version.
 
 ## Historical Document Map
 
