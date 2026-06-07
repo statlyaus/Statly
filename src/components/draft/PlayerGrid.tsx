@@ -11,6 +11,8 @@ import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
 
+type PlayerGridSortKey = 'statlyZ' | 'name' | 'position' | 'club' | 'adp';
+
 interface PlayerGridProps {
   players: DraftPlayer[];
   totalPlayers: number;
@@ -26,8 +28,8 @@ interface PlayerGridProps {
   positionFilter: string;
   onPositionFilterChange: (position: string) => void;
   availablePositions: string[];
-  sortBy: 'name' | 'position' | 'club' | 'adp';
-  onSortChange: (sort: 'name' | 'position' | 'club' | 'adp') => void;
+  sortBy: PlayerGridSortKey;
+  onSortChange: (sort: PlayerGridSortKey) => void;
   isLoading: boolean;
   emptyStateMessage?: string;
 }
@@ -65,7 +67,7 @@ export default function PlayerGrid({
   const filteredPlayers = players;
 
   const hasActiveFilters =
-    searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'adp';
+    searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'statlyZ';
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -155,7 +157,7 @@ export default function PlayerGrid({
               onClick={() => {
                 onSearchChange('');
                 onPositionFilterChange('ALL');
-                onSortChange('adp');
+                onSortChange('statlyZ');
               }}
               className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
@@ -243,6 +245,7 @@ export default function PlayerGrid({
               onChange={(e) => onSortChange(e.target.value as typeof sortBy)}
               className="block w-full rounded-md border border-input bg-background px-3 py-2.5 leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             >
+              <option value="statlyZ">Sort by Statly Z</option>
               <option value="adp">Sort by ADP</option>
               <option value="name">Sort by Name</option>
               <option value="position">Sort by Position</option>
@@ -306,12 +309,8 @@ export default function PlayerGrid({
                 const isWatched = watchedIds.has(player.id);
                 const teamLogo = getTeamLogo(player.club);
                 const teamAbbreviation = getTeamAbbreviation(player.club);
-                const averagePoints =
-                  typeof player.avgPoints === 'number'
-                    ? player.avgPoints
-                    : typeof player.averagePoints === 'number'
-                      ? player.averagePoints
-                      : null;
+                const statlyZScore =
+                  typeof player.statlyZScore === 'number' ? player.statlyZScore : null;
 
                 return (
                   <motion.tr
@@ -382,16 +381,14 @@ export default function PlayerGrid({
                       <div className="min-w-0 space-y-2">
                         <div>
                           <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            Fantasy avg
+                            Statly Z
                           </div>
                           <div className="mt-1 text-lg font-semibold leading-none text-foreground">
-                            {averagePoints !== null ? averagePoints.toFixed(1) : '—'}
+                            {statlyZScore !== null ? statlyZScore.toFixed(2) : 'Pending'}
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {player.gamesPlayed
-                            ? `${player.gamesPlayed} games tracked`
-                            : 'Season profile loading'}
+                          Combined Z score across this league&apos;s selected scoring categories.
                         </div>
 
                         {player.injuryStatus && player.injuryStatus !== 'healthy' && (
@@ -419,7 +416,7 @@ export default function PlayerGrid({
                           />
                         ) : (
                           <div className="text-sm text-muted-foreground">
-                            League categories not configured yet.
+                            League categories pending.
                           </div>
                         )}
                       </div>

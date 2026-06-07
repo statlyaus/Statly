@@ -1,11 +1,8 @@
 'use client';
 
-import type { KeyboardEvent } from 'react';
-import React, { useMemo, useCallback, useState, useDeferredValue, useRef, useEffect } from 'react';
+import { useMemo, useCallback, useState, useDeferredValue, useRef, useEffect } from 'react';
 
 import Link from 'next/link';
-
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 import DraftWatchlist from '@/components/DraftWatchlist';
 import LivePickHeader from '@/components/LivePickHeader';
@@ -18,11 +15,12 @@ import {
   toFeedPicks,
   toFeedParticipants,
 } from '@/lib/mappers/draftUiMappers';
-import type { DraftPlayer, DraftParticipant, DraftPick } from '@/types/draft';
+import type { DraftPlayer, DraftParticipant, DraftPick, DraftSettings } from '@/types/draft';
 
 import ConnectionStatus from './ConnectionStatus';
 import DraftAnalytics from './DraftAnalytics';
 import DraftControls from './DraftControls';
+import DraftLeftRail, { type DraftLeftRailRosterSlot } from './DraftLeftRail';
 import DraftQueue from './DraftQueue';
 import DraftStatusBanner from './DraftStatusBanner';
 import PlayerGrid from './PlayerGrid';
@@ -32,24 +30,115 @@ interface UnifiedDraftRoomProps {
   userId: string;
 }
 
+type PlayerSortKey = 'statlyZ' | 'name' | 'position' | 'club' | 'adp';
+
+function getPositiveInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function buildRosterSlots({
+  settings,
+  picks,
+  userMemberId,
+  userId,
+  fallbackRosterSize,
+}: {
+  settings?: Partial<DraftSettings> | null;
+  picks: DraftPick[];
+  userMemberId: string;
+  userId: string;
+  fallbackRosterSize: number;
+}): DraftLeftRailRosterSlot[] {
+  const userPicks = picks
+    .filter((pick) => {
+      const pickMemberId = String(pick.member?.id ?? '');
+      const pickUserId = String(pick.member?.userId ?? '');
+
+      return (
+        (userMemberId && pickMemberId === String(userMemberId)) ||
+        (userId && pickUserId === String(userId))
+      );
+    })
+    .sort((a, b) => a.overall - b.overall);
+
+  const slots: DraftLeftRailRosterSlot[] = [];
+  const startingLineup =
+    settings?.startingLineup && typeof settings.startingLineup === 'object'
+      ? settings.startingLineup
+      : null;
+
+  if (startingLineup) {
+    Object.entries(startingLineup).forEach(([position, count]) => {
+      const slotCount = getPositiveInteger(count);
+
+      for (let index = 1; index <= slotCount; index += 1) {
+        slots.push({
+          id: `starter-${position}-${index}`,
+          label: `${position} ${index}`,
+          position,
+        });
+      }
+    });
+  }
+
+  const benchSize = getPositiveInteger(settings?.benchSize);
+  for (let index = 1; index <= benchSize; index += 1) {
+    slots.push({
+      id: `bench-${index}`,
+      label: `Bench ${index}`,
+    });
+  }
+
+  const minimumSlotCount = Math.max(userPicks.length, fallbackRosterSize);
+  if (slots.length === 0) {
+    for (let index = 1; index <= minimumSlotCount; index += 1) {
+      slots.push({
+        id: `roster-${index}`,
+        label: `Roster ${index}`,
+      });
+    }
+  }
+
+  while (slots.length < userPicks.length) {
+    const nextIndex = slots.length + 1;
+    slots.push({
+      id: `roster-${nextIndex}`,
+      label: `Roster ${nextIndex}`,
+    });
+  }
+
+  return slots.map((slot, index) => {
+    const player = userPicks[index]?.player;
+
+    if (!player) return slot;
+
+    return {
+      ...slot,
+      player: {
+        id: player.id,
+        name: player.name,
+        club: player.club,
+        position: player.position,
+      },
+    };
+  });
+}
+
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
 
-  const [activeTab, setActiveTab] = useState<'players' | 'queue' | 'watchlist' | 'analytics'>(
-    'players'
-  );
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<'name' | 'position' | 'club' | 'adp'>('adp');
+  const [sortBy, setSortBy] = useState<PlayerSortKey>('statlyZ');
   const [isPickFeedOpen, setIsPickFeedOpen] = useState(false);
-  const reduceMotion = useReducedMotion();
 
   // Desktop FAB ref + modal focus mgmt refs
   const openFeedBtnRef = useRef<HTMLButtonElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
+  const hasOpenedPickFeedRef = useRef(false);
 
   // Participants/picks/players are guaranteed arrays by DraftContext
   const participants = draft.participants as DraftParticipant[];
@@ -86,30 +175,27 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       players = players.filter((p) => p.position === positionFilter);
     }
 
-    // Sorting
-    const sortKeyMap = {
-      name: (p: DraftPlayer) => p.name,
-      position: (p: DraftPlayer) => p.position,
-      club: (p: DraftPlayer) => p.club,
-      adp: (p: DraftPlayer) => p.adp ?? 999, // ADP: lower is better; keep ascending
-    } as const;
+    // Create a copy to avoid mutating context state
+    const arr = [...players];
+    arr.sort((a, b) => {
+      if (sortBy === 'statlyZ') {
+        const aScore = typeof a.statlyZScore === 'number' ? a.statlyZScore : null;
+        const bScore = typeof b.statlyZScore === 'number' ? b.statlyZScore : null;
 
-    const sortKey = sortKeyMap[sortBy];
-    if (sortKey) {
-      // Create a copy to avoid mutating context state
-      const arr = [...players];
-      arr.sort((a, b) => {
-        const aVal = sortKey(a);
-        const bVal = sortKey(b);
-        if (typeof aVal === 'string' && typeof bVal === 'string') {
-          return aVal.localeCompare(bVal);
-        }
-        return Number(aVal ?? 0) - Number(bVal ?? 0);
-      });
-      return arr;
-    }
+        if (aScore === null && bScore === null) return a.name.localeCompare(b.name);
+        if (aScore === null) return 1;
+        if (bScore === null) return -1;
 
-    return players;
+        return bScore - aScore || a.name.localeCompare(b.name);
+      }
+
+      if (sortBy === 'adp') {
+        return (a.adp ?? Number.MAX_SAFE_INTEGER) - (b.adp ?? Number.MAX_SAFE_INTEGER);
+      }
+
+      return a[sortBy].localeCompare(b[sortBy]);
+    });
+    return arr;
   }, [playersList, deferredQuery, positionFilter, sortBy]);
 
   // Unique positions for the filter dropdown
@@ -197,6 +283,26 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const userMemberId = me?.id || '';
   const draftState = draft.draft;
   const draftStatus = draftState?.status ?? 'LOBBY';
+  const rosterSlots = useMemo(() => {
+    const settings = draftState?.settings;
+    const derivedRosterSize =
+      draftState && draftState.totalPicks > 0 && participants.length > 0
+        ? Math.ceil(draftState.totalPicks / participants.length)
+        : 0;
+    const fallbackRosterSize = Math.max(
+      getPositiveInteger(settings?.rosterSize),
+      getPositiveInteger(settings?.totalRounds),
+      derivedRosterSize
+    );
+
+    return buildRosterSlots({
+      settings,
+      picks,
+      userMemberId,
+      userId,
+      fallbackRosterSize,
+    });
+  }, [draftState, participants.length, picks, userId, userMemberId]);
   const statusTone =
     {
       SCHEDULED: 'bg-primary/10 text-primary ring-1 ring-primary/20',
@@ -208,46 +314,17 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       CANCELLED: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
     }[draftStatus] ?? 'bg-muted text-muted-foreground ring-1 ring-border';
 
-  // A11y: full keyboard navigation for tabs (Left/Right)
-  const tabs = useMemo(
-    () =>
-      [
-        { id: 'players', label: 'Available Players', count: filteredPlayers.length },
-        {
-          id: 'queue',
-          label: 'Your Queue',
-          count: me?.queue?.length ?? 0,
-        },
-        { id: 'watchlist', label: 'Watchlist', count: watchlistItems?.length || 0 },
-        { id: 'analytics', label: 'Draft Analytics', count: 0 },
-      ] as const,
-    [filteredPlayers.length, me?.queue?.length, watchlistItems?.length]
-  );
-  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-
-  const onTabsKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    e.preventDefault();
-    const idx = tabs.findIndex((t) => t.id === activeTab);
-    if (idx === -1) return;
-    const nextIdx =
-      e.key === 'ArrowRight' ? (idx + 1) % tabs.length : (idx - 1 + tabs.length) % tabs.length;
-    const next = tabs[nextIdx].id as typeof activeTab;
-    setActiveTab(next);
-    // move focus to the newly selected tab
-    tabRefs.current[`tab-${next}`]?.focus();
-  };
-
   // Modal focus management
   useEffect(() => {
     if (isPickFeedOpen) {
+      hasOpenedPickFeedRef.current = true;
       // Save last focused element & move focus into dialog
       lastFocusedRef.current = (document.activeElement as HTMLElement) ?? null;
       // Delay to end of paint so ref exists
       requestAnimationFrame(() => {
         closeBtnRef.current?.focus();
       });
-    } else {
+    } else if (hasOpenedPickFeedRef.current) {
       // Restore focus to the element that opened the feed, or fallback to the FAB.
       requestAnimationFrame(() => {
         (lastFocusedRef.current || openFeedBtnRef.current)?.focus();
@@ -341,6 +418,46 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     totalRounds && totalRounds > 0
       ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`
       : `Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`;
+  const queuePanel = (
+    <DraftQueue
+      queue={me?.queue || []}
+      availablePlayers={playersList}
+      onQueueUpdate={handleQueueUpdate}
+      isLoading={draft.isSaving}
+      confirm={confirm}
+    />
+  );
+  const watchlistPanel = (
+    <DraftWatchlist
+      players={playersList}
+      draftedPlayerIds={picks.map((p) => p.player?.id).filter(Boolean) as string[]}
+      onDraftPlayer={(player) => {
+        void handlePlayerSelectById(player.id);
+      }}
+      canDraft={draft.canMakePick}
+      watchlistItems={watchlistItems}
+      onAddToQueue={handleAddWatchlistPlayerToQueue}
+      queuedPlayerIds={queuePlayerIds}
+      onRemoveFromWatchlist={draft.removeFromWatchlist}
+      isLoading={draft.isSaving}
+    />
+  );
+  const pickFeedProps = {
+    picks: feedPicks,
+    participants: feedParticipants,
+    userMemberId,
+    watchlistPlayerIds: watchlistItems.map((item) => item.playerId),
+    className: 'border-0 shadow-none',
+  };
+  const desktopPickFeed = (
+    <PickFeed
+      {...pickFeedProps}
+      contentId={`pick-feed-content:${activeDraft.id}:desktop`}
+    />
+  );
+  const mobilePickFeed = (
+    <PickFeed {...pickFeedProps} contentId={`pick-feed-content:${activeDraft.id}:mobile`} />
+  );
 
   return (
     <DraftErrorBoundary>
@@ -348,7 +465,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         {/* Connection Status */}
         <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
 
-        <div className="space-y-4 pb-4 md:pr-[23rem] xl:pr-[25rem]">
+        <div className="space-y-4 pb-4">
           {/* Draft Controls (for league owners) */}
           <DraftControls
             draftId={draftId}
@@ -378,7 +495,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         </div>
 
         {/* Main Content */}
-        <main className="mx-auto w-full max-w-[1780px] px-3 pb-6 sm:px-5 lg:px-8 md:pr-[23rem] xl:pr-[25rem]">
+        <main className="mx-auto w-full max-w-[1780px] px-3 pb-6 sm:px-5 lg:px-8">
           <section className="rounded-3xl border border-border bg-card px-4 py-3 text-card-foreground shadow-sm sm:px-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="min-w-0">
@@ -410,136 +527,61 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             </div>
           </section>
 
-          {/* Tabs */}
-          <div className="mb-6 mt-6">
-            <nav
-              className="rounded-2xl border border-border bg-card p-1 shadow-sm"
-              aria-label="Draft room sections"
-            >
-              <div
-                className="flex flex-col gap-1 sm:flex-row"
-                role="tablist"
-                aria-orientation="horizontal"
-                tabIndex={-1}
-                onKeyDown={onTabsKeyDown}
-              >
-                {tabs.map((tab) => {
-                  const selected = activeTab === tab.id;
-                  const tabId = `tab-${tab.id}`;
-                  const panelId = `panel-${tab.id}`;
-                  return (
-                    <button
-                      key={tab.id}
-                      ref={(el) => {
-                        tabRefs.current[tabId] = el;
-                      }}
-                      type="button"
-                      role="tab"
-                      id={tabId}
-                      aria-selected={selected}
-                      aria-controls={panelId}
-                      tabIndex={selected ? 0 : -1}
-                      onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                      className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors ${
-                        selected
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      }`}
-                    >
-                      {tab.label}
-                      {tab.count > 0 && (
-                        <span
-                          className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                            selected
-                              ? 'bg-primary-foreground/20 text-primary-foreground'
-                              : 'bg-muted text-muted-foreground'
-                          }`}
-                          aria-label={`${tab.count} items`}
-                        >
-                          {tab.count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+          <section
+            aria-label="Draft board"
+            className="mt-6 grid gap-4 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)_minmax(18rem,20rem)] xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(20rem,22rem)]"
+          >
+            <DraftLeftRail
+              draftStatus={activeDraft.status}
+              storageKey={`draft-left-rail:${activeDraft.id}:${userMemberId || userId}`}
+              rosterSlots={rosterSlots}
+              queueCount={queuePlayerIds.length}
+              watchlistCount={watchlistItems.length}
+              queuePanel={queuePanel}
+              watchlistPanel={watchlistPanel}
+              className="min-h-[28rem] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
+            />
+
+            <div className="min-w-0">
+              <PlayerGrid
+                players={filteredPlayers}
+                totalPlayers={playersList.length}
+                onPlayerSelect={handlePlayerSelect}
+                onAddToQueue={handleAddToQueue}
+                onToggleWatchlist={handleToggleWatchlist}
+                canMakePick={draft.canMakePick}
+                queuedPlayerIds={me?.queue || []}
+                watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
+                selectedCategories={selectedCategories}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                positionFilter={positionFilter}
+                onPositionFilterChange={setPositionFilter}
+                availablePositions={availablePositions}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                isLoading={draft.isSaving}
+                emptyStateMessage={emptyPlayerMessage}
+              />
+            </div>
+
+            <aside className="hidden min-h-0 lg:block" aria-label="Desktop pick feed">
+              <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm">
+                {desktopPickFeed}
               </div>
-            </nav>
-          </div>
+            </aside>
+          </section>
 
-          {/* Tab Content */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              id={`panel-${activeTab}`}
-              role="tabpanel"
-              aria-labelledby={`tab-${activeTab}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: reduceMotion ? 0 : 0.2 }}
-              className="space-y-6"
-            >
-              {activeTab === 'players' && (
-                <PlayerGrid
-                  players={filteredPlayers}
-                  totalPlayers={playersList.length}
-                  onPlayerSelect={handlePlayerSelect}
-                  onAddToQueue={handleAddToQueue}
-                  onToggleWatchlist={handleToggleWatchlist}
-                  canMakePick={draft.canMakePick}
-                  queuedPlayerIds={me?.queue || []}
-                  watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
-                  selectedCategories={selectedCategories}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  positionFilter={positionFilter}
-                  onPositionFilterChange={setPositionFilter}
-                  availablePositions={availablePositions}
-                  sortBy={sortBy}
-                  onSortChange={setSortBy}
-                  isLoading={draft.isSaving}
-                  emptyStateMessage={emptyPlayerMessage}
-                />
-              )}
-
-              {activeTab === 'queue' && (
-                <DraftQueue
-                  queue={me?.queue || []}
-                  availablePlayers={playersList}
-                  onQueueUpdate={handleQueueUpdate}
-                  isLoading={draft.isSaving}
-                  confirm={confirm}
-                />
-              )}
-
-              {activeTab === 'watchlist' && (
-                <DraftWatchlist
-                  players={playersList}
-                  draftedPlayerIds={picks.map((p) => p.player?.id).filter(Boolean) as string[]}
-                  onDraftPlayer={(player) => {
-                    void handlePlayerSelectById(player.id);
-                  }}
-                  canDraft={draft.canMakePick}
-                  watchlistItems={watchlistItems}
-                  onAddToQueue={handleAddWatchlistPlayerToQueue}
-                  queuedPlayerIds={queuePlayerIds}
-                  onRemoveFromWatchlist={draft.removeFromWatchlist}
-                  isLoading={draft.isSaving}
-                />
-              )}
-
-              {activeTab === 'analytics' && (
-                <DraftAnalytics draft={draft.draft} picks={picks} participants={participants} />
-              )}
-            </motion.div>
-          </AnimatePresence>
+          <section className="mt-6" aria-label="Draft analytics">
+            <DraftAnalytics draft={draft.draft} picks={picks} participants={participants} />
+          </section>
         </main>
 
         {/* Mobile Pick Feed Toggle */}
         <button
           ref={openFeedBtnRef}
           onClick={() => setIsPickFeedOpen(true)}
-          className="fixed bottom-4 right-4 z-40 rounded-full bg-primary p-3 text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+          className="fixed bottom-4 right-4 z-40 rounded-full bg-primary p-3 text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
           aria-label="Open Pick Feed"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -552,23 +594,10 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           </svg>
         </button>
 
-        {/* Sidebar - Pick Feed (desktop) */}
-        <div className="fixed right-0 top-0 hidden h-full w-[22rem] overflow-y-auto border-l border-border bg-muted/80 p-4 shadow-lg backdrop-blur md:block xl:w-96">
-          <div className="pt-2">
-            <PickFeed
-              picks={feedPicks}
-              participants={feedParticipants}
-              userMemberId={userMemberId}
-              watchlistPlayerIds={watchlistItems.map((item) => item.playerId)}
-              className="border-0 shadow-none"
-            />
-          </div>
-        </div>
-
         {/* Mobile Pick Feed Modal */}
         {isPickFeedOpen && (
           <div
-            className="fixed inset-0 z-50 bg-foreground/50 md:hidden"
+            className="fixed inset-0 z-50 bg-foreground/50 lg:hidden"
             role="presentation"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
@@ -576,7 +605,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               }
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              if (e.key === 'Escape') {
                 setIsPickFeedOpen(false);
               }
             }}
@@ -615,13 +644,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 Pick Feed
               </div>
               <div>
-                <PickFeed
-                  picks={feedPicks}
-                  participants={feedParticipants}
-                  userMemberId={userMemberId}
-                  watchlistPlayerIds={watchlistItems.map((item) => item.playerId)}
-                  className="border-0 shadow-none"
-                />
+                {mobilePickFeed}
               </div>
             </div>
           </div>

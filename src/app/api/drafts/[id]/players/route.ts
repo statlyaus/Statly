@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import {
   buildAvailableDraftPlayer,
+  calculateStatlyZScores,
   loadDraftPlayerStatsLookup,
   parseSelectedCategories,
   type DraftPlayerStatsLookup,
@@ -150,19 +151,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const nameFilter = q ? { contains: q, mode: 'insensitive' as const } : undefined;
 
     // Relational anti-join to exclude players already picked in this draft
-    const where = {
+    const availablePlayerWhere = {
       active: true,
-      ...(position ? { position } : {}),
-      ...(nameFilter ? { name: nameFilter } : {}),
       picks: { none: { draftId: id } },
     } as const;
+    const where = {
+      ...availablePlayerWhere,
+      ...(position ? { position } : {}),
+      ...(nameFilter ? { name: nameFilter } : {}),
+    } as const;
 
-    const playersFetched = await prisma.player.findMany({
-      where,
-      orderBy: [{ position: 'asc' }, { name: 'asc' }],
-      skip,
-      take: pageSize + 1, // over-fetch by one to determine hasMore without a separate count
-    });
+    const [playersFetched, availablePlayersForStatlyZ] = await Promise.all([
+      prisma.player.findMany({
+        where,
+        orderBy: [{ position: 'asc' }, { name: 'asc' }],
+        skip,
+        take: pageSize + 1, // over-fetch by one to determine hasMore without a separate count
+      }),
+      prisma.player.findMany({
+        where: availablePlayerWhere,
+        orderBy: [{ position: 'asc' }, { name: 'asc' }],
+      }),
+    ]);
 
     const hasMore = playersFetched.length > pageSize;
     const players = hasMore ? playersFetched.slice(0, pageSize) : playersFetched;
@@ -177,9 +187,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       });
     }
 
+    const basePlayers = players.map((player) => buildAvailableDraftPlayer(player, statsLookup));
+    const statlyZCohortPlayers = availablePlayersForStatlyZ.map((player) =>
+      buildAvailableDraftPlayer(player, statsLookup)
+    );
+    const statlyZScores = calculateStatlyZScores(statlyZCohortPlayers, selectedCategories);
+
     const data = {
       draftId: id,
-      players: players.map((player) => buildAvailableDraftPlayer(player, statsLookup)),
+      players: basePlayers.map((player) => {
+        const statlyZScore = statlyZScores.get(player.id);
+
+        return {
+          ...player,
+          statlyZScore: statlyZScore?.score ?? 0,
+          statlyZBreakdown: statlyZScore?.breakdown ?? [],
+          statlyZMissingCategories: statlyZScore?.missingCategories ?? selectedCategories,
+        };
+      }),
       pagination: {
         page,
         pageSize,

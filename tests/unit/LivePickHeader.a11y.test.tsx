@@ -63,22 +63,17 @@ const draftData = {
 };
 
 describe('LivePickHeader', () => {
-  it('renders a command-center live status with accessible timer and draft order', () => {
+  it('renders canonical live status with accessible timer and pick train', () => {
     render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={3} />);
 
     expect(screen.getByRole('banner', { name: 'Live draft status' })).toBeInTheDocument();
     expect(screen.getByRole('timer', { name: /time remaining/i })).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: /pick timer/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Alpha' })).toBeInTheDocument();
-    expect(screen.getByText('Marcus Bontempelli')).toBeInTheDocument();
+    const pickTrain = screen.getByRole('region', { name: 'Draft pick train' });
 
-    const draftOrder = screen.getByRole('list', { name: 'Draft order' });
-    const items = within(draftOrder).getAllByRole('listitem');
-
-    expect(items).toHaveLength(3);
-    expect(within(items[0]).getByText('Team 1: Alpha (currently picking)')).toBeInTheDocument();
-    expect(within(items[1]).getByText('Team 2: Beta (next to pick)')).toBeInTheDocument();
-    expect(within(items[2]).getByText('Team 3: Gamma (your team)')).toBeInTheDocument();
-    expect(within(draftOrder).queryAllByRole('button')).toHaveLength(0);
+    expect(pickTrain).toBeInTheDocument();
+    expect(screen.getByText('On the clock')).toBeInTheDocument();
+    expect(within(pickTrain).getByText('Alpha')).toBeInTheDocument();
+    expect(screen.getAllByText('Marcus Bontempelli').length).toBeGreaterThan(0);
   });
 });

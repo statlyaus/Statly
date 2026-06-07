@@ -25,6 +25,11 @@ const players: DraftPlayer[] = [
     position: 'MID',
     club: 'Western Bulldogs',
     avgPoints: 108.4,
+    statlyZScore: 3.42,
+    statlyZBreakdown: [
+      { category: 'goals', value: 1.1, zScore: 0.4 },
+      { category: 'tackles', value: 5.8, zScore: 1.2 },
+    ],
     adp: 3,
     isAvailable: true,
     gamesPlayed: 21,
@@ -85,9 +90,14 @@ describe('PlayerGrid accessibility', () => {
     ).toEqual(['Player', 'Profile', 'League Stats', 'Actions']);
 
     const playerRow = within(table).getByRole('row', { name: /marcus bontempelli/i });
+    expect(within(playerRow).getByText('Statly Z')).toBeInTheDocument();
+    expect(within(playerRow).getByText('3.42')).toBeInTheDocument();
     expect(within(playerRow).getByLabelText('Goals: 1.1')).toBeInTheDocument();
     expect(within(playerRow).getByLabelText('Inside 50s: 4.2')).toBeInTheDocument();
     expect(within(playerRow).getByLabelText('Score Involvements: 7.4')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Sort by Statly Z' })).toBeInTheDocument();
+    expect(screen.queryByText('Fantasy avg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fantasy average')).not.toBeInTheDocument();
     expect(screen.queryByText(/\+\d+ more/)).not.toBeInTheDocument();
     const logo = playerRow.querySelector('img');
     expect(logo).toHaveAttribute('src', '/logos/Western Bulldogs.svg');

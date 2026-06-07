@@ -1,7 +1,32 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
+
+type DraftRoomPlayerFixture = {
+  id: string;
+  name: string;
+  position: string;
+  club: string;
+  adp: number;
+  statlyZScore?: number;
+};
+
+const playerGridSpy = vi.hoisted(() => vi.fn());
+const draftLeftRailSpy = vi.hoisted(() => vi.fn());
+
+const draftContext = vi.hoisted<{ availablePlayers: DraftRoomPlayerFixture[] }>(() => ({
+  availablePlayers: [
+    {
+      id: 'player-1',
+      name: 'Caleb Daniel',
+      position: 'DEF',
+      club: 'North Melbourne',
+      adp: 1,
+      statlyZScore: 1.2,
+    },
+  ],
+}));
 
 vi.mock('next/link', () => ({
   default: ({
@@ -17,19 +42,6 @@ vi.mock('next/link', () => ({
       {children}
     </a>
   ),
-}));
-
-vi.mock('framer-motion', () => ({
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  motion: {
-    div: ({
-      children,
-      ...props
-    }: React.HTMLAttributes<HTMLDivElement> & { children: React.ReactNode }) => (
-      <div {...props}>{children}</div>
-    ),
-  },
-  useReducedMotion: () => true,
 }));
 
 vi.mock('@/components/ui', () => ({
@@ -52,7 +64,40 @@ vi.mock('@/components/LivePickHeader', () => ({
 }));
 
 vi.mock('@/components/PickFeed', () => ({
-  default: () => <aside aria-label="Pick feed">Pick Feed</aside>,
+  default: ({ contentId }: { contentId?: string }) => (
+    <aside aria-label="Pick feed">
+      <div id={contentId ?? 'pick-feed-content'}>
+        Pick Feed
+        <button type="button">Feed filter</button>
+      </div>
+    </aside>
+  ),
+}));
+
+vi.mock('@/components/draft/DraftLeftRail', () => ({
+  default: (props: {
+    rosterSlots: Array<{ id: string; label: string; position?: string; player?: { name: string } }>;
+    queuePanel: React.ReactNode;
+    watchlistPanel: React.ReactNode;
+  }) => {
+    draftLeftRailSpy(props);
+
+    return (
+      <aside aria-label="Draft side panel">
+        Draft left rail
+        <ol aria-label="Roster slots">
+          {props.rosterSlots.map((slot) => (
+            <li key={slot.id}>
+              {slot.label}
+              {slot.player ? `: ${slot.player.name}` : null}
+            </li>
+          ))}
+        </ol>
+        <div>{props.queuePanel}</div>
+        <div>{props.watchlistPanel}</div>
+      </aside>
+    );
+  },
 }));
 
 vi.mock('@/components/DraftWatchlist', () => ({
@@ -80,20 +125,25 @@ vi.mock('@/components/draft/DraftStatusBanner', () => ({
 }));
 
 vi.mock('@/components/draft/PlayerGrid', () => ({
-  default: () => <div>Available player grid</div>,
+  default: (props: { players: Array<{ name: string }>; sortBy: string }) => {
+    playerGridSpy(props);
+
+    return (
+      <div>
+        Available player grid
+        <ol aria-label="Rendered player order">
+          {props.players.map((player) => (
+            <li key={player.name}>{player.name}</li>
+          ))}
+        </ol>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/contexts/DraftContext', () => ({
   useDraft: () => ({
-    availablePlayers: [
-      {
-        id: 'player-1',
-        name: 'Caleb Daniel',
-        position: 'DEF',
-        club: 'North Melbourne',
-        adp: 1,
-      },
-    ],
+    availablePlayers: draftContext.availablePlayers,
     canMakePick: false,
     connection: { status: 'disconnected' },
     draft: {
@@ -103,7 +153,13 @@ vi.mock('@/contexts/DraftContext', () => ({
       currentPick: 1,
       totalPicks: 264,
       round: 1,
-      settings: { timePerPick: 60, totalRounds: 22 },
+      settings: {
+        timePerPick: 60,
+        totalRounds: 22,
+        rosterSize: 4,
+        startingLineup: { DEF: 1, MID: 1 },
+        benchSize: 2,
+      },
     },
     draftReadiness: { blockers: [] },
     error: null,
@@ -127,7 +183,29 @@ vi.mock('@/contexts/DraftContext', () => ({
         queue: [],
       },
     ],
-    picks: [],
+    picks: [
+      {
+        id: 'pick-1',
+        overall: 1,
+        round: 1,
+        slot: 1,
+        player: {
+          id: 'roster-player-1',
+          name: 'Nick Daicos',
+          position: 'DEF',
+          club: 'Collingwood',
+          isAvailable: false,
+        },
+        member: {
+          id: 'member-1',
+          userId: 'statly-dev-tester',
+          displayName: 'Tester',
+          teamName: 'Tester FC',
+        },
+        auto: false,
+        madeAt: new Date('2026-06-01T10:00:00.000Z'),
+      },
+    ],
     removeFromWatchlist: vi.fn(),
     selectedCategories: [],
     toggleWatchlist: vi.fn(),
@@ -137,6 +215,21 @@ vi.mock('@/contexts/DraftContext', () => ({
 }));
 
 describe('UnifiedDraftRoom live shell composition', () => {
+  beforeEach(() => {
+    playerGridSpy.mockClear();
+    draftLeftRailSpy.mockClear();
+    draftContext.availablePlayers = [
+      {
+        id: 'player-1',
+        name: 'Caleb Daniel',
+        position: 'DEF',
+        club: 'North Melbourne',
+        adp: 1,
+        statlyZScore: 1.2,
+      },
+    ];
+  });
+
   it('uses the live pick header as the only live status shell', () => {
     render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
 
@@ -147,9 +240,118 @@ describe('UnifiedDraftRoom live shell composition', () => {
       '/drafts'
     );
     expect(screen.getByText('Available player grid')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Draft side panel' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Pick feed' })).toBeInTheDocument();
+    expect(screen.getByText('Draft queue panel')).toBeInTheDocument();
+    expect(screen.getByText('Watchlist panel')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Draft room sections' })).not.toBeInTheDocument();
 
     expect(screen.queryByText('Current snake or linear cycle.')).not.toBeInTheDocument();
     expect(screen.queryByText('Live board position.')).not.toBeInTheDocument();
     expect(screen.queryByText('Connection: disconnected')).not.toBeInTheDocument();
+  });
+
+  it('builds left-rail roster slots from draft settings and current user picks', () => {
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    const leftRailProps = draftLeftRailSpy.mock.calls.at(-1)?.[0];
+    expect(leftRailProps.rosterSlots.map((slot: { label: string }) => slot.label)).toEqual([
+      'DEF 1',
+      'MID 1',
+      'Bench 1',
+      'Bench 2',
+    ]);
+    expect(leftRailProps.rosterSlots[0]).toEqual(
+      expect.objectContaining({
+        label: 'DEF 1',
+        position: 'DEF',
+        player: expect.objectContaining({ name: 'Nick Daicos' }),
+      })
+    );
+    expect(leftRailProps.rosterSlots[1]).not.toHaveProperty('player');
+    expect(leftRailProps.rosterSlots[2]).not.toHaveProperty('player');
+    expect(leftRailProps.rosterSlots[3]).not.toHaveProperty('player');
+  });
+
+  it('defaults the player grid to Statly Z sorting with missing scores last', () => {
+    draftContext.availablePlayers = [
+      {
+        id: 'player-1',
+        name: 'Average Scored',
+        position: 'MID',
+        club: 'Adelaide',
+        adp: 1,
+        statlyZScore: 1.2,
+      },
+      {
+        id: 'player-2',
+        name: 'Pending Score',
+        position: 'MID',
+        club: 'Brisbane',
+        adp: 2,
+      },
+      {
+        id: 'player-3',
+        name: 'Elite Scored',
+        position: 'MID',
+        club: 'Carlton',
+        adp: 3,
+        statlyZScore: 3.4,
+      },
+    ];
+
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    const playerGridProps = playerGridSpy.mock.calls.at(-1)?.[0];
+    expect(playerGridProps.sortBy).toBe('statlyZ');
+    expect(playerGridProps.players.map((player: { name: string }) => player.name)).toEqual([
+      'Elite Scored',
+      'Average Scored',
+      'Pending Score',
+    ]);
+  });
+
+  it('keeps desktop and mobile pick feed content ids unique when the mobile feed is open', () => {
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Pick Feed' }));
+
+    expect(screen.getByRole('dialog', { name: 'Pick Feed' })).toBeInTheDocument();
+
+    const feedContentIds = Array.from(
+      document.querySelectorAll('[id^="pick-feed-content:draft-1"]')
+    ).map((element) => element.id);
+
+    expect(feedContentIds).toEqual([
+      'pick-feed-content:draft-1:desktop',
+      'pick-feed-content:draft-1:mobile',
+    ]);
+  });
+
+  it('does not close the mobile pick feed when keyboard actions bubble from feed controls', () => {
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Pick Feed' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Pick Feed' });
+    const mobileFeedButton = screen.getAllByRole('button', { name: 'Feed filter' }).at(-1);
+
+    expect(mobileFeedButton).toBeDefined();
+    fireEvent.keyDown(mobileFeedButton as HTMLElement, { key: 'Enter' });
+
+    expect(dialog).toBeInTheDocument();
+  });
+
+  it('closes the mobile pick feed when Escape bubbles from focused feed controls', () => {
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Pick Feed' }));
+
+    const mobileFeedButton = screen.getAllByRole('button', { name: 'Feed filter' }).at(-1);
+
+    expect(mobileFeedButton).toBeDefined();
+    fireEvent.keyDown(mobileFeedButton as HTMLElement, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Pick Feed' })).not.toBeInTheDocument();
   });
 });

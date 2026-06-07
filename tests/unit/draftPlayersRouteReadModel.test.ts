@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 
 const prismaMocks = vi.hoisted(() => ({
   pick: {
@@ -128,6 +129,8 @@ describe('draft players read model route', () => {
     const body = await response.json();
 
     expect(body.data.selectedCategories).toEqual([...REAL_DATA_NINE_CATEGORY_PRESET]);
+    const [calebDaniel, unknownPlayer] = body.data.players;
+
     expect(body.data.players[0]).toMatchObject({
       id: 'caleb_daniel',
       name: 'Caleb Daniel',
@@ -137,6 +140,7 @@ describe('draft players read model route', () => {
       gamesPlayed: 22,
       avgPoints: 90,
       averagePoints: 90,
+      statlyZScore: expect.any(Number),
       statsTotal: {
         goals: 11,
         tackles: 88,
@@ -160,13 +164,140 @@ describe('draft players read model route', () => {
         scoreInvolvements: 4.5,
       },
     });
+    expect(calebDaniel.statlyZBreakdown).toHaveLength(REAL_DATA_NINE_CATEGORY_PRESET.length);
+    expect(
+      calebDaniel.statlyZBreakdown.map(
+        (entry: { category: FantasyCategoryKey }) => entry.category
+      )
+    ).toEqual([...REAL_DATA_NINE_CATEGORY_PRESET]);
+    expect(calebDaniel.statlyZBreakdown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: 'goals', value: 0.5, zScore: 0 }),
+        expect.objectContaining({ category: 'tackles', value: 4, zScore: 0 }),
+        expect.objectContaining({ category: 'inside50s', value: 3, zScore: 0 }),
+      ])
+    );
+    expect(calebDaniel.statlyZMissingCategories).toEqual([]);
     expect(body.data.players[1]).toMatchObject({
       id: 'unknown_player',
       name: 'Unknown Player',
       position: 'MID',
       club: 'Adelaide',
       isAvailable: true,
+      statlyZScore: expect.any(Number),
     });
-    expect(body.data.players[1].avgPoints).toBeUndefined();
+    expect(unknownPlayer.statlyZBreakdown).toEqual([]);
+    expect(unknownPlayer.statlyZMissingCategories).toEqual([...REAL_DATA_NINE_CATEGORY_PRESET]);
+    expect(unknownPlayer.avgPoints).toBeUndefined();
+  });
+
+  it('calculates Statly Z from the full available cohort before pagination and filters', async () => {
+    const draftId = 'cmq29ngg50004ux5s39ya2azu';
+    const pagePlayer = {
+      id: 'ace_player',
+      name: 'Ace Player',
+      position: 'DEF',
+      club: 'Adelaide',
+      active: true,
+    };
+    const cohortOnlyPlayer = {
+      id: 'baseline_player',
+      name: 'Baseline Player',
+      position: 'MID',
+      club: 'Brisbane',
+      active: true,
+    };
+
+    prismaMocks.draft.findUnique.mockResolvedValueOnce({
+      id: draftId,
+      createdAt: new Date('2026-06-06T10:00:00.000Z'),
+      startedAt: null,
+      completedAt: null,
+      leagueId: 'league-1',
+      league: {
+        categoriesJson: JSON.stringify(['goals']),
+      },
+    });
+    prismaMocks.player.findMany.mockImplementation(async (args) => {
+      if (args?.take === 2 && args?.skip === 0) {
+        return [pagePlayer];
+      }
+
+      return [pagePlayer, cohortOnlyPlayer];
+    });
+    dataMocks.getPlayers.mockResolvedValueOnce([
+      {
+        id: 'ace_player',
+        name: 'Ace Player',
+        team: 'Adelaide',
+        position: 'DEF',
+        games: 1,
+        stats: {
+          goals: 10,
+          aflFantasy: 100,
+        },
+      },
+      {
+        id: 'baseline_player',
+        name: 'Baseline Player',
+        team: 'Brisbane',
+        position: 'MID',
+        games: 1,
+        stats: {
+          goals: 0,
+          aflFantasy: 50,
+        },
+      },
+    ]);
+
+    const response = await GET(
+      request(`/api/drafts/${draftId}/players?q=Ace&position=DEF&page=1&pageSize=1`),
+      {
+        params: Promise.resolve({ id: draftId }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+
+    expect(body.data.players).toHaveLength(1);
+    expect(body.data.players[0]).toMatchObject({
+      id: 'ace_player',
+      statlyZScore: 1,
+      statlyZBreakdown: [
+        {
+          category: 'goals',
+          value: 10,
+          zScore: 1,
+        },
+      ],
+      statlyZMissingCategories: [],
+    });
+
+    const pageCall = prismaMocks.player.findMany.mock.calls.find(
+      ([args]) => args?.take === 2 && args?.skip === 0
+    );
+    const cohortCall = prismaMocks.player.findMany.mock.calls.find(
+      ([args]) => args?.take === undefined
+    );
+
+    expect(pageCall?.[0]).toMatchObject({
+      where: {
+        active: true,
+        position: 'DEF',
+        name: { contains: 'Ace', mode: 'insensitive' },
+        picks: { none: { draftId } },
+      },
+      skip: 0,
+      take: 2,
+    });
+    expect(cohortCall?.[0]).toMatchObject({
+      where: {
+        active: true,
+        picks: { none: { draftId } },
+      },
+    });
+    expect(cohortCall?.[0].where).not.toHaveProperty('name');
+    expect(cohortCall?.[0].where).not.toHaveProperty('position');
   });
 });
