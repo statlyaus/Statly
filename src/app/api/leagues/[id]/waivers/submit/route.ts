@@ -6,7 +6,7 @@ import { logger, withTiming } from '@/lib/logger';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
-import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,10 +37,9 @@ export const POST = withMetrics(
         teamId,
         playerId,
       });
-      // Unified membership verification
-      const membership = await verifyLeagueMembership(leagueId, userId);
-      if (!membership.isMember) {
-        return NextResponse.json({ error: 'Not a league member' }, { status: 403 });
+      const access = await getLeagueMembershipAccess(leagueId, userId);
+      if (!access.isMember) {
+        return NextResponse.json({ error: 'League membership required' }, { status: 403 });
       }
 
       // Ownership checks (doc read + roster scan) concurrently to reduce latency
@@ -142,32 +141,34 @@ export const POST = withMetrics(
         }
 
         const newDocRef = waiversCollection.doc();
-        tx.set(newDocRef, {
+        const waiverClaimData = {
           leagueId,
           userId,
           teamId,
           playerId: String(playerId),
-          dropPlayerId: dropPlayerId ? String(dropPlayerId) : undefined,
           priority: Number(priority) || 1,
-          bidAmount: typeof validatedBid === 'number' ? validatedBid : undefined,
           status: 'PENDING',
           createdAt: new Date(),
-        });
+          ...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {}),
+          ...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {}),
+        };
+        tx.set(newDocRef, waiverClaimData);
 
         // Audit log
         const activityRef = adminDb.collection(`leagues/${leagueId}/activity`).doc();
-        tx.set(activityRef, {
+        const activityData = {
           type: 'waiver-submitted',
           leagueId,
           userId,
           teamId,
           playerId: String(playerId),
-          dropPlayerId: dropPlayerId ? String(dropPlayerId) : undefined,
-          bidAmount: typeof validatedBid === 'number' ? validatedBid : undefined,
           priority: Number(priority) || 1,
           timestamp: new Date(),
           claimId: newDocRef.id,
-        });
+          ...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {}),
+          ...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {}),
+        };
+        tx.set(activityRef, activityData);
 
         return newDocRef.id;
       });

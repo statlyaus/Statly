@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { DEVELOPMENT_AUTH_COOKIE, isDevelopmentAuthEnabled } from '@/lib/devAuth';
 
 /**
  * Resolve the authenticated user id from the request.
@@ -7,9 +8,12 @@ import { adminAuth } from '@/lib/firebaseAdmin';
  * - In production: verifies Firebase session cookie (statly_session)
  */
 export async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
-  if (process.env.NODE_ENV !== 'production') {
+  if (isDevelopmentAuthEnabled()) {
     const devUser = request.headers.get('x-auth-user');
     if (devUser) return devUser;
+
+    const devCookieUser = request.cookies.get(DEVELOPMENT_AUTH_COOKIE)?.value;
+    if (devCookieUser) return devCookieUser;
   }
 
   const sessionCookie = request.cookies.get('statly_session')?.value;
@@ -25,6 +29,10 @@ export async function getUserIdFromRequest(request: NextRequest): Promise<string
 
 // Verify a Firebase ID token from an Authorization: Bearer <token> header
 export async function validateAuthToken(token: string): Promise<string | null> {
+  if (isDevelopmentAuthEnabled() && token.startsWith('dev:')) {
+    return token.slice('dev:'.length) || null;
+  }
+
   try {
     const decoded = await adminAuth.verifyIdToken(token, true);
     return decoded.uid ?? null;

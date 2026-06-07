@@ -15,6 +15,14 @@ import {
 import type { User, UserCredential } from 'firebase/auth';
 import { auth } from '@/lib/firebaseClient';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import {
+  clearDevelopmentAuthUser,
+  createDevelopmentAuthUser,
+  isDevelopmentAuthEnabled,
+  isDevelopmentLogin,
+  persistDevelopmentAuthUser,
+  readStoredDevelopmentAuthUser,
+} from '@/lib/devAuth';
 
 interface AuthContextType {
   user: User | null;
@@ -29,6 +37,42 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function toFirebaseDevelopmentUser(): User {
+  const developmentUser = createDevelopmentAuthUser();
+
+  return {
+    uid: developmentUser.uid,
+    email: developmentUser.email,
+    displayName: developmentUser.displayName,
+    emailVerified: true,
+    isAnonymous: false,
+    phoneNumber: null,
+    photoURL: null,
+    providerId: 'development',
+    providerData: [],
+    refreshToken: '',
+    tenantId: null,
+    delete: async () => undefined,
+    getIdToken: async () => `dev:${developmentUser.uid}`,
+    getIdTokenResult: async () =>
+      ({
+        token: `dev:${developmentUser.uid}`,
+        signInProvider: 'development',
+        claims: {},
+      }) as Awaited<ReturnType<User['getIdTokenResult']>>,
+    reload: async () => undefined,
+    toJSON: () => developmentUser,
+  } as unknown as User;
+}
+
+function toDevelopmentCredential(user: User): UserCredential {
+  return {
+    user,
+    providerId: 'development',
+    operationType: 'signIn',
+  } as unknown as UserCredential;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Skip Firebase auth if not available
     if (!auth) {
+      if (isDevelopmentAuthEnabled() && readStoredDevelopmentAuthUser()) {
+        setUser(toFirebaseDevelopmentUser());
+      }
       setLoading(false);
       return;
     }
@@ -87,7 +134,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     loading,
     login: async (email: string, pass: string) => {
-      if (!auth) throw new Error('Firebase Auth not available');
+      if (!auth) {
+        if (isDevelopmentLogin(email, pass)) {
+          const developmentUser = toFirebaseDevelopmentUser();
+          persistDevelopmentAuthUser();
+          setUser(developmentUser);
+          return toDevelopmentCredential(developmentUser);
+        }
+        throw new Error('Use the documented local development credentials.');
+      }
       const cred = await signInWithEmailAndPassword(auth, email, pass);
       await createServerSession();
       return cred;
@@ -119,6 +174,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await createServerSession();
     },
     logout: async () => {
+      if (!auth && isDevelopmentAuthEnabled()) {
+        clearDevelopmentAuthUser();
+        setUser(null);
+        return;
+      }
       if (!auth) throw new Error('Firebase Auth not available');
       await clearServerSession();
       return signOut(auth);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
 import { fetchJson } from '@/lib/api';
+import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { getPerformanceMonitor } from '@/lib/performance';
 import { isAbortError } from '@/lib/utils';
 
@@ -40,6 +41,8 @@ export function useUserLeagues(userId?: string) {
 
       try {
         const response = await fetchJson<UserLeaguesResponse>(`/api/leagues/user/${userId}`, {
+          fetcher: authenticatedFetch,
+          userId,
           signal: controller.signal,
         });
         const leaguesFromResponse: LeagueBrief[] = Array.isArray(response)

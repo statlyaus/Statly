@@ -8,7 +8,6 @@ import {
   doc,
   onSnapshot,
   updateDoc,
-  addDoc,
   query,
   where,
   orderBy,
@@ -16,7 +15,6 @@ import {
   type DocumentReference,
   type CollectionReference,
   type Unsubscribe,
-  runTransaction,
   limit,
   startAfter,
   startAt,
@@ -257,10 +255,6 @@ export class LeagueDataService {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'rosters');
   }
 
-  private getLeagueDraftCollection(leagueId: string): CollectionReference {
-    return collection(this.ensureFirestore(), 'leagues', leagueId, 'draft');
-  }
-
   private getLeagueTradesCollection(leagueId: string): CollectionReference {
     return collection(this.ensureFirestore(), 'leagues', leagueId, 'trades');
   }
@@ -382,51 +376,6 @@ export class LeagueDataService {
     this.subscriptions.set(subscriptionKey, {
       unsubscribe,
       collection: 'roster',
-      leagueId,
-    });
-
-    return subscriptionKey;
-  }
-
-  /**
-   * Real-time subscription for league draft picks
-   */
-  subscribeToLeagueDraft(
-    leagueId: string,
-    callback: (picks: LeagueDraftPick[]) => void,
-    onError?: (error: Error) => void
-  ): string {
-    const subscriptionKey = `draft-${leagueId}`;
-
-    this.unsubscribe(subscriptionKey);
-
-    const draftRef = collection(this.getLeagueDraftCollection(leagueId), 'picks');
-    const q = query(draftRef, orderBy('overallPick'));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const picks: LeagueDraftPick[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          picks.push({
-            id: doc.id,
-            ...data,
-            pickedAt: data.pickedAt?.toDate(),
-            createdAt: data.createdAt?.toDate() || new Date(),
-          } as LeagueDraftPick);
-        });
-        callback(picks);
-      },
-      (error) => {
-        console.error(`Error in league draft subscription (${leagueId}):`, error);
-        onError?.(error);
-      }
-    );
-
-    this.subscriptions.set(subscriptionKey, {
-      unsubscribe,
-      collection: 'draft',
       leagueId,
     });
 
@@ -774,13 +723,27 @@ export class LeagueDataService {
     claim: Omit<LeagueWaiverClaim, 'id' | 'createdAt'>
   ): Promise<string> {
     try {
-      const waiversRef = this.getLeagueWaiversCollection(leagueId);
-      const docRef = await addDoc(waiversRef, {
-        ...claim,
-        leagueId, // Ensure league scoping
-        createdAt: Timestamp.now(),
+      const response = await fetch(`/api/leagues/${leagueId}/waivers/submit`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          teamId: claim.teamId,
+          playerId: claim.playerId,
+          dropPlayerId: claim.dropPlayerId,
+          priority: claim.priority,
+          bidAmount: claim.bidAmount,
+        }),
       });
-      return docRef.id;
+
+      const body = (await response.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!response.ok || !body.id) {
+        throw new Error(body.error || 'Failed to submit waiver claim');
+      }
+
+      return body.id;
     } catch (error) {
       console.error(`Error submitting waiver claim (${leagueId}):`, error);
       throw error;
@@ -795,13 +758,21 @@ export class LeagueDataService {
     trade: Omit<LeagueTrade, 'id' | 'createdAt'>
   ): Promise<string> {
     try {
-      const tradesRef = this.getLeagueTradesCollection(leagueId);
-      const docRef = await addDoc(tradesRef, {
-        ...trade,
-        leagueId, // Ensure league scoping
-        createdAt: Timestamp.now(),
+      const response = await fetch(`/api/leagues/${leagueId}/trades`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(trade),
       });
-      return docRef.id;
+
+      const body = (await response.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!response.ok || !body.id) {
+        throw new Error(body.error || 'Failed to propose trade');
+      }
+
+      return body.id;
     } catch (error) {
       console.error(`Error proposing trade (${leagueId}):`, error);
       throw error;
@@ -811,33 +782,21 @@ export class LeagueDataService {
   /**
    * Cancel a waiver claim with proper league scoping
    */
-  async cancelLeagueWaiverClaim(leagueId: string, claimId: string, userId: string): Promise<void> {
+  async cancelLeagueWaiverClaim(leagueId: string, claimId: string, _userId: string): Promise<void> {
     try {
-      const db = this.ensureFirestore();
-      const waiversRef = this.getLeagueWaiversCollection(leagueId);
-      const claimRef = doc(waiversRef, claimId);
-
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(claimRef);
-        if (!snap.exists()) {
-          throw new Error('Waiver claim not found.');
-        }
-        const data = snap.data() as WaiverDoc;
-        const ownerId = data.userId || data.createdBy || undefined;
-        if (!ownerId || ownerId !== userId) {
-          throw new Error('Permission denied: only the claim owner can cancel this claim.');
-        }
-        if (data.status !== 'PENDING') {
-          throw new Error('Cancellation forbidden: only pending claims can be cancelled.');
-        }
-
-        tx.update(claimRef, {
-          status: 'CANCELLED',
-          processedAt: Timestamp.now(),
-          leagueId,
-          userId,
-        });
+      const response = await fetch(`/api/leagues/${leagueId}/waivers/cancel`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ claimId }),
       });
+
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        throw new Error(body.error || 'Failed to cancel waiver claim');
+      }
     } catch (error) {
       console.error(`Error cancelling waiver claim (${leagueId}, ${claimId}):`, error);
       throw error;

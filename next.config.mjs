@@ -4,11 +4,6 @@ import { withSentryConfig } from '@sentry/nextjs';
 const nextConfig = {
   reactStrictMode: true,
 
-  // Temporarily disable ESLint during builds to resolve deployment blocking
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   async headers() {
     return [
       {

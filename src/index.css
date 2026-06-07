@@ -23,6 +23,9 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-overlay: var(--overlay);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -58,6 +61,9 @@
   --accent: #dee8fa;
   --accent-foreground: #1a49a0;
   --destructive: oklch(0.577 0.245 27.325);
+  --warning: oklch(0.78 0.16 78);
+  --warning-foreground: oklch(0.24 0.06 78);
+  --overlay: oklch(0 0 0 / 50%);
   --border: #ced4da; /* A neutral border color */
   --input: #ced4da;
   --ring: oklch(0.708 0 0);
@@ -74,6 +80,28 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --app-toolbar-height: 4rem;
+  --app-shell-max-width: 2100px;
+
+  /* League workspace palette */
+  --league-page: #f3eee6;
+  --league-surface: #fffdfa;
+  --league-surface-muted: #f5f0e8;
+  --league-border: #d9d0c3;
+  --league-text: #171611;
+  --league-text-muted: #6d665d;
+  --league-primary: #18324a;
+  --league-primary-foreground: #fff;
+  --league-primary-hover: #23445f;
+  --league-primary-soft: #e6edf3;
+  --league-accent: #7f6035;
+  --league-accent-soft: #efe4d2;
+  --league-success: #2f6b58;
+  --league-success-soft: #e7f2ed;
+  --league-warning: #9d7234;
+  --league-warning-soft: #f6ecdc;
+  --league-danger: #a84f44;
+  --league-danger-soft: #f7e7e3;
 }
 
 .dark {
@@ -92,6 +120,9 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --warning: oklch(0.7 0.15 78);
+  --warning-foreground: oklch(0.18 0.04 78);
+  --overlay: oklch(0 0 0 / 65%);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);

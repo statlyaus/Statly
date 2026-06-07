@@ -30,7 +30,10 @@ interface WatchlistProps {
   className?: string;
   // Add watchlist state as props
   watchlistItems: WatchlistItem[];
+  onAddToQueue?: (player: DraftPlayer) => void | Promise<void>;
+  queuedPlayerIds?: string[];
   onRemoveFromWatchlist: (playerId: string) => void;
+  isLoading?: boolean;
 }
 
 export default function DraftWatchlist({

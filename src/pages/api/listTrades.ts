@@ -2,6 +2,7 @@ import { db } from '@/lib/firebase';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
+import { getAuthenticatedUserIdFromApiRequest } from '@/lib/nextApiAuth';
 
 // Query validation
 const QuerySchema = z.object({
@@ -72,6 +73,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
+  const userId = await getAuthenticatedUserIdFromApiRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
   const parsed = QuerySchema.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid query parameters', issues: parsed.error.issues });
@@ -133,7 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       nextCursor = encodeCursor({ t: lastUpdatedTS.toMillis(), id: last.id });
     }
 
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=30');
+    res.setHeader('Cache-Control', 'private, no-store');
     res.status(200).json({
       trades,
       pageInfo: {
@@ -194,7 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         nextCursor = encodeCursor({ t: 0, id: last.id });
       }
 
-      res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=30');
+      res.setHeader('Cache-Control', 'private, no-store');
       res.status(200).json({
         trades,
         pageInfo: {

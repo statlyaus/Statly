@@ -1,73 +1,65 @@
-/**
- * Draft Action API Routes
- * /api/drafts/[draftId]/start - Start a draft
- */
-
 import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
-import { getLiveDraftEngine } from '@/services/liveDraftEngine';
-import { revalidateTag } from 'next/cache';
-import { tags } from '@/lib/cacheTags';
-import { logger } from '@/lib/logger';
 
-// POST /api/drafts/[draftId]/start - Start a draft
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+import { commonErrors, errorResponse, successResponse } from '@/lib/apiResponse';
+import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
+import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+function commandErrorResponse(error: unknown, draftId: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  const [kind, detail] = message.includes(':') ? message.split(':', 2) : ['internal', message];
+
+  if (kind === 'not_found') return commonErrors.notFound(detail);
+  if (kind === 'bad_request') return commonErrors.badRequest(detail);
+  if (kind === 'conflict') return errorResponse(detail || 'Draft state changed', 409);
+  if (kind === 'forbidden') return commonErrors.forbidden(detail || 'Forbidden');
+
+  logger.error('Failed to start draft via API', {
+    draftId,
+    error: error instanceof Error ? error.message : String(error),
+  });
+  return errorResponse('Failed to start draft', 500);
+}
+
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+): Promise<Response> {
   const { id: draftId } = await context.params;
+  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    return errorResponse('Missing or invalid draftId', 400);
+  }
+
+  const actorUserId = await getAuthenticatedUserId(request);
+  if (!actorUserId) {
+    return commonErrors.unauthorized();
+  }
 
   try {
-    logger.info('Starting draft via API', { draftId });
+    const result = await draftApplicationService.startDraft({ draftId, actorUserId });
 
-    const engine = getLiveDraftEngine();
-    await engine.startDraft(draftId);
-
-    const draft = await engine.getDraft(draftId);
-
-    if (!draft) {
-      return NextResponse.json({ error: 'Draft not found after start' }, { status: 404 });
+    try {
+      await draftRealtimePublisher.publishCommandResult(result);
+    } catch (publishError) {
+      logger.warn('Failed to publish draft start side effects', { draftId, error: publishError });
     }
 
-    if (draft.leagueId) {
-      const results = await Promise.allSettled([
-        revalidateTag(tags.draft(draft.leagueId)),
-        revalidateTag(tags.league(draft.leagueId)),
-      ]);
-      const rejected = results.filter((r) => r.status === 'rejected');
-      if (rejected.length) {
-        logger.warn('Revalidation failed after start', {
-          draftId,
-          leagueId: draft.leagueId,
-          failed: rejected.length,
-        });
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       message: 'Draft started successfully',
       draft: {
-        draftId: draft.draftId,
-        status: draft.status,
-        currentPick: {
-          userId: draft.currentPick.userId,
-          pickNumber: draft.currentPick.pickNumber,
-          expiresAt: draft.currentPick.expiresAt,
-        },
-        startedAt: draft.updatedAt,
+        id: result.draftId,
+        status: result.data.status,
+        currentPick: result.currentPick,
+        startedAt: result.data.startedAt,
+        pickDeadlineAt: result.data.pickDeadlineAt,
       },
     });
   } catch (error) {
-    logger.error('Failed to start draft via API', {
-      draftId,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
-
-    const errorMessage = error instanceof Error ? error.message : 'Failed to start draft';
-    const statusCode = errorMessage.includes('not found')
-      ? 404
-      : errorMessage.includes('not in a startable state')
-        ? 400
-        : 500;
-
-    return NextResponse.json({ error: errorMessage }, { status: statusCode });
+    return commandErrorResponse(error, draftId);
   }
 }

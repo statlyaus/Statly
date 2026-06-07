@@ -1,17 +1,45 @@
 import type { NextRequest } from 'next/server';
+import type { NextResponse } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { canManageLeague } from '@/lib/leagueMembership';
 
 interface LinkDraftRequest {
   draftId: string;
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function authorizeLeagueDraftLink(request: NextRequest, leagueId: string) {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return errorResponse('Unauthorized', 401);
+  }
+
+  if (!(await canManageLeague(leagueId, userId))) {
+    return errorResponse('Forbidden', 403);
+  }
+
+  return null;
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
     const { id: leagueId } = await params;
     const body: LinkDraftRequest = await request.json();
+
+    if (!body.draftId?.trim()) {
+      return errorResponse('Draft ID is required', 400);
+    }
+
+    const authError = await authorizeLeagueDraftLink(request, leagueId);
+    if (authError) {
+      return authError;
+    }
 
     // Dev shortcut for test league: accept link without DB writes
     if (leagueId === 'test-league-id') {
@@ -21,10 +49,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         leagueId,
         draftId: body.draftId,
       });
-    }
-
-    if (!body.draftId?.trim()) {
-      return errorResponse('Draft ID is required', 400);
     }
 
     // First try to update Prisma database

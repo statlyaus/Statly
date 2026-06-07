@@ -5,7 +5,7 @@
  * - Handles concurrent draft timers for 1000s of leagues
  * - Real-time updates via WebSockets and listeners
  * - Pause/resume, auto-pick, and queue management
- * - Persistent draft state storage
+ * - Redis-backed runtime state; Prisma APIs remain the durable draft authority
  * - Memory-efficient timer management
  * - Horizontal scaling support
  */
@@ -13,7 +13,6 @@
 import { EventEmitter } from 'events';
 import { Redis } from 'ioredis';
 import { logger } from '@/lib/logger';
-import { draftPersistence } from './draftPersistence';
 import { rosterService } from './rosterService';
 
 // Live Draft Engine specific interfaces
@@ -226,8 +225,7 @@ export class LiveDraftEngine extends EventEmitter {
     this.activeDrafts.set(draftId, draft);
     await this.persistDraftState(draft);
 
-    // TODO: Initialize in Firestore if needed
-    // The Live Draft Engine manages its own state separately
+    // Draft durability is handled by Prisma APIs; the engine keeps runtime state in Redis.
 
     this.metrics.activeDrafts++;
     this.emit('draft:created', draft);
@@ -273,9 +271,6 @@ export class LiveDraftEngine extends EventEmitter {
 
     // Start timer
     await this.startPickTimer(draftId);
-
-    // Update Firestore - simplified approach
-    // await draftPersistence.updateTimer(draftId, draft.timerSettings.durationSeconds, true);
 
     this.emit('draft:updated', draft);
 
@@ -402,9 +397,6 @@ export class LiveDraftEngine extends EventEmitter {
     this.activeDrafts.set(draftId, draft);
     await this.persistDraftState(draft);
 
-    // TODO: Save pick to Firestore if needed
-    // await draftPersistence.savePick(draftId, pick);
-
     // Emit events
     if (auto) {
       this.emit('draft:auto-pick', draftId, pick);
@@ -464,9 +456,6 @@ export class LiveDraftEngine extends EventEmitter {
     this.activeDrafts.set(draftId, draft);
     await this.persistDraftState(draft);
 
-    // Update Firestore
-    await draftPersistence.updateTimer(draftId, timer?.timeRemaining || 0, false);
-
     this.emit('draft:paused', draftId);
 
     logger.info('Draft paused successfully', { draftId });
@@ -513,13 +502,6 @@ export class LiveDraftEngine extends EventEmitter {
     this.activeDrafts.set(draftId, draft);
     await this.persistDraftState(draft);
 
-    // Update Firestore
-    await draftPersistence.updateTimer(
-      draftId,
-      timer?.timeRemaining || draft.timerSettings.durationSeconds,
-      true
-    );
-
     this.emit('draft:resumed', draftId);
 
     logger.info('Draft resumed successfully', { draftId });
@@ -548,9 +530,6 @@ export class LiveDraftEngine extends EventEmitter {
     this.activeDrafts.set(draftId, draft);
     await this.persistDraftState(draft);
 
-    // Update Firestore
-    await draftPersistence.updateParticipant(draftId, participant.memberId, { queue });
-
     this.emit('draft:queue-updated', draftId, userId, queue);
   }
 
@@ -574,9 +553,6 @@ export class LiveDraftEngine extends EventEmitter {
 
     this.activeDrafts.set(draftId, draft);
     await this.persistDraftState(draft);
-
-    // Update Firestore
-    await draftPersistence.updateParticipant(draftId, participant.memberId, { isOnline });
 
     if (isOnline) {
       this.emit('draft:participant-joined', draftId, userId);

@@ -66,6 +66,8 @@ type ActivityFeedItem = LeagueActivityItem & {
   teamName?: string;
 };
 
+type WaiverLoadSource = 'claims' | 'roster' | 'activity' | 'priority';
+
 export default function LeagueWaiversContainer({
   leagueId,
   initialClaims,
@@ -74,7 +76,7 @@ export default function LeagueWaiversContainer({
   playersIndex,
   membersIndex,
   initialPlayersCursor,
-}: Props) {
+}: Props): React.JSX.Element | null {
   const { user, loading } = useAuth();
   // Local player paging state
   const [availablePlayers, setAvailablePlayers] = useState(_availablePlayers || []);
@@ -105,6 +107,13 @@ export default function LeagueWaiversContainer({
   const [roster, setRoster] = useState<LeagueRoster | null>(null);
   const [activity, setActivity] = useState<LeagueActivityItem[]>([]);
   const [remainingFAAB, setRemainingFAAB] = useState<number | undefined>(undefined);
+  const [waiverLoadErrors, setWaiverLoadErrors] = useState<
+    Partial<Record<WaiverLoadSource, string>>
+  >({});
+  const waiverLoadError = useMemo(
+    () => Object.values(waiverLoadErrors)[0] ?? null,
+    [waiverLoadErrors]
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Activity paging state
@@ -117,23 +126,45 @@ export default function LeagueWaiversContainer({
   useEffect(() => {
     if (!user?.uid) return;
 
+    const clearLoadError = (source: WaiverLoadSource) => {
+      setWaiverLoadErrors((prev) => {
+        if (!prev[source]) return prev;
+        const next = { ...prev };
+        delete next[source];
+        return next;
+      });
+    };
+
+    const handleLoadError = (source: WaiverLoadSource, message: string) => (err: unknown) => {
+      const detail = err instanceof Error ? err.message : String(err || message);
+      setWaiverLoadErrors((prev) => ({ ...prev, [source]: detail }));
+      console.error(message, err);
+    };
+
     const subKey = leagueDataService.subscribeToLeagueWaivers(
       leagueId,
-      (c) => setClaims(c),
+      (c) => {
+        clearLoadError('claims');
+        setClaims(c);
+      },
       user.uid,
-      (err) => console.error('Waivers sub error', err)
+      handleLoadError('claims', 'Waiver claims are unavailable')
     );
 
     const rosterKey = leagueDataService.subscribeToUserRoster(
       leagueId,
       user.uid,
-      (r) => setRoster(r),
-      (err) => console.error('Roster sub error', err)
+      (r) => {
+        clearLoadError('roster');
+        setRoster(r);
+      },
+      handleLoadError('roster', 'Roster data is unavailable')
     );
 
     const activityKey = leagueDataService.subscribeToLeagueActivity(
       leagueId,
       (items, pageMeta) => {
+        clearLoadError('activity');
         // Merge latest snapshot with any previously loaded older items (dedupe by id)
         setActivity((prev) => {
           const latestIds = new Set(items.map((i) => i.id));
@@ -148,14 +179,17 @@ export default function LeagueWaiversContainer({
         setActivityHasMore((items?.length ?? 0) === ACTIVITY_PAGE_SIZE);
       },
       { pageSize: ACTIVITY_PAGE_SIZE },
-      (err) => console.error('Activity sub error', err)
+      handleLoadError('activity', 'Waiver activity is unavailable')
     );
 
     const faabKey = leagueDataService.subscribeToWaiverPriority(
       leagueId,
       user.uid,
-      (remaining) => setRemainingFAAB(remaining),
-      (err) => console.error('Waiver priority sub error', err)
+      (remaining) => {
+        clearLoadError('priority');
+        setRemainingFAAB(remaining);
+      },
+      handleLoadError('priority', 'Waiver priority is unavailable')
     );
 
     return () => {
@@ -388,6 +422,14 @@ export default function LeagueWaiversContainer({
 
   return (
     <>
+      {waiverLoadError && (
+        <div
+          className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          role="alert"
+        >
+          {waiverLoadError}
+        </div>
+      )}
       {submitError && (
         <div
           className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-red-700 text-sm"

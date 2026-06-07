@@ -1,5 +1,3 @@
-import 'server-only';
-
 import { Worker, QueueEvents } from 'bullmq';
 import { z } from 'zod';
 
@@ -96,3 +94,16 @@ export function createWebVitalsWorker({
 }
 
 export default createWebVitalsWorker;
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const { worker, events } = createWebVitalsWorker();
+
+  const shutdown = async (signal: string) => {
+    logger.info('WebVitals worker shutting down', { signal });
+    await Promise.allSettled([worker.close(), events.close()]);
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+}

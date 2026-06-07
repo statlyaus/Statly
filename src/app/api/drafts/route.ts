@@ -1,11 +1,38 @@
-import type { NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { DraftType, DraftStatus, DraftDirection } from '@prisma/client';
+import {
+  DraftType,
+  DraftStatus,
+  DraftDirection,
+  PickOrder,
+  type LeagueMember,
+} from '@prisma/client';
 import { scheduleDraftStart } from '@/server/queue/draftQueue';
 import { localToUtc, isValidTimeZone } from '@/lib/timezone';
 import { createDraftReminders } from '@/lib/reminders';
+import { ensurePrismaLeagueMirror } from '@/lib/prismaLeagueBridge';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { canManageLeague } from '@/server/leagues/membership';
+import {
+  FANTASY_CATEGORIES,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
+import {
+  MAX_PICK_SECONDS,
+  MIN_PICK_SECONDS,
+  getBenchSizeFromPositionLimits,
+  getRosterSizeFromPositionLimits,
+  isValidPickSeconds,
+  normalizeDraftAutoPickRules,
+  normalizeDraftPickOrderMode,
+  normalizeDraftPositionLimits,
+  type DraftAutoPickRules,
+  type DraftPickOrderMode,
+  type DraftPositionLimits,
+} from '@/lib/draftSettings';
 import { addMinutes } from 'date-fns';
 
 interface CreateDraftRequest {
@@ -17,6 +44,11 @@ interface CreateDraftRequest {
   scheduledTime?: string;
   timeZone?: string;
   enableReminders?: boolean;
+  pickOrder?: DraftPickOrderMode;
+  positionLimits?: DraftPositionLimits;
+  autoPickRules?: DraftAutoPickRules;
+  rosterSize?: number;
+  benchSize?: number;
   // League synchronization data
   leagueData?: {
     name: string;
@@ -33,9 +65,109 @@ interface CreateDraftRequest {
   }>;
 }
 
+type LeagueMemberWithUser = LeagueMember & {
+  user: { id: string; email: string; displayName: string | null; timeZone: string | null };
+};
+
+const VALID_FANTASY_CATEGORY_KEYS = new Set(Object.keys(FANTASY_CATEGORIES));
+
+function parseValidLeagueCategories(
+  categories: readonly string[] | null | undefined
+): FantasyCategoryKey[] {
+  return (categories ?? [])
+    .map(String)
+    .filter((category): category is FantasyCategoryKey =>
+      VALID_FANTASY_CATEGORY_KEYS.has(category)
+    );
+}
+
+function normalizeLeagueCategories(
+  categories: readonly string[] | null | undefined
+): FantasyCategoryKey[] {
+  const selected = parseValidLeagueCategories(categories);
+  return selected.length ? selected : [...REAL_DATA_NINE_CATEGORY_PRESET];
+}
+
+function parseStoredLeagueCategories(raw: string | null | undefined): FantasyCategoryKey[] {
+  if (!raw) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parseValidLeagueCategories(parsed.map(String)) : [];
+  } catch {
+    return parseValidLeagueCategories(raw.split(','));
+  }
+}
+
+function hasStoredLeagueCategories(raw: string | null | undefined): boolean {
+  return parseStoredLeagueCategories(raw).length > 0;
+}
+
+function orderMembersForDraft(
+  members: LeagueMemberWithUser[],
+  participants: CreateDraftRequest['participants'],
+  pickOrder: DraftPickOrderMode
+): LeagueMemberWithUser[] {
+  if (!participants?.length) {
+    const ordered = [...members].sort((a, b) => {
+      const slotA = a.draftSlot ?? Number.MAX_SAFE_INTEGER;
+      const slotB = b.draftSlot ?? Number.MAX_SAFE_INTEGER;
+      if (slotA !== slotB) return slotA - slotB;
+      return a.joinedAt.getTime() - b.joinedAt.getTime();
+    });
+
+    if (pickOrder === 'manual') {
+      return ordered;
+    }
+
+    for (let i = ordered.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+    }
+
+    return ordered;
+  }
+
+  const rankByMemberId = new Map(
+    participants.map((participant) => [participant.memberId, participant.draftOrder])
+  );
+  const rankByUserId = new Map(
+    participants.map((participant) => [participant.userId, participant.draftOrder])
+  );
+
+  return [...members].sort((a, b) => {
+    const rankA = rankByMemberId.get(a.id) ?? rankByUserId.get(a.userId) ?? Number.MAX_SAFE_INTEGER;
+    const rankB = rankByMemberId.get(b.id) ?? rankByUserId.get(b.userId) ?? Number.MAX_SAFE_INTEGER;
+    if (rankA !== rankB) return rankA - rankB;
+    return a.joinedAt.getTime() - b.joinedAt.getTime();
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const userId = await getAuthenticatedUserId(request);
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     const body: CreateDraftRequest = await request.json();
+
+    if (process.env.NODE_ENV === 'production' && !body.leagueId) {
+      return NextResponse.json(
+        { success: false, error: 'League draft creation requires a leagueId' },
+        { status: 400 }
+      );
+    }
+
+    if (body.leagueId && !(await canManageLeague(body.leagueId, userId))) {
+      return NextResponse.json(
+        { success: false, error: 'Commissioner access required' },
+        { status: 403 }
+      );
+    }
 
     // Validation
     if (!body.name?.trim()) {
@@ -50,8 +182,11 @@ export async function POST(request: NextRequest) {
       return errorResponse('Draft type must be "snake" or "linear"', 400);
     }
 
-    if (!body.timePerPick || body.timePerPick < 30 || body.timePerPick > 600) {
-      return errorResponse('Time per pick must be between 30 and 600 seconds', 400);
+    if (!body.timePerPick || !isValidPickSeconds(body.timePerPick)) {
+      return errorResponse(
+        `Time per pick must be between ${MIN_PICK_SECONDS} and ${MAX_PICK_SECONDS} seconds`,
+        400
+      );
     }
 
     // Timezone validation
@@ -78,10 +213,40 @@ export async function POST(request: NextRequest) {
       scheduledStartTime = addMinutes(new Date(), 5);
     }
 
-    // Calculate roster settings (for demo - in production, get from league settings)
-    const rosterSize = 18; // Standard AFL roster size
-    const benchSize = 4; // Standard bench size
+    const positionLimits = normalizeDraftPositionLimits(body.positionLimits);
+    const autoPickRules = normalizeDraftAutoPickRules(body.autoPickRules);
+    const pickOrder = normalizeDraftPickOrderMode(body.pickOrder);
+    const rosterSize =
+      typeof body.rosterSize === 'number'
+        ? body.rosterSize
+        : getRosterSizeFromPositionLimits(positionLimits);
+    const benchSize =
+      typeof body.benchSize === 'number'
+        ? body.benchSize
+        : getBenchSizeFromPositionLimits(positionLimits);
     const totalPicks = body.leagueSize * (rosterSize + benchSize);
+
+    if (body.leagueId && body.leagueId !== 'test-league-id') {
+      const existingLeague = await prisma.league.findUnique({
+        where: { id: body.leagueId },
+        select: { id: true },
+      });
+
+      if (!existingLeague) {
+        await ensurePrismaLeagueMirror({
+          leagueId: body.leagueId,
+          draftType: body.draftType,
+          timePerPick: body.timePerPick,
+          scheduledStartTime,
+          timeZone,
+          rosterSize,
+          benchSize,
+          pickOrder,
+          positionLimits,
+          autoPickRules,
+        });
+      }
+    }
 
     // Create draft in database transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -103,11 +268,45 @@ export async function POST(request: NextRequest) {
           throw new Error('League not found');
         }
 
-        settings = league.settings;
+        const leagueCategories = normalizeLeagueCategories(body.leagueData?.categories);
+        if (!hasStoredLeagueCategories(league.categoriesJson)) {
+          await tx.league.update({
+            where: { id: league.id },
+            data: { categoriesJson: JSON.stringify(leagueCategories) },
+          });
+        }
+
+        const orderedMembers = orderMembersForDraft(league.members, body.participants, pickOrder);
+        const settingsData = {
+          pickSeconds: body.timePerPick,
+          allowAutoPick: autoPickRules.enabled,
+          positionLimitsJson: JSON.stringify(positionLimits),
+          autoPickRulesJson: JSON.stringify(autoPickRules),
+          draftType: body.draftType === 'linear' ? DraftType.LINEAR : DraftType.SNAKE,
+          pickOrder: pickOrder === 'manual' ? PickOrder.MANUAL : PickOrder.RANDOM,
+          rosterSize,
+          benchSize,
+          startAt: scheduledStartTime,
+          timeZone,
+        };
+
+        settings = await tx.leagueSettings.update({
+          where: { id: league.settings.id },
+          data: settingsData,
+        });
 
         // Verify participants match league members if provided
         if (body.participants && body.participants.length !== league.members.length) {
           throw new Error('Participant count does not match league member count');
+        }
+
+        for (let i = 0; i < orderedMembers.length; i++) {
+          if (orderedMembers[i].draftSlot !== i + 1) {
+            await tx.leagueMember.update({
+              where: { id: orderedMembers[i].id },
+              data: { draftSlot: i + 1 },
+            });
+          }
         }
 
         // Create draft with existing league
@@ -126,17 +325,17 @@ export async function POST(request: NextRequest) {
         });
 
         // Create draft orders from existing league members
-        for (let i = 0; i < league.members.length; i++) {
+        for (let i = 0; i < orderedMembers.length; i++) {
           await tx.draftOrder.create({
             data: {
               draftId: draft.id,
-              memberId: league.members[i].id,
+              memberId: orderedMembers[i].id,
               slot: i + 1,
             },
           });
         }
 
-        return { draft, league, members: league.members, settings };
+        return { draft, league, members: orderedMembers, settings };
       } else {
         // Create new temporary league for standalone draft (existing logic)
         settings = await tx.leagueSettings.create({
@@ -145,8 +344,11 @@ export async function POST(request: NextRequest) {
             benchSize,
             maxTeams: body.leagueSize,
             pickSeconds: body.timePerPick,
-            allowAutoPick: true,
-            draftType: body.draftType === 'snake' ? DraftType.SNAKE : DraftType.SNAKE, // Only snake for now
+            allowAutoPick: autoPickRules.enabled,
+            positionLimitsJson: JSON.stringify(positionLimits),
+            autoPickRulesJson: JSON.stringify(autoPickRules),
+            draftType: body.draftType === 'linear' ? DraftType.LINEAR : DraftType.SNAKE,
+            pickOrder: pickOrder === 'manual' ? PickOrder.MANUAL : PickOrder.RANDOM,
             startAt: scheduledStartTime || new Date(),
             timeZone,
             locked: false,
@@ -160,6 +362,7 @@ export async function POST(request: NextRequest) {
             inviteCode: `DRAFT_${Date.now()}`,
             ownerId: body.leagueData?.ownerId || 'temp_owner', // Will be updated after creating the first user
             settingsId: settings.id,
+            categoriesJson: JSON.stringify(normalizeLeagueCategories(body.leagueData?.categories)),
           },
         });
 
@@ -290,17 +493,22 @@ export async function POST(request: NextRequest) {
         }
 
         // Create draft order
-        for (let i = 0; i < members.length; i++) {
+        const orderedMembers = orderMembersForDraft(
+          members as LeagueMemberWithUser[],
+          body.participants,
+          pickOrder
+        );
+        for (let i = 0; i < orderedMembers.length; i++) {
           await tx.draftOrder.create({
             data: {
               draftId: draft.id,
               slot: i + 1,
-              memberId: members[i].id,
+              memberId: orderedMembers[i].id,
             },
           });
         }
 
-        return { draft, league, members, settings };
+        return { draft, league, members: orderedMembers, settings };
       }
     });
 
@@ -352,10 +560,16 @@ export async function POST(request: NextRequest) {
     const responseData = {
       id: result.draft.id,
       name: body.name.trim(),
+      leagueId: result.league.id,
+      league: {
+        id: result.league.id,
+        name: result.league.name,
+      },
       leagueSize: body.leagueSize,
       draftType: body.draftType,
       timePerPick: body.timePerPick,
-      status: body.scheduledTime ? 'pending' : 'active',
+      status: result.draft.status,
+      startAt: result.settings.startAt.toISOString(),
       scheduledTime: body.scheduledTime,
       createdAt: result.draft.createdAt.toISOString(),
       currentPick: result.draft.currentPick,

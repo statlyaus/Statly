@@ -1,4 +1,5 @@
 import type { FantasyCategoryKey } from './fantasyCategories';
+import type { DraftOperationalReadiness } from './draftReadiness';
 import type { Timestamp } from 'firebase-admin/firestore';
 
 // Core League Types
@@ -42,6 +43,7 @@ export interface League {
   pickOrder?: DraftPickOrder;
   waiverRule?: WaiverResetPolicy;
   currentTeams?: number; // Computed field for current member count
+  draftReadiness?: DraftOperationalReadiness;
 }
 
 // Firestore document shape for league members (server-side)

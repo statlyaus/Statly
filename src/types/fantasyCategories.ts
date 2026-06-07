@@ -75,6 +75,18 @@ export interface LeagueSettings {
   scoringType?: string;
 }
 
+export const REAL_DATA_NINE_CATEGORY_PRESET = [
+  'goals',
+  'tackles',
+  'inside50s',
+  'intercepts',
+  'contestedMarks',
+  'rebound50s',
+  'contestedPossessions',
+  'effectiveDisposals',
+  'scoreInvolvements',
+] as const satisfies readonly FantasyCategoryKey[];
+
 export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
   goals: {
     id: 'goals',

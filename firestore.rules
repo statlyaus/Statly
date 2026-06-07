@@ -1,151 +1,230 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
+    function leagueMemberPath(leagueId, userId) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/members/$(userId);
+    }
+
+    function leagueMemberDoc(leagueId) {
+      return get(leagueMemberPath(leagueId, request.auth.uid));
+    }
+
     function isLeagueMember(leagueId) {
-      return exists(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid));
+      return isAuthenticated()
+        && exists(leagueMemberPath(leagueId, request.auth.uid))
+        && leagueMemberDoc(leagueId).data.isActive != false
+        && leagueMemberDoc(leagueId).data.status != 'REMOVED'
+        && leagueMemberDoc(leagueId).data.status != 'removed'
+        && leagueMemberDoc(leagueId).data.status != 'INACTIVE'
+        && leagueMemberDoc(leagueId).data.status != 'inactive'
+        && leagueMemberDoc(leagueId).data.status != 'DECLINED'
+        && leagueMemberDoc(leagueId).data.status != 'declined';
     }
-    
-    function isCommissioner(leagueId) {
-      return get(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid)).data.role == 'COMMISSIONER';
+
+    function isLeagueManager(leagueId) {
+      return isLeagueMember(leagueId)
+        && (
+          leagueMemberDoc(leagueId).data.role in [
+            'owner',
+            'admin',
+            'manager',
+            'commissioner',
+            'OWNER',
+            'ADMIN',
+            'MANAGER',
+            'COMMISSIONER'
+          ]
+        );
     }
-    
-    function isOwner(resource) {
+
+    function isResourceUser(resource) {
       return request.auth.uid == resource.data.userId;
     }
-    
-    // Global player data (read-only for users)
+
+    function isSelfMemberPreferenceUpdate(userId) {
+      return request.auth.uid == userId
+        && request.resource.data.leagueId == resource.data.leagueId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'draftPreferences',
+          'scoringPreferences',
+          'notificationSettings'
+        ]);
+    }
+
+    function isRosterLineupUpdate(leagueId) {
+      return request.resource.data.leagueId == resource.data.leagueId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'teamName',
+          'captain',
+          'viceCaptain',
+          'bench',
+          'emergencies',
+          'updatedAt'
+        ]);
+    }
+
+    function hasLeagueId(leagueId) {
+      return request.resource.data.leagueId == leagueId;
+    }
+
     match /players/{playerId} {
       allow read: if isAuthenticated();
-      allow write: if false; // Admin only via Functions
+      allow write: if false;
     }
-    
-    // Global match data (read-only for users)
+
     match /matches/{matchId} {
       allow read: if isAuthenticated();
-      allow write: if false; // Admin only via Functions
+      allow write: if false;
     }
-    
-    // User profiles
+
+    match /leagueMembers/{memberId} {
+      allow read: if isAuthenticated()
+        && resource.data.isActive != false
+        && isLeagueMember(resource.data.leagueId);
+      allow write: if false;
+    }
+
     match /users/{userId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
+
+      match /{document=**} {
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
     }
-    
-    // League-scoped data
+
     match /leagues/{leagueId} {
-      // League document itself
-      allow read: if isAuthenticated() && isLeagueMember(leagueId);
-      allow write: if isAuthenticated() && isCommissioner(leagueId);
-      
-      // League members
+      allow read: if isLeagueMember(leagueId);
+      allow write: if false;
+
       match /members/{userId} {
-        allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow write: if isAuthenticated() && 
-          (request.auth.uid == userId || isCommissioner(leagueId));
+        allow read: if isLeagueMember(leagueId);
+        allow create: if false;
+        allow update: if isSelfMemberPreferenceUpdate(userId);
+        allow delete: if false;
       }
-      
-      // Team rosters
+
       match /rosters/{teamId} {
-        allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow create: if isAuthenticated() && isLeagueMember(leagueId) &&
-          request.auth.uid == request.resource.data.userId;
-        allow update, delete: if isAuthenticated() && 
-          (isOwner(resource) || isCommissioner(leagueId));
+        allow read: if isLeagueMember(leagueId);
+        allow create: if false;
+        allow update: if isLeagueMember(leagueId)
+          && (isResourceUser(resource) || isLeagueManager(leagueId))
+          && isRosterLineupUpdate(leagueId);
+        allow delete: if false;
       }
-      
-      // Draft system
+
       match /draft/{draftDoc} {
-        allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow write: if isAuthenticated() && 
-          (isCommissioner(leagueId) || isOwner(resource));
-          
-        // Draft picks subcollection
+        allow read: if isLeagueMember(leagueId);
+        allow write: if false;
+
         match /picks/{pickId} {
-          allow read: if isAuthenticated() && isLeagueMember(leagueId);
-          allow create: if isAuthenticated() && isLeagueMember(leagueId);
-          allow update: if isAuthenticated() && 
-            (isOwner(resource) || isCommissioner(leagueId));
+          allow read: if isLeagueMember(leagueId);
+          allow write: if false;
         }
-        
-        // Active picks subcollection (real-time draft state)
+
         match /active/{pickId} {
-          allow read: if isAuthenticated() && isLeagueMember(leagueId);
-          allow write: if isAuthenticated() && 
-            (isOwner(resource) || isCommissioner(leagueId));
+          allow read: if isLeagueMember(leagueId);
+          allow write: if false;
         }
       }
-      
-      // Trade system
+
+      match /drafts/{draftId} {
+        allow read: if isLeagueMember(leagueId);
+        allow write: if false;
+
+        match /picks/{pickId} {
+          allow read: if isLeagueMember(leagueId);
+          allow write: if false;
+        }
+      }
+
+      match /availablePlayers/{playerId} {
+        allow read: if isLeagueMember(leagueId);
+        allow write: if false;
+      }
+
+      match /playerOwnerships/{playerId} {
+        allow read: if isLeagueMember(leagueId);
+        allow write: if false;
+      }
+
       match /trades/{tradeId} {
-        allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow create: if isAuthenticated() && isLeagueMember(leagueId) &&
-          request.auth.uid == request.resource.data.fromUserId;
-        allow update: if isAuthenticated() && (
-          request.auth.uid == resource.data.toUserId ||
-          request.auth.uid == resource.data.fromUserId ||
-          isCommissioner(leagueId)
-        );
-        allow delete: if isAuthenticated() && 
-          (isOwner(resource) || isCommissioner(leagueId));
+        allow read: if isLeagueMember(leagueId);
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
       }
-      
-      // Waiver system
+
       match /waivers/{claimId} {
-        allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow create: if isAuthenticated() && isLeagueMember(leagueId) &&
-          request.auth.uid == request.resource.data.userId;
-        allow update: if isAuthenticated() && 
-          (isOwner(resource) || isCommissioner(leagueId));
-        allow delete: if isAuthenticated() && 
-          (isOwner(resource) || isCommissioner(leagueId));
+        allow read: if isLeagueMember(leagueId);
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
       }
-      
-      // Personal watchlists
+
+      match /waiverPriorities/{userId} {
+        allow read: if isLeagueMember(leagueId)
+          && (request.auth.uid == userId || isLeagueManager(leagueId));
+        allow write: if false;
+      }
+
+      match /activity/{activityId} {
+        allow read: if isLeagueMember(leagueId);
+        allow write: if false;
+      }
+
+      match /teamActions/{actionId} {
+        allow read: if isLeagueMember(leagueId);
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
+      }
+
       match /watchlists/{userId} {
-        allow read, write: if isAuthenticated() && 
-          (request.auth.uid == userId || isCommissioner(leagueId));
+        allow read, write: if false;
       }
-      
-      // League configuration
+
       match /config/{configDoc} {
-        allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow write: if isAuthenticated() && isCommissioner(leagueId);
+        allow read: if isLeagueMember(leagueId);
+        allow write: if false;
       }
-      
-      // League messages/chat
+
       match /messages/{messageId} {
-        allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow create: if isAuthenticated() && isLeagueMember(leagueId) &&
-          request.auth.uid == request.resource.data.userId;
-        allow update, delete: if isAuthenticated() && 
-          (isOwner(resource) || isCommissioner(leagueId));
+        allow read: if isLeagueMember(leagueId);
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
       }
-      
-      // League standings (computed)
+
       match /standings/{standingDoc} {
-        allow read: if isAuthenticated() && isLeagueMember(leagueId);
-        allow write: if false; // Functions only
+        allow read: if isLeagueMember(leagueId);
+        allow write: if false;
       }
     }
-    
-    // Admin-only collections
+
+    match /activeDrafts/{leagueId} {
+      allow read: if isLeagueMember(leagueId);
+      allow write: if false;
+    }
+
     match /admin/{document=**} {
-      allow read, write: if false; // Functions only
+      allow read, write: if false;
     }
-    
-    // System logs (Functions only)
+
     match /logs/{logId} {
-      allow read, write: if false; // Functions only
+      allow read, write: if false;
     }
-    
-    // Analytics data (Functions only)
+
     match /analytics/{analyticsDoc} {
-      allow read, write: if false; // Functions only
+      allow read, write: if false;
+    }
+
+    match /analytics_web_vitals/{metricId} {
+      allow read, write: if false;
     }
   }
 }

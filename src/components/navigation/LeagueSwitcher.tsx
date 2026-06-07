@@ -79,18 +79,6 @@ export default function LeagueSwitcher() {
     document.cookie = buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, leagueId);
   }, [lastLeagueId, leagueId]);
 
-  // Auto-navigate to last selected league if on /leagues with no id
-  useEffect(() => {
-    if (!pathname) return;
-    const isLeaguesRoot = /^\/leagues\/?$/.test(pathname);
-    if (!isLeaguesRoot) return;
-    if (!lastLeagueId) return;
-    if (!leagues.some((l) => l.id === lastLeagueId)) return;
-    const qs = search?.toString();
-    const suffix = qs && qs.length > 0 ? `?${qs}` : '';
-    router.replace(`/leagues/${lastLeagueId}${suffix}`);
-  }, [pathname, lastLeagueId, leagues, router, search]);
-
   useEffect(() => {
     let mounted = true;
     const load = async () => {

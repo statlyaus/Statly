@@ -12,6 +12,7 @@ import {
   formatInTimezone,
   getTimezoneInfo,
 } from '@/lib/timezone';
+import { TIME_PER_PICK_OPTIONS } from '@/lib/draftSettings';
 
 interface DraftScheduleManagerProps {
   draftId: string;
@@ -288,11 +289,11 @@ export default function DraftScheduleManager({
               onChange={(e) => setFormData({ ...formData, timePerPick: parseInt(e.target.value) })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value={60}>1 minute</option>
-              <option value={90}>1.5 minutes</option>
-              <option value={120}>2 minutes</option>
-              <option value={180}>3 minutes</option>
-              <option value={300}>5 minutes</option>
+              {TIME_PER_PICK_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </FormField>
 

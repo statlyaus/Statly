@@ -1,7 +1,65 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
+import { scheduleDraftStart } from '@/server/queue/draftQueue';
+import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
+import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
+import {
+  MAX_PICK_SECONDS,
+  MIN_PICK_SECONDS,
+  getBenchSizeFromPositionLimits,
+  getRosterSizeFromPositionLimits,
+  isValidPickSeconds,
+  normalizeDraftAutoPickRules,
+  normalizeDraftPickOrderMode,
+  normalizeDraftPositionLimits,
+} from '@/lib/draftSettings';
+
+function parseDraftDate(value: unknown): Date | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return undefined;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function parsePickSeconds(value: unknown): number | undefined {
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+async function authorizeDraftSettingsRead(request: NextRequest, leagueId: string) {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const membership = await getLeagueMembership(leagueId, userId);
+  if (!membership.isMember) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  return null;
+}
+
+async function authorizeDraftSettingsWrite(request: NextRequest, leagueId: string) {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const membership = await getLeagueMembership(leagueId, userId);
+  if (!membership.isMember || !isLeagueManagerRole(membership.data?.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  return null;
+}
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,6 +70,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
 
+    const authError = await authorizeDraftSettingsWrite(request, id);
+    if (authError) {
+      return authError;
+    }
+
     // For test league, just return success
     if (id === 'test-league-id') {
       logger.info(`Updated draft settings for test league: ${JSON.stringify(body)}`);
@@ -20,6 +83,96 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         success: true,
         message: 'Draft settings updated successfully',
         data: body,
+      });
+    }
+
+    const prismaLeague = await prisma.league.findUnique({
+      where: { id },
+      include: { settings: true },
+    });
+
+    if (prismaLeague?.settings) {
+      const draftDate = parseDraftDate(body.draftDate ?? body.scheduledTime ?? body.startAt);
+      const timePerPick = parsePickSeconds(body.timePerPick ?? body.pickSeconds);
+      const draftType = String(body.draftType ?? prismaLeague.settings.draftType).toUpperCase();
+
+      if ((body.draftDate || body.scheduledTime || body.startAt) && !draftDate) {
+        return NextResponse.json({ error: 'Invalid draft date' }, { status: 400 });
+      }
+
+      if (timePerPick !== undefined && !isValidPickSeconds(timePerPick)) {
+        return NextResponse.json(
+          {
+            error: `Time per pick must be between ${MIN_PICK_SECONDS} and ${MAX_PICK_SECONDS} seconds`,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!['SNAKE', 'LINEAR'].includes(draftType)) {
+        return NextResponse.json({ error: 'Invalid draft type' }, { status: 400 });
+      }
+
+      const positionLimits = normalizeDraftPositionLimits(
+        body.positionLimits ?? prismaLeague.settings.positionLimitsJson
+      );
+      const autoPickRules = normalizeDraftAutoPickRules(
+        body.autoPickRules ?? prismaLeague.settings.autoPickRulesJson
+      );
+      const pickOrder = normalizeDraftPickOrderMode(body.pickOrder ?? prismaLeague.settings.pickOrder);
+
+      await prisma.leagueSettings.update({
+        where: { id: prismaLeague.settings.id },
+        data: {
+          ...(draftDate ? { startAt: draftDate } : {}),
+          ...(timePerPick !== undefined ? { pickSeconds: timePerPick } : {}),
+          draftType: draftType as 'SNAKE' | 'LINEAR',
+          pickOrder: pickOrder === 'manual' ? 'MANUAL' : 'RANDOM',
+          allowAutoPick: autoPickRules.enabled,
+          rosterSize: getRosterSizeFromPositionLimits(positionLimits),
+          benchSize: getBenchSizeFromPositionLimits(positionLimits),
+          positionLimitsJson: JSON.stringify(positionLimits),
+          autoPickRulesJson: JSON.stringify(autoPickRules),
+        },
+      });
+
+      const draftReadiness = await ensureLeagueDraftSetupConverged({
+        prismaClient: prisma,
+        leagueId: id,
+      });
+      const effectivePickSeconds = timePerPick ?? prismaLeague.settings.pickSeconds;
+
+      if (draftDate && draftDate.getTime() > Date.now()) {
+        try {
+          await scheduleDraftStart(id, draftDate, effectivePickSeconds * 1000, true);
+        } catch (error) {
+          logger.error('Failed to schedule updated draft start', {
+            leagueId: id,
+            draftId: draftReadiness.draftId,
+            scheduledTime: draftDate.toISOString(),
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      logger.info('Updated Prisma draft settings', {
+        leagueId: id,
+        draftId: draftReadiness.draftId,
+        readinessStatus: draftReadiness.status,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Draft settings updated successfully',
+        data: {
+          draftDate: draftDate?.toISOString() ?? prismaLeague.settings.startAt.toISOString(),
+          draftType: draftType.toLowerCase(),
+          timePerPick: effectivePickSeconds,
+          pickOrder,
+          positionLimits,
+          autoPickRules,
+          draftReadiness,
+        },
       });
     }
 
@@ -36,6 +189,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       draftDate: body.draftDate,
       draftType: body.draftType || 'snake',
       timePerPick: body.timePerPick || 120,
+      pickOrder: normalizeDraftPickOrderMode(body.pickOrder),
+      positionLimits: normalizeDraftPositionLimits(body.positionLimits),
+      autoPickRules: normalizeDraftAutoPickRules(body.autoPickRules),
       updatedAt: new Date().toISOString(),
     });
 
@@ -60,17 +216,47 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
 
+    const authError = await authorizeDraftSettingsRead(request, id);
+    if (authError) {
+      return authError;
+    }
+
     // For test league
     if (id === 'test-league-id') {
       const testDraftSettings = {
         draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         draftType: 'snake',
         timePerPick: 120,
+        pickOrder: 'random',
+        positionLimits: normalizeDraftPositionLimits(undefined),
+        autoPickRules: normalizeDraftAutoPickRules(undefined),
       };
 
       return NextResponse.json({
         success: true,
         data: testDraftSettings,
+      });
+    }
+
+    const prismaLeague = await prisma.league.findUnique({
+      where: { id },
+      include: { settings: true },
+    });
+
+    if (prismaLeague?.settings) {
+      const draftReadiness = await getLeagueDraftOperationalReadiness(prisma, { leagueId: id });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          draftDate: prismaLeague.settings.startAt.toISOString(),
+          draftType: prismaLeague.settings.draftType.toLowerCase(),
+          timePerPick: prismaLeague.settings.pickSeconds,
+          pickOrder: prismaLeague.settings.pickOrder.toLowerCase(),
+          positionLimits: normalizeDraftPositionLimits(prismaLeague.settings.positionLimitsJson),
+          autoPickRules: normalizeDraftAutoPickRules(prismaLeague.settings.autoPickRulesJson),
+          draftReadiness,
+        },
       });
     }
 
@@ -87,6 +273,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       draftDate: leagueData?.draftDate,
       draftType: leagueData?.draftType || 'snake',
       timePerPick: leagueData?.timePerPick || 120,
+      pickOrder: normalizeDraftPickOrderMode(leagueData?.pickOrder),
+      positionLimits: normalizeDraftPositionLimits(leagueData?.positionLimits),
+      autoPickRules: normalizeDraftAutoPickRules(leagueData?.autoPickRules),
     };
 
     return NextResponse.json({

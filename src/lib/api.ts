@@ -3,8 +3,14 @@ export interface ApiErrorShape {
   message?: string;
 }
 
-export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
+interface FetchJsonInit extends RequestInit {
+  fetcher?: (input: RequestInfo | URL, init?: RequestInit, userId?: string) => Promise<Response>;
+  userId?: string;
+}
+
+export async function fetchJson<T>(input: RequestInfo | URL, init?: FetchJsonInit): Promise<T> {
+  const { fetcher = fetch, userId, ...requestInit } = init ?? {};
+  const response = await fetcher(input, requestInit, userId);
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
     try {
@@ -21,6 +27,7 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit)
 
 // src/lib/api.ts
 
+import { isDevelopmentAuthEnabled, readStoredDevelopmentAuthUserId } from '@/lib/devAuth';
 import type { TradeState, TradeStatus, TradeSummary } from '@/state/tradeReviewStore';
 
 /**
@@ -28,7 +35,10 @@ import type { TradeState, TradeStatus, TradeSummary } from '@/state/tradeReviewS
  * This function should be exported so it can be used in other files.
  */
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
-  const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
+  const base =
+    typeof window === 'undefined'
+      ? (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '')
+      : '';
 
   // Validate endpoint doesn't contain protocol or path traversal
   if (/^https?:\/\//i.test(endpoint) || endpoint.includes('..')) {
@@ -40,13 +50,22 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     .replace(/^\//, '');
   const path = `/api/${normalized}`;
   const url = base ? `${base}${path}` : path;
+  const headers = new Headers(options.headers);
+
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (!headers.has('Authorization') && isDevelopmentAuthEnabled()) {
+    const developmentUserId = readStoredDevelopmentAuthUserId();
+    if (developmentUserId) {
+      headers.set('Authorization', `Bearer dev:${developmentUserId}`);
+    }
+  }
 
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
     ...options,
+    headers,
   });
 
   if (!response.ok) {

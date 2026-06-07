@@ -4,26 +4,38 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { DraftType, DraftStatus, LeagueRole } from '@prisma/client';
 import { addMinutes } from 'date-fns';
+import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+import {
+  DEVELOPMENT_AUTH_DISPLAY_NAME,
+  DEVELOPMENT_AUTH_EMAIL,
+  DEVELOPMENT_AUTH_USER_ID,
+} from '@/lib/devAuth';
 
 /**
  * Create a test draft for development/testing
  */
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     logger.info('Creating test draft');
+    const body = await request.json().catch(() => ({}));
+    const quickCompletionMode =
+      process.env.NODE_ENV !== 'production' && body?.mode === 'quick-completion';
 
     // Create test draft with lobby opening in 1 minute and draft starting in 6 minutes
     const now = new Date();
     const lobbyOpenTime = addMinutes(now, 1);
     const draftStartTime = addMinutes(now, 6);
+    const teamCount = quickCompletionMode ? 2 : 12;
+    const totalRounds = quickCompletionMode ? 1 : 22;
+    const rosterSize = quickCompletionMode ? 1 : 22;
 
     const result = await prisma.$transaction(async (tx) => {
       // Create league settings first
       const settings = await tx.leagueSettings.create({
         data: {
-          rosterSize: 22,
-          benchSize: 5,
-          maxTeams: 12,
+          rosterSize,
+          benchSize: 0,
+          maxTeams: teamCount,
           pickSeconds: 120,
           allowAutoPick: true,
           draftType: DraftType.SNAKE,
@@ -36,10 +48,13 @@ export async function POST(_request: NextRequest) {
       // Create league
       const league = await tx.league.create({
         data: {
-          name: `Test Draft League - ${now.toISOString().slice(0, 16)}`,
+          name: `${quickCompletionMode ? 'Quick Test Draft League' : 'Test Draft League'} - ${now
+            .toISOString()
+            .slice(0, 16)}`,
           inviteCode: `TEST${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          ownerId: 'test-user',
+          ownerId: DEVELOPMENT_AUTH_USER_ID,
           settingsId: settings.id,
+          categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
         },
       });
 
@@ -51,20 +66,35 @@ export async function POST(_request: NextRequest) {
           lobbyStatus: 'CLOSED',
           lobbyOpenAt: lobbyOpenTime,
           currentPick: 1,
-          totalPicks: 264, // 12 teams * 22 picks
+          totalPicks: teamCount * totalRounds,
           round: 1,
         },
       });
 
-      // Create some test members
+      // Create a full local league: one human team plus CPU teams.
       const members = [];
-      for (let i = 1; i <= 4; i++) {
+      for (let i = 1; i <= teamCount; i++) {
+        const userId = i === 1 ? DEVELOPMENT_AUTH_USER_ID : `test-bot-user-${i - 1}`;
+        const displayName = i === 1 ? DEVELOPMENT_AUTH_DISPLAY_NAME : `CPU Team ${i - 1}`;
+        await tx.user.upsert({
+          where: { id: userId },
+          update: { displayName },
+          create: {
+            id: userId,
+            email: i === 1 ? DEVELOPMENT_AUTH_EMAIL : `${userId}@statly.local`,
+            passwordHash: 'test_hash',
+            displayName,
+            timeZone: 'Australia/Melbourne',
+          },
+        });
+
         const member = await tx.leagueMember.create({
           data: {
             leagueId: league.id,
-            userId: `test-user-${i}`,
+            userId,
             role: i === 1 ? LeagueRole.OWNER : LeagueRole.MANAGER,
-            teamName: `Test Team ${i}`,
+            teamName: i === 1 ? 'Your Team' : `CPU Team ${i - 1}`,
+            draftSlot: i,
           },
         });
         members.push(member);
@@ -93,6 +123,10 @@ export async function POST(_request: NextRequest) {
         lobbyOpenAt: result.draft.lobbyOpenAt,
         leagueId: result.league.id,
         leagueName: result.league.name,
+        mode: quickCompletionMode ? 'quick-completion' : 'standard',
+        teamCount,
+        totalRounds,
+        totalPicks: result.draft.totalPicks,
         draftStartTime,
         lobbyOpenTime,
         url: `/drafts/${result.draft.id}`,

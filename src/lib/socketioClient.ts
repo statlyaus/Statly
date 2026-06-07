@@ -70,7 +70,7 @@ export interface DraftRoomHandlers {
 }
 
 const defaultClientConfig: SocketIOClientConfig = {
-  url: process.env.NEXT_PUBLIC_SOCKET_IO_URL ?? 'http://localhost:3001',
+  url: process.env.NEXT_PUBLIC_SOCKET_IO_URL ?? 'http://localhost:3002',
   autoConnect: false,
   reconnection: true,
   reconnectionAttempts: 5,

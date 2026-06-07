@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { getLobbyState } from '@/lib/draftLobby';
-import { ensureLobbyColumns } from '@/lib/ensureLobbyColumns';
 import { observeHistogram, registerHistogram } from '@/server/metrics';
 
 // Register histograms once in this module context
@@ -18,7 +17,10 @@ registerHistogram('lobby_get_duration_seconds', [0.005, 0.01, 0.025, 0.05, 0.1, 
 /**
  * GET lobby state
  */
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<Response> {
   const t0 = Date.now();
   let draftId: string | undefined;
   try {
@@ -33,8 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Optional auth check
     try {
-      const cookieStore = await cookies();
-      const sessionCookie = cookieStore.get('statly_session')?.value;
+      const sessionCookie = (await cookies()).get('statly_session')?.value;
       if (sessionCookie) {
         await adminAuth.verifySessionCookie(sessionCookie, true);
       }
@@ -43,11 +44,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     logger.info('Lobby API called', { draftId });
-
-    const columnsReady = await ensureLobbyColumns();
-    if (!columnsReady) {
-      logger.warn('Lobby columns not ready, using fallback');
-    }
 
     const lobbyState = await getLobbyState(draftId);
 

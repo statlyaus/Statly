@@ -1,130 +1,133 @@
 import type { NextRequest } from 'next/server';
+import { z } from 'zod';
+
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { cookies } from 'next/headers';
-import { adminAuth } from '@/lib/firebaseAdmin';
-import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { getDraftMembershipAccess } from '@/server/leagues/membership';
 
-const QueueRequestSchema = z.object({
+const QueuePostSchema = z.object({
   playerId: z.string().min(1),
-  memberId: z.string().min(1),
   rank: z.coerce.number().int().positive().optional(),
 });
 
-type _QueueRequest = z.infer<typeof QueueRequestSchema>;
+const QueueDeleteQuerySchema = z.object({
+  playerId: z.string().min(1),
+});
 
-// Bulk update schema: full ordered queue for the authenticated member in this draft's league
 const QueuePutSchema = z.object({
   queue: z.array(z.string().min(1)).default([]),
 });
 
-async function authenticateAndAuthorize(draftId: string, memberId: string) {
-  // Verify user authentication
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get('statly_session')?.value;
-  if (!sessionCookie) {
-    throw errorResponse('Unauthorized', 401);
+const queueEntrySelect = {
+  id: true,
+  draftId: true,
+  memberId: true,
+  playerId: true,
+  rank: true,
+  notes: true,
+} as const;
+
+async function resolveQueueMember(
+  request: NextRequest,
+  draftId: string
+): Promise<{ memberId: string; userId: string } | Response> {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return commonErrors.unauthorized();
   }
 
-  let userId: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    userId = decoded.uid;
-  } catch {
-    throw errorResponse('Unauthorized', 401);
+  const access = await getDraftMembershipAccess(draftId, userId);
+  if (!access.isMember || !access.memberId) {
+    return commonErrors.forbidden('Not a member of this draft');
   }
 
-  // Verify draft exists
-  const draft = await prisma.draft.findUnique({ where: { id: draftId } });
-  if (!draft) {
-    throw commonErrors.notFound('Draft not found');
-  }
-
-  // Verify member belongs to the draft's league and to the authenticated user
-  const membership = await prisma.leagueMember.findFirst({
-    where: { id: memberId, leagueId: draft.leagueId, userId },
-  });
-  if (!membership) {
-    throw commonErrors.forbidden('Not a member of this draft');
-  }
-
-  return { draft, userId } as const;
+  return { memberId: access.memberId, userId };
 }
 
-// Resolve the authenticated user and their LeagueMember for this draft
-async function authenticateAndResolveMember(draftId: string) {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get('statly_session')?.value;
-  if (!sessionCookie) throw commonErrors.unauthorized();
-
-  let userId: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    userId = decoded.uid;
-  } catch {
-    throw commonErrors.unauthorized();
-  }
-
-  const draft = await prisma.draft.findUnique({
-    where: { id: draftId },
-    include: { league: { include: { members: true } } },
-  });
-  if (!draft) throw commonErrors.notFound('Draft not found');
-  const member = draft.league?.members.find((m) => m.userId === userId);
-  if (!member) throw commonErrors.forbidden('Not a member of this draft');
-  return { draft, userId, member } as const;
+function isInvalidDraftId(draftId: string): boolean {
+  return typeof draftId !== 'string' || draftId.trim().length === 0;
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<Response> {
   try {
     const { id: draftId } = await params;
-    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    if (isInvalidDraftId(draftId)) {
       return errorResponse('Missing or invalid draftId', 400);
     }
 
+    const access = await resolveQueueMember(request, draftId);
+    if (access instanceof Response) {
+      return access;
+    }
+
     const json = await request.json().catch(() => null);
-    const parsed = QueueRequestSchema.safeParse(json);
+    const parsed = QueuePostSchema.safeParse(json);
     if (!parsed.success) {
       return commonErrors.unprocessableEntity('Invalid request body', {
         issues: parsed.error.flatten(),
       });
     }
-    const { playerId, memberId } = parsed.data;
-    let { rank } = parsed.data;
 
-    // Authn + Authz
-    const { draft } = await authenticateAndAuthorize(draftId, memberId);
+    const { playerId } = parsed.data;
+    const memberId = access.memberId;
 
-    // Check if player already picked in this draft
-    const alreadyPicked = await prisma.pick.findFirst({ where: { draftId: draft.id, playerId } });
+    const alreadyPicked = await prisma.pick.findFirst({
+      where: { draftId, playerId },
+      select: { id: true },
+    });
     if (alreadyPicked) {
       return commonErrors.badRequest('Player already picked');
     }
 
-    // Verify player exists and is active
-    const player = await prisma.player.findUnique({ where: { id: playerId } });
-    if (!player || !player.active) {
+    const player = await prisma.player.findUnique({
+      where: { id: playerId },
+      select: { id: true, name: true, active: true },
+    });
+    if (!player?.active) {
       return commonErrors.badRequest('Player not found or not available');
     }
 
-    // Determine and create rank atomically
-    const queueItem = await prisma.$transaction(async (tx) => {
-      if (!rank) {
-        const maxRank = await tx.queueItem.aggregate({ _max: { rank: true }, where: { memberId } });
-        const rankToUse = (maxRank._max.rank || 0) + 1;
-        return tx.queueItem.create({ data: { memberId, playerId, rank: rankToUse } });
+    const entry = await prisma.$transaction(async (tx) => {
+      const existing = await tx.preDraftQueue.findUnique({
+        where: {
+          draftId_memberId_playerId: {
+            draftId,
+            memberId,
+            playerId,
+          },
+        },
+        select: queueEntrySelect,
+      });
+
+      if (existing && parsed.data.rank === undefined) {
+        return existing;
       }
-      try {
-        return await tx.queueItem.create({ data: { memberId, playerId, rank } });
-      } catch (e) {
-        const err = e as Prisma.PrismaClientKnownRequestError;
-        if (err.code === 'P2002') {
-          throw commonErrors.badRequest('Rank already in use');
-        }
-        throw e;
-      }
+
+      const rank =
+        parsed.data.rank ??
+        ((await tx.preDraftQueue.aggregate({
+          where: { draftId, memberId },
+          _max: { rank: true },
+        }))._max.rank ?? 0) +
+          1;
+
+      return tx.preDraftQueue.upsert({
+        where: {
+          draftId_memberId_playerId: {
+            draftId,
+            memberId,
+            playerId,
+          },
+        },
+        update: { rank },
+        create: { draftId, memberId, playerId, rank },
+        select: queueEntrySelect,
+      });
     });
 
     logger.info('Player added to queue', {
@@ -132,12 +135,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       memberId,
       playerId,
       playerName: player.name,
-      rank: queueItem.rank,
+      rank: entry.rank,
     });
 
-    return successResponse(queueItem, 201);
+    return successResponse(entry, 201);
   } catch (error) {
-    if (error instanceof Response) return error as Response; // early errorResponse from auth
     logger.error('Failed to add player to queue', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
@@ -152,37 +154,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<Response> {
   try {
     const { id: draftId } = await params;
+    if (isInvalidDraftId(draftId)) {
+      return errorResponse('Missing or invalid draftId', 400);
+    }
+
+    const access = await resolveQueueMember(request, draftId);
+    if (access instanceof Response) {
+      return access;
+    }
+
     const url = new URL(request.url);
-    const QuerySchema = z.object({ playerId: z.string().min(1), memberId: z.string().min(1) });
-    const parsed = QuerySchema.safeParse({
+    const parsed = QueueDeleteQuerySchema.safeParse({
       playerId: url.searchParams.get('playerId'),
-      memberId: url.searchParams.get('memberId'),
     });
     if (!parsed.success) {
       return commonErrors.unprocessableEntity('Invalid query params', {
         issues: parsed.error.flatten(),
       });
     }
-    const { playerId, memberId } = parsed.data;
 
-    await authenticateAndAuthorize(draftId, memberId);
-
-    // Find and delete queue item
-    const queueItem = await prisma.queueItem.findFirst({
-      where: {
-        memberId,
-        playerId,
-      },
+    const { memberId } = access;
+    const { playerId } = parsed.data;
+    const deleted = await prisma.preDraftQueue.deleteMany({
+      where: { draftId, memberId, playerId },
     });
 
-    if (!queueItem) {
+    if (deleted.count === 0) {
       return commonErrors.notFound('Player not in queue');
     }
-
-    await prisma.queueItem.delete({ where: { id: queueItem.id } });
 
     logger.info('Player removed from queue', {
       draftId,
@@ -192,7 +194,6 @@ export async function DELETE(
 
     return successResponse({ message: 'Player removed from queue' });
   } catch (error) {
-    if (error instanceof Response) return error as Response;
     logger.error('Failed to remove player from queue', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
@@ -205,49 +206,39 @@ export async function DELETE(
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<Response> {
   try {
     const { id: draftId } = await params;
-    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    if (isInvalidDraftId(draftId)) {
       return errorResponse('Missing or invalid draftId', 400);
     }
-    const url = new URL(request.url);
-    const QuerySchema = z.object({ memberId: z.string().min(1) });
-    const parsed = QuerySchema.safeParse({ memberId: url.searchParams.get('memberId') });
-    if (!parsed.success) {
-      return commonErrors.unprocessableEntity('Invalid query params', {
-        issues: parsed.error.flatten(),
-      });
+
+    const access = await resolveQueueMember(request, draftId);
+    if (access instanceof Response) {
+      return access;
     }
-    const { memberId } = parsed.data;
 
-    await authenticateAndAuthorize(draftId, memberId);
-
-    // Get member's queue
-    const queueItems = await prisma.queueItem.findMany({
-      where: { memberId },
+    const queueEntries = await prisma.preDraftQueue.findMany({
+      where: { draftId, memberId: access.memberId },
       orderBy: { rank: 'asc' },
-      select: { id: true, memberId: true, playerId: true, rank: true },
+      include: {
+        player: {
+          select: { id: true, name: true, position: true, club: true, active: true },
+        },
+      },
     });
 
-    // Batch fetch player details to avoid N+1 queries
-    const playerIds = Array.from(new Set(queueItems.map((q) => q.playerId)));
-    const players = await prisma.player.findMany({
-      where: { id: { in: playerIds } },
-      select: { id: true, name: true, position: true, club: true, active: true },
+    logger.info('Queue retrieved', {
+      draftId,
+      memberId: access.memberId,
+      queueSize: queueEntries.length,
     });
-    const playerMap = new Map(players.map((p) => [p.id, p] as const));
 
-    const queueWithPlayers = queueItems.map((item) => ({
-      ...item,
-      player: playerMap.get(item.playerId) || null,
-    }));
-
-    logger.info('Queue retrieved', { draftId, memberId, queueSize: queueWithPlayers.length });
-
-    return successResponse(queueWithPlayers);
+    return successResponse(queueEntries);
   } catch (error) {
-    if (error instanceof Response) return error as Response;
     logger.error('Failed to get queue', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',
@@ -260,18 +251,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-// PUT /api/drafts/[id]/queue - Replace the user's queue with provided order
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<Response> {
   try {
     const { id: draftId } = await params;
-    if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    if (isInvalidDraftId(draftId)) {
       return commonErrors.badRequest('Missing or invalid draftId');
     }
 
-    // Authenticate and resolve member for this draft
-    const { member } = await authenticateAndResolveMember(draftId);
+    const access = await resolveQueueMember(request, draftId);
+    if (access instanceof Response) {
+      return access;
+    }
 
-    // Parse body
     const raw = await request.json().catch(() => ({}));
     const parsed = QueuePutSchema.safeParse(raw);
     if (!parsed.success) {
@@ -279,37 +273,70 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         issues: parsed.error.flatten(),
       });
     }
+
+    const memberId = access.memberId;
     const inputIds = Array.from(new Set(parsed.data.queue.map(String)));
 
-    // Replace queue atomically
     const { created, failedIds } = await prisma.$transaction(async (tx) => {
-      await tx.queueItem.deleteMany({ where: { memberId: member.id } });
-      const created: Array<{ id: string; playerId: string; rank: number }> = [];
+      const [activePlayers, alreadyPicked] = await Promise.all([
+        tx.player.findMany({
+          where: { id: { in: inputIds }, active: true },
+          select: { id: true },
+        }),
+        tx.pick.findMany({
+          where: { draftId, playerId: { in: inputIds } },
+          select: { playerId: true },
+        }),
+      ]);
+
+      const activeIds = new Set(activePlayers.map((player) => player.id));
+      const pickedIds = new Set(alreadyPicked.map((pick) => pick.playerId));
+      const availableIds = new Set(
+        inputIds.filter((playerId) => activeIds.has(playerId) && !pickedIds.has(playerId))
+      );
+
+      await tx.preDraftQueue.deleteMany({ where: { draftId, memberId } });
+
+      const created: Array<{
+        id: string;
+        draftId: string;
+        memberId: string;
+        playerId: string;
+        rank: number;
+        notes: string | null;
+      }> = [];
       const failedIds: string[] = [];
-      for (let i = 0; i < inputIds.length; i++) {
-        const pid = inputIds[i];
-        try {
-          const q = await tx.queueItem.create({
-            data: { memberId: member.id, playerId: pid, rank: i + 1 },
-            select: { id: true, playerId: true, rank: true },
-          });
-          created.push(q);
-        } catch (_e) {
-          failedIds.push(pid);
+
+      for (const playerId of inputIds) {
+        if (!availableIds.has(playerId)) {
+          failedIds.push(playerId);
+          continue;
         }
+
+        const entry = await tx.preDraftQueue.create({
+          data: {
+            draftId,
+            memberId,
+            playerId,
+            rank: created.length + 1,
+          },
+          select: queueEntrySelect,
+        });
+        created.push(entry);
       }
+
       return { created, failedIds };
     });
 
     logger.info('Queue replaced', {
       draftId,
-      memberId: member.id,
+      memberId,
       size: created.length,
       failed: failedIds.length,
     });
 
     return successResponse({
-      memberId: member.id,
+      memberId,
       queue: created,
       failedIds,
     });

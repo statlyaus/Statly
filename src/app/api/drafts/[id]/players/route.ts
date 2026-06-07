@@ -2,6 +2,13 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import {
+  buildAvailableDraftPlayer,
+  loadDraftPlayerStatsLookup,
+  parseSelectedCategories,
+  type DraftPlayerStatsLookup,
+} from '@/server/draft/readModels/draftPlayerReadModel';
+import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import { z } from 'zod';
 import { createHash } from 'crypto';
 
@@ -62,13 +69,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }),
       prisma.draft.findUnique({
         where: { id },
-        select: { createdAt: true, startedAt: true, completedAt: true },
+        select: {
+          createdAt: true,
+          startedAt: true,
+          completedAt: true,
+          leagueId: true,
+          league: {
+            select: {
+              categoriesJson: true,
+            },
+          },
+        },
       }),
     ]);
 
     if (!draftMeta) {
       return errorResponse('Draft not found', 404);
     }
+
+    const selectedCategories = parseSelectedCategories(draftMeta.league?.categoriesJson);
+    const draftReadiness = await getLeagueDraftOperationalReadiness(prisma, {
+      leagueId: draftMeta.leagueId,
+    });
 
     const timestamps: number[] = [draftMeta.createdAt.getTime()];
     if (draftMeta.startedAt) timestamps.push(draftMeta.startedAt.getTime());
@@ -77,7 +99,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const lastUpdated = new Date(Math.max(...timestamps));
 
     // Build weak ETag including filters and pagination window
-    const etagBase = `${id}|players|${lastUpdated.toISOString()}|${q || ''}|${position || ''}|${page}|${pageSize}`;
+    const etagBase = `${id}|players|${lastUpdated.toISOString()}|${draftReadiness.playerPool.availableCount}|${draftReadiness.status}|${selectedCategories.join(',')}|${q || ''}|${position || ''}|${page}|${pageSize}`;
     const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
 
     // Fast 304 on If-None-Match (supports comma-separated ETags and wildcard "*")
@@ -144,10 +166,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const hasMore = playersFetched.length > pageSize;
     const players = hasMore ? playersFetched.slice(0, pageSize) : playersFetched;
+    let statsLookup: DraftPlayerStatsLookup | null = null;
+
+    try {
+      statsLookup = await loadDraftPlayerStatsLookup();
+    } catch (error) {
+      logger.warn('Draft player stat enrichment unavailable', {
+        draftId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     const data = {
       draftId: id,
-      players: players.map((p) => ({ id: p.id, name: p.name, position: p.position, club: p.club })),
+      players: players.map((player) => buildAvailableDraftPlayer(player, statsLookup)),
       pagination: {
         page,
         pageSize,
@@ -155,6 +187,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         q: q || null,
         position: position || null,
       },
+      selectedCategories,
+      draftReadiness,
       lastUpdated: lastUpdated.toISOString(),
     };
 

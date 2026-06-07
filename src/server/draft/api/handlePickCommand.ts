@@ -4,11 +4,14 @@ import { z } from 'zod';
 
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
-export async function handlePickCommand(request: NextRequest, params: Promise<{ id: string }>) {
+export async function handlePickCommand(
+  request: NextRequest,
+  params: Promise<{ id: string }>
+): Promise<Response> {
   const requestContext: { draftId?: string; userId?: string; hasSessionCookie?: boolean } = {};
   const headerRequestId =
     request.headers.get('x-request-id') ?? request.headers.get('x-requestid') ?? undefined;
@@ -21,7 +24,7 @@ export async function handlePickCommand(request: NextRequest, params: Promise<{ 
     }
     requestContext.draftId = draftId;
 
-    let userId = await getUserIdFromRequest(request);
+    let userId = await getAuthenticatedUserId(request);
     requestContext.hasSessionCookie = Boolean(request.cookies.get('statly_session')?.value);
 
     if (!userId && process.env.NODE_ENV !== 'production') {

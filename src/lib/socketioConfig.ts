@@ -7,9 +7,9 @@ type SocketIOCorsConfig = {
   credentials: true;
 };
 
-export type SocketIOConfig = {
+export interface SocketIoConfig {
   environment: string;
-  server: {
+  server: Partial<ServerOptions> & {
     port: number;
     cors: SocketIOCorsConfig;
     transports: SocketTransport[];
@@ -19,7 +19,9 @@ export type SocketIOConfig = {
     upgradeTimeout: number;
     maxHttpBufferSize: number;
   };
-};
+}
+
+export type SocketIOConfig = SocketIoConfig;
 
 function parseCommaSeparated(value: string): string[] {
   return value
@@ -28,21 +30,21 @@ function parseCommaSeparated(value: string): string[] {
     .filter(Boolean);
 }
 
-function parseIntegerEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) {
-    return fallback;
+function parseIntegerEnv(names: string[], fallback: number): number {
+  for (const name of names) {
+    const raw = process.env[name];
+    if (!raw) continue;
+
+    const value = Number.parseInt(raw, 10);
+    if (Number.isFinite(value)) return value;
   }
 
-  const value = Number.parseInt(raw, 10);
-  return Number.isFinite(value) ? value : fallback;
+  return fallback;
 }
 
 function parseBooleanEnv(name: string, fallback: boolean): boolean {
   const raw = process.env[name];
-  if (!raw) {
-    return fallback;
-  }
+  if (!raw) return fallback;
 
   return raw === '1' || raw.toLowerCase() === 'true';
 }
@@ -67,7 +69,6 @@ function getCorsOrigins(environment: string): string[] {
   }
 
   if (origins.size === 0 && environment !== 'production') {
-    // Dev fallback
     origins.add('http://localhost:3000');
     console.warn('[socketioConfig] No SOCKET_IO_CORS_ORIGINS set, defaulting to localhost in dev.');
   }
@@ -75,23 +76,32 @@ function getCorsOrigins(environment: string): string[] {
   return Array.from(origins);
 }
 
-function buildSocketIOConfig(): SocketIOConfig {
+function buildSocketIOConfig(): SocketIoConfig {
   const environment = process.env.NODE_ENV || 'development';
 
   return {
     environment,
     server: {
-      port: parseIntegerEnv('SOCKET_PORT', 3002),
+      port: parseIntegerEnv(['SOCKET_PORT', 'SOCKET_IO_PORT', 'SOCKETIO_PORT', 'PORT'], 3002),
       cors: {
         origin: getCorsOrigins(environment),
         credentials: true,
       },
       transports: parseTransports(),
       allowEIO3: parseBooleanEnv('SOCKET_IO_ALLOW_EIO3', true),
-      pingTimeout: parseIntegerEnv('SOCKET_IO_PING_TIMEOUT_MS', 60_000),
-      pingInterval: parseIntegerEnv('SOCKET_IO_PING_INTERVAL_MS', 25_000),
-      upgradeTimeout: parseIntegerEnv('SOCKET_IO_UPGRADE_TIMEOUT_MS', 10_000),
-      maxHttpBufferSize: parseIntegerEnv('SOCKET_IO_MAX_HTTP_BUFFER_SIZE', 1e6),
+      pingTimeout: parseIntegerEnv(['SOCKET_IO_PING_TIMEOUT_MS', 'SOCKET_PING_TIMEOUT_MS'], 60_000),
+      pingInterval: parseIntegerEnv(
+        ['SOCKET_IO_PING_INTERVAL_MS', 'SOCKET_PING_INTERVAL_MS'],
+        25_000
+      ),
+      upgradeTimeout: parseIntegerEnv(
+        ['SOCKET_IO_UPGRADE_TIMEOUT_MS', 'SOCKET_UPGRADE_TIMEOUT_MS'],
+        10_000
+      ),
+      maxHttpBufferSize: parseIntegerEnv(
+        ['SOCKET_IO_MAX_HTTP_BUFFER_SIZE', 'SOCKET_MAX_HTTP_BUFFER_SIZE'],
+        1_000_000
+      ),
     },
   };
 }
@@ -101,19 +111,11 @@ function buildSocketIOConfig(): SocketIOConfig {
  * - SOCKET_IO_CORS_ORIGINS: comma-separated list of allowed origins
  * - NODE_ENV: 'development' allows fallback to localhost
  */
-export function getSocketIoConfig(): Partial<ServerOptions> {
+export function getSocketIoConfig(): SocketIoConfig {
   const config = buildSocketIOConfig();
   validateSocketIOConfig(config);
 
-  return {
-    cors: config.server.cors,
-    transports: config.server.transports,
-    allowEIO3: config.server.allowEIO3,
-    pingTimeout: config.server.pingTimeout,
-    pingInterval: config.server.pingInterval,
-    upgradeTimeout: config.server.upgradeTimeout,
-    maxHttpBufferSize: config.server.maxHttpBufferSize,
-  };
+  return config;
 }
 
 export function validateSocketIOConfig(config: SocketIOConfig): void {
@@ -137,4 +139,4 @@ export function validateSocketIOConfig(config: SocketIOConfig): void {
   }
 }
 
-export const socketIOConfig = buildSocketIOConfig();
+export const socketIOConfig = getSocketIoConfig();

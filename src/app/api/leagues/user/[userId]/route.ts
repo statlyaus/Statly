@@ -1,13 +1,41 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
-import type { LeagueMember } from '@/types/leagues';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { listActiveUserLeagueMemberships } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+
+const REAL_DATA_CATEGORY_KEYS = new Set<FantasyCategoryKey>(REAL_DATA_NINE_CATEGORY_PRESET);
+
+function normalizeCategories(value: unknown): FantasyCategoryKey[] {
+  if (typeof value !== 'string') {
+    return [...REAL_DATA_NINE_CATEGORY_PRESET];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) {
+      return [...REAL_DATA_NINE_CATEGORY_PRESET];
+    }
+
+    const selected = parsed.filter(
+      (entry): entry is FantasyCategoryKey =>
+        typeof entry === 'string' && REAL_DATA_CATEGORY_KEYS.has(entry as FantasyCategoryKey)
+    );
+
+    return selected.length > 0 ? selected : [...REAL_DATA_NINE_CATEGORY_PRESET];
+  } catch {
+    return [...REAL_DATA_NINE_CATEGORY_PRESET];
+  }
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const { userId } = await params;
 
@@ -22,104 +50,75 @@ export async function GET(
       );
     }
 
-    // Check if this is your real user - return your actual league
-    if (userId === 'addison_real_user_id' || userId === 'addisonarmadale@gmail.com') {
-      const yourLeague = {
-        id: 'cmeilycnf00047gue6xhkh7xzl',
-        name: 'AFL Fantasy Champions League',
-        teamName: "Addison's Champions",
-        status: 'active' as const,
-        draftCompleted: true,
-        memberCount: 10,
-        maxTeams: 10,
-        description: 'AFL Fantasy Champions League with completed draft',
-        ownerId: 'addison_real_user_id',
-        type: 'private',
-        code: 'AFL2025',
-        categories: [
-          'disposals',
-          'kicks',
-          'handballs',
-          'marks',
-          'tackles',
-          'goals',
-          'behinds',
-          'hitouts',
-          'fantasy_points',
-        ],
-        draftDate: new Date('2025-01-19T10:00:00Z').toISOString(),
-        createdAt: new Date('2025-01-01T00:00:00Z').toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      logger.info(`Returning actual league for real user ${userId}`);
-      return NextResponse.json({
-        success: true,
-        leagues: [yourLeague],
-      });
+    const authenticatedUserId = await getAuthenticatedUserId(request);
+    if (!authenticatedUserId) {
+      return NextResponse.json(
+        { success: false, leagues: [], error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    // Check if this is our test user - return test league
-    if (userId === '2qlfdHSCFTPlxoKFSUfNLSlCDRe2') {
-      const testLeague = {
-        id: 'test-league-id',
-        name: 'Test AFL Champions League',
-        teamName: 'My Champions Team',
-        status: 'active' as const,
-        draftCompleted: true,
-        memberCount: 12,
-        maxTeams: 12,
-        description: 'A test league for development and testing AFL fantasy',
-        ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
-        type: 'private',
-        code: '123ABC',
-        categories: [
-          'disposals',
-          'kicks',
-          'handballs',
-          'marks',
-          'tackles',
-          'goals',
-          'behinds',
-          'hitouts',
-          'fantasy_points',
-        ],
-        draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
-        createdAt: new Date('2025-08-15T10:00:00Z').toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      logger.info(`Returning test league for user ${userId}`);
-      return NextResponse.json({
-        success: true,
-        leagues: [testLeague],
-      });
+    if (authenticatedUserId !== userId) {
+      return NextResponse.json(
+        { success: false, leagues: [], error: 'Forbidden' },
+        { status: 403 }
+      );
     }
 
-    // Get user's league memberships
-    const membershipsRef = adminDb.collection('leagueMembers');
-    const snapshot = await membershipsRef
-      .where('userId', '==', userId)
-      .where('isActive', '==', true)
-      .get();
-
-    const memberships: LeagueMember[] = [];
-    const leagueIds: string[] = [];
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const membership = {
-        id: doc.id,
-        leagueId: data.leagueId,
-        userId: data.userId,
-        role: data.role,
-        teamName: data.teamName,
-        joinedAt: data.joinedAt,
-        isActive: data.isActive,
-      };
-      memberships.push(membership);
-      leagueIds.push(data.leagueId);
+    const prismaMemberships = await prisma.leagueMember.findMany({
+      where: { userId },
+      include: {
+        league: {
+          include: {
+            settings: true,
+            drafts: { orderBy: { createdAt: 'desc' }, take: 1 },
+            _count: { select: { members: true } },
+          },
+        },
+      },
+      orderBy: { joinedAt: 'desc' },
     });
+
+    if (prismaMemberships.length > 0) {
+      const leagues = prismaMemberships.map((membership) => {
+        const league = membership.league;
+        const draft = league.drafts[0] ?? null;
+
+        return {
+          id: league.id,
+          name: league.name,
+          teamName: membership.teamName,
+          status:
+            draft?.status === 'COMPLETED'
+              ? 'completed'
+              : draft?.status === 'LIVE'
+                ? 'active'
+                : 'preseason',
+          draftCompleted: draft?.status === 'COMPLETED',
+          memberCount: league._count.members,
+          maxTeams: league.settings.maxTeams,
+          description: `${league.name} Fantasy League`,
+          ownerId: league.ownerId,
+          type: 'private',
+          code: league.inviteCode,
+          categories: normalizeCategories(league.categoriesJson),
+          draftDate: league.settings.startAt?.toISOString(),
+          createdAt: league.createdAt.toISOString(),
+          updatedAt: league.createdAt.toISOString(),
+        };
+      });
+
+      logger.info('Returning Prisma league memberships', { userId, count: leagues.length });
+      return NextResponse.json({
+        success: true,
+        leagues,
+      });
+    }
+
+    const memberships = await listActiveUserLeagueMemberships(userId);
+    const leagueIds = memberships
+      .map((membership) => membership.leagueId)
+      .filter((leagueId) => leagueId.length > 0);
 
     // Fetch the actual league details for each membership
     const leagues = [];

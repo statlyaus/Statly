@@ -21,7 +21,7 @@
     "typecheck:data": "tsc -p tsconfig.data.json --noEmit",
     "typecheck:tests": "tsc -p tsconfig.test.json --noEmit",
     "pretest": "npm run typecheck:tests",
-    "lint": "eslint src",
+    "lint": "cross-env STATLY_LINT_ADVISORY=1 eslint src",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
@@ -60,7 +60,17 @@
     "codex:rewrite": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/rewrite.sh'",
     "codex:review:committed": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/review-against-main.sh'",
     "codex:review:branch": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/review-against-main.sh origin/main'",
-    "codex:trigger": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/trigger-review.sh'"
+    "codex:trigger": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && Scripts/codex/trigger-review.sh'",
+    "codex:council": "node Scripts/codex/council.mjs",
+    "codex:council:diff": "node Scripts/codex/council.mjs --diff",
+    "codex:council:logical": "node Scripts/codex/council.mjs --provider logical",
+    "codex:council:logical:diff": "node Scripts/codex/council.mjs --provider logical --diff",
+    "codex:council:local": "node Scripts/codex/council.mjs --provider logical",
+    "codex:council:local:diff": "node Scripts/codex/council.mjs --provider logical --diff",
+    "codex:council:ollama": "node Scripts/codex/council.mjs --provider ollama",
+    "codex:council:ollama:diff": "node Scripts/codex/council.mjs --provider ollama --diff",
+    "codex:council:openrouter": "node Scripts/codex/council.mjs --provider openrouter",
+    "codex:commit:reviewed": "node Scripts/codex/reviewed-commit.mjs"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.1",
@@ -72,7 +82,7 @@
     "@sentry/react": "^10.8.0",
     "@tanstack/react-query": "^5.85.3",
     "@types/cheerio": "^1.0.0",
-    "axios": "^1.11.0",
+    "axios": "^1.17.0",
     "bullmq": "^5.58.4",
     "canvas-confetti": "^1.9.3",
     "chart.js": "^4.5.0",
@@ -173,7 +183,17 @@
       "zod": "^4.0.0"
     },
     "firebase-admin": {
-      "@google-cloud/firestore": "7.11.0"
+      "@google-cloud/firestore": "7.11.0",
+      "node-forge": "1.4.0"
+    },
+    "google-auth-library": {
+      "jws": "4.0.1"
+    },
+    "gtoken": {
+      "jws": "4.0.1"
+    },
+    "jsonwebtoken": {
+      "jws": "3.2.3"
     }
   },
   "engines": {

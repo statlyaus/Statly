@@ -204,17 +204,17 @@ export class DraftRealtimePublisher {
       return 0;
     }
 
-    const draftIds = Array.from(new Set(outboxEvents.map((event) => event.draftId)));
-    let flushedCount = 0;
-
-    for (const draftId of draftIds) {
-      const state = await this.flushPendingDraftEvents(draftId);
-      if (state || outboxEvents.some((event) => event.draftId === draftId)) {
-        flushedCount += outboxEvents.filter((event) => event.draftId === draftId).length;
-      }
+    try {
+      await this.drainOutboxEvents(outboxEvents);
+      await this.markOutboxPublished(outboxEvents.map((event) => event.id));
+      return outboxEvents.length;
+    } catch (error) {
+      await this.markOutboxFailed(
+        outboxEvents.map((event) => event.id),
+        error instanceof Error ? error.message : String(error)
+      );
+      throw error;
     }
-
-    return flushedCount;
   }
 
   async publishDraftState(draftId: string): Promise<LiveDraftState | null> {

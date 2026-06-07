@@ -240,6 +240,7 @@ return {1, participantCount + 1}
     const set = MEM_STORE.participants.get(draftId) || new Set<string>();
     set.delete(participantId);
     MEM_STORE.participants.set(draftId, set);
+    MEM_STORE.participantData.get(draftId)?.delete(participantId);
     return set.size;
   }
 

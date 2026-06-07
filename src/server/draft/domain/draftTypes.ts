@@ -1,4 +1,5 @@
 import type { DraftDirection, DraftStatus } from '@prisma/client';
+import type { DraftAutoPickRules, DraftPositionLimits } from '@/lib/draftSettings';
 
 export type DraftTypeValue = 'SNAKE' | 'LINEAR';
 
@@ -21,6 +22,8 @@ export interface DraftSettingsSnapshot {
   benchSize: number;
   pickSeconds: number;
   allowAutoPick: boolean;
+  positionLimits?: DraftPositionLimits;
+  autoPickRules?: DraftAutoPickRules;
   draftType: DraftTypeValue;
 }
 

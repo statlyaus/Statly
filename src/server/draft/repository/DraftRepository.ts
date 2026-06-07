@@ -2,6 +2,7 @@ import type { Prisma as PrismaNS } from '@prisma/client';
 import { DraftStatus } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { normalizeDraftAutoPickRules, normalizeDraftPositionLimits } from '@/lib/draftSettings';
 
 import type {
   DraftAggregate,
@@ -69,6 +70,8 @@ function toSettingsSnapshot(settings: {
   benchSize: number;
   pickSeconds: number;
   allowAutoPick: boolean;
+  positionLimitsJson: string | null;
+  autoPickRulesJson: string | null;
   draftType: 'SNAKE' | 'LINEAR';
 }): DraftSettingsSnapshot {
   return {
@@ -76,6 +79,8 @@ function toSettingsSnapshot(settings: {
     benchSize: settings.benchSize,
     pickSeconds: settings.pickSeconds,
     allowAutoPick: settings.allowAutoPick,
+    positionLimits: normalizeDraftPositionLimits(settings.positionLimitsJson),
+    autoPickRules: normalizeDraftAutoPickRules(settings.autoPickRulesJson),
     draftType: settings.draftType as DraftSettingsSnapshot['draftType'],
   };
 }
