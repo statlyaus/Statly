@@ -12,6 +12,7 @@ import React, {
 
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
+import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import type {
   DraftState as DraftCore,
@@ -35,7 +36,8 @@ export interface DraftSnapshot {
     | Record<string, DraftParticipant>
     | Map<string, DraftParticipant>;
   picks: DraftPick[] | Record<string, DraftPick> | Map<string, DraftPick>;
-  availablePlayers: DraftPlayer[] | Record<string, DraftPlayer> | Map<string, DraftPlayer>;
+  availablePlayers?: DraftPlayer[] | Record<string, DraftPlayer> | Map<string, DraftPlayer>;
+  draftReadiness?: DraftOperationalReadiness | null;
   selectedCategories?: FantasyCategoryKey[] | null;
   liveState?: DraftLiveState | null;
   ts?: number; // server event time (ms)
@@ -59,6 +61,8 @@ export interface DraftWatchlistItem {
   id: string;
   playerId: string;
   priority: number;
+  rank: number;
+  addedAt: string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -75,6 +79,7 @@ interface DraftState {
   participants: DraftParticipant[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
+  draftReadiness: DraftOperationalReadiness | null;
   selectedCategories: FantasyCategoryKey[];
   watchlistItems: DraftWatchlistItem[];
   liveState: DraftLiveState;
@@ -88,6 +93,7 @@ interface DraftContextValue extends DraftState {
   draftId: string;
   userId: string;
   makePick: (playerId: string) => Promise<void>;
+  startDraft: () => Promise<void>;
   updateQueue: (queue: string[]) => Promise<void>;
   addToWatchlist: (playerId: string) => Promise<void>;
   removeFromWatchlist: (playerId: string) => Promise<void>;
@@ -98,6 +104,7 @@ interface DraftContextValue extends DraftState {
 }
 
 const DraftContext = createContext<DraftContextValue | undefined>(undefined);
+const PERSISTED_PICK_BACKFILL_INTERVAL_MS = 5000;
 
 /* -------------------------------- Utilities -------------------------------- */
 
@@ -227,14 +234,21 @@ function normalizeDraftCore(raw: unknown): DraftCore | null {
   } as DraftCore;
 }
 
+function getPickOrder(pick: Partial<DraftPick>): number {
+  return Number((pick as any).overall ?? (pick as any).pickNo ?? 0);
+}
+
 function normalizeSnapshot(raw?: DraftSnapshot | null): {
   draft: DraftCore | null;
   participants: DraftParticipant[];
   picks: DraftPick[];
   availablePlayers: DraftPlayer[];
+  draftReadiness: DraftOperationalReadiness | null;
   selectedCategories: FantasyCategoryKey[];
   liveState: DraftLiveState;
   includesParticipantQueues: boolean;
+  includesPicks: boolean;
+  includesAvailablePlayers: boolean;
   ts?: number;
 } {
   if (!raw) {
@@ -243,9 +257,12 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       participants: [],
       picks: [],
       availablePlayers: [],
+      draftReadiness: null,
       selectedCategories: [],
       liveState: {},
       includesParticipantQueues: false,
+      includesPicks: false,
+      includesAvailablePlayers: false,
     };
   }
 
@@ -253,13 +270,13 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
 
   const participants = normalizeParticipants((raw as any).participants);
   const includesParticipantQueues = participantQueueIncluded((raw as any).participants);
+  const includesPicks = 'picks' in raw;
+  const includesAvailablePlayers = 'availablePlayers' in raw;
 
   const picks = toArray<DraftPick>(raw.picks)
     .slice()
     .sort((a, b) => {
-      const ap = Number((a as any).pickNo ?? 0);
-      const bp = Number((b as any).pickNo ?? 0);
-      return ap - bp;
+      return getPickOrder(a) - getPickOrder(b);
     });
 
   const pickedIds = new Set<string>(
@@ -270,15 +287,20 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     (pl) => !pickedIds.has(String(pl.id))
   );
   const selectedCategories = toArray<FantasyCategoryKey>((raw as any).selectedCategories);
+  const draftReadiness =
+    ((raw as any).draftReadiness as DraftOperationalReadiness | null | undefined) ?? null;
 
   return {
     draft: draftLike,
     participants,
     picks,
     availablePlayers,
+    draftReadiness,
     selectedCategories,
     liveState: raw.liveState ?? {},
     includesParticipantQueues,
+    includesPicks,
+    includesAvailablePlayers,
     ts: raw.ts,
   };
 }
@@ -337,6 +359,26 @@ function normalizeCommandPick(raw: unknown, participants: DraftParticipant[]): D
   };
 }
 
+function getLatestPickMadeAtMs(picks: DraftPick[]): number | undefined {
+  const latest = picks.reduce((max, pick) => {
+    const madeAt = pick.madeAt instanceof Date ? pick.madeAt : new Date(pick.madeAt);
+    const ts = madeAt.getTime();
+    return Number.isFinite(ts) ? Math.max(max, ts) : max;
+  }, 0);
+
+  return latest > 0 ? latest : undefined;
+}
+
+function buildPersistedPickBackfillEndpoint(draftId: string, sinceMs?: number): string {
+  if (!sinceMs) {
+    return `drafts/${draftId}/picks?pageSize=100`;
+  }
+
+  return `drafts/${draftId}/picks?since=${encodeURIComponent(
+    new Date(sinceMs).toISOString()
+  )}&pageSize=100`;
+}
+
 /* --------------------------------- Reducer --------------------------------- */
 
 type Action =
@@ -345,6 +387,7 @@ type Action =
       type: 'SET_AVAILABLE_PLAYERS';
       players: DraftPlayer[];
       selectedCategories?: FantasyCategoryKey[];
+      draftReadiness?: DraftOperationalReadiness | null;
     }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
@@ -355,6 +398,11 @@ type Action =
 
 function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
   const ts = delta.ts ?? Date.now();
+  const lastEventAt = state.connection.lastEventAt ?? 0;
+  if (ts < lastEventAt) {
+    return state;
+  }
+
   let next = { ...state, connection: { ...state.connection, lastEventAt: ts } };
 
   switch (delta.type) {
@@ -364,8 +412,9 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         ...next,
         draft: snap.draft,
         participants: snap.participants,
-        picks: snap.picks,
-        availablePlayers: snap.availablePlayers,
+        picks: snap.includesPicks ? snap.picks : next.picks,
+        availablePlayers: snap.includesAvailablePlayers ? snap.availablePlayers : next.availablePlayers,
+        draftReadiness: snap.draftReadiness,
         liveState: snap.liveState,
         error: null,
         isLoading: false,
@@ -373,16 +422,21 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
       };
     }
     case 'PICK_MADE': {
-      const rawPick = (delta.payload as { pick?: unknown })?.pick;
+      const payload = delta.payload as {
+        pick?: unknown;
+        currentPick?: unknown;
+        isComplete?: unknown;
+        status?: unknown;
+        pickDeadlineAt?: unknown;
+      };
+      const rawPick = payload?.pick;
       const pick = normalizeCommandPick(rawPick, next.participants);
       if (!pick) return next;
       const picks = [
         ...next.picks.filter((existing) => String(existing.id) !== String(pick.id)),
         pick,
       ].sort((a, b) => {
-        const ap = Number((a as any).pickNo ?? 0);
-        const bp = Number((b as any).pickNo ?? 0);
-        return ap - bp;
+        return getPickOrder(a) - getPickOrder(b);
       });
       const pid = String((pick as any).player?.id ?? (pick as any).playerId);
       const availablePlayers = next.availablePlayers.filter((p) => String(p.id) !== pid);
@@ -392,7 +446,33 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
           ? participant.queue.filter((queuedId) => String(queuedId) !== pid)
           : [],
       }));
-      return { ...next, picks, availablePlayers, participants };
+      const nextCurrentPick =
+        typeof payload.currentPick === 'number' && Number.isFinite(payload.currentPick)
+          ? payload.currentPick
+          : undefined;
+      const isComplete = payload.isComplete === true;
+      const nextStatus =
+        typeof payload.status === 'string' ? payload.status : isComplete ? 'COMPLETED' : undefined;
+      const draft = next.draft
+        ? {
+            ...next.draft,
+            ...(nextCurrentPick !== undefined ? { currentPick: nextCurrentPick } : {}),
+            ...(nextStatus ? { status: nextStatus as DraftCore['status'] } : {}),
+            ...(typeof payload.pickDeadlineAt === 'string' || payload.pickDeadlineAt === null
+              ? {
+                  pickDeadlineAt:
+                    payload.pickDeadlineAt === null
+                      ? null
+                      : (toOptionalDate(payload.pickDeadlineAt) ?? null),
+                }
+              : {}),
+          }
+        : next.draft;
+      const liveState =
+        nextCurrentPick !== undefined
+          ? { ...next.liveState, currentPick: nextCurrentPick }
+          : next.liveState;
+      return { ...next, draft, liveState, picks, availablePlayers, participants };
     }
     case 'PLAYER_REMOVED': {
       const { playerId } = delta.payload as { playerId: string };
@@ -450,6 +530,12 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
 function reducer(state: DraftState, action: Action): DraftState {
   switch (action.type) {
     case 'SET_SNAPSHOT': {
+      const incomingTs = action.snapshot.ts;
+      const lastEventAt = state.connection.lastEventAt ?? 0;
+      if (incomingTs && incomingTs < lastEventAt) {
+        return { ...state, isLoading: false };
+      }
+
       const participants = action.snapshot.includesParticipantQueues
         ? action.snapshot.participants
         : mergeParticipantQueues(action.snapshot.participants, state.participants);
@@ -457,8 +543,11 @@ function reducer(state: DraftState, action: Action): DraftState {
         ...state,
         draft: action.snapshot.draft,
         participants,
-        picks: action.snapshot.picks,
-        availablePlayers: action.snapshot.availablePlayers,
+        picks: action.snapshot.includesPicks ? action.snapshot.picks : state.picks,
+        availablePlayers: action.snapshot.includesAvailablePlayers
+          ? action.snapshot.availablePlayers
+          : state.availablePlayers,
+        draftReadiness: action.snapshot.draftReadiness ?? state.draftReadiness,
         selectedCategories:
           action.snapshot.selectedCategories.length > 0
             ? action.snapshot.selectedCategories
@@ -476,6 +565,7 @@ function reducer(state: DraftState, action: Action): DraftState {
       return {
         ...state,
         availablePlayers: action.players,
+        draftReadiness: action.draftReadiness ?? state.draftReadiness,
         selectedCategories: action.selectedCategories ?? state.selectedCategories,
         error: null,
       };
@@ -517,6 +607,11 @@ function useDraftSocket(opts: {
   setStatus: (s: ConnectionStatus) => void;
 }) {
   const { socket, draftId, lastEventAt, onSnapshot, onDelta, setStatus } = opts;
+  const lastEventAtRef = useRef(lastEventAt);
+
+  useEffect(() => {
+    lastEventAtRef.current = lastEventAt;
+  }, [lastEventAt]);
 
   useEffect(() => {
     if (!socket) return;
@@ -524,7 +619,7 @@ function useDraftSocket(opts: {
     const join = () => {
       setStatus('connected');
       socket.emit('draft:join', { draftId });
-      socket.emit('draft:backfill', { draftId, since: lastEventAt ?? 0 });
+      socket.emit('draft:backfill', { draftId, since: lastEventAtRef.current ?? 0 });
     };
 
     const onConnect = join;
@@ -562,7 +657,7 @@ function useDraftSocket(opts: {
         /* noop */
       }
     };
-  }, [socket, draftId, lastEventAt, onSnapshot, onDelta, setStatus]);
+  }, [socket, draftId, onSnapshot, onDelta, setStatus]);
 }
 
 /* --------------------------------- Provider -------------------------------- */
@@ -583,6 +678,7 @@ export function DraftProvider({
   const deltaQueueRef = useRef<DraftDelta[]>([]);
   const rafScheduledRef = useRef(false);
   const hydratedQueueMemberIdRef = useRef<string | null>(null);
+  const initialHydrateStartedRef = useRef(Boolean(initialSnapshot));
 
   const initial = useMemo<DraftState>(() => {
     const snap = normalizeSnapshot(initialSnapshot ?? null);
@@ -591,7 +687,8 @@ export function DraftProvider({
       participants: snap.participants,
       picks: snap.picks,
       availablePlayers: snap.availablePlayers,
-      selectedCategories: [],
+      draftReadiness: snap.draftReadiness,
+      selectedCategories: snap.selectedCategories,
       watchlistItems: [],
       liveState: snap.liveState,
       connection: { status: 'disconnected', lastEventAt: snap.ts },
@@ -658,17 +755,19 @@ export function DraftProvider({
 
   const hydrateAvailablePlayers = useCallback(async () => {
     try {
-      const pageSize = 200;
+      const pageSize = 100;
       let page = 1;
       let hasMore = true;
       const allPlayers: DraftPlayer[] = [];
       let selectedCategories: FantasyCategoryKey[] = [];
+      let draftReadiness: DraftOperationalReadiness | null = null;
 
       while (hasMore) {
-        const res = await fetchApi(
-          `drafts/${draftId}/available-players?page=${page}&pageSize=${pageSize}`
-        );
+        const res = await fetchApi(`drafts/${draftId}/players?page=${page}&pageSize=${pageSize}`);
         const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
+        draftReadiness =
+          (res?.data?.draftReadiness as DraftOperationalReadiness | null | undefined) ??
+          draftReadiness;
         if (page === 1) {
           selectedCategories = toArray<FantasyCategoryKey>(
             res?.data?.selectedCategories ?? res?.selectedCategories
@@ -683,8 +782,13 @@ export function DraftProvider({
         page += 1;
       }
 
-      if (!isMounted.current || allPlayers.length === 0) return;
-      dispatch({ type: 'SET_AVAILABLE_PLAYERS', players: allPlayers, selectedCategories });
+      if (!isMounted.current) return;
+      dispatch({
+        type: 'SET_AVAILABLE_PLAYERS',
+        players: allPlayers,
+        selectedCategories,
+        draftReadiness,
+      });
     } catch {
       // Keep the draft usable even if the player pool hydrate fails.
     }
@@ -727,9 +831,18 @@ export function DraftProvider({
         const res = await fetchApi(
           `drafts/${draftId}/watchlist?memberId=${encodeURIComponent(targetMemberId)}`
         );
-        const items = toArray<DraftWatchlistItem>(res?.data?.watchlist ?? res?.watchlist)
-          .slice()
-          .sort((a, b) => Number(a?.priority ?? 0) - Number(b?.priority ?? 0));
+        const items = toArray<
+          Omit<DraftWatchlistItem, 'rank' | 'addedAt'> & {
+            rank?: number;
+            addedAt?: string;
+          }
+        >(res?.data?.watchlist ?? res?.watchlist)
+          .map((item) => ({
+            ...item,
+            rank: Number(item.rank ?? item.priority ?? 0),
+            addedAt: item.addedAt ?? item.createdAt ?? new Date().toISOString(),
+          }))
+          .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0));
 
         if (!isMounted.current) return;
         dispatch({ type: 'SET_WATCHLIST', items });
@@ -780,6 +893,104 @@ export function DraftProvider({
     }
   }, [draftId, hydrateAvailablePlayers, hydrateMyQueue, hydrateMyWatchlist, memberId]);
 
+  const fetchPersistedPickBackfill = useCallback(async () => {
+    if (!state.draft) return;
+
+    const status = String(state.draft.status ?? '').toUpperCase();
+    if (status !== 'LIVE' && status !== 'IN_PROGRESS') return;
+
+    const shouldLoadInitialPersistedPicks =
+      state.picks.length === 0 && Number(state.draft.currentPick ?? 0) > 1;
+    const sinceMs = shouldLoadInitialPersistedPicks
+      ? undefined
+      : (getLatestPickMadeAtMs(state.picks) ?? state.connection.lastEventAt);
+    if (sinceMs !== undefined && !Number.isFinite(sinceMs)) return;
+
+    try {
+      const res = await fetchApi(buildPersistedPickBackfillEndpoint(draftId, sinceMs));
+      const persistedPicks = toArray<unknown>(res?.data?.picks ?? res?.picks);
+      if (persistedPicks.length === 0) return;
+
+      const existingPickIds = new Set(state.picks.map((pick) => String(pick.id)));
+      const deltas = persistedPicks.flatMap((rawPick) => {
+        const pick = normalizeCommandPick(rawPick, state.participants);
+        if (!pick || existingPickIds.has(String(pick.id))) return [];
+
+        const madeAtMs = pick.madeAt.getTime();
+        const deltaTs = shouldLoadInitialPersistedPicks
+          ? Math.max(
+              Number.isFinite(madeAtMs) ? madeAtMs : 0,
+              state.connection.lastEventAt ?? 0,
+              Date.now()
+            )
+          : Number.isFinite(madeAtMs)
+            ? madeAtMs
+            : Date.now();
+        return [
+          {
+            type: 'PICK_MADE' as const,
+            payload: { pick },
+            ts: deltaTs,
+          },
+        ];
+      });
+
+      if (!isMounted.current || deltas.length === 0) return;
+
+      dispatch({ type: 'APPLY_DELTAS', deltas });
+      await forceRefresh();
+    } catch {
+      // Socket delivery is still primary; persisted-pick polling is a silent catch-up path.
+    }
+  }, [
+    draftId,
+    forceRefresh,
+    state.connection.lastEventAt,
+    state.draft,
+    state.participants,
+    state.picks,
+  ]);
+
+  useEffect(() => {
+    if (initialHydrateStartedRef.current || initialSnapshot || state.draft) return;
+
+    initialHydrateStartedRef.current = true;
+    void forceRefresh();
+  }, [forceRefresh, initialSnapshot, state.draft]);
+
+  useEffect(() => {
+    if (!state.draft) return;
+
+    const status = String(state.draft.status ?? '').toUpperCase();
+    if (status !== 'LIVE' && status !== 'IN_PROGRESS') return;
+
+    const intervalId = window.setInterval(() => {
+      void fetchPersistedPickBackfill();
+    }, PERSISTED_PICK_BACKFILL_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [fetchPersistedPickBackfill, state.draft]);
+
+  const startDraft = useCallback(async () => {
+    dispatch({ type: 'SET_SAVING', saving: true });
+    try {
+      await fetchApi(`drafts/${draftId}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      await forceRefresh();
+    } catch (err: any) {
+      if (isMounted.current) {
+        dispatch({
+          type: 'SET_ERROR',
+          error: err?.message ?? 'Failed to start draft',
+        });
+      }
+    } finally {
+      if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+    }
+  }, [draftId, forceRefresh]);
+
   const makePick = useCallback(
     async (playerId: string) => {
       if (!playerId || typeof playerId !== 'string') {
@@ -808,7 +1019,17 @@ export function DraftProvider({
         });
         const pick = normalizeCommandPick(res?.data?.pick ?? res?.pick, state.participants);
         if (pick) {
-          const delta: DraftDelta = { type: 'PICK_MADE', payload: { pick }, ts: Date.now() };
+          const commandData = res?.data ?? res ?? {};
+          const delta: DraftDelta = {
+            type: 'PICK_MADE',
+            payload: {
+              pick,
+              currentPick: commandData.currentPick,
+              isComplete: commandData.isComplete,
+              pickDeadlineAt: commandData.pickDeadlineAt,
+            },
+            ts: Date.now(),
+          };
           dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
         } else if (isMounted.current) {
           dispatch({
@@ -832,7 +1053,7 @@ export function DraftProvider({
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
       }
     },
-    [draftId, state.availablePlayers]
+    [draftId, state.availablePlayers, state.participants]
   );
 
   const updateQueue = useCallback(
@@ -1046,6 +1267,7 @@ export function DraftProvider({
       userId,
       ...state,
       makePick,
+      startDraft,
       updateQueue,
       addToWatchlist,
       removeFromWatchlist,
@@ -1062,6 +1284,7 @@ export function DraftProvider({
       isInWatchlist,
       makePick,
       removeFromWatchlist,
+      startDraft,
       state,
       toggleWatchlist,
       updateQueue,

@@ -8,10 +8,11 @@ import 'dotenv/config';
 import { createServer } from 'http';
 
 import express from 'express';
-import { Server } from 'socket.io';
+import { Server, type Socket as SocketIOSocket } from 'socket.io';
 
 import { buildAuthoritativeDraftState, buildLegacyDraftUpdate } from '@/lib/draftRealtime';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 import { redisClient } from '@/lib/redis';
 import { validateAuthToken } from '@/lib/serverAuth';
 import { socketIOConfig, validateSocketIOConfig } from '@/lib/socketioConfig';
@@ -26,7 +27,6 @@ import {
 import { draftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 import { draftRoomStore } from '@/server/roomStore';
-import { getRedis } from '@/server/redis';
 
 // Validate configuration before starting
 try {
@@ -85,27 +85,83 @@ type DraftDelta = {
     | 'PLAYER_ADDED'
     | 'QUEUE_UPDATED'
     | 'STATE_PATCH';
-  payload: any;
+  payload: unknown;
   ts?: number;
 };
 
-async function getDeltasSince(draftId: string, since: number): Promise<DraftDelta[]> {
-  const redis = await getRedis();
-  if (!redis) {
-    return [];
+type SocketMiddlewareNext = (err?: Error) => void;
+
+function parseDraftEventPayload(payload: string | null): unknown {
+  if (!payload) {
+    return {};
   }
 
-  const key = `draft:${draftId}:events`;
-  const vals = await redis.zrangebyscore(key, since + 1, '+inf');
-  return vals
-    .map((value) => {
-      try {
-        return JSON.parse(value) as DraftDelta;
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean) as DraftDelta[];
+  try {
+    return JSON.parse(payload);
+  } catch (error) {
+    logger.warn('Failed to parse persisted draft event payload', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {};
+  }
+}
+
+function toBackfillDelta(event: {
+  event: string;
+  payload: string | null;
+  createdAt: Date;
+}): DraftDelta | null {
+  const payload = parseDraftEventPayload(event.payload);
+  const ts = event.createdAt.getTime();
+
+  switch (event.event) {
+    case 'draft:pick-made':
+    case 'draft:auto-pick':
+      return {
+        type: 'PICK_MADE',
+        payload: { pick: payload },
+        ts,
+      };
+    case 'draft:queue-updated':
+      return {
+        type: 'QUEUE_UPDATED',
+        payload,
+        ts,
+      };
+    case 'draft:paused':
+      return {
+        type: 'STATE_PATCH',
+        payload: { draft: { status: 'PAUSED' } },
+        ts,
+      };
+    case 'draft:resumed':
+      return {
+        type: 'STATE_PATCH',
+        payload: { draft: { status: 'LIVE' } },
+        ts,
+      };
+    case 'draft:completed':
+      return {
+        type: 'STATE_PATCH',
+        payload: { draft: { status: 'COMPLETED' } },
+        ts,
+      };
+    default:
+      return null;
+  }
+}
+
+async function getDeltasSince(draftId: string, since: number): Promise<DraftDelta[]> {
+  const events = await prisma.draftEvent.findMany({
+    where: { draftId, createdAt: { gt: new Date(since) } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: 100,
+  });
+
+  return events.flatMap((event) => {
+    const delta = toBackfillDelta(event);
+    return delta ? [delta] : [];
+  });
 }
 
 // Start or restart a draft timer and broadcast ticks/expiry
@@ -319,34 +375,6 @@ const io = new Server(httpServer, {
         }
       }
 
-      // Bearer token check; plug in real verification as needed
-      const auth = Array.isArray(req.headers['authorization'])
-        ? req.headers['authorization'][0]
-        : req.headers['authorization'];
-      if (!auth || !auth.startsWith('Bearer ') || auth.slice(7).trim().length === 0) {
-        if (socketIOConfig.environment !== 'production') {
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-            outcome: 'dev-noauth',
-          });
-          return callback(null, true);
-        }
-        incCounter(METRICS.authFailures);
-        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-          outcome: 'noauth',
-        });
-        return callback('Authentication required', false);
-      }
-      const token = auth.slice(7).trim();
-      const uid = await validateAuthToken(token);
-      if (!uid) {
-        incCounter(METRICS.authFailures);
-        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-          outcome: 'invauth',
-        });
-        return callback('Authentication required', false);
-      }
-      // Optionally attach uid for later use in connection
-      (req as any)._uid = uid;
       observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
         outcome: 'ok',
       });
@@ -361,8 +389,10 @@ const io = new Server(httpServer, {
   },
 });
 
-// Middleware for authentication and logging
-io.use((socket, next) => {
+async function authenticateSocketConnection(
+  socket: SocketIOSocket,
+  next: SocketMiddlewareNext
+): Promise<void> {
   const startTime = Date.now();
 
   // Log connection attempt
@@ -376,12 +406,57 @@ io.use((socket, next) => {
   // Add timing to socket for performance monitoring
   socket.data.connectionStartTime = startTime;
 
-  next();
+  try {
+    const token =
+      typeof socket.handshake.auth.token === 'string' ? socket.handshake.auth.token.trim() : '';
+
+    if (!token) {
+      incCounter(METRICS.authFailures);
+      return next(new Error('Authentication required'));
+    }
+
+    if (token.startsWith('dev:')) {
+      if (process.env.NODE_ENV === 'production') {
+        incCounter(METRICS.authFailures);
+        return next(new Error('Authentication required'));
+      }
+
+      const devUserId = token.slice(4).trim();
+      if (!devUserId) {
+        incCounter(METRICS.authFailures);
+        return next(new Error('Authentication required'));
+      }
+
+      socket.data.userId = devUserId;
+      return next();
+    }
+
+    const uid = await validateAuthToken(token);
+    if (!uid) {
+      incCounter(METRICS.authFailures);
+      return next(new Error('Authentication required'));
+    }
+
+    socket.data.userId = uid;
+    return next();
+  } catch (error) {
+    incCounter(METRICS.authFailures);
+    logger.warn('Socket.IO authentication failed', {
+      socketId: socket.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return next(new Error('Authentication required'));
+  }
+}
+
+// Middleware for authentication and logging
+io.use((socket, next) => {
+  void authenticateSocketConnection(socket, next);
 });
 
 draftRealtimeDispatcher.attachSocketServer(io);
 
-(async () => {
+void (async () => {
   try {
     await draftRealtimeDispatcher.startSubscription();
     await flushDraftOutboxBatch();
@@ -423,7 +498,7 @@ io.on('connection', (socket) => {
     displayName?: string;
     authToken?: string;
   }) => {
-    const { draftId, userId, memberId, displayName } = data;
+    const { draftId, memberId, displayName } = data;
     const startJoin = Date.now();
     let acceptedDraftId: string | null = null;
 
@@ -433,10 +508,16 @@ io.on('connection', (socket) => {
         throw new Error('Invalid draftId');
       }
 
+      const authenticatedUserId =
+        typeof socket.data.userId === 'string' ? socket.data.userId : undefined;
+      if (!authenticatedUserId) {
+        throw new Error('Authentication required');
+      }
+
       logger.info('👤 User joining draft', {
         socketId: socket.id,
         draftId,
-        userId: userId || 'anonymous',
+        userId: authenticatedUserId,
         timestamp: new Date().toISOString(),
       });
 
@@ -461,23 +542,20 @@ io.on('connection', (socket) => {
       }
 
       acceptedDraftId = draftId;
-      incCounter(METRICS.joins);
       const participantCount = participantResult.count;
+      incCounter(METRICS.joins);
 
       // Join the room
-      socket.join(draftId);
-      socket.join(`draft:${draftId}`);
+      await socket.join(draftId);
+      await socket.join(`draft:${draftId}`);
 
       // Store user info in socket data
       socket.data.draftId = draftId;
-      socket.data.userId = userId;
       socket.data.joinedAt = new Date();
 
       // Store richer participant metadata if available
-      const uidFromReq = (socket.request as any)?._uid as string | undefined;
-      const participantUser = userId || uidFromReq || 'anonymous';
       await draftRoomStore.setParticipantData(draftId, socket.id, {
-        userId: participantUser,
+        userId: authenticatedUserId,
         memberId,
         displayName,
         socketId: socket.id,
@@ -497,8 +575,8 @@ io.on('connection', (socket) => {
           draft: legacyUpdate
             ? {
                 id: legacyUpdate.draftId,
-                name: `Draft ${legacyUpdate.draftId}`,
-                leagueId: draftId,
+                name: legacyUpdate.name,
+                leagueId: legacyUpdate.leagueId,
                 status: legacyUpdate.status,
                 currentPick: legacyUpdate.currentPick,
                 totalPicks: legacyUpdate.totalPicks,
@@ -559,7 +637,7 @@ io.on('connection', (socket) => {
       // Notify other participants that someone joined
       socket.to(draftId).emit('participant:join', {
         socketId: socket.id,
-        userId: userId || 'anonymous',
+        userId: authenticatedUserId,
         timestamp: new Date().toISOString(),
         participantCount,
       });
@@ -628,17 +706,17 @@ io.on('connection', (socket) => {
     try {
       logger.info('👋 User leaving draft', { socketId: socket.id, draftId });
 
-      socket.leave(draftId);
-      socket.leave(`draft:${draftId}`);
+      await socket.leave(draftId);
+      await socket.leave(`draft:${draftId}`);
+
       const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
 
-      // Clean up room if empty
+      // Clean up legacy local room state if it exists.
       const room = draftRooms.get(draftId);
       if (room) {
         room.participants.delete(socket.id);
 
         if (room.participants.size === 0) {
-          // Clean up timer if exists
           if (room.timer) {
             clearInterval(room.timer);
             room.timer = undefined;
@@ -658,7 +736,6 @@ io.on('connection', (socket) => {
 
       // Clear socket data
       delete socket.data.draftId;
-      delete socket.data.userId;
     } catch (error) {
       logger.error('❌ Error leaving draft', {
         socketId: socket.id,
@@ -732,7 +809,7 @@ io.on('connection', (socket) => {
     logger.warn('Rejected socket-driven draft pick to avoid split-brain state', {
       socketId: socket.id,
       draftId: data.draftId,
-      userId: data.userId || (socket.request as any)?._uid || 'unknown',
+      userId: socket.data.userId || 'unknown',
     });
     socket.emit('draft:error', {
       error: 'Direct socket picks are disabled. Use the Prisma-backed draft API.',
@@ -794,7 +871,7 @@ const gracefulShutdown = (signal: string) => {
   logger.info(`🔄 ${signal} received, shutting down gracefully`);
 
   // Close all Socket.IO connections
-  io.close(() => {
+  void io.close(() => {
     logger.info('📡 Socket.IO server closed');
 
     // Close HTTP server
@@ -841,19 +918,17 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Start the server
 httpServer.listen(PORT, () => {
-  const corsOrigins = socketIOConfig.server.cors.origin;
-
   logger.info('🚀 Enhanced Socket.IO server started', {
     port: PORT,
     environment: socketIOConfig.environment,
-    cors: corsOrigins,
+    cors: socketIOConfig.server.cors.origin,
     transports: socketIOConfig.server.transports,
     timestamp: new Date().toISOString(),
   });
 
   console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
   console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🌐 CORS enabled for: ${corsOrigins.join(', ')}`);
+  console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);
   console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
   console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
 });

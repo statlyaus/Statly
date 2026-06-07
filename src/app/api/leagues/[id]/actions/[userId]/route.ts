@@ -3,6 +3,8 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { verifyLeagueMembership } from '@/lib/leagueMembership';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
 export async function GET(
@@ -14,6 +16,11 @@ export async function GET(
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
+    }
+
+    const authorization = await authorizeTeamActionRequest(request, leagueId, userId);
+    if ('response' in authorization) {
+      return authorization.response;
     }
 
     await ensureRosterTables();
@@ -68,11 +75,17 @@ export async function POST(
 ) {
   try {
     const { id: leagueId, userId } = await params;
-    const body = await request.json();
 
     if (!leagueId || !userId) {
       return errorResponse('League ID and User ID are required', 400);
     }
+
+    const authorization = await authorizeTeamActionRequest(request, leagueId, userId);
+    if ('response' in authorization) {
+      return authorization.response;
+    }
+
+    const body = await request.json();
 
     const { actionType, details, targetMemberId } = body;
 
@@ -165,6 +178,28 @@ export async function POST(
     });
     return errorResponse('Failed to create team action', 500);
   }
+}
+
+async function authorizeTeamActionRequest(
+  request: NextRequest,
+  leagueId: string,
+  routeUserId: string
+) {
+  const authenticatedUserId = await getAuthenticatedUserId(request);
+  if (!authenticatedUserId) {
+    return { response: errorResponse('Unauthorized', 401) };
+  }
+
+  if (authenticatedUserId !== routeUserId) {
+    return { response: errorResponse('Forbidden', 403) };
+  }
+
+  const membership = await verifyLeagueMembership(leagueId, authenticatedUserId);
+  if (!membership.isMember) {
+    return { response: errorResponse('User is not a member of this league', 403) };
+  }
+
+  return { userId: authenticatedUserId };
 }
 
 // Validation logic for different action types

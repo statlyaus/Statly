@@ -43,6 +43,26 @@ interface ConnectionHealth {
 // name collisions and ensure safety across module reloads and worker contexts.
 const SHUTDOWN_HANDLERS_SYMBOL = Symbol.for('scalableRedisShutdownHandlersRegistered');
 
+function isNextProductionBuild(): boolean {
+  return process.env.NEXT_PHASE === 'phase-production-build' || process.env.REDIS_DISABLED === '1';
+}
+
+function createDisabledRedisClient(): IORedisClient {
+  const client = {
+    status: 'end',
+    ping: async () => 'PONG',
+    publish: async () => 0,
+    psubscribe: async () => 0,
+    subscribe: async () => 0,
+    on: () => client,
+    quit: async () => undefined,
+    disconnect: () => undefined,
+    duplicate: () => client,
+  };
+
+  return client as unknown as IORedisClient;
+}
+
 class ScalableRedisConnection {
   private static instance: ScalableRedisConnection;
 
@@ -152,7 +172,7 @@ class ScalableRedisConnection {
       poolSize: Number(process.env.REDIS_POOL_SIZE) || 10,
       maxRetries: Number(process.env.REDIS_MAX_RETRIES) || 3,
       retryDelayOnFailover: Number(process.env.REDIS_RETRY_DELAY) || 100,
-      enableHealthCheck: process.env.REDIS_HEALTH_CHECK !== 'false',
+      enableHealthCheck: !isNextProductionBuild() && process.env.REDIS_HEALTH_CHECK !== 'false',
       healthCheckIntervalMs,
     } as ScalableRedisConfig;
   }
@@ -168,6 +188,10 @@ class ScalableRedisConnection {
   private createClientInstance(
     role: 'publisher' | 'worker' | 'queueEvents' | 'generic' | 'subscriber'
   ): IORedisClient | IORedisCluster {
+    if (isNextProductionBuild()) {
+      return createDisabledRedisClient();
+    }
+
     const config = ScalableRedisConnection.buildScalableRedisConfig();
     const isBlockingRole = role === 'worker' || role === 'queueEvents';
     const commandTimeout = isBlockingRole ? undefined : 5000;

@@ -2,6 +2,7 @@ import { DraftStatus, Prisma as PrismaNS } from '@prisma/client';
 
 import { draftRepository } from '../repository/DraftRepository';
 import { draftScheduler } from './DraftScheduler';
+import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
 import {
   assertActorTurn,
   assertAutoPickIsAllowed,
@@ -13,6 +14,7 @@ import {
 } from '../domain/draftRules';
 
 import type {
+  DraftAggregate,
   DraftCommandEventType,
   DraftCommandResult,
   DraftPickEventPayload,
@@ -59,6 +61,27 @@ function buildCommandEvents(...events: DraftCommandEventType[]): DraftCommandEve
   return events;
 }
 
+const DRAFT_MANAGER_ROLES = new Set(['OWNER', 'MANAGER', 'COMMISSIONER', 'ADMIN']);
+
+function isDraftManagerRole(role: string | null | undefined): boolean {
+  return DRAFT_MANAGER_ROLES.has(String(role ?? '').toUpperCase());
+}
+
+function assertCanManageDraftCommand(
+  draft: DraftAggregate,
+  actorUserId: string | undefined,
+  action: string
+): void {
+  if (!actorUserId) {
+    return;
+  }
+
+  const actor = draft.participants.find((participant) => participant.userId === actorUserId);
+  if (!actor || !isDraftManagerRole(actor.role)) {
+    throw new Error(`forbidden:Commissioner access required to ${action}`);
+  }
+}
+
 async function createCommandOutboxEvents(
   tx: TxClient,
   input: {
@@ -89,7 +112,12 @@ async function createCommandOutboxEvents(
 }
 
 export class DraftApplicationService {
-  async startDraft(input: { draftId: string }): Promise<DraftCommandResult<LifecycleCommandData>> {
+  constructor(private readonly rosterProjectionService = new RosterProjectionService()) {}
+
+  async startDraft(input: {
+    draftId: string;
+    actorUserId?: string;
+  }): Promise<DraftCommandResult<LifecycleCommandData>> {
     const { draftId } = input;
 
     const result = await draftRepository.transaction(async (tx) => {
@@ -97,6 +125,8 @@ export class DraftApplicationService {
       if (!draft) {
         throw new Error('not_found:Draft not found');
       }
+
+      assertCanManageDraftCommand(draft, input.actorUserId, 'start drafts');
 
       if (draft.status !== DraftStatus.SCHEDULED) {
         throw new Error(
@@ -435,6 +465,10 @@ export class DraftApplicationService {
     });
 
     if (result.isComplete) {
+      await this.rosterProjectionService.projectDraft({
+        leagueId: result.leagueId,
+        draftId: result.draftId,
+      });
       await draftScheduler.cancelPickExpiry(result.draftId);
     } else if (result.data.pickDeadlineAt) {
       await draftScheduler.schedulePickExpiry({
@@ -448,7 +482,10 @@ export class DraftApplicationService {
     return result;
   }
 
-  async autoPick(input: { draftId: string }): Promise<DraftCommandResult<PickCommandData>> {
+  async autoPick(input: {
+    draftId: string;
+    actorUserId?: string;
+  }): Promise<DraftCommandResult<PickCommandData>> {
     const { draftId } = input;
 
     const result = await draftRepository.transaction(async (tx) => {
@@ -456,6 +493,8 @@ export class DraftApplicationService {
       if (!draft) {
         throw new Error('not_found:Draft not found');
       }
+
+      assertCanManageDraftCommand(draft, input.actorUserId, 'run auto-pick');
 
       assertDraftIsLive(draft);
       assertAutoPickIsAllowed(draft);
@@ -628,6 +667,10 @@ export class DraftApplicationService {
     });
 
     if (result.isComplete) {
+      await this.rosterProjectionService.projectDraft({
+        leagueId: result.leagueId,
+        draftId: result.draftId,
+      });
       await draftScheduler.cancelPickExpiry(result.draftId);
     } else if (result.data.pickDeadlineAt) {
       await draftScheduler.schedulePickExpiry({
@@ -653,10 +696,7 @@ export class DraftApplicationService {
         throw new Error('not_found:Draft not found');
       }
 
-      const actor = draft.participants.find((participant) => participant.userId === actorUserId);
-      if (!actor || actor.role !== 'OWNER') {
-        throw new Error('forbidden:Only league owners can pause drafts');
-      }
+      assertCanManageDraftCommand(draft, actorUserId, 'pause drafts');
 
       if (draft.status !== DraftStatus.LIVE) {
         throw new Error('bad_request:Only live drafts can be paused');
@@ -730,10 +770,7 @@ export class DraftApplicationService {
         throw new Error('not_found:Draft not found');
       }
 
-      const actor = draft.participants.find((participant) => participant.userId === actorUserId);
-      if (!actor || actor.role !== 'OWNER') {
-        throw new Error('forbidden:Only league owners can resume drafts');
-      }
+      assertCanManageDraftCommand(draft, actorUserId, 'resume drafts');
 
       if (draft.status !== DraftStatus.PAUSED) {
         throw new Error('bad_request:Only paused drafts can be resumed');

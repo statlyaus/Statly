@@ -95,7 +95,7 @@ export async function GET(request: Request) {
           notifications: (data as any)?.notifications ?? [],
         },
       },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
+      { headers: { 'Cache-Control': 'private, no-store' } }
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -249,7 +249,7 @@ export async function POST(request: Request) {
           { success: true, data: { archived: true } },
           {
             headers: {
-              'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30',
+              'Cache-Control': 'private, no-store',
             },
           }
         );
@@ -262,7 +262,7 @@ export async function POST(request: Request) {
           { success: true, data: { state: null, auditLog: [], notifications: [] } },
           {
             headers: {
-              'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30',
+              'Cache-Control': 'private, no-store',
             },
           }
         );
@@ -309,7 +309,7 @@ export async function POST(request: Request) {
           notifications: localNotifications,
         },
       },
-      { headers: { 'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' } }
+      { headers: { 'Cache-Control': 'private, no-store' } }
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

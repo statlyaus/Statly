@@ -3,6 +3,7 @@ import { db } from '@/lib/firebase';
 import type { TradeStatus } from '@/lib/tradeReviewEngine';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Player } from '@/types/players';
+import { getAuthenticatedUserIdFromApiRequest } from '@/lib/nextApiAuth';
 
 // In-memory variables removed; all state is now per-trade and loaded from Firestore
 // Use tradeId from query or body, default to 'current' for backward compatibility
@@ -11,7 +12,13 @@ function getTradeId(req: NextApiRequest): string {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=30');
+  res.setHeader('Cache-Control', 'private, no-store');
+  const userId = await getAuthenticatedUserIdFromApiRequest(req);
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
   const tradeId = getTradeId(req);
   // Use per-trade in-memory store (not persistent across server restarts, but avoids cross-trade state)
   // For true multi-user, multi-instance, always load from Firestore

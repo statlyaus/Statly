@@ -1,10 +1,11 @@
 import type { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { updatePreDraftQueue, getPreDraftQueue } from '@/lib/draftLobby';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { getDraftMembershipAccess } from '@/server/leagues/membership';
 
 interface PreQueueRequest {
-  memberId: string;
   queue: Array<{
     playerId: string;
     rank: number;
@@ -12,20 +13,38 @@ interface PreQueueRequest {
   }>;
 }
 
+async function resolvePreQueueMember(
+  request: NextRequest,
+  draftId: string
+): Promise<{ memberId: string } | Response> {
+  const userId = await getAuthenticatedUserId(request);
+  if (!userId) {
+    return commonErrors.unauthorized('Authentication required');
+  }
+
+  const access = await getDraftMembershipAccess(draftId, userId);
+  if (!access.isMember || !access.memberId) {
+    return commonErrors.forbidden('League membership required');
+  }
+
+  return { memberId: access.memberId };
+}
+
 /**
  * Get member's pre-draft queue
  */
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<Response> {
   try {
     const { id: draftId } = await params;
-    const url = new URL(request.url);
-    const memberId = url.searchParams.get('memberId');
-
-    if (!memberId) {
-      return errorResponse('Missing memberId parameter', 400);
+    const access = await resolvePreQueueMember(request, draftId);
+    if (access instanceof Response) {
+      return access;
     }
 
-    const queue = await getPreDraftQueue(draftId, memberId);
+    const queue = await getPreDraftQueue(draftId, access.memberId);
 
     return successResponse({ queue });
   } catch (error) {
@@ -41,13 +60,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 /**
  * Update member's pre-draft queue
  */
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<Response> {
   try {
     const { id: draftId } = await params;
-    const body: PreQueueRequest = await request.json();
+    const access = await resolvePreQueueMember(request, draftId);
+    if (access instanceof Response) {
+      return access;
+    }
 
-    if (!body.memberId || !Array.isArray(body.queue)) {
-      return errorResponse('Missing memberId or invalid queue format', 400);
+    const body = (await request.json().catch(() => null)) as PreQueueRequest | null;
+    if (!body || !Array.isArray(body.queue)) {
+      return errorResponse('Invalid queue format', 400);
     }
 
     // Validate queue items
@@ -57,7 +83,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    const updatedQueue = await updatePreDraftQueue(draftId, body.memberId, body.queue);
+    const updatedQueue = await updatePreDraftQueue(draftId, access.memberId, body.queue);
 
     return successResponse({ queue: updatedQueue });
   } catch (error) {

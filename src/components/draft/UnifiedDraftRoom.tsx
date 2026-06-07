@@ -55,18 +55,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const participants = draft.participants as DraftParticipant[];
   const picks = draft.picks as DraftPick[];
   const playersList = draft.availablePlayers as DraftPlayer[];
-  const watchlistItems = useMemo(() => draft.watchlistItems || [], [draft.watchlistItems]);
-  const legacyWatchlistItems = useMemo(
-    () =>
-      watchlistItems.map((item) => ({
-        playerId: item.playerId,
-        rank: item.priority,
-        addedAt: item.createdAt ?? item.updatedAt ?? new Date(0).toISOString(),
-        notes: item.notes,
-      })),
-    [watchlistItems]
-  );
+  const watchlistItems = draft.watchlistItems || [];
   const selectedCategories = draft.selectedCategories || [];
+  const emptyPlayerMessage =
+    draft.draftReadiness?.blockers.find((blocker) => blocker.code === 'player_pool_empty')
+      ?.message ?? undefined;
 
   // Derive "me", ownership, and your slot once
   const me = useMemo(() => participants.find((p) => p.userId === userId), [participants, userId]);
@@ -164,6 +157,17 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     [draft, me?.queue]
   );
 
+  const handleAddWatchlistPlayerToQueue = useCallback(
+    async (player: { id: string }) => {
+      const draftPlayer = playersList.find((entry) => String(entry.id) === String(player.id));
+      if (!draftPlayer) return;
+      await handleAddToQueue(draftPlayer);
+    },
+    [handleAddToQueue, playersList]
+  );
+
+  const queuePlayerIds = me?.queue || [];
+
   const handleToggleWatchlist = useCallback(
     async (player: DraftPlayer) => {
       try {
@@ -193,18 +197,16 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const userMemberId = me?.id || '';
   const draftState = draft.draft;
   const draftStatus = draftState?.status ?? 'LOBBY';
-  const draftProgress = draftState ? (draftState.currentPick / draftState.totalPicks) * 100 : 0;
-  const isYourTurn = Boolean(draft.liveState?.isYourTurn);
   const statusTone =
     {
-      SCHEDULED: 'bg-indigo-500/15 text-indigo-100 ring-1 ring-indigo-400/30',
-      LOBBY: 'bg-slate-500/20 text-slate-100 ring-1 ring-slate-300/30',
-      COUNTDOWN: 'bg-amber-500/20 text-amber-100 ring-1 ring-amber-300/30',
-      LIVE: 'bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-300/30',
-      PAUSED: 'bg-amber-500/20 text-amber-100 ring-1 ring-amber-300/30',
-      COMPLETED: 'bg-slate-500/20 text-slate-100 ring-1 ring-slate-300/30',
-      CANCELLED: 'bg-rose-500/20 text-rose-100 ring-1 ring-rose-300/30',
-    }[draftStatus] ?? 'bg-white/10 text-white';
+      SCHEDULED: 'bg-primary/10 text-primary ring-1 ring-primary/20',
+      LOBBY: 'bg-muted text-muted-foreground ring-1 ring-border',
+      COUNTDOWN: 'bg-primary/10 text-primary ring-1 ring-primary/20',
+      LIVE: 'bg-primary text-primary-foreground ring-1 ring-primary/30',
+      PAUSED: 'bg-muted text-muted-foreground ring-1 ring-border',
+      COMPLETED: 'bg-muted text-muted-foreground ring-1 ring-border',
+      CANCELLED: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
+    }[draftStatus] ?? 'bg-muted text-muted-foreground ring-1 ring-border';
 
   // A11y: full keyboard navigation for tabs (Left/Right)
   const tabs = useMemo(
@@ -253,31 +255,18 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     }
   }, [isPickFeedOpen]);
 
-  useEffect(() => {
-    if (!isPickFeedOpen) return;
-
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsPickFeedOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isPickFeedOpen]);
-
   // Loading
   if (draft.isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div
-            className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"
+            className="mx-auto mb-6 h-16 w-16 animate-spin rounded-full border-4 border-muted border-t-primary"
             role="status"
             aria-label="Loading"
           />
-          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Loading Draft Room</h2>
-          <p className="text-gray-600">Preparing your draft experience...</p>
+          <h2 className="mb-2 text-2xl font-semibold text-foreground">Loading Draft Room</h2>
+          <p className="text-muted-foreground">Preparing your draft experience...</p>
         </div>
       </div>
     );
@@ -286,11 +275,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   // Error
   if (draft.error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
             <svg
-              className="w-8 h-8 text-red-600"
+              className="h-8 w-8 text-destructive"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -304,17 +293,17 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Error</h2>
-          <p className="text-gray-600 mb-6">{draft.error}</p>
+          <h2 className="mb-4 text-2xl font-bold text-foreground">Draft Error</h2>
+          <p className="mb-6 text-muted-foreground">{draft.error}</p>
           <button
             onClick={() => draft.forceRefresh()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 mr-2"
+            className="mr-2 rounded-md bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Retry
           </button>
           <button
             onClick={() => window.location.reload()}
-            className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+            className="rounded-md border border-border bg-background px-4 py-2 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Refresh Page
           </button>
@@ -326,10 +315,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   // No draft
   if (!draft.draft) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Draft Not Found</h2>
-          <p className="text-gray-600">The draft you&apos;re looking for doesn&apos;t exist.</p>
+          <h2 className="mb-4 text-2xl font-bold text-foreground">Draft Not Found</h2>
+          <p className="text-muted-foreground">
+            The draft you&apos;re looking for doesn&apos;t exist.
+          </p>
         </div>
       </div>
     );
@@ -353,11 +344,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   return (
     <DraftErrorBoundary>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background text-foreground">
         {/* Connection Status */}
         <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
 
-        <div className="space-y-4 pb-4">
+        <div className="space-y-4 pb-4 md:pr-[23rem] xl:pr-[25rem]">
           {/* Draft Controls (for league owners) */}
           <DraftControls
             draftId={draftId}
@@ -370,7 +361,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           {activeDraft.status !== 'LIVE' && (
             <DraftStatusBanner
               status={activeDraft.status}
-              onStartDraft={() => draft.forceRefresh()}
+              onStartDraft={draft.startDraft}
               isLoading={draft.isSaving}
             />
           )}
@@ -388,7 +379,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
         {/* Main Content */}
         <main className="mx-auto w-full max-w-[1780px] px-3 pb-6 sm:px-5 lg:px-8 md:pr-[23rem] xl:pr-[25rem]">
-          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <section className="rounded-3xl border border-border bg-card px-4 py-3 text-card-foreground shadow-sm sm:px-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-3">
@@ -397,83 +388,24 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   >
                     {draftStatus}
                   </span>
-                  <span className="text-sm font-semibold text-slate-900">{displayDraftTitle}</span>
+                  <span className="text-sm font-semibold text-foreground">{displayDraftTitle}</span>
                 </div>
-                <p className="mt-2 text-sm text-slate-600">{displayDraftSubtitle}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{displayDraftSubtitle}</p>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/drafts"
-                  className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+                  className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Back to drafts
                 </Link>
                 <Link
                   href="/drafts/history"
-                  className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                  className="inline-flex items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   History
                 </Link>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 lg:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Progress
-                  </span>
-                  <span className="text-lg font-semibold text-slate-900">
-                    {draftProgress.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="mt-3 h-2 rounded-full bg-slate-200">
-                  <div
-                    className="h-2 rounded-full bg-emerald-500"
-                    style={{ width: `${Math.min(100, Math.max(0, draftProgress))}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Round
-                </div>
-                <div className="mt-2 text-xl font-semibold text-slate-900">
-                  {activeDraft.round}
-                  <span className="ml-2 text-sm font-medium text-slate-500">
-                    / {totalRounds ?? '—'}
-                  </span>
-                </div>
-                <div className="mt-1 text-sm text-slate-600">Current snake or linear cycle.</div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Pick
-                </div>
-                <div className="mt-2 text-xl font-semibold text-slate-900">
-                  {activeDraft.currentPick}
-                  <span className="ml-2 text-sm font-medium text-slate-500">
-                    / {activeDraft.totalPicks}
-                  </span>
-                </div>
-                <div className="mt-1 text-sm text-slate-600">Live board position.</div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Turn
-                </div>
-                <div className="mt-2 text-xl font-semibold text-slate-900">
-                  {isYourTurn ? 'Your turn' : 'Waiting'}
-                </div>
-                <div className="mt-1 text-sm text-slate-600">
-                  {draft.liveState?.isYourTurn
-                    ? 'You can make a pick right now.'
-                    : `Connection: ${draft.connection.status}`}
-                </div>
               </div>
             </div>
           </section>
@@ -481,7 +413,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           {/* Tabs */}
           <div className="mb-6 mt-6">
             <nav
-              className="bg-white rounded-2xl border border-slate-200 p-1 shadow-sm"
+              className="rounded-2xl border border-border bg-card p-1 shadow-sm"
               aria-label="Draft room sections"
             >
               <div
@@ -510,15 +442,17 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                       onClick={() => setActiveTab(tab.id as typeof activeTab)}
                       className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors ${
                         selected
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                     >
                       {tab.label}
                       {tab.count > 0 && (
                         <span
                           className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                            selected ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                            selected
+                              ? 'bg-primary-foreground/20 text-primary-foreground'
+                              : 'bg-muted text-muted-foreground'
                           }`}
                           aria-label={`${tab.count} items`}
                         >
@@ -564,6 +498,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   sortBy={sortBy}
                   onSortChange={setSortBy}
                   isLoading={draft.isSaving}
+                  emptyStateMessage={emptyPlayerMessage}
                 />
               )}
 
@@ -585,8 +520,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     void handlePlayerSelectById(player.id);
                   }}
                   canDraft={draft.canMakePick}
-                  watchlistItems={legacyWatchlistItems}
+                  watchlistItems={watchlistItems}
+                  onAddToQueue={handleAddWatchlistPlayerToQueue}
+                  queuedPlayerIds={queuePlayerIds}
                   onRemoveFromWatchlist={draft.removeFromWatchlist}
+                  isLoading={draft.isSaving}
                 />
               )}
 
@@ -601,7 +539,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         <button
           ref={openFeedBtnRef}
           onClick={() => setIsPickFeedOpen(true)}
-          className="md:hidden fixed bottom-4 right-4 z-40 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-colors"
+          className="fixed bottom-4 right-4 z-40 rounded-full bg-primary p-3 text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
           aria-label="Open Pick Feed"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -615,7 +553,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         </button>
 
         {/* Sidebar - Pick Feed (desktop) */}
-        <div className="hidden md:block fixed right-0 top-0 h-full w-[22rem] overflow-y-auto border-l border-slate-200 bg-slate-50/80 p-4 shadow-lg backdrop-blur xl:w-96">
+        <div className="fixed right-0 top-0 hidden h-full w-[22rem] overflow-y-auto border-l border-border bg-muted/80 p-4 shadow-lg backdrop-blur md:block xl:w-96">
           <div className="pt-2">
             <PickFeed
               picks={feedPicks}
@@ -630,16 +568,21 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         {/* Mobile Pick Feed Modal */}
         {isPickFeedOpen && (
           <div
-            className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50"
+            className="fixed inset-0 z-50 bg-foreground/50 md:hidden"
             role="presentation"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 setIsPickFeedOpen(false);
               }
             }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+                setIsPickFeedOpen(false);
+              }
+            }}
           >
             <div
-              className="absolute right-0 top-0 h-full w-80 overflow-y-auto bg-slate-50 p-4 shadow-lg"
+              className="absolute right-0 top-0 h-full w-80 overflow-y-auto bg-card p-4 text-card-foreground shadow-lg"
               role="dialog"
               aria-modal="true"
               aria-labelledby="pickFeedTitle"
@@ -649,7 +592,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 <button
                   ref={closeBtnRef}
                   onClick={() => setIsPickFeedOpen(false)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Close Pick Feed"
                 >
                   <svg

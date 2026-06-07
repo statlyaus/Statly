@@ -35,17 +35,18 @@ model Session {
 }
 
 model League {
-  id             String         @id @default(cuid())
+  id             String               @id @default(cuid())
   name           String
-  inviteCode     String         @unique
+  inviteCode     String               @unique
   ownerId        String
+  settingsId     String               @unique
   categoriesJson String?
-  settingsId     String         @unique
   members        LeagueMember[]
-  settings       LeagueSettings @relation(fields: [settingsId], references: [id])
+  settings       LeagueSettings       @relation(fields: [settingsId], references: [id])
   drafts         Draft[]
   draftEvents    DraftEvent[]
-  createdAt      DateTime       @default(now())
+  rosterPlayers  LeagueRosterPlayer[]
+  createdAt      DateTime             @default(now())
 
   @@index([ownerId])
   @@index([createdAt])
@@ -53,17 +54,18 @@ model League {
 }
 
 model LeagueMember {
-  id        String       @id @default(cuid())
-  leagueId  String
-  userId    String
-  role      LeagueRole
-  teamName  String
-  draftSlot Int?
-  joinedAt  DateTime     @default(now())
-  league    League       @relation(fields: [leagueId], references: [id])
-  user      User         @relation(fields: [userId], references: [id])
-  picks     Pick[]
-  orders    DraftOrder[]
+  id            String               @id @default(cuid())
+  leagueId      String
+  userId        String
+  role          LeagueRole
+  teamName      String
+  draftSlot     Int?
+  joinedAt      DateTime             @default(now())
+  league        League               @relation(fields: [leagueId], references: [id])
+  user          User                 @relation(fields: [userId], references: [id])
+  picks         Pick[]
+  orders        DraftOrder[]
+  rosterPlayers LeagueRosterPlayer[]
 
   // Lobby relations
   watchlists      DraftWatchlist[]
@@ -82,18 +84,20 @@ enum LeagueRole {
 }
 
 model LeagueSettings {
-  id            String     @id @default(cuid())
-  rosterSize    Int
-  benchSize     Int
-  maxTeams      Int
-  pickSeconds   Int
-  allowAutoPick Boolean    @default(true)
-  draftType     DraftType
-  pickOrder     PickOrder  @default(RANDOM)
-  waiverRule    WaiverRule @default(WEEKLY)
-  startAt       DateTime
-  timeZone      String     @default("UTC")
-  locked        Boolean    @default(false)
+  id                 String     @id @default(cuid())
+  rosterSize         Int
+  benchSize          Int
+  maxTeams           Int
+  pickSeconds        Int
+  allowAutoPick      Boolean    @default(true)
+  positionLimitsJson String?
+  autoPickRulesJson  String?
+  draftType          DraftType
+  pickOrder          PickOrder  @default(RANDOM)
+  waiverRule         WaiverRule @default(WEEKLY)
+  startAt            DateTime
+  timeZone           String     @default("UTC")
+  locked             Boolean    @default(false)
 
   // Captain/Vice-Captain system (admin configurable)
   enableCaptainSystem   Boolean @default(false)
@@ -119,24 +123,25 @@ enum WaiverRule {
 }
 
 model Draft {
-  id                     String         @id @default(cuid())
-  leagueId               String         @unique
-  league                 League         @relation(fields: [leagueId], references: [id])
+  id                     String               @id @default(cuid())
+  leagueId               String               @unique
+  league                 League               @relation(fields: [leagueId], references: [id])
   status                 DraftStatus
-  currentPick            Int            @default(1)
+  currentPick            Int                  @default(1)
   totalPicks             Int
-  round                  Int            @default(1)
-  direction              DraftDirection @default(FORWARD)
+  round                  Int                  @default(1)
+  direction              DraftDirection       @default(FORWARD)
   picks                  Pick[]
   orders                 DraftOrder[]
-  createdAt              DateTime       @default(now())
+  rosterPlayers          LeagueRosterPlayer[]
+  createdAt              DateTime             @default(now())
   startedAt              DateTime?
   completedAt            DateTime?
   pickStartedAt          DateTime?
   pickDeadlineAt         DateTime?
   pausedRemainingSeconds Int?
   // Version counter used to atomically claim scheduling of the next pick
-  schedulingVersion      Int            @default(0)
+  schedulingVersion      Int                  @default(0)
 
   // Lobby system fields
   lobbyStatus String?   @default("CLOSED")
@@ -255,12 +260,13 @@ model DraftOrder {
 }
 
 model Player {
-  id       String  @id
-  name     String
-  club     String
-  position String
-  active   Boolean @default(true)
-  picks    Pick[]
+  id            String               @id
+  name          String
+  club          String
+  position      String
+  active        Boolean              @default(true)
+  picks         Pick[]
+  rosterPlayers LeagueRosterPlayer[]
 
   // Lobby relations
   watchlists     DraftWatchlist[]
@@ -270,18 +276,19 @@ model Player {
 }
 
 model Pick {
-  id       String       @id @default(cuid())
-  draftId  String
-  overall  Int
-  round    Int
-  slot     Int
-  memberId String
-  playerId String
-  madeAt   DateTime     @default(now())
-  auto     Boolean      @default(false)
-  draft    Draft        @relation(fields: [draftId], references: [id])
-  member   LeagueMember @relation(fields: [memberId], references: [id])
-  player   Player       @relation(fields: [playerId], references: [id])
+  id            String               @id @default(cuid())
+  draftId       String
+  overall       Int
+  round         Int
+  slot          Int
+  memberId      String
+  playerId      String
+  madeAt        DateTime             @default(now())
+  auto          Boolean              @default(false)
+  draft         Draft                @relation(fields: [draftId], references: [id])
+  member        LeagueMember         @relation(fields: [memberId], references: [id])
+  player        Player               @relation(fields: [playerId], references: [id])
+  rosterPlayers LeagueRosterPlayer[]
 
   @@unique([draftId, playerId])
   @@unique([draftId, overall])
@@ -317,6 +324,31 @@ model LeagueRoster {
   @@unique([leagueId, memberId])
   @@index([leagueId])
   @@index([memberId])
+}
+
+model LeagueRosterPlayer {
+  id         String   @id @default(cuid())
+  leagueId   String
+  memberId   String
+  draftId    String?
+  pickId     String?
+  playerId   String
+  slot       String?
+  acquiredBy String   @default("DRAFT")
+  acquiredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  draft  Draft?       @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  pick   Pick?        @relation(fields: [pickId], references: [id], onDelete: SetNull)
+  player Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, playerId])
+  @@unique([leagueId, memberId, playerId])
+  @@index([leagueId, memberId])
+  @@index([leagueId, acquiredBy])
 }
 
 // Team Actions (trades, waivers, etc.)

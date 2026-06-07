@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
     <html lang="en" data-theme="light">
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning>
         <ClientSentryWrapper>
           <PageErrorBoundary name="RootLayout">{children}</PageErrorBoundary>
         </ClientSentryWrapper>

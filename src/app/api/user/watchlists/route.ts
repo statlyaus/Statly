@@ -48,16 +48,13 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/user/watchlists/[userId]
+ * GET /api/user/watchlists?userId=xxx
  * Get all watchlists for a user
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-) {
+export async function GET(request: NextRequest) {
   try {
-    const { userId } = await params;
     const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
     const leagueId = searchParams.get('leagueId');
 
     if (!userId) {

@@ -25,7 +25,6 @@ export interface Player extends Omit<PlayerBase, 'stats'> {
   avg?: number;
   injury?: string;
   summary?: string;
-  ownership?: number;
 
   // Optional detailed stats
   kicks?: number;
@@ -38,6 +37,7 @@ export interface Player extends Omit<PlayerBase, 'stats'> {
   inside50s?: number;
   rebound50s?: number;
   contestedPossessions?: number;
+  ownership?: number;
 
   // Optional ranks (if present in data)
   kicks_rank?: number;
@@ -52,6 +52,17 @@ export interface Player extends Omit<PlayerBase, 'stats'> {
   contestedPossessions_rank?: number;
 }
 
+export interface PlayerSearchResult {
+  id: string;
+  name: string;
+  team: string;
+  position: string;
+  totalGames: number;
+  totalScore: number;
+  averageScore: number;
+  latestRound: number;
+}
+
 // Minimal Team shape used by MyTeamPanel
 export interface Team {
   id: string;
@@ -62,13 +73,6 @@ export interface Team {
 // (Optional) super‑light version used in some tables
 export type PlayerLite = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
   [key: string]: unknown;
-};
-
-export type PlayerSearchResult = Pick<Player, 'id' | 'name' | 'team' | 'position'> & {
-  totalGames: number;
-  totalScore: number;
-  averageScore: number;
-  latestRound: number;
 };
 
 /**

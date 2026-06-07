@@ -4,8 +4,22 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { League, LeagueMember } from '@/types/leagues';
-import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
-import LeagueOverview from '@/components/league/LeagueOverview';
+import {
+  FANTASY_CATEGORIES,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
+import {
+  DEFAULT_DRAFT_AUTO_PICK_RULES,
+  DEFAULT_DRAFT_POSITION_LIMITS,
+  POSITION_LIMIT_KEYS,
+  TIME_PER_PICK_OPTIONS,
+  type DraftAutoPickRules,
+  type DraftPickOrderMode,
+  type DraftPositionLimits,
+  type PositionLimitKey,
+} from '@/lib/draftSettings';
+import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import MyTeamPanel from '@/components/MyTeamPanel';
 import type { Player, Team } from '@/types/players';
 import DraftManager from './DraftManager';
@@ -53,16 +67,79 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
     { id: 'overview', name: 'Overview' },
     { id: 'teams', name: 'Teams' },
     { id: 'roster', name: 'My Roster' },
-    { id: 'trades', name: 'Trades', badge: 2 },
+    { id: 'trades', name: 'Trades' },
     { id: 'waivers', name: 'Waivers' },
     { id: 'draft', name: 'Draft' },
     { id: 'settings', name: 'Settings' },
   ];
 
-  const isAdmin = members.find((m) => m.userId === currentUserId)?.role === 'owner';
+  const currentMember = members.find((member) => member.userId === currentUserId);
+  const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
+  const draftReadiness = league.draftReadiness ?? null;
+  const draftRoomPath =
+    draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
+      ? `/drafts/${draftReadiness.draftId}`
+      : null;
+  const draftDate = league.draftDate ? new Date(league.draftDate) : null;
+  const formattedDraftDate =
+    draftDate && !Number.isNaN(draftDate.getTime())
+      ? new Intl.DateTimeFormat('en-AU', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(draftDate)
+      : 'Not scheduled';
 
   return (
     <div className="space-y-6">
+      <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+              League command center
+            </p>
+            <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
+              {league.name}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[color:var(--league-text-muted)]">
+              <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-1 font-semibold capitalize text-[color:var(--league-text)]">
+                {league.type}
+              </span>
+              <span>
+                {members.length}/{league.maxTeams} teams
+              </span>
+              <span>Draft: {formattedDraftDate}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {draftRoomPath ? (
+              <button
+                type="button"
+                onClick={() => router.push(draftRoomPath)}
+                className="inline-flex h-11 items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              >
+                Enter draft room
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleTabChange('draft')}
+                className="inline-flex h-11 items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              >
+                Prepare draft
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleTabChange('teams')}
+              className="inline-flex h-11 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+            >
+              Manage teams
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* Tab Navigation */}
       <div className="bg-white rounded-xl shadow-lg">
         <div className="border-b border-gray-200">
@@ -99,7 +176,73 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'overview' && (
-              <LeagueOverview league={league} members={members} currentUserId={currentUserId} />
+              <div className="space-y-6">
+                <section className="grid gap-4 md:grid-cols-3">
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      Your team
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-gray-900">
+                      {currentMember?.teamName ?? 'Team not set'}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {currentMember?.role === 'owner' || currentMember?.role === 'manager'
+                        ? 'Commissioner access'
+                        : 'Member access'}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      Draft status
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-gray-900">
+                      {draftReadiness?.status ?? 'Not prepared'}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {draftRoomPath
+                        ? 'Room is available for this league.'
+                        : (draftReadiness?.blockers[0]?.message ??
+                          'Configure draft settings to prepare the room.')}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      Scoring
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-gray-900">
+                      {league.categories.length} categories
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {league.categories
+                        .slice(0, 3)
+                        .map((category) => FANTASY_CATEGORIES[category]?.label ?? category)
+                        .join(', ')}
+                    </p>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-gray-200 bg-white p-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">Next action</h2>
+                      <p className="mt-1 text-sm text-gray-600">
+                        {draftRoomPath
+                          ? 'Enter the draft room to manage readiness, queue, watchlist, and picks.'
+                          : 'Open the draft tab to configure the draft room and commissioner settings.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        draftRoomPath ? router.push(draftRoomPath) : handleTabChange('draft')
+                      }
+                      className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                    >
+                      {draftRoomPath ? 'Enter draft room' : 'Prepare draft'}
+                    </button>
+                  </div>
+                </section>
+              </div>
             )}
 
             {activeTab === 'teams' && (
@@ -119,18 +262,6 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
                       <p className="text-sm text-gray-600">
                         Joined {new Date(member.joinedAt).toLocaleDateString()}
                       </p>
-                      {league.status !== 'preseason' && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <div className="text-sm">
-                            <span className="text-gray-600">Record: </span>
-                            <span className="font-medium">4-3</span>
-                          </div>
-                          <div className="text-sm">
-                            <span className="text-gray-600">Points: </span>
-                            <span className="font-medium">823.1</span>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -152,12 +283,19 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-semibold text-gray-900">Trades</h2>
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                    Propose Trade
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/leagues/${league.id}/trades`)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Open trade centre
                   </button>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <p className="text-gray-600">Trade interface coming soon...</p>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                  <p className="text-sm text-gray-600">
+                    Review proposals, counters, and commissioner decisions in the league trade
+                    centre.
+                  </p>
                 </div>
               </div>
             )}
@@ -166,18 +304,60 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-semibold text-gray-900">Waiver Wire</h2>
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                    Submit Claim
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/leagues/${league.id}/waivers`)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Open waivers
                   </button>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <p className="text-gray-600">Waiver wire interface coming soon...</p>
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                  <p className="text-sm text-gray-600">
+                    Submit claims, review waiver order, and process league waiver activity from the
+                    dedicated waiver workspace.
+                  </p>
                 </div>
               </div>
             )}
 
             {activeTab === 'draft' && (
               <div className="space-y-4">
+                {draftReadiness && (
+                  <div className="rounded-lg border border-gray-200 bg-white p-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">
+                          {draftRoomPath ? 'Draft room ready' : 'Draft setup status'}
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {draftRoomPath
+                            ? draftReadiness.lifecycle.isRunning
+                              ? 'The draft is live now.'
+                              : 'The lobby is available for this league.'
+                            : (draftReadiness.blockers[0]?.message ??
+                              'Save draft settings to prepare the draft room.')}
+                        </p>
+                      </div>
+                      {draftRoomPath && (
+                        <button
+                          type="button"
+                          onClick={() => router.push(draftRoomPath)}
+                          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                        >
+                          Enter draft room
+                        </button>
+                      )}
+                    </div>
+                    {!draftRoomPath && draftReadiness.blockers.length > 1 && (
+                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600">
+                        {draftReadiness.blockers.slice(1).map((blocker) => (
+                          <li key={blocker.code}>{blocker.message}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 <DraftManager
                   league={league}
                   members={members}
@@ -189,121 +369,619 @@ export default function LeagueTabs({ league, members, currentUserId }: LeagueTab
             )}
 
             {activeTab === 'settings' && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-900">League Settings</h2>
-
-                {/* Basic Info */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Basic Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        htmlFor="league-name"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        League Name
-                      </label>
-                      <input
-                        id="league-name"
-                        type="text"
-                        value={league.name}
-                        disabled={!isAdmin}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="league-code"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        League Code
-                      </label>
-                      <input
-                        id="league-code"
-                        type="text"
-                        value={league.code}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Scoring Categories */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Scoring Categories</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {league.categories.map((category) => {
-                      const categoryData = FANTASY_CATEGORIES[category];
-                      return (
-                        <div
-                          key={category}
-                          className="flex items-center space-x-2 p-2 bg-blue-50 rounded-lg"
-                        >
-                          <span className="text-sm font-medium text-blue-900">
-                            {categoryData?.label || category}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Trade Settings */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h3 className="font-medium text-gray-900 mb-4">Trade Settings</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        htmlFor="trade-limit"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Trade Limit
-                      </label>
-                      <input
-                        id="trade-limit"
-                        type="number"
-                        value={league.tradeSettings.tradeLimit}
-                        disabled={!isAdmin}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="trade-review"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Review Process
-                      </label>
-                      <select
-                        id="trade-review"
-                        value={league.tradeSettings.tradeReview}
-                        disabled={!isAdmin}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100"
-                      >
-                        <option value="none">None</option>
-                        <option value="admin">Admin Review</option>
-                        <option value="veto">League Veto</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {isAdmin && (
-                  <div className="flex justify-end space-x-3">
-                    <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                      Cancel
-                    </button>
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                      Save Changes
-                    </button>
-                  </div>
-                )}
-              </div>
+              <LeagueSettingsPanel
+                league={league}
+                memberCount={members.length}
+                isAdmin={isAdmin}
+                isActive
+                currentUserId={currentUserId}
+              />
             )}
           </motion.div>
         </div>
       </div>
+    </div>
+  );
+}
+
+type LeagueSettingsDraftType = 'snake' | 'linear';
+type LeagueSettingsWaiverRule = 'weekly' | 'rolling';
+
+interface LeagueSettingsResponse {
+  league: {
+    id: string;
+    name: string;
+    code: string;
+    maxTeams: number;
+    locked: boolean;
+  };
+  scoring: {
+    scoringFormat: 'nine-category';
+    categories: FantasyCategoryKey[];
+  };
+  roster: {
+    rosterSize: number;
+    benchSize: number;
+    positionLimits: DraftPositionLimits;
+  };
+  draft: {
+    draftDate: string;
+    draftType: LeagueSettingsDraftType;
+    timePerPick: number;
+    pickOrder: DraftPickOrderMode;
+    timeZone: string;
+    autoPickRules: DraftAutoPickRules;
+  };
+  waiver: {
+    waiverRule: LeagueSettingsWaiverRule;
+  };
+}
+
+type LeagueSettingsMessage = {
+  type: 'success' | 'error';
+  text: string;
+};
+
+const POSITION_LIMIT_LABELS: Record<PositionLimitKey, string> = {
+  DEF: 'Defenders',
+  MID: 'Midfielders',
+  RUC: 'Rucks',
+  FWD: 'Forwards',
+  BENCH: 'Bench',
+};
+
+const CATEGORY_PRESET = [...REAL_DATA_NINE_CATEGORY_PRESET];
+
+function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
+  const draftDate =
+    league.draftDate ?? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+
+  return {
+    league: {
+      id: league.id,
+      name: league.name,
+      code: league.code,
+      maxTeams: league.maxTeams,
+      locked: false,
+    },
+    scoring: {
+      scoringFormat: 'nine-category',
+      categories: [...CATEGORY_PRESET],
+    },
+    roster: {
+      rosterSize: 18,
+      benchSize: DEFAULT_DRAFT_POSITION_LIMITS.BENCH,
+      positionLimits: { ...DEFAULT_DRAFT_POSITION_LIMITS },
+    },
+    draft: {
+      draftDate,
+      draftType: league.draftType ?? 'snake',
+      timePerPick: 120,
+      pickOrder: league.pickOrder ?? 'random',
+      timeZone: 'Australia/Melbourne',
+      autoPickRules: { ...DEFAULT_DRAFT_AUTO_PICK_RULES },
+    },
+    waiver: {
+      waiverRule: league.waiverRule ?? 'weekly',
+    },
+  };
+}
+
+function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueSettingsResponse {
+  const fallback = createFallbackLeagueSettings(league);
+  const source = isRecord(value) ? value : {};
+  const leagueSource = isRecord(source.league) ? source.league : {};
+  const rosterSource = isRecord(source.roster) ? source.roster : {};
+  const draftSource = isRecord(source.draft) ? source.draft : {};
+  const waiverSource = isRecord(source.waiver) ? source.waiver : {};
+
+  return {
+    league: {
+      id: league.id,
+      name: asString(leagueSource.name, fallback.league.name),
+      code: asString(leagueSource.code, fallback.league.code),
+      maxTeams: asNumber(leagueSource.maxTeams, fallback.league.maxTeams),
+      locked: Boolean(leagueSource.locked ?? fallback.league.locked),
+    },
+    scoring: {
+      scoringFormat: 'nine-category',
+      categories: [...CATEGORY_PRESET],
+    },
+    roster: {
+      rosterSize: asNumber(rosterSource.rosterSize, fallback.roster.rosterSize),
+      benchSize: asNumber(rosterSource.benchSize, fallback.roster.benchSize),
+      positionLimits: normalizePositionLimits(rosterSource.positionLimits),
+    },
+    draft: {
+      draftDate: asString(draftSource.draftDate, fallback.draft.draftDate),
+      draftType: asDraftType(draftSource.draftType, fallback.draft.draftType),
+      timePerPick: asNumber(draftSource.timePerPick, fallback.draft.timePerPick),
+      pickOrder: asPickOrder(draftSource.pickOrder, fallback.draft.pickOrder),
+      timeZone: asString(draftSource.timeZone, fallback.draft.timeZone),
+      autoPickRules: normalizeAutoPickRules(draftSource.autoPickRules),
+    },
+    waiver: {
+      waiverRule: asWaiverRule(waiverSource.waiverRule, fallback.waiver.waiverRule),
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+function asString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function asDraftType(value: unknown, fallback: LeagueSettingsDraftType): LeagueSettingsDraftType {
+  return String(value ?? fallback).toLowerCase() === 'linear' ? 'linear' : 'snake';
+}
+
+function asPickOrder(value: unknown, fallback: DraftPickOrderMode): DraftPickOrderMode {
+  return String(value ?? fallback).toLowerCase() === 'manual' ? 'manual' : 'random';
+}
+
+function asWaiverRule(
+  value: unknown,
+  fallback: LeagueSettingsWaiverRule
+): LeagueSettingsWaiverRule {
+  return String(value ?? fallback).toLowerCase() === 'rolling' ? 'rolling' : 'weekly';
+}
+
+function normalizePositionLimits(value: unknown): DraftPositionLimits {
+  const source = isRecord(value) ? value : {};
+  return POSITION_LIMIT_KEYS.reduce<DraftPositionLimits>((limits, key) => {
+    const parsed = asNumber(source[key], DEFAULT_DRAFT_POSITION_LIMITS[key]);
+    limits[key] = Math.max(0, Math.min(parsed, key === 'BENCH' ? 20 : 30));
+    return limits;
+  }, {} as DraftPositionLimits);
+}
+
+function normalizeAutoPickRules(value: unknown): DraftAutoPickRules {
+  const source = isRecord(value) ? value : {};
+  const strategy = String(source.strategy ?? DEFAULT_DRAFT_AUTO_PICK_RULES.strategy).toLowerCase();
+
+  return {
+    enabled: source.enabled !== false,
+    strategy:
+      strategy === 'best-available' || strategy === 'fill-positions'
+        ? strategy
+        : DEFAULT_DRAFT_AUTO_PICK_RULES.strategy,
+  };
+}
+
+function toDateTimeLocalValue(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocalValue(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function LeagueSettingsPanel({
+  league,
+  memberCount,
+  isAdmin,
+  isActive,
+  currentUserId,
+}: {
+  league: League;
+  memberCount: number;
+  isAdmin: boolean;
+  isActive: boolean;
+  currentUserId?: string;
+}) {
+  const [settings, setSettings] = useState<LeagueSettingsResponse>(() =>
+    createFallbackLeagueSettings(league)
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<LeagueSettingsMessage | null>(null);
+
+  useEffect(() => {
+    setSettings(createFallbackLeagueSettings(league));
+  }, [league]);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    let mounted = true;
+    async function loadLeagueSettings() {
+      try {
+        setIsLoading(true);
+        setMessage(null);
+        const response = await authenticatedFetch(
+          `/api/leagues/${league.id}/settings`,
+          {},
+          currentUserId
+        );
+        const payload = await response.json();
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error ?? `status ${response.status}`);
+        }
+
+        if (mounted) {
+          setSettings(normalizeLeagueSettingsPayload(payload.data, league));
+        }
+      } catch (error) {
+        if (mounted) {
+          setMessage({
+            type: 'error',
+            text: error instanceof Error ? error.message : 'Failed to load league settings.',
+          });
+        }
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    void loadLeagueSettings();
+    return () => {
+      mounted = false;
+    };
+  }, [currentUserId, isActive, league]);
+
+  const updateLeagueSettings = (updates: Partial<LeagueSettingsResponse['league']>) => {
+    setSettings((current) => ({
+      ...current,
+      league: { ...current.league, ...updates },
+    }));
+  };
+
+  const updateDraftSettings = (updates: Partial<LeagueSettingsResponse['draft']>) => {
+    setSettings((current) => ({
+      ...current,
+      draft: { ...current.draft, ...updates },
+    }));
+  };
+
+  const updatePositionLimit = (key: PositionLimitKey, value: number) => {
+    setSettings((current) => ({
+      ...current,
+      roster: {
+        ...current.roster,
+        positionLimits: {
+          ...current.roster.positionLimits,
+          [key]: value,
+        },
+      },
+    }));
+  };
+
+  const updateAutoPickRules = (updates: Partial<DraftAutoPickRules>) => {
+    setSettings((current) => ({
+      ...current,
+      draft: {
+        ...current.draft,
+        autoPickRules: { ...current.draft.autoPickRules, ...updates },
+      },
+    }));
+  };
+
+  const handleSaveSettings = async () => {
+    if (!isAdmin) return;
+
+    try {
+      setIsSaving(true);
+      setMessage(null);
+      const response = await authenticatedFetch(
+        `/api/leagues/${league.id}/settings`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings),
+        },
+        currentUserId
+      );
+      const payload = await response.json();
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? `status ${response.status}`);
+      }
+
+      setSettings(normalizeLeagueSettingsPayload(payload.data, league));
+      setMessage({ type: 'success', text: 'League settings saved.' });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to save league settings.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const teamFillPercent = Math.min(100, Math.round((memberCount / settings.league.maxTeams) * 100));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-[color:var(--league-text)]">League Settings</h2>
+          <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+            {isAdmin ? 'Commissioner controls' : 'Read-only league settings'}
+          </p>
+        </div>
+        {isLoading && (
+          <span className="rounded-full border border-[color:var(--league-border)] px-3 py-1 text-sm text-[color:var(--league-text-muted)]">
+            Loading
+          </span>
+        )}
+      </div>
+
+      {message && (
+        <div
+          role="status"
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            message.type === 'success'
+              ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
+
+      <fieldset disabled={!isAdmin || isSaving} className="flex flex-col gap-6 disabled:opacity-75">
+        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+            Basic Information
+          </h3>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              League Name
+              <input
+                type="text"
+                value={settings.league.name}
+                onChange={(event) => updateLeagueSettings({ name: event.target.value })}
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:bg-[color:var(--league-surface-muted)]"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              League Code
+              <input
+                type="text"
+                value={settings.league.code}
+                readOnly
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 font-mono text-[color:var(--league-text-muted)]"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Max Teams
+              <input
+                type="number"
+                min={4}
+                max={20}
+                value={settings.league.maxTeams}
+                onChange={(event) =>
+                  updateLeagueSettings({ maxTeams: Number.parseInt(event.target.value, 10) || 4 })
+                }
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              />
+            </label>
+            <div className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Team Count
+              <div className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span>{memberCount} teams filled</span>
+                  <span>{settings.league.maxTeams} max</span>
+                </div>
+                <div className="mt-3 h-2 rounded-full bg-[color:var(--league-surface-muted)]">
+                  <div
+                    className="h-2 rounded-full bg-[color:var(--league-primary)]"
+                    style={{ width: `${teamFillPercent}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+            Scoring Categories
+          </h3>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {CATEGORY_PRESET.map((category) => {
+              const categoryData = FANTASY_CATEGORIES[category];
+              const isSelected = settings.scoring.categories.includes(category);
+
+              return (
+                <div
+                  key={category}
+                  className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-[color:var(--league-text)]">
+                      {categoryData?.label ?? category}
+                    </span>
+                    <span className="rounded-full bg-[color:var(--league-surface-muted)] px-2 py-0.5 text-xs font-semibold text-[color:var(--league-text-muted)]">
+                      {categoryData?.abbrev ?? category}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-[color:var(--league-text-muted)]">
+                    {isSelected ? 'Selected' : 'Available'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+            Draft Settings
+          </h3>
+          <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Draft Date
+              <input
+                type="datetime-local"
+                value={toDateTimeLocalValue(settings.draft.draftDate)}
+                onChange={(event) =>
+                  updateDraftSettings({ draftDate: fromDateTimeLocalValue(event.target.value) })
+                }
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Draft Type
+              <select
+                value={settings.draft.draftType}
+                onChange={(event) =>
+                  updateDraftSettings({
+                    draftType: event.target.value as LeagueSettingsDraftType,
+                  })
+                }
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              >
+                <option value="snake">Snake</option>
+                <option value="linear">Linear</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Pick Order
+              <select
+                value={settings.draft.pickOrder}
+                onChange={(event) =>
+                  updateDraftSettings({ pickOrder: event.target.value as DraftPickOrderMode })
+                }
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              >
+                <option value="random">Random</option>
+                <option value="manual">Manual</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Time Per Pick
+              <select
+                value={settings.draft.timePerPick}
+                onChange={(event) =>
+                  updateDraftSettings({
+                    timePerPick: Number.parseInt(event.target.value, 10),
+                  })
+                }
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              >
+                {TIME_PER_PICK_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Time Zone
+              <input
+                type="text"
+                value={settings.draft.timeZone}
+                onChange={(event) => updateDraftSettings({ timeZone: event.target.value })}
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+            Roster Settings
+          </h3>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {POSITION_LIMIT_KEYS.map((key) => (
+              <label
+                key={key}
+                className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]"
+              >
+                {POSITION_LIMIT_LABELS[key]}
+                <input
+                  type="number"
+                  min={0}
+                  max={key === 'BENCH' ? 20 : 30}
+                  value={settings.roster.positionLimits[key]}
+                  onChange={(event) =>
+                    updatePositionLimit(key, Number.parseInt(event.target.value, 10) || 0)
+                  }
+                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                />
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+            Auto-Pick And Waivers
+          </h3>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <label className="flex min-h-10 items-center gap-3 text-sm font-medium text-[color:var(--league-text)]">
+              <input
+                type="checkbox"
+                checked={settings.draft.autoPickRules.enabled}
+                onChange={(event) => updateAutoPickRules({ enabled: event.target.checked })}
+                className="size-4 rounded border-[color:var(--league-border)] text-[color:var(--league-primary)] focus:ring-[color:var(--league-primary)]"
+              />
+              Enable Auto-Pick
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Auto-Pick Strategy
+              <select
+                value={settings.draft.autoPickRules.strategy}
+                onChange={(event) =>
+                  updateAutoPickRules({
+                    strategy: event.target.value as DraftAutoPickRules['strategy'],
+                  })
+                }
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              >
+                <option value="queue-first">Queue first</option>
+                <option value="best-available">Best available</option>
+                <option value="fill-positions">Fill positions</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Waiver Rule
+              <select
+                value={settings.waiver.waiverRule}
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    waiver: {
+                      waiverRule: event.target.value as LeagueSettingsWaiverRule,
+                    },
+                  }))
+                }
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              >
+                <option value="weekly">Weekly</option>
+                <option value="rolling">Rolling</option>
+              </select>
+            </label>
+          </div>
+        </section>
+      </fieldset>
+
+      {isAdmin && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void handleSaveSettings()}
+            disabled={isSaving}
+            className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+          >
+            {isSaving ? 'Saving...' : 'Save league settings'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

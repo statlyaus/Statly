@@ -7,6 +7,7 @@ import { logger, withTiming } from '@/lib/logger';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
+import { canManageLeague } from '@/server/leagues/membership';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -56,19 +57,9 @@ export const POST = withMetrics(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
 
-      // Authorization: require commissioner/owner role for this league
-      let memberSnap = await adminDb
-        .collection('leagueMembers')
-        .where('leagueId', '==', leagueId)
-        .where('userId', '==', userId)
-        .limit(1)
-        .get();
-      // TODO: remove legacy fallback once data migration completes
-      const member = memberSnap.docs[0]?.data() as { role?: string } | undefined;
-      const role = member?.role ?? 'member';
-      const allowed = role === 'owner' || role === 'commissioner' || role === 'admin';
+      const allowed = await canManageLeague(leagueId, userId);
       if (!allowed) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return NextResponse.json({ error: 'Commissioner access required' }, { status: 403 });
       }
 
       // Load waiver settings to determine processing order
@@ -148,18 +139,19 @@ export const POST = withMetrics(
             // Helper to emit audit log for failures
             function logFailure(claim: WaiverClaimRaw, reason: string) {
               const activityRef = adminDb.collection(`leagues/${leagueId}/activity`).doc();
-              tx.set(activityRef, {
+              const failedActivityData = {
                 type: 'waiver-failed',
                 leagueId,
                 userId: claim.userId,
                 teamId: claim.teamId,
                 playerId: claim.playerId,
-                dropPlayerId: claim.dropPlayerId || undefined,
-                bidAmount: claim.bidAmount || undefined,
                 reason,
                 claimId: claim.id,
                 timestamp: new Date(),
-              });
+                ...(claim.dropPlayerId ? { dropPlayerId: claim.dropPlayerId } : {}),
+                ...(typeof claim.bidAmount === 'number' ? { bidAmount: claim.bidAmount } : {}),
+              };
+              tx.set(activityRef, failedActivityData);
             }
 
             // Helper to decrement pendingBidTotal when a PENDING claim leaves PENDING
@@ -167,12 +159,14 @@ export const POST = withMetrics(
               if (!isFAAB) return;
               const bid = typeof freshData.bidAmount === 'number' ? freshData.bidAmount : 0;
               if (bid <= 0) return;
+              const bidCents = Math.round(bid * 100);
               const priorityRef = adminDb.doc(
                 `leagues/${leagueId}/waiverPriorities/${freshData.userId}`
               );
               const prSnap = await tx.get(priorityRef);
               const update = {
                 pendingBidTotal: FieldValue.increment(-bid),
+                pendingBidTotalCents: FieldValue.increment(-bidCents),
                 updatedAt: new Date(),
               } as const;
               if (prSnap.exists) {
@@ -192,7 +186,21 @@ export const POST = withMetrics(
               results.push({ id: claim.id, status: 'SKIPPED', reason: 'Missing claim' });
               return;
             }
-            const freshData = freshSnap.data() as WaiverClaimRaw;
+            const freshSource = freshSnap.data() as Partial<
+              WaiverClaimRaw & { createdAt?: FirebaseFirestore.Timestamp | Date }
+            >;
+            const freshData: WaiverClaimRaw = {
+              id: freshSnap.id,
+              leagueId: freshSource.leagueId || leagueId,
+              userId: freshSource.userId || '',
+              teamId: freshSource.teamId || '',
+              playerId: freshSource.playerId || '',
+              priority: typeof freshSource.priority === 'number' ? freshSource.priority : claim.priority,
+              status: (freshSource.status as WaiverClaimRaw['status']) || 'PENDING',
+              createdAt: normalizeFirestoreDate(freshSource.createdAt),
+              ...(typeof freshSource.bidAmount === 'number' ? { bidAmount: freshSource.bidAmount } : {}),
+              ...(freshSource.dropPlayerId ? { dropPlayerId: freshSource.dropPlayerId } : {}),
+            };
             if (freshData.status !== 'PENDING') {
               results.push({ id: claim.id, status: 'SKIPPED', reason: 'Already processed' });
               return;
@@ -328,17 +336,18 @@ export const POST = withMetrics(
             tx.update(claimRef, { status: 'SUCCESSFUL', processedAt: new Date() });
             // audit: waiver-successful
             const successActivityRef = adminDb.collection(`leagues/${leagueId}/activity`).doc();
-            tx.set(successActivityRef, {
+            const successfulActivityData = {
               type: 'waiver-successful',
               leagueId,
               userId: freshData.userId,
               teamId: freshData.teamId,
               playerId: freshData.playerId,
-              dropPlayerId: freshData.dropPlayerId || undefined,
-              bidAmount: freshData.bidAmount || undefined,
               claimId: claim.id,
               timestamp: new Date(),
-            });
+              ...(freshData.dropPlayerId ? { dropPlayerId: freshData.dropPlayerId } : {}),
+              ...(typeof freshData.bidAmount === 'number' ? { bidAmount: freshData.bidAmount } : {}),
+            };
+            tx.set(successActivityRef, successfulActivityData);
             results.push({ id: claim.id, status: 'SUCCESSFUL' });
           });
         } catch (e) {

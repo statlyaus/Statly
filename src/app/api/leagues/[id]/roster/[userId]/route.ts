@@ -3,7 +3,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
-import { getUserIdFromRequest } from '@/lib/serverAuth';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -97,7 +97,7 @@ export async function GET(
     }
 
     // Auth: require server-validated identity
-    const reqUserId = await getUserIdFromRequest(request);
+    const reqUserId = await getAuthenticatedUserId(request);
     if (!reqUserId) return errorResponse('Unauthorized', 401);
     if (reqUserId !== userId) return errorResponse('Forbidden', 403);
 
@@ -264,7 +264,7 @@ export async function PUT(
     }
 
     // Auth: require server-validated identity
-    const reqUserId = await getUserIdFromRequest(request);
+    const reqUserId = await getAuthenticatedUserId(request);
     if (!reqUserId) return errorResponse('Unauthorized', 401);
     if (reqUserId !== userId) return errorResponse('Forbidden', 403);
 

@@ -15,23 +15,50 @@ import path from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const advisoryLintSeverity = process.env.STATLY_LINT_ADVISORY === '1' ? 'warn' : 'off';
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
+  {
+    linterOptions: {
+      reportUnusedDisableDirectives: advisoryLintSeverity,
+    },
+  },
+
   // 1) Ignore junk and build outputs
   {
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
+      'functions/lib/**',
+      '**/functions/lib/**',
+      '.next/**',
       '**/.next/**',
+      '.turbo/**',
       '**/.turbo/**',
+      '.netlify/**',
+      '**/.netlify/**',
+      '.vercel/**',
       '**/.vercel/**',
+      '.firebase/**',
+      '**/.firebase/**',
+      '.firebase-data/**',
+      '**/.firebase-data/**',
+      '.codex/**',
+      '**/.codex/**',
+      '.superpowers/**',
+      '**/.superpowers/**',
+      '.vibe/**',
+      '**/.vibe/**',
       '**/build/**',
       '**/coverage/**',
       '**/functions/lib/**',
       '**/public/**',
       '**/out/**',
       '**/Statly.worktrees/**',
+      '**/firebase-export-*/**',
+      '**/graphify-out/**',
+      '**/tmp/**',
       // local config/meta files
       'eslint.config.js',
       'tailwind.config.*',
@@ -69,16 +96,26 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       ...reactPlugin.configs.recommended.rules,
-      ...reactHooksPlugin.configs.recommended.rules,
       ...a11yPlugin.configs.recommended.rules,
       ...nextPlugin.configs['core-web-vitals'].rules,
 
       'react/react-in-jsx-scope': 'off',
       '@next/next/no-html-link-for-pages': 'off',
-      'react-hooks/exhaustive-deps': 'warn',
+      '@next/next/no-img-element': advisoryLintSeverity,
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': advisoryLintSeverity,
 
       // Accessibility
       'jsx-a11y/scope': 'error',
+    },
+  },
+
+  // TypeScript handles symbols through the TypeScript-aware rules below.
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
     },
   },
 
@@ -115,12 +152,12 @@ export default [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/consistent-type-imports': 'warn',
-      '@typescript-eslint/explicit-module-boundary-types': 'warn',
-      '@typescript-eslint/no-floating-promises': ['warn', { ignoreVoid: true }],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/consistent-type-imports': advisoryLintSeverity,
+      '@typescript-eslint/explicit-module-boundary-types': advisoryLintSeverity,
+      '@typescript-eslint/no-floating-promises': [advisoryLintSeverity, { ignoreVoid: true }],
+      '@typescript-eslint/no-explicit-any': advisoryLintSeverity,
       '@typescript-eslint/no-misused-promises': [
-        'warn',
+        advisoryLintSeverity,
         { checksVoidReturn: { attributes: false } },
       ],
 

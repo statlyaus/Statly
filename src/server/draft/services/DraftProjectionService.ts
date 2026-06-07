@@ -8,6 +8,8 @@ import type { DraftPickEventPayload } from '../domain/draftTypes';
 
 export interface LegacyDraftUpdate {
   draftId: string;
+  leagueId: string;
+  name: string;
   currentPick: number;
   totalPicks: number;
   round: number;
@@ -252,6 +254,8 @@ export class DraftProjectionService {
 
     return {
       draftId: draft.id,
+      leagueId: draft.leagueId,
+      name: `${draft.league.name || 'Draft'} - ${draft.status}`,
       currentPick: draft.currentPick,
       totalPicks: draft.totalPicks,
       round: draft.round,

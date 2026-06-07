@@ -4,7 +4,8 @@ export const dynamic = 'force-dynamic';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { League, CreateLeagueRequest, LeagueMember } from '@/types/leagues';
-import { generateDeterministicMemberId } from '@/utils/firestore';
+import { queueLeagueMembershipSet } from '@/lib/leagueMembership';
+import { normalizeCreateLeagueInput } from '@/server/leagues/createLeagueContract';
 
 // Generate unique league code
 function generateLeagueCode(): string {
@@ -17,19 +18,13 @@ function generateLeagueCode(): string {
 }
 
 // GET /api/leagues - List leagues
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const type = url.searchParams.get('type');
-
-    let snapshot;
-    if (type === 'public') {
-      // Get public leagues only
-      snapshot = await adminDb.collection('leagues').where('type', '==', 'public').limit(20).get();
-    } else {
-      // Get all leagues without ordering for now (to avoid index requirement)
-      snapshot = await adminDb.collection('leagues').limit(20).get();
-    }
+    const snapshot = await adminDb
+      .collection('leagues')
+      .where('type', '==', 'public')
+      .limit(20)
+      .get();
 
     const leagues = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -52,13 +47,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = (await req.json()) as CreateLeagueRequest;
+    const normalized = normalizeCreateLeagueInput(body);
     const userId = await getUserIdFromRequest(req);
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     console.log('📝 Received data:', { body, userId });
 
     // Basic validation
-    if (!body.name || body.name.length < 3) {
+    if (normalized.name.length < 3) {
       console.log('❌ Validation failed: League name too short');
       return NextResponse.json(
         { success: false, error: 'League name must be at least 3 characters' },
@@ -66,7 +62,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!body.categories || body.categories.length < 3) {
+    if (normalized.categories.length < 3) {
       console.log('❌ Validation failed: Not enough categories');
       return NextResponse.json(
         { success: false, error: 'Must select at least 3 categories' },
@@ -91,12 +87,12 @@ export async function POST(req: NextRequest) {
     // Create league object
     const now = new Date().toISOString();
     const league: Omit<League, 'id'> = {
-      name: body.name,
+      name: normalized.name,
       code,
-      type: body.type || 'public',
+      type: normalized.visibility === 'PUBLIC' ? 'public' : 'private',
       ownerId: userId,
-      maxTeams: body.maxTeams || 10,
-      categories: body.categories,
+      maxTeams: normalized.maxTeams,
+      categories: normalized.categories,
       tradeSettings: {
         tradeLimit: body.tradeSettings?.tradeLimit || 10,
         tradeReview: body.tradeSettings?.tradeReview || 'none',
@@ -128,17 +124,12 @@ export async function POST(req: NextRequest) {
       leagueId: leagueRef.id,
       userId,
       role: 'owner',
-      teamName: `${body.name} Owner`,
+      teamName: `${normalized.name} Owner`,
       joinedAt: now,
       isActive: true,
     };
 
-    // Backfill path for legacy collection removed; write to canonical collection only
-    // Use canonical deterministic ID with base64url encoding to prevent dupes and ensure valid ids
-    const deterministicOwnerMemberId = generateDeterministicMemberId(leagueRef.id, userId);
-
-    const ownerMemberRef = adminDb.collection('leagueMembers').doc(deterministicOwnerMemberId);
-    batch.set(ownerMemberRef, ownerMember, { merge: true });
+    queueLeagueMembershipSet(batch, ownerMember);
     await batch.commit();
 
     const createdLeague: League = {

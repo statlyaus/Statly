@@ -8,10 +8,11 @@ const mocks = vi.hoisted(() => ({
   pathname: '/leagues/new',
   push: vi.fn(),
   replace: vi.fn(),
+  user: null as { uid: string } | null,
 }));
 
 vi.mock('@/AuthContext', () => ({
-  useAuth: () => ({ user: null }),
+  useAuth: () => ({ user: mocks.user }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -27,7 +28,9 @@ describe('LeagueSwitcher route state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.pathname = '/leagues/new';
+    mocks.user = null;
     document.cookie = `${LAST_LEAGUE_ID_COOKIE}=; Max-Age=0; path=/`;
+    vi.stubGlobal('fetch', vi.fn());
   });
 
   it('does not persist reserved league routes as the last selected league', async () => {
@@ -49,5 +52,25 @@ describe('LeagueSwitcher route state', () => {
     await waitFor(() => {
       expect(document.cookie).toContain(`${LAST_LEAGUE_ID_COOKIE}=league-456`);
     });
+  });
+
+  it('does not auto-navigate away from the leagues index after leagues load', async () => {
+    mocks.pathname = '/leagues';
+    mocks.user = { uid: 'user-1' };
+    document.cookie = `${LAST_LEAGUE_ID_COOKIE}=league-123; path=/`;
+    vi.mocked(fetch).mockResolvedValue({
+      json: async () => ({
+        data: {
+          leagues: [{ id: 'league-123', name: 'Test Lab Alpha' }],
+        },
+      }),
+    } as Response);
+
+    render(<LeagueSwitcher />);
+
+    await screen.findByText('Test Lab Alpha');
+
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 });

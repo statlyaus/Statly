@@ -2,6 +2,8 @@ export const revalidate = 60;
 import { AppLayout } from '@/components/navigation';
 import LeagueWaiversContainer from '@/components/waivers/LeagueWaiversContainer';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { requireUser } from '@/lib/requireUser';
+import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { firestoreTimestampToDate } from '@/utils/firestore';
 import type { FirebaseTimestamp } from '@/types/firebase';
 
@@ -39,6 +41,11 @@ interface SSRMemberLite {
 
 export default async function LeagueWaiversPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: leagueId } = await params;
+  const userId = await requireUser();
+  const membership = await verifyLeagueMembership(leagueId, userId);
+  if (!membership.isMember) {
+    throw new Error('Forbidden');
+  }
 
   // Preload data server-side
   const leagueRef = adminDb.collection('leagues').doc(leagueId);

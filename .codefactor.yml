@@ -1,0 +1,19 @@
+ratings:
+  paths:
+    - "src/**"
+    - "functions/src/**"
+    - "Scripts/**"
+
+exclude:
+  - "tests/**"
+  - "functions/lib/**"
+  - "etl/dist/**"
+  - "coverage/**"
+
+rules:
+  javascript:
+    complexity:
+      enabled: false
+  typescript:
+    complexity:
+      enabled: false

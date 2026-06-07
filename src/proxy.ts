@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 // Example protected route enforcement placeholder.
 // If you move to server-verified Firebase sessions, replace the stub with real checks.
-export async function middleware(req: NextRequest) {
+export function proxy(req: NextRequest): NextResponse {
   const url = req.nextUrl.clone();
   const pathname = url.pathname;
 

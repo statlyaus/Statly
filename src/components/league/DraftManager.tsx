@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
@@ -10,8 +10,26 @@ import {
   CogIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { fetchApi } from '@/lib/api';
+import {
+  DEFAULT_DRAFT_AUTO_PICK_RULES,
+  DEFAULT_DRAFT_POSITION_LIMITS,
+  POSITION_LIMIT_KEYS,
+  TIME_PER_PICK_OPTIONS,
+  getBenchSizeFromPositionLimits,
+  getRosterSizeFromPositionLimits,
+  normalizeDraftAutoPickRules,
+  normalizeDraftPickOrderMode,
+  normalizeDraftPositionLimits,
+  type DraftAutoPickRules,
+  type DraftPickOrderMode,
+  type DraftPositionLimits,
+  type PositionLimitKey,
+} from '@/lib/draftSettings';
 import type { League, LeagueMember } from '@/types/leagues';
 import {
   isConnectivityError,
@@ -41,6 +59,9 @@ interface DraftSettings {
   timePerPick: number;
   timeZone: string;
   enableReminders: boolean;
+  pickOrder: DraftPickOrderMode;
+  positionLimits: DraftPositionLimits;
+  autoPickRules: DraftAutoPickRules;
 }
 
 interface ExistingDraft {
@@ -48,6 +69,41 @@ interface ExistingDraft {
   status: 'SCHEDULED' | 'LOBBY' | 'COUNTDOWN' | 'LIVE' | 'PAUSED' | 'COMPLETED';
   startAt: string;
   createdAt: string;
+}
+
+interface DraftResponseShape {
+  id: string;
+  status?: string | null;
+  startAt?: string | null;
+  scheduledTime?: string | null;
+  createdAt?: string | null;
+  leagueId?: string | null;
+  league?: { id?: string | null } | null;
+}
+
+interface LeagueDraftReadModel {
+  draft?: DraftResponseShape | null;
+}
+
+const DRAFT_STATUSES = new Set(['SCHEDULED', 'LOBBY', 'COUNTDOWN', 'LIVE', 'PAUSED', 'COMPLETED']);
+
+function normalizeExistingDraftStatus(status: string | null | undefined): ExistingDraft['status'] {
+  const normalized = status?.toUpperCase();
+  return DRAFT_STATUSES.has(normalized ?? '')
+    ? (normalized as ExistingDraft['status'])
+    : 'SCHEDULED';
+}
+
+function toExistingDraft(draft: DraftResponseShape): ExistingDraft {
+  const startAt =
+    draft.startAt ?? draft.scheduledTime ?? draft.createdAt ?? new Date().toISOString();
+
+  return {
+    id: draft.id,
+    status: normalizeExistingDraftStatus(draft.status),
+    startAt,
+    createdAt: draft.createdAt ?? startAt,
+  };
 }
 
 export default function DraftManager({
@@ -62,6 +118,10 @@ export default function DraftManager({
   const [savingDraft, setSavingDraft] = useState(false);
   const [existingDraft, setExistingDraft] = useState<ExistingDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [draftOrderMemberIds, setDraftOrderMemberIds] = useState<string[]>(() =>
+    members.map((member) => member.id)
+  );
+  const [draftOrderRandomized, setDraftOrderRandomized] = useState(false);
 
   const [draftSettings, setDraftSettings] = useState<DraftSettings>({
     scheduledTime: '',
@@ -69,69 +129,149 @@ export default function DraftManager({
     timePerPick: 120,
     timeZone: 'Australia/Melbourne',
     enableReminders: true,
+    pickOrder: normalizeDraftPickOrderMode(league.pickOrder),
+    positionLimits: { ...DEFAULT_DRAFT_POSITION_LIMITS },
+    autoPickRules: { ...DEFAULT_DRAFT_AUTO_PICK_RULES },
   });
 
   const effectiveOwnerId =
     league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId;
-  const isOwner = currentUserId === effectiveOwnerId;
+  const currentMember = members.find((member) => member.userId === currentUserId);
+  const isCommissioner =
+    currentUserId === effectiveOwnerId ||
+    currentMember?.role === 'owner' ||
+    currentMember?.role === 'manager';
   const hasEnoughMembers = members.length >= 4;
-  const canCreateDraft = isOwner && hasEnoughMembers && !existingDraft;
+  const canCreateDraft = isCommissioner && hasEnoughMembers && !existingDraft;
+  const draftOrderMembers = draftOrderMemberIds
+    .map((memberId) => members.find((member) => member.id === memberId))
+    .filter((member): member is LeagueMember => Boolean(member));
 
-  // Initialize check on mount
-  useEffect(() => {
-    // Normalize timezone to the user's actual system timezone to match server conversion
+  const refreshDraftState = useCallback(async () => {
     try {
-      const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (userTimeZone && userTimeZone !== draftSettings.timeZone) {
-        setDraftSettings((prev) => ({ ...prev, timeZone: userTimeZone }));
+      const response = await fetchApi(`leagues/${league.id}/draft`);
+      const data = response.data as LeagueDraftReadModel | undefined;
+      if (response.success && data?.draft) {
+        setExistingDraft(toExistingDraft(data.draft));
+      } else if (response.success) {
+        setExistingDraft(null);
       }
-    } catch {
-      // Ignore if not available
-    }
-
-    // Prefill a default scheduled time 10 minutes from now (local time)
-    if (!draftSettings.scheduledTime) {
-      const nowPlusTen = new Date(Date.now() + 10 * 60 * 1000);
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const localStr = `${nowPlusTen.getFullYear()}-${pad(nowPlusTen.getMonth() + 1)}-${pad(
-        nowPlusTen.getDate()
-      )}T${pad(nowPlusTen.getHours())}:${pad(nowPlusTen.getMinutes())}`;
-      setDraftSettings((prev) => ({ ...prev, scheduledTime: localStr }));
-    }
-
-    const checkDraft = async () => {
-      try {
-        const response = await fetchApi(`leagues/${league.id}/draft`);
-        if (response.success && response.data?.hasDraft) {
-          setExistingDraft({
-            id: response.data.draftId,
-            status: response.data.status || 'SCHEDULED',
-            startAt: response.data.startAt,
-            createdAt: response.data.createdAt,
-          });
-        }
-      } catch (error) {
-        // Handle different types of errors
-        if (error instanceof Error) {
-          if (isConnectivityError(error)) {
-            console.warn('Development server not running or API unreachable');
-            setError(getConnectivityErrorMessage());
-          } else if (isExpectedTestLeague404(error, league.id)) {
-            // Expected for test leagues, don't show error
-            console.debug('Test league draft check - 404 expected');
-          } else {
-            console.error('Error checking existing draft:', error);
-            setError(`Failed to check draft status: ${error.message}`);
-          }
+    } catch (error) {
+      // Handle different types of errors
+      if (error instanceof Error) {
+        if (isConnectivityError(error)) {
+          console.warn('Development server not running or API unreachable');
+          setError(getConnectivityErrorMessage());
+        } else if (isExpectedTestLeague404(error, league.id)) {
+          // Expected for test leagues, don't show error
+          console.debug('Test league draft check - 404 expected');
         } else {
-          console.error('Unknown error checking draft:', error);
-          setError('An unexpected error occurred while checking draft status');
+          console.error('Error checking existing draft:', error);
+          setError(`Failed to check draft status: ${error.message}`);
         }
+      } else {
+        console.error('Unknown error checking draft:', error);
+        setError('An unexpected error occurred while checking draft status');
       }
-    };
-
-    checkDraft();
+    }
   }, [league.id]);
+
+  // Initialize schedule defaults on mount.
+  useEffect(() => {
+    setDraftSettings((prev) => {
+      let next = prev;
+
+      try {
+        const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (userTimeZone && userTimeZone !== next.timeZone) {
+          next = { ...next, timeZone: userTimeZone };
+        }
+      } catch {
+        // Ignore if not available
+      }
+
+      if (!next.scheduledTime) {
+        const nowPlusTen = new Date(Date.now() + 10 * 60 * 1000);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const localStr = `${nowPlusTen.getFullYear()}-${pad(nowPlusTen.getMonth() + 1)}-${pad(
+          nowPlusTen.getDate()
+        )}T${pad(nowPlusTen.getHours())}:${pad(nowPlusTen.getMinutes())}`;
+        next = { ...next, scheduledTime: localStr };
+      }
+
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    void refreshDraftState();
+  }, [refreshDraftState]);
+
+  useEffect(() => {
+    setDraftOrderMemberIds((current) => {
+      const activeIds = new Set(members.map((member) => member.id));
+      const retained = current.filter((memberId) => activeIds.has(memberId));
+      const missing = members
+        .map((member) => member.id)
+        .filter((memberId) => !retained.includes(memberId));
+      return [...retained, ...missing];
+    });
+    setDraftOrderRandomized(false);
+  }, [members]);
+
+  const shuffleMembers = (orderedMembers: LeagueMember[]) => {
+    const shuffled = [...orderedMembers];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  const randomizeDraftOrder = () => {
+    setDraftOrderMemberIds((current) =>
+      shuffleMembers(
+        current
+          .map((memberId) => members.find((member) => member.id === memberId))
+          .filter((member): member is LeagueMember => Boolean(member))
+      ).map((member) => member.id)
+    );
+    setDraftOrderRandomized(true);
+    setDraftSettings((prev) => ({ ...prev, pickOrder: 'random' }));
+  };
+
+  const moveDraftOrderMember = (memberId: string, direction: -1 | 1) => {
+    setDraftSettings((prev) => ({ ...prev, pickOrder: 'manual' }));
+    setDraftOrderRandomized(false);
+    setDraftOrderMemberIds((current) => {
+      const fromIndex = current.indexOf(memberId);
+      const toIndex = fromIndex + direction;
+      if (fromIndex < 0 || toIndex < 0 || toIndex >= current.length) {
+        return current;
+      }
+      const next = [...current];
+      [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
+      return next;
+    });
+  };
+
+  const updatePositionLimit = (key: PositionLimitKey, value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    setDraftSettings((prev) => ({
+      ...prev,
+      positionLimits: normalizeDraftPositionLimits({
+        ...prev.positionLimits,
+        [key]: Number.isFinite(parsed) ? parsed : DEFAULT_DRAFT_POSITION_LIMITS[key],
+      }),
+    }));
+  };
+
+  const updateAutoPickRules = (next: Partial<DraftAutoPickRules>) => {
+    setDraftSettings((prev) => ({
+      ...prev,
+      autoPickRules: normalizeDraftAutoPickRules({ ...prev.autoPickRules, ...next }),
+    }));
+  };
 
   const createDraft = async () => {
     if (!canCreateDraft) return;
@@ -156,7 +296,13 @@ export default function DraftManager({
       // Step 1: Create the draft with league synchronization
       // Build participants; ensure current user is included for test leagues
 
-      let participants: DraftParticipant[] = members.map((member, index) => ({
+      let orderedMembers =
+        draftOrderMembers.length === members.length ? draftOrderMembers : members;
+      if (draftSettings.pickOrder === 'random' && !draftOrderRandomized) {
+        orderedMembers = shuffleMembers(orderedMembers);
+      }
+
+      let participants: DraftParticipant[] = orderedMembers.map((member, index) => ({
         userId: member.userId,
         memberId: member.id,
         displayName: member.teamName || `Team ${index + 1}`,
@@ -191,6 +337,11 @@ export default function DraftManager({
         scheduledTime: draftSettings.scheduledTime,
         timeZone: draftSettings.timeZone,
         enableReminders: draftSettings.enableReminders,
+        pickOrder: draftSettings.pickOrder,
+        positionLimits: draftSettings.positionLimits,
+        autoPickRules: draftSettings.autoPickRules,
+        rosterSize: getRosterSizeFromPositionLimits(draftSettings.positionLimits),
+        benchSize: getBenchSizeFromPositionLimits(draftSettings.positionLimits),
         // Sync league data
         leagueData: {
           name: league.name,
@@ -213,26 +364,22 @@ export default function DraftManager({
       });
 
       if (response.success) {
-        // Step 2: Update league with draft reference (skip for test league)
-        if (league.id !== 'test-league-id') {
-          await fetchApi(`leagues/${league.id}/link-draft`, {
-            method: 'POST',
-            body: JSON.stringify({
-              draftId: response.data.id,
-            }),
-          });
+        const createdDraft = response.data as DraftResponseShape;
+        const draftLinkedToLeague =
+          league.id === 'test-league-id' ||
+          createdDraft.leagueId === league.id ||
+          createdDraft.league?.id === league.id;
+
+        if (!draftLinkedToLeague) {
+          throw new Error('Draft was created without the expected league link');
         }
 
-        setExistingDraft({
-          id: response.data.id,
-          status: response.data.status,
-          startAt: response.data.startAt,
-          createdAt: response.data.createdAt,
-        });
+        setExistingDraft(toExistingDraft(createdDraft));
+        await refreshDraftState();
 
         setShowDraftSettings(false);
 
-        const draftId = response.data.id;
+        const draftId = createdDraft.id;
         if (onDraftCreated) {
           onDraftCreated(draftId);
         } else {
@@ -270,17 +417,17 @@ export default function DraftManager({
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
-      SCHEDULED: 'bg-blue-100 text-blue-800',
-      LOBBY: 'bg-yellow-100 text-yellow-800',
-      COUNTDOWN: 'bg-orange-100 text-orange-800',
-      LIVE: 'bg-green-100 text-green-800',
-      PAUSED: 'bg-gray-100 text-gray-800',
-      COMPLETED: 'bg-purple-100 text-purple-800',
+      SCHEDULED: 'bg-primary/10 text-primary',
+      LOBBY: 'bg-muted text-muted-foreground',
+      COUNTDOWN: 'bg-primary/10 text-primary',
+      LIVE: 'bg-primary text-primary-foreground',
+      PAUSED: 'bg-muted text-muted-foreground',
+      COMPLETED: 'bg-muted text-muted-foreground',
     };
 
     return (
       <span
-        className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}
+        className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[status as keyof typeof statusColors] || 'bg-muted text-muted-foreground'}`}
       >
         {status}
       </span>
@@ -296,19 +443,19 @@ export default function DraftManager({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <PlayIcon className="h-6 w-6 text-green-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Draft Management</h2>
+          <PlayIcon className="h-6 w-6 text-primary" />
+          <h2 className="text-xl font-semibold text-foreground">Draft Management</h2>
         </div>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-          <ExclamationTriangleIcon className="h-5 w-5 text-red-500" />
-          <span className="text-red-700">{error}</span>
+        <div className="mb-4 flex items-center space-x-2 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
+          <ExclamationTriangleIcon className="h-5 w-5 text-destructive" />
+          <span className="text-destructive">{error}</span>
         </div>
       )}
 
@@ -317,25 +464,25 @@ export default function DraftManager({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg"
+          className="mb-6 rounded-lg border border-border bg-muted/50 p-4"
         >
           <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-center space-x-3 mb-2">
-                <CheckCircleIcon className="h-5 w-5 text-green-600" />
-                <h3 className="font-semibold text-gray-900">Draft Created</h3>
+              <div className="mb-2 flex items-center space-x-3">
+                <CheckCircleIcon className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-foreground">Draft Created</h3>
                 {getStatusBadge(existingDraft.status)}
               </div>
-              <p className="text-sm text-gray-600 mb-1">
+              <p className="mb-1 text-sm text-muted-foreground">
                 Draft ID: <span className="font-mono text-xs">{existingDraft.id}</span>
               </p>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Scheduled: {formatDateTime(existingDraft.startAt)}
               </p>
             </div>
             <button
               onClick={joinDraftRoom}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+              className="flex items-center space-x-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <PlayIcon className="h-4 w-4" />
               <span>Join Draft Room</span>
@@ -350,34 +497,34 @@ export default function DraftManager({
           {/* Prerequisites Check */}
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
-              <UsersIcon className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-600">
+              <UsersIcon className="h-5 w-5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
                 League Members: {members.length}/{league.maxTeams}
               </span>
               {hasEnoughMembers ? (
-                <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                <CheckCircleIcon className="h-5 w-5 text-primary" />
               ) : (
-                <span className="text-xs text-red-500">Need at least 4 members</span>
+                <span className="text-xs text-destructive">Need at least 4 members</span>
               )}
             </div>
 
             <div className="flex items-center space-x-3">
-              <CogIcon className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-600">League Owner Access</span>
-              {isOwner ? (
-                <CheckCircleIcon className="h-5 w-5 text-green-500" />
+              <CogIcon className="h-5 w-5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Commissioner Access</span>
+              {isCommissioner ? (
+                <CheckCircleIcon className="h-5 w-5 text-primary" />
               ) : (
-                <span className="text-xs text-red-500">Owner only</span>
+                <span className="text-xs text-destructive">Commissioner only</span>
               )}
             </div>
           </div>
 
           {/* Create Draft Button */}
           {canCreateDraft && (
-            <div className="pt-4 border-t border-gray-200">
+            <div className="border-t border-border pt-4">
               <button
                 onClick={() => setShowDraftSettings(true)}
-                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+                className="flex w-full items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <CalendarIcon className="h-5 w-5" />
                 <span>Create Draft for League</span>
@@ -386,11 +533,11 @@ export default function DraftManager({
           )}
 
           {!canCreateDraft && (
-            <div className="pt-4 border-t border-gray-200">
-              <div className="p-3 bg-gray-50 rounded-lg text-center">
-                <span className="text-sm text-gray-500">
-                  {!isOwner
-                    ? 'Only the league owner can create a draft'
+            <div className="border-t border-border pt-4">
+              <div className="rounded-lg bg-muted p-3 text-center">
+                <span className="text-sm text-muted-foreground">
+                  {!isCommissioner
+                    ? 'Only a league commissioner can create a draft'
                     : !hasEnoughMembers
                       ? 'Need at least 4 members to create a draft'
                       : 'Draft requirements not met'}
@@ -406,21 +553,21 @@ export default function DraftManager({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4"
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-card p-6 text-card-foreground shadow-xl"
           >
-            <h3 className="text-lg font-semibold mb-4">Draft Settings</h3>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">Draft Settings</h3>
 
             <div className="space-y-4">
               {/* Scheduled Time */}
               <div>
                 <label
                   htmlFor="scheduledTime"
-                  className="block text-sm font-medium text-gray-700 mb-1"
+                  className="mb-1 block text-sm font-medium text-foreground"
                 >
                   Draft Start Time
                 </label>
@@ -431,14 +578,17 @@ export default function DraftManager({
                   onChange={(e) =>
                     setDraftSettings((prev) => ({ ...prev, scheduledTime: e.target.value }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                   min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)} // At least 5 minutes from now
                 />
               </div>
 
               {/* Draft Type */}
               <div>
-                <label htmlFor="draftType" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="draftType"
+                  className="mb-1 block text-sm font-medium text-foreground"
+                >
                   Draft Type
                 </label>
                 <select
@@ -450,7 +600,7 @@ export default function DraftManager({
                       draftType: e.target.value as 'snake' | 'linear',
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="snake">Snake Draft</option>
                   <option value="linear">Linear Draft</option>
@@ -461,7 +611,7 @@ export default function DraftManager({
               <div>
                 <label
                   htmlFor="timePerPick"
-                  className="block text-sm font-medium text-gray-700 mb-1"
+                  className="mb-1 block text-sm font-medium text-foreground"
                 >
                   Time Per Pick (seconds)
                 </label>
@@ -471,13 +621,139 @@ export default function DraftManager({
                   onChange={(e) =>
                     setDraftSettings((prev) => ({ ...prev, timePerPick: parseInt(e.target.value) }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value={60}>1 minute</option>
-                  <option value={90}>1.5 minutes</option>
-                  <option value={120}>2 minutes</option>
-                  <option value={180}>3 minutes</option>
-                  <option value={300}>5 minutes</option>
+                  {TIME_PER_PICK_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label htmlFor="pickOrder" className="block text-sm font-medium text-foreground">
+                    Draft Order
+                  </label>
+                  <button
+                    type="button"
+                    onClick={randomizeDraftOrder}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ArrowPathIcon className="h-4 w-4" />
+                    Randomize
+                  </button>
+                </div>
+                <select
+                  id="pickOrder"
+                  value={draftSettings.pickOrder}
+                  onChange={(e) =>
+                    setDraftSettings((prev) => ({
+                      ...prev,
+                      pickOrder: e.target.value as DraftPickOrderMode,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="random">Randomized order</option>
+                  <option value="manual">Manual order</option>
+                </select>
+                <div className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border">
+                  {draftOrderMembers.map((member, index) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-b-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {index + 1}. {member.teamName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{member.role}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveDraftOrderMember(member.id, -1)}
+                          disabled={index === 0}
+                          aria-label={`Move ${member.teamName} up in draft order`}
+                          className="rounded-md border border-border p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                        >
+                          <ArrowUpIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveDraftOrderMember(member.id, 1)}
+                          disabled={index === draftOrderMembers.length - 1}
+                          aria-label={`Move ${member.teamName} down in draft order`}
+                          className="rounded-md border border-border p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                        >
+                          <ArrowDownIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 block text-sm font-medium text-foreground">Position Limits</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  {POSITION_LIMIT_KEYS.map((key) => (
+                    <div key={key}>
+                      <label
+                        htmlFor={`position-${key}`}
+                        className="block text-xs text-muted-foreground"
+                      >
+                        {key}
+                      </label>
+                      <input
+                        id={`position-${key}`}
+                        type="number"
+                        min={0}
+                        max={key === 'BENCH' ? 20 : 30}
+                        value={draftSettings.positionLimits[key]}
+                        onChange={(e) => updatePositionLimit(key, e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border p-3">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="autoPickEnabled"
+                    checked={draftSettings.autoPickRules.enabled}
+                    onChange={(e) => updateAutoPickRules({ enabled: e.target.checked })}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                  />
+                  <label htmlFor="autoPickEnabled" className="ml-2 text-sm text-foreground">
+                    Auto-pick when clock expires
+                  </label>
+                </div>
+                <label
+                  htmlFor="autoPickStrategy"
+                  className="mt-3 block text-sm font-medium text-foreground"
+                >
+                  Auto-pick Priority
+                </label>
+                <select
+                  id="autoPickStrategy"
+                  value={draftSettings.autoPickRules.strategy}
+                  onChange={(e) =>
+                    updateAutoPickRules({
+                      strategy: e.target.value as DraftAutoPickRules['strategy'],
+                    })
+                  }
+                  disabled={!draftSettings.autoPickRules.enabled}
+                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
+                >
+                  <option value="queue-first">Queue first, then best available</option>
+                  <option value="best-available">Best available</option>
+                  <option value="fill-positions">Fill position needs</option>
                 </select>
               </div>
 
@@ -490,30 +766,30 @@ export default function DraftManager({
                   onChange={(e) =>
                     setDraftSettings((prev) => ({ ...prev, enableReminders: e.target.checked }))
                   }
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
                 />
-                <label htmlFor="reminders" className="ml-2 text-sm text-gray-700">
+                <label htmlFor="reminders" className="ml-2 text-sm text-foreground">
                   Send draft reminders to league members
                 </label>
               </div>
             </div>
 
-            <div className="flex space-x-3 mt-6">
+            <div className="mt-6 flex space-x-3">
               <button
                 onClick={() => setShowDraftSettings(false)}
                 disabled={savingDraft}
-                className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 rounded-lg border border-border px-4 py-2 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={createDraft}
                 disabled={savingDraft || !draftSettings.scheduledTime}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {savingDraft ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                     <span>Creating...</span>
                   </>
                 ) : (

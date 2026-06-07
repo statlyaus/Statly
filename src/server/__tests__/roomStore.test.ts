@@ -44,6 +44,24 @@ describe('DraftRoomStore (in-memory fallback)', () => {
     await expect(draftRoomStore.getParticipantCount('draft-limit')).resolves.toBe(1);
   });
 
+  it('removes participant metadata when a socket leaves', async () => {
+    await draftRoomStore.initRoomIfMissing('draftPresence');
+    await draftRoomStore.addParticipant('draftPresence', 'socket-1');
+    await draftRoomStore.setParticipantData('draftPresence', 'socket-1', {
+      userId: 'user-1',
+      socketId: 'socket-1',
+    });
+
+    expect(await draftRoomStore.getParticipantsData('draftPresence')).toHaveProperty('socket-1');
+
+    const count = await draftRoomStore.removeParticipant('draftPresence', 'socket-1');
+
+    expect(count).toBe(0);
+    expect(await draftRoomStore.getParticipantsData('draftPresence')).not.toHaveProperty(
+      'socket-1'
+    );
+  });
+
   it('handles invalid or empty room IDs', async () => {
     await expect(draftRoomStore.getRoom('')).resolves.toBeNull();
     await expect(draftRoomStore.getRoom('unknown-room')).resolves.toBeNull();

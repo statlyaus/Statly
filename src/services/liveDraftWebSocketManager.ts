@@ -154,95 +154,41 @@ export class LiveDraftWebSocketManager {
   }
 
   private setupSocketHandlers(socket: Socket & { data: DraftSocketData }): void {
-    const { userId, draftId } = socket.data;
-
-    // Make pick
-    socket.on('draft:make-pick', async (data: { playerId: string }) => {
+    // Mutating draft state must go through the Prisma-backed REST APIs for atomicity.
+    socket.on('draft:make-pick', () => {
       if (!this.checkRateLimit(socket.id)) {
         socket.emit('error', { message: 'Rate limit exceeded' });
         return;
       }
 
-      try {
-        const pick = await getLiveDraftEngine().makePick({
-          draftId: draftId!,
-          userId: userId!,
-          playerId: data.playerId,
-        });
-
-        logger.info('Pick made via socket', {
-          socketId: socket.id,
-          draftId,
-          userId,
-          pickNumber: pick.overall,
-        });
-      } catch (error) {
-        logger.error('Pick failed via socket', { socketId: socket.id, draftId, userId, error });
-        socket.emit('draft:pick-error', {
-          message: error instanceof Error ? error.message : 'Pick failed',
-        });
-      }
+      this.rejectDirectMutation(socket, 'draft:make-pick', 'draft:pick-error');
     });
 
-    // Update queue
-    socket.on('draft:update-queue', async (data: { queue: string[] }) => {
+    socket.on('draft:update-queue', () => {
       if (!this.checkRateLimit(socket.id)) {
         socket.emit('error', { message: 'Rate limit exceeded' });
         return;
       }
 
-      try {
-        await getLiveDraftEngine().updateQueue(draftId!, userId!, data.queue);
-        logger.debug('Queue updated via socket', { socketId: socket.id, draftId, userId });
-      } catch (error) {
-        logger.error('Queue update failed via socket', {
-          socketId: socket.id,
-          draftId,
-          userId,
-          error,
-        });
-        socket.emit('draft:queue-error', {
-          message: error instanceof Error ? error.message : 'Queue update failed',
-        });
-      }
+      this.rejectDirectMutation(socket, 'draft:update-queue', 'draft:queue-error');
     });
 
-    // Pause draft (admin only)
-    socket.on('draft:pause', async () => {
-      try {
-        // Add admin check here
-        await getLiveDraftEngine().pauseDraft(draftId!);
-        logger.info('Draft paused via socket', { socketId: socket.id, draftId, userId });
-      } catch (error) {
-        logger.error('Draft pause failed via socket', {
-          socketId: socket.id,
-          draftId,
-          userId,
-          error,
-        });
-        socket.emit('draft:pause-error', {
-          message: error instanceof Error ? error.message : 'Pause failed',
-        });
+    socket.on('draft:pause', () => {
+      if (!this.checkRateLimit(socket.id)) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
       }
+
+      this.rejectDirectMutation(socket, 'draft:pause', 'draft:pause-error');
     });
 
-    // Resume draft (admin only)
-    socket.on('draft:resume', async () => {
-      try {
-        // Add admin check here
-        await getLiveDraftEngine().resumeDraft(draftId!);
-        logger.info('Draft resumed via socket', { socketId: socket.id, draftId, userId });
-      } catch (error) {
-        logger.error('Draft resume failed via socket', {
-          socketId: socket.id,
-          draftId,
-          userId,
-          error,
-        });
-        socket.emit('draft:resume-error', {
-          message: error instanceof Error ? error.message : 'Resume failed',
-        });
+    socket.on('draft:resume', () => {
+      if (!this.checkRateLimit(socket.id)) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
       }
+
+      this.rejectDirectMutation(socket, 'draft:resume', 'draft:resume-error');
     });
 
     // Heartbeat for connection health
@@ -253,6 +199,23 @@ export class LiveDraftWebSocketManager {
     // Handle disconnection
     socket.on('disconnect', () => {
       this.handleDisconnection(socket);
+    });
+  }
+
+  private rejectDirectMutation(
+    socket: Socket & { data: DraftSocketData },
+    action: string,
+    errorEvent: string
+  ): void {
+    logger.warn('Rejected direct socket draft mutation', {
+      socketId: socket.id,
+      draftId: socket.data.draftId,
+      userId: socket.data.userId,
+      action,
+    });
+
+    socket.emit(errorEvent, {
+      message: 'Draft mutations must use the Prisma-backed draft API.',
     });
   }
 

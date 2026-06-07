@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -9,10 +8,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: draftId } = await params;
+export async function GET() {
+  let userId: string | undefined;
 
+  try {
     // Verify user authentication
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('statly_session')?.value;
@@ -21,7 +20,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return errorResponse('Unauthorized', 401);
     }
 
-    let userId: string;
     try {
       const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
       userId = decoded.uid;
@@ -29,13 +27,24 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return errorResponse('Unauthorized', 401);
     }
 
-    // Get draft and verify user is league member
-    const draft = await prisma.draft.findUnique({
-      where: { id: draftId },
+    const drafts = await prisma.draft.findMany({
+      where: {
+        status: 'COMPLETED',
+        league: {
+          members: {
+            some: { userId },
+          },
+        },
+      },
       include: {
         league: {
           include: {
-            members: true,
+            members: {
+              include: {
+                user: true,
+              },
+              orderBy: { draftSlot: 'asc' },
+            },
           },
         },
         picks: {
@@ -50,64 +59,43 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           orderBy: { overall: 'asc' },
         },
       },
+      orderBy: { completedAt: 'desc' },
     });
 
-    if (!draft) {
-      return errorResponse('Draft not found', 404);
-    }
-
-    // Check if user is league member
-    const isMember = draft.league.members.some((member) => member.userId === userId);
-
-    if (!isMember) {
-      return errorResponse('Forbidden', 403);
-    }
-
-    // Format picks for history
-    const picks = draft.picks.map((pick) => ({
-      id: pick.id,
-      overall: pick.overall,
-      round: pick.round,
-      slot: pick.slot,
-      player: {
-        id: pick.player.id,
-        name: pick.player.name,
-        position: pick.player.position,
-        club: pick.player.club,
-      },
-      member: {
-        id: pick.member.id,
-        teamName: pick.member.teamName,
-        user: {
-          id: pick.member.user.id,
-          displayName: pick.member.user.displayName,
-          email: pick.member.user.email,
-        },
-      },
-      auto: pick.auto,
-      madeAt: pick.madeAt,
+    const draftHistory = drafts.map((draft) => ({
+      id: draft.id,
+      name: draft.league.name,
+      status: draft.status,
+      createdAt: draft.createdAt.toISOString(),
+      completedAt: draft.completedAt?.toISOString(),
+      totalPicks: draft.totalPicks,
+      participants: draft.league.members.map((member) => ({
+        id: member.id,
+        displayName: member.user.displayName,
+        teamName: member.teamName,
+        picks: draft.picks
+          .filter((pick) => pick.memberId === member.id)
+          .map((pick) => ({
+            player: {
+              name: pick.player.name,
+              position: pick.player.position,
+              club: pick.player.club,
+            },
+            overall: pick.overall,
+            round: pick.round,
+          })),
+      })),
     }));
 
     logger.info('Draft history retrieved', {
-      draftId,
       userId,
-      pickCount: picks.length,
+      draftCount: draftHistory.length,
     });
 
-    return successResponse({
-      draft: {
-        id: draft.id,
-        status: draft.status,
-        currentPick: draft.currentPick,
-        totalPicks: draft.totalPicks,
-        startedAt: draft.startedAt,
-        completedAt: draft.completedAt,
-      },
-      picks,
-    });
+    return successResponse(draftHistory);
   } catch (error) {
     logger.error('Failed to get draft history', {
-      draftId: (await params).id,
+      userId,
       error: error instanceof Error ? error.message : String(error),
     });
 

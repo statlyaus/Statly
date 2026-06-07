@@ -3,10 +3,9 @@
 import { useAuth } from '@/AuthContext';
 import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner, Alert } from '@/components/ui';
-import LeagueOverview from '@/components/league/LeagueOverview';
+import LeagueTabs from '@/components/league/LeagueTabs';
 import type { League, LeagueMember } from '@/types/leagues';
 import { useEffect, useState } from 'react';
-import OnboardingChecklist from './OnboardingChecklist';
 
 interface Props {
   league: League | null;
@@ -124,26 +123,13 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
     );
   }
 
-  const currentMember = curMembers.find((m) => m.userId === user?.uid);
-
   return (
     <AppLayout>
-      <div>
-        <h1 className="text-3xl font-bold mb-6">{curLeague.name}</h1>
-        <OnboardingChecklist member={currentMember} />
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
-            <p>
-              <strong>Debug Info:</strong>
-            </p>
-            <p>Current User ID: {user?.uid || 'Not logged in'}</p>
-            <p>League Owner ID: {curLeague.ownerId}</p>
-            <p>Is Admin: {user?.uid === curLeague.ownerId ? 'Yes' : 'No'}</p>
-            <p>Member Count: {curMembers.length}</p>
-          </div>
-        )}
-        <LeagueOverview league={curLeague} members={curMembers} currentUserId={user?.uid} />
-      </div>
+      <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-6 text-[color:var(--league-text)] sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[var(--app-shell-max-width)]">
+          <LeagueTabs league={curLeague} members={curMembers} currentUserId={user?.uid} />
+        </div>
+      </main>
     </AppLayout>
   );
 }
