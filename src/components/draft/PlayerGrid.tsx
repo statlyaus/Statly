@@ -342,7 +342,8 @@ export default function PlayerGrid({
                             width={32}
                             height={32}
                             unoptimized={teamLogo.endsWith('.svg')}
-                            className="h-8 w-8 object-contain"
+                            className="h-8 max-w-8 object-contain"
+                            style={{ width: 'auto' }}
                           />
                         </span>
                         <div className="min-w-0">
