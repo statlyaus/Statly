@@ -4,6 +4,11 @@ import { draftRepository } from '../repository/DraftRepository';
 import { draftScheduler } from './DraftScheduler';
 import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
 import {
+  buildAvailableDraftPlayer,
+  calculateStatlyZScores,
+  loadDraftPlayerStatsLookup,
+} from '../readModels/draftPlayerReadModel';
+import {
   assertActorTurn,
   assertAutoPickIsAllowed,
   assertCurrentPickIsOpen,
@@ -80,6 +85,53 @@ function assertCanManageDraftCommand(
   if (!actor || !isDraftManagerRole(actor.role)) {
     throw new Error(`forbidden:Commissioner access required to ${action}`);
   }
+}
+
+async function selectHighestStatlyZAvailablePlayer(
+  tx: TxClient,
+  input: {
+    excludedPlayerIds: string[];
+    selectedCategories: readonly string[];
+  }
+): Promise<DraftPlayerSnapshot | null> {
+  const candidates = await draftRepository.listAvailableAutoPickCandidates(tx, input.excludedPlayerIds);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const statsLookup = await loadDraftPlayerStatsLookup();
+  const projectedCandidates = candidates.map((player) =>
+    buildAvailableDraftPlayer(
+      {
+        id: player.id,
+        name: player.name,
+        position: player.position ?? '',
+        club: player.club ?? '',
+      },
+      statsLookup
+    )
+  );
+  const zScores = calculateStatlyZScores(projectedCandidates, input.selectedCategories);
+
+  return [...candidates].sort((a, b) => {
+    const aScore = zScores.get(a.id)?.score;
+    const bScore = zScores.get(b.id)?.score;
+    const aHasScore = typeof aScore === 'number';
+    const bHasScore = typeof bScore === 'number';
+
+    if (aHasScore && bHasScore && aScore !== bScore) {
+      return bScore - aScore;
+    }
+
+    if (aHasScore !== bHasScore) {
+      return aHasScore ? -1 : 1;
+    }
+
+    const positionCompare = String(a.position ?? '').localeCompare(String(b.position ?? ''));
+    if (positionCompare !== 0) return positionCompare;
+
+    return a.name.localeCompare(b.name);
+  })[0];
 }
 
 async function createCommandOutboxEvents(
@@ -526,7 +578,10 @@ export class DraftApplicationService {
       }
 
       if (!selectedPlayer) {
-        selectedPlayer = await draftRepository.findBestAvailablePlayer(tx, excludedPlayerIds);
+        selectedPlayer = await selectHighestStatlyZAvailablePlayer(tx, {
+          excludedPlayerIds,
+          selectedCategories: draft.settings.selectedCategories,
+        });
       }
 
       if (!selectedPlayer) {
