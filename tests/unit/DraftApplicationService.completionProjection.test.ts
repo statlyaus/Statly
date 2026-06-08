@@ -387,4 +387,112 @@ describe('DraftApplicationService completion projection', () => {
     expect(draftRepository.removeQueuedPlayerById).toHaveBeenCalledWith({}, 'queue-1');
     expect(result.data.wasQueued).toBe(true);
   });
+
+  it('rejects timer auto-pick when the authoritative clock has not expired', async () => {
+    draftRepository.getDraftAggregate.mockResolvedValue({
+      id: 'draft-1',
+      leagueId: 'league-1',
+      status: DraftStatus.LIVE,
+      currentPick: 1,
+      totalPicks: 3,
+      round: 1,
+      direction: DraftDirection.FORWARD,
+      startedAt: new Date('2026-06-07T00:00:00.000Z'),
+      completedAt: null,
+      pickStartedAt: new Date(),
+      pickDeadlineAt: new Date(Date.now() + 60_000),
+      pausedRemainingSeconds: null,
+      schedulingVersion: 3,
+      settings: {
+        rosterSize: 3,
+        benchSize: 0,
+        pickSeconds: 120,
+        allowAutoPick: true,
+        selectedCategories: ['goals', 'tackles'],
+        positionLimits: {},
+        autoPickRules: {},
+        draftType: 'SNAKE',
+      },
+      participants: [
+        {
+          memberId: 'member-1',
+          userId: 'statly-dev-tester',
+          slot: 1,
+          displayName: 'Statly Dev Tester',
+          role: 'OWNER',
+        },
+      ],
+      picks: [],
+    });
+
+    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+
+    await expect(
+      service.autoPick({
+        draftId: 'draft-1',
+        expectedSchedulingVersion: 3,
+        requireExpired: true,
+      })
+    ).rejects.toThrow('conflict:Pick clock has not expired');
+    expect(draftRepository.createPick).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale timer auto-pick when scheduling has already advanced', async () => {
+    draftRepository.getDraftAggregate.mockResolvedValue({
+      id: 'draft-1',
+      leagueId: 'league-1',
+      status: DraftStatus.LIVE,
+      currentPick: 2,
+      totalPicks: 3,
+      round: 1,
+      direction: DraftDirection.FORWARD,
+      startedAt: new Date('2026-06-07T00:00:00.000Z'),
+      completedAt: null,
+      pickStartedAt: new Date('2026-06-07T00:02:00.000Z'),
+      pickDeadlineAt: new Date('2026-06-07T00:04:00.000Z'),
+      pausedRemainingSeconds: null,
+      schedulingVersion: 4,
+      settings: {
+        rosterSize: 3,
+        benchSize: 0,
+        pickSeconds: 120,
+        allowAutoPick: true,
+        selectedCategories: ['goals', 'tackles'],
+        positionLimits: {},
+        autoPickRules: {},
+        draftType: 'SNAKE',
+      },
+      participants: [
+        {
+          memberId: 'member-1',
+          userId: 'statly-dev-tester',
+          slot: 1,
+          displayName: 'Statly Dev Tester',
+          role: 'OWNER',
+        },
+      ],
+      picks: [
+        {
+          id: 'pick-1',
+          overall: 1,
+          round: 1,
+          slot: 1,
+          memberId: 'member-1',
+          playerId: 'player-1',
+          auto: true,
+        },
+      ],
+    });
+
+    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+
+    await expect(
+      service.autoPick({
+        draftId: 'draft-1',
+        expectedSchedulingVersion: 3,
+        requireExpired: true,
+      })
+    ).rejects.toThrow('conflict:Draft scheduling changed');
+    expect(draftRepository.createPick).not.toHaveBeenCalled();
+  });
 });

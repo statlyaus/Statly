@@ -537,6 +537,8 @@ export class DraftApplicationService {
   async autoPick(input: {
     draftId: string;
     actorUserId?: string;
+    expectedSchedulingVersion?: number;
+    requireExpired?: boolean;
   }): Promise<DraftCommandResult<PickCommandData>> {
     const { draftId } = input;
 
@@ -551,6 +553,18 @@ export class DraftApplicationService {
       assertDraftIsLive(draft);
       assertAutoPickIsAllowed(draft);
       assertCurrentPickIsOpen(draft);
+      if (
+        input.expectedSchedulingVersion !== undefined &&
+        draft.schedulingVersion !== input.expectedSchedulingVersion
+      ) {
+        throw new Error('conflict:Draft scheduling changed');
+      }
+      if (input.requireExpired) {
+        const pickDeadlineMs = draft.pickDeadlineAt?.getTime();
+        if (!pickDeadlineMs || pickDeadlineMs > Date.now()) {
+          throw new Error('conflict:Pick clock has not expired');
+        }
+      }
 
       const turn = calculateDraftTurn(
         draft.settings.draftType,
