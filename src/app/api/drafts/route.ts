@@ -15,6 +15,7 @@ import { createDraftReminders } from '@/lib/reminders';
 import { ensurePrismaLeagueMirror } from '@/lib/prismaLeagueBridge';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { canManageLeague } from '@/server/leagues/membership';
+import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
 import {
   FANTASY_CATEGORIES,
   REAL_DATA_NINE_CATEGORY_PRESET,
@@ -216,15 +217,9 @@ export async function POST(request: NextRequest) {
     const positionLimits = normalizeDraftPositionLimits(body.positionLimits);
     const autoPickRules = normalizeDraftAutoPickRules(body.autoPickRules);
     const pickOrder = normalizeDraftPickOrderMode(body.pickOrder);
-    const rosterSize =
-      typeof body.rosterSize === 'number'
-        ? body.rosterSize
-        : getRosterSizeFromPositionLimits(positionLimits);
-    const benchSize =
-      typeof body.benchSize === 'number'
-        ? body.benchSize
-        : getBenchSizeFromPositionLimits(positionLimits);
-    const totalPicks = body.leagueSize * (rosterSize + benchSize);
+    const rosterSize = getRosterSizeFromPositionLimits(positionLimits);
+    const benchSize = getBenchSizeFromPositionLimits(positionLimits);
+    const activePlayerCount = await prisma.player.count({ where: { active: true } });
 
     if (body.leagueId && body.leagueId !== 'test-league-id') {
       const existingLeague = await prisma.league.findUnique({
@@ -277,6 +272,11 @@ export async function POST(request: NextRequest) {
         }
 
         const orderedMembers = orderMembersForDraft(league.members, body.participants, pickOrder);
+        const capacity = calculateDraftCapacity({
+          teamCount: orderedMembers.length,
+          positionLimits,
+          activePlayerCount,
+        });
         const settingsData = {
           pickSeconds: body.timePerPick,
           allowAutoPick: autoPickRules.enabled,
@@ -317,7 +317,7 @@ export async function POST(request: NextRequest) {
             lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN',
             lobbyOpenAt: body.scheduledTime ? undefined : new Date(),
             currentPick: 1,
-            totalPicks,
+            totalPicks: capacity.totalPicks,
             round: 1,
             direction: DraftDirection.FORWARD,
             startedAt: body.scheduledTime ? undefined : new Date(),
@@ -337,6 +337,12 @@ export async function POST(request: NextRequest) {
 
         return { draft, league, members: orderedMembers, settings };
       } else {
+        const capacity = calculateDraftCapacity({
+          teamCount: body.leagueSize,
+          positionLimits,
+          activePlayerCount,
+        });
+
         // Create new temporary league for standalone draft (existing logic)
         settings = await tx.leagueSettings.create({
           data: {
@@ -374,7 +380,7 @@ export async function POST(request: NextRequest) {
             lobbyStatus: body.scheduledTime ? 'CLOSED' : 'COUNTDOWN', // Open lobby immediately if no time specified
             lobbyOpenAt: body.scheduledTime ? undefined : new Date(), // Open lobby now if no time specified
             currentPick: 1,
-            totalPicks,
+            totalPicks: capacity.totalPicks,
             round: 1,
             direction: DraftDirection.FORWARD,
             startedAt: body.scheduledTime ? undefined : new Date(),

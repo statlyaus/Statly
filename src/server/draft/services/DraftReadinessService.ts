@@ -1,6 +1,12 @@
 import { DraftStatus, type Prisma, type PrismaClient } from '@prisma/client';
 
 import { prisma as defaultPrisma } from '@/lib/prisma';
+import { normalizeDraftPositionLimits } from '@/lib/draftSettings';
+import {
+  calculateDraftCapacity,
+  countActiveDraftPlayersByPosition,
+  type DraftCapacity,
+} from '@/server/draft/domain/draftCapacity';
 import type { DraftOperationalReadiness, DraftReadinessBlocker } from '@/types/draftReadiness';
 
 type ReadinessClient = Pick<PrismaClient, 'league' | 'player'> | Prisma.TransactionClient;
@@ -49,11 +55,9 @@ function buildMissingLeagueReadiness(leagueId: string): DraftOperationalReadines
 
 function buildBlockers(input: {
   league: LeagueWithReadinessData;
-  availablePlayers: number;
-  rosterSpots: number;
-  totalPicks: number;
+  capacity: DraftCapacity;
 }): DraftReadinessBlocker[] {
-  const { league, availablePlayers, rosterSpots, totalPicks } = input;
+  const { league, capacity } = input;
   const draft = league.drafts[0] ?? null;
   const blockers: DraftReadinessBlocker[] = [];
 
@@ -91,17 +95,31 @@ function buildBlockers(input: {
     });
   }
 
-  if (rosterSpots <= 0 || totalPicks <= 0) {
+  if (capacity.rosterSpotsPerTeam <= 0 || capacity.requestedTotalPicks <= 0) {
     blockers.push({
       code: 'settings_missing',
       message: 'Roster and bench sizes must be configured before the draft can run.',
     });
   }
 
-  if (availablePlayers === 0) {
+  if (capacity.activePlayerCount === 0) {
     blockers.push({
       code: 'player_pool_empty',
       message: 'No active players are available for this draft.',
+    });
+  }
+
+  if (capacity.cappedByPlayerPool && capacity.activePlayerCount > 0) {
+    blockers.push({
+      code: 'player_pool_shortage',
+      message: `Only ${capacity.activePlayerCount} active players are available for ${capacity.requestedTotalPicks} requested draft picks.`,
+    });
+  }
+
+  for (const shortage of capacity.positionShortages) {
+    blockers.push({
+      code: 'position_pool_shortage',
+      message: `${shortage.position} roster settings require ${shortage.required} players, but only ${shortage.available} active ${shortage.position} players are available.`,
     });
   }
 
@@ -161,12 +179,22 @@ export async function getLeagueDraftOperationalReadiness(
   }
 
   const availablePlayers = await client.player.count({ where: { active: true } });
+  const activePlayersByPosition = await countActiveDraftPlayersByPosition(client);
   const draft = league.drafts[0] ?? null;
-  const rosterSpots = league.settings ? league.settings.rosterSize + league.settings.benchSize : 0;
-  const totalPicks = league.members.length * rosterSpots;
+  const positionLimits = normalizeDraftPositionLimits(league.settings?.positionLimitsJson);
+  const capacity = calculateDraftCapacity({
+    teamCount: league.members.length,
+    positionLimits,
+    activePlayerCount: availablePlayers,
+    activePlayersByPosition,
+    existingPickCount: 0,
+    currentPick: draft?.currentPick,
+  });
+  const rosterSpots = capacity.rosterSpotsPerTeam;
+  const totalPicks = capacity.totalPicks;
   const startAt = league.settings?.startAt ?? null;
   const shouldBeOpen = Boolean(startAt && startAt.getTime() <= now.getTime());
-  const blockers = buildBlockers({ league, availablePlayers, rosterSpots, totalPicks });
+  const blockers = buildBlockers({ league, capacity });
   const isRunning = draft?.status === DraftStatus.LIVE || draft?.status === DraftStatus.PAUSED;
   const isComplete = draft?.status === DraftStatus.COMPLETED;
   const roomIsOpen = Boolean(
@@ -184,6 +212,8 @@ export async function getLeagueDraftOperationalReadiness(
       'insufficient_members',
       'draft_order_missing',
       'player_pool_empty',
+      'player_pool_shortage',
+      'position_pool_shortage',
       'draft_completed',
     ].includes(blocker.code)
   );

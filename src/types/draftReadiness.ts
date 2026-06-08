@@ -6,6 +6,8 @@ export type DraftReadinessBlockerCode =
   | 'draft_room_missing'
   | 'draft_order_missing'
   | 'player_pool_empty'
+  | 'player_pool_shortage'
+  | 'position_pool_shortage'
   | 'draft_completed';
 
 export interface DraftReadinessBlocker {

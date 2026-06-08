@@ -9,6 +9,8 @@ describe('draft create route architecture', () => {
     expect(source).toContain('isValidPickSeconds(body.timePerPick)');
     expect(source).toContain('normalizeDraftPositionLimits(body.positionLimits)');
     expect(source).toContain('normalizeDraftAutoPickRules(body.autoPickRules)');
+    expect(source).toContain('calculateDraftCapacity');
+    expect(source).toContain('activePlayerCount');
     expect(source).toContain('orderMembersForDraft(league.members, body.participants, pickOrder)');
     expect(source).toContain('data: { draftSlot: i + 1 }');
     expect(source).toContain('memberId: orderedMembers[i].id');

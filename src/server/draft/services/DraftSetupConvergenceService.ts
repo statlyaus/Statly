@@ -1,6 +1,8 @@
 import { DraftDirection, DraftStatus, type Prisma, type PrismaClient } from '@prisma/client';
 
+import { normalizeDraftPositionLimits } from '@/lib/draftSettings';
 import { prisma as defaultPrisma } from '@/lib/prisma';
+import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 
 import { getLeagueDraftOperationalReadiness } from './DraftReadinessService';
@@ -25,7 +27,7 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
       include: {
         settings: true,
         members: { orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }] },
-        drafts: { include: { orders: true }, take: 1 },
+        drafts: { include: { orders: true, picks: true }, take: 1 },
       },
     });
 
@@ -34,8 +36,16 @@ async function ensureDraftRoomExists(client: ConvergenceClient, leagueId: string
     }
 
     const existingDraft = league.drafts[0] ?? null;
-    const rosterSpots = league.settings.rosterSize + league.settings.benchSize;
-    const totalPicks = league.members.length * rosterSpots;
+    const activePlayerCount = await tx.player.count({ where: { active: true } });
+    const capacity = calculateDraftCapacity({
+      teamCount: league.members.length,
+      positionLimits: normalizeDraftPositionLimits(league.settings.positionLimitsJson),
+      activePlayerCount,
+      existingPickCount: existingDraft?.picks.length ?? 0,
+      currentPick: existingDraft?.currentPick,
+    });
+    const rosterSpots = capacity.rosterSpotsPerTeam;
+    const totalPicks = capacity.totalPicks;
 
     if (existingDraft) {
       if (existingDraft.orders.length === league.members.length) {

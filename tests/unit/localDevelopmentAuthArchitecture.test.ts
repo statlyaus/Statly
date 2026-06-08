@@ -43,8 +43,11 @@ describe('local development auth architecture', () => {
     expect(source).toContain("process.env.NODE_ENV !== 'production'");
     expect(source).toContain("body?.mode === 'quick-completion'");
     expect(source).toContain('const teamCount = quickCompletionMode ? 2 : 12');
-    expect(source).toContain('const totalRounds = quickCompletionMode ? 1 : 22');
-    expect(source).toContain('const rosterSize = quickCompletionMode ? 1 : 22');
+    expect(source).toContain('const positionLimits = { ...DEFAULT_DRAFT_POSITION_LIMITS }');
+    expect(source).toContain('calculateDraftCapacity');
+    expect(source).toContain('positionLimitsJson: JSON.stringify(positionLimits)');
+    expect(source).not.toContain('const totalRounds = quickCompletionMode ? 1 : 22');
+    expect(source).not.toContain('const rosterSize = quickCompletionMode ? 1 : 22');
     expect(source).toContain("mode: quickCompletionMode ? 'quick-completion' : 'standard'");
   });
 });
