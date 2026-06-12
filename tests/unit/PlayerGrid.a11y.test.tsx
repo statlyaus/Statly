@@ -87,14 +87,30 @@ describe('PlayerGrid accessibility', () => {
       within(table)
         .getAllByRole('columnheader')
         .map((header) => header.textContent)
-    ).toEqual(['Player', 'Profile', 'League Stats', 'Actions']);
+    ).toEqual([
+      'Player',
+      'Profile',
+      'League Stats',
+      'Actions',
+      'G',
+      'T',
+      'I50',
+      'I',
+      'CM',
+      'R50',
+      'CP',
+      'ED',
+      'SI',
+    ]);
 
     const playerRow = within(table).getByRole('row', { name: /marcus bontempelli/i });
     expect(within(playerRow).getByText('Statly Z')).toBeInTheDocument();
     expect(within(playerRow).getByText('3.42')).toBeInTheDocument();
-    expect(within(playerRow).getByLabelText('Goals: 1.1')).toBeInTheDocument();
-    expect(within(playerRow).getByLabelText('Inside 50s: 4.2')).toBeInTheDocument();
-    expect(within(playerRow).getByLabelText('Score Involvements: 7.4')).toBeInTheDocument();
+    expect(within(playerRow).getByRole('cell', { name: 'Goals: 1.1' })).toBeInTheDocument();
+    expect(within(playerRow).getByRole('cell', { name: 'Inside 50s: 4.2' })).toBeInTheDocument();
+    expect(
+      within(playerRow).getByRole('cell', { name: 'Score Involvements: 7.4' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Sort by Statly Z' })).toBeInTheDocument();
     expect(screen.queryByText('Fantasy avg')).not.toBeInTheDocument();
     expect(screen.queryByText('Fantasy average')).not.toBeInTheDocument();

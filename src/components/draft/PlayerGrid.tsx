@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { CheckCircle2, ListPlus, Star } from 'lucide-react';
 
-import { CompactStatsRow } from '@/components/PlayerStatsDisplay';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
@@ -32,6 +31,26 @@ interface PlayerGridProps {
   onSortChange: (sort: PlayerGridSortKey) => void;
   isLoading: boolean;
   emptyStateMessage?: string;
+}
+
+const PLAYER_COLUMN_WIDTH = 320;
+const PROFILE_COLUMN_WIDTH = 180;
+const STAT_COLUMN_WIDTH = 76;
+const ACTIONS_COLUMN_WIDTH = 300;
+
+function formatLeagueStat(player: DraftPlayer, category: FantasyCategoryKey): string {
+  const categoryData = FANTASY_CATEGORIES[category];
+  const value = player.stats?.[category];
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '—';
+  }
+
+  if (categoryData.format === 'percentage') {
+    return `${value.toFixed(1)}%`;
+  }
+
+  return value.toFixed(categoryData.format === 'decimal' ? 2 : 1);
 }
 
 export default function PlayerGrid({
@@ -68,6 +87,12 @@ export default function PlayerGrid({
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'statlyZ';
+  const statColumnCount = Math.max(visibleCategories.length, 1);
+  const tableMinWidth =
+    PLAYER_COLUMN_WIDTH +
+    PROFILE_COLUMN_WIDTH +
+    statColumnCount * STAT_COLUMN_WIDTH +
+    ACTIONS_COLUMN_WIDTH;
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -255,22 +280,12 @@ export default function PlayerGrid({
         </div>
 
         {/* Results Count */}
-        <div className="mt-3 flex flex-col gap-2 text-sm text-muted-foreground xl:flex-row xl:items-center xl:justify-between">
+        <div className="mt-3 text-sm text-muted-foreground">
           <div>
             Showing {filteredPlayers.length} of {totalPlayers} players
             {hasActiveFilters && (
               <span className="ml-2">Filtered by your current search and sort.</span>
             )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {visibleCategories.map((category) => (
-              <span
-                key={category}
-                className="rounded-md bg-background px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-border"
-              >
-                {FANTASY_CATEGORIES[category].shortLabel || FANTASY_CATEGORIES[category].label}
-              </span>
-            ))}
           </div>
         </div>
       </div>
@@ -279,33 +294,75 @@ export default function PlayerGrid({
       <div className="relative">
         <div className="max-h-[680px] overflow-auto">
           <table
-            className="w-full min-w-[1320px] table-fixed border-collapse text-left"
+            className="w-full table-fixed border-collapse text-left"
+            style={{ minWidth: tableMinWidth }}
             aria-label="Available draft players"
           >
             <caption className="sr-only">
               Available draft players with profile, league stats, and draft actions.
             </caption>
             <colgroup>
-              <col className="w-[28%]" />
-              <col className="w-[15%]" />
-              <col className="w-[40%]" />
-              <col className="w-[17%]" />
+              <col style={{ width: PLAYER_COLUMN_WIDTH }} />
+              <col style={{ width: PROFILE_COLUMN_WIDTH }} />
+              {visibleCategories.length > 0 ? (
+                visibleCategories.map((category) => (
+                  <col key={category} style={{ width: STAT_COLUMN_WIDTH }} />
+                ))
+              ) : (
+                <col style={{ width: STAT_COLUMN_WIDTH }} />
+              )}
+              <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
             </colgroup>
             <thead className="sticky top-0 z-10 border-b border-border bg-muted/95 text-sm font-medium text-muted-foreground backdrop-blur">
               <tr>
-                <th scope="col" className="px-4 py-3 font-medium sm:px-5">
+                <th
+                  scope="col"
+                  rowSpan={visibleCategories.length > 0 ? 2 : 1}
+                  className="px-4 py-3 font-medium sm:px-5"
+                >
                   Player
                 </th>
-                <th scope="col" className="px-4 py-3 font-medium">
+                <th
+                  scope="col"
+                  rowSpan={visibleCategories.length > 0 ? 2 : 1}
+                  className="px-4 py-3 font-medium"
+                >
                   Profile
                 </th>
-                <th scope="col" className="px-4 py-3 font-medium">
+                <th
+                  scope={visibleCategories.length > 0 ? 'colgroup' : 'col'}
+                  colSpan={visibleCategories.length > 0 ? visibleCategories.length : 1}
+                  className="border-x border-border/70 px-4 py-3 text-center font-medium"
+                >
                   League Stats
                 </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium sm:px-5">
+                <th
+                  scope="col"
+                  rowSpan={visibleCategories.length > 0 ? 2 : 1}
+                  className="px-4 py-3 text-right font-medium sm:px-5"
+                >
                   Actions
                 </th>
               </tr>
+              {visibleCategories.length > 0 && (
+                <tr className="border-t border-border/70">
+                  {visibleCategories.map((category) => {
+                    const categoryData = FANTASY_CATEGORIES[category];
+
+                    return (
+                      <th
+                        key={category}
+                        scope="col"
+                        aria-label={categoryData.label}
+                        className="border-l border-border/70 px-2 py-2 text-center text-[11px] font-semibold uppercase text-muted-foreground first:border-l"
+                        title={categoryData.label}
+                      >
+                        {categoryData.abbrev}
+                      </th>
+                    );
+                  })}
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-border">
               {filteredPlayers.map((player, index) => {
@@ -411,22 +468,26 @@ export default function PlayerGrid({
                       </div>
                     </td>
 
-                    <td className="px-4 py-4 align-middle">
-                      <div className="min-w-0 max-w-[34rem]">
-                        {visibleCategories.length > 0 ? (
-                          <CompactStatsRow
-                            stats={player.stats}
-                            selectedCategories={visibleCategories}
-                            maxDisplay={visibleCategories.length}
-                            className="w-full"
-                          />
-                        ) : (
-                          <div className="text-sm text-muted-foreground">
-                            League categories pending.
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                    {visibleCategories.length > 0 ? (
+                      visibleCategories.map((category) => {
+                        const categoryData = FANTASY_CATEGORIES[category];
+                        const displayValue = formatLeagueStat(player, category);
+
+                        return (
+                          <td
+                            key={category}
+                            className="border-l border-border/60 px-2 py-4 text-right align-middle text-sm font-semibold tabular-nums text-foreground"
+                            aria-label={`${categoryData.label}: ${displayValue}`}
+                          >
+                            {displayValue}
+                          </td>
+                        );
+                      })
+                    ) : (
+                      <td className="border-l border-border/60 px-4 py-4 align-middle text-sm text-muted-foreground">
+                        League categories pending.
+                      </td>
+                    )}
 
                     <td className="px-4 py-4 align-middle sm:px-5">
                       <div className="flex items-center justify-end gap-2">
