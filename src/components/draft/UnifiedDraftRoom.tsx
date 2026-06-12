@@ -495,7 +495,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         </div>
 
         {/* Main Content */}
-        <main className="mx-auto w-full max-w-[1780px] px-3 pb-6 sm:px-5 lg:px-8">
+        <main className="w-full px-3 pb-6 sm:px-5 lg:px-8">
           <section className="rounded-3xl border border-border bg-card px-4 py-3 text-card-foreground shadow-sm sm:px-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="min-w-0">
@@ -529,7 +529,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           <section
             aria-label="Draft board"
-            className="mt-6 grid gap-4 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)_minmax(18rem,20rem)] xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(20rem,22rem)]"
+            className="mt-6 grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)_20rem] xl:grid-cols-[20rem_minmax(0,1fr)_22rem]"
           >
             <DraftLeftRail
               draftStatus={activeDraft.status}

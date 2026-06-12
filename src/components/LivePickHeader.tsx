@@ -260,7 +260,7 @@ export default function LivePickHeader({
   if (!draftData?.participants?.length) {
     return (
       <section
-        className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
+        className={`w-full px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
         role="banner"
         aria-label="Live draft status"
       >
@@ -310,7 +310,7 @@ export default function LivePickHeader({
   if (normalizedStatus === 'PAUSED') {
     return (
       <section
-        className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
+        className={`w-full px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
         role="banner"
         aria-label="Live draft status"
       >
@@ -327,7 +327,7 @@ export default function LivePickHeader({
   if (normalizedStatus === 'WAITING') {
     return (
       <section
-        className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
+        className={`w-full px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
         role="banner"
         aria-label="Live draft status"
       >
@@ -345,7 +345,7 @@ export default function LivePickHeader({
   if (normalizedStatus === 'COMPLETED') {
     return (
       <section
-        className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
+        className={`w-full px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
         role="banner"
         aria-label="Live draft status"
       >
@@ -361,7 +361,7 @@ export default function LivePickHeader({
 
   return (
     <section
-      className={`mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
+      className={`w-full px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
       role="banner"
       aria-label="Live draft status"
     >
