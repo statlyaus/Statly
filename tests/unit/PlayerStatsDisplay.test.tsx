@@ -59,6 +59,12 @@ describe('CompactStatsRow', () => {
     expect(screen.getByText('TOG%')).toBeInTheDocument();
     expect(screen.getByText('82.5%')).toBeInTheDocument();
 
-    expect(screen.getByText('K').closest('div')).toHaveClass('border-border', 'bg-background');
+    const kicksStat = screen.getByLabelText('Kicks: 310.0');
+    expect(kicksStat.parentElement).toHaveStyle({
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    });
+    expect(kicksStat).toHaveClass('grid', 'grid-cols-[auto_minmax(0,1fr)]');
+    expect(kicksStat).not.toHaveClass('rounded-md', 'border', 'bg-background');
+    expect(screen.getByText('310.0')).toHaveClass('text-foreground');
   });
 });

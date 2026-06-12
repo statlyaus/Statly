@@ -279,12 +279,18 @@ export default function PlayerGrid({
       <div className="relative">
         <div className="max-h-[680px] overflow-auto">
           <table
-            className="w-full min-w-[1120px] border-collapse text-left"
+            className="w-full min-w-[1320px] table-fixed border-collapse text-left"
             aria-label="Available draft players"
           >
             <caption className="sr-only">
               Available draft players with profile, league stats, and draft actions.
             </caption>
+            <colgroup>
+              <col className="w-[28%]" />
+              <col className="w-[15%]" />
+              <col className="w-[40%]" />
+              <col className="w-[17%]" />
+            </colgroup>
             <thead className="sticky top-0 z-10 border-b border-border bg-muted/95 text-sm font-medium text-muted-foreground backdrop-blur">
               <tr>
                 <th scope="col" className="px-4 py-3 font-medium sm:px-5">
@@ -412,7 +418,7 @@ export default function PlayerGrid({
                             stats={player.stats}
                             selectedCategories={visibleCategories}
                             maxDisplay={visibleCategories.length}
-                            className="flex-wrap gap-x-2 gap-y-2"
+                            className="w-full"
                           />
                         ) : (
                           <div className="text-sm text-muted-foreground">

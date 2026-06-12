@@ -125,7 +125,10 @@ export function CompactStatsRow({
   }
 
   return (
-    <div className={`grid grid-cols-3 gap-1.5 text-xs sm:grid-cols-5 xl:grid-cols-9 ${className}`}>
+    <div
+      className={`grid overflow-hidden rounded-md border border-border bg-muted/25 text-xs ${className}`}
+      style={{ gridTemplateColumns: `repeat(${displayCategories.length}, minmax(0, 1fr))` }}
+    >
       {displayCategories.map((category) => {
         const categoryData = FANTASY_CATEGORIES[category];
         const value = stats[category];
@@ -135,18 +138,17 @@ export function CompactStatsRow({
             ? `${value.toFixed(1)}%`
             : value.toFixed(categoryData.format === 'decimal' ? 2 : 1)
           : '—';
-        const colorClass = getStatColor(hasValue ? value : undefined, category);
 
         return (
           <div
             key={category}
-            className="rounded-md border border-border bg-background px-2 py-1"
+            className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-1.5 border-r border-border/70 px-2 py-1.5 last:border-r-0"
             aria-label={`${categoryData.label}: ${displayValue}`}
           >
-            <span className="block text-[10px] font-semibold uppercase leading-none text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase leading-none text-muted-foreground">
               {categoryData.abbrev}
             </span>
-            <span className={`mt-1 block font-semibold tabular-nums ${colorClass}`}>
+            <span className="min-w-0 text-right font-semibold tabular-nums text-foreground">
               {displayValue}
             </span>
           </div>
