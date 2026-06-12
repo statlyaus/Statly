@@ -285,12 +285,13 @@ describe('draft players read model route', () => {
       where: {
         active: true,
         position: 'DEF',
-        name: { contains: 'Ace', mode: 'insensitive' },
+        name: { contains: 'Ace' },
         picks: { none: { draftId } },
       },
       skip: 0,
       take: 2,
     });
+    expect(pageCall?.[0].where.name).toEqual({ contains: 'Ace' });
     expect(cohortCall?.[0]).toMatchObject({
       where: {
         active: true,

@@ -148,7 +148,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    const nameFilter = q ? { contains: q, mode: 'insensitive' as const } : undefined;
+    const nameFilter = q ? { contains: q } : undefined;
 
     // Relational anti-join to exclude players already picked in this draft
     const availablePlayerWhere = {

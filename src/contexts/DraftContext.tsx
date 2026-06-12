@@ -124,6 +124,13 @@ function toArray<T>(v: unknown): T[] {
   return [];
 }
 
+export function shouldHydrateAvailablePlayers(players: DraftPlayer[]): boolean {
+  return (
+    players.length === 0 ||
+    players.some((player) => typeof player.statlyZScore !== 'number')
+  );
+}
+
 function normalizeParticipants(raw: unknown): DraftParticipant[] {
   return toArray<any>(raw).map((participant, index) => {
     const member = participant?.member ?? participant;
@@ -763,7 +770,10 @@ export function DraftProvider({
       let draftReadiness: DraftOperationalReadiness | null = null;
 
       while (hasMore) {
-        const res = await fetchApi(`drafts/${draftId}/players?page=${page}&pageSize=${pageSize}`);
+        const res = await fetchApi(`drafts/${draftId}/players?page=${page}&pageSize=${pageSize}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
         const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
         draftReadiness =
           (res?.data?.draftReadiness as DraftOperationalReadiness | null | undefined) ??
@@ -854,9 +864,9 @@ export function DraftProvider({
   );
 
   useEffect(() => {
-    if (!state.draft || state.availablePlayers.length > 0) return;
+    if (!state.draft || !shouldHydrateAvailablePlayers(state.availablePlayers)) return;
     void hydrateAvailablePlayers();
-  }, [state.draft, state.availablePlayers.length, hydrateAvailablePlayers]);
+  }, [state.draft, state.availablePlayers, hydrateAvailablePlayers]);
 
   useEffect(() => {
     if (!memberId) return;
@@ -876,7 +886,7 @@ export function DraftProvider({
       const snap = normalizeSnapshot(res?.data ?? res);
       if (!isMounted.current) return;
       dispatch({ type: 'SET_SNAPSHOT', snapshot: snap });
-      if (snap.availablePlayers.length === 0 && snap.draft) {
+      if (snap.draft && shouldHydrateAvailablePlayers(snap.availablePlayers)) {
         await hydrateAvailablePlayers();
       }
       if (memberId) {
