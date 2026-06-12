@@ -36,7 +36,7 @@ interface PlayerGridProps {
 const PLAYER_COLUMN_WIDTH = 320;
 const PROFILE_COLUMN_WIDTH = 180;
 const STAT_COLUMN_WIDTH = 76;
-const ACTIONS_COLUMN_WIDTH = 300;
+const ACTIONS_COLUMN_WIDTH = 360;
 
 function formatLeagueStat(player: DraftPlayer, category: FantasyCategoryKey): string {
   const categoryData = FANTASY_CATEGORIES[category];
@@ -339,7 +339,7 @@ export default function PlayerGrid({
                 <th
                   scope="col"
                   rowSpan={visibleCategories.length > 0 ? 2 : 1}
-                  className="px-4 py-3 text-right font-medium sm:px-5"
+                  className="px-4 py-3 text-center font-medium sm:px-5"
                 >
                   Actions
                 </th>
@@ -476,10 +476,12 @@ export default function PlayerGrid({
                         return (
                           <td
                             key={category}
-                            className="border-l border-border/60 px-2 py-4 text-right align-middle text-sm font-semibold tabular-nums text-foreground"
+                            className="border-l border-border/60 px-2 py-4 text-center align-middle text-sm font-semibold text-foreground"
                             aria-label={`${categoryData.label}: ${displayValue}`}
                           >
-                            {displayValue}
+                            <span className="inline-flex min-w-10 justify-center tabular-nums">
+                              {displayValue}
+                            </span>
                           </td>
                         );
                       })
@@ -489,8 +491,8 @@ export default function PlayerGrid({
                       </td>
                     )}
 
-                    <td className="px-4 py-4 align-middle sm:px-5">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="border-l border-border/60 px-3 py-4 align-middle">
+                      <div className="flex flex-wrap items-center justify-center gap-2">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -498,7 +500,7 @@ export default function PlayerGrid({
                             onToggleWatchlist(player);
                           }}
                           disabled={isLoading}
-                          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             !isLoading && isWatched
                               ? 'border border-border bg-accent text-accent-foreground hover:bg-accent/80'
                               : !isLoading
@@ -521,7 +523,7 @@ export default function PlayerGrid({
                             onAddToQueue(player);
                           }}
                           disabled={isLoading || isQueued}
-                          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             !isLoading && !isQueued
                               ? 'border border-input bg-background text-foreground hover:bg-muted'
                               : 'cursor-not-allowed border border-border bg-muted text-muted-foreground'
@@ -542,7 +544,7 @@ export default function PlayerGrid({
                             handlePlayerSelect(player);
                           }}
                           disabled={!canMakePick || isLoading}
-                          className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             canMakePick && !isLoading
                               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                               : 'cursor-not-allowed bg-muted text-muted-foreground'

@@ -134,6 +134,11 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('bg-background');
     expect(source).toContain('text-muted-foreground');
     expect(source).toContain('focus-visible:ring-ring');
+    expect(source).toContain('const ACTIONS_COLUMN_WIDTH = 360');
+    expect(source).toContain('flex flex-wrap items-center justify-center gap-2');
+    expect(source).toContain('px-2 py-4 text-center align-middle text-sm font-semibold');
+    expect(source).toContain('inline-flex min-w-10 justify-center tabular-nums');
+    expect(source).not.toContain('items-center justify-end gap-2');
     expect(source).not.toMatch(/\brounded-(xl|2xl|3xl)\b/);
     expect(source).not.toMatch(/\bbg-(gray|blue|slate|white|black|red|orange|yellow)-/);
     expect(source).not.toMatch(/\btext-(gray|blue|slate|white|black|red|orange|yellow)-/);
