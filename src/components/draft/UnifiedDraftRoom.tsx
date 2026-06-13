@@ -418,6 +418,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     totalRounds && totalRounds > 0
       ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`
       : `Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`;
+  const timePerPick =
+    activeDraft.settings?.timePerPick ?? (activeDraft.settings as any)?.pickSeconds ?? 120;
+  const historyHref = activeDraft.leagueId
+    ? `/drafts/history?leagueId=${encodeURIComponent(activeDraft.leagueId)}`
+    : '/drafts/history';
   const queuePanel = (
     <DraftQueue
       queue={me?.queue || []}
@@ -483,15 +488,13 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             />
           )}
 
-          {/* Live Pick Header */}
-          {activeDraft.status === 'LIVE' && (
-            <LivePickHeader
-              draftData={toLivePickHeaderData(activeDraft, participants, picks)}
-              timePerPick={activeDraft.settings?.timePerPick ?? 120}
-              isYourTurn={Boolean(draft.liveState?.isYourTurn)}
-              yourSlot={yourSlot}
-            />
-          )}
+          {/* Draft Pick Header */}
+          <LivePickHeader
+            draftData={toLivePickHeaderData(activeDraft, participants, picks)}
+            timePerPick={timePerPick}
+            isYourTurn={Boolean(draft.liveState?.isYourTurn)}
+            yourSlot={yourSlot}
+          />
         </div>
 
         {/* Main Content */}
@@ -518,7 +521,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   Back to drafts
                 </Link>
                 <Link
-                  href="/drafts/history"
+                  href={historyHref}
                   className="inline-flex items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   History
@@ -529,7 +532,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           <section
             aria-label="Draft board"
-            className="mt-6 grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)_20rem] xl:grid-cols-[20rem_minmax(0,1fr)_22rem]"
+            className="mt-6 grid gap-4 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(16rem,20rem)_minmax(54rem,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(64rem,1fr)_22rem]"
           >
             <DraftLeftRail
               draftStatus={activeDraft.status}
@@ -542,7 +545,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               className="min-h-[28rem] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
             />
 
-            <div className="min-w-0">
+            <div className="min-w-0 overflow-x-auto">
               <PlayerGrid
                 players={filteredPlayers}
                 totalPlayers={playersList.length}

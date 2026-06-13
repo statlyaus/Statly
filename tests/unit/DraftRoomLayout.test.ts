@@ -22,9 +22,12 @@ describe('draft room layout sizing', () => {
     );
 
     expect(unifiedDraftRoom).toContain(
-      'lg:grid-cols-[17rem_minmax(0,1fr)_20rem] xl:grid-cols-[20rem_minmax(0,1fr)_22rem]'
+      'xl:grid-cols-[minmax(16rem,20rem)_minmax(54rem,1fr)_minmax(20rem,22rem)]'
     );
+    expect(unifiedDraftRoom).toContain('2xl:grid-cols-[20rem_minmax(64rem,1fr)_22rem]');
     expect(unifiedDraftRoom).toContain('w-full px-3 pb-6 sm:px-5 lg:px-8');
+    expect(unifiedDraftRoom).toContain('className="min-w-0 overflow-x-auto"');
+    expect(unifiedDraftRoom).not.toContain('lg:grid-cols-[17rem_minmax(0,1fr)_20rem]');
     expect(unifiedDraftRoom).not.toContain('max-w-[1780px]');
     expect(livePickHeader).not.toContain('max-w-[1400px]');
     expect(draftControls).not.toContain('max-w-[1400px]');

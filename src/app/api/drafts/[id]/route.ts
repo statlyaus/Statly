@@ -163,6 +163,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const draftData = {
       id: draft.id,
+      leagueId: draft.leagueId,
       name: `${draft.league?.name || 'Draft'} - ${draft.status}`,
       leagueSize: draft.orders.length,
       draftType: draft.league?.settings?.draftType || 'SNAKE',

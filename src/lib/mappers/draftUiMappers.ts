@@ -1,4 +1,5 @@
 import type { DraftState, DraftParticipant, DraftPick } from '@/types/draft';
+import { buildDraftRoomSequence } from '@/lib/draftRoomSequencing';
 
 function formatDateToIso(value: unknown): string {
   // Handle Date instances
@@ -184,37 +185,6 @@ export function toFeedParticipants(participants: DraftParticipant[]): FeedPartic
   }));
 }
 
-function getSlotForOverallPick(overall: number, teamCount: number): number {
-  if (teamCount <= 0) return 0;
-
-  const round = Math.ceil(overall / teamCount);
-  const pickIndex = (overall - 1) % teamCount;
-
-  return round % 2 === 1 ? pickIndex + 1 : teamCount - pickIndex;
-}
-
-function getPickWindow(currentPick: number, totalPicks: number, yourSlot?: number, teamCount = 0) {
-  const safeCurrentPick = Math.max(1, Math.min(currentPick, Math.max(totalPicks, 1)));
-  const start = Math.max(1, safeCurrentPick - 1);
-  const end = Math.min(totalPicks, safeCurrentPick + 4);
-  const picks = new Set<number>();
-
-  for (let overall = start; overall <= end; overall += 1) {
-    picks.add(overall);
-  }
-
-  if (yourSlot && teamCount > 0) {
-    for (let overall = safeCurrentPick; overall <= totalPicks; overall += 1) {
-      if (getSlotForOverallPick(overall, teamCount) === yourSlot) {
-        picks.add(overall);
-        break;
-      }
-    }
-  }
-
-  return [...picks].sort((a, b) => a - b);
-}
-
 function buildDraftPickTrainState(params: {
   currentPick: number;
   totalPicks: number;
@@ -225,27 +195,14 @@ function buildDraftPickTrainState(params: {
   yourSlot?: number;
 }): DraftPickTrainState {
   const { currentPick, totalPicks, round, direction, participants, picks, yourSlot } = params;
-  const teamCount = participants.length;
-  const participantsBySlot = new Map(participants.map((participant) => [participant.slot, participant]));
-  const picksByOverall = new Map(picks.map((pick) => [pick.overall, pick]));
 
-  const slots = getPickWindow(currentPick, totalPicks, yourSlot, teamCount).map((overall) => {
-    const slot = getSlotForOverallPick(overall, teamCount);
-    const participant = participantsBySlot.get(slot);
-    const pick = picksByOverall.get(overall);
-    const status: DraftPickTrainSlot['status'] =
-      overall === currentPick ? 'current' : overall < currentPick || pick ? 'completed' : 'upcoming';
-
-    return {
-      overall,
-      round: teamCount > 0 ? Math.ceil(overall / teamCount) : round,
-      slot,
-      status,
-      isUserPick: slot === yourSlot,
-      displayName: participant?.member.displayName ?? `Team ${slot}`,
-      teamName: participant?.member.teamName,
-      player: pick?.player,
-    };
+  const sequence = buildDraftRoomSequence({
+    currentPick,
+    totalPicks,
+    participants,
+    picks,
+    yourSlot,
+    status: 'LIVE',
   });
 
   return {
@@ -253,7 +210,16 @@ function buildDraftPickTrainState(params: {
     totalPicks,
     round,
     direction,
-    slots,
+    slots: sequence.slots.map((slot) => ({
+      overall: slot.overall,
+      round: slot.round,
+      slot: slot.slot,
+      status: slot.status,
+      isUserPick: slot.isUserPick,
+      displayName: slot.displayName,
+      teamName: slot.teamName,
+      player: slot.player,
+    })),
   };
 }
 

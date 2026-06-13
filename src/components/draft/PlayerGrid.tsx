@@ -33,10 +33,10 @@ interface PlayerGridProps {
   emptyStateMessage?: string;
 }
 
-const PLAYER_COLUMN_WIDTH = 320;
+const PLAYER_COLUMN_WIDTH = 340;
 const PROFILE_COLUMN_WIDTH = 180;
-const STAT_COLUMN_WIDTH = 76;
-const ACTIONS_COLUMN_WIDTH = 360;
+const STAT_COLUMN_WIDTH = 88;
+const ACTIONS_COLUMN_WIDTH = 236;
 
 function formatLeagueStat(player: DraftPlayer, category: FantasyCategoryKey): string {
   const categoryData = FANTASY_CATEGORIES[category];
@@ -354,7 +354,7 @@ export default function PlayerGrid({
                         key={category}
                         scope="col"
                         aria-label={categoryData.label}
-                        className="border-l border-border/70 px-2 py-2 text-center text-[11px] font-semibold uppercase text-muted-foreground first:border-l"
+                        className="border-l border-border/70 px-3 py-2 text-center text-[11px] font-semibold uppercase text-muted-foreground first:border-l"
                         title={categoryData.label}
                       >
                         {categoryData.abbrev}
@@ -476,10 +476,10 @@ export default function PlayerGrid({
                         return (
                           <td
                             key={category}
-                            className="border-l border-border/60 px-2 py-4 text-center align-middle text-sm font-semibold text-foreground"
+                            className="border-l border-border/60 px-3 py-4 text-center align-middle text-sm font-semibold text-foreground"
                             aria-label={`${categoryData.label}: ${displayValue}`}
                           >
-                            <span className="inline-flex min-w-10 justify-center tabular-nums">
+                            <span className="inline-flex min-w-12 justify-center tabular-nums">
                               {displayValue}
                             </span>
                           </td>
@@ -492,7 +492,7 @@ export default function PlayerGrid({
                     )}
 
                     <td className="border-l border-border/60 px-3 py-4 align-middle">
-                      <div className="flex flex-wrap items-center justify-center gap-2">
+                      <div className="grid grid-cols-3 items-center gap-2">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -500,7 +500,7 @@ export default function PlayerGrid({
                             onToggleWatchlist(player);
                           }}
                           disabled={isLoading}
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             !isLoading && isWatched
                               ? 'border border-border bg-accent text-accent-foreground hover:bg-accent/80'
                               : !isLoading
@@ -514,7 +514,7 @@ export default function PlayerGrid({
                             aria-hidden="true"
                             fill={isWatched ? 'currentColor' : 'none'}
                           />
-                          {isWatched ? 'Watched' : 'Watch'}
+                          <span className="hidden 2xl:inline">{isWatched ? 'Watched' : 'Watch'}</span>
                         </button>
                         <button
                           type="button"
@@ -523,7 +523,7 @@ export default function PlayerGrid({
                             onAddToQueue(player);
                           }}
                           disabled={isLoading || isQueued}
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             !isLoading && !isQueued
                               ? 'border border-input bg-background text-foreground hover:bg-muted'
                               : 'cursor-not-allowed border border-border bg-muted text-muted-foreground'
@@ -535,7 +535,7 @@ export default function PlayerGrid({
                           }
                         >
                           <ListPlus className="h-4 w-4" aria-hidden="true" />
-                          {isQueued ? 'Queued' : 'Queue'}
+                          <span className="hidden 2xl:inline">{isQueued ? 'Queued' : 'Queue'}</span>
                         </button>
                         <button
                           type="button"
@@ -544,7 +544,7 @@ export default function PlayerGrid({
                             handlePlayerSelect(player);
                           }}
                           disabled={!canMakePick || isLoading}
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          className={`inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
                             canMakePick && !isLoading
                               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                               : 'cursor-not-allowed bg-muted text-muted-foreground'
@@ -552,7 +552,7 @@ export default function PlayerGrid({
                           aria-label={`Select ${player.name}`}
                         >
                           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                          {isLoading ? 'Selecting...' : 'Select'}
+                          <span className="hidden 2xl:inline">{isLoading ? 'Selecting' : 'Select'}</span>
                         </button>
                       </div>
                     </td>

@@ -15,7 +15,11 @@ type DraftRoomPlayerFixture = {
 const playerGridSpy = vi.hoisted(() => vi.fn());
 const draftLeftRailSpy = vi.hoisted(() => vi.fn());
 
-const draftContext = vi.hoisted<{ availablePlayers: DraftRoomPlayerFixture[] }>(() => ({
+const draftContext = vi.hoisted<{
+  status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
+  availablePlayers: DraftRoomPlayerFixture[];
+}>(() => ({
+  status: 'LIVE',
   availablePlayers: [
     {
       id: 'player-1',
@@ -149,7 +153,8 @@ vi.mock('@/contexts/DraftContext', () => ({
     draft: {
       id: 'draft-1',
       name: 'Test AFL Champions League - LIVE',
-      status: 'LIVE',
+      leagueId: 'league-1',
+      status: draftContext.status,
       currentPick: 1,
       totalPicks: 264,
       round: 1,
@@ -218,6 +223,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
   beforeEach(() => {
     playerGridSpy.mockClear();
     draftLeftRailSpy.mockClear();
+    draftContext.status = 'LIVE';
     draftContext.availablePlayers = [
       {
         id: 'player-1',
@@ -239,6 +245,10 @@ describe('UnifiedDraftRoom live shell composition', () => {
       'href',
       '/drafts'
     );
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+      'href',
+      '/drafts/history?leagueId=league-1'
+    );
     expect(screen.getByText('Available player grid')).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Draft side panel' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Pick feed' })).toBeInTheDocument();
@@ -250,6 +260,17 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(screen.queryByText('Live board position.')).not.toBeInTheDocument();
     expect(screen.queryByText('Connection: disconnected')).not.toBeInTheDocument();
   });
+
+  it.each(['SCHEDULED', 'PAUSED', 'COMPLETED'] as const)(
+    'renders the unified draft status header for %s drafts',
+    (status) => {
+      draftContext.status = status;
+
+      render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+      expect(screen.getByRole('banner', { name: 'Live draft status' })).toBeInTheDocument();
+    }
+  );
 
   it('builds left-rail roster slots from draft settings and current user picks', () => {
     render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);

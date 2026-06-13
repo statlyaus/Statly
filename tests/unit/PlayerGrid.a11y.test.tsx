@@ -134,10 +134,14 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('bg-background');
     expect(source).toContain('text-muted-foreground');
     expect(source).toContain('focus-visible:ring-ring');
-    expect(source).toContain('const ACTIONS_COLUMN_WIDTH = 360');
-    expect(source).toContain('flex flex-wrap items-center justify-center gap-2');
-    expect(source).toContain('px-2 py-4 text-center align-middle text-sm font-semibold');
-    expect(source).toContain('inline-flex min-w-10 justify-center tabular-nums');
+    expect(source).toContain('const PLAYER_COLUMN_WIDTH = 340');
+    expect(source).toContain('const PROFILE_COLUMN_WIDTH = 180');
+    expect(source).toContain('const STAT_COLUMN_WIDTH = 88');
+    expect(source).toContain('const ACTIONS_COLUMN_WIDTH = 236');
+    expect(source).toContain('grid grid-cols-3 items-center gap-2');
+    expect(source).toContain('h-10 w-full justify-center');
+    expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');
+    expect(source).not.toContain('flex flex-wrap items-center justify-center gap-2');
     expect(source).not.toContain('items-center justify-end gap-2');
     expect(source).not.toMatch(/\brounded-(xl|2xl|3xl)\b/);
     expect(source).not.toMatch(/\bbg-(gray|blue|slate|white|black|red|orange|yellow)-/);

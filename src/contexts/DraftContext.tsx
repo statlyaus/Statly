@@ -12,6 +12,7 @@ import React, {
 
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
+import { getSlotForOverallPick } from '@/lib/draftRoomSequencing';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import type {
@@ -313,11 +314,8 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
 }
 
 function computeCurrentSlotFromSnake(currentPick: number, teamCount: number): number | undefined {
-  if (!currentPick || !teamCount) return undefined;
-  const round = Math.ceil(currentPick / teamCount);
-  const fwd = round % 2 === 1;
-  const idx = ((currentPick - 1) % teamCount) + 1;
-  return fwd ? idx : teamCount - ((currentPick - 1) % teamCount);
+  const slot = getSlotForOverallPick(currentPick, teamCount);
+  return slot > 0 ? slot : undefined;
 }
 
 function normalizeCommandPick(raw: unknown, participants: DraftParticipant[]): DraftPick | null {
@@ -434,6 +432,9 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         currentPick?: unknown;
         isComplete?: unknown;
         status?: unknown;
+        round?: unknown;
+        direction?: unknown;
+        pickStartedAt?: unknown;
         pickDeadlineAt?: unknown;
       };
       const rawPick = payload?.pick;
@@ -465,12 +466,26 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
             ...next.draft,
             ...(nextCurrentPick !== undefined ? { currentPick: nextCurrentPick } : {}),
             ...(nextStatus ? { status: nextStatus as DraftCore['status'] } : {}),
-            ...(typeof payload.pickDeadlineAt === 'string' || payload.pickDeadlineAt === null
+            ...(typeof payload.round === 'number' && Number.isFinite(payload.round)
+              ? { round: payload.round }
+              : {}),
+            ...(typeof payload.direction === 'string'
+              ? { direction: payload.direction as DraftCore['direction'] }
+              : {}),
+            ...(payload.pickStartedAt !== undefined
+              ? {
+                  pickStartedAt:
+                    payload.pickStartedAt === null
+                      ? null
+                      : (toOptionalDate(payload.pickStartedAt) ?? null),
+                }
+              : {}),
+            ...(payload.pickDeadlineAt !== undefined
               ? {
                   pickDeadlineAt:
                     payload.pickDeadlineAt === null
                       ? null
-                      : (toOptionalDate(payload.pickDeadlineAt) ?? null),
+                      : (toOptionalDate(payload.pickDeadlineAt) ?? next.draft.pickDeadlineAt ?? null),
                 }
               : {}),
           }
@@ -543,12 +558,27 @@ function reducer(state: DraftState, action: Action): DraftState {
         return { ...state, isLoading: false };
       }
 
+      const snapshotDraft = action.snapshot.draft;
+      const draft =
+        snapshotDraft && state.draft && !snapshotDraft.leagueId && state.draft.leagueId
+          ? {
+              ...snapshotDraft,
+              leagueId: state.draft.leagueId,
+              settings: {
+                ...snapshotDraft.settings,
+                leagueId:
+                  snapshotDraft.settings?.leagueId ||
+                  state.draft.settings?.leagueId ||
+                  state.draft.leagueId,
+              },
+            }
+          : snapshotDraft;
       const participants = action.snapshot.includesParticipantQueues
         ? action.snapshot.participants
         : mergeParticipantQueues(action.snapshot.participants, state.participants);
       return {
         ...state,
-        draft: action.snapshot.draft,
+        draft,
         participants,
         picks: action.snapshot.includesPicks ? action.snapshot.picks : state.picks,
         availablePlayers: action.snapshot.includesAvailablePlayers
@@ -1036,6 +1066,10 @@ export function DraftProvider({
               pick,
               currentPick: commandData.currentPick,
               isComplete: commandData.isComplete,
+              status: commandData.status,
+              round: commandData.round,
+              direction: commandData.direction,
+              pickStartedAt: commandData.pickStartedAt,
               pickDeadlineAt: commandData.pickDeadlineAt,
             },
             ts: Date.now(),

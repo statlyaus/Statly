@@ -40,6 +40,11 @@ import { ClockIcon } from '@heroicons/react/24/outline';
 
 import DraftPickTrain from '@/components/draft/DraftPickTrain';
 import { toDraftPickTrainStateFromHeaderData } from '@/lib/mappers/draftUiMappers';
+import {
+  buildDraftRoomSequence,
+  getDraftRoomTimerState,
+  type DraftRoomStatus,
+} from '@/lib/draftRoomSequencing';
 
 interface DraftParticipant {
   slot: number;
@@ -118,80 +123,61 @@ export default function LivePickHeader({
   // Helper function to check if status is a valid draft status
   const isValidDraftStatus = (
     status: string
-  ): status is 'LIVE' | 'COMPLETED' | 'PAUSED' | 'WAITING' => {
-    return ['LIVE', 'COMPLETED', 'PAUSED', 'WAITING'].includes(status);
+  ): status is
+    | 'SCHEDULED'
+    | 'LOBBY'
+    | 'COUNTDOWN'
+    | 'LIVE'
+    | 'COMPLETED'
+    | 'PAUSED'
+    | 'CANCELLED'
+    | 'WAITING' => {
+    return [
+      'SCHEDULED',
+      'LOBBY',
+      'COUNTDOWN',
+      'LIVE',
+      'COMPLETED',
+      'PAUSED',
+      'CANCELLED',
+      'WAITING',
+    ].includes(status);
   };
 
   // Get normalized status with fallback
   const normalizedStatus = isValidDraftStatus(draftData?.status) ? draftData.status : 'WAITING';
-  const deadlineMs = useMemo(() => {
-    if (!draftData?.pickDeadlineAt) return null;
-    const parsed = new Date(draftData.pickDeadlineAt).getTime();
-    return Number.isNaN(parsed) ? null : parsed;
-  }, [draftData?.pickDeadlineAt]);
-
-  // Memoized calculations - moved before any early returns
-  const { yourPickInfo } = useMemo(() => {
-    // Return default values if no valid data
-    if (!draftData?.participants?.length) {
-      return {
-        yourPickInfo: null,
-      };
-    }
-
-    const teamCount = draftData.participants.length;
-
-    // Calculate when it's your turn next
-    let picksUntilYourTurn = 0;
-    let estimatedTimeUntilYourTurn = 0;
-
-    if (!isYourTurn && normalizedStatus === 'LIVE') {
-      // Simulate the snake draft to find next occurrence of your slot
-      let tempPick = draftData.currentPick + 1;
-      while (tempPick <= draftData.totalPicks && picksUntilYourTurn === 0) {
-        const tempRound = Math.ceil(tempPick / teamCount);
-        const tempDirection = tempRound % 2 === 1 ? 'FORWARD' : 'REVERSE';
-
-        let tempSlot: number;
-        if (tempDirection === 'FORWARD') {
-          tempSlot = ((tempPick - 1) % teamCount) + 1;
-        } else {
-          tempSlot = teamCount - ((tempPick - 1) % teamCount);
-        }
-
-        if (tempSlot === yourSlot) {
-          picksUntilYourTurn = tempPick - draftData.currentPick;
-          estimatedTimeUntilYourTurn = picksUntilYourTurn * timePerPick;
-          break;
-        }
-        tempPick++;
-      }
-    }
-
-    return {
-      yourPickInfo: {
-        picksUntilYourTurn,
-        estimatedTimeUntilYourTurn,
-        nextPickNumber: draftData.currentPick + picksUntilYourTurn,
-      },
-    };
-  }, [draftData, yourSlot, isYourTurn, timePerPick, normalizedStatus]);
-  const picksUntilYourTurn = yourPickInfo?.picksUntilYourTurn ?? 0;
-  const estimatedTimeUntilYourTurn = yourPickInfo?.estimatedTimeUntilYourTurn ?? 0;
+  const sequence = useMemo(
+    () =>
+      buildDraftRoomSequence({
+        currentPick: draftData.currentPick,
+        totalPicks: draftData.totalPicks,
+        participants: draftData.participants,
+        picks: draftData.picks,
+        yourSlot,
+        status: normalizedStatus as DraftRoomStatus,
+        timePerPick,
+      }),
+    [draftData, normalizedStatus, timePerPick, yourSlot]
+  );
+  const nextUserPick = sequence.nextUserPick;
+  const picksUntilYourTurn = nextUserPick?.picksUntil ?? 0;
+  const estimatedTimeUntilYourTurn = nextUserPick?.estimatedSecondsUntil ?? 0;
 
   const getRemainingSeconds = useMemo(
     () => () => {
-      if (normalizedStatus !== 'LIVE') return timePerPick;
-      if (!deadlineMs) return timePerPick;
-      return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+      return getDraftRoomTimerState({
+        status: normalizedStatus,
+        timePerPick,
+        pickDeadlineAt: draftData.pickDeadlineAt,
+      }).remainingSeconds;
     },
-    [deadlineMs, normalizedStatus, timePerPick]
+    [draftData.pickDeadlineAt, normalizedStatus, timePerPick]
   );
 
   // Timer effect with proper cleanup and callbacks
   useEffect(() => {
     if (normalizedStatus !== 'LIVE') {
-      setTimeLeft(timePerPick);
+      setTimeLeft(getRemainingSeconds());
       hasExpiredRef.current = false;
       return;
     }
@@ -221,7 +207,7 @@ export default function LivePickHeader({
         clearInterval(intervalRef.current);
       }
     };
-  }, [draftData.currentPick, deadlineMs, getRemainingSeconds, normalizedStatus, timePerPick]);
+  }, [draftData.currentPick, getRemainingSeconds, normalizedStatus]);
 
   useEffect(() => {
     setTimeLeft(getRemainingSeconds());
@@ -282,82 +268,89 @@ export default function LivePickHeader({
     }
   };
 
-  const timerPercent = Math.max(0, Math.min(100, Math.round((timeLeft / timePerPick) * 100)));
+  const timerState = getDraftRoomTimerState({
+    status: normalizedStatus,
+    timePerPick,
+    pickDeadlineAt: draftData.pickDeadlineAt,
+  });
+  const timerPercent = timerState.percentRemaining;
   const timerTone =
-    timeLeft <= 30
+    timerState.tone === 'urgent'
       ? {
           badge: 'border-destructive/30 bg-destructive/10 text-destructive',
           bar: 'bg-destructive',
           rail: 'bg-destructive/15',
-          label: 'Urgent',
+          label: timerState.label,
         }
-      : timeLeft <= 60
+      : timerState.tone === 'warning'
         ? {
             badge: 'border-warning/40 bg-warning/15 text-warning-foreground',
             bar: 'bg-warning',
             rail: 'bg-warning/20',
-            label: 'Short clock',
+            label: timerState.label,
           }
-        : {
-            badge: 'border-primary/25 bg-primary/10 text-primary',
-            bar: 'bg-primary',
-            rail: 'bg-primary/15',
-            label: 'On pace',
-          };
+        : timerState.tone === 'complete'
+          ? {
+              badge: 'border-primary/25 bg-primary/10 text-primary',
+              bar: 'bg-primary',
+              rail: 'bg-primary/15',
+              label: timerState.label,
+            }
+          : timerState.tone === 'neutral'
+            ? {
+                badge: 'border-border bg-muted text-muted-foreground',
+                bar: 'bg-muted-foreground',
+                rail: 'bg-muted',
+                label: timerState.label,
+              }
+            : {
+                badge: 'border-primary/25 bg-primary/10 text-primary',
+                bar: 'bg-primary',
+                rail: 'bg-primary/15',
+                label: timerState.label,
+              };
   const latestPick = draftData.picks[draftData.picks.length - 1];
-
-  // Show paused or waiting state
-  if (normalizedStatus === 'PAUSED') {
-    return (
-      <section
-        className={`w-full px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
-        role="banner"
-        aria-label="Live draft status"
-      >
-        <div className="rounded-3xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 text-center">
-          <h2 className="text-lg font-semibold text-foreground">Draft paused</h2>
-          <p className="text-sm text-muted-foreground">
-            The live clock is stopped until the league owner resumes the room.
-          </p>
-        </div>
-      </section>
-    );
-  }
-
-  if (normalizedStatus === 'WAITING') {
-    return (
-      <section
-        className={`w-full px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
-        role="banner"
-        aria-label="Live draft status"
-      >
-        <div className="rounded-3xl border border-border/60 bg-card/95 px-5 py-4 text-center shadow-sm">
-          <h2 className="text-lg font-semibold text-foreground">Draft starting soon</h2>
-          <p className="text-sm text-muted-foreground">
-            Waiting for participants and final room readiness before the draft begins.
-          </p>
-        </div>
-      </section>
-    );
-  }
-
-  // Show completion state
-  if (normalizedStatus === 'COMPLETED') {
-    return (
-      <section
-        className={`w-full px-4 pt-4 sm:px-6 lg:px-8 ${className}`}
-        role="banner"
-        aria-label="Live draft status"
-      >
-        <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-4 text-center">
-          <h2 className="text-lg font-semibold text-foreground">Draft complete</h2>
-          <p className="text-sm text-muted-foreground">
-            All picks are finalized and the room is now in its completed state.
-          </p>
-        </div>
-      </section>
-    );
-  }
+  const statusCopy =
+    {
+      SCHEDULED: {
+        title: 'Draft scheduled',
+        detail:
+          'The room is ready. Participants can prepare queues before the league owner starts the draft.',
+      },
+      LOBBY: {
+        title: 'Draft lobby',
+        detail: 'The lobby is open for final queue and roster checks.',
+      },
+      COUNTDOWN: {
+        title: 'Draft countdown',
+        detail: 'The draft is waiting for its scheduled launch.',
+      },
+      LIVE: {
+        title: sequence.current ? `Pick ${sequence.current.overall}` : `Pick ${draftData.currentPick}`,
+        detail: sequence.current
+          ? `${sequence.current.displayName} is on the clock.`
+          : 'The draft clock is live.',
+      },
+      PAUSED: {
+        title: 'Draft paused',
+        detail: 'The clock is stopped until the league owner resumes the room.',
+      },
+      COMPLETED: {
+        title: 'Draft complete',
+        detail: 'All picks are finalized and the draft history is available for review.',
+      },
+      CANCELLED: {
+        title: 'Draft cancelled',
+        detail: 'This draft is no longer accepting picks.',
+      },
+      WAITING: {
+        title: 'Draft starting soon',
+        detail: 'Waiting for participants and final room readiness before the draft begins.',
+      },
+    }[normalizedStatus] ?? {
+      title: 'Draft room',
+      detail: 'The room is loading the latest draft state.',
+    };
 
   return (
     <section
@@ -375,7 +368,7 @@ export default function LivePickHeader({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                  Pick {draftData.currentPick}
+                  {statusCopy.title}
                 </span>
                 <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
                   Round {draftData.round} / {draftData.direction}
@@ -401,8 +394,9 @@ export default function LivePickHeader({
                 <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
                   Live pick clock
                 </p>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{statusCopy.detail}</p>
                 <div
-                  className="mt-1 flex items-baseline gap-2 font-mono text-4xl font-semibold tracking-normal text-foreground"
+                  className="mt-2 flex items-baseline gap-2 font-mono text-4xl font-semibold tracking-normal text-foreground"
                   role="timer"
                   aria-label={`Time remaining: ${formatTime(timeLeft)}`}
                   aria-live="polite"
