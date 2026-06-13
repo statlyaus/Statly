@@ -11,30 +11,34 @@ interface InviteModalProps {
 
 export default function InviteModal({ league, isOpen, onClose }: InviteModalProps) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const joinUrl = useMemo(() => {
     const base = typeof window !== 'undefined' ? window.location.origin : '';
     return `${base}/leagues/join?code=${encodeURIComponent(league.code)}`;
   }, [league.code]);
 
-  const handleCopyCode = async () => {
+  const copyToClipboard = async (value: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(league.code);
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(value);
       setCopied(true);
+      setCopyError(null);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy code:', err);
+      setCopyError(`Copy ${label} manually.`);
+      console.warn(`Failed to copy ${label}:`, err);
     }
   };
 
+  const handleCopyCode = async () => {
+    await copyToClipboard(league.code, 'code');
+  };
+
   const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(joinUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy link:', err);
-    }
+    await copyToClipboard(joinUrl, 'link');
   };
 
   if (!isOpen) return null;
@@ -61,6 +65,7 @@ export default function InviteModal({ league, isOpen, onClose }: InviteModalProp
             <p className="text-sm text-gray-600 mb-3">
               Share this code with friends to invite them to <strong>{league.name}</strong>
             </p>
+            {copyError ? <p className="text-sm text-red-600">{copyError}</p> : null}
           </div>
 
           {/* League Code */}

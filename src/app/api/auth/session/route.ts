@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
 
 const COOKIE_NAME = 'statly_session';
+const isProduction = process.env.NODE_ENV === 'production';
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     const res = NextResponse.json({ ok: true, uid: decoded.uid });
     res.cookies.set(COOKIE_NAME, sessionCookie, {
       httpOnly: true,
-      secure: true,
+      secure: isProduction,
       sameSite: 'lax',
       path: '/',
       maxAge: Math.floor(expiresIn / 1000),
@@ -36,7 +37,7 @@ export async function DELETE() {
     const res = NextResponse.json({ ok: true });
     res.cookies.set(COOKIE_NAME, '', {
       httpOnly: true,
-      secure: true,
+      secure: isProduction,
       sameSite: 'lax',
       path: '/',
       maxAge: 0,

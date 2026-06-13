@@ -36,6 +36,7 @@ describe('local full stack development architecture', () => {
 
   it('starts the app stack with Firebase emulator environment variables', () => {
     const source = read('Scripts/dev/full-local-stack.sh');
+    const firebaseClient = read('src/lib/firebaseClient.ts');
 
     expect(source).toContain('FIRESTORE_EMULATOR_HOST');
     expect(source).toContain('FIREBASE_AUTH_EMULATOR_HOST');
@@ -48,6 +49,25 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('npm:dev');
     expect(source).toContain('npm:socket');
     expect(source).toContain('npm:worker:dev');
+    expect(firebaseClient).toContain('const useFirebaseEmulators');
+    expect(firebaseClient).toContain('firebaseConfig.measurementId && !useFirebaseEmulators');
+    expect(firebaseClient).toContain('useFirebaseEmulators && db && auth');
+  });
+
+  it('does not require clipboard permission to recover from invite copy failures', () => {
+    const source = read('src/components/league/InviteModal.tsx');
+
+    expect(source).toContain('copyToClipboard');
+    expect(source).toContain('navigator.clipboard?.writeText');
+    expect(source).toContain('Copy ${label} manually.');
+  });
+
+  it('allows the local HTTP app to persist session cookies after emulator login', () => {
+    const source = read('src/app/api/auth/session/route.ts');
+
+    expect(source).toContain("process.env.NODE_ENV === 'production'");
+    expect(source).toContain('secure: isProduction');
+    expect(source).not.toContain('secure: true');
   });
 
   it('seeds the shared local user into Auth, Prisma, and Firestore', () => {
