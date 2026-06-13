@@ -4,6 +4,10 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import {
+  getDraftHistoryList,
+  parseDraftHistoryLimit,
+} from '@/server/draft/readModels/draftHistoryReadModel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,69 +23,14 @@ export async function GET(request: NextRequest) {
     }
     userId = authenticatedUserId;
 
-    const drafts = await prisma.draft.findMany({
-      where: {
-        status: 'COMPLETED',
-        league: {
-          members: {
-            some: { userId },
-          },
-        },
-      },
-      include: {
-        league: {
-          include: {
-            members: {
-              include: {
-                user: true,
-              },
-              orderBy: { draftSlot: 'asc' },
-            },
-          },
-        },
-        picks: {
-          include: {
-            player: true,
-            member: {
-              include: {
-                user: true,
-              },
-            },
-          },
-          orderBy: { overall: 'asc' },
-        },
-      },
-      orderBy: { completedAt: 'desc' },
+    const url = new URL(request.url);
+    const draftHistory = await getDraftHistoryList(prisma, userId, {
+      limit: parseDraftHistoryLimit(url.searchParams.get('limit')),
     });
-
-    const draftHistory = drafts.map((draft) => ({
-      id: draft.id,
-      name: draft.league.name,
-      status: draft.status,
-      createdAt: draft.createdAt.toISOString(),
-      completedAt: draft.completedAt?.toISOString(),
-      totalPicks: draft.totalPicks,
-      participants: draft.league.members.map((member) => ({
-        id: member.id,
-        displayName: member.user.displayName,
-        teamName: member.teamName,
-        picks: draft.picks
-          .filter((pick) => pick.memberId === member.id)
-          .map((pick) => ({
-            player: {
-              name: pick.player.name,
-              position: pick.player.position,
-              club: pick.player.club,
-            },
-            overall: pick.overall,
-            round: pick.round,
-          })),
-      })),
-    }));
 
     logger.info('Draft history retrieved', {
       userId,
-      draftCount: draftHistory.length,
+      draftCount: draftHistory.drafts.length,
     });
 
     return successResponse(draftHistory);
