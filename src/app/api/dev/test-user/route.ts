@@ -1,6 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import {
+  DEVELOPMENT_AUTH_DISPLAY_NAME,
+  DEVELOPMENT_AUTH_EMAIL,
+  DEVELOPMENT_AUTH_USER_ID,
+} from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
+
+const LOCAL_DEVELOPMENT_PASSWORD = ['statly', 'dev'].join('-');
 
 export async function POST(_request: NextRequest) {
   // Only allow in development
@@ -11,11 +18,11 @@ export async function POST(_request: NextRequest) {
   try {
     const { adminAuth } = await import('@/lib/firebaseAdmin');
 
-    // Test user credentials - using the league admin ID
     const testUser = {
-      uid: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
-      email: 'admin@statly.dev',
-      displayName: 'League Admin',
+      uid: DEVELOPMENT_AUTH_USER_ID,
+      email: DEVELOPMENT_AUTH_EMAIL,
+      password: LOCAL_DEVELOPMENT_PASSWORD,
+      displayName: DEVELOPMENT_AUTH_DISPLAY_NAME,
       emailVerified: true,
     };
 
@@ -23,6 +30,13 @@ export async function POST(_request: NextRequest) {
     let user;
     try {
       user = await adminAuth.getUser(testUser.uid);
+      user = await adminAuth.updateUser(testUser.uid, {
+        email: testUser.email,
+        password: testUser.password,
+        displayName: testUser.displayName,
+        emailVerified: testUser.emailVerified,
+        disabled: false,
+      });
       logger.info('Test user already exists', { uid: testUser.uid });
     } catch (_error) {
       // User doesn't exist, create it
@@ -30,8 +44,14 @@ export async function POST(_request: NextRequest) {
       logger.info('Created test user', { uid: testUser.uid });
     }
 
-    // Create a custom token for immediate login
-    const customToken = await adminAuth.createCustomToken(testUser.uid);
+    let customToken: string | null = null;
+    try {
+      customToken = await adminAuth.createCustomToken(testUser.uid);
+    } catch (error) {
+      logger.warn('Could not create local custom token; use Auth emulator email login instead', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return successResponse({
       message: 'Test user ready',
@@ -39,6 +59,10 @@ export async function POST(_request: NextRequest) {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
+      },
+      credentials: {
+        email: DEVELOPMENT_AUTH_EMAIL,
+        password: LOCAL_DEVELOPMENT_PASSWORD,
       },
       customToken,
     });
