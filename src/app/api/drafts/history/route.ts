@@ -1,31 +1,23 @@
+import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { cookies } from 'next/headers';
-import { adminAuth } from '@/lib/firebaseAdmin';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   let userId: string | undefined;
 
   try {
-    // Verify user authentication
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('statly_session')?.value;
-
-    if (!sessionCookie) {
+    const authenticatedUserId = await getAuthenticatedUserId(request);
+    if (!authenticatedUserId) {
       return errorResponse('Unauthorized', 401);
     }
-
-    try {
-      const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-      userId = decoded.uid;
-    } catch (_verifyErr) {
-      return errorResponse('Unauthorized', 401);
-    }
+    userId = authenticatedUserId;
 
     const drafts = await prisma.draft.findMany({
       where: {
