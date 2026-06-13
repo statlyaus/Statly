@@ -22,6 +22,7 @@ export interface DraftSettingsSnapshot {
   benchSize: number;
   pickSeconds: number;
   allowAutoPick: boolean;
+  selectedCategories: string[];
   positionLimits?: DraftPositionLimits;
   autoPickRules?: DraftAutoPickRules;
   draftType: DraftTypeValue;

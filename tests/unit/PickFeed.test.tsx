@@ -1,0 +1,157 @@
+import type { ImgHTMLAttributes } from 'react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+
+import PickFeed from '@/components/PickFeed';
+
+vi.mock('next/image', () => ({
+  default: ({
+    alt,
+    src,
+    ...props
+  }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) => (
+    <img alt={alt} src={src} {...props} />
+  ),
+}));
+
+const participants = [
+  {
+    slot: 1,
+    member: {
+      id: 'member-1',
+      userId: 'user-1',
+      displayName: 'Alpha FC',
+      email: 'alpha@example.com',
+    },
+  },
+  {
+    slot: 2,
+    member: {
+      id: 'member-2',
+      userId: 'user-2',
+      displayName: 'Beta FC',
+      email: 'beta@example.com',
+    },
+  },
+  {
+    slot: 3,
+    member: {
+      id: 'member-3',
+      userId: 'user-3',
+      displayName: 'Gamma FC',
+      email: 'gamma@example.com',
+    },
+  },
+];
+
+const picks = [
+  {
+    id: 'pick-1',
+    overall: 1,
+    round: 1,
+    slot: 1,
+    player: {
+      id: 'player-1',
+      name: 'Marcus Bontempelli',
+      position: 'MID',
+      club: 'Western Bulldogs',
+    },
+    member: {
+      id: 'member-1',
+      displayName: 'Alpha FC',
+    },
+    auto: false,
+    madeAt: '2026-06-07T00:00:00.000Z',
+  },
+  {
+    id: 'pick-2',
+    overall: 2,
+    round: 1,
+    slot: 2,
+    player: {
+      id: 'player-2',
+      name: 'Nick Daicos',
+      position: 'MID',
+      club: 'Collingwood',
+    },
+    member: {
+      id: 'member-2',
+      displayName: 'Beta FC',
+    },
+    auto: false,
+    madeAt: '2026-06-07T00:05:00.000Z',
+  },
+  {
+    id: 'pick-3',
+    overall: 3,
+    round: 1,
+    slot: 3,
+    player: {
+      id: 'player-3',
+      name: 'Errol Gulden',
+      position: 'MID',
+      club: 'Sydney',
+    },
+    member: {
+      id: 'member-3',
+      displayName: 'Gamma FC',
+    },
+    auto: true,
+    madeAt: '2026-06-07T00:10:00.000Z',
+  },
+];
+
+const defaultProps = {
+  picks,
+  participants,
+  userMemberId: 'member-2',
+  watchlistPlayerIds: ['player-3'],
+};
+
+describe('PickFeed', () => {
+  it('renders club logo next to picked player names', () => {
+    render(<PickFeed {...defaultProps} />);
+
+    const feed = screen.getByLabelText('Pick feed');
+    const latestPick = within(feed).getByText('Errol Gulden').closest('div');
+
+    expect(latestPick).not.toBeNull();
+    expect(screen.getByAltText('Sydney logo')).toHaveAttribute('src', '/logos/Sydney.svg');
+  });
+
+  it('filters to my picks', () => {
+    render(<PickFeed {...defaultProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /mine/i }));
+
+    expect(screen.getByText('Nick Daicos')).toBeInTheDocument();
+    expect(screen.queryByText('Marcus Bontempelli')).not.toBeInTheDocument();
+    expect(screen.queryByText('Errol Gulden')).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 1 of 3 total picks')).toBeInTheDocument();
+  });
+
+  it('filters to watchlist picks', () => {
+    render(<PickFeed {...defaultProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /watchlist/i }));
+
+    expect(screen.getByText('Errol Gulden')).toBeInTheDocument();
+    expect(screen.queryByText('Marcus Bontempelli')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nick Daicos')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Watchlist')).toHaveLength(2);
+  });
+
+  it('toggles auto-scroll state with an accessible label', () => {
+    render(<PickFeed {...defaultProps} />);
+
+    const toggle = screen.getByRole('button', { name: 'Toggle auto-scroll' });
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Auto-scroll on new picks')).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('Manual scroll mode')).toBeInTheDocument();
+  });
+});

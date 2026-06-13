@@ -35,6 +35,14 @@ export const DEFAULT_DRAFT_POSITION_LIMITS: DraftPositionLimits = {
   BENCH: 4,
 };
 
+export const LOCAL_TEST_DRAFT_POSITION_LIMITS: DraftPositionLimits = {
+  DEF: 1,
+  MID: 15,
+  RUC: 1,
+  FWD: 1,
+  BENCH: 4,
+};
+
 export const DEFAULT_DRAFT_AUTO_PICK_RULES: DraftAutoPickRules = {
   enabled: true,
   strategy: 'queue-first',

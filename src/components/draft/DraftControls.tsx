@@ -143,7 +143,7 @@ const DraftControls = memo(function DraftControls({
     <>
       {ConfirmationModal}
       {(draftStatus === 'LIVE' || isPaused) && (
-        <section className="mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8">
+        <section className="w-full px-4 pt-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card/95 px-5 py-4 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <div

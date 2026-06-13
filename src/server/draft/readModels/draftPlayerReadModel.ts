@@ -36,6 +36,11 @@ const STAT_KEYS = [
 ] as const satisfies readonly (keyof PlayerStats)[];
 
 const AVERAGE_STAT_KEYS = new Set<keyof PlayerStats>(['timeOnGroundPct', 'disposalEffPct']);
+const LOWER_IS_BETTER_CATEGORIES = new Set<FantasyCategoryKey>([
+  'clangers',
+  'freesAgainst',
+  'turnovers',
+]);
 
 type DraftPlayerStatsProjection = {
   avgPoints: number;
@@ -44,6 +49,23 @@ type DraftPlayerStatsProjection = {
   gamesPlayed: number;
   stats: Partial<PlayerStats>;
   statsTotal: Partial<PlayerStats>;
+};
+
+export type StatlyZPlayerInput = {
+  id: string;
+  stats?: Partial<PlayerStats> | null;
+};
+
+type StatlyZBreakdownEntry = {
+  category: FantasyCategoryKey;
+  value: number;
+  zScore: number;
+};
+
+type StatlyZScore = {
+  score: number;
+  breakdown: StatlyZBreakdownEntry[];
+  missingCategories: FantasyCategoryKey[];
 };
 
 export type AvailableDraftPlayerSource = {
@@ -99,6 +121,91 @@ function readNumericStat(player: Player, key: keyof PlayerStats): number {
 
 function roundStat(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+function roundStatlyZ(value: number): number {
+  const rounded = Math.round(value * 100) / 100;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function validSelectedCategories(
+  selectedCategories: readonly (FantasyCategoryKey | string)[]
+): FantasyCategoryKey[] {
+  const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
+  const seen = new Set<string>();
+
+  return selectedCategories.filter((category): category is FantasyCategoryKey => {
+    if (!validKeys.has(category) || seen.has(category)) return false;
+    seen.add(category);
+    return true;
+  });
+}
+
+function readFinitePlayerStat(
+  player: StatlyZPlayerInput,
+  category: FantasyCategoryKey
+): number | null {
+  const value = player.stats?.[category];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+export function calculateStatlyZScores(
+  players: readonly StatlyZPlayerInput[],
+  selectedCategories: readonly (FantasyCategoryKey | string)[]
+): Map<string, StatlyZScore> {
+  const categories = validSelectedCategories(selectedCategories);
+  const categoryStats = new Map<FantasyCategoryKey, { mean: number; stdDev: number }>();
+
+  for (const category of categories) {
+    const values = players
+      .map((player) => readFinitePlayerStat(player, category))
+      .filter((value): value is number => value !== null);
+
+    if (values.length === 0) {
+      categoryStats.set(category, { mean: 0, stdDev: 0 });
+      continue;
+    }
+
+    const mean = values.reduce((total, value) => total + value, 0) / values.length;
+    const variance =
+      values.reduce((total, value) => total + (value - mean) ** 2, 0) / values.length;
+
+    categoryStats.set(category, { mean, stdDev: Math.sqrt(variance) });
+  }
+
+  return new Map(
+    players.map((player) => {
+      const breakdown: StatlyZBreakdownEntry[] = [];
+      const missingCategories: FantasyCategoryKey[] = [];
+      let score = 0;
+
+      for (const category of categories) {
+        const value = readFinitePlayerStat(player, category);
+
+        if (value === null) {
+          missingCategories.push(category);
+          continue;
+        }
+
+        const stats = categoryStats.get(category);
+        const rawZScore = stats && stats.stdDev !== 0 ? (value - stats.mean) / stats.stdDev : 0;
+        const zScore = LOWER_IS_BETTER_CATEGORIES.has(category) ? -rawZScore : rawZScore;
+        const roundedZScore = roundStatlyZ(zScore);
+
+        score += zScore;
+        breakdown.push({ category, value, zScore: roundedZScore });
+      }
+
+      return [
+        player.id,
+        {
+          score: roundStatlyZ(score),
+          breakdown,
+          missingCategories,
+        },
+      ];
+    })
+  );
 }
 
 function buildCompleteStats(

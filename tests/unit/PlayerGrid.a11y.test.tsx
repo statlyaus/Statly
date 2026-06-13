@@ -1,11 +1,22 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type React from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import PlayerGrid from '@/components/draft/PlayerGrid';
 import type { DraftPlayer } from '@/types/draft';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+
+vi.mock('next/image', () => ({
+  default: ({
+    alt = '',
+    unoptimized: _unoptimized,
+    ...props
+  }: React.ImgHTMLAttributes<HTMLImageElement> & { unoptimized?: boolean }) => (
+    <img alt={alt} {...props} />
+  ),
+}));
 
 const players: DraftPlayer[] = [
   {
@@ -14,6 +25,11 @@ const players: DraftPlayer[] = [
     position: 'MID',
     club: 'Western Bulldogs',
     avgPoints: 108.4,
+    statlyZScore: 3.42,
+    statlyZBreakdown: [
+      { category: 'goals', value: 1.1, zScore: 0.4 },
+      { category: 'tackles', value: 5.8, zScore: 1.2 },
+    ],
     adp: 3,
     isAvailable: true,
     gamesPlayed: 21,
@@ -71,13 +87,37 @@ describe('PlayerGrid accessibility', () => {
       within(table)
         .getAllByRole('columnheader')
         .map((header) => header.textContent)
-    ).toEqual(['Player', 'Profile', 'League Stats', 'Actions']);
+    ).toEqual([
+      'Player',
+      'Profile',
+      'League Stats',
+      'Actions',
+      'G',
+      'T',
+      'I50',
+      'I',
+      'CM',
+      'R50',
+      'CP',
+      'ED',
+      'SI',
+    ]);
 
     const playerRow = within(table).getByRole('row', { name: /marcus bontempelli/i });
-    expect(within(playerRow).getByLabelText('Goals: 1.1')).toBeInTheDocument();
-    expect(within(playerRow).getByLabelText('Inside 50s: 4.2')).toBeInTheDocument();
-    expect(within(playerRow).getByLabelText('Score Involvements: 7.4')).toBeInTheDocument();
+    expect(within(playerRow).getByText('Statly Z')).toBeInTheDocument();
+    expect(within(playerRow).getByText('3.42')).toBeInTheDocument();
+    expect(within(playerRow).getByRole('cell', { name: 'Goals: 1.1' })).toBeInTheDocument();
+    expect(within(playerRow).getByRole('cell', { name: 'Inside 50s: 4.2' })).toBeInTheDocument();
+    expect(
+      within(playerRow).getByRole('cell', { name: 'Score Involvements: 7.4' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Sort by Statly Z' })).toBeInTheDocument();
+    expect(screen.queryByText('Fantasy avg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fantasy average')).not.toBeInTheDocument();
     expect(screen.queryByText(/\+\d+ more/)).not.toBeInTheDocument();
+    const logo = playerRow.querySelector('img');
+    expect(logo).toHaveAttribute('src', '/logos/Western Bulldogs.svg');
+    expect(logo).toHaveAttribute('alt', '');
 
     fireEvent.keyDown(playerRow, { key: 'Enter' });
     expect(onPlayerSelect).toHaveBeenCalledWith(players[0]);
@@ -88,15 +128,21 @@ describe('PlayerGrid accessibility', () => {
   });
 
   it('keeps the draft player table aligned to semantic tokens and compact radii', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'),
-      'utf8'
-    );
+    const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
 
     expect(source).toContain('border border-border bg-card text-card-foreground');
     expect(source).toContain('bg-background');
     expect(source).toContain('text-muted-foreground');
     expect(source).toContain('focus-visible:ring-ring');
+    expect(source).toContain('const PLAYER_COLUMN_WIDTH = 340');
+    expect(source).toContain('const PROFILE_COLUMN_WIDTH = 180');
+    expect(source).toContain('const STAT_COLUMN_WIDTH = 88');
+    expect(source).toContain('const ACTIONS_COLUMN_WIDTH = 236');
+    expect(source).toContain('grid grid-cols-3 items-center gap-2');
+    expect(source).toContain('h-10 w-full justify-center');
+    expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');
+    expect(source).not.toContain('flex flex-wrap items-center justify-center gap-2');
+    expect(source).not.toContain('items-center justify-end gap-2');
     expect(source).not.toMatch(/\brounded-(xl|2xl|3xl)\b/);
     expect(source).not.toMatch(/\bbg-(gray|blue|slate|white|black|red|orange|yellow)-/);
     expect(source).not.toMatch(/\btext-(gray|blue|slate|white|black|red|orange|yellow)-/);

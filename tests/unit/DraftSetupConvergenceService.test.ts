@@ -25,6 +25,7 @@ function buildSettings(startAt: Date) {
     draftType: DraftType.SNAKE,
     pickOrder: PickOrder.RANDOM,
     waiverRule: WaiverRule.WEEKLY,
+    positionLimitsJson: JSON.stringify({ DEF: 5, MID: 4, RUC: 1, FWD: 3, BENCH: 4 }),
     startAt,
     timeZone: 'Australia/Melbourne',
     locked: false,
@@ -62,6 +63,7 @@ function buildLeagueWithDraft(startAt: Date) {
     schedulingVersion: 0,
     lobbyStatus: 'COUNTDOWN',
     lobbyOpenAt: new Date('2026-05-01T00:00:00.000Z'),
+    picks: [],
     orders: members.map((member) => ({
       id: `order-${member.id}`,
       draftId: 'draft-1',
@@ -116,6 +118,15 @@ describe('ensureLeagueDraftSetupConverged', () => {
         create: vi.fn().mockResolvedValue({}),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
+      player: {
+        count: vi.fn().mockResolvedValue(100),
+        groupBy: vi.fn().mockResolvedValue([
+          { position: 'DEF', _count: { _all: 50 } },
+          { position: 'MID', _count: { _all: 50 } },
+          { position: 'RUC', _count: { _all: 50 } },
+          { position: 'FWD', _count: { _all: 50 } },
+        ]),
+      },
     };
 
     const client = {
@@ -125,6 +136,12 @@ describe('ensureLeagueDraftSetupConverged', () => {
       },
       player: {
         count: vi.fn().mockResolvedValue(100),
+        groupBy: vi.fn().mockResolvedValue([
+          { position: 'DEF', _count: { _all: 50 } },
+          { position: 'MID', _count: { _all: 50 } },
+          { position: 'RUC', _count: { _all: 50 } },
+          { position: 'FWD', _count: { _all: 50 } },
+        ]),
       },
     };
     const readiness = await ensureLeagueDraftSetupConverged({
@@ -166,6 +183,7 @@ describe('ensureLeagueDraftSetupConverged', () => {
         ...buildSettings(startAt),
         rosterSize: 2,
         benchSize: 0,
+        positionLimitsJson: JSON.stringify({ DEF: 2, MID: 0, RUC: 0, FWD: 0, BENCH: 0 }),
       },
       members,
       drafts: [{ ...staleDraft, totalPicks: 4 }],
@@ -185,6 +203,15 @@ describe('ensureLeagueDraftSetupConverged', () => {
         create: vi.fn(),
         deleteMany: vi.fn(),
       },
+      player: {
+        count: vi.fn().mockResolvedValue(100),
+        groupBy: vi.fn().mockResolvedValue([
+          { position: 'DEF', _count: { _all: 50 } },
+          { position: 'MID', _count: { _all: 50 } },
+          { position: 'RUC', _count: { _all: 50 } },
+          { position: 'FWD', _count: { _all: 50 } },
+        ]),
+      },
     };
 
     const client = {
@@ -194,6 +221,12 @@ describe('ensureLeagueDraftSetupConverged', () => {
       },
       player: {
         count: vi.fn().mockResolvedValue(100),
+        groupBy: vi.fn().mockResolvedValue([
+          { position: 'DEF', _count: { _all: 50 } },
+          { position: 'MID', _count: { _all: 50 } },
+          { position: 'RUC', _count: { _all: 50 } },
+          { position: 'FWD', _count: { _all: 50 } },
+        ]),
       },
     };
 

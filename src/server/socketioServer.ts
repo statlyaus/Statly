@@ -24,6 +24,8 @@ import {
   observeHistogram,
   renderHistograms,
 } from '@/server/metrics';
+import { draftRepository } from '@/server/draft/repository/DraftRepository';
+import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 import { draftRoomStore } from '@/server/roomStore';
@@ -164,6 +166,41 @@ async function getDeltasSince(draftId: string, since: number): Promise<DraftDelt
   });
 }
 
+async function runAutoPickForExpiredTimer(draftId: string): Promise<void> {
+  const draft = await draftRepository.transaction((tx) => draftRepository.getDraftAggregate(tx, draftId));
+  if (!draft) {
+    logger.warn('Skipping timer auto-pick for missing draft', { draftId });
+    return;
+  }
+  if (draft.status !== 'LIVE') {
+    logger.info('Skipping timer auto-pick for non-live draft', { draftId, status: draft.status });
+    return;
+  }
+  if (!draft.pickDeadlineAt || draft.pickDeadlineAt.getTime() > Date.now()) {
+    logger.info('Skipping timer auto-pick before authoritative deadline', {
+      draftId,
+      pickDeadlineAt: draft.pickDeadlineAt?.toISOString() ?? null,
+    });
+    return;
+  }
+
+  try {
+    const result = await draftApplicationService.autoPick({
+      draftId,
+      expectedSchedulingVersion: draft.schedulingVersion,
+      requireExpired: true,
+    });
+    await draftRealtimePublisher.publishCommandResult(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith('conflict:')) {
+      logger.info('Skipping stale timer auto-pick after draft state changed', { draftId, error: message });
+      return;
+    }
+    logger.error('Failed to auto-pick after timer expiry', { draftId, error: message });
+  }
+}
+
 // Start or restart a draft timer and broadcast ticks/expiry
 async function startDraftTimer(draftId: string, opts?: { duration?: number; useLeader?: boolean }) {
   const useLeader = !!opts?.useLeader;
@@ -245,6 +282,7 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
       });
       incCounter(METRICS.timerExpired);
       await draftRealtimeDispatcher.publishTimerExpired(draftId);
+      await runAutoPickForExpiredTimer(draftId);
     }
   }, 1000);
   roomTimers.set(draftId, timer);

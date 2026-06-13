@@ -10,6 +10,12 @@ import {
   DEVELOPMENT_AUTH_EMAIL,
   DEVELOPMENT_AUTH_USER_ID,
 } from '@/lib/devAuth';
+import {
+  LOCAL_TEST_DRAFT_POSITION_LIMITS,
+  getBenchSizeFromPositionLimits,
+  getRosterSizeFromPositionLimits,
+} from '@/lib/draftSettings';
+import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
 
 /**
  * Create a test draft for development/testing
@@ -26,18 +32,26 @@ export async function POST(request: NextRequest) {
     const lobbyOpenTime = addMinutes(now, 1);
     const draftStartTime = addMinutes(now, 6);
     const teamCount = quickCompletionMode ? 2 : 12;
-    const totalRounds = quickCompletionMode ? 1 : 22;
-    const rosterSize = quickCompletionMode ? 1 : 22;
+    const positionLimits = { ...LOCAL_TEST_DRAFT_POSITION_LIMITS };
+    const rosterSize = getRosterSizeFromPositionLimits(positionLimits);
+    const benchSize = getBenchSizeFromPositionLimits(positionLimits);
+    const activePlayerCount = await prisma.player.count({ where: { active: true } });
+    const capacity = calculateDraftCapacity({
+      teamCount,
+      positionLimits,
+      activePlayerCount,
+    });
 
     const result = await prisma.$transaction(async (tx) => {
       // Create league settings first
       const settings = await tx.leagueSettings.create({
         data: {
           rosterSize,
-          benchSize: 0,
+          benchSize,
           maxTeams: teamCount,
           pickSeconds: 120,
           allowAutoPick: true,
+          positionLimitsJson: JSON.stringify(positionLimits),
           draftType: DraftType.SNAKE,
           startAt: draftStartTime,
           timeZone: 'UTC',
@@ -66,7 +80,7 @@ export async function POST(request: NextRequest) {
           lobbyStatus: 'CLOSED',
           lobbyOpenAt: lobbyOpenTime,
           currentPick: 1,
-          totalPicks: teamCount * totalRounds,
+          totalPicks: capacity.totalPicks,
           round: 1,
         },
       });
@@ -125,7 +139,7 @@ export async function POST(request: NextRequest) {
         leagueName: result.league.name,
         mode: quickCompletionMode ? 'quick-completion' : 'standard',
         teamCount,
-        totalRounds,
+        totalRounds: capacity.rosterSpotsPerTeam,
         totalPicks: result.draft.totalPicks,
         draftStartTime,
         lobbyOpenTime,

@@ -5,6 +5,7 @@ import {
   DEVELOPMENT_AUTH_EMAIL,
   isDevelopmentLogin,
   persistDevelopmentAuthUser,
+  resolveLocalDevelopmentAuthPhrase,
 } from '@/lib/devAuth';
 
 describe('fetchApi', () => {
@@ -30,7 +31,7 @@ describe('fetchApi', () => {
   });
 
   it('attaches the signed-in development user to internal API requests', async () => {
-    const localPassphrase = ['statly', 'dev'].join('-');
+    const localPassphrase = resolveLocalDevelopmentAuthPhrase();
 
     expect(isDevelopmentLogin(DEVELOPMENT_AUTH_EMAIL, localPassphrase)).toBe(true);
     persistDevelopmentAuthUser();

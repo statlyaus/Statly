@@ -70,4 +70,17 @@ describe('draft command routes', () => {
     expect(worker).toContain('draftApplicationService.autoPick({ draftId })');
     expect(worker).toContain('draftApplicationService.startDraft({ draftId: scheduledDraft })');
   });
+
+  it('advances the authoritative draft when the Socket.IO live timer expires', () => {
+    const socketServer = read('src/server/socketioServer.ts');
+
+    expect(socketServer).toContain('async function runAutoPickForExpiredTimer');
+    expect(socketServer).toContain('draftApplicationService.autoPick');
+    expect(socketServer).toContain('expectedSchedulingVersion: draft.schedulingVersion');
+    expect(socketServer).toContain('requireExpired: true');
+    expect(socketServer).toContain('draftRealtimePublisher.publishCommandResult(result)');
+    expect(socketServer.indexOf('publishTimerExpired(draftId)')).toBeLessThan(
+      socketServer.indexOf('runAutoPickForExpiredTimer(draftId)')
+    );
+  });
 });

@@ -1,95 +1,42 @@
+import type { NextRequest } from 'next/server';
+
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { cookies } from 'next/headers';
-import { adminAuth } from '@/lib/firebaseAdmin';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { LAST_LEAGUE_ID_COOKIE, parseLeaguePreference } from '@/lib/uiPreferences';
+import {
+  getDraftHistoryList,
+  parseDraftHistoryLimit,
+} from '@/server/draft/readModels/draftHistoryReadModel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   let userId: string | undefined;
 
   try {
-    // Verify user authentication
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('statly_session')?.value;
-
-    if (!sessionCookie) {
+    const authenticatedUserId = await getAuthenticatedUserId(request);
+    if (!authenticatedUserId) {
       return errorResponse('Unauthorized', 401);
     }
+    userId = authenticatedUserId;
 
-    try {
-      const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-      userId = decoded.uid;
-    } catch (_verifyErr) {
-      return errorResponse('Unauthorized', 401);
-    }
-
-    const drafts = await prisma.draft.findMany({
-      where: {
-        status: 'COMPLETED',
-        league: {
-          members: {
-            some: { userId },
-          },
-        },
-      },
-      include: {
-        league: {
-          include: {
-            members: {
-              include: {
-                user: true,
-              },
-              orderBy: { draftSlot: 'asc' },
-            },
-          },
-        },
-        picks: {
-          include: {
-            player: true,
-            member: {
-              include: {
-                user: true,
-              },
-            },
-          },
-          orderBy: { overall: 'asc' },
-        },
-      },
-      orderBy: { completedAt: 'desc' },
+    const url = new URL(request.url);
+    const selectedLeagueId = parseLeaguePreference(
+      url.searchParams.get('leagueId') ?? request.cookies.get(LAST_LEAGUE_ID_COOKIE)?.value
+    );
+    const draftHistory = await getDraftHistoryList(prisma, userId, {
+      limit: parseDraftHistoryLimit(url.searchParams.get('limit')),
+      leagueId: selectedLeagueId,
     });
-
-    const draftHistory = drafts.map((draft) => ({
-      id: draft.id,
-      name: draft.league.name,
-      status: draft.status,
-      createdAt: draft.createdAt.toISOString(),
-      completedAt: draft.completedAt?.toISOString(),
-      totalPicks: draft.totalPicks,
-      participants: draft.league.members.map((member) => ({
-        id: member.id,
-        displayName: member.user.displayName,
-        teamName: member.teamName,
-        picks: draft.picks
-          .filter((pick) => pick.memberId === member.id)
-          .map((pick) => ({
-            player: {
-              name: pick.player.name,
-              position: pick.player.position,
-              club: pick.player.club,
-            },
-            overall: pick.overall,
-            round: pick.round,
-          })),
-      })),
-    }));
 
     logger.info('Draft history retrieved', {
       userId,
-      draftCount: draftHistory.length,
+      leagueId: selectedLeagueId,
+      draftCount: draftHistory.drafts.length,
     });
 
     return successResponse(draftHistory);

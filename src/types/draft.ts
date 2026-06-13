@@ -1,5 +1,6 @@
 // Unified Draft Types - Single source of truth for all draft data
 import type { DraftOperationalReadiness } from './draftReadiness';
+import type { FantasyCategoryKey } from './fantasyCategories';
 
 export type DraftStatus =
   | 'SCHEDULED'
@@ -31,6 +32,9 @@ export interface DraftPlayer {
   stats?: Partial<import('@/types/fantasyCategories').PlayerStats>;
   statsTotal?: Partial<import('@/types/fantasyCategories').PlayerStats>;
   gamesPlayed?: number;
+  statlyZScore?: number;
+  statlyZBreakdown?: Array<{ category: FantasyCategoryKey; value: number; zScore: number }>;
+  statlyZMissingCategories?: FantasyCategoryKey[];
 }
 
 export interface DraftParticipant {

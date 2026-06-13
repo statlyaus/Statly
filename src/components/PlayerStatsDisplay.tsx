@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactElement } from 'react';
+
 import {
   FANTASY_CATEGORIES,
   type FantasyCategoryKey,
@@ -24,7 +26,7 @@ export default function PlayerStatsDisplay({
   showLabels = true,
   compact = false,
   className = '',
-}: PlayerStatsDisplayProps) {
+}: PlayerStatsDisplayProps): ReactElement {
   if (!selectedCategories.length) {
     return (
       <div className={`text-xs text-muted-foreground ${className}`}>No categories selected</div>
@@ -103,36 +105,50 @@ export function CompactStatsRow({
   maxDisplay = 4,
   className = '',
 }: {
-  stats?: PlayerStats;
+  stats?: Partial<PlayerStats>;
   selectedCategories: FantasyCategoryKey[];
   maxDisplay?: number;
   className?: string;
-}) {
-  const displayCategories = selectedCategories.slice(0, maxDisplay);
-  const remainingCount = selectedCategories.length - maxDisplay;
+}): ReactElement {
+  const availableCategories = selectedCategories.filter((category) => FANTASY_CATEGORIES[category]);
+  const displayCategories = availableCategories.slice(0, maxDisplay);
+  const remainingCount = availableCategories.length - maxDisplay;
+
+  if (!stats || displayCategories.length === 0) {
+    return (
+      <div
+        className={`inline-flex items-center rounded-md border border-dashed border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground ${className}`}
+      >
+        League stats unavailable
+      </div>
+    );
+  }
 
   return (
-    <div className={`grid grid-cols-3 gap-1.5 text-xs sm:grid-cols-5 xl:grid-cols-9 ${className}`}>
+    <div
+      className={`grid overflow-hidden rounded-md border border-border bg-muted/25 text-xs ${className}`}
+      style={{ gridTemplateColumns: `repeat(${displayCategories.length}, minmax(0, 1fr))` }}
+    >
       {displayCategories.map((category) => {
         const categoryData = FANTASY_CATEGORIES[category];
-        const value = stats ? stats[category] : undefined;
-        const perGameValue = typeof value === 'number' && Number.isFinite(value) ? value : 0;
-        const displayValue =
-          categoryData.format === 'percentage'
-            ? `${perGameValue.toFixed(1)}%`
-            : perGameValue.toFixed(1);
-        const colorClass = getStatColor(typeof value === 'number' ? value : undefined, category);
+        const value = stats[category];
+        const hasValue = typeof value === 'number' && Number.isFinite(value);
+        const displayValue = hasValue
+          ? categoryData.format === 'percentage'
+            ? `${value.toFixed(1)}%`
+            : value.toFixed(categoryData.format === 'decimal' ? 2 : 1)
+          : '—';
 
         return (
           <div
             key={category}
-            className="rounded-md border border-border bg-background px-2 py-1"
+            className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-1.5 border-r border-border/70 px-2 py-1.5 last:border-r-0"
             aria-label={`${categoryData.label}: ${displayValue}`}
           >
-            <span className="block text-[10px] font-semibold uppercase leading-none text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase leading-none text-muted-foreground">
               {categoryData.abbrev}
             </span>
-            <span className={`mt-1 block font-semibold tabular-nums ${colorClass}`}>
+            <span className="min-w-0 text-right font-semibold tabular-nums text-foreground">
               {displayValue}
             </span>
           </div>
@@ -156,7 +172,7 @@ export function FantasyPointsSummary({
   selectedCategories: FantasyCategoryKey[];
   weights?: Record<FantasyCategoryKey, number>;
   className?: string;
-}) {
+}): ReactElement {
   if (!stats) {
     return <div className={`text-xs text-muted-foreground ${className}`}>No stats available</div>;
   }

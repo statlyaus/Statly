@@ -1,5 +1,6 @@
 'use client';
 
+// Legacy reference table only. The live draft room uses src/components/draft/PlayerGrid.tsx.
 import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

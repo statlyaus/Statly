@@ -15,6 +15,7 @@ import type {
   DraftParticipantSnapshot,
   DraftSettingsSnapshot,
 } from '../domain/draftTypes';
+import { parseSelectedCategories } from '../readModels/draftPlayerReadModel';
 
 type TxClient = PrismaNS.TransactionClient;
 
@@ -66,6 +67,7 @@ function toOutboxEventRecord(event: DraftEventRecord): DraftOutboxEventRecord {
 }
 
 function toSettingsSnapshot(settings: {
+  selectedCategories?: unknown;
   rosterSize: number;
   benchSize: number;
   pickSeconds: number;
@@ -79,6 +81,7 @@ function toSettingsSnapshot(settings: {
     benchSize: settings.benchSize,
     pickSeconds: settings.pickSeconds,
     allowAutoPick: settings.allowAutoPick,
+    selectedCategories: parseSelectedCategories(settings.selectedCategories),
     positionLimits: normalizeDraftPositionLimits(settings.positionLimitsJson),
     autoPickRules: normalizeDraftAutoPickRules(settings.autoPickRulesJson),
     draftType: settings.draftType as DraftSettingsSnapshot['draftType'],
@@ -167,7 +170,10 @@ export class DraftRepository {
       pickDeadlineAt: draft.pickDeadlineAt,
       pausedRemainingSeconds: draft.pausedRemainingSeconds,
       schedulingVersion: draft.schedulingVersion,
-      settings: toSettingsSnapshot(draft.league.settings),
+      settings: toSettingsSnapshot({
+        ...draft.league.settings,
+        selectedCategories: draft.league.categoriesJson,
+      }),
       participants: draft.orders.map(toParticipantSnapshot),
       picks: draft.picks.map(toPickSnapshot),
     };
@@ -199,11 +205,11 @@ export class DraftRepository {
     });
   }
 
-  async findBestAvailablePlayer(
+  async listAvailableAutoPickCandidates(
     tx: TxClient,
     excludedPlayerIds: string[]
-  ): Promise<DraftPlayerSnapshot | null> {
-    return tx.player.findFirst({
+  ): Promise<DraftPlayerSnapshot[]> {
+    return tx.player.findMany({
       where: {
         id: { notIn: excludedPlayerIds },
         active: true,

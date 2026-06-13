@@ -18,6 +18,9 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
+const useFirebaseEmulators =
+  process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_USE_EMULATORS === 'true';
+
 // In development, it's helpful to see if the keys are loaded, but avoid logging the actual keys.
 if (process.env.NODE_ENV === 'development') {
   console.log('Firebase keys loaded:', {
@@ -45,16 +48,13 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
       console.warn('Failed to set Firebase auth persistence:', e);
     }
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && firebaseConfig.measurementId && !useFirebaseEmulators) {
       analytics = getAnalytics(app);
     }
 
     // Optional: connect to local emulators when enabled (development only)
     if (
-      process.env.NODE_ENV !== 'production' &&
-      process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' &&
-      db &&
-      auth
+      useFirebaseEmulators && db && auth
     ) {
       const fsHost = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST ?? '127.0.0.1';
       const fsPort = Number(process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT ?? '8080');
