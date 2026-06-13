@@ -81,6 +81,11 @@ const AuthForm = ({
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [touched, setTouched] = useState({
+    email: false,
+    password: false,
+  });
   const [validation, setValidation] = useState<FormValidation>({
     email: { isValid: true, message: '' },
     password: { isValid: true, message: '' },
@@ -143,6 +148,7 @@ const AuthForm = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setHasSubmitted(true);
     setIsSubmitting(true);
 
     // Validation
@@ -274,6 +280,11 @@ const AuthForm = ({
   const handleModeSwitch = () => {
     setIsSignup(!isSignup);
     setError(null);
+    setHasSubmitted(false);
+    setTouched({
+      email: false,
+      password: false,
+    });
     setPassword('');
     setConfirmPassword('');
     setValidation({
@@ -370,6 +381,9 @@ const AuthForm = ({
     );
   }
 
+  const showEmailError = (hasSubmitted || touched.email) && !validation.email.isValid;
+  const showPasswordError = (hasSubmitted || touched.password) && !validation.password.isValid;
+
   return (
     <>
       <NotificationToast notification={notification} />
@@ -380,7 +394,7 @@ const AuthForm = ({
         className={className}
       >
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           {/* Email Field */}
           <div className="space-y-2">
             <label
@@ -393,7 +407,7 @@ const AuthForm = ({
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <EnvelopeIcon
                   className={`w-5 h-5 transition-colors ${
-                    !validation.email.isValid
+                    showEmailError
                       ? 'text-red-400'
                       : email && validation.email.isValid
                         ? 'text-green-500'
@@ -406,7 +420,7 @@ const AuthForm = ({
                 type="email"
                 placeholder="Enter your email address"
                 className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                  !validation.email.isValid
+                  showEmailError
                     ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100'
                     : email && validation.email.isValid
                       ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
@@ -414,8 +428,9 @@ const AuthForm = ({
                 }`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => setTouched((current) => ({ ...current, email: true }))}
                 required
-                aria-describedby={!validation.email.isValid ? 'email-error' : undefined}
+                aria-describedby={showEmailError ? 'email-error' : undefined}
               />
               {email && validation.email.isValid && (
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
@@ -423,7 +438,7 @@ const AuthForm = ({
                 </div>
               )}
             </div>
-            {!validation.email.isValid && (
+            {showEmailError && (
               <p
                 id="email-error"
                 className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1"
@@ -446,7 +461,7 @@ const AuthForm = ({
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <LockClosedIcon
                   className={`w-5 h-5 transition-colors ${
-                    !validation.password.isValid
+                    showPasswordError
                       ? 'text-red-400'
                       : password && validation.password.isValid
                         ? 'text-green-500'
@@ -459,7 +474,7 @@ const AuthForm = ({
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Enter your password"
                 className={`block w-full pl-10 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                  !validation.password.isValid
+                  showPasswordError
                     ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100'
                     : password && validation.password.isValid
                       ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
@@ -467,8 +482,9 @@ const AuthForm = ({
                 }`}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => setTouched((current) => ({ ...current, password: true }))}
                 required
-                aria-describedby={!validation.password.isValid ? 'password-error' : undefined}
+                aria-describedby={showPasswordError ? 'password-error' : undefined}
               />
               <button
                 type="button"
@@ -522,7 +538,7 @@ const AuthForm = ({
               </div>
             )}
 
-            {!validation.password.isValid && (
+            {showPasswordError && (
               <p
                 id="password-error"
                 className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1 mt-2"
@@ -608,7 +624,7 @@ const AuthForm = ({
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             type="submit"
-            disabled={isSubmitting || !validation.email.isValid || !validation.password.isValid}
+            disabled={isSubmitting}
             className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? (
