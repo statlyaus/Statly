@@ -33,6 +33,9 @@ describe('draft history route architecture', () => {
 
     expect(summaryRoute).toContain('getDraftHistoryList(prisma, userId');
     expect(summaryRoute).toContain('parseDraftHistoryLimit');
+    expect(summaryRoute).toContain('LAST_LEAGUE_ID_COOKIE');
+    expect(summaryRoute).toContain("url.searchParams.get('leagueId')");
+    expect(summaryRoute).toContain('request.cookies.get(LAST_LEAGUE_ID_COOKIE)');
     expect(summaryRoute).not.toContain('prisma.draft.findMany');
     expect(detailRoute).toContain('getDraftHistoryDetail(prisma, userId, draftId)');
     expect(detailRoute).toContain("errorResponse('Draft history not found', 404)");
@@ -51,7 +54,12 @@ describe('draft history route architecture', () => {
 
     expect(summaryPage).toContain('Open full history');
     expect(summaryPage).toContain('Search leagues, teams, managers, or players');
+    expect(summaryPage).toContain('readCookieValue(document.cookie, LAST_LEAGUE_ID_COOKIE)');
+    expect(summaryPage).toContain('drafts/history?limit=50&leagueId=');
+    expect(summaryPage).toContain('/drafts/history/${draft.id}?leagueId=');
     expect(summaryPage).not.toContain('.slice(0, 8)');
+    expect(detailPage).toContain('buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, draft.leagueId)');
+    expect(detailPage).toContain('backToHistoryHref');
     expect(detailPage).toContain("type DetailTab = 'rounds' | 'rosters' | 'timeline'");
     expect(detailPage).toContain('Round {round.round}');
     expect(detailPage).toContain('Pick timeline');

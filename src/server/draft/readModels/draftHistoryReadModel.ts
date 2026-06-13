@@ -86,6 +86,7 @@ export interface DraftHistoryListResult {
 
 type DraftHistoryQueryOptions = {
   limit?: number;
+  leagueId?: string;
 };
 
 type DraftRecord = Awaited<ReturnType<typeof fetchDraftHistoryRecords>>[number];
@@ -268,7 +269,7 @@ export async function getDraftHistoryList(
   options: DraftHistoryQueryOptions = {}
 ): Promise<DraftHistoryListResult> {
   const limit = Math.min(Math.max(options.limit ?? DEFAULT_HISTORY_LIMIT, 1), MAX_HISTORY_LIMIT);
-  const records = await fetchDraftHistoryRecords(db, userId, limit + 1);
+  const records = await fetchDraftHistoryRecords(db, userId, limit + 1, options.leagueId);
   const visibleRecords = records.slice(0, limit);
   const drafts = visibleRecords.map(mapDraftHistoryRecord);
 
@@ -350,9 +351,15 @@ function historyDraftInclude() {
   };
 }
 
-async function fetchDraftHistoryRecords(db: DraftHistoryDb, userId: string, take: number) {
+async function fetchDraftHistoryRecords(
+  db: DraftHistoryDb,
+  userId: string,
+  take: number,
+  leagueId?: string
+) {
   return db.draft.findMany({
     where: {
+      ...(leagueId ? { leagueId } : {}),
       status: 'COMPLETED',
       league: {
         members: {

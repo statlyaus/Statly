@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   calculateDraftCompletionPct,
@@ -63,5 +65,17 @@ describe('draft history read model helpers', () => {
     expect(calculateDraftCompletionPct(0, 0)).toBe(0);
     expect(calculateDraftCompletionPct(2, 4)).toBe(50);
     expect(calculateDraftCompletionPct(5, 4)).toBe(100);
+  });
+
+  it('supports selected-league scoping at the Prisma read boundary', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/server/draft/readModels/draftHistoryReadModel.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('leagueId?: string');
+    expect(source).toContain('options.leagueId');
+    expect(source).toContain('...(leagueId ? { leagueId } : {})');
+    expect(source).toContain('some: { userId }');
   });
 });

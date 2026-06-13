@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
 import { useAuth } from '@/AuthContext';
 import { AppLayout } from '@/components/navigation';
 import { fetchApi } from '@/lib/api';
+import { buildPreferenceCookie, LAST_LEAGUE_ID_COOKIE } from '@/lib/uiPreferences';
 import type {
   DraftHistoryDetail,
   DraftHistoryParticipant,
@@ -53,12 +54,18 @@ function getErrorMessage(error: unknown) {
 
 export default function DraftHistoryDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [draft, setDraft] = useState<DraftHistoryDetail | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>('rounds');
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const queryLeagueId = searchParams?.get('leagueId') ?? '';
+  const activeLeagueId = draft?.leagueId ?? queryLeagueId;
+  const backToHistoryHref = activeLeagueId
+    ? `/drafts/history?leagueId=${encodeURIComponent(activeLeagueId)}`
+    : '/drafts/history';
 
   useEffect(() => {
     const fetchDraftHistoryDetail = async () => {
@@ -87,6 +94,11 @@ export default function DraftHistoryDetailPage() {
 
     fetchDraftHistoryDetail();
   }, [params?.id, user]);
+
+  useEffect(() => {
+    if (!draft?.leagueId || typeof document === 'undefined') return;
+    document.cookie = buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, draft.leagueId);
+  }, [draft?.leagueId]);
 
   const filteredTimeline = useMemo(() => {
     const timeline = draft?.timeline ?? [];
@@ -138,7 +150,7 @@ export default function DraftHistoryDetailPage() {
         <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
           <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
             <Link
-              href="/drafts/history"
+              href={backToHistoryHref}
               className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -162,6 +174,7 @@ export default function DraftHistoryDetailPage() {
                     <span>{draft.teamCount} teams</span>
                     <span>{draft.totalRounds} rounds</span>
                     <span>{draft.selectedCategories.length} categories</span>
+                    <span>League ID {draft.leagueId}</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

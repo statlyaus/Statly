@@ -4,6 +4,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { LAST_LEAGUE_ID_COOKIE, parseLeaguePreference } from '@/lib/uiPreferences';
 import {
   getDraftHistoryList,
   parseDraftHistoryLimit,
@@ -24,12 +25,17 @@ export async function GET(request: NextRequest) {
     userId = authenticatedUserId;
 
     const url = new URL(request.url);
+    const selectedLeagueId = parseLeaguePreference(
+      url.searchParams.get('leagueId') ?? request.cookies.get(LAST_LEAGUE_ID_COOKIE)?.value
+    );
     const draftHistory = await getDraftHistoryList(prisma, userId, {
       limit: parseDraftHistoryLimit(url.searchParams.get('limit')),
+      leagueId: selectedLeagueId,
     });
 
     logger.info('Draft history retrieved', {
       userId,
+      leagueId: selectedLeagueId,
       draftCount: draftHistory.drafts.length,
     });
 

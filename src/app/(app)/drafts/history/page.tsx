@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   Archive,
@@ -17,7 +18,16 @@ import {
 import { useAuth } from '@/AuthContext';
 import { AppLayout } from '@/components/navigation';
 import { fetchApi } from '@/lib/api';
-import type { DraftHistoryListResult, DraftHistorySummary } from '@/server/draft/readModels/draftHistoryReadModel';
+import {
+  buildPreferenceCookie,
+  LAST_LEAGUE_ID_COOKIE,
+  parseLeaguePreference,
+  readCookieValue,
+} from '@/lib/uiPreferences';
+import type {
+  DraftHistoryListResult,
+  DraftHistorySummary,
+} from '@/server/draft/readModels/draftHistoryReadModel';
 
 function formatDate(dateString: string | null) {
   if (!dateString) return 'Not recorded';
@@ -60,10 +70,14 @@ function getErrorMessage(error: unknown) {
 
 export default function DraftHistoryPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
   const [history, setHistory] = useState<DraftHistoryListResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [selectedLeagueId, setSelectedLeagueId] = useState('');
+
+  const queryLeagueId = searchParams?.get('leagueId') ?? '';
 
   useEffect(() => {
     const fetchDraftHistory = async () => {
@@ -75,7 +89,21 @@ export default function DraftHistoryPage() {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await fetchApi('drafts/history?limit=50');
+        const persistedLeagueId =
+          typeof document === 'undefined'
+            ? undefined
+            : readCookieValue(document.cookie, LAST_LEAGUE_ID_COOKIE);
+        const scopedLeagueId = parseLeaguePreference(queryLeagueId || persistedLeagueId);
+        setSelectedLeagueId(scopedLeagueId ?? '');
+
+        if (scopedLeagueId && queryLeagueId) {
+          document.cookie = buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, scopedLeagueId);
+        }
+
+        const endpoint = scopedLeagueId
+          ? `drafts/history?limit=50&leagueId=${encodeURIComponent(scopedLeagueId)}`
+          : 'drafts/history?limit=50';
+        const response = await fetchApi(endpoint);
 
         if (response.success) {
           setHistory(response.data);
@@ -91,7 +119,7 @@ export default function DraftHistoryPage() {
     };
 
     fetchDraftHistory();
-  }, [user]);
+  }, [queryLeagueId, user]);
 
   const filteredDrafts = useMemo(() => {
     const drafts = history?.drafts ?? [];
@@ -208,6 +236,14 @@ export default function DraftHistoryPage() {
                 Showing {filteredDrafts.length} of {history?.drafts.length ?? 0} completed drafts
               </p>
             </div>
+            {selectedLeagueId ? (
+              <p className="mt-3 text-sm font-medium text-muted-foreground">
+                League scope:{' '}
+                <span className="text-foreground">
+                  {history?.drafts[0]?.name ?? selectedLeagueId}
+                </span>
+              </p>
+            ) : null}
           </section>
 
           {isLoading && (
@@ -341,7 +377,7 @@ function DraftHistoryCard({ draft }: { draft: DraftHistorySummary }) {
           </div>
         </div>
         <Link
-          href={`/drafts/history/${draft.id}`}
+          href={`/drafts/history/${draft.id}?leagueId=${encodeURIComponent(draft.leagueId)}`}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Open full history

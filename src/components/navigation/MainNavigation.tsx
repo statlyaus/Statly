@@ -297,6 +297,7 @@ function shouldShowLeagueSwitcher(pathname: string | null | undefined): boolean 
     p === '/dashboard' ||
     p === '/' ||
     p.startsWith('/leagues') ||
+    p.startsWith('/drafts') ||
     p.startsWith('/players') ||
     p.startsWith('/live-scoring') ||
     p.startsWith('/waivers') ||
