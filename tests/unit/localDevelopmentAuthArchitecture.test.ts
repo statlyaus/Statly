@@ -37,13 +37,13 @@ describe('local development auth architecture', () => {
     expect(source).not.toMatch(/const userId = i === 1 \? 'test-user'/);
   });
 
-  it('keeps quick-completion draft fixtures local while preserving the full default draft', () => {
+  it('keeps quick-completion draft fixtures local while preserving a feasible full draft', () => {
     const source = read('src/app/api/create-test-draft/route.ts');
 
     expect(source).toContain("process.env.NODE_ENV !== 'production'");
     expect(source).toContain("body?.mode === 'quick-completion'");
     expect(source).toContain('const teamCount = quickCompletionMode ? 2 : 12');
-    expect(source).toContain('const positionLimits = { ...DEFAULT_DRAFT_POSITION_LIMITS }');
+    expect(source).toContain('const positionLimits = { ...LOCAL_TEST_DRAFT_POSITION_LIMITS }');
     expect(source).toContain('calculateDraftCapacity');
     expect(source).toContain('positionLimitsJson: JSON.stringify(positionLimits)');
     expect(source).not.toContain('const totalRounds = quickCompletionMode ? 1 : 22');

@@ -66,7 +66,29 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('prisma.leagueMember.updateMany');
     expect(source).toContain('ownerId: DEVELOPMENT_AUTH_USER_ID');
     expect(source).toContain('userId: DEVELOPMENT_AUTH_USER_ID');
+    expect(source).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
+    expect(source).toContain('LOCAL_TEST_DRAFT_POSITION_LIMITS');
+    expect(source).toContain('DEFAULT_DRAFT_AUTO_PICK_RULES');
+    expect(source).toContain('positionLimitsJson');
+    expect(source).toContain('autoPickRulesJson');
+    expect(source).toContain('pickDeadlineAt');
+    expect(source).toContain('draft.pickDeadlineAt.getTime() > now.getTime()');
+    expect(source).toContain('schedulingVersion: { increment: 1 }');
     expect(source).toContain("adminDb.collection('users').doc(DEVELOPMENT_AUTH_USER_ID)");
+  });
+
+  it('creates feasible full local draft fixtures for the current local player pool', () => {
+    const draftSettings = read('src/lib/draftSettings.ts');
+    const createTestDraft = read('src/app/api/create-test-draft/route.ts');
+
+    expect(draftSettings).toContain('LOCAL_TEST_DRAFT_POSITION_LIMITS');
+    expect(draftSettings).toContain('DEF: 1');
+    expect(draftSettings).toContain('MID: 15');
+    expect(draftSettings).toContain('RUC: 1');
+    expect(draftSettings).toContain('FWD: 1');
+    expect(draftSettings).toContain('BENCH: 4');
+    expect(createTestDraft).toContain('LOCAL_TEST_DRAFT_POSITION_LIMITS');
+    expect(createTestDraft).not.toContain('DEFAULT_DRAFT_POSITION_LIMITS');
   });
 
   it('smoke tests local auth, firestore, socket, next, and full draft fixture', () => {

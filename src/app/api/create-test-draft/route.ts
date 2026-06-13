@@ -11,7 +11,7 @@ import {
   DEVELOPMENT_AUTH_USER_ID,
 } from '@/lib/devAuth';
 import {
-  DEFAULT_DRAFT_POSITION_LIMITS,
+  LOCAL_TEST_DRAFT_POSITION_LIMITS,
   getBenchSizeFromPositionLimits,
   getRosterSizeFromPositionLimits,
 } from '@/lib/draftSettings';
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const lobbyOpenTime = addMinutes(now, 1);
     const draftStartTime = addMinutes(now, 6);
     const teamCount = quickCompletionMode ? 2 : 12;
-    const positionLimits = { ...DEFAULT_DRAFT_POSITION_LIMITS };
+    const positionLimits = { ...LOCAL_TEST_DRAFT_POSITION_LIMITS };
     const rosterSize = getRosterSizeFromPositionLimits(positionLimits);
     const benchSize = getBenchSizeFromPositionLimits(positionLimits);
     const activePlayerCount = await prisma.player.count({ where: { active: true } });
