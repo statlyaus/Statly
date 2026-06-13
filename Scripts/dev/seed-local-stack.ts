@@ -6,8 +6,6 @@ process.env.GOOGLE_CLOUD_PROJECT ??= 'statly-4cbed';
 process.env.GCLOUD_PROJECT ??= process.env.GOOGLE_CLOUD_PROJECT;
 process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??= process.env.GOOGLE_CLOUD_PROJECT;
 
-const LOCAL_PASSWORD = ['statly', 'dev'].join('-');
-
 async function main() {
   const { adminAuth, adminDb } = await import('../../src/lib/firebaseAdmin');
   const { prisma } = await import('../../src/lib/prisma');
@@ -15,13 +13,15 @@ async function main() {
     DEVELOPMENT_AUTH_DISPLAY_NAME,
     DEVELOPMENT_AUTH_EMAIL,
     DEVELOPMENT_AUTH_USER_ID,
+    resolveLocalDevelopmentAuthPhrase,
   } = await import('../../src/lib/devAuth');
+  const localAuthPhrase = resolveLocalDevelopmentAuthPhrase();
 
   try {
     await adminAuth.getUser(DEVELOPMENT_AUTH_USER_ID);
     await adminAuth.updateUser(DEVELOPMENT_AUTH_USER_ID, {
       email: DEVELOPMENT_AUTH_EMAIL,
-      password: LOCAL_PASSWORD,
+      password: localAuthPhrase,
       displayName: DEVELOPMENT_AUTH_DISPLAY_NAME,
       emailVerified: true,
       disabled: false,
@@ -31,7 +31,7 @@ async function main() {
     await adminAuth.createUser({
       uid: DEVELOPMENT_AUTH_USER_ID,
       email: DEVELOPMENT_AUTH_EMAIL,
-      password: LOCAL_PASSWORD,
+      password: localAuthPhrase,
       displayName: DEVELOPMENT_AUTH_DISPLAY_NAME,
       emailVerified: true,
       disabled: false,
@@ -68,7 +68,7 @@ async function main() {
   );
   console.log(`[local-seed] Upserted Firestore user ${DEVELOPMENT_AUTH_USER_ID}`);
 
-  console.log('[local-seed] Local login ready: admin@statly.dev / statly-dev');
+  console.log(`[local-seed] Local login ready: ${DEVELOPMENT_AUTH_EMAIL} / ${localAuthPhrase}`);
 }
 
 main().catch((error) => {

@@ -53,7 +53,8 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('FIREBASE_AUTH_EMULATOR_HOST');
     expect(source).toContain('DEVELOPMENT_AUTH_USER_ID');
     expect(source).toContain('DEVELOPMENT_AUTH_EMAIL');
-    expect(source).toContain("['statly', 'dev'].join('-')");
+    expect(source).toContain('resolveLocalDevelopmentAuthPhrase');
+    expect(source).not.toContain('LOCAL_PASSWORD');
     expect(source).toContain('adminAuth.createUser');
     expect(source).toContain('adminAuth.updateUser');
     expect(source).toContain('prisma.user.upsert');
@@ -76,7 +77,8 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('DEVELOPMENT_AUTH_USER_ID');
     expect(source).toContain('DEVELOPMENT_AUTH_EMAIL');
     expect(source).toContain('DEVELOPMENT_AUTH_DISPLAY_NAME');
-    expect(source).toContain("['statly', 'dev'].join('-')");
+    expect(source).toContain('resolveLocalDevelopmentAuthPhrase');
+    expect(source).not.toContain('LOCAL_DEVELOPMENT_PASSWORD');
     expect(source).not.toContain('2qlfdHSCFTPlxoKFSUfNLSlCDRe2');
     expect(source).not.toContain('League Admin');
   });
@@ -87,7 +89,8 @@ describe('local full stack development architecture', () => {
     expect(docs).toContain('npm run dev:full:local');
     expect(docs).toContain('npm run dev:smoke:local');
     expect(docs).toContain('admin@statly.dev');
-    expect(docs).toContain('statly-dev');
+    expect(docs).toContain('STATLY_LOCAL_AUTH_PHRASE');
+    expect(docs).toContain('Use the local password printed by `npm run dev:full:local`');
     expect(docs).toContain('The legacy development-auth fallback remains available only');
   });
 });

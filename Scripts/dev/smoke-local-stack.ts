@@ -10,7 +10,6 @@ const BASE_URL = process.env.APP_BASE_URL ?? 'http://localhost:3000';
 const SOCKET_HEALTH_URL = process.env.SOCKET_HEALTH_URL ?? 'http://localhost:3002/health';
 const AUTH_EMULATOR_URL =
   process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL ?? 'http://127.0.0.1:9099';
-const LOCAL_PASSWORD = ['statly', 'dev'].join('-');
 
 type JsonRecord = Record<string, unknown>;
 
@@ -28,7 +27,7 @@ async function assertFetchOk(label: string, input: string, init?: RequestInit): 
   return response;
 }
 
-async function assertAuthLogin(email: string): Promise<void> {
+async function assertAuthLogin(email: string, password: string): Promise<void> {
   const response = await assertFetchOk(
     'Firebase Auth emulator sign-in',
     `${AUTH_EMULATOR_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=local-emulator-key`,
@@ -37,7 +36,7 @@ async function assertAuthLogin(email: string): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email,
-        password: LOCAL_PASSWORD,
+        password,
         returnSecureToken: true,
       }),
     }
@@ -53,7 +52,9 @@ async function main() {
   const {
     DEVELOPMENT_AUTH_EMAIL,
     DEVELOPMENT_AUTH_USER_ID,
+    resolveLocalDevelopmentAuthPhrase,
   } = await import('../../src/lib/devAuth');
+  const localAuthPhrase = resolveLocalDevelopmentAuthPhrase();
 
   await assertFetchOk('Next app', `${BASE_URL}/`);
 
@@ -63,7 +64,7 @@ async function main() {
     throw new Error(`Socket.IO health returned unexpected status: ${String(health.status)}`);
   }
 
-  await assertAuthLogin(DEVELOPMENT_AUTH_EMAIL);
+  await assertAuthLogin(DEVELOPMENT_AUTH_EMAIL, localAuthPhrase);
 
   const userDoc = await adminDb.collection('users').doc(DEVELOPMENT_AUTH_USER_ID).get();
   if (!userDoc.exists) {

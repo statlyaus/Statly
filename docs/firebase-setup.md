@@ -130,8 +130,11 @@ Local test login:
 
 ```text
 admin@statly.dev
-statly-dev
+Use the local password printed by `npm run dev:full:local`.
 ```
+
+The local password is generated from the shared dev-auth resolver unless you set
+`STATLY_LOCAL_AUTH_PHRASE` before starting the stack.
 
 After the stack is ready, run the smoke check:
 

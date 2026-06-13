@@ -4,10 +4,9 @@ import {
   DEVELOPMENT_AUTH_DISPLAY_NAME,
   DEVELOPMENT_AUTH_EMAIL,
   DEVELOPMENT_AUTH_USER_ID,
+  resolveLocalDevelopmentAuthPhrase,
 } from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
-
-const LOCAL_DEVELOPMENT_PASSWORD = ['statly', 'dev'].join('-');
 
 export async function POST(_request: NextRequest) {
   // Only allow in development
@@ -17,11 +16,12 @@ export async function POST(_request: NextRequest) {
 
   try {
     const { adminAuth } = await import('@/lib/firebaseAdmin');
+    const localDevelopmentAuthPhrase = resolveLocalDevelopmentAuthPhrase();
 
     const testUser = {
       uid: DEVELOPMENT_AUTH_USER_ID,
       email: DEVELOPMENT_AUTH_EMAIL,
-      password: LOCAL_DEVELOPMENT_PASSWORD,
+      password: localDevelopmentAuthPhrase,
       displayName: DEVELOPMENT_AUTH_DISPLAY_NAME,
       emailVerified: true,
     };
@@ -62,7 +62,7 @@ export async function POST(_request: NextRequest) {
       },
       credentials: {
         email: DEVELOPMENT_AUTH_EMAIL,
-        password: LOCAL_DEVELOPMENT_PASSWORD,
+        password: localDevelopmentAuthPhrase,
       },
       customToken,
     });

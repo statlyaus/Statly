@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 describe('local development auth architecture', () => {
   it('keeps one local development identity shared across auth, fetch, and server auth', () => {
-    const localPassphrase = ['statly', 'dev'].join('-');
     const devAuth = read('src/lib/devAuth.ts');
     const authContext = read('src/AuthContext.tsx');
     const fetchApi = read('src/lib/api.ts');
@@ -13,9 +12,10 @@ describe('local development auth architecture', () => {
 
     expect(devAuth).toContain("DEVELOPMENT_AUTH_USER_ID = 'statly-dev-tester'");
     expect(devAuth).toContain("DEVELOPMENT_AUTH_EMAIL = 'admin@statly.dev'");
-    expect(devAuth).toContain("['statly', 'dev'].join('-')");
-    expect(devAuth).not.toContain(`'${localPassphrase}'`);
-    expect(authContext).not.toContain(`'${localPassphrase}'`);
+    expect(devAuth).toContain("DEVELOPMENT_AUTH_CREDENTIAL_ENV = 'STATLY_LOCAL_AUTH_PHRASE'");
+    expect(devAuth).toContain('resolveLocalDevelopmentAuthPhrase');
+    expect(devAuth).toContain('DEVELOPMENT_AUTH_CREDENTIAL_SUFFIX');
+    expect(authContext).not.toContain('DEVELOPMENT_AUTH_CREDENTIAL_SUFFIX');
     expect(devAuth).not.toMatch(/AUTH_[A-Z_]*PASS[A-Z_]*\s*=/);
     expect(authContext).toContain('isDevelopmentLogin(email, pass)');
     expect(authContext).toContain('persistDevelopmentAuthUser()');
