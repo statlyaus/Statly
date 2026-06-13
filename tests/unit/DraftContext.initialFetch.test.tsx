@@ -25,7 +25,11 @@ function DraftStateProbe() {
     <div>
       <div data-testid="loading">{String(draft.isLoading)}</div>
       <div data-testid="draft-name">{draft.draft?.name ?? 'missing'}</div>
+      <div data-testid="league-id">{draft.draft?.leagueId ?? 'missing'}</div>
       <div data-testid="current-pick">{draft.draft?.currentPick ?? 'missing'}</div>
+      <div data-testid="pick-deadline">
+        {draft.draft?.pickDeadlineAt?.toISOString?.() ?? 'missing'}
+      </div>
       <div data-testid="player-count">{draft.availablePlayers.length}</div>
       <div data-testid="pick-order">{draft.picks.map((pick) => pick.id).join(',')}</div>
       <button type="button" onClick={() => void draft.makePick('player-1')}>
@@ -190,7 +194,6 @@ describe('DraftProvider initial hydration', () => {
         draft: {
           id: 'cmevh14aq001lux1gottrhp3a',
           name: 'Test AFL Champions League - LIVE',
-          leagueId: 'league-1',
           status: 'LIVE',
           currentPick: 1,
           totalPicks: 264,
@@ -206,6 +209,7 @@ describe('DraftProvider initial hydration', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('player-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('league-id')).toHaveTextContent('league-1');
     });
 
     expect(emit.mock.calls.filter((call) => call[0] === 'draft:join')).toHaveLength(
@@ -250,6 +254,96 @@ describe('DraftProvider initial hydration', () => {
     );
 
     expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1,pick-2');
+  });
+
+  it('hydrates an in-progress draft with persisted picks and authoritative deadline after refresh', async () => {
+    const pickDeadlineAt = '2026-06-13T10:05:00.000Z';
+
+    fetchApi.mockImplementation(async (endpoint: string) => {
+      if (endpoint === 'drafts/draft-1') {
+        return {
+          success: true,
+          data: {
+            id: 'draft-1',
+            name: 'Live Draft With Picks',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 4,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+            pickDeadlineAt,
+            settings: { timePerPick: 120, pickSeconds: 120 },
+            participants: [
+              {
+                slot: 1,
+                member: {
+                  id: 'member-1',
+                  userId: 'statly-dev-tester',
+                  displayName: 'Tester',
+                },
+              },
+              {
+                slot: 2,
+                member: {
+                  id: 'member-2',
+                  userId: 'bot-1',
+                  displayName: 'CPU Team 1',
+                },
+              },
+            ],
+            picks: [
+              {
+                id: 'pick-1',
+                overall: 1,
+                round: 1,
+                slot: 1,
+                auto: false,
+                madeAt: '2026-06-13T10:00:00.000Z',
+                player: {
+                  id: 'player-1',
+                  name: 'Player One',
+                  position: 'MID',
+                  club: 'Sydney',
+                },
+                member: {
+                  id: 'member-1',
+                  displayName: 'Tester',
+                  teamName: 'Your Team',
+                },
+              },
+            ],
+            availablePlayers: [],
+            selectedCategories: ['goals', 'tackles'],
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/draft-1/players?page=1&pageSize=100') {
+        return {
+          success: true,
+          data: {
+            players: [],
+            pagination: { hasMore: false },
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider draftId="draft-1" userId="statly-dev-tester">
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('draft-name')).toHaveTextContent('Live Draft With Picks');
+      expect(screen.getByTestId('current-pick')).toHaveTextContent('4');
+      expect(screen.getByTestId('pick-deadline')).toHaveTextContent(pickDeadlineAt);
+      expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
+    });
   });
 
   it('ignores stale socket snapshots after newer state is loaded', async () => {
@@ -321,6 +415,80 @@ describe('DraftProvider initial hydration', () => {
 
     expect(screen.getByTestId('draft-name')).toHaveTextContent('Fresh Draft');
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
+  });
+
+  it('preserves league affiliation when socket snapshot deltas omit league ids', async () => {
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      });
+    const handlers = new Map<string, (...args: any[]) => void>();
+    socketState.current = {
+      connected: false,
+      emit: vi.fn(),
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        handlers.set(event, handler);
+      }),
+      off: vi.fn(),
+      io: {
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+    };
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'League Affiliated Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 2,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    expect(screen.getByTestId('league-id')).toHaveTextContent('league-1');
+
+    act(() => {
+      handlers.get('draft:delta')?.({
+        type: 'SNAPSHOT',
+        payload: {
+          draft: {
+            id: 'draft-1',
+            name: 'Socket Delta Snapshot',
+            status: 'LIVE',
+            currentPick: 3,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+          },
+          participants: [],
+          picks: [],
+          ts: 300,
+        },
+        ts: 300,
+      });
+    });
+
+    expect(screen.getByTestId('draft-name')).toHaveTextContent('Socket Delta Snapshot');
+    expect(screen.getByTestId('current-pick')).toHaveTextContent('3');
+    expect(screen.getByTestId('league-id')).toHaveTextContent('league-1');
+    requestAnimationFrameSpy.mockRestore();
   });
 
   it('advances visible draft state from a successful pick command response', async () => {

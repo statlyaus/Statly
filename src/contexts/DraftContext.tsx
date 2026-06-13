@@ -12,6 +12,7 @@ import React, {
 
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
+import { getSlotForOverallPick } from '@/lib/draftRoomSequencing';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import type {
@@ -122,6 +123,13 @@ function toArray<T>(v: unknown): T[] {
     }
   }
   return [];
+}
+
+export function shouldHydrateAvailablePlayers(players: DraftPlayer[]): boolean {
+  return (
+    players.length === 0 ||
+    players.some((player) => typeof player.statlyZScore !== 'number')
+  );
 }
 
 function normalizeParticipants(raw: unknown): DraftParticipant[] {
@@ -306,11 +314,8 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
 }
 
 function computeCurrentSlotFromSnake(currentPick: number, teamCount: number): number | undefined {
-  if (!currentPick || !teamCount) return undefined;
-  const round = Math.ceil(currentPick / teamCount);
-  const fwd = round % 2 === 1;
-  const idx = ((currentPick - 1) % teamCount) + 1;
-  return fwd ? idx : teamCount - ((currentPick - 1) % teamCount);
+  const slot = getSlotForOverallPick(currentPick, teamCount);
+  return slot > 0 ? slot : undefined;
 }
 
 function normalizeCommandPick(raw: unknown, participants: DraftParticipant[]): DraftPick | null {
@@ -356,6 +361,27 @@ function normalizeCommandPick(raw: unknown, participants: DraftParticipant[]): D
     auto: Boolean(pick.auto),
     madeAt: new Date(pick.madeAt ?? pick.timestamp ?? Date.now()),
     timeToMake: typeof pick.timeToMake === 'number' ? pick.timeToMake : undefined,
+  };
+}
+
+function preserveDraftLeagueAffiliation(
+  incomingDraft: DraftCore | null,
+  currentDraft: DraftCore | null
+): DraftCore | null {
+  if (!incomingDraft || !currentDraft?.leagueId || incomingDraft.leagueId) {
+    return incomingDraft;
+  }
+
+  return {
+    ...incomingDraft,
+    leagueId: currentDraft.leagueId,
+    settings: {
+      ...incomingDraft.settings,
+      leagueId:
+        incomingDraft.settings?.leagueId ||
+        currentDraft.settings?.leagueId ||
+        currentDraft.leagueId,
+    },
   };
 }
 
@@ -408,9 +434,10 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
   switch (delta.type) {
     case 'SNAPSHOT': {
       const snap = normalizeSnapshot(delta.payload as DraftSnapshot);
+      const draft = preserveDraftLeagueAffiliation(snap.draft, next.draft);
       return {
         ...next,
-        draft: snap.draft,
+        draft,
         participants: snap.participants,
         picks: snap.includesPicks ? snap.picks : next.picks,
         availablePlayers: snap.includesAvailablePlayers ? snap.availablePlayers : next.availablePlayers,
@@ -427,6 +454,9 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         currentPick?: unknown;
         isComplete?: unknown;
         status?: unknown;
+        round?: unknown;
+        direction?: unknown;
+        pickStartedAt?: unknown;
         pickDeadlineAt?: unknown;
       };
       const rawPick = payload?.pick;
@@ -458,12 +488,26 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
             ...next.draft,
             ...(nextCurrentPick !== undefined ? { currentPick: nextCurrentPick } : {}),
             ...(nextStatus ? { status: nextStatus as DraftCore['status'] } : {}),
-            ...(typeof payload.pickDeadlineAt === 'string' || payload.pickDeadlineAt === null
+            ...(typeof payload.round === 'number' && Number.isFinite(payload.round)
+              ? { round: payload.round }
+              : {}),
+            ...(typeof payload.direction === 'string'
+              ? { direction: payload.direction as DraftCore['direction'] }
+              : {}),
+            ...(payload.pickStartedAt !== undefined
+              ? {
+                  pickStartedAt:
+                    payload.pickStartedAt === null
+                      ? null
+                      : (toOptionalDate(payload.pickStartedAt) ?? null),
+                }
+              : {}),
+            ...(payload.pickDeadlineAt !== undefined
               ? {
                   pickDeadlineAt:
                     payload.pickDeadlineAt === null
                       ? null
-                      : (toOptionalDate(payload.pickDeadlineAt) ?? null),
+                      : (toOptionalDate(payload.pickDeadlineAt) ?? next.draft.pickDeadlineAt ?? null),
                 }
               : {}),
           }
@@ -536,12 +580,13 @@ function reducer(state: DraftState, action: Action): DraftState {
         return { ...state, isLoading: false };
       }
 
+      const draft = preserveDraftLeagueAffiliation(action.snapshot.draft, state.draft);
       const participants = action.snapshot.includesParticipantQueues
         ? action.snapshot.participants
         : mergeParticipantQueues(action.snapshot.participants, state.participants);
       return {
         ...state,
-        draft: action.snapshot.draft,
+        draft,
         participants,
         picks: action.snapshot.includesPicks ? action.snapshot.picks : state.picks,
         availablePlayers: action.snapshot.includesAvailablePlayers
@@ -763,7 +808,10 @@ export function DraftProvider({
       let draftReadiness: DraftOperationalReadiness | null = null;
 
       while (hasMore) {
-        const res = await fetchApi(`drafts/${draftId}/players?page=${page}&pageSize=${pageSize}`);
+        const res = await fetchApi(`drafts/${draftId}/players?page=${page}&pageSize=${pageSize}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
         const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
         draftReadiness =
           (res?.data?.draftReadiness as DraftOperationalReadiness | null | undefined) ??
@@ -854,9 +902,9 @@ export function DraftProvider({
   );
 
   useEffect(() => {
-    if (!state.draft || state.availablePlayers.length > 0) return;
+    if (!state.draft || !shouldHydrateAvailablePlayers(state.availablePlayers)) return;
     void hydrateAvailablePlayers();
-  }, [state.draft, state.availablePlayers.length, hydrateAvailablePlayers]);
+  }, [state.draft, state.availablePlayers, hydrateAvailablePlayers]);
 
   useEffect(() => {
     if (!memberId) return;
@@ -876,7 +924,7 @@ export function DraftProvider({
       const snap = normalizeSnapshot(res?.data ?? res);
       if (!isMounted.current) return;
       dispatch({ type: 'SET_SNAPSHOT', snapshot: snap });
-      if (snap.availablePlayers.length === 0 && snap.draft) {
+      if (snap.draft && shouldHydrateAvailablePlayers(snap.availablePlayers)) {
         await hydrateAvailablePlayers();
       }
       if (memberId) {
@@ -1026,6 +1074,10 @@ export function DraftProvider({
               pick,
               currentPick: commandData.currentPick,
               isComplete: commandData.isComplete,
+              status: commandData.status,
+              round: commandData.round,
+              direction: commandData.direction,
+              pickStartedAt: commandData.pickStartedAt,
               pickDeadlineAt: commandData.pickDeadlineAt,
             },
             ts: Date.now(),

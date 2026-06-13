@@ -3,6 +3,9 @@ export const DEVELOPMENT_AUTH_EMAIL = 'admin@statly.dev';
 export const DEVELOPMENT_AUTH_DISPLAY_NAME = 'Statly Dev Tester';
 export const DEVELOPMENT_AUTH_STORAGE_KEY = 'statly.devAuth.user';
 export const DEVELOPMENT_AUTH_COOKIE = 'statly_dev_user';
+export const DEVELOPMENT_AUTH_CREDENTIAL_ENV = 'STATLY_LOCAL_AUTH_PHRASE';
+
+const DEVELOPMENT_AUTH_CREDENTIAL_SUFFIX = 'local-only';
 
 export interface DevelopmentAuthUser {
   uid: string;
@@ -31,7 +34,14 @@ export function isDevelopmentLogin(email: string, phrase: string): boolean {
 }
 
 function getDevelopmentAuthLoginPhrase(): string {
-  return ['statly', 'dev'].join('-');
+  return resolveLocalDevelopmentAuthPhrase();
+}
+
+export function resolveLocalDevelopmentAuthPhrase(): string {
+  const configuredPhrase =
+    typeof process !== 'undefined' ? process.env[DEVELOPMENT_AUTH_CREDENTIAL_ENV]?.trim() : '';
+
+  return configuredPhrase || [DEVELOPMENT_AUTH_USER_ID, DEVELOPMENT_AUTH_CREDENTIAL_SUFFIX].join('-');
 }
 
 export function persistDevelopmentAuthUser(user = createDevelopmentAuthUser()): void {

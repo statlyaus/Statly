@@ -99,6 +99,12 @@ function buildClient(input: {
     },
     player: {
       count: vi.fn().mockResolvedValue(input.availablePlayers),
+      groupBy: vi.fn().mockResolvedValue([
+        { position: 'DEF', _count: { _all: 50 } },
+        { position: 'MID', _count: { _all: 50 } },
+        { position: 'RUC', _count: { _all: 50 } },
+        { position: 'FWD', _count: { _all: 50 } },
+      ]),
     },
   };
 }

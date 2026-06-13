@@ -1,4 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import LeagueSwitcher from '@/components/navigation/LeagueSwitcher';
@@ -72,5 +74,20 @@ describe('LeagueSwitcher route state', () => {
 
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('keeps draft history in the selected league workflow', () => {
+    const switcherSource = readFileSync(
+      join(process.cwd(), 'src/components/navigation/LeagueSwitcher.tsx'),
+      'utf8'
+    );
+    const navigationSource = readFileSync(
+      join(process.cwd(), 'src/components/navigation/MainNavigation.tsx'),
+      'utf8'
+    );
+
+    expect(navigationSource).toContain("p.startsWith('/drafts')");
+    expect(switcherSource).toContain("pathname?.startsWith('/drafts/history')");
+    expect(switcherSource).toContain('router.push(`/drafts/history?leagueId=');
   });
 });

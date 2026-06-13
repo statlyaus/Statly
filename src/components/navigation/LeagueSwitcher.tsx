@@ -116,6 +116,10 @@ export default function LeagueSwitcher() {
     if (typeof document !== 'undefined') {
       document.cookie = buildPreferenceCookie(LAST_LEAGUE_ID_COOKIE, nextId);
     }
+    if (pathname?.startsWith('/drafts/history')) {
+      router.push(`/drafts/history?leagueId=${encodeURIComponent(nextId)}`);
+      return;
+    }
     if (pathname?.startsWith('/leagues')) {
       const qs = search?.toString();
       const suffix = qs && qs.length > 0 ? `?${qs}` : '';

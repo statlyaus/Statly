@@ -108,54 +108,70 @@ Sign out via `DELETE /api/auth/session`.
 - 403 on analytics: ensure METRICS_ALLOWED_ORIGINS includes the exact origin.
 - Missing NEXT_PUBLIC_API_BASE_URL: set it to your app origin, or omit to use relative URLs.
 
-## Local Firebase Emulators (optional)
+## Local Firebase Emulators
 
-Run the Firebase emulators locally to develop without touching production data.
-
-1. Start emulators
+Use the local full-stack command for draft-room and league testing. It starts Firebase Auth,
+Firestore, the Next app, Socket.IO, and the worker without touching production Firebase data.
 
 ```bash
-firebase emulators:start --only auth,firestore
+npm run dev:full:local
 ```
 
-2. Environment variables
+The command:
 
-Client (.env.local):
+- starts Firebase Auth on `127.0.0.1:9099`
+- starts Firestore on `127.0.0.1:8080`
+- seeds the local test user in Auth, Firestore, and Prisma
+- starts the app on `http://localhost:3000`
+- starts Socket.IO on `http://localhost:3002`
+- starts the web vitals worker
+
+Local test login:
+
+```text
+admin@statly.dev
+Use the local password printed by `npm run dev:full:local`.
+```
+
+The local password is generated from the shared dev-auth resolver unless you set
+`STATLY_LOCAL_AUTH_PHRASE` before starting the stack.
+
+After the stack is ready, run the smoke check:
+
+```bash
+npm run dev:smoke:local
+```
+
+The smoke check verifies the Next app, Socket.IO health, Firebase Auth emulator sign-in,
+Firestore seeded user, and a full 12-team test draft through `/api/create-test-draft`.
+
+Manual emulator startup is still available when you only need Firebase:
+
+```bash
+npm run dev:firebase
+```
+
+Required local environment values are set by `npm run dev:full:local`. If you run services
+manually, use:
 
 ```dotenv
 NEXT_PUBLIC_USE_EMULATORS=true
-```
-
-Server/Admin (.env or shell):
-
-```dotenv
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=statly-4cbed
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=statly-4cbed.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL=http://127.0.0.1:9099
+NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=127.0.0.1
+NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT=8080
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
+GOOGLE_CLOUD_PROJECT=statly-4cbed
 ```
 
-3. Client SDK connection snippet
+Set `NEXT_PUBLIC_FIREBASE_API_KEY` to any non-empty local-only value when starting services
+manually. `npm run dev:full:local` generates this value when it is omitted.
 
-Add this conditional block to your `src/lib/firebaseClient.ts` after initializing `auth`/`db`:
+The app already connects the client SDK to the emulators when `NEXT_PUBLIC_USE_EMULATORS=true`.
+The Admin SDK auto-targets the emulators when `FIRESTORE_EMULATOR_HOST` and
+`FIREBASE_AUTH_EMULATOR_HOST` are set.
 
-import { connectAuthEmulator } from 'firebase/auth';
-import { connectFirestoreEmulator } from 'firebase/firestore';
-
-if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true' && db && auth) {
-try {
-connectFirestoreEmulator(db, '127.0.0.1', 8080);
-} catch (e) {
-if (process.env.NODE_ENV !== 'production') console.debug('Firestore emulator connect failed:', e);
-}
-try {
-connectAuthEmulator(auth, 'http://127.0.0.1:9099');
-} catch (e) {
-if (process.env.NODE_ENV !== 'production') console.debug('Auth emulator connect failed:', e);
-}
-}
-
-```
-
-4) Admin SDK
-
-The Admin SDK auto-targets the emulators when `FIRESTORE_EMULATOR_HOST`/`FIREBASE_AUTH_EMULATOR_HOST` are set. No code changes are required in `src/lib/firebaseAdmin.ts`.
-```
+The legacy development-auth fallback remains available only when Firebase client config is absent.
+For full-stack testing, prefer the Auth emulator path above.
