@@ -6,6 +6,8 @@ process.env.GOOGLE_CLOUD_PROJECT ??= 'statly-4cbed';
 process.env.GCLOUD_PROJECT ??= process.env.GOOGLE_CLOUD_PROJECT;
 process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??= process.env.GOOGLE_CLOUD_PROJECT;
 
+const LEGACY_LOCAL_DEVELOPMENT_USER_IDS = ['2qlfdHSCFTPlxoKFSUfNLSlCDRe2'];
+
 async function main() {
   const { adminAuth, adminDb } = await import('../../src/lib/firebaseAdmin');
   const { prisma } = await import('../../src/lib/prisma');
@@ -55,6 +57,31 @@ async function main() {
     },
   });
   console.log(`[local-seed] Upserted Prisma user ${DEVELOPMENT_AUTH_USER_ID}`);
+
+  const [leagueOwnerRepair, memberRepair] = await prisma.$transaction([
+    prisma.league.updateMany({
+      where: {
+        ownerId: { in: LEGACY_LOCAL_DEVELOPMENT_USER_IDS },
+      },
+      data: {
+        ownerId: DEVELOPMENT_AUTH_USER_ID,
+      },
+    }),
+    prisma.leagueMember.updateMany({
+      where: {
+        userId: { in: LEGACY_LOCAL_DEVELOPMENT_USER_IDS },
+      },
+      data: {
+        userId: DEVELOPMENT_AUTH_USER_ID,
+      },
+    }),
+  ]);
+
+  if (leagueOwnerRepair.count > 0 || memberRepair.count > 0) {
+    console.log(
+      `[local-seed] Repaired ${leagueOwnerRepair.count} legacy league owner records and ${memberRepair.count} legacy league member records`
+    );
+  }
 
   await adminDb.collection('users').doc(DEVELOPMENT_AUTH_USER_ID).set(
     {

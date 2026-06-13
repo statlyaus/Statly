@@ -61,6 +61,11 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('adminAuth.createUser');
     expect(source).toContain('adminAuth.updateUser');
     expect(source).toContain('prisma.user.upsert');
+    expect(source).toContain('LEGACY_LOCAL_DEVELOPMENT_USER_IDS');
+    expect(source).toContain('prisma.league.updateMany');
+    expect(source).toContain('prisma.leagueMember.updateMany');
+    expect(source).toContain('ownerId: DEVELOPMENT_AUTH_USER_ID');
+    expect(source).toContain('userId: DEVELOPMENT_AUTH_USER_ID');
     expect(source).toContain("adminDb.collection('users').doc(DEVELOPMENT_AUTH_USER_ID)");
   });
 
