@@ -417,6 +417,80 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
   });
 
+  it('preserves league affiliation when socket snapshot deltas omit league ids', async () => {
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      });
+    const handlers = new Map<string, (...args: any[]) => void>();
+    socketState.current = {
+      connected: false,
+      emit: vi.fn(),
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        handlers.set(event, handler);
+      }),
+      off: vi.fn(),
+      io: {
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+    };
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'League Affiliated Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 2,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    expect(screen.getByTestId('league-id')).toHaveTextContent('league-1');
+
+    act(() => {
+      handlers.get('draft:delta')?.({
+        type: 'SNAPSHOT',
+        payload: {
+          draft: {
+            id: 'draft-1',
+            name: 'Socket Delta Snapshot',
+            status: 'LIVE',
+            currentPick: 3,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+          },
+          participants: [],
+          picks: [],
+          ts: 300,
+        },
+        ts: 300,
+      });
+    });
+
+    expect(screen.getByTestId('draft-name')).toHaveTextContent('Socket Delta Snapshot');
+    expect(screen.getByTestId('current-pick')).toHaveTextContent('3');
+    expect(screen.getByTestId('league-id')).toHaveTextContent('league-1');
+    requestAnimationFrameSpy.mockRestore();
+  });
+
   it('advances visible draft state from a successful pick command response', async () => {
     fetchApi.mockImplementation(async (endpoint: string, init?: { method?: string }) => {
       if (endpoint === 'drafts/draft-1/picks' && init?.method === 'POST') {

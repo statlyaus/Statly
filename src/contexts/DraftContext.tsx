@@ -364,6 +364,27 @@ function normalizeCommandPick(raw: unknown, participants: DraftParticipant[]): D
   };
 }
 
+function preserveDraftLeagueAffiliation(
+  incomingDraft: DraftCore | null,
+  currentDraft: DraftCore | null
+): DraftCore | null {
+  if (!incomingDraft || !currentDraft?.leagueId || incomingDraft.leagueId) {
+    return incomingDraft;
+  }
+
+  return {
+    ...incomingDraft,
+    leagueId: currentDraft.leagueId,
+    settings: {
+      ...incomingDraft.settings,
+      leagueId:
+        incomingDraft.settings?.leagueId ||
+        currentDraft.settings?.leagueId ||
+        currentDraft.leagueId,
+    },
+  };
+}
+
 function getLatestPickMadeAtMs(picks: DraftPick[]): number | undefined {
   const latest = picks.reduce((max, pick) => {
     const madeAt = pick.madeAt instanceof Date ? pick.madeAt : new Date(pick.madeAt);
@@ -413,9 +434,10 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
   switch (delta.type) {
     case 'SNAPSHOT': {
       const snap = normalizeSnapshot(delta.payload as DraftSnapshot);
+      const draft = preserveDraftLeagueAffiliation(snap.draft, next.draft);
       return {
         ...next,
-        draft: snap.draft,
+        draft,
         participants: snap.participants,
         picks: snap.includesPicks ? snap.picks : next.picks,
         availablePlayers: snap.includesAvailablePlayers ? snap.availablePlayers : next.availablePlayers,
@@ -558,21 +580,7 @@ function reducer(state: DraftState, action: Action): DraftState {
         return { ...state, isLoading: false };
       }
 
-      const snapshotDraft = action.snapshot.draft;
-      const draft =
-        snapshotDraft && state.draft && !snapshotDraft.leagueId && state.draft.leagueId
-          ? {
-              ...snapshotDraft,
-              leagueId: state.draft.leagueId,
-              settings: {
-                ...snapshotDraft.settings,
-                leagueId:
-                  snapshotDraft.settings?.leagueId ||
-                  state.draft.settings?.leagueId ||
-                  state.draft.leagueId,
-              },
-            }
-          : snapshotDraft;
+      const draft = preserveDraftLeagueAffiliation(action.snapshot.draft, state.draft);
       const participants = action.snapshot.includesParticipantQueues
         ? action.snapshot.participants
         : mergeParticipantQueues(action.snapshot.participants, state.participants);
