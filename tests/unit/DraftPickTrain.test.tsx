@@ -80,6 +80,14 @@ describe('DraftPickTrain', () => {
     expect(screen.getByText('Upcoming')).toBeInTheDocument();
     expect(screen.getByText('Your next pick')).toBeInTheDocument();
     expect(screen.getByText('North Melbourne')).toBeInTheDocument();
+
+    const pickList = screen.getByRole('list', { name: 'Draft picks' });
+    expect(pickList).toHaveClass('overflow-x-auto');
+
+    for (const pickItem of screen.getAllByRole('listitem')) {
+      expect(pickItem).toHaveClass('w-[15rem]');
+      expect(pickItem).toHaveClass('min-w-[15rem]');
+    }
   });
 });
 

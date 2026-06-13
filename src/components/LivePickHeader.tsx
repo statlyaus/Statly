@@ -358,8 +358,8 @@ export default function LivePickHeader({
       role="banner"
       aria-label="Live draft status"
     >
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
-        <div className="flex flex-col gap-4">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,21rem)]">
+        <div className="flex min-w-0 flex-col gap-4">
           <div
             className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm"
             role="region"
@@ -451,7 +451,7 @@ export default function LivePickHeader({
         </div>
 
         <aside
-          className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-5"
+          className="min-w-0 self-start rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-5"
           aria-label="Latest draft activity"
         >
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">

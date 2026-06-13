@@ -83,7 +83,10 @@ export default function DraftPickTrain({
         )}
       </div>
 
-      <ol className="flex gap-3 overflow-x-auto px-4 py-4" aria-label="Draft picks">
+      <ol
+        className="flex min-w-0 gap-3 overflow-x-auto px-4 py-4"
+        aria-label="Draft picks"
+      >
         {state.slots.map((slot) => {
           const label = getStatusLabel(slot);
           const teamLabel = slot.teamName || slot.displayName;
@@ -92,20 +95,20 @@ export default function DraftPickTrain({
             <li
               key={`${slot.round}-${slot.overall}-${slot.slot}`}
               className={cn(
-                'flex min-w-[13rem] flex-col gap-3 rounded-lg border p-3',
+                'flex w-[15rem] min-w-[15rem] flex-col gap-3 rounded-lg border p-3',
                 getSlotClasses(slot)
               )}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-2">
                 <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-normal opacity-80">
+                  <p className="text-xs font-medium uppercase tracking-normal leading-5 opacity-80">
                     Round {slot.round} / Pick {slot.overall}
                   </p>
                   <p className="mt-1 truncate text-sm font-semibold">Slot {slot.slot}</p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 bg-background/80 px-2 py-1 text-xs font-medium text-foreground">
+                <span className="inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-md border border-border/60 bg-background/80 px-2 py-1 text-xs font-medium leading-4 text-foreground">
                   <StatusIcon slot={slot} />
-                  {label}
+                  <span className="truncate">{label}</span>
                 </span>
               </div>
 
