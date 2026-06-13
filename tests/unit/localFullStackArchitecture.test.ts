@@ -44,8 +44,15 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL');
     expect(source).toContain('NEXT_PUBLIC_FIREBASE_API_KEY');
     expect(source).not.toContain(deprecatedEmulatorKeyLiteral);
+    expect(source).toContain('port_is_open()');
+    expect(source).toContain('reusing existing Firebase emulators');
     expect(source).toContain('npx firebase emulators:start --only auth,firestore');
+    expect(source).toContain('npm run prisma:generate');
+    expect(source).toContain('npx prisma migrate deploy');
     expect(source).toContain('npm run dev:seed:local');
+    expect(source.indexOf('npx prisma migrate deploy')).toBeLessThan(
+      source.indexOf('npm run dev:seed:local')
+    );
     expect(source).toContain('npm:dev');
     expect(source).toContain('npm:socket');
     expect(source).toContain('npm:worker:dev');

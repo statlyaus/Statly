@@ -59,14 +59,30 @@ wait_for_port() {
   return 1
 }
 
+port_is_open() {
+  local host="$1"
+  local port="$2"
+
+  nc -z "$host" "$port" >/dev/null 2>&1
+}
+
 npm run dev:down >/dev/null 2>&1 || true
 
-npx firebase emulators:start --only auth,firestore --project "$STATLY_LOCAL_PROJECT_ID" &
-FIREBASE_PID="$!"
+if port_is_open "127.0.0.1" "8080" && port_is_open "127.0.0.1" "9099"; then
+  echo "local stack: reusing existing Firebase emulators on 127.0.0.1:8080 and 127.0.0.1:9099"
+elif port_is_open "127.0.0.1" "8080" || port_is_open "127.0.0.1" "9099"; then
+  echo "local stack: only one Firebase emulator port is available; stop stale Firebase processes and retry" >&2
+  exit 1
+else
+  npx firebase emulators:start --only auth,firestore --project "$STATLY_LOCAL_PROJECT_ID" &
+  FIREBASE_PID="$!"
+fi
 
 wait_for_port "Firestore emulator" "127.0.0.1" "8080"
 wait_for_port "Firebase Auth emulator" "127.0.0.1" "9099"
 
+npm run prisma:generate
+npx prisma migrate deploy
 npm run dev:seed:local
 
 npx concurrently -k -n web,socket,worker -c blue,magenta,green \
