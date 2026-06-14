@@ -4,8 +4,9 @@ import {
   collectRuntimeErrors,
   expectNoAppErrorBoundary,
 } from './helpers/devAuth';
+import { E2E_LEAGUE_ID } from './global.setup';
 
-const leagueId = process.env.STATLY_E2E_LEAGUE_ID ?? 'cmevh14am001jux1gl87onfgh';
+const leagueId = process.env.STATLY_E2E_LEAGUE_ID ?? E2E_LEAGUE_ID;
 
 test('league roster pulls through completed team data into the review table', async ({ page }) => {
   const runtimeErrors = collectRuntimeErrors(page);

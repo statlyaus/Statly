@@ -4,8 +4,9 @@ import {
   collectRuntimeErrors,
   expectNoAppErrorBoundary,
 } from './helpers/devAuth';
+import { E2E_DRAFT_ID } from './global.setup';
 
-const draftId = process.env.STATLY_E2E_DRAFT_ID ?? 'cmevh14aq001lux1gottrhp3a';
+const draftId = process.env.STATLY_E2E_DRAFT_ID ?? E2E_DRAFT_ID;
 
 test('draft room renders its completion or live workflow without runtime errors', async ({
   page,
