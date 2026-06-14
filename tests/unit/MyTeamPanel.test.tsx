@@ -66,4 +66,33 @@ describe('MyTeamPanel', () => {
     expect(screen.queryByText('No Team Selected')).not.toBeInTheDocument();
     expect(screen.queryByText('Optimize Lineup')).not.toBeInTheDocument();
   });
+
+  it('renders zero Statly Z and scoring metrics as real values', () => {
+    useRankingsMock.mockReturnValue({
+      rankings: [{ id: 'player-zero', rank: 99, totalValue: 0, valueOverReplacement: 0 }],
+      loading: false,
+      error: null,
+    });
+
+    render(
+      <MyTeamPanel
+        team={{ id: 'team-1', name: 'Zero Squad', players: ['player-zero'] }}
+        players={[
+          {
+            id: 'player-zero',
+            name: 'Zero Value',
+            position: 'MID',
+            team: 'Sydney',
+            averageScore: 0,
+            projectedScore: 0,
+            form: 0,
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getAllByText('0.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('0.0').length).toBeGreaterThan(0);
+    expect(screen.getByText('Projection 0.0')).toBeInTheDocument();
+  });
 });

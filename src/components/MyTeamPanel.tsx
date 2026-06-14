@@ -366,7 +366,8 @@ const MyTeamPanel = ({
   const rankingStatus = rankingsLoading
     ? 'Updating rankings'
     : `${rankingById.size.toLocaleString()} rankings loaded`;
-  const formatMetric = (value: number, digits = 1) => (value > 0 ? value.toFixed(digits) : '—');
+  const formatMetric = (value: number | null | undefined, digits = 1) =>
+    value == null || !Number.isFinite(value) ? '—' : value.toFixed(digits);
   const tableSortFields: Array<[SortField, string]> = [
     ['name', 'Player'],
     ['position', 'Pos'],

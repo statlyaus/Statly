@@ -242,10 +242,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
 
     expect(screen.getByRole('banner', { name: 'Live draft status' })).toBeInTheDocument();
     expect(screen.getByText('Test AFL Champions League - LIVE')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to drafts' })).toHaveAttribute(
-      'href',
-      '/drafts'
-    );
+    expect(screen.getByRole('link', { name: 'Back to drafts' })).toHaveAttribute('href', '/drafts');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/drafts/history?leagueId=league-1'
@@ -292,19 +289,21 @@ describe('UnifiedDraftRoom live shell composition', () => {
     const nextSteps = screen.getByRole('region', { name: 'Draft complete next steps' });
     expect(nextSteps).toHaveTextContent('Draft complete');
 
-    expect(
-      screen.getByRole('link', { name: 'Go back to league hub' })
-    ).toHaveAttribute('href', '/leagues/league-1');
-    expect(
-      screen.getByRole('link', { name: 'Review completed draft' })
-    ).toHaveAttribute('href', '/drafts/history/draft-1?leagueId=league-1');
+    expect(screen.getByRole('link', { name: 'Go back to league hub' })).toHaveAttribute(
+      'href',
+      '/leagues/league-1'
+    );
+    expect(screen.getByRole('link', { name: 'Review completed draft' })).toHaveAttribute(
+      'href',
+      '/drafts/history/draft-1?leagueId=league-1'
+    );
     expect(screen.getByRole('link', { name: 'Review my roster' })).toHaveAttribute(
       'href',
       '/leagues/league-1?tab=roster'
     );
 
     const background = screen.getByRole('region', { name: 'Completed draft background' });
-    expect(background).toHaveAttribute('aria-disabled', 'true');
+    expect(background).toHaveAttribute('inert');
     expect(background).toHaveClass('opacity-45');
   });
 

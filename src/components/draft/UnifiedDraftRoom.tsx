@@ -418,12 +418,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     activeDraft.name === activeDraft.id ||
     activeDraft.name === `Draft ${activeDraft.id}`;
   const displayDraftTitle = hasPlaceholderDraftName ? 'League Draft' : activeDraft.name;
-  const displayDraftSubtitle =
-    isCompletedDraft
-      ? `${displayCurrentPick} of ${activeDraft.totalPicks} picks finalized. Review your roster and every team in the archive.`
-      : totalRounds && totalRounds > 0
-        ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${displayCurrentPick} of ${activeDraft.totalPicks}.`
-        : `Pick ${displayCurrentPick} of ${activeDraft.totalPicks}.`;
+  const displayDraftSubtitle = isCompletedDraft
+    ? `${displayCurrentPick} of ${activeDraft.totalPicks} picks finalized. Review your roster and every team in the archive.`
+    : totalRounds && totalRounds > 0
+      ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${displayCurrentPick} of ${activeDraft.totalPicks}.`
+      : `Pick ${displayCurrentPick} of ${activeDraft.totalPicks}.`;
   const timePerPick =
     activeDraft.settings?.timePerPick ?? (activeDraft.settings as any)?.pickSeconds ?? 120;
   const leagueHistoryQuery = activeDraft.leagueId
@@ -438,8 +437,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const historyHref = isCompletedDraft
     ? `/drafts/history/${encodeURIComponent(activeDraft.id)}${leagueHistoryQuery}`
     : activeDraft.leagueId
-    ? `/drafts/history?leagueId=${encodeURIComponent(activeDraft.leagueId)}`
-    : '/drafts/history';
+      ? `/drafts/history?leagueId=${encodeURIComponent(activeDraft.leagueId)}`
+      : '/drafts/history';
   const historyLinkLabel = isCompletedDraft ? 'Review completed draft' : 'History';
   const filledRosterSlots = rosterSlots.filter((slot) => slot.player).length;
   const queuePanel = (
@@ -474,10 +473,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     className: 'border-0 shadow-none',
   };
   const desktopPickFeed = (
-    <PickFeed
-      {...pickFeedProps}
-      contentId={`pick-feed-content:${activeDraft.id}:desktop`}
-    />
+    <PickFeed {...pickFeedProps} contentId={`pick-feed-content:${activeDraft.id}:desktop`} />
   );
   const mobilePickFeed = (
     <PickFeed {...pickFeedProps} contentId={`pick-feed-content:${activeDraft.id}:mobile`} />
@@ -617,8 +613,8 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           <section
             aria-label={isCompletedDraft ? 'Completed draft background' : undefined}
-            aria-disabled={isCompletedDraft ? 'true' : undefined}
             className={isCompletedDraft ? 'opacity-45 pointer-events-none select-none' : undefined}
+            inert={isCompletedDraft ? true : undefined}
           >
             <section
               aria-label="Draft board"
@@ -737,9 +733,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               <div id="pickFeedTitle" className="sr-only">
                 Pick Feed
               </div>
-              <div>
-                {mobilePickFeed}
-              </div>
+              <div>{mobilePickFeed}</div>
             </div>
           </div>
         )}
