@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { draftRepository } from '@/server/draft/repository/DraftRepository';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
+import { draftScheduler } from '@/server/draft/services/DraftScheduler';
 
 import {
   draftQueue,
@@ -28,6 +29,70 @@ interface WorkerMetrics {
   runtimeError?: string;
   lastErrorAt?: Date;
   workerId: string;
+}
+
+export async function reconcileLiveDraftPickExpiryJobs(): Promise<number> {
+  const schedules = await draftRepository.transaction((tx) =>
+    draftRepository.listLiveDraftPickExpirySchedules(tx)
+  );
+
+  let scheduledCount = 0;
+  let repairedCount = 0;
+  let skippedCount = 0;
+  for (const schedule of schedules) {
+    let pickDeadlineAt = schedule.pickDeadlineAt;
+    let schedulingVersion = schedule.schedulingVersion;
+
+    if (!pickDeadlineAt) {
+      const pickStartedAt = schedule.pickStartedAt ?? schedule.startedAt ?? new Date();
+      const repairedPickDeadlineAt = new Date(
+        pickStartedAt.getTime() + schedule.pickSeconds * 1000
+      );
+      const updated = await draftRepository.transaction((tx) =>
+        draftRepository.repairMissingLiveDraftPickDeadline(tx, {
+          draftId: schedule.draftId,
+          currentSchedulingVersion: schedule.schedulingVersion,
+          pickStartedAt,
+          pickDeadlineAt: repairedPickDeadlineAt,
+        })
+      );
+
+      if (updated.count !== 1) {
+        skippedCount++;
+        logger.warn('Skipped live draft timer repair because draft state changed', {
+          draftId: schedule.draftId,
+        });
+        continue;
+      }
+
+      repairedCount++;
+      schedulingVersion += 1;
+      pickDeadlineAt = repairedPickDeadlineAt;
+    }
+
+    if (!pickDeadlineAt) {
+      skippedCount++;
+      logger.warn('Skipped live draft timer reconciliation without a deadline', {
+        draftId: schedule.draftId,
+      });
+      continue;
+    }
+
+    await draftScheduler.schedulePickExpiry({
+      draftId: schedule.draftId,
+      leagueId: schedule.leagueId,
+      schedulingVersion,
+      pickDeadlineAt,
+    });
+    scheduledCount++;
+  }
+
+  logger.info('Reconciled live draft pick expiry jobs', {
+    scheduledCount,
+    repairedCount,
+    skippedCount,
+  });
+  return scheduledCount;
 }
 
 class EnhancedDraftWorker {
@@ -71,6 +136,7 @@ class EnhancedDraftWorker {
     this.metrics.ready = true;
     this.metrics.runtimeError = undefined;
     this.metrics.lastErrorAt = undefined;
+    await reconcileLiveDraftPickExpiryJobs();
     this.startCleanupJob();
     logger.info('Enhanced Draft Worker started', {
       workerId: this.metrics.workerId,

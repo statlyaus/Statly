@@ -144,6 +144,16 @@ export class DraftProjectionService {
     const turn = calculateDraftTurn(draftType, safePickNumber, participants);
     const timerAnchor = draft.pickStartedAt ?? draft.startedAt ?? draft.createdAt;
     const pickTimeLimit = draft.league.settings.pickSeconds;
+    const pausedTimeRemaining =
+      draft.status === DraftStatus.PAUSED
+        ? (draft.pausedRemainingSeconds ?? pickTimeLimit)
+        : undefined;
+    const expiresAt =
+      draft.pickDeadlineAt ??
+      (draft.status === DraftStatus.PAUSED
+        ? new Date(Date.now() + (pausedTimeRemaining ?? pickTimeLimit) * 1000)
+        : new Date(timerAnchor.getTime() + pickTimeLimit * 1000));
+
     return {
       leagueId: draft.leagueId,
       draftId: draft.id,
@@ -154,7 +164,7 @@ export class DraftProjectionService {
         pickNumber: draft.currentPick,
         round: draft.round,
         slot: turn.slot,
-        expiresAt: draft.pickDeadlineAt ?? new Date(timerAnchor.getTime() + pickTimeLimit * 1000),
+        expiresAt,
         startedAt: timerAnchor,
       },
       picks: draft.picks.map((pick) => ({
@@ -180,8 +190,8 @@ export class DraftProjectionService {
       timerSettings: {
         durationSeconds: pickTimeLimit,
         autopickAfterExpiry: draft.league.settings.allowAutoPick,
-        ...(draft.status === DraftStatus.PAUSED && draft.pausedRemainingSeconds !== null
-          ? { pausedTimeRemaining: draft.pausedRemainingSeconds }
+        ...(pausedTimeRemaining !== undefined
+          ? { pausedTimeRemaining }
           : {}),
       },
       draftSettings: {

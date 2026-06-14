@@ -19,6 +19,16 @@ import { parseSelectedCategories } from '../readModels/draftPlayerReadModel';
 
 type TxClient = PrismaNS.TransactionClient;
 
+export type LiveDraftPickExpirySchedule = {
+  draftId: string;
+  leagueId: string;
+  schedulingVersion: number;
+  pickDeadlineAt: Date | null;
+  pickStartedAt: Date | null;
+  startedAt: Date | null;
+  pickSeconds: number;
+};
+
 type DraftEventRecord = {
   id: string;
   draftId: string;
@@ -129,6 +139,72 @@ function toPickSnapshot(pick: {
 export class DraftRepository {
   async transaction<T>(work: (tx: TxClient) => Promise<T>, timeout = 20000): Promise<T> {
     return prisma.$transaction((tx) => work(tx), { timeout });
+  }
+
+  async listLiveDraftPickExpirySchedules(
+    tx: TxClient
+  ): Promise<LiveDraftPickExpirySchedule[]> {
+    const drafts = await tx.draft.findMany({
+      where: {
+        status: DraftStatus.LIVE,
+      },
+      select: {
+        id: true,
+        leagueId: true,
+        currentPick: true,
+        totalPicks: true,
+        schedulingVersion: true,
+        pickStartedAt: true,
+        pickDeadlineAt: true,
+        startedAt: true,
+        league: {
+          select: {
+            settings: {
+              select: {
+                pickSeconds: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return drafts
+      .filter((draft) => draft.currentPick <= draft.totalPicks && Boolean(draft.league.settings))
+      .map((draft) => ({
+        draftId: draft.id,
+        leagueId: draft.leagueId,
+        schedulingVersion: draft.schedulingVersion,
+        pickDeadlineAt: draft.pickDeadlineAt,
+        pickStartedAt: draft.pickStartedAt,
+        startedAt: draft.startedAt,
+        pickSeconds: draft.league.settings!.pickSeconds,
+      }));
+  }
+
+  async repairMissingLiveDraftPickDeadline(
+    tx: TxClient,
+    input: {
+      draftId: string;
+      currentSchedulingVersion: number;
+      pickStartedAt: Date;
+      pickDeadlineAt: Date;
+    }
+  ) {
+    return tx.draft.updateMany({
+      where: {
+        id: input.draftId,
+        status: DraftStatus.LIVE,
+        schedulingVersion: input.currentSchedulingVersion,
+        pickDeadlineAt: null,
+      },
+      data: {
+        pickStartedAt: input.pickStartedAt,
+        pickDeadlineAt: input.pickDeadlineAt,
+        pausedRemainingSeconds: null,
+        schedulingVersion: { increment: 1 },
+      },
+    });
   }
 
   async getDraftAggregate(tx: TxClient, draftId: string): Promise<DraftAggregate | null> {
