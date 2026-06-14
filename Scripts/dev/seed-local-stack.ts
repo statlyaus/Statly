@@ -110,6 +110,12 @@ async function main() {
   const autoPickRulesJson = JSON.stringify(DEFAULT_DRAFT_AUTO_PICK_RULES);
   const rosterSize = getRosterSizeFromPositionLimits(LOCAL_TEST_DRAFT_POSITION_LIMITS);
   const benchSize = getBenchSizeFromPositionLimits(LOCAL_TEST_DRAFT_POSITION_LIMITS);
+  const repairedPickExpiryJobs: Array<{
+    draftId: string;
+    leagueId: string;
+    schedulingVersion: number;
+    pickDeadlineAt: Date;
+  }> = [];
   const runtimeRepair = await prisma.$transaction(async (tx) => {
     const localLeagues = await tx.league.findMany({
       where: {
@@ -177,14 +183,29 @@ async function main() {
         if (draft.pickDeadlineAt && draft.pickDeadlineAt.getTime() > now.getTime()) continue;
 
         const pickSeconds = Math.max(15, Number(league.settings.pickSeconds || 60));
-        await tx.draft.update({
+        const pickDeadlineAt = new Date(now.getTime() + pickSeconds * 1000);
+        const repairedDraft = await tx.draft.update({
           where: { id: draft.id },
           data: {
             pickStartedAt: draft.pickStartedAt ?? now,
-            pickDeadlineAt: new Date(now.getTime() + pickSeconds * 1000),
+            pickDeadlineAt,
             schedulingVersion: { increment: 1 },
           },
+          select: {
+            id: true,
+            leagueId: true,
+            schedulingVersion: true,
+            pickDeadlineAt: true,
+          },
         });
+        if (repairedDraft.pickDeadlineAt) {
+          repairedPickExpiryJobs.push({
+            draftId: repairedDraft.id,
+            leagueId: repairedDraft.leagueId,
+            schedulingVersion: repairedDraft.schedulingVersion,
+            pickDeadlineAt: repairedDraft.pickDeadlineAt,
+          });
+        }
         deadlineCount += 1;
       }
     }
@@ -199,6 +220,29 @@ async function main() {
   ) {
     console.log(
       `[local-seed] Repaired ${runtimeRepair.categoryCount} legacy league category records, ${runtimeRepair.settingsCount} draft settings records, and ${runtimeRepair.deadlineCount} live draft deadline records`
+    );
+  }
+
+  if (repairedPickExpiryJobs.length > 0) {
+    const { draftQueue, scheduleDraftPickExpiry } = await import('../../src/server/queue/draftQueue');
+    const { ScalableRedisConnection } = await import('../../src/server/realtime/scalableConnection');
+
+    for (const job of repairedPickExpiryJobs) {
+      await scheduleDraftPickExpiry(
+        {
+          kind: 'draft:pick-expiry',
+          draftId: job.draftId,
+          leagueId: job.leagueId,
+          schedulingVersion: job.schedulingVersion,
+        },
+        job.pickDeadlineAt
+      );
+    }
+
+    await draftQueue.close();
+    await ScalableRedisConnection.getInstance().shutdown();
+    console.log(
+      `[local-seed] Scheduled ${repairedPickExpiryJobs.length} repaired live draft pick expiry jobs`
     );
   }
 

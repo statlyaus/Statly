@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, type ReactNode }
 import { io, type Socket } from 'socket.io-client';
 import * as Sentry from '@sentry/react';
 
+import { isDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { auth } from '@/lib/firebaseClient';
 
 interface Props {
@@ -13,14 +14,14 @@ interface Props {
 
 const SocketContext = createContext<Socket | null>(null);
 
-async function resolveSocketAuthToken(uid: string): Promise<string | null> {
+export async function resolveSocketAuthToken(uid: string): Promise<string | null> {
+  if (isDevelopmentAuthEnabled()) {
+    return `dev:${uid}`;
+  }
+
   const currentUser = auth?.currentUser;
   if (currentUser) {
     return currentUser.getIdToken();
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    return `dev:${uid}`;
   }
 
   return null;

@@ -24,6 +24,10 @@ export NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${NEXT_PUBLIC_FIREBASE_MESSAGIN
 export NEXT_PUBLIC_FIREBASE_APP_ID="${NEXT_PUBLIC_FIREBASE_APP_ID:-1:000000000000:web:local}"
 export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-http://localhost:3000}"
 export APP_BASE_URL="${APP_BASE_URL:-http://localhost:3000}"
+export SOCKET_PORT="3002"
+export SOCKETIO_PORT="3002"
+export SOCKET_IO_PORT="3002"
+export NEXT_PUBLIC_SOCKET_URL="http://localhost:3002"
 
 FIREBASE_PID=""
 
@@ -85,7 +89,7 @@ npm run prisma:generate
 npx prisma migrate deploy
 npm run dev:seed:local
 
-npx concurrently -k -n web,socket,worker -c blue,magenta,green \
+npx concurrently -k -n web,socket,draft-worker -c blue,magenta,green \
   "npm:dev" \
   "npm:socket" \
-  "npm:worker:dev"
+  "npm:draft-worker:dev"
