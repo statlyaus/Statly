@@ -3,7 +3,6 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 
 import Image from 'next/image';
 
-import { motion } from 'framer-motion';
 import { CheckCircle2, ListPlus, Star } from 'lucide-react';
 
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
@@ -15,7 +14,7 @@ type PlayerGridSortKey = 'statlyZ' | 'name' | 'position' | 'club' | 'adp';
 interface PlayerGridProps {
   players: DraftPlayer[];
   totalPlayers: number;
-  onPlayerSelect: (player: DraftPlayer) => void;
+  onPlayerSelect: (player: DraftPlayer) => void | Promise<void>;
   onAddToQueue: (player: DraftPlayer) => void;
   onToggleWatchlist: (player: DraftPlayer) => void;
   canMakePick: boolean;
@@ -53,6 +52,10 @@ function formatLeagueStat(player: DraftPlayer, category: FantasyCategoryKey): st
   return value.toFixed(categoryData.format === 'decimal' ? 2 : 1);
 }
 
+function isPromiseLike(value: void | Promise<void>): value is Promise<void> {
+  return Boolean(value && typeof value.then === 'function');
+}
+
 export default function PlayerGrid({
   players,
   totalPlayers,
@@ -74,6 +77,7 @@ export default function PlayerGrid({
   emptyStateMessage,
 }: PlayerGridProps): React.JSX.Element {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +91,7 @@ export default function PlayerGrid({
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 || positionFilter !== 'ALL' || sortBy !== 'statlyZ';
+  const selectionInFlight = pendingSelectionId !== null;
   const statColumnCount = Math.max(visibleCategories.length, 1);
   const tableMinWidth =
     PLAYER_COLUMN_WIDTH +
@@ -97,15 +102,28 @@ export default function PlayerGrid({
   // Handle player selection
   const handlePlayerSelect = useCallback(
     (player: DraftPlayer) => {
-      if (!canMakePick) return;
+      if (!canMakePick || selectionInFlight) return;
 
+      const clearPendingSelection = () => {
+        setPendingSelectionId(null);
+        setSelectedPlayerId((currentPlayerId) =>
+          currentPlayerId === player.id ? null : currentPlayerId
+        );
+      };
+
+      setPendingSelectionId(player.id);
       setSelectedPlayerId(player.id);
-      onPlayerSelect(player);
 
-      // Clear selection after a short delay
-      setTimeout(() => setSelectedPlayerId(null), 1000);
+      const selectionResult = onPlayerSelect(player);
+
+      if (isPromiseLike(selectionResult)) {
+        void selectionResult.finally(clearPendingSelection);
+        return;
+      }
+
+      clearPendingSelection();
     },
-    [canMakePick, onPlayerSelect]
+    [canMakePick, onPlayerSelect, selectionInFlight]
   );
 
   // Keyboard navigation
@@ -129,7 +147,7 @@ export default function PlayerGrid({
         case 'Enter':
         case ' ': {
           event.preventDefault();
-          handlePlayerSelect(filteredPlayers[playerIndex]);
+          void handlePlayerSelect(filteredPlayers[playerIndex]);
           break;
         }
         case 'Home': {
@@ -376,7 +394,7 @@ export default function PlayerGrid({
                   typeof player.statlyZScore === 'number' ? player.statlyZScore : null;
 
                 return (
-                  <motion.tr
+                  <tr
                     key={player.id}
                     ref={(element) => {
                       rowRefs.current[index] = element;
@@ -389,7 +407,7 @@ export default function PlayerGrid({
                     onFocus={() => setFocusedRow(index)}
                     onBlur={() => setFocusedRow(null)}
                     onClick={() => {
-                      if (canMakePick) handlePlayerSelect(player);
+                      void handlePlayerSelect(player);
                     }}
                     aria-label={`${player.name}, ${player.position}, ${player.club}. Press Enter to select.`}
                     data-selected={isSelected ? 'true' : undefined}
@@ -499,11 +517,11 @@ export default function PlayerGrid({
                             e.stopPropagation();
                             onToggleWatchlist(player);
                           }}
-                          disabled={isLoading}
+                          disabled={isLoading || selectionInFlight}
                           className={`inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                            !isLoading && isWatched
+                            !isLoading && !selectionInFlight && isWatched
                               ? 'border border-border bg-accent text-accent-foreground hover:bg-accent/80'
-                              : !isLoading
+                              : !isLoading && !selectionInFlight
                                 ? 'border border-input bg-background text-foreground hover:bg-muted'
                                 : 'cursor-not-allowed border border-border bg-muted text-muted-foreground'
                           }`}
@@ -522,9 +540,9 @@ export default function PlayerGrid({
                             e.stopPropagation();
                             onAddToQueue(player);
                           }}
-                          disabled={isLoading || isQueued}
+                          disabled={isLoading || selectionInFlight || isQueued}
                           className={`inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                            !isLoading && !isQueued
+                            !isLoading && !selectionInFlight && !isQueued
                               ? 'border border-input bg-background text-foreground hover:bg-muted'
                               : 'cursor-not-allowed border border-border bg-muted text-muted-foreground'
                           }`}
@@ -541,22 +559,24 @@ export default function PlayerGrid({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handlePlayerSelect(player);
+                            void handlePlayerSelect(player);
                           }}
-                          disabled={!canMakePick || isLoading}
+                          disabled={!canMakePick || isLoading || selectionInFlight}
                           className={`inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                            canMakePick && !isLoading
+                            canMakePick && !isLoading && !selectionInFlight
                               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                               : 'cursor-not-allowed bg-muted text-muted-foreground'
                           }`}
                           aria-label={`Select ${player.name}`}
                         >
                           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                          <span className="hidden 2xl:inline">{isLoading ? 'Selecting' : 'Select'}</span>
+                          <span className="hidden 2xl:inline">
+                            {isLoading || pendingSelectionId === player.id ? 'Selecting' : 'Select'}
+                          </span>
                         </button>
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                 );
               })}
             </tbody>

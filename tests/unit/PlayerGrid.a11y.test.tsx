@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type React from 'react';
@@ -127,6 +127,34 @@ describe('PlayerGrid accessibility', () => {
     expect(onPlayerSelect).toHaveBeenCalledTimes(1);
   });
 
+  it('submits one selection while a pick is already processing', async () => {
+    let resolvePick: (() => void) | undefined;
+    const onPlayerSelect = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePick = resolve;
+        })
+    );
+
+    render(<PlayerGrid {...defaultProps} onPlayerSelect={onPlayerSelect} />);
+
+    const selectButton = screen.getByRole('button', { name: /select marcus bontempelli/i });
+
+    fireEvent.click(selectButton);
+    fireEvent.click(selectButton);
+    fireEvent.click(selectButton);
+
+    expect(onPlayerSelect).toHaveBeenCalledTimes(1);
+    expect(selectButton).toBeDisabled();
+    expect(selectButton).toHaveTextContent('Selecting');
+
+    resolvePick?.();
+
+    await waitFor(() => {
+      expect(selectButton).not.toBeDisabled();
+    });
+  });
+
   it('keeps the draft player table aligned to semantic tokens and compact radii', () => {
     const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
 
@@ -141,6 +169,8 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('grid grid-cols-3 items-center gap-2');
     expect(source).toContain('h-10 w-full justify-center');
     expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');
+    expect(source).not.toContain('motion.tr');
+    expect(source).not.toContain("from 'framer-motion'");
     expect(source).not.toContain('flex flex-wrap items-center justify-center gap-2');
     expect(source).not.toContain('items-center justify-end gap-2');
     expect(source).not.toMatch(/\brounded-(xl|2xl|3xl)\b/);
