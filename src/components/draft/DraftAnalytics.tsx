@@ -39,7 +39,11 @@ export default function DraftAnalytics({ draft, picks, participants }: DraftAnal
 
     // Participant engagement
     const participantStats = participants.map((participant) => {
-      const participantPicks = picks.filter((p) => p.member.userId === participant.userId);
+      const participantPicks = picks.filter(
+        (pick) =>
+          String(pick.member.id) === String(participant.id) ||
+          (pick.member.userId && String(pick.member.userId) === String(participant.userId))
+      );
       const avgTime =
         participantPicks.length > 0
           ? participantPicks.reduce((sum, p) => sum + (p.timeToMake || 0), 0) /

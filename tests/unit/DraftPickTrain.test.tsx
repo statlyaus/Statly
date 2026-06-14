@@ -203,4 +203,65 @@ describe('toDraftPickTrainState', () => {
       teamName: 'Alpha FC',
     });
   });
+
+  it('clamps completed drafts to the final pick and does not render a next user pick', () => {
+    const participants = [
+      {
+        id: 'member-1',
+        userId: 'user-1',
+        displayName: 'Alpha',
+        teamName: 'Alpha FC',
+        draftOrder: 1,
+      },
+      {
+        id: 'member-2',
+        userId: 'user-2',
+        displayName: 'Beta',
+        teamName: 'Beta FC',
+        draftOrder: 2,
+      },
+    ] as DraftParticipant[];
+    const draft = {
+      id: 'draft-1',
+      currentPick: 5,
+      totalPicks: 4,
+      round: 2,
+      direction: 'REVERSE',
+      status: 'COMPLETED',
+    } as DraftState;
+    const picks = Array.from({ length: 4 }, (_, index) => ({
+      id: `pick-${index + 1}`,
+      overall: index + 1,
+      round: index < 2 ? 1 : 2,
+      slot: index % 2 === 0 ? 1 : 2,
+      auto: false,
+      madeAt: new Date('2026-06-07T00:00:00.000Z'),
+      player: {
+        id: `player-${index + 1}`,
+        name: `Player ${index + 1}`,
+        position: 'MID',
+        club: 'Collingwood',
+      },
+      member: {
+        id: index % 2 === 0 ? 'member-1' : 'member-2',
+        displayName: index % 2 === 0 ? 'Alpha' : 'Beta',
+        teamName: index % 2 === 0 ? 'Alpha FC' : 'Beta FC',
+      },
+    })) as DraftPick[];
+
+    const state = toDraftPickTrainState({
+      draft,
+      participants,
+      picks,
+      yourSlot: 1,
+    });
+
+    expect(state.currentPick).toBe(4);
+    expect(state.slots.map((slot) => slot.status)).toEqual(['completed', 'completed']);
+
+    render(<DraftPickTrain state={state} timeLeft={0} />);
+
+    expect(screen.getByText('Pick 4 of 4')).toBeInTheDocument();
+    expect(screen.queryByText('Your next pick')).not.toBeInTheDocument();
+  });
 });

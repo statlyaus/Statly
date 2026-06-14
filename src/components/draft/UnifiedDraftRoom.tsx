@@ -404,25 +404,44 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   }
 
   const activeDraft = draft.draft;
+  const isCompletedDraft = String(activeDraft.status).toUpperCase() === 'COMPLETED';
   const derivedTotalRounds =
     activeDraft.totalPicks > 0 && participants.length > 0
       ? Math.ceil(activeDraft.totalPicks / participants.length)
       : null;
   const totalRounds = activeDraft.settings?.totalRounds ?? derivedTotalRounds;
+  const displayCurrentPick = isCompletedDraft
+    ? Math.max(1, activeDraft.totalPicks)
+    : activeDraft.currentPick;
   const hasPlaceholderDraftName =
     !activeDraft.name ||
     activeDraft.name === activeDraft.id ||
     activeDraft.name === `Draft ${activeDraft.id}`;
   const displayDraftTitle = hasPlaceholderDraftName ? 'League Draft' : activeDraft.name;
   const displayDraftSubtitle =
-    totalRounds && totalRounds > 0
-      ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`
-      : `Pick ${activeDraft.currentPick} of ${activeDraft.totalPicks}.`;
+    isCompletedDraft
+      ? `${displayCurrentPick} of ${activeDraft.totalPicks} picks finalized. Review your roster and every team in the archive.`
+      : totalRounds && totalRounds > 0
+        ? `Round ${activeDraft.round} of ${totalRounds}. Pick ${displayCurrentPick} of ${activeDraft.totalPicks}.`
+        : `Pick ${displayCurrentPick} of ${activeDraft.totalPicks}.`;
   const timePerPick =
     activeDraft.settings?.timePerPick ?? (activeDraft.settings as any)?.pickSeconds ?? 120;
-  const historyHref = activeDraft.leagueId
+  const leagueHistoryQuery = activeDraft.leagueId
+    ? `?leagueId=${encodeURIComponent(activeDraft.leagueId)}`
+    : '';
+  const leagueHubHref = activeDraft.leagueId
+    ? `/leagues/${encodeURIComponent(activeDraft.leagueId)}`
+    : '/leagues';
+  const rosterHref = activeDraft.leagueId
+    ? `/leagues/${encodeURIComponent(activeDraft.leagueId)}?tab=roster`
+    : '/rosters';
+  const historyHref = isCompletedDraft
+    ? `/drafts/history/${encodeURIComponent(activeDraft.id)}${leagueHistoryQuery}`
+    : activeDraft.leagueId
     ? `/drafts/history?leagueId=${encodeURIComponent(activeDraft.leagueId)}`
     : '/drafts/history';
+  const historyLinkLabel = isCompletedDraft ? 'Review completed draft' : 'History';
+  const filledRosterSlots = rosterSlots.filter((slot) => slot.player).length;
   const queuePanel = (
     <DraftQueue
       queue={me?.queue || []}
@@ -470,7 +489,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         {/* Connection Status */}
         <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
 
-        <div className="space-y-4 pb-4">
+        <div className={isCompletedDraft ? 'space-y-4 pb-4 opacity-45' : 'space-y-4 pb-4'}>
           {/* Draft Controls (for league owners) */}
           <DraftControls
             draftId={draftId}
@@ -499,84 +518,156 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
         {/* Main Content */}
         <main className="w-full px-3 pb-6 sm:px-5 lg:px-8">
-          <section className="rounded-3xl border border-border bg-card px-4 py-3 text-card-foreground shadow-sm sm:px-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-3">
+          {isCompletedDraft ? (
+            <section
+              aria-label="Draft complete next steps"
+              className="rounded-3xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6"
+            >
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(36rem,48rem)] xl:items-end">
+                <div className="min-w-0">
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
+                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
                   >
-                    {draftStatus}
+                    Completed
                   </span>
-                  <span className="text-sm font-semibold text-foreground">{displayDraftTitle}</span>
+                  <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                    Draft complete
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                    {displayDraftTitle} is finalized with {displayCurrentPick} of{' '}
+                    {activeDraft.totalPicks} picks complete. Choose where to go next; the draft room
+                    remains below as a read-only reference.
+                  </p>
+                  <p className="mt-3 text-sm font-medium text-foreground">
+                    Your roster: {filledRosterSlots} of {rosterSlots.length} slots filled.
+                  </p>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">{displayDraftSubtitle}</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Link
+                    href={leagueHubHref}
+                    aria-label="Go back to league hub"
+                    className="rounded-2xl border border-border bg-background p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="block text-sm font-semibold text-foreground">
+                      Go back to league hub
+                    </span>
+                    <span className="mt-2 block text-xs leading-5 text-muted-foreground">
+                      Return to league command, settings, fixtures, and season tools.
+                    </span>
+                  </Link>
+                  <Link
+                    href={historyHref}
+                    aria-label="Review completed draft"
+                    className="rounded-2xl border border-primary bg-primary p-4 text-left text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="block text-sm font-semibold">Review completed draft</span>
+                    <span className="mt-2 block text-xs leading-5 text-primary-foreground/80">
+                      Open the final pick timeline, round tables, and every team result.
+                    </span>
+                  </Link>
+                  <Link
+                    href={rosterHref}
+                    aria-label="Review my roster"
+                    className="rounded-2xl border border-border bg-background p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="block text-sm font-semibold text-foreground">
+                      Review my roster
+                    </span>
+                    <span className="mt-2 block text-xs leading-5 text-muted-foreground">
+                      Inspect your drafted squad inside the league roster view.
+                    </span>
+                  </Link>
+                </div>
               </div>
+            </section>
+          ) : (
+            <section className="rounded-3xl border border-border bg-card px-4 py-3 text-card-foreground shadow-sm sm:px-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusTone}`}
+                    >
+                      {draftStatus}
+                    </span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {displayDraftTitle}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">{displayDraftSubtitle}</p>
+                </div>
 
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/drafts"
-                  className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  Back to drafts
-                </Link>
-                <Link
-                  href={historyHref}
-                  className="inline-flex items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  History
-                </Link>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href="/drafts"
+                    className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Back to drafts
+                  </Link>
+                  <Link
+                    href={historyHref}
+                    className="inline-flex items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {historyLinkLabel}
+                  </Link>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           <section
-            aria-label="Draft board"
-            className="mt-6 grid gap-4 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(16rem,20rem)_minmax(54rem,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(64rem,1fr)_22rem]"
+            aria-label={isCompletedDraft ? 'Completed draft background' : undefined}
+            aria-disabled={isCompletedDraft ? 'true' : undefined}
+            className={isCompletedDraft ? 'opacity-45 pointer-events-none select-none' : undefined}
           >
-            <DraftLeftRail
-              draftStatus={activeDraft.status}
-              storageKey={`draft-left-rail:${activeDraft.id}:${userMemberId || userId}`}
-              rosterSlots={rosterSlots}
-              queueCount={queuePlayerIds.length}
-              watchlistCount={watchlistItems.length}
-              queuePanel={queuePanel}
-              watchlistPanel={watchlistPanel}
-              className="min-h-[28rem] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
-            />
-
-            <div className="min-w-0 overflow-x-auto">
-              <PlayerGrid
-                players={filteredPlayers}
-                totalPlayers={playersList.length}
-                onPlayerSelect={handlePlayerSelect}
-                onAddToQueue={handleAddToQueue}
-                onToggleWatchlist={handleToggleWatchlist}
-                canMakePick={draft.canMakePick}
-                queuedPlayerIds={me?.queue || []}
-                watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
-                selectedCategories={selectedCategories}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                positionFilter={positionFilter}
-                onPositionFilterChange={setPositionFilter}
-                availablePositions={availablePositions}
-                sortBy={sortBy}
-                onSortChange={setSortBy}
-                isLoading={draft.isSaving}
-                emptyStateMessage={emptyPlayerMessage}
+            <section
+              aria-label="Draft board"
+              className="mt-6 grid gap-4 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(16rem,20rem)_minmax(54rem,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(64rem,1fr)_22rem]"
+            >
+              <DraftLeftRail
+                draftStatus={activeDraft.status}
+                storageKey={`draft-left-rail:${activeDraft.id}:${userMemberId || userId}`}
+                rosterSlots={rosterSlots}
+                queueCount={queuePlayerIds.length}
+                watchlistCount={watchlistItems.length}
+                queuePanel={queuePanel}
+                watchlistPanel={watchlistPanel}
+                className="min-h-[28rem] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
               />
-            </div>
 
-            <aside className="hidden min-h-0 lg:block" aria-label="Desktop pick feed">
-              <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm">
-                {desktopPickFeed}
+              <div className="min-w-0 overflow-x-auto">
+                <PlayerGrid
+                  players={filteredPlayers}
+                  totalPlayers={playersList.length}
+                  onPlayerSelect={handlePlayerSelect}
+                  onAddToQueue={handleAddToQueue}
+                  onToggleWatchlist={handleToggleWatchlist}
+                  canMakePick={draft.canMakePick}
+                  queuedPlayerIds={me?.queue || []}
+                  watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
+                  selectedCategories={selectedCategories}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  positionFilter={positionFilter}
+                  onPositionFilterChange={setPositionFilter}
+                  availablePositions={availablePositions}
+                  sortBy={sortBy}
+                  onSortChange={setSortBy}
+                  isLoading={draft.isSaving}
+                  emptyStateMessage={emptyPlayerMessage}
+                />
               </div>
-            </aside>
-          </section>
 
-          <section className="mt-6" aria-label="Draft analytics">
-            <DraftAnalytics draft={draft.draft} picks={picks} participants={participants} />
+              <aside className="hidden min-h-0 lg:block" aria-label="Desktop pick feed">
+                <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm">
+                  {desktopPickFeed}
+                </div>
+              </aside>
+            </section>
+
+            <section className="mt-6" aria-label="Draft analytics">
+              <DraftAnalytics draft={draft.draft} picks={picks} participants={participants} />
+            </section>
           </section>
         </main>
 

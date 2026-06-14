@@ -190,11 +190,16 @@ function buildDraftPickTrainState(params: {
   totalPicks: number;
   round: number;
   direction: string;
+  status?: string;
   participants: DraftPickTrainParticipant[];
   picks: DraftPickTrainPick[];
   yourSlot?: number;
 }): DraftPickTrainState {
-  const { currentPick, totalPicks, round, direction, participants, picks, yourSlot } = params;
+  const { currentPick, totalPicks, round, direction, status, participants, picks, yourSlot } = params;
+  const isComplete =
+    String(status ?? '').toUpperCase() === 'COMPLETED' ||
+    (Number.isFinite(totalPicks) && totalPicks > 0 && currentPick > totalPicks);
+  const displayCurrentPick = isComplete ? Math.max(1, totalPicks) : currentPick;
 
   const sequence = buildDraftRoomSequence({
     currentPick,
@@ -202,11 +207,11 @@ function buildDraftPickTrainState(params: {
     participants,
     picks,
     yourSlot,
-    status: 'LIVE',
+    status,
   });
 
   return {
-    currentPick,
+    currentPick: displayCurrentPick,
     totalPicks,
     round,
     direction,
@@ -234,6 +239,7 @@ export function toDraftPickTrainState(params: {
     totalPicks: params.draft.totalPicks,
     round: params.draft.round,
     direction: params.draft.direction,
+    status: params.draft.status,
     participants: params.participants.map((participant) => ({
       slot: participant.draftOrder,
       member: {
@@ -257,6 +263,7 @@ export function toDraftPickTrainStateFromHeaderData(params: {
     totalPicks: params.draftData.totalPicks,
     round: params.draftData.round,
     direction: params.draftData.direction,
+    status: params.draftData.status,
     participants: params.draftData.participants,
     picks: params.draftData.picks,
     yourSlot: params.yourSlot,

@@ -24,8 +24,8 @@ export default function RankingDisplay({
   if (!entry) return null;
 
   const { rank } = entry;
-  const totalValue = entry.valueOverReplacement || 0;
-  const label = `Rank ${rank}, total value ${totalValue.toFixed(2)}`;
+  const statlyZ = entry.totalValue ?? entry.valueOverReplacement ?? 0;
+  const label = `Rank ${rank}, Statly Z ${statlyZ.toFixed(2)}`;
 
   if (variant === 'chip') {
     return (
@@ -47,7 +47,7 @@ export default function RankingDisplay({
         {!compact && (
           <>
             <span className="opacity-60">•</span>
-            <span className="tabular-nums text-[10px]">${totalValue.toFixed(0)}</span>
+            <span className="tabular-nums text-[10px]">Z {statlyZ.toFixed(2)}</span>
           </>
         )}
       </span>

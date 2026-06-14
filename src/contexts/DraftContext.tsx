@@ -106,6 +106,7 @@ interface DraftContextValue extends DraftState {
 
 const DraftContext = createContext<DraftContextValue | undefined>(undefined);
 const PERSISTED_PICK_BACKFILL_INTERVAL_MS = 5000;
+const PERSISTED_PICK_PAGE_SIZE = 200;
 
 /* -------------------------------- Utilities -------------------------------- */
 
@@ -395,6 +396,36 @@ function getLatestPickMadeAtMs(picks: DraftPick[]): number | undefined {
   return latest > 0 ? latest : undefined;
 }
 
+function getExpectedPersistedPickCount(draft: DraftCore | null): number {
+  if (!draft) return 0;
+
+  const summaryCount = Number((draft as any).picksSummary?.count ?? 0);
+  if (Number.isFinite(summaryCount) && summaryCount > 0) {
+    return summaryCount;
+  }
+
+  const totalPicks = Number(draft.totalPicks ?? 0);
+  const currentPick = Number(draft.currentPick ?? 0);
+  const status = String(draft.status ?? '').toUpperCase();
+
+  if (status === 'COMPLETED') {
+    return Number.isFinite(totalPicks) && totalPicks > 0 ? totalPicks : Math.max(0, currentPick - 1);
+  }
+
+  if (status === 'LIVE' || status === 'IN_PROGRESS') {
+    const completedPicks = Math.max(0, currentPick - 1);
+    return Number.isFinite(totalPicks) && totalPicks > 0
+      ? Math.min(completedPicks, totalPicks)
+      : completedPicks;
+  }
+
+  return 0;
+}
+
+function shouldHydratePersistedPicks(draft: DraftCore | null, picks: DraftPick[]): boolean {
+  return getExpectedPersistedPickCount(draft) > picks.length;
+}
+
 function buildPersistedPickBackfillEndpoint(draftId: string, sinceMs?: number): string {
   if (!sinceMs) {
     return `drafts/${draftId}/picks?pageSize=100`;
@@ -416,6 +447,7 @@ type Action =
       draftReadiness?: DraftOperationalReadiness | null;
     }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
+  | { type: 'SET_PERSISTED_PICKS'; picks: DraftPick[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
   | { type: 'SET_SAVING'; saving: boolean }
@@ -620,6 +652,29 @@ function reducer(state: DraftState, action: Action): DraftState {
         watchlistItems: action.items,
         error: null,
       };
+    case 'SET_PERSISTED_PICKS': {
+      const picksById = new Map<string, DraftPick>();
+      for (const pick of state.picks) {
+        picksById.set(String(pick.id), pick);
+      }
+      for (const pick of action.picks) {
+        picksById.set(String(pick.id), pick);
+      }
+
+      const picks = Array.from(picksById.values()).sort((a, b) => getPickOrder(a) - getPickOrder(b));
+      const draftedPlayerIds = new Set(
+        picks.map((pick) => String((pick as any).player?.id ?? (pick as any).playerId))
+      );
+
+      return {
+        ...state,
+        picks,
+        availablePlayers: state.availablePlayers.filter(
+          (player) => !draftedPlayerIds.has(String(player.id))
+        ),
+        error: null,
+      };
+    }
     case 'APPLY_DELTAS': {
       let next = state;
       for (const d of action.deltas) next = applyDelta(next, d);
@@ -724,6 +779,7 @@ export function DraftProvider({
   const rafScheduledRef = useRef(false);
   const hydratedQueueMemberIdRef = useRef<string | null>(null);
   const initialHydrateStartedRef = useRef(Boolean(initialSnapshot));
+  const persistedPickHydratingRef = useRef(false);
 
   const initial = useMemo<DraftState>(() => {
     const snap = normalizeSnapshot(initialSnapshot ?? null);
@@ -901,10 +957,61 @@ export function DraftProvider({
     [draftId]
   );
 
+  const hydratePersistedPickPages = useCallback(async () => {
+    if (!state.draft || persistedPickHydratingRef.current) return;
+
+    const expectedPickCount = getExpectedPersistedPickCount(state.draft);
+    if (expectedPickCount <= state.picks.length) return;
+
+    persistedPickHydratingRef.current = true;
+
+    try {
+      const persistedPicks: DraftPick[] = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore && persistedPicks.length < expectedPickCount) {
+        const res = await fetchApi(
+          `drafts/${draftId}/picks?page=${page}&pageSize=${PERSISTED_PICK_PAGE_SIZE}`,
+          {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' },
+          }
+        );
+        const rawPicks = toArray<unknown>(res?.data?.picks ?? res?.picks);
+        const normalizedPicks = rawPicks.flatMap((rawPick) => {
+          const pick = normalizeCommandPick(rawPick, state.participants);
+          return pick ? [pick] : [];
+        });
+
+        persistedPicks.push(...normalizedPicks);
+
+        hasMore =
+          Boolean(res?.data?.pagination?.hasMore) &&
+          rawPicks.length > 0 &&
+          normalizedPicks.length > 0;
+        page += 1;
+      }
+
+      if (!isMounted.current || persistedPicks.length === 0) return;
+
+      dispatch({ type: 'SET_PERSISTED_PICKS', picks: persistedPicks });
+    } catch {
+      // Persisted picks are a catch-up path; keep socket and draft controls usable if it fails.
+    } finally {
+      persistedPickHydratingRef.current = false;
+    }
+  }, [draftId, state.draft, state.participants, state.picks.length]);
+
   useEffect(() => {
     if (!state.draft || !shouldHydrateAvailablePlayers(state.availablePlayers)) return;
     void hydrateAvailablePlayers();
   }, [state.draft, state.availablePlayers, hydrateAvailablePlayers]);
+
+  useEffect(() => {
+    if (!shouldHydratePersistedPicks(state.draft, state.picks)) return;
+    void hydratePersistedPickPages();
+  }, [hydratePersistedPickPages, state.draft, state.picks]);
 
   useEffect(() => {
     if (!memberId) return;
