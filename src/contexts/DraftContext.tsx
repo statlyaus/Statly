@@ -133,31 +133,45 @@ export function shouldHydrateAvailablePlayers(players: DraftPlayer[]): boolean {
   );
 }
 
-function normalizeParticipants(raw: unknown): DraftParticipant[] {
-  return toArray<any>(raw).map((participant, index) => {
-    const member = participant?.member ?? participant;
-    const draftOrder =
-      Number(participant?.draftOrder ?? participant?.slot ?? member?.draftOrder ?? index + 1) ||
-      index + 1;
+function asRecord(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' ? (value as Record<string, any>) : {};
+}
 
-    return {
-      id: String(member?.id ?? participant?.id ?? `participant-${draftOrder}`),
-      userId: String(member?.userId ?? participant?.userId ?? ''),
-      displayName: String(member?.displayName ?? participant?.displayName ?? `Team ${draftOrder}`),
-      teamName: member?.teamName ?? participant?.teamName ?? undefined,
-      draftOrder,
-      isOnline: Boolean(participant?.isOnline ?? member?.isOnline ?? false),
-      lastSeen: new Date(participant?.lastSeen ?? member?.lastSeen ?? 0),
-      isCurrentTurn: Boolean(participant?.isCurrentTurn ?? member?.isCurrentTurn ?? false),
-      timeRemaining:
-        typeof (participant?.timeRemaining ?? member?.timeRemaining) === 'number'
-          ? Number(participant?.timeRemaining ?? member?.timeRemaining)
-          : undefined,
-      queue: Array.isArray(participant?.queue ?? member?.queue)
-        ? (participant?.queue ?? member?.queue)
-        : [],
-    };
-  });
+function firstPresent<T>(...values: T[]): T | undefined {
+  return values.find((value) => value !== undefined && value !== null);
+}
+
+function getParticipantDraftOrder(
+  participant: Record<string, any>,
+  member: Record<string, any>,
+  index: number
+): number {
+  return Number(firstPresent(participant.draftOrder, participant.slot, member.draftOrder, index + 1)) || index + 1;
+}
+
+function normalizeParticipant(participant: any, index: number): DraftParticipant {
+  const participantRecord = asRecord(participant);
+  const member = asRecord(firstPresent(participantRecord.member, participantRecord));
+  const draftOrder = getParticipantDraftOrder(participantRecord, member, index);
+  const timeRemaining = firstPresent(participantRecord.timeRemaining, member.timeRemaining);
+  const queue = firstPresent(participantRecord.queue, member.queue);
+
+  return {
+    id: String(firstPresent(member.id, participantRecord.id, `participant-${draftOrder}`)),
+    userId: String(firstPresent(member.userId, participantRecord.userId, '')),
+    displayName: String(firstPresent(member.displayName, participantRecord.displayName, `Team ${draftOrder}`)),
+    teamName: firstPresent(member.teamName, participantRecord.teamName),
+    draftOrder,
+    isOnline: Boolean(firstPresent(participantRecord.isOnline, member.isOnline, false)),
+    lastSeen: new Date(firstPresent(participantRecord.lastSeen, member.lastSeen, 0)),
+    isCurrentTurn: Boolean(firstPresent(participantRecord.isCurrentTurn, member.isCurrentTurn, false)),
+    timeRemaining: typeof timeRemaining === 'number' ? Number(timeRemaining) : undefined,
+    queue: Array.isArray(queue) ? queue : [],
+  };
+}
+
+function normalizeParticipants(raw: unknown): DraftParticipant[] {
+  return toArray<any>(raw).map(normalizeParticipant);
 }
 
 function participantQueueIncluded(raw: unknown): boolean {
@@ -454,6 +468,72 @@ type Action =
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_ERROR'; error: string | null };
 
+type NormalizedDraftSnapshot = ReturnType<typeof normalizeSnapshot>;
+
+function shouldIgnoreSnapshot(state: DraftState, snapshot: NormalizedDraftSnapshot): boolean {
+  const incomingTs = snapshot.ts;
+  const lastEventAt = state.connection.lastEventAt ?? 0;
+  return Boolean(incomingTs && incomingTs < lastEventAt);
+}
+
+function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot): DraftState {
+  if (shouldIgnoreSnapshot(state, snapshot)) {
+    return { ...state, isLoading: false };
+  }
+
+  const draft = preserveDraftLeagueAffiliation(snapshot.draft, state.draft);
+  const participants = snapshot.includesParticipantQueues
+    ? snapshot.participants
+    : mergeParticipantQueues(snapshot.participants, state.participants);
+
+  return {
+    ...state,
+    draft,
+    participants,
+    picks: snapshot.includesPicks ? snapshot.picks : state.picks,
+    availablePlayers: snapshot.includesAvailablePlayers
+      ? snapshot.availablePlayers
+      : state.availablePlayers,
+    draftReadiness: snapshot.draftReadiness ?? state.draftReadiness,
+    selectedCategories:
+      snapshot.selectedCategories.length > 0
+        ? snapshot.selectedCategories
+        : state.selectedCategories,
+    liveState: snapshot.liveState,
+    isLoading: false,
+    error: null,
+    connection: {
+      ...state.connection,
+      lastEventAt: snapshot.ts ?? state.connection.lastEventAt,
+    },
+  };
+}
+
+function mergePersistedPicks(existing: DraftPick[], incoming: DraftPick[]): DraftPick[] {
+  const picksById = new Map<string, DraftPick>();
+  for (const pick of existing) picksById.set(String(pick.id), pick);
+  for (const pick of incoming) picksById.set(String(pick.id), pick);
+  return Array.from(picksById.values()).sort((a, b) => getPickOrder(a) - getPickOrder(b));
+}
+
+function getDraftedPlayerIds(picks: DraftPick[]): Set<string> {
+  return new Set(picks.map((pick) => String((pick as any).player?.id ?? (pick as any).playerId)));
+}
+
+function applyPersistedPicksState(state: DraftState, incomingPicks: DraftPick[]): DraftState {
+  const picks = mergePersistedPicks(state.picks, incomingPicks);
+  const draftedPlayerIds = getDraftedPlayerIds(picks);
+
+  return {
+    ...state,
+    picks,
+    availablePlayers: state.availablePlayers.filter(
+      (player) => !draftedPlayerIds.has(String(player.id))
+    ),
+    error: null,
+  };
+}
+
 function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
   const ts = delta.ts ?? Date.now();
   const lastEventAt = state.connection.lastEventAt ?? 0;
@@ -605,39 +685,8 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
 
 function reducer(state: DraftState, action: Action): DraftState {
   switch (action.type) {
-    case 'SET_SNAPSHOT': {
-      const incomingTs = action.snapshot.ts;
-      const lastEventAt = state.connection.lastEventAt ?? 0;
-      if (incomingTs && incomingTs < lastEventAt) {
-        return { ...state, isLoading: false };
-      }
-
-      const draft = preserveDraftLeagueAffiliation(action.snapshot.draft, state.draft);
-      const participants = action.snapshot.includesParticipantQueues
-        ? action.snapshot.participants
-        : mergeParticipantQueues(action.snapshot.participants, state.participants);
-      return {
-        ...state,
-        draft,
-        participants,
-        picks: action.snapshot.includesPicks ? action.snapshot.picks : state.picks,
-        availablePlayers: action.snapshot.includesAvailablePlayers
-          ? action.snapshot.availablePlayers
-          : state.availablePlayers,
-        draftReadiness: action.snapshot.draftReadiness ?? state.draftReadiness,
-        selectedCategories:
-          action.snapshot.selectedCategories.length > 0
-            ? action.snapshot.selectedCategories
-            : state.selectedCategories,
-        liveState: action.snapshot.liveState,
-        isLoading: false,
-        error: null,
-        connection: {
-          ...state.connection,
-          lastEventAt: action.snapshot.ts ?? state.connection.lastEventAt,
-        },
-      };
-    }
+    case 'SET_SNAPSHOT':
+      return applySnapshotState(state, action.snapshot);
     case 'SET_AVAILABLE_PLAYERS':
       return {
         ...state,
@@ -652,29 +701,8 @@ function reducer(state: DraftState, action: Action): DraftState {
         watchlistItems: action.items,
         error: null,
       };
-    case 'SET_PERSISTED_PICKS': {
-      const picksById = new Map<string, DraftPick>();
-      for (const pick of state.picks) {
-        picksById.set(String(pick.id), pick);
-      }
-      for (const pick of action.picks) {
-        picksById.set(String(pick.id), pick);
-      }
-
-      const picks = Array.from(picksById.values()).sort((a, b) => getPickOrder(a) - getPickOrder(b));
-      const draftedPlayerIds = new Set(
-        picks.map((pick) => String((pick as any).player?.id ?? (pick as any).playerId))
-      );
-
-      return {
-        ...state,
-        picks,
-        availablePlayers: state.availablePlayers.filter(
-          (player) => !draftedPlayerIds.has(String(player.id))
-        ),
-        error: null,
-      };
-    }
+    case 'SET_PERSISTED_PICKS':
+      return applyPersistedPicksState(state, action.picks);
     case 'APPLY_DELTAS': {
       let next = state;
       for (const d of action.deltas) next = applyDelta(next, d);

@@ -95,4 +95,30 @@ describe('MyTeamPanel', () => {
     expect(screen.getAllByText('0.0').length).toBeGreaterThan(0);
     expect(screen.getByText('Projection 0.0')).toBeInTheDocument();
   });
+
+  it('does not crash when rankings are returned in a non-array shape', () => {
+    useRankingsMock.mockReturnValue({
+      rankings: { entries: [] },
+      loading: false,
+      error: null,
+    });
+
+    render(
+      <MyTeamPanel
+        team={{ id: 'team-1', name: 'Safe Rankings', players: ['player-1'] }}
+        players={[
+          {
+            id: 'player-1',
+            name: 'Fallback Player',
+            position: 'MID',
+            team: 'Essendon',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Safe Rankings' })).toBeInTheDocument();
+    expect(screen.getByText('Fallback Player')).toBeInTheDocument();
+    expect(screen.getByText('0 rankings loaded')).toBeInTheDocument();
+  });
 });
