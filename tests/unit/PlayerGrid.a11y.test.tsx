@@ -47,6 +47,15 @@ const players: DraftPlayer[] = [
   },
 ];
 
+function buildPlayer(index: number): DraftPlayer {
+  return {
+    ...players[0],
+    id: `player-${index}`,
+    name: `Player ${String(index).padStart(3, '0')}`,
+    statlyZScore: 500 - index,
+  };
+}
+
 const defaultProps = {
   players,
   totalPlayers: players.length,
@@ -153,6 +162,24 @@ describe('PlayerGrid accessibility', () => {
     await waitFor(() => {
       expect(selectButton).not.toBeDisabled();
     });
+  });
+
+  it('windows large draft player pools instead of mounting every row', () => {
+    const largePool = Array.from({ length: 320 }, (_, index) => buildPlayer(index + 1));
+
+    render(
+      <PlayerGrid
+        {...defaultProps}
+        players={largePool}
+        totalPlayers={largePool.length}
+        selectedCategories={['goals', 'tackles']}
+      />
+    );
+
+    expect(screen.getByText('Showing 320 of 320 players')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /select player 001/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /select player 320/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('row').length).toBeLessThan(80);
   });
 
   it('keeps the draft player table aligned to semantic tokens and compact radii', () => {

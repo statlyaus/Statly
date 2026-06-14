@@ -59,7 +59,18 @@ export async function GET(
       }),
       prisma.draft.findUnique({
         where: { id },
-        select: { createdAt: true, startedAt: true, completedAt: true },
+        select: {
+          createdAt: true,
+          startedAt: true,
+          completedAt: true,
+          currentPick: true,
+          status: true,
+          round: true,
+          direction: true,
+          pickStartedAt: true,
+          pickDeadlineAt: true,
+          schedulingVersion: true,
+        },
       }),
     ]);
 
@@ -123,6 +134,15 @@ export async function GET(
 
     const data = {
       draftId: id,
+      draftState: {
+        currentPick: draftMeta.currentPick,
+        status: draftMeta.status,
+        round: draftMeta.round,
+        direction: draftMeta.direction,
+        pickStartedAt: draftMeta.pickStartedAt?.toISOString() ?? null,
+        pickDeadlineAt: draftMeta.pickDeadlineAt?.toISOString() ?? null,
+        schedulingVersion: draftMeta.schedulingVersion,
+      },
       picks: picks.map((pick) => ({
         id: pick.id,
         overall: pick.overall,

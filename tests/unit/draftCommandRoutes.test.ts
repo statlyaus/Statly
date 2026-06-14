@@ -42,6 +42,17 @@ describe('draft command routes', () => {
     expect(picksRoute).toContain('handlePickCommand');
   });
 
+  it('returns draft state metadata with persisted picks for lightweight backfill', () => {
+    const picksRoute = read('src/app/api/drafts/[id]/picks/route.ts');
+    const draftContext = read('src/contexts/DraftContext.tsx');
+
+    expect(picksRoute).toContain('draftState');
+    expect(picksRoute).toContain('currentPick');
+    expect(picksRoute).toContain('pickDeadlineAt');
+    expect(draftContext).toContain('draftState');
+    expect(draftContext).toContain('pickDeadlineAt');
+  });
+
   it('uses the shared authenticated request helper for manual pick commands', () => {
     const pickCommand = read('src/server/draft/api/handlePickCommand.ts');
 

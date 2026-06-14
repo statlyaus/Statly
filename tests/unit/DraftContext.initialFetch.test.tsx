@@ -867,6 +867,109 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
   });
 
+  it('uses persisted pick draft metadata without forcing a full snapshot refresh', async () => {
+    vi.useFakeTimers();
+
+    fetchApi.mockImplementation(async (endpoint: string) => {
+      if (
+        endpoint ===
+        'drafts/draft-1/picks?since=2026-06-07T00%3A00%3A00.000Z&pageSize=100'
+      ) {
+        return {
+          success: true,
+          data: {
+            draftState: {
+              currentPick: 2,
+              status: 'LIVE',
+              round: 1,
+              direction: 'FORWARD',
+              pickDeadlineAt: '2026-06-07T00:02:00.000Z',
+            },
+            picks: [
+              {
+                id: 'pick-1',
+                overall: 1,
+                round: 1,
+                slot: 1,
+                player: {
+                  id: 'player-1',
+                  name: 'First Player',
+                  position: 'MID',
+                  club: 'Sydney',
+                },
+                member: {
+                  id: 'member-1',
+                  displayName: 'Tester',
+                },
+                auto: false,
+                madeAt: '2026-06-07T00:00:05.000Z',
+              },
+            ],
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Live Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+            pickDeadlineAt: new Date('2026-06-07T00:01:00.000Z'),
+          } as any,
+          participants: [
+            {
+              id: 'member-1',
+              memberId: 'member-1',
+              userId: 'user-1',
+              displayName: 'Tester',
+              slot: 1,
+              queue: ['player-1'],
+            },
+          ] as any,
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+            },
+          ],
+          picks: [],
+          liveState: { currentPick: 1 },
+          ts: Date.parse('2026-06-07T00:00:00.000Z'),
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchApi).toHaveBeenCalledWith(
+      'drafts/draft-1/picks?since=2026-06-07T00%3A00%3A00.000Z&pageSize=100'
+    );
+    expect(fetchApi).not.toHaveBeenCalledWith('drafts/draft-1');
+    expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
+    expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
+    expect(screen.getByTestId('pick-deadline')).toHaveTextContent('2026-06-07T00:02:00.000Z');
+  });
+
   it('loads persisted picks without a since cursor when a live draft opens after picks exist', async () => {
     vi.useFakeTimers();
 

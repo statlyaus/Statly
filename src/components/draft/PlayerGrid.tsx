@@ -36,6 +36,10 @@ const PLAYER_COLUMN_WIDTH = 340;
 const PROFILE_COLUMN_WIDTH = 180;
 const STAT_COLUMN_WIDTH = 88;
 const ACTIONS_COLUMN_WIDTH = 236;
+const TABLE_VIEWPORT_HEIGHT = 680;
+const VIRTUALIZED_ROW_HEIGHT = 112;
+const VIRTUALIZED_ROW_OVERSCAN = 6;
+const VIRTUALIZED_ROW_THRESHOLD = 120;
 
 function formatLeagueStat(player: DraftPlayer, category: FantasyCategoryKey): string {
   const categoryData = FANTASY_CATEGORIES[category];
@@ -79,7 +83,9 @@ export default function PlayerGrid({
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const queuedIds = useMemo(() => new Set(queuedPlayerIds), [queuedPlayerIds]);
   const watchedIds = useMemo(() => new Set(watchedPlayerIds), [watchedPlayerIds]);
@@ -98,6 +104,34 @@ export default function PlayerGrid({
     PROFILE_COLUMN_WIDTH +
     statColumnCount * STAT_COLUMN_WIDTH +
     ACTIONS_COLUMN_WIDTH;
+  const shouldWindowRows = filteredPlayers.length > VIRTUALIZED_ROW_THRESHOLD;
+  const visibleRange = useMemo(() => {
+    if (!shouldWindowRows) {
+      return {
+        start: 0,
+        end: filteredPlayers.length,
+        topSpacerHeight: 0,
+        bottomSpacerHeight: 0,
+      };
+    }
+
+    const firstVisibleRow = Math.floor(scrollTop / VIRTUALIZED_ROW_HEIGHT);
+    const start = Math.max(0, firstVisibleRow - VIRTUALIZED_ROW_OVERSCAN);
+    const visibleRowCount =
+      Math.ceil(TABLE_VIEWPORT_HEIGHT / VIRTUALIZED_ROW_HEIGHT) + VIRTUALIZED_ROW_OVERSCAN * 2;
+    const end = Math.min(filteredPlayers.length, start + visibleRowCount);
+
+    return {
+      start,
+      end,
+      topSpacerHeight: start * VIRTUALIZED_ROW_HEIGHT,
+      bottomSpacerHeight: (filteredPlayers.length - end) * VIRTUALIZED_ROW_HEIGHT,
+    };
+  }, [filteredPlayers.length, scrollTop, shouldWindowRows]);
+  const visiblePlayers = useMemo(
+    () => filteredPlayers.slice(visibleRange.start, visibleRange.end),
+    [filteredPlayers, visibleRange.end, visibleRange.start]
+  );
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -173,9 +207,23 @@ export default function PlayerGrid({
   // Focus management
   useEffect(() => {
     if (focusedRow !== null) {
-      rowRefs.current[focusedRow]?.scrollIntoView({ block: 'center' });
+      if (shouldWindowRows) {
+        scrollContainerRef.current?.scrollTo?.({
+          top: Math.max(0, focusedRow * VIRTUALIZED_ROW_HEIGHT - TABLE_VIEWPORT_HEIGHT / 2),
+          behavior: 'auto',
+        });
+      } else {
+        rowRefs.current[focusedRow]?.scrollIntoView({ block: 'center' });
+      }
     }
-  }, [focusedRow]);
+  }, [focusedRow, shouldWindowRows]);
+
+  useEffect(() => {
+    rowRefs.current = [];
+    setFocusedRow(null);
+    setScrollTop(0);
+    scrollContainerRef.current?.scrollTo?.({ top: 0, behavior: 'auto' });
+  }, [searchQuery, positionFilter, sortBy, filteredPlayers.length]);
 
   // Empty state
   if (filteredPlayers.length === 0) {
@@ -310,10 +358,19 @@ export default function PlayerGrid({
 
       {/* Player List */}
       <div className="relative">
-        <div className="max-h-[680px] overflow-auto">
+        <div
+          ref={scrollContainerRef}
+          className="max-h-[680px] overflow-auto"
+          onScroll={(event) => {
+            if (shouldWindowRows) {
+              setScrollTop(event.currentTarget.scrollTop);
+            }
+          }}
+        >
           <table
             className="w-full table-fixed border-collapse text-left"
             style={{ minWidth: tableMinWidth }}
+            aria-rowcount={filteredPlayers.length + (visibleCategories.length > 0 ? 2 : 1)}
             aria-label="Available draft players"
           >
             <caption className="sr-only">
@@ -383,7 +440,17 @@ export default function PlayerGrid({
               )}
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredPlayers.map((player, index) => {
+              {shouldWindowRows && visibleRange.topSpacerHeight > 0 && (
+                <tr aria-hidden="true" role="presentation">
+                  <td
+                    colSpan={2 + statColumnCount + 1}
+                    className="border-0 p-0"
+                    style={{ height: visibleRange.topSpacerHeight }}
+                  />
+                </tr>
+              )}
+              {visiblePlayers.map((player, visibleIndex) => {
+                const index = visibleRange.start + visibleIndex;
                 const isFocused = focusedRow === index;
                 const isSelected = selectedPlayerId === player.id;
                 const isQueued = queuedIds.has(player.id);
@@ -410,6 +477,7 @@ export default function PlayerGrid({
                       void handlePlayerSelect(player);
                     }}
                     aria-label={`${player.name}, ${player.position}, ${player.club}. Press Enter to select.`}
+                    aria-rowindex={index + (visibleCategories.length > 0 ? 3 : 2)}
                     data-selected={isSelected ? 'true' : undefined}
                   >
                     <th scope="row" className="px-4 py-4 font-normal sm:px-5">
@@ -579,6 +647,15 @@ export default function PlayerGrid({
                   </tr>
                 );
               })}
+              {shouldWindowRows && visibleRange.bottomSpacerHeight > 0 && (
+                <tr aria-hidden="true" role="presentation">
+                  <td
+                    colSpan={2 + statColumnCount + 1}
+                    className="border-0 p-0"
+                    style={{ height: visibleRange.bottomSpacerHeight }}
+                  />
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

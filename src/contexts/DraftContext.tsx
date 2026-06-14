@@ -450,6 +450,48 @@ function buildPersistedPickBackfillEndpoint(draftId: string, sinceMs?: number): 
   )}&pageSize=100`;
 }
 
+function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null {
+  const source = asRecord(rawDraftState);
+  const draftPatch: Partial<DraftCore> = {};
+  const livePatch: DraftLiveState = {};
+
+  if (typeof source.currentPick === 'number' && Number.isFinite(source.currentPick)) {
+    draftPatch.currentPick = source.currentPick;
+    livePatch.currentPick = source.currentPick;
+  }
+
+  if (typeof source.status === 'string') {
+    draftPatch.status = source.status as DraftCore['status'];
+  }
+
+  if (typeof source.round === 'number' && Number.isFinite(source.round)) {
+    draftPatch.round = source.round;
+  }
+
+  if (typeof source.direction === 'string') {
+    draftPatch.direction = source.direction as DraftCore['direction'];
+  }
+
+  if ('pickDeadlineAt' in source) {
+    draftPatch.pickDeadlineAt = source.pickDeadlineAt
+      ? (toOptionalDate(source.pickDeadlineAt) ?? null)
+      : null;
+  }
+
+  if (Object.keys(draftPatch).length === 0 && Object.keys(livePatch).length === 0) {
+    return null;
+  }
+
+  return {
+    type: 'STATE_PATCH',
+    payload: {
+      draft: draftPatch,
+      liveState: livePatch,
+    },
+    ts: Date.now(),
+  };
+}
+
 /* --------------------------------- Reducer --------------------------------- */
 
 type Action =
@@ -1092,6 +1134,7 @@ export function DraftProvider({
     try {
       const res = await fetchApi(buildPersistedPickBackfillEndpoint(draftId, sinceMs));
       const persistedPicks = toArray<unknown>(res?.data?.picks ?? res?.picks);
+      const draftStateDelta = buildDraftStateBackfillDelta(res?.data?.draftState ?? res?.draftState);
       if (persistedPicks.length === 0) return;
 
       const existingPickIds = new Set(state.picks.map((pick) => String(pick.id)));
@@ -1120,8 +1163,14 @@ export function DraftProvider({
 
       if (!isMounted.current || deltas.length === 0) return;
 
-      dispatch({ type: 'APPLY_DELTAS', deltas });
-      await forceRefresh();
+      dispatch({
+        type: 'APPLY_DELTAS',
+        deltas: draftStateDelta ? [...deltas, draftStateDelta] : deltas,
+      });
+
+      if (!draftStateDelta) {
+        await forceRefresh();
+      }
     } catch {
       // Socket delivery is still primary; persisted-pick polling is a silent catch-up path.
     }
