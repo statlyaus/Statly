@@ -41,6 +41,9 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
       - name: Prisma migrate (test DB)
         run: npx prisma migrate deploy
 
