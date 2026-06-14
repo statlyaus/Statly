@@ -44,7 +44,9 @@
     "test:all": "npm run lint:ci && npm run typecheck && npm run test:unit && npm run test:int && npm run test:race && npm run test:e2e",
     "lint:ci": "eslint . --quiet",
     "lint:strict": "eslint . --max-warnings=0",
-    "test:e2e": "echo 'No e2e tests yet'",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
     "dev:kill": "bash -lc 'pkill -f \"next dev\" || true; pkill -f \"tsx .*socketioServer\" || true; pkill -f \"tsx .*webVitalsWorker\" || true'",
     "dev:clean": "bash -lc 'rm -rf .next node_modules/.cache'",
     "dev:reset": "bash -lc 'npm run dev:kill && npm run dev:clean && npm run dev:full:all'",
@@ -127,6 +129,7 @@
   "devDependencies": {
     "@eslint/compat": "^1.3.2",
     "@eslint/js": "^9.33.0",
+    "@playwright/test": "1.60.0",
     "@storybook/react": "^9.1.2",
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/postcss": "^4.1.12",

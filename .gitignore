@@ -52,6 +52,8 @@ logs/
 
 # --- Misc ---
 coverage/
+playwright-report/
+test-results/
 *.bak
 *.swp
 *.tmp
