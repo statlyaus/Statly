@@ -4,6 +4,7 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 const socketPort = Number(process.env.PLAYWRIGHT_SOCKET_PORT ?? 4102);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 const socketURL = process.env.PLAYWRIGHT_SOCKET_URL ?? `http://localhost:${socketPort}`;
+const firebaseProjectId = process.env.PLAYWRIGHT_FIREBASE_PROJECT_ID ?? 'statly-e2e';
 const useSocketWebServer =
   process.env.PLAYWRIGHT_WITH_SOCKET === 'true' ||
   (process.env.PLAYWRIGHT_WITH_SOCKET !== 'false' && !process.env.CI);
@@ -11,7 +12,9 @@ const useSocketWebServer =
 const nextCommand = [
   'NODE_ENV=development',
   'NEXT_PUBLIC_FIREBASE_API_KEY=',
-  'NEXT_PUBLIC_FIREBASE_PROJECT_ID=',
+  `GOOGLE_CLOUD_PROJECT=${firebaseProjectId}`,
+  `GCLOUD_PROJECT=${firebaseProjectId}`,
+  `NEXT_PUBLIC_FIREBASE_PROJECT_ID=${firebaseProjectId}`,
   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=',
   'NEXT_PUBLIC_FIREBASE_APP_ID=',
   'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=',
