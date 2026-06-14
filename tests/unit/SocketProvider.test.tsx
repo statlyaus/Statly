@@ -38,6 +38,7 @@ function read(path: string) {
 
 describe('SocketProvider', () => {
   const originalSocketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+  const originalSocketDisabled = process.env.NEXT_PUBLIC_SOCKET_DISABLED;
 
   afterEach(() => {
     cleanup();
@@ -45,6 +46,7 @@ describe('SocketProvider', () => {
     authMock.currentUser = null;
     isDevelopmentAuthEnabled.mockReturnValue(false);
     process.env.NEXT_PUBLIC_SOCKET_URL = originalSocketUrl;
+    process.env.NEXT_PUBLIC_SOCKET_DISABLED = originalSocketDisabled;
   });
 
   it('creates socket with a Firebase auth token at the configured socket URL', async () => {
@@ -88,6 +90,18 @@ describe('SocketProvider', () => {
         })
       )
     );
+  });
+
+  it('skips socket creation when the runtime disables realtime transport', () => {
+    process.env.NEXT_PUBLIC_SOCKET_DISABLED = 'true';
+
+    render(
+      <SocketProvider uid="dev-user">
+        <div>content</div>
+      </SocketProvider>
+    );
+
+    expect(io).not.toHaveBeenCalled();
   });
 
   it('keeps the socket handshake contract aligned with server token auth', () => {

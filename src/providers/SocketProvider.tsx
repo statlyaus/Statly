@@ -14,6 +14,10 @@ interface Props {
 
 const SocketContext = createContext<Socket | null>(null);
 
+function isSocketDisabled(): boolean {
+  return process.env.NEXT_PUBLIC_SOCKET_DISABLED === 'true';
+}
+
 export async function resolveSocketAuthToken(uid: string): Promise<string | null> {
   if (isDevelopmentAuthEnabled()) {
     return `dev:${uid}`;
@@ -31,6 +35,11 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
+    if (isSocketDisabled()) {
+      setSocket(null);
+      return;
+    }
+
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3002';
     let cancelled = false;
     let activeSocket: Socket | null = null;

@@ -4,11 +4,12 @@ import { DEVELOPMENT_AUTH_EMAIL, DEVELOPMENT_AUTH_USER_ID } from '../../src/lib/
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../src/types/fantasyCategories';
 
 export const E2E_LEAGUE_ID = 'e2e-completed-league';
-export const E2E_DRAFT_ID = 'e2e-completed-draft';
+export const E2E_DRAFT_ID = 'cme2edraft0000e2etestdraft';
 const E2E_SETTINGS_ID = 'e2e-completed-settings';
 const E2E_HUMAN_MEMBER_ID = 'e2e-member-human';
 const E2E_BOT_MEMBER_ID = 'e2e-member-bot';
 const E2E_BOT_USER_ID = 'e2e-bot-user';
+const E2E_MEMBER_IDS = [E2E_HUMAN_MEMBER_ID, E2E_BOT_MEMBER_ID];
 
 const E2E_PLAYERS = [
   { id: 'e2e-player-darcy-cameron', name: 'Darcy Cameron', club: 'Collingwood', position: 'RUC' },
@@ -23,11 +24,39 @@ async function globalSetup() {
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.leagueRosterPlayer.deleteMany({ where: { leagueId: E2E_LEAGUE_ID } });
-      await tx.leagueRoster.deleteMany({ where: { leagueId: E2E_LEAGUE_ID } });
-      await tx.pick.deleteMany({ where: { draftId: E2E_DRAFT_ID } });
-      await tx.draftOrder.deleteMany({ where: { draftId: E2E_DRAFT_ID } });
-      await tx.draft.deleteMany({ where: { id: E2E_DRAFT_ID } });
+      const fixtureDrafts = await tx.draft.findMany({
+        where: { OR: [{ id: E2E_DRAFT_ID }, { leagueId: E2E_LEAGUE_ID }] },
+        select: { id: true },
+      });
+      const fixtureDraftIds = fixtureDrafts.map((draft) => draft.id);
+
+      await tx.leagueRosterPlayer.deleteMany({
+        where: { OR: [{ leagueId: E2E_LEAGUE_ID }, { memberId: { in: E2E_MEMBER_IDS } }] },
+      });
+      await tx.leagueRoster.deleteMany({
+        where: { OR: [{ leagueId: E2E_LEAGUE_ID }, { memberId: { in: E2E_MEMBER_IDS } }] },
+      });
+      await tx.teamAction.deleteMany({
+        where: {
+          OR: [
+            { leagueId: E2E_LEAGUE_ID },
+            { memberId: { in: E2E_MEMBER_IDS } },
+            { targetMemberId: { in: E2E_MEMBER_IDS } },
+          ],
+        },
+      });
+      await tx.queueItem.deleteMany({ where: { memberId: { in: E2E_MEMBER_IDS } } });
+
+      if (fixtureDraftIds.length > 0) {
+        await tx.draftWatchlist.deleteMany({ where: { draftId: { in: fixtureDraftIds } } });
+        await tx.preDraftQueue.deleteMany({ where: { draftId: { in: fixtureDraftIds } } });
+        await tx.lobbyActivity.deleteMany({ where: { draftId: { in: fixtureDraftIds } } });
+        await tx.draftEvent.deleteMany({ where: { draftId: { in: fixtureDraftIds } } });
+        await tx.pick.deleteMany({ where: { draftId: { in: fixtureDraftIds } } });
+        await tx.draftOrder.deleteMany({ where: { draftId: { in: fixtureDraftIds } } });
+        await tx.draft.deleteMany({ where: { id: { in: fixtureDraftIds } } });
+      }
+
       await tx.leagueMember.deleteMany({ where: { leagueId: E2E_LEAGUE_ID } });
       await tx.league.deleteMany({ where: { id: E2E_LEAGUE_ID } });
       await tx.leagueSettings.deleteMany({ where: { id: E2E_SETTINGS_ID } });
