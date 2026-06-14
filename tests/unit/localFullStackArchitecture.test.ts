@@ -55,7 +55,11 @@ describe('local full stack development architecture', () => {
     );
     expect(source).toContain('npm:dev');
     expect(source).toContain('npm:socket');
-    expect(source).toContain('npm:worker:dev');
+    expect(source).toContain('npm:draft-worker:dev');
+    expect(source).toContain('export SOCKET_PORT="3002"');
+    expect(source).toContain('export SOCKETIO_PORT="3002"');
+    expect(source).toContain('export SOCKET_IO_PORT="3002"');
+    expect(source).toContain('export NEXT_PUBLIC_SOCKET_URL="http://localhost:3002"');
     expect(firebaseClient).toContain('const useFirebaseEmulators');
     expect(firebaseClient).toContain('firebaseConfig.measurementId && !useFirebaseEmulators');
     expect(firebaseClient).toContain('useFirebaseEmulators && db && auth');
@@ -101,6 +105,9 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('pickDeadlineAt');
     expect(source).toContain('draft.pickDeadlineAt.getTime() > now.getTime()');
     expect(source).toContain('schedulingVersion: { increment: 1 }');
+    expect(source).toContain('repairedPickExpiryJobs');
+    expect(source).toContain('scheduleDraftPickExpiry');
+    expect(source).toContain("kind: 'draft:pick-expiry'");
     expect(source).toContain("adminDb.collection('users').doc(DEVELOPMENT_AUTH_USER_ID)");
   });
 

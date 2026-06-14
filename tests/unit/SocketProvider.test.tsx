@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SocketProvider } from '../../src/providers/SocketProvider';
 
-const { authMock, getIdToken, io, socketMock } = vi.hoisted(() => {
+const { authMock, getIdToken, io, isDevelopmentAuthEnabled, socketMock } = vi.hoisted(() => {
   const socket = {
     on: vi.fn(),
     off: vi.fn(),
@@ -21,12 +21,14 @@ const { authMock, getIdToken, io, socketMock } = vi.hoisted(() => {
     },
     getIdToken: vi.fn(),
     io: vi.fn(() => socket),
+    isDevelopmentAuthEnabled: vi.fn(() => false),
     socketMock: socket,
   };
 });
 
 vi.mock('socket.io-client', () => ({ io }));
 vi.mock('@/lib/firebaseClient', () => ({ auth: authMock }));
+vi.mock('@/lib/devAuth', () => ({ isDevelopmentAuthEnabled }));
 
 const root = process.cwd();
 
@@ -36,12 +38,15 @@ function read(path: string) {
 
 describe('SocketProvider', () => {
   const originalSocketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+  const originalSocketDisabled = process.env.NEXT_PUBLIC_SOCKET_DISABLED;
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
     authMock.currentUser = null;
+    isDevelopmentAuthEnabled.mockReturnValue(false);
     process.env.NEXT_PUBLIC_SOCKET_URL = originalSocketUrl;
+    process.env.NEXT_PUBLIC_SOCKET_DISABLED = originalSocketDisabled;
   });
 
   it('creates socket with a Firebase auth token at the configured socket URL', async () => {
@@ -69,6 +74,7 @@ describe('SocketProvider', () => {
 
   it('defaults to the dedicated local socket server URL', async () => {
     delete process.env.NEXT_PUBLIC_SOCKET_URL;
+    isDevelopmentAuthEnabled.mockReturnValue(true);
 
     render(
       <SocketProvider uid="dev-user">
@@ -84,6 +90,18 @@ describe('SocketProvider', () => {
         })
       )
     );
+  });
+
+  it('skips socket creation when the runtime disables realtime transport', () => {
+    process.env.NEXT_PUBLIC_SOCKET_DISABLED = 'true';
+
+    render(
+      <SocketProvider uid="dev-user">
+        <div>content</div>
+      </SocketProvider>
+    );
+
+    expect(io).not.toHaveBeenCalled();
   });
 
   it('keeps the socket handshake contract aligned with server token auth', () => {

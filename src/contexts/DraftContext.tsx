@@ -106,6 +106,7 @@ interface DraftContextValue extends DraftState {
 
 const DraftContext = createContext<DraftContextValue | undefined>(undefined);
 const PERSISTED_PICK_BACKFILL_INTERVAL_MS = 5000;
+const PERSISTED_PICK_PAGE_SIZE = 200;
 
 /* -------------------------------- Utilities -------------------------------- */
 
@@ -132,31 +133,45 @@ export function shouldHydrateAvailablePlayers(players: DraftPlayer[]): boolean {
   );
 }
 
-function normalizeParticipants(raw: unknown): DraftParticipant[] {
-  return toArray<any>(raw).map((participant, index) => {
-    const member = participant?.member ?? participant;
-    const draftOrder =
-      Number(participant?.draftOrder ?? participant?.slot ?? member?.draftOrder ?? index + 1) ||
-      index + 1;
+function asRecord(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' ? (value as Record<string, any>) : {};
+}
 
-    return {
-      id: String(member?.id ?? participant?.id ?? `participant-${draftOrder}`),
-      userId: String(member?.userId ?? participant?.userId ?? ''),
-      displayName: String(member?.displayName ?? participant?.displayName ?? `Team ${draftOrder}`),
-      teamName: member?.teamName ?? participant?.teamName ?? undefined,
-      draftOrder,
-      isOnline: Boolean(participant?.isOnline ?? member?.isOnline ?? false),
-      lastSeen: new Date(participant?.lastSeen ?? member?.lastSeen ?? 0),
-      isCurrentTurn: Boolean(participant?.isCurrentTurn ?? member?.isCurrentTurn ?? false),
-      timeRemaining:
-        typeof (participant?.timeRemaining ?? member?.timeRemaining) === 'number'
-          ? Number(participant?.timeRemaining ?? member?.timeRemaining)
-          : undefined,
-      queue: Array.isArray(participant?.queue ?? member?.queue)
-        ? (participant?.queue ?? member?.queue)
-        : [],
-    };
-  });
+function firstPresent<T>(...values: T[]): T | undefined {
+  return values.find((value) => value !== undefined && value !== null);
+}
+
+function getParticipantDraftOrder(
+  participant: Record<string, any>,
+  member: Record<string, any>,
+  index: number
+): number {
+  return Number(firstPresent(participant.draftOrder, participant.slot, member.draftOrder, index + 1)) || index + 1;
+}
+
+function normalizeParticipant(participant: any, index: number): DraftParticipant {
+  const participantRecord = asRecord(participant);
+  const member = asRecord(firstPresent(participantRecord.member, participantRecord));
+  const draftOrder = getParticipantDraftOrder(participantRecord, member, index);
+  const timeRemaining = firstPresent(participantRecord.timeRemaining, member.timeRemaining);
+  const queue = firstPresent(participantRecord.queue, member.queue);
+
+  return {
+    id: String(firstPresent(member.id, participantRecord.id, `participant-${draftOrder}`)),
+    userId: String(firstPresent(member.userId, participantRecord.userId, '')),
+    displayName: String(firstPresent(member.displayName, participantRecord.displayName, `Team ${draftOrder}`)),
+    teamName: firstPresent(member.teamName, participantRecord.teamName),
+    draftOrder,
+    isOnline: Boolean(firstPresent(participantRecord.isOnline, member.isOnline, false)),
+    lastSeen: new Date(firstPresent(participantRecord.lastSeen, member.lastSeen, 0)),
+    isCurrentTurn: Boolean(firstPresent(participantRecord.isCurrentTurn, member.isCurrentTurn, false)),
+    timeRemaining: typeof timeRemaining === 'number' ? Number(timeRemaining) : undefined,
+    queue: Array.isArray(queue) ? queue : [],
+  };
+}
+
+function normalizeParticipants(raw: unknown): DraftParticipant[] {
+  return toArray<any>(raw).map(normalizeParticipant);
 }
 
 function participantQueueIncluded(raw: unknown): boolean {
@@ -395,6 +410,36 @@ function getLatestPickMadeAtMs(picks: DraftPick[]): number | undefined {
   return latest > 0 ? latest : undefined;
 }
 
+function getExpectedPersistedPickCount(draft: DraftCore | null): number {
+  if (!draft) return 0;
+
+  const summaryCount = Number((draft as any).picksSummary?.count ?? 0);
+  if (Number.isFinite(summaryCount) && summaryCount > 0) {
+    return summaryCount;
+  }
+
+  const totalPicks = Number(draft.totalPicks ?? 0);
+  const currentPick = Number(draft.currentPick ?? 0);
+  const status = String(draft.status ?? '').toUpperCase();
+
+  if (status === 'COMPLETED') {
+    return Number.isFinite(totalPicks) && totalPicks > 0 ? totalPicks : Math.max(0, currentPick - 1);
+  }
+
+  if (status === 'LIVE' || status === 'IN_PROGRESS') {
+    const completedPicks = Math.max(0, currentPick - 1);
+    return Number.isFinite(totalPicks) && totalPicks > 0
+      ? Math.min(completedPicks, totalPicks)
+      : completedPicks;
+  }
+
+  return 0;
+}
+
+function shouldHydratePersistedPicks(draft: DraftCore | null, picks: DraftPick[]): boolean {
+  return getExpectedPersistedPickCount(draft) > picks.length;
+}
+
 function buildPersistedPickBackfillEndpoint(draftId: string, sinceMs?: number): string {
   if (!sinceMs) {
     return `drafts/${draftId}/picks?pageSize=100`;
@@ -416,11 +461,78 @@ type Action =
       draftReadiness?: DraftOperationalReadiness | null;
     }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
+  | { type: 'SET_PERSISTED_PICKS'; picks: DraftPick[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_ERROR'; error: string | null };
+
+type NormalizedDraftSnapshot = ReturnType<typeof normalizeSnapshot>;
+
+function shouldIgnoreSnapshot(state: DraftState, snapshot: NormalizedDraftSnapshot): boolean {
+  const incomingTs = snapshot.ts;
+  const lastEventAt = state.connection.lastEventAt ?? 0;
+  return Boolean(incomingTs && incomingTs < lastEventAt);
+}
+
+function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot): DraftState {
+  if (shouldIgnoreSnapshot(state, snapshot)) {
+    return { ...state, isLoading: false };
+  }
+
+  const draft = preserveDraftLeagueAffiliation(snapshot.draft, state.draft);
+  const participants = snapshot.includesParticipantQueues
+    ? snapshot.participants
+    : mergeParticipantQueues(snapshot.participants, state.participants);
+
+  return {
+    ...state,
+    draft,
+    participants,
+    picks: snapshot.includesPicks ? snapshot.picks : state.picks,
+    availablePlayers: snapshot.includesAvailablePlayers
+      ? snapshot.availablePlayers
+      : state.availablePlayers,
+    draftReadiness: snapshot.draftReadiness ?? state.draftReadiness,
+    selectedCategories:
+      snapshot.selectedCategories.length > 0
+        ? snapshot.selectedCategories
+        : state.selectedCategories,
+    liveState: snapshot.liveState,
+    isLoading: false,
+    error: null,
+    connection: {
+      ...state.connection,
+      lastEventAt: snapshot.ts ?? state.connection.lastEventAt,
+    },
+  };
+}
+
+function mergePersistedPicks(existing: DraftPick[], incoming: DraftPick[]): DraftPick[] {
+  const picksById = new Map<string, DraftPick>();
+  for (const pick of existing) picksById.set(String(pick.id), pick);
+  for (const pick of incoming) picksById.set(String(pick.id), pick);
+  return Array.from(picksById.values()).sort((a, b) => getPickOrder(a) - getPickOrder(b));
+}
+
+function getDraftedPlayerIds(picks: DraftPick[]): Set<string> {
+  return new Set(picks.map((pick) => String((pick as any).player?.id ?? (pick as any).playerId)));
+}
+
+function applyPersistedPicksState(state: DraftState, incomingPicks: DraftPick[]): DraftState {
+  const picks = mergePersistedPicks(state.picks, incomingPicks);
+  const draftedPlayerIds = getDraftedPlayerIds(picks);
+
+  return {
+    ...state,
+    picks,
+    availablePlayers: state.availablePlayers.filter(
+      (player) => !draftedPlayerIds.has(String(player.id))
+    ),
+    error: null,
+  };
+}
 
 function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
   const ts = delta.ts ?? Date.now();
@@ -573,39 +685,8 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
 
 function reducer(state: DraftState, action: Action): DraftState {
   switch (action.type) {
-    case 'SET_SNAPSHOT': {
-      const incomingTs = action.snapshot.ts;
-      const lastEventAt = state.connection.lastEventAt ?? 0;
-      if (incomingTs && incomingTs < lastEventAt) {
-        return { ...state, isLoading: false };
-      }
-
-      const draft = preserveDraftLeagueAffiliation(action.snapshot.draft, state.draft);
-      const participants = action.snapshot.includesParticipantQueues
-        ? action.snapshot.participants
-        : mergeParticipantQueues(action.snapshot.participants, state.participants);
-      return {
-        ...state,
-        draft,
-        participants,
-        picks: action.snapshot.includesPicks ? action.snapshot.picks : state.picks,
-        availablePlayers: action.snapshot.includesAvailablePlayers
-          ? action.snapshot.availablePlayers
-          : state.availablePlayers,
-        draftReadiness: action.snapshot.draftReadiness ?? state.draftReadiness,
-        selectedCategories:
-          action.snapshot.selectedCategories.length > 0
-            ? action.snapshot.selectedCategories
-            : state.selectedCategories,
-        liveState: action.snapshot.liveState,
-        isLoading: false,
-        error: null,
-        connection: {
-          ...state.connection,
-          lastEventAt: action.snapshot.ts ?? state.connection.lastEventAt,
-        },
-      };
-    }
+    case 'SET_SNAPSHOT':
+      return applySnapshotState(state, action.snapshot);
     case 'SET_AVAILABLE_PLAYERS':
       return {
         ...state,
@@ -620,6 +701,8 @@ function reducer(state: DraftState, action: Action): DraftState {
         watchlistItems: action.items,
         error: null,
       };
+    case 'SET_PERSISTED_PICKS':
+      return applyPersistedPicksState(state, action.picks);
     case 'APPLY_DELTAS': {
       let next = state;
       for (const d of action.deltas) next = applyDelta(next, d);
@@ -724,6 +807,7 @@ export function DraftProvider({
   const rafScheduledRef = useRef(false);
   const hydratedQueueMemberIdRef = useRef<string | null>(null);
   const initialHydrateStartedRef = useRef(Boolean(initialSnapshot));
+  const persistedPickHydratingRef = useRef(false);
 
   const initial = useMemo<DraftState>(() => {
     const snap = normalizeSnapshot(initialSnapshot ?? null);
@@ -901,10 +985,61 @@ export function DraftProvider({
     [draftId]
   );
 
+  const hydratePersistedPickPages = useCallback(async () => {
+    if (!state.draft || persistedPickHydratingRef.current) return;
+
+    const expectedPickCount = getExpectedPersistedPickCount(state.draft);
+    if (expectedPickCount <= state.picks.length) return;
+
+    persistedPickHydratingRef.current = true;
+
+    try {
+      const persistedPicks: DraftPick[] = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore && persistedPicks.length < expectedPickCount) {
+        const res = await fetchApi(
+          `drafts/${draftId}/picks?page=${page}&pageSize=${PERSISTED_PICK_PAGE_SIZE}`,
+          {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' },
+          }
+        );
+        const rawPicks = toArray<unknown>(res?.data?.picks ?? res?.picks);
+        const normalizedPicks = rawPicks.flatMap((rawPick) => {
+          const pick = normalizeCommandPick(rawPick, state.participants);
+          return pick ? [pick] : [];
+        });
+
+        persistedPicks.push(...normalizedPicks);
+
+        hasMore =
+          Boolean(res?.data?.pagination?.hasMore) &&
+          rawPicks.length > 0 &&
+          normalizedPicks.length > 0;
+        page += 1;
+      }
+
+      if (!isMounted.current || persistedPicks.length === 0) return;
+
+      dispatch({ type: 'SET_PERSISTED_PICKS', picks: persistedPicks });
+    } catch {
+      // Persisted picks are a catch-up path; keep socket and draft controls usable if it fails.
+    } finally {
+      persistedPickHydratingRef.current = false;
+    }
+  }, [draftId, state.draft, state.participants, state.picks.length]);
+
   useEffect(() => {
     if (!state.draft || !shouldHydrateAvailablePlayers(state.availablePlayers)) return;
     void hydrateAvailablePlayers();
   }, [state.draft, state.availablePlayers, hydrateAvailablePlayers]);
+
+  useEffect(() => {
+    if (!shouldHydratePersistedPicks(state.draft, state.picks)) return;
+    void hydratePersistedPickPages();
+  }, [hydratePersistedPickPages, state.draft, state.picks]);
 
   useEffect(() => {
     if (!memberId) return;

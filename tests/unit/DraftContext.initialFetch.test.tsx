@@ -31,6 +31,7 @@ function DraftStateProbe() {
         {draft.draft?.pickDeadlineAt?.toISOString?.() ?? 'missing'}
       </div>
       <div data-testid="player-count">{draft.availablePlayers.length}</div>
+      <div data-testid="pick-count">{draft.picks.length}</div>
       <div data-testid="pick-order">{draft.picks.map((pick) => pick.id).join(',')}</div>
       <button type="button" onClick={() => void draft.makePick('player-1')}>
         Pick player 1
@@ -343,6 +344,149 @@ describe('DraftProvider initial hydration', () => {
       expect(screen.getByTestId('current-pick')).toHaveTextContent('4');
       expect(screen.getByTestId('pick-deadline')).toHaveTextContent(pickDeadlineAt);
       expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
+    });
+  });
+
+  it('hydrates every persisted pick for a completed draft before rendering final roster summaries', async () => {
+    const participants = [
+      {
+        slot: 1,
+        member: {
+          id: 'member-1',
+          userId: 'statly-dev-tester',
+          displayName: 'Robbo Rockers',
+        },
+      },
+      {
+        slot: 2,
+        member: {
+          id: 'member-2',
+          userId: 'bot-1',
+          displayName: 'AFL Legends',
+        },
+      },
+    ];
+    const picks = Array.from({ length: 201 }, (_, index) => {
+      const overall = index + 1;
+
+      return {
+        id: `pick-${overall}`,
+        overall,
+        round: Math.ceil(overall / participants.length),
+        slot: overall % 2 === 1 ? 1 : 2,
+        auto: false,
+        madeAt: `2026-06-13T10:${String(index).padStart(2, '0')}.000Z`,
+        player: {
+          id: `player-${overall}`,
+          name: `Player ${overall}`,
+          position: 'MID',
+          club: 'Sydney',
+        },
+        member: {
+          id: overall % 2 === 1 ? 'member-1' : 'member-2',
+          displayName: overall % 2 === 1 ? 'Robbo Rockers' : 'AFL Legends',
+          teamName: overall % 2 === 1 ? 'Robbo Rockers' : 'AFL Legends',
+        },
+      };
+    });
+
+    fetchApi.mockImplementation(async (endpoint: string) => {
+      if (endpoint === 'drafts/completed-draft') {
+        return {
+          success: true,
+          data: {
+            id: 'completed-draft',
+            name: 'Completed Draft',
+            leagueId: 'league-1',
+            status: 'COMPLETED',
+            currentPick: 202,
+            totalPicks: 201,
+            round: 101,
+            direction: 'REVERSE',
+            participants,
+            picksSummary: {
+              count: picks.length,
+              latestOverall: picks.length,
+            },
+            selectedCategories: [],
+            draftReadiness: null,
+            liveState: {},
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/completed-draft/players?page=1&pageSize=100') {
+        return {
+          success: true,
+          data: {
+            players: [
+              {
+                id: 'undrafted-player',
+                name: 'Undrafted Player',
+                position: 'MID',
+                club: 'Sydney',
+                statlyZScore: 0,
+              },
+            ],
+            pagination: { hasMore: false },
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/completed-draft/picks?page=1&pageSize=200') {
+        return {
+          success: true,
+          data: {
+            picks: picks.slice(0, 200),
+            pagination: {
+              page: 1,
+              pageSize: 200,
+              totalCount: picks.length,
+              hasMore: true,
+            },
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/completed-draft/picks?page=2&pageSize=200') {
+        return {
+          success: true,
+          data: {
+            picks: picks.slice(200),
+            pagination: {
+              page: 2,
+              pageSize: 200,
+              totalCount: picks.length,
+              hasMore: false,
+            },
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider draftId="completed-draft" userId="statly-dev-tester">
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(fetchApi).toHaveBeenCalledWith('drafts/completed-draft/picks?page=1&pageSize=200', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      expect(fetchApi).toHaveBeenCalledWith('drafts/completed-draft/picks?page=2&pageSize=200', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-count')).toHaveTextContent('201');
+      expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
+      expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-201');
     });
   });
 

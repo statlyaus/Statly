@@ -37,12 +37,13 @@ vi.mock('next/link', () => ({
     href,
     children,
     className,
+    ...props
   }: {
     href: string;
     children: React.ReactNode;
     className?: string;
-  }) => (
-    <a href={href} className={className}>
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={href} className={className} {...props}>
       {children}
     </a>
   ),
@@ -241,10 +242,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
 
     expect(screen.getByRole('banner', { name: 'Live draft status' })).toBeInTheDocument();
     expect(screen.getByText('Test AFL Champions League - LIVE')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to drafts' })).toHaveAttribute(
-      'href',
-      '/drafts'
-    );
+    expect(screen.getByRole('link', { name: 'Back to drafts' })).toHaveAttribute('href', '/drafts');
     expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
       'href',
       '/drafts/history?leagueId=league-1'
@@ -271,6 +269,43 @@ describe('UnifiedDraftRoom live shell composition', () => {
       expect(screen.getByRole('banner', { name: 'Live draft status' })).toBeInTheDocument();
     }
   );
+
+  it('links completed drafts directly to the archived roster review', () => {
+    draftContext.status = 'COMPLETED';
+
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(screen.getByRole('link', { name: 'Review completed draft' })).toHaveAttribute(
+      'href',
+      '/drafts/history/draft-1?leagueId=league-1'
+    );
+  });
+
+  it('moves completed drafts into a distinct post-draft action flow', () => {
+    draftContext.status = 'COMPLETED';
+
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    const nextSteps = screen.getByRole('region', { name: 'Draft complete next steps' });
+    expect(nextSteps).toHaveTextContent('Draft complete');
+
+    expect(screen.getByRole('link', { name: 'Go back to league hub' })).toHaveAttribute(
+      'href',
+      '/leagues/league-1'
+    );
+    expect(screen.getByRole('link', { name: 'Review completed draft' })).toHaveAttribute(
+      'href',
+      '/drafts/history/draft-1?leagueId=league-1'
+    );
+    expect(screen.getByRole('link', { name: 'Review my roster' })).toHaveAttribute(
+      'href',
+      '/leagues/league-1?tab=roster'
+    );
+
+    const background = screen.getByRole('region', { name: 'Completed draft background' });
+    expect(background).toHaveAttribute('inert');
+    expect(background).toHaveClass('opacity-45');
+  });
 
   it('builds left-rail roster slots from draft settings and current user picks', () => {
     render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);

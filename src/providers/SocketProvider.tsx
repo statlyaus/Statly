@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, type ReactNode }
 import { io, type Socket } from 'socket.io-client';
 import * as Sentry from '@sentry/react';
 
+import { isDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { auth } from '@/lib/firebaseClient';
 
 interface Props {
@@ -13,14 +14,18 @@ interface Props {
 
 const SocketContext = createContext<Socket | null>(null);
 
-async function resolveSocketAuthToken(uid: string): Promise<string | null> {
+function isSocketDisabled(): boolean {
+  return process.env.NEXT_PUBLIC_SOCKET_DISABLED === 'true';
+}
+
+export async function resolveSocketAuthToken(uid: string): Promise<string | null> {
+  if (isDevelopmentAuthEnabled()) {
+    return `dev:${uid}`;
+  }
+
   const currentUser = auth?.currentUser;
   if (currentUser) {
     return currentUser.getIdToken();
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    return `dev:${uid}`;
   }
 
   return null;
@@ -30,6 +35,11 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
+    if (isSocketDisabled()) {
+      setSocket(null);
+      return;
+    }
+
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3002';
     let cancelled = false;
     let activeSocket: Socket | null = null;

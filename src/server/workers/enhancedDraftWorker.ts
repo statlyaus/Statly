@@ -1,3 +1,5 @@
+import { pathToFileURL } from 'node:url';
+
 import { Worker, QueueEvents } from 'bullmq';
 
 import { logger } from '@/lib/logger';
@@ -344,6 +346,38 @@ class EnhancedDraftWorker {
     this.metrics.ready = false;
     logger.info('Enhanced Draft Worker shutdown complete', { workerId: this.metrics.workerId });
   }
+}
+
+function isDirectWorkerEntrypoint(): boolean {
+  const entrypoint = process.argv[1];
+  return Boolean(entrypoint && pathToFileURL(entrypoint).href === import.meta.url);
+}
+
+async function shutdownDirectWorker(
+  signal: NodeJS.Signals,
+  worker: EnhancedDraftWorker
+): Promise<void> {
+  logger.info('Enhanced Draft Worker received shutdown signal', { signal });
+  await worker.shutdown();
+  process.exit(0);
+}
+
+if (isDirectWorkerEntrypoint()) {
+  const directWorker = new EnhancedDraftWorker(`draft-worker-${process.pid}-${Date.now()}`);
+
+  directWorker.start().catch((error) => {
+    logger.error('Failed to start Enhanced Draft Worker process', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    process.exit(1);
+  });
+
+  process.once('SIGINT', () => {
+    void shutdownDirectWorker('SIGINT', directWorker);
+  });
+  process.once('SIGTERM', () => {
+    void shutdownDirectWorker('SIGTERM', directWorker);
+  });
 }
 
 export { EnhancedDraftWorker };

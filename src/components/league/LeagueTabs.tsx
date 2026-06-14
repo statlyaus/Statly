@@ -993,11 +993,46 @@ interface MyTeamRosterManagerProps {
   currentUserId?: string;
 }
 
+type LeagueRosterRecord = Record<string, unknown> & {
+  players?: Player[];
+  playerIds?: Array<string | number>;
+};
+
+interface NormalizedLeagueRosterResponse {
+  roster: LeagueRosterRecord | null;
+  players: Player[];
+}
+
+function normalizeLeagueRosterResponse(payload: unknown): NormalizedLeagueRosterResponse {
+  const responseBody =
+    isRecord(payload) && isRecord(payload.data) ? payload.data : isRecord(payload) ? payload : null;
+  const roster =
+    responseBody && isRecord(responseBody.roster)
+      ? (responseBody.roster as LeagueRosterRecord)
+      : null;
+  const rosterPlayers = roster && Array.isArray(roster.players) ? roster.players : [];
+  const responsePlayers =
+    responseBody && Array.isArray(responseBody.players) ? (responseBody.players as Player[]) : [];
+
+  return {
+    roster,
+    players: rosterPlayers.length > 0 ? rosterPlayers : responsePlayers,
+  };
+}
+
+function getRosterPlayerIds(roster: LeagueRosterRecord | null, players: Player[]): string[] {
+  if (roster && Array.isArray(roster.playerIds) && roster.playerIds.length > 0) {
+    return roster.playerIds.map((playerId) => String(playerId));
+  }
+
+  return players.map((player) => String(player.id));
+}
+
 function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterManagerProps) {
   const [_selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [lastAction, setLastAction] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [roster, setRoster] = useState<Record<string, unknown> | null>(null);
+  const [roster, setRoster] = useState<LeagueRosterRecord | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
 
   // Get current user's team from league members
@@ -1013,8 +1048,9 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
         if (response.ok) {
           const rosterData = await response.json();
-          setRoster(rosterData.roster);
-          setPlayers(rosterData.players || []);
+          const nextRoster = normalizeLeagueRosterResponse(rosterData);
+          setRoster(nextRoster.roster);
+          setPlayers(nextRoster.players);
         } else {
           console.error('Failed to fetch roster data');
         }
@@ -1029,11 +1065,12 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
   }, [league?.id, currentUserId]);
 
   // Convert roster data to Team format for MyTeamPanel
+  const teamPlayerIds = getRosterPlayerIds(roster, players);
   const team: Team | undefined = roster
     ? {
-        id: String(roster.id),
+        id: String(roster.id ?? currentUserTeam?.id),
         name: currentUserTeam?.teamName || 'My Team',
-        players: (roster.playerIds as string[]) || [],
+        players: teamPlayerIds,
       }
     : undefined;
 
@@ -1119,8 +1156,9 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
               );
               if (rosterResponse.ok) {
                 const rosterData = await rosterResponse.json();
-                setRoster(rosterData.roster);
-                setPlayers(rosterData.players || []);
+                const nextRoster = normalizeLeagueRosterResponse(rosterData);
+                setRoster(nextRoster.roster);
+                setPlayers(nextRoster.players);
                 setLastAction(`${action} completed successfully`);
               }
             } catch (error) {
@@ -1149,8 +1187,9 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
       if (response.ok) {
         const rosterData = await response.json();
-        setRoster(rosterData.roster);
-        setPlayers(rosterData.players || []);
+        const nextRoster = normalizeLeagueRosterResponse(rosterData);
+        setRoster(nextRoster.roster);
+        setPlayers(nextRoster.players);
         setLastAction('Team data refreshed');
       } else {
         setLastAction('Refresh failed');
@@ -1217,31 +1256,6 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         maxHeight="600px"
         isLoading={loading}
       />
-
-      {/* Additional League-specific Team Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button
-          onClick={() => handleTeamAction('optimize')}
-          disabled={loading}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-        >
-          Optimize Lineup
-        </button>
-        <button
-          onClick={() => handleTeamAction('trade')}
-          disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-        >
-          Propose Trade
-        </button>
-        <button
-          onClick={() => handleTeamAction('waivers')}
-          disabled={loading}
-          className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-700 transition-colors disabled:opacity-50"
-        >
-          Waiver Claims
-        </button>
-      </div>
     </div>
   );
 }
