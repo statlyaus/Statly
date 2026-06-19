@@ -60,7 +60,6 @@ async function globalSetup() {
       await tx.leagueMember.deleteMany({ where: { leagueId: E2E_LEAGUE_ID } });
       await tx.league.deleteMany({ where: { id: E2E_LEAGUE_ID } });
       await tx.leagueSettings.deleteMany({ where: { id: E2E_SETTINGS_ID } });
-      await tx.player.deleteMany({ where: { id: { in: E2E_PLAYERS.map((player) => player.id) } } });
 
       await tx.user.upsert({
         where: { id: DEVELOPMENT_AUTH_USER_ID },
@@ -148,9 +147,15 @@ async function globalSetup() {
         ],
       });
 
-      await tx.player.createMany({
-        data: E2E_PLAYERS.map((player) => ({ ...player, active: true })),
-      });
+      await Promise.all(
+        E2E_PLAYERS.map((player) =>
+          tx.player.upsert({
+            where: { id: player.id },
+            update: { ...player, active: true },
+            create: { ...player, active: true },
+          })
+        )
+      );
 
       await tx.draft.create({
         data: {

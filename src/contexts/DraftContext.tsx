@@ -133,6 +133,21 @@ export function shouldHydrateAvailablePlayers(players: DraftPlayer[]): boolean {
   );
 }
 
+export function shouldStartAvailablePlayerHydration(
+  players: DraftPlayer[],
+  isHydrating: boolean
+): boolean {
+  return !isHydrating && shouldHydrateAvailablePlayers(players);
+}
+
+export function excludeDraftedAvailablePlayers(
+  players: DraftPlayer[],
+  picks: DraftPick[]
+): DraftPlayer[] {
+  const draftedPlayerIds = getDraftedPlayerIds(picks);
+  return players.filter((player) => !draftedPlayerIds.has(String(player.id)));
+}
+
 function asRecord(value: unknown): Record<string, any> {
   return value && typeof value === 'object' ? (value as Record<string, any>) : {};
 }
@@ -732,7 +747,7 @@ function reducer(state: DraftState, action: Action): DraftState {
     case 'SET_AVAILABLE_PLAYERS':
       return {
         ...state,
-        availablePlayers: action.players,
+        availablePlayers: excludeDraftedAvailablePlayers(action.players, state.picks),
         draftReadiness: action.draftReadiness ?? state.draftReadiness,
         selectedCategories: action.selectedCategories ?? state.selectedCategories,
         error: null,
@@ -849,6 +864,7 @@ export function DraftProvider({
   const rafScheduledRef = useRef(false);
   const hydratedQueueMemberIdRef = useRef<string | null>(null);
   const initialHydrateStartedRef = useRef(Boolean(initialSnapshot));
+  const availablePlayersHydratingRef = useRef(false);
   const persistedPickHydratingRef = useRef(false);
 
   const initial = useMemo<DraftState>(() => {
@@ -925,6 +941,10 @@ export function DraftProvider({
   });
 
   const hydrateAvailablePlayers = useCallback(async () => {
+    if (availablePlayersHydratingRef.current) return;
+
+    availablePlayersHydratingRef.current = true;
+
     try {
       const pageSize = 100;
       let page = 1;
@@ -952,6 +972,15 @@ export function DraftProvider({
           allPlayers.push(...players);
         }
 
+        if (page === 1 && players.length > 0 && isMounted.current) {
+          dispatch({
+            type: 'SET_AVAILABLE_PLAYERS',
+            players: allPlayers,
+            selectedCategories,
+            draftReadiness,
+          });
+        }
+
         hasMore = Boolean(res?.data?.pagination?.hasMore) && players.length > 0;
         page += 1;
       }
@@ -965,6 +994,8 @@ export function DraftProvider({
       });
     } catch {
       // Keep the draft usable even if the player pool hydrate fails.
+    } finally {
+      availablePlayersHydratingRef.current = false;
     }
   }, [draftId]);
 
@@ -1074,7 +1105,15 @@ export function DraftProvider({
   }, [draftId, state.draft, state.participants, state.picks.length]);
 
   useEffect(() => {
-    if (!state.draft || !shouldHydrateAvailablePlayers(state.availablePlayers)) return;
+    if (
+      !state.draft ||
+      !shouldStartAvailablePlayerHydration(
+        state.availablePlayers,
+        availablePlayersHydratingRef.current
+      )
+    ) {
+      return;
+    }
     void hydrateAvailablePlayers();
   }, [state.draft, state.availablePlayers, hydrateAvailablePlayers]);
 
@@ -1101,7 +1140,13 @@ export function DraftProvider({
       const snap = normalizeSnapshot(res?.data ?? res);
       if (!isMounted.current) return;
       dispatch({ type: 'SET_SNAPSHOT', snapshot: snap });
-      if (snap.draft && shouldHydrateAvailablePlayers(snap.availablePlayers)) {
+      if (
+        snap.draft &&
+        shouldStartAvailablePlayerHydration(
+          snap.availablePlayers,
+          availablePlayersHydratingRef.current
+        )
+      ) {
         await hydrateAvailablePlayers();
       }
       if (memberId) {

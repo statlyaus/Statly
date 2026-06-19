@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { shouldHydrateAvailablePlayers } from '@/contexts/DraftContext';
-import type { DraftPlayer } from '@/types/draft';
+import {
+  excludeDraftedAvailablePlayers,
+  shouldHydrateAvailablePlayers,
+  shouldStartAvailablePlayerHydration,
+} from '@/contexts/DraftContext';
+import type { DraftPick, DraftPlayer } from '@/types/draft';
 
 const basePlayer: DraftPlayer = {
   id: 'player-1',
@@ -28,5 +32,29 @@ describe('shouldHydrateAvailablePlayers', () => {
         },
       ])
     ).toBe(false);
+  });
+
+  it('does not start another player hydration while one is already running', () => {
+    expect(shouldStartAvailablePlayerHydration([], true)).toBe(false);
+  });
+
+  it('does not re-add drafted players from late player hydration pages', () => {
+    const picks = [
+      {
+        id: 'pick-1',
+        playerId: 'player-1',
+        player: { id: 'player-1' },
+      },
+    ] as DraftPick[];
+
+    expect(
+      excludeDraftedAvailablePlayers(
+        [
+          { ...basePlayer, statlyZScore: 1 },
+          { ...basePlayer, id: 'player-2', statlyZScore: 0 },
+        ],
+        picks
+      ).map((player) => player.id)
+    ).toEqual(['player-2']);
   });
 });

@@ -61,6 +61,16 @@ describe('draft command routes', () => {
     expect(pickCommand).not.toContain('getUserIdFromRequest');
   });
 
+  it('does not block HTTP pick responses on realtime side effects', () => {
+    const pickCommand = read('src/server/draft/api/handlePickCommand.ts');
+    const autoPickRoute = read('src/app/api/drafts/[id]/auto-pick/route.ts');
+
+    expect(pickCommand).toContain('void draftRealtimePublisher.publishCommandResult(result)');
+    expect(pickCommand).not.toContain('await draftRealtimePublisher.publishCommandResult(result)');
+    expect(autoPickRoute).toContain('void draftRealtimePublisher.publishCommandResult(result)');
+    expect(autoPickRoute).not.toContain('await draftRealtimePublisher.publishCommandResult(result)');
+  });
+
   it('supports the authenticated client POST path used by DraftContext.startDraft', () => {
     const draftContext = read('src/contexts/DraftContext.tsx');
     const startRoute = read('src/app/api/drafts/[id]/start/route.ts');
