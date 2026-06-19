@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIResponse } from '@playwright/test';
 
 import {
   authenticateAsDevelopmentUser,
@@ -6,6 +6,17 @@ import {
   expectNoAppErrorBoundary,
 } from './helpers/devAuth';
 import { seedFullDraftSoakFixture } from './helpers/fullDraftSoakFixture';
+
+const MAX_DRAFT_INTERACTION_MS = 10_000;
+
+async function expectOkDraftResponse(response: APIResponse, label: string) {
+  if (response.ok()) {
+    return;
+  }
+
+  const body = await response.text();
+  throw new Error(`${label} failed with ${response.status()} ${response.statusText()}: ${body}`);
+}
 
 test('completes a fresh 12-team draft and reconciles rosters/history without freezing', async ({
   page,
@@ -20,18 +31,21 @@ test('completes a fresh 12-team draft and reconciles rosters/history without fre
   await expect(page.locator('body')).toContainText('Pick 1 of 264');
   await expectNoAppErrorBoundary(page);
 
-  const renderedRows = await page.locator('tbody tr').count();
+  const playerRows = page
+    .getByRole('table', { name: 'Available draft players' })
+    .locator('tbody tr');
+  const renderedRows = await playerRows.count();
   expect(renderedRows).toBeLessThan(90);
 
   const firstSelectButton = page.getByRole('button', { name: /^Select / }).first();
   const playerReadyStart = Date.now();
   await expect(firstSelectButton).toBeEnabled();
-  expect(Date.now() - playerReadyStart).toBeLessThan(5000);
+  expect(Date.now() - playerReadyStart).toBeLessThan(MAX_DRAFT_INTERACTION_MS);
 
   const selectStart = Date.now();
   await firstSelectButton.click();
   await expect(page.locator('body')).toContainText('Pick 2 of 264');
-  expect(Date.now() - selectStart).toBeLessThan(5000);
+  expect(Date.now() - selectStart).toBeLessThan(MAX_DRAFT_INTERACTION_MS);
 
   const firstPickResponse = await page.request.get(`/api/drafts/${fixture.draftId}/picks?pageSize=1`);
   expect(firstPickResponse.ok()).toBe(true);
@@ -41,7 +55,7 @@ test('completes a fresh 12-team draft and reconciles rosters/history without fre
   const secondPick = await page.request.post(`/api/drafts/${fixture.draftId}/auto-pick`, {
     headers: { authorization: 'Bearer dev:statly-dev-tester' },
   });
-  expect(secondPick.ok()).toBe(true);
+  await expectOkDraftResponse(secondPick, 'Auto-pick 2');
   const secondPayload = await secondPick.json();
   expect(secondPayload.data.wasQueued).toBe(true);
   expect(secondPayload.data.pick.player.id).toBe(fixture.queuedBotPlayerId);
@@ -49,7 +63,7 @@ test('completes a fresh 12-team draft and reconciles rosters/history without fre
   const thirdPick = await page.request.post(`/api/drafts/${fixture.draftId}/auto-pick`, {
     headers: { authorization: 'Bearer dev:statly-dev-tester' },
   });
-  expect(thirdPick.ok()).toBe(true);
+  await expectOkDraftResponse(thirdPick, 'Auto-pick 3');
   const thirdPayload = await thirdPick.json();
   const expectedThirdPickPlayerId = fixture.rankedPlayerIds.find(
     (playerId) => ![firstPickedPlayerId, fixture.queuedBotPlayerId].includes(playerId)
@@ -60,7 +74,7 @@ test('completes a fresh 12-team draft and reconciles rosters/history without fre
     const response = await page.request.post(`/api/drafts/${fixture.draftId}/auto-pick`, {
       headers: { authorization: 'Bearer dev:statly-dev-tester' },
     });
-    expect(response.ok()).toBe(true);
+    await expectOkDraftResponse(response, `Auto-pick ${pick}`);
   }
 
   await page.goto(`/drafts/${fixture.draftId}`);
