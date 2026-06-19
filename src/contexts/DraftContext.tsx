@@ -465,6 +465,62 @@ function buildPersistedPickBackfillEndpoint(draftId: string, sinceMs?: number): 
   )}&pageSize=100`;
 }
 
+function isLiveDraftStatus(status: unknown): boolean {
+  const normalizedStatus = String(status ?? '').toUpperCase();
+  return normalizedStatus === 'LIVE' || normalizedStatus === 'IN_PROGRESS';
+}
+
+function getPersistedPickBackfillSinceMs(input: {
+  draft: DraftCore;
+  picks: DraftPick[];
+  lastEventAt?: number;
+}): number | undefined {
+  const shouldLoadInitialPersistedPicks =
+    input.picks.length === 0 && Number(input.draft.currentPick ?? 0) > 1;
+
+  if (shouldLoadInitialPersistedPicks) {
+    return undefined;
+  }
+
+  const sinceMs = getLatestPickMadeAtMs(input.picks) ?? input.lastEventAt;
+  return sinceMs !== undefined && Number.isFinite(sinceMs) ? sinceMs : undefined;
+}
+
+function buildPersistedPickBackfillDeltas(input: {
+  rawPicks: unknown[];
+  existingPicks: DraftPick[];
+  participants: DraftParticipant[];
+  lastEventAt?: number;
+  loadInitialPicks: boolean;
+}): DraftDelta[] {
+  const existingPickIds = new Set(input.existingPicks.map((pick) => String(pick.id)));
+
+  return input.rawPicks.flatMap((rawPick) => {
+    const pick = normalizeCommandPick(rawPick, input.participants);
+    if (!pick || existingPickIds.has(String(pick.id))) return [];
+
+    const madeAtMs = pick.madeAt.getTime();
+    const ts =
+      input.loadInitialPicks
+        ? Math.max(
+            Number.isFinite(madeAtMs) ? madeAtMs : 0,
+            input.lastEventAt ?? 0,
+            Date.now()
+          )
+        : Number.isFinite(madeAtMs)
+          ? madeAtMs
+          : Date.now();
+
+    return [
+      {
+        type: 'PICK_MADE' as const,
+        payload: { pick },
+        ts,
+      },
+    ];
+  });
+}
+
 function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null {
   const source = asRecord(rawDraftState);
   const draftPatch: Partial<DraftCore> = {};
@@ -1166,15 +1222,15 @@ export function DraftProvider({
   const fetchPersistedPickBackfill = useCallback(async () => {
     if (!state.draft) return;
 
-    const status = String(state.draft.status ?? '').toUpperCase();
-    if (status !== 'LIVE' && status !== 'IN_PROGRESS') return;
+    if (!isLiveDraftStatus(state.draft.status)) return;
 
     const shouldLoadInitialPersistedPicks =
       state.picks.length === 0 && Number(state.draft.currentPick ?? 0) > 1;
-    const sinceMs = shouldLoadInitialPersistedPicks
-      ? undefined
-      : (getLatestPickMadeAtMs(state.picks) ?? state.connection.lastEventAt);
-    if (sinceMs !== undefined && !Number.isFinite(sinceMs)) return;
+    const sinceMs = getPersistedPickBackfillSinceMs({
+      draft: state.draft,
+      picks: state.picks,
+      lastEventAt: state.connection.lastEventAt,
+    });
 
     try {
       const res = await fetchApi(buildPersistedPickBackfillEndpoint(draftId, sinceMs));
@@ -1182,28 +1238,12 @@ export function DraftProvider({
       const draftStateDelta = buildDraftStateBackfillDelta(res?.data?.draftState ?? res?.draftState);
       if (persistedPicks.length === 0) return;
 
-      const existingPickIds = new Set(state.picks.map((pick) => String(pick.id)));
-      const deltas = persistedPicks.flatMap((rawPick) => {
-        const pick = normalizeCommandPick(rawPick, state.participants);
-        if (!pick || existingPickIds.has(String(pick.id))) return [];
-
-        const madeAtMs = pick.madeAt.getTime();
-        const deltaTs = shouldLoadInitialPersistedPicks
-          ? Math.max(
-              Number.isFinite(madeAtMs) ? madeAtMs : 0,
-              state.connection.lastEventAt ?? 0,
-              Date.now()
-            )
-          : Number.isFinite(madeAtMs)
-            ? madeAtMs
-            : Date.now();
-        return [
-          {
-            type: 'PICK_MADE' as const,
-            payload: { pick },
-            ts: deltaTs,
-          },
-        ];
+      const deltas = buildPersistedPickBackfillDeltas({
+        rawPicks: persistedPicks,
+        existingPicks: state.picks,
+        participants: state.participants,
+        lastEventAt: state.connection.lastEventAt,
+        loadInitialPicks: shouldLoadInitialPersistedPicks,
       });
 
       if (!isMounted.current || deltas.length === 0) return;
