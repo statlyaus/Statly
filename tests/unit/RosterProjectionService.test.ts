@@ -78,6 +78,43 @@ describe('RosterProjectionService', () => {
     expect(result).toEqual({ projected: 1 });
   });
 
+  it('keeps completed draft roster projection successful when waiver availability projection is unavailable', async () => {
+    const db = {
+      pick: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'pick-1',
+            draftId: 'draft-1',
+            playerId: 'player-1',
+            memberId: 'member-1',
+          },
+        ]),
+      },
+      leagueRoster: {
+        upsert: vi.fn().mockResolvedValue({ id: 'roster-1', playerIds: '[]' }),
+      },
+      leagueRosterPlayer: {
+        upsert: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
+      },
+    };
+    const waiverAvailabilityProjectionService = {
+      projectLeague: vi.fn().mockRejectedValue(new Error('Firestore unavailable')),
+    };
+
+    const service = new RosterProjectionService(db as never, waiverAvailabilityProjectionService);
+    const result = await service.projectDraft({ leagueId: 'league-1', draftId: 'draft-1' });
+
+    expect(db.leagueRosterPlayer.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { leagueId_playerId: { leagueId: 'league-1', playerId: 'player-1' } },
+      })
+    );
+    expect(waiverAvailabilityProjectionService.projectLeague).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+    });
+    expect(result).toEqual({ projected: 1 });
+  });
+
   it('projects rosters after completed draft command results', () => {
     const source = read('src/server/draft/services/DraftApplicationService.ts');
 
