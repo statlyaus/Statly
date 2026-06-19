@@ -133,6 +133,21 @@ export function shouldHydrateAvailablePlayers(players: DraftPlayer[]): boolean {
   );
 }
 
+export function shouldStartAvailablePlayerHydration(
+  players: DraftPlayer[],
+  isHydrating: boolean
+): boolean {
+  return !isHydrating && shouldHydrateAvailablePlayers(players);
+}
+
+export function excludeDraftedAvailablePlayers(
+  players: DraftPlayer[],
+  picks: DraftPick[]
+): DraftPlayer[] {
+  const draftedPlayerIds = getDraftedPlayerIds(picks);
+  return players.filter((player) => !draftedPlayerIds.has(String(player.id)));
+}
+
 function asRecord(value: unknown): Record<string, any> {
   return value && typeof value === 'object' ? (value as Record<string, any>) : {};
 }
@@ -450,6 +465,104 @@ function buildPersistedPickBackfillEndpoint(draftId: string, sinceMs?: number): 
   )}&pageSize=100`;
 }
 
+function isLiveDraftStatus(status: unknown): boolean {
+  const normalizedStatus = String(status ?? '').toUpperCase();
+  return normalizedStatus === 'LIVE' || normalizedStatus === 'IN_PROGRESS';
+}
+
+function getPersistedPickBackfillSinceMs(input: {
+  draft: DraftCore;
+  picks: DraftPick[];
+  lastEventAt?: number;
+}): number | undefined {
+  const shouldLoadInitialPersistedPicks =
+    input.picks.length === 0 && Number(input.draft.currentPick ?? 0) > 1;
+
+  if (shouldLoadInitialPersistedPicks) {
+    return undefined;
+  }
+
+  const sinceMs = getLatestPickMadeAtMs(input.picks) ?? input.lastEventAt;
+  return sinceMs !== undefined && Number.isFinite(sinceMs) ? sinceMs : undefined;
+}
+
+function buildPersistedPickBackfillDeltas(input: {
+  rawPicks: unknown[];
+  existingPicks: DraftPick[];
+  participants: DraftParticipant[];
+  lastEventAt?: number;
+  loadInitialPicks: boolean;
+}): DraftDelta[] {
+  const existingPickIds = new Set(input.existingPicks.map((pick) => String(pick.id)));
+
+  return input.rawPicks.flatMap((rawPick) => {
+    const pick = normalizeCommandPick(rawPick, input.participants);
+    if (!pick || existingPickIds.has(String(pick.id))) return [];
+
+    const madeAtMs = pick.madeAt.getTime();
+    const ts =
+      input.loadInitialPicks
+        ? Math.max(
+            Number.isFinite(madeAtMs) ? madeAtMs : 0,
+            input.lastEventAt ?? 0,
+            Date.now()
+          )
+        : Number.isFinite(madeAtMs)
+          ? madeAtMs
+          : Date.now();
+
+    return [
+      {
+        type: 'PICK_MADE' as const,
+        payload: { pick },
+        ts,
+      },
+    ];
+  });
+}
+
+function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null {
+  const source = asRecord(rawDraftState);
+  const draftPatch: Partial<DraftCore> = {};
+  const livePatch: DraftLiveState = {};
+
+  if (typeof source.currentPick === 'number' && Number.isFinite(source.currentPick)) {
+    draftPatch.currentPick = source.currentPick;
+    livePatch.currentPick = source.currentPick;
+  }
+
+  if (typeof source.status === 'string') {
+    draftPatch.status = source.status as DraftCore['status'];
+  }
+
+  if (typeof source.round === 'number' && Number.isFinite(source.round)) {
+    draftPatch.round = source.round;
+  }
+
+  if (typeof source.direction === 'string') {
+    draftPatch.direction = source.direction as DraftCore['direction'];
+  }
+
+  if ('pickDeadlineAt' in source) {
+    draftPatch.pickDeadlineAt = source.pickDeadlineAt
+      ? (toOptionalDate(source.pickDeadlineAt) ?? null)
+      : null;
+  }
+
+  if (Object.keys(draftPatch).length === 0 && Object.keys(livePatch).length === 0) {
+    return null;
+  }
+
+  return {
+    type: 'STATE_PATCH',
+    payload: {
+      draft: draftPatch,
+      liveState: livePatch,
+    },
+    ts: Date.now(),
+  };
+}
+
 /* --------------------------------- Reducer --------------------------------- */
 
 type Action =
@@ -690,7 +803,7 @@ function reducer(state: DraftState, action: Action): DraftState {
     case 'SET_AVAILABLE_PLAYERS':
       return {
         ...state,
-        availablePlayers: action.players,
+        availablePlayers: excludeDraftedAvailablePlayers(action.players, state.picks),
         draftReadiness: action.draftReadiness ?? state.draftReadiness,
         selectedCategories: action.selectedCategories ?? state.selectedCategories,
         error: null,
@@ -807,6 +920,7 @@ export function DraftProvider({
   const rafScheduledRef = useRef(false);
   const hydratedQueueMemberIdRef = useRef<string | null>(null);
   const initialHydrateStartedRef = useRef(Boolean(initialSnapshot));
+  const availablePlayersHydratingRef = useRef(false);
   const persistedPickHydratingRef = useRef(false);
 
   const initial = useMemo<DraftState>(() => {
@@ -883,6 +997,10 @@ export function DraftProvider({
   });
 
   const hydrateAvailablePlayers = useCallback(async () => {
+    if (availablePlayersHydratingRef.current) return;
+
+    availablePlayersHydratingRef.current = true;
+
     try {
       const pageSize = 100;
       let page = 1;
@@ -910,6 +1028,15 @@ export function DraftProvider({
           allPlayers.push(...players);
         }
 
+        if (page === 1 && players.length > 0 && isMounted.current) {
+          dispatch({
+            type: 'SET_AVAILABLE_PLAYERS',
+            players: allPlayers,
+            selectedCategories,
+            draftReadiness,
+          });
+        }
+
         hasMore = Boolean(res?.data?.pagination?.hasMore) && players.length > 0;
         page += 1;
       }
@@ -923,6 +1050,8 @@ export function DraftProvider({
       });
     } catch {
       // Keep the draft usable even if the player pool hydrate fails.
+    } finally {
+      availablePlayersHydratingRef.current = false;
     }
   }, [draftId]);
 
@@ -1032,7 +1161,15 @@ export function DraftProvider({
   }, [draftId, state.draft, state.participants, state.picks.length]);
 
   useEffect(() => {
-    if (!state.draft || !shouldHydrateAvailablePlayers(state.availablePlayers)) return;
+    if (
+      !state.draft ||
+      !shouldStartAvailablePlayerHydration(
+        state.availablePlayers,
+        availablePlayersHydratingRef.current
+      )
+    ) {
+      return;
+    }
     void hydrateAvailablePlayers();
   }, [state.draft, state.availablePlayers, hydrateAvailablePlayers]);
 
@@ -1059,7 +1196,13 @@ export function DraftProvider({
       const snap = normalizeSnapshot(res?.data ?? res);
       if (!isMounted.current) return;
       dispatch({ type: 'SET_SNAPSHOT', snapshot: snap });
-      if (snap.draft && shouldHydrateAvailablePlayers(snap.availablePlayers)) {
+      if (
+        snap.draft &&
+        shouldStartAvailablePlayerHydration(
+          snap.availablePlayers,
+          availablePlayersHydratingRef.current
+        )
+      ) {
         await hydrateAvailablePlayers();
       }
       if (memberId) {
@@ -1079,49 +1222,40 @@ export function DraftProvider({
   const fetchPersistedPickBackfill = useCallback(async () => {
     if (!state.draft) return;
 
-    const status = String(state.draft.status ?? '').toUpperCase();
-    if (status !== 'LIVE' && status !== 'IN_PROGRESS') return;
+    if (!isLiveDraftStatus(state.draft.status)) return;
 
     const shouldLoadInitialPersistedPicks =
       state.picks.length === 0 && Number(state.draft.currentPick ?? 0) > 1;
-    const sinceMs = shouldLoadInitialPersistedPicks
-      ? undefined
-      : (getLatestPickMadeAtMs(state.picks) ?? state.connection.lastEventAt);
-    if (sinceMs !== undefined && !Number.isFinite(sinceMs)) return;
+    const sinceMs = getPersistedPickBackfillSinceMs({
+      draft: state.draft,
+      picks: state.picks,
+      lastEventAt: state.connection.lastEventAt,
+    });
 
     try {
       const res = await fetchApi(buildPersistedPickBackfillEndpoint(draftId, sinceMs));
       const persistedPicks = toArray<unknown>(res?.data?.picks ?? res?.picks);
+      const draftStateDelta = buildDraftStateBackfillDelta(res?.data?.draftState ?? res?.draftState);
       if (persistedPicks.length === 0) return;
 
-      const existingPickIds = new Set(state.picks.map((pick) => String(pick.id)));
-      const deltas = persistedPicks.flatMap((rawPick) => {
-        const pick = normalizeCommandPick(rawPick, state.participants);
-        if (!pick || existingPickIds.has(String(pick.id))) return [];
-
-        const madeAtMs = pick.madeAt.getTime();
-        const deltaTs = shouldLoadInitialPersistedPicks
-          ? Math.max(
-              Number.isFinite(madeAtMs) ? madeAtMs : 0,
-              state.connection.lastEventAt ?? 0,
-              Date.now()
-            )
-          : Number.isFinite(madeAtMs)
-            ? madeAtMs
-            : Date.now();
-        return [
-          {
-            type: 'PICK_MADE' as const,
-            payload: { pick },
-            ts: deltaTs,
-          },
-        ];
+      const deltas = buildPersistedPickBackfillDeltas({
+        rawPicks: persistedPicks,
+        existingPicks: state.picks,
+        participants: state.participants,
+        lastEventAt: state.connection.lastEventAt,
+        loadInitialPicks: shouldLoadInitialPersistedPicks,
       });
 
       if (!isMounted.current || deltas.length === 0) return;
 
-      dispatch({ type: 'APPLY_DELTAS', deltas });
-      await forceRefresh();
+      dispatch({
+        type: 'APPLY_DELTAS',
+        deltas: draftStateDelta ? [...deltas, draftStateDelta] : deltas,
+      });
+
+      if (!draftStateDelta) {
+        await forceRefresh();
+      }
     } catch {
       // Socket delivery is still primary; persisted-pick polling is a silent catch-up path.
     }

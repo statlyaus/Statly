@@ -10,7 +10,7 @@ interface PerformanceMonitorProps {
 }
 
 export function PerformanceMonitor({
-  enableAnalytics = true,
+  enableAnalytics = process.env.NEXT_PUBLIC_DISABLE_PERFORMANCE_ANALYTICS !== 'true',
   enableConsoleLogging = process.env.NODE_ENV === 'development',
   sampleRate = 1.0,
 }: PerformanceMonitorProps) {

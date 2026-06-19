@@ -42,12 +42,33 @@ describe('draft command routes', () => {
     expect(picksRoute).toContain('handlePickCommand');
   });
 
+  it('returns draft state metadata with persisted picks for lightweight backfill', () => {
+    const picksRoute = read('src/app/api/drafts/[id]/picks/route.ts');
+    const draftContext = read('src/contexts/DraftContext.tsx');
+
+    expect(picksRoute).toContain('draftState');
+    expect(picksRoute).toContain('currentPick');
+    expect(picksRoute).toContain('pickDeadlineAt');
+    expect(draftContext).toContain('draftState');
+    expect(draftContext).toContain('pickDeadlineAt');
+  });
+
   it('uses the shared authenticated request helper for manual pick commands', () => {
     const pickCommand = read('src/server/draft/api/handlePickCommand.ts');
 
     expect(pickCommand).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
     expect(pickCommand).toContain('let userId = await getAuthenticatedUserId(request)');
     expect(pickCommand).not.toContain('getUserIdFromRequest');
+  });
+
+  it('does not block HTTP pick responses on realtime side effects', () => {
+    const pickCommand = read('src/server/draft/api/handlePickCommand.ts');
+    const autoPickRoute = read('src/app/api/drafts/[id]/auto-pick/route.ts');
+
+    expect(pickCommand).toContain('void draftRealtimePublisher.publishCommandResult(result)');
+    expect(pickCommand).not.toContain('await draftRealtimePublisher.publishCommandResult(result)');
+    expect(autoPickRoute).toContain('void draftRealtimePublisher.publishCommandResult(result)');
+    expect(autoPickRoute).not.toContain('await draftRealtimePublisher.publishCommandResult(result)');
   });
 
   it('supports the authenticated client POST path used by DraftContext.startDraft', () => {

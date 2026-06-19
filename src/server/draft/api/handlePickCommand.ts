@@ -70,15 +70,6 @@ export async function handlePickCommand(
       playerId: parsed.data.playerId,
     });
 
-    try {
-      await draftRealtimePublisher.publishCommandResult(result);
-    } catch (publishError) {
-      logger.warn('Failed to publish draft pick side effects', {
-        draftId: requestContext.draftId,
-        error: publishError,
-      });
-    }
-
     const eventPick = result.data.eventPick ?? null;
     if (!eventPick) {
       logger.error('Draft pick command completed without an eventPick payload', {
@@ -88,6 +79,13 @@ export async function handlePickCommand(
       });
       return errorResponse('Failed to make pick', 500);
     }
+
+    void draftRealtimePublisher.publishCommandResult(result).catch((publishError) => {
+      logger.warn('Failed to publish draft pick side effects', {
+        draftId: requestContext.draftId,
+        error: publishError,
+      });
+    });
 
     return successResponse({
       pick: eventPick,

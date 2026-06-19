@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 type PrismaLike = Pick<typeof prisma, 'pick' | 'leagueRoster' | 'leagueRosterPlayer'>;
@@ -69,7 +70,15 @@ export class RosterProjectionService {
       });
     }
 
-    await this.waiverAvailabilityProjectionService.projectLeague({ leagueId: input.leagueId });
+    try {
+      await this.waiverAvailabilityProjectionService.projectLeague({ leagueId: input.leagueId });
+    } catch (error) {
+      logger.warn('Waiver availability projection failed after roster projection', {
+        leagueId: input.leagueId,
+        draftId: input.draftId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return { projected: picks.length };
   }

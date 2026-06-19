@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type React from 'react';
@@ -46,6 +46,15 @@ const players: DraftPlayer[] = [
     },
   },
 ];
+
+function buildPlayer(index: number): DraftPlayer {
+  return {
+    ...players[0],
+    id: `player-${index}`,
+    name: `Player ${String(index).padStart(3, '0')}`,
+    statlyZScore: 500 - index,
+  };
+}
 
 const defaultProps = {
   players,
@@ -127,6 +136,52 @@ describe('PlayerGrid accessibility', () => {
     expect(onPlayerSelect).toHaveBeenCalledTimes(1);
   });
 
+  it('submits one selection while a pick is already processing', async () => {
+    let resolvePick: (() => void) | undefined;
+    const onPlayerSelect = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePick = resolve;
+        })
+    );
+
+    render(<PlayerGrid {...defaultProps} onPlayerSelect={onPlayerSelect} />);
+
+    const selectButton = screen.getByRole('button', { name: /select marcus bontempelli/i });
+
+    fireEvent.click(selectButton);
+    fireEvent.click(selectButton);
+    fireEvent.click(selectButton);
+
+    expect(onPlayerSelect).toHaveBeenCalledTimes(1);
+    expect(selectButton).toBeDisabled();
+    expect(selectButton).toHaveTextContent('Selecting');
+
+    resolvePick?.();
+
+    await waitFor(() => {
+      expect(selectButton).not.toBeDisabled();
+    });
+  });
+
+  it('windows large draft player pools instead of mounting every row', () => {
+    const largePool = Array.from({ length: 320 }, (_, index) => buildPlayer(index + 1));
+
+    render(
+      <PlayerGrid
+        {...defaultProps}
+        players={largePool}
+        totalPlayers={largePool.length}
+        selectedCategories={['goals', 'tackles']}
+      />
+    );
+
+    expect(screen.getByText('Showing 320 of 320 players')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /select player 001/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /select player 320/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('row').length).toBeLessThan(80);
+  });
+
   it('keeps the draft player table aligned to semantic tokens and compact radii', () => {
     const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
 
@@ -141,6 +196,8 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('grid grid-cols-3 items-center gap-2');
     expect(source).toContain('h-10 w-full justify-center');
     expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');
+    expect(source).not.toContain('motion.tr');
+    expect(source).not.toContain("from 'framer-motion'");
     expect(source).not.toContain('flex flex-wrap items-center justify-center gap-2');
     expect(source).not.toContain('items-center justify-end gap-2');
     expect(source).not.toMatch(/\brounded-(xl|2xl|3xl)\b/);

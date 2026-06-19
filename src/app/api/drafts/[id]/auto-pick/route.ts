@@ -43,14 +43,12 @@ export async function POST(
   try {
     const result = await draftApplicationService.autoPick({ draftId, actorUserId });
 
-    try {
-      await draftRealtimePublisher.publishCommandResult(result);
-    } catch (publishError) {
+    void draftRealtimePublisher.publishCommandResult(result).catch((publishError) => {
       logger.warn('Failed to publish draft auto-pick side effects', {
         draftId,
         error: publishError,
       });
-    }
+    });
 
     return successResponse({
       pick: result.data.pick,
