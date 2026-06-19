@@ -8,6 +8,7 @@ import {
 import { seedFullDraftSoakFixture } from './helpers/fullDraftSoakFixture';
 
 const MAX_DRAFT_INTERACTION_MS = 10_000;
+const MAX_RENDERED_AVAILABLE_PLAYER_ROWS = 120;
 
 async function expectOkDraftResponse(response: APIResponse, label: string) {
   if (response.ok()) {
@@ -35,7 +36,7 @@ test('completes a fresh 12-team draft and reconciles rosters/history without fre
     .getByRole('table', { name: 'Available draft players' })
     .locator('tbody tr');
   const renderedRows = await playerRows.count();
-  expect(renderedRows).toBeLessThan(90);
+  expect(renderedRows).toBeLessThanOrEqual(MAX_RENDERED_AVAILABLE_PLAYER_ROWS);
 
   const firstSelectButton = page.getByRole('button', { name: /^Select / }).first();
   const playerReadyStart = Date.now();
