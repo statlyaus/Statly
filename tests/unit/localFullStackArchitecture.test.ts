@@ -50,6 +50,7 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('npm run prisma:generate');
     expect(source).toContain('npx prisma migrate deploy');
     expect(source).toContain('npm run dev:seed:local');
+    expect(source).not.toMatch(/DATABASE_URL=/);
     expect(source.indexOf('npx prisma migrate deploy')).toBeLessThan(
       source.indexOf('npm run dev:seed:local')
     );
