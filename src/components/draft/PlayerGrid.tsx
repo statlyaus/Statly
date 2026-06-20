@@ -609,10 +609,10 @@ function PlayerGridTable({
   onToggleWatchlist,
 }: PlayerGridTableProps): React.JSX.Element {
   return (
-    <div className="relative">
+    <div className="relative min-h-0 flex-1">
       <div
         ref={scrollContainerRef}
-        className="max-h-[680px] overflow-auto"
+        className="h-full min-h-0 overflow-auto"
         onScroll={(event) => {
           if (shouldWindowRows) {
             setScrollTop(event.currentTarget.scrollTop);
@@ -925,21 +925,23 @@ export default function PlayerGrid({
   // Empty state
   if (filteredPlayers.length === 0) {
     return (
-      <PlayerGridEmptyState
-        hasActiveFilters={hasActiveFilters}
-        emptyStateMessage={emptyStateMessage}
-        onClearFilters={() => {
-          onSearchChange('');
-          onPositionFilterChange('ALL');
-          onSortChange('statlyZ');
-        }}
-        onScrollToTop={() => rowRefs.current[0]?.scrollIntoView({ block: 'start' })}
-      />
+      <div className="h-full min-h-[28rem]">
+        <PlayerGridEmptyState
+          hasActiveFilters={hasActiveFilters}
+          emptyStateMessage={emptyStateMessage}
+          onClearFilters={() => {
+            onSearchChange('');
+            onPositionFilterChange('ALL');
+            onSortChange('statlyZ');
+          }}
+          onScrollToTop={() => rowRefs.current[0]?.scrollIntoView({ block: 'start' })}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+    <div className="flex h-full min-h-[28rem] flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
       <PlayerGridControls
         searchInputRef={searchInputRef}
         searchQuery={searchQuery}
