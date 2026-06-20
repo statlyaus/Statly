@@ -1,6 +1,7 @@
 import type { Player } from '@/types/players';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import { diagnosePlayerDataConvergence } from '@/server/playerDataConvergenceDiagnostic';
+import { planPlayerDataConvergenceApply } from '@/server/playerDataConvergenceApplyPlan';
 import { planPlayerDataConvergenceTempDbDryRun } from '@/server/playerDataConvergenceDryRunPlan';
 import { planPlayerDataConvergenceActions } from '@/server/playerDataConvergencePlanner';
 import { planPlayerDataConvergenceTempDbSimulation } from '@/server/playerDataConvergenceTempDbSimulation';
@@ -67,6 +68,7 @@ export function buildPlayerDataConvergenceTrackedDryRunReport({
     diagnostic,
     expectedCategoryKeys: [...REAL_DATA_NINE_CATEGORY_PRESET],
   });
+  const applyPlan = planPlayerDataConvergenceApply({ diagnostic, convergencePlan });
   const dryRunPlan = planPlayerDataConvergenceTempDbDryRun({
     diagnostic,
     convergencePlan,
@@ -113,6 +115,7 @@ export function buildPlayerDataConvergenceTrackedDryRunReport({
     },
     skippedSourceEvidence,
     dryRunPlan,
+    applyPlan,
     simulation: {
       status: simulation.status,
       safeForTempDbSimulation: simulation.safeForTempDbSimulation,
