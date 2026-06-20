@@ -1,11 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarClock, ChevronLeft, Loader2, Settings2, ShieldCheck, Trophy } from 'lucide-react';
 
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
+import {
+  COMMON_TIMEZONES,
+  datetimeLocalToUtc,
+  getBrowserTimeZone,
+  isValidTimeZone,
+} from '@/lib/timezone';
 import { AppLayout } from '@/components/navigation';
 import { normalizeCreateLeagueResponse } from '@/server/leagues/createLeagueContract';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
@@ -17,6 +23,7 @@ export default function NewLeaguePage() {
   const [teamCount, setTeamCount] = useState(12);
   const [scoringFormat, setScoringFormat] = useState('nine-category');
   const [draftDate, setDraftDate] = useState('');
+  const [timeZone, setTimeZone] = useState('UTC');
   const [draftType, setDraftType] = useState('snake');
   const [pickOrder, setPickOrder] = useState('random');
   const [waiverRule, setWaiverRule] = useState('weekly');
@@ -24,6 +31,21 @@ export default function NewLeaguePage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { user } = useAuth();
+
+  useEffect(() => {
+    const browserTimeZone = getBrowserTimeZone();
+    if (isValidTimeZone(browserTimeZone)) {
+      setTimeZone(browserTimeZone);
+    }
+  }, []);
+
+  const timeZoneOptions = useMemo(() => {
+    if (COMMON_TIMEZONES.some((option) => option.value === timeZone)) {
+      return COMMON_TIMEZONES;
+    }
+
+    return [{ value: timeZone, label: `${timeZone} (detected)`, offset: '' }, ...COMMON_TIMEZONES];
+  }, [timeZone]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -43,7 +65,8 @@ export default function NewLeaguePage() {
           privacy: 'private',
           scoringFormat,
           categories: [...REAL_DATA_NINE_CATEGORY_PRESET],
-          draftDate: draftDate ? new Date(draftDate).toISOString() : undefined,
+          draftDate: draftDate ? datetimeLocalToUtc(draftDate, timeZone).toISOString() : undefined,
+          timeZone,
           draftType,
           pickOrder,
           waiverRule,
@@ -159,6 +182,27 @@ export default function NewLeaguePage() {
                   onChange={(e) => setDraftDate(e.target.value)}
                   className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
                 />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="timeZone"
+                  className="text-sm font-semibold text-[color:var(--league-text)]"
+                >
+                  Time zone
+                </label>
+                <select
+                  id="timeZone"
+                  value={timeZone}
+                  onChange={(e) => setTimeZone(e.target.value)}
+                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                >
+                  {timeZoneOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
