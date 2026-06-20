@@ -196,6 +196,8 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('grid grid-cols-3 items-center gap-2');
     expect(source).toContain('h-10 w-full justify-center');
     expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');
+    expect(source).not.toContain('font-mono');
+    expect(source).not.toMatch(/\btracking-\[-/);
     expect(source).not.toContain('motion.tr');
     expect(source).not.toContain("from 'framer-motion'");
     expect(source).not.toContain('flex flex-wrap items-center justify-center gap-2');
