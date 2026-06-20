@@ -30,6 +30,7 @@ function DraftStateProbe() {
       <div data-testid="pick-deadline">
         {draft.draft?.pickDeadlineAt?.toISOString?.() ?? 'missing'}
       </div>
+      <div data-testid="pick-time">{draft.draft?.settings?.timePerPick ?? 'missing'}</div>
       <div data-testid="player-count">{draft.availablePlayers.length}</div>
       <div data-testid="pick-count">{draft.picks.length}</div>
       <div data-testid="pick-order">{draft.picks.map((pick) => pick.id).join(',')}</div>
@@ -216,6 +217,38 @@ describe('DraftProvider initial hydration', () => {
     expect(emit.mock.calls.filter((call) => call[0] === 'draft:join')).toHaveLength(
       joinCountBeforeSnapshot
     );
+  });
+
+  it('normalizes league pickSeconds into the client timePerPick setting', () => {
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Sixty Second Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+            settings: {
+              pickSeconds: 60,
+            },
+          } as any,
+          participants: [],
+          availablePlayers: [],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    expect(screen.getByTestId('pick-time')).toHaveTextContent('60');
   });
 
   it('orders initial snapshot picks by overall number', () => {

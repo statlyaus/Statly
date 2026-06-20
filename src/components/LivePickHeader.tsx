@@ -95,6 +95,29 @@ interface LivePickHeaderProps {
   className?: string;
 }
 
+function isValidDraftStatus(
+  status: string
+): status is
+  | 'SCHEDULED'
+  | 'LOBBY'
+  | 'COUNTDOWN'
+  | 'LIVE'
+  | 'COMPLETED'
+  | 'PAUSED'
+  | 'CANCELLED'
+  | 'WAITING' {
+  return [
+    'SCHEDULED',
+    'LOBBY',
+    'COUNTDOWN',
+    'LIVE',
+    'COMPLETED',
+    'PAUSED',
+    'CANCELLED',
+    'WAITING',
+  ].includes(status);
+}
+
 export default function LivePickHeader({
   draftData,
   timePerPick = 120,
@@ -104,7 +127,15 @@ export default function LivePickHeader({
   onAudioAlert,
   className = '',
 }: LivePickHeaderProps): ReactElement {
-  const [timeLeft, setTimeLeft] = useState(timePerPick);
+  const normalizedStatus = isValidDraftStatus(draftData?.status) ? draftData.status : 'WAITING';
+  const [timeLeft, setTimeLeft] = useState(
+    () =>
+      getDraftRoomTimerState({
+        status: normalizedStatus,
+        timePerPick,
+        pickDeadlineAt: draftData.pickDeadlineAt,
+      }).remainingSeconds
+  );
   const [isFlashing, setIsFlashing] = useState(false);
   const [hasAlerted, setHasAlerted] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -120,32 +151,6 @@ export default function LivePickHeader({
     onAudioAlertRef.current = onAudioAlert;
   }, [onAudioAlert]);
 
-  // Helper function to check if status is a valid draft status
-  const isValidDraftStatus = (
-    status: string
-  ): status is
-    | 'SCHEDULED'
-    | 'LOBBY'
-    | 'COUNTDOWN'
-    | 'LIVE'
-    | 'COMPLETED'
-    | 'PAUSED'
-    | 'CANCELLED'
-    | 'WAITING' => {
-    return [
-      'SCHEDULED',
-      'LOBBY',
-      'COUNTDOWN',
-      'LIVE',
-      'COMPLETED',
-      'PAUSED',
-      'CANCELLED',
-      'WAITING',
-    ].includes(status);
-  };
-
-  // Get normalized status with fallback
-  const normalizedStatus = isValidDraftStatus(draftData?.status) ? draftData.status : 'WAITING';
   const sequence = useMemo(
     () =>
       buildDraftRoomSequence({

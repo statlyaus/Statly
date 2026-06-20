@@ -246,7 +246,13 @@ function normalizeDraftCore(raw: unknown): DraftCore | null {
       draftType: String(
         source.settings?.draftType ?? source.draftType ?? 'SNAKE'
       ) as DraftCore['settings']['draftType'],
-      timePerPick: Number(source.settings?.timePerPick ?? source.timePerPick ?? 120),
+      timePerPick: Number(
+        source.settings?.timePerPick ??
+          source.settings?.pickSeconds ??
+          source.timePerPick ??
+          source.pickSeconds ??
+          120
+      ),
       timeZone: String(source.settings?.timeZone ?? 'Australia/Melbourne'),
       enableReminders: Boolean(source.settings?.enableReminders ?? true),
       totalRounds: Number(source.settings?.totalRounds ?? 0),

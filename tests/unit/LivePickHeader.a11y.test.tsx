@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import LivePickHeader from '@/components/LivePickHeader';
@@ -76,5 +77,25 @@ describe('LivePickHeader', () => {
     expect(screen.getByText('On the clock')).toBeInTheDocument();
     expect(within(pickTrain).getByText('Alpha')).toBeInTheDocument();
     expect(screen.getAllByText('Marcus Bontempelli').length).toBeGreaterThan(0);
+  });
+
+  it('renders the authoritative deadline time on the first paint', () => {
+    const html = renderToString(
+      <LivePickHeader
+        draftData={{
+          ...draftData,
+          pickDeadlineAt: new Date(Date.now() + 47_000).toISOString(),
+        }}
+        timePerPick={60}
+        isYourTurn={false}
+        yourSlot={3}
+      />
+    );
+
+    expect(html).toContain('aria-label="Time remaining: 47s"');
+    expect(html).toContain('aria-valuenow="47"');
+    expect(html).toContain('aria-valuemax="60"');
+    expect(html).not.toContain('aria-label="Time remaining: 1m 0s"');
+    expect(html).not.toContain('aria-label="Time remaining: 2m 0s"');
   });
 });
