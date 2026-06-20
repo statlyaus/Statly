@@ -42,32 +42,47 @@ async function getPrismaLeaguePlayers(input: {
     return { items: [], nextCursor: null, total: 0 };
   }
 
-  const idFilter: { in?: string[]; notIn?: string[]; gt?: string } = {};
+  const ownershipIdFilter: { in?: string[]; notIn?: string[] } = {};
   if (input.owned) {
-    idFilter.in = ownedPlayerIds;
+    ownershipIdFilter.in = ownedPlayerIds;
   } else if (ownedPlayerIds.length > 0) {
-    idFilter.notIn = ownedPlayerIds;
+    ownershipIdFilter.notIn = ownedPlayerIds;
   }
-  if (input.cursor) {
-    idFilter.gt = input.cursor;
-  }
+  const playerFilters = {
+    active: true,
+    ...(input.team ? { club: input.team } : {}),
+    ...(input.position ? { position: input.position } : {}),
+  };
+  const totalWhere = {
+    ...playerFilters,
+    ...(Object.keys(ownershipIdFilter).length > 0 ? { id: ownershipIdFilter } : {}),
+  };
 
-  const players = await prisma.player.findMany({
-    where: {
-      active: true,
-      ...(Object.keys(idFilter).length > 0 ? { id: idFilter } : {}),
-      ...(input.team ? { club: input.team } : {}),
-      ...(input.position ? { position: input.position } : {}),
-    },
-    orderBy: { id: 'asc' },
-    take: input.limit,
-    select: {
-      id: true,
-      name: true,
-      club: true,
-      position: true,
-    },
-  });
+  const pageIdFilter: { in?: string[]; notIn?: string[]; gt?: string } = {
+    ...ownershipIdFilter,
+  };
+  if (input.cursor) {
+    pageIdFilter.gt = input.cursor;
+  }
+  const pageWhere = {
+    ...playerFilters,
+    ...(Object.keys(pageIdFilter).length > 0 ? { id: pageIdFilter } : {}),
+  };
+
+  const [players, total] = await Promise.all([
+    prisma.player.findMany({
+      where: pageWhere,
+      orderBy: { id: 'asc' },
+      take: input.limit,
+      select: {
+        id: true,
+        name: true,
+        club: true,
+        position: true,
+      },
+    }),
+    prisma.player.count({ where: totalWhere }),
+  ]);
 
   const items = players.map((player) => ({
     id: player.id,
@@ -81,7 +96,7 @@ async function getPrismaLeaguePlayers(input: {
   return {
     items,
     nextCursor: players.length === input.limit && last ? last.id : null,
-    total: items.length,
+    total,
   };
 }
 
