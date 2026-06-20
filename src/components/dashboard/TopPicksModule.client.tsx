@@ -17,13 +17,11 @@ export default function TopPicksModuleClient({ socket }: TopPicksModuleClientPro
   const { data: playerStats, loading, error, refetch } = usePlayerStatsETL('2025');
 
   // Derived data must be computed before any early returns to obey Hooks rules
-  const filteredPlayers = useMemo(
-    () =>
-      (playerStats ?? []).filter(
-        (player) => player.totalValue && !Number.isNaN(player.totalValue) && player.categories
-      ),
-    [playerStats]
-  );
+  const filteredPlayers = useMemo(() => {
+    return (playerStats ?? []).filter(
+      (player) => Number.isFinite(player.totalValue) && player.categories != null
+    );
+  }, [playerStats]);
 
   useEffect(() => {
     if (!socket) return;
@@ -125,7 +123,7 @@ function DataFocusedTopPicks({
   limit?: number;
 }) {
   const reduceMotion = useReducedMotion();
-  const topPlayers = players.slice(0, limit);
+  const topPlayers = [...players].sort((a, b) => b.totalValue - a.totalValue).slice(0, limit);
 
   return (
     <div
@@ -148,7 +146,7 @@ function DataFocusedTopPicks({
       <div className="space-y-3">
         {topPlayers.map((player, index) => (
           <motion.div
-            key={player.id}
+            key={player.player_id}
             initial={reduceMotion ? undefined : { opacity: 0, x: -20 }}
             animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
             transition={reduceMotion ? undefined : { delay: index * 0.1 }}
@@ -311,11 +309,11 @@ function comparePlayerStat(a: PlayerStat, b: PlayerStat): boolean {
   const bc = (b.categories ?? {}) as NonNullable<PlayerStat['categories']>;
 
   return (
-    a.id === b.id &&
+    a.player_id === b.player_id &&
     a.player_name === b.player_name &&
     a.team === b.team &&
     a.position === b.position &&
-    (a.totalValue || 0) === (b.totalValue || 0) &&
+    a.totalValue === b.totalValue &&
     a.round_number === b.round_number &&
     a.opposition === b.opposition &&
     (ac.goals || 0) === (bc.goals || 0) &&
