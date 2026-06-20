@@ -20,6 +20,29 @@ describe('league creation contract', () => {
       maxTeams: 12,
       categories: [...REAL_DATA_NINE_CATEGORY_PRESET],
       visibility: 'PRIVATE',
+      timeZone: 'UTC',
+    });
+  });
+
+  it('keeps valid league creation time zones', () => {
+    expect(
+      normalizeCreateLeagueInput({
+        name: 'Test Lab Alpha',
+        timeZone: 'Australia/Melbourne',
+      })
+    ).toMatchObject({
+      timeZone: 'Australia/Melbourne',
+    });
+  });
+
+  it('defaults invalid league creation time zones to UTC', () => {
+    expect(
+      normalizeCreateLeagueInput({
+        name: 'Test Lab Alpha',
+        timeZone: 'Mars/Olympus_Mons',
+      })
+    ).toMatchObject({
+      timeZone: 'UTC',
     });
   });
 

@@ -39,6 +39,7 @@ export interface League {
   status: LeagueStatus;
   description?: string;
   draftDate?: string; // ISO timestamp
+  timeZone?: string; // IANA timezone name for league scheduling
   draftType?: DraftTypeOption;
   pickOrder?: DraftPickOrder;
   waiverRule?: WaiverResetPolicy;
@@ -80,6 +81,7 @@ export interface CreateLeagueRequest {
   tradeSettings?: Partial<TradeSettings>;
   waiverWire?: Partial<WaiverWireSettings>;
   draftDate?: string;
+  timeZone?: string;
   draftType?: DraftTypeOption;
   pickOrder?: DraftPickOrder;
   waiverRule?: WaiverResetPolicy;

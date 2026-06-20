@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       },
       createdAt: now,
       status: 'preseason',
+      timeZone: normalized.timeZone,
       ...(body.description && { description: body.description }),
       ...(body.draftDate && { draftDate: body.draftDate }),
       ...(body.draftType && { draftType: body.draftType }),

@@ -9,6 +9,7 @@ export interface CreateLeagueInput {
   privacy?: string;
   type?: string;
   visibility?: string;
+  timeZone?: string;
 }
 
 export interface NormalizedCreateLeagueInput {
@@ -16,6 +17,21 @@ export interface NormalizedCreateLeagueInput {
   maxTeams: number;
   categories: FantasyCategoryKey[];
   visibility: 'PUBLIC' | 'PRIVATE';
+  timeZone: string;
+}
+
+function normalizeTimeZone(timeZone: unknown): string {
+  if (typeof timeZone !== 'string' || !timeZone.trim()) {
+    return 'UTC';
+  }
+
+  const trimmed = timeZone.trim();
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: trimmed });
+    return trimmed;
+  } catch {
+    return 'UTC';
+  }
 }
 
 export function normalizeCreateLeagueInput(input: CreateLeagueInput): NormalizedCreateLeagueInput {
@@ -33,6 +49,7 @@ export function normalizeCreateLeagueInput(input: CreateLeagueInput): Normalized
     maxTeams,
     categories,
     visibility,
+    timeZone: normalizeTimeZone(input.timeZone),
   };
 }
 
