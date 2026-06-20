@@ -10,10 +10,13 @@ describe('draft room runtime source of truth', () => {
   it('keeps the live draft route on the unified draft room surface', () => {
     const routeSource = read('src/app/(app)/drafts/[id]/page.tsx');
 
-    expect(routeSource).toContain("import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom'");
+    expect(routeSource).toContain(
+      "import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom'"
+    );
     expect(routeSource).toContain('<DraftProvider draftId={draftId} userId={user.uid}>');
     expect(routeSource).toContain('<UnifiedDraftRoom draftId={draftId} userId={user.uid} />');
     expect(routeSource).not.toMatch(/AvailablePlayersTable(_new)?/);
+    expect(routeSource).not.toMatch(/\bDraftLobby\b/);
   });
 
   it('keeps the unified room wired to the current table and rails', () => {
@@ -26,12 +29,11 @@ describe('draft room runtime source of truth', () => {
     expect(roomSource).toContain('<DraftLeftRail');
     expect(roomSource).toContain('<PickFeed');
     expect(roomSource).not.toMatch(/AvailablePlayersTable(_new)?/);
+    expect(roomSource).not.toMatch(/\bDraftLobby\b/);
   });
 
   it('documents the deployment, archive, and close-out requirements', () => {
-    const sourceOfTruth = read(
-      'docs/superpowers/specs/2026-06-13-draft-room-source-of-truth.md'
-    );
+    const sourceOfTruth = read('docs/superpowers/specs/2026-06-13-draft-room-source-of-truth.md');
 
     expect(sourceOfTruth).toContain('Live draft room route: `src/app/(app)/drafts/[id]/page.tsx`');
     expect(sourceOfTruth).toContain('Live room shell: `src/components/draft/UnifiedDraftRoom.tsx`');
