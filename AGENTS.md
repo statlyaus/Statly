@@ -81,6 +81,13 @@ Statly uses a repo-local adaptation of [karpathy/llm-council](https://github.com
 - If the logical scaffold is insufficient and Ollama/OpenRouter are unavailable, state that model-backed council review was skipped and continue with the best local review path; do not block urgent or trivial work solely on council availability.
 - Do not paste secrets into council prompts. The council is an engineering review aid, not product runtime code.
 
+## Codex Agent Loops
+
+- Use `docs/codex/agent-loop-operating-model.md` as the repo-local operating model for repeatable Codex loops that plan, implement, review, fix, re-review, and report.
+- Use `.agents/skills/draft-reliability-loop/SKILL.md` for draft-room reliability loops.
+- Use `.agents/skills/pr-babysitter/SKILL.md` for PR monitoring, CI follow-up, and stale PR triage loops.
+- These loop docs do not replace the council gates above; preserve Decision 1 before substantive work and Decision 2 before commit.
+
 ## Architecture Rules
 
 - Server Components should load protected server data through server-side loaders, services, or repositories.
