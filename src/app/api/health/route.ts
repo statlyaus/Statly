@@ -170,16 +170,14 @@ function checkMemory(): ServiceStatus {
 
   if (memoryUsagePercent >= 90) {
     status = isProductionEnvironment() ? 'unhealthy' : 'degraded';
-    error =
-      process.env.NODE_ENV === 'production'
-        ? 'High memory usage detected'
-        : `High memory usage: ${memoryUsagePercent.toFixed(1)}%`;
+    error = isProductionEnvironment()
+      ? 'High memory usage detected'
+      : `High memory usage: ${memoryUsagePercent.toFixed(1)}%`;
   } else if (memoryUsagePercent >= 75) {
     status = 'degraded';
-    error =
-      process.env.NODE_ENV === 'production'
-        ? 'Elevated memory usage'
-        : `Elevated memory usage: ${memoryUsagePercent.toFixed(1)}%`;
+    error = isProductionEnvironment()
+      ? 'Elevated memory usage'
+      : `Elevated memory usage: ${memoryUsagePercent.toFixed(1)}%`;
   } else {
     status = 'healthy';
   }
