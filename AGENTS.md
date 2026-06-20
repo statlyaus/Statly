@@ -86,6 +86,7 @@ Statly uses a repo-local adaptation of [karpathy/llm-council](https://github.com
 - Use `docs/codex/agent-loop-operating-model.md` as the repo-local operating model for repeatable Codex loops that plan, implement, review, fix, re-review, and report.
 - Use `.agents/skills/draft-reliability-loop/SKILL.md` for draft-room reliability loops.
 - Use `.agents/skills/pr-babysitter/SKILL.md` for PR monitoring, CI follow-up, and stale PR triage loops.
+- Use `docs/codex/loop-library-adoption.md` for the repo-local Loop Library-inspired workflow set: repository cleanup, completion contracts, ticket-to-PR-ready planning, fresh-clone verification, docs sweeps, and quality streaks.
 - These loop docs do not replace the council gates above; preserve Decision 1 before substantive work and Decision 2 before commit.
 
 ## Architecture Rules
