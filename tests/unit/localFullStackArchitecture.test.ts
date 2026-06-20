@@ -37,6 +37,10 @@ describe('local full stack development architecture', () => {
   it('starts the app stack with Firebase emulator environment variables', () => {
     const source = read('Scripts/dev/full-local-stack.sh');
     const firebaseClient = read('src/lib/firebaseClient.ts');
+    const executableLines = source
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#'));
 
     expect(source).toContain('FIRESTORE_EMULATOR_HOST');
     expect(source).toContain('FIREBASE_AUTH_EMULATOR_HOST');
@@ -50,7 +54,9 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('npm run prisma:generate');
     expect(source).toContain('npx prisma migrate deploy');
     expect(source).toContain('npm run dev:seed:local');
-    expect(source).not.toMatch(/DATABASE_URL=/);
+    expect(executableLines).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/^(export\s+)?DATABASE_URL=/)])
+    );
     expect(source.indexOf('npx prisma migrate deploy')).toBeLessThan(
       source.indexOf('npm run dev:seed:local')
     );

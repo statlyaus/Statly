@@ -48,6 +48,7 @@ Use a disposable SQLite database under `/tmp`:
 ```bash
 export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
 export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+echo "STATLY_VERIFY_DB=${STATLY_VERIFY_DB}"
 ```
 
 Do not use `file:./prisma/dev.db`, `file:prisma/dev.db`, or any path inside the
@@ -64,6 +65,7 @@ Terminal 1:
 ```bash
 export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
 export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+echo "STATLY_VERIFY_DB=${STATLY_VERIFY_DB}"
 npm run dev:full:local
 ```
 
@@ -73,7 +75,8 @@ emulator to be ready.
 Terminal 2:
 
 ```bash
-export STATLY_VERIFY_DB="/tmp/statly-verify-YYYYMMDDHHMMSS.db"
+# Paste the exact value printed by Terminal 1.
+export STATLY_VERIFY_DB="/tmp/statly-verify-20260620193000.db"
 export DATABASE_URL="file://${STATLY_VERIFY_DB}"
 npm run dev:smoke:local
 ```
@@ -94,14 +97,18 @@ Before verification:
 
 ```bash
 git status --short -- prisma/dev.db
-if [ -f prisma/dev.db ]; then stat -f "%m %z %N" prisma/dev.db; fi
+if [ -f prisma/dev.db ]; then
+  stat -f "%m %z %N" prisma/dev.db 2>/dev/null || stat -c "%Y %s %n" prisma/dev.db
+fi
 ```
 
 After verification:
 
 ```bash
 git status --short -- prisma/dev.db
-if [ -f prisma/dev.db ]; then stat -f "%m %z %N" prisma/dev.db; fi
+if [ -f prisma/dev.db ]; then
+  stat -f "%m %z %N" prisma/dev.db 2>/dev/null || stat -c "%Y %s %n" prisma/dev.db
+fi
 git status --short --branch
 ```
 
