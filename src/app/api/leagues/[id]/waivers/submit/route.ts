@@ -43,10 +43,19 @@ export const POST = withMetrics(
         return NextResponse.json({ error: 'League membership required' }, { status: 403 });
       }
 
-      const prismaOwnership = await prisma.leagueRosterPlayer.findFirst({
-        where: { leagueId, playerId: String(playerId) },
-        select: { playerId: true, memberId: true },
-      });
+      let prismaOwnership: { playerId: string; memberId: string } | null = null;
+      try {
+        prismaOwnership = await prisma.leagueRosterPlayer.findFirst({
+          where: { leagueId, playerId: String(playerId) },
+          select: { playerId: true, memberId: true },
+        });
+      } catch (error) {
+        logger.warn('Prisma ownership pre-check failed; continuing with Firestore checks', {
+          leagueId,
+          playerId: String(playerId),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       if (prismaOwnership) {
         return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }

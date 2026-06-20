@@ -126,21 +126,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const owned = ownedStr === 'true' ? true : ownedStr === 'false' ? false : undefined;
 
     if (typeof owned === 'boolean') {
-      const prismaLeague = await prisma.league.findUnique({
-        where: { id: leagueId },
-        select: { id: true },
-      });
+      try {
+        const prismaLeague = await prisma.league.findUnique({
+          where: { id: leagueId },
+          select: { id: true },
+        });
 
-      if (prismaLeague) {
-        const result = await getPrismaLeaguePlayers({
+        if (prismaLeague) {
+          const result = await getPrismaLeaguePlayers({
+            leagueId,
+            owned,
+            limit,
+            cursor,
+            team,
+            position,
+          });
+          return NextResponse.json(result, { status: 200 });
+        }
+      } catch (error) {
+        console.warn('[players API] prisma ownership path failed, falling back:', {
           leagueId,
           owned,
-          limit,
-          cursor,
-          team,
-          position,
+          error: error instanceof Error ? error.message : String(error),
         });
-        return NextResponse.json(result, { status: 200 });
       }
     }
 
