@@ -48,21 +48,21 @@ player directory repairs.
 
 ## Current Ladder Status
 
-As of June 21, 2026, the safe, non-writing player data convergence ladder has
-completed these steps:
+Current `main` has completed these safe, non-writing player data convergence
+ladder steps:
 
-| Step                                | Status    | Evidence                                                                                                          |
-| ----------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
-| Phase 1 read-only diagnostic        | Completed | Current player identity, stats, ranking, and draft read-model ownership were inspected without mutating state.    |
-| Phase 2 pure diagnostic module      | Completed | `src/server/playerDataConvergenceDiagnostic.ts` and fixture tests compare in-memory player/stat/category records. |
-| Phase 3 tracked-data guard          | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies tracked data remains identity-converged.           |
-| Phase 4 pure action planner         | Completed | `src/server/playerDataConvergencePlanner.ts` converts diagnostics into non-writing recommendations.               |
-| Phase 4b tracked-data planner guard | Completed | The tracked-data guard verifies warning-only tracked data stays safe for read-only follow-up.                     |
+| Step                                | Status    | Evidence                                                                                                                     |
+| ----------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 read-only diagnostic        | Completed | Current player identity, stats, ranking, and draft read-model ownership were inspected without mutating state.               |
+| Phase 2 pure diagnostic module      | Completed | `src/server/playerDataConvergenceDiagnostic.ts` and fixture tests compare in-memory player/stat/category records.            |
+| Phase 3 tracked-data guard          | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies tracked data remains identity-converged.                      |
+| Phase 4 pure action planner         | Completed | `src/server/playerDataConvergencePlanner.ts` converts diagnostics into non-writing recommendations.                          |
+| Phase 4b tracked-data planner guard | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies warning-only tracked data stays safe for read-only follow-up. |
 
 The current tracked-data warning is narrow and understood: four
 `player_stats_2025.json` rows have all nine real-data category values as `null`.
-Those rows are skipped source evidence and a source-data coverage warning, not
-player identity repair candidates.
+Those rows are skipped, with source evidence and a source-data coverage warning,
+not player identity repair candidates.
 
 The current safety position is:
 
