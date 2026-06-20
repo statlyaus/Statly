@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { getPlayers } from '@/lib/data';
 import { diagnosePlayerDataConvergence } from '@/server/playerDataConvergenceDiagnostic';
+import { planPlayerDataConvergenceActions } from '@/server/playerDataConvergencePlanner';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
 type RawStatRow = Record<string, unknown>;
@@ -37,20 +38,25 @@ function sourceRecordFromRawRow(row: RawStatRow) {
   };
 }
 
+async function diagnoseTrackedPlayerData() {
+  const rawRows = await loadRawStatRows();
+  const players = await getPlayers();
+
+  return diagnosePlayerDataConvergence({
+    canonicalPlayers: players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      team: player.team,
+      position: player.position,
+    })),
+    sourceRecords: rawRows.map(sourceRecordFromRawRow),
+    expectedCategoryKeys: [...REAL_DATA_NINE_CATEGORY_PRESET],
+  });
+}
+
 describe('tracked player data convergence diagnostic', () => {
   it('keeps current tracked player stats identity-converged and documents null stat rows', async () => {
-    const rawRows = await loadRawStatRows();
-    const players = await getPlayers();
-    const result = diagnosePlayerDataConvergence({
-      canonicalPlayers: players.map((player) => ({
-        id: player.id,
-        name: player.name,
-        team: player.team,
-        position: player.position,
-      })),
-      sourceRecords: rawRows.map(sourceRecordFromRawRow),
-      expectedCategoryKeys: [...REAL_DATA_NINE_CATEGORY_PRESET],
-    });
+    const result = await diagnoseTrackedPlayerData();
 
     expect(result.summary).toMatchObject({
       totalCanonicalPlayers: 642,
@@ -99,5 +105,47 @@ describe('tracked player data convergence diagnostic', () => {
       ])
     );
     expect(result.recommendedNextAction).toContain('Review warnings with source evidence');
+  });
+
+  it('keeps tracked null stat rows as skipped source evidence in planner output', async () => {
+    const diagnostic = await diagnoseTrackedPlayerData();
+    const plan = planPlayerDataConvergenceActions({
+      diagnostic,
+      expectedCategoryKeys: [...REAL_DATA_NINE_CATEGORY_PRESET],
+    });
+    const actionKinds = plan.actions.map((action) => action.kind);
+    const skippedSourceEvidence = plan.actions.find(
+      (action) => action.kind === 'skippedNullStatSourceEvidence'
+    );
+
+    expect(diagnostic.summary.severity).toBe('warning');
+    expect(skippedSourceEvidence).toMatchObject({
+      severity: 'warning',
+      count: 4,
+      sourceIndexes: [2920, 6140, 6209, 6324],
+    });
+    expect(skippedSourceEvidence?.sourceIdentities).toEqual(
+      expect.arrayContaining([
+        'tobie travaglia|st kilda',
+        'nathan fyfe|fremantle',
+        'lachlan mcneil|western bulldogs',
+        'mitchell duncan|geelong',
+      ])
+    );
+    expect(actionKinds).not.toEqual(
+      expect.arrayContaining([
+        'identityReviewRequired',
+        'sourceRecordReviewRequired',
+        'unsafeForWritePlanning',
+        'blockedPendingProductDecision',
+      ])
+    );
+    expect(actionKinds).toContain('safeForNextReadOnlyDryRun');
+    expect(plan).toMatchObject({
+      status: 'readOnlyFollowUpSafe',
+      safeForNextReadOnlyDryRun: true,
+      safeForWritePlanning: false,
+      requiresProductDecision: false,
+    });
   });
 });
