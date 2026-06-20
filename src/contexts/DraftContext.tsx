@@ -1236,7 +1236,6 @@ export function DraftProvider({
       const res = await fetchApi(buildPersistedPickBackfillEndpoint(draftId, sinceMs));
       const persistedPicks = toArray<unknown>(res?.data?.picks ?? res?.picks);
       const draftStateDelta = buildDraftStateBackfillDelta(res?.data?.draftState ?? res?.draftState);
-      if (persistedPicks.length === 0) return;
 
       const deltas = buildPersistedPickBackfillDeltas({
         rawPicks: persistedPicks,
@@ -1245,12 +1244,13 @@ export function DraftProvider({
         lastEventAt: state.connection.lastEventAt,
         loadInitialPicks: shouldLoadInitialPersistedPicks,
       });
+      const backfillDeltas = draftStateDelta ? [...deltas, draftStateDelta] : deltas;
 
-      if (!isMounted.current || deltas.length === 0) return;
+      if (!isMounted.current || backfillDeltas.length === 0) return;
 
       dispatch({
         type: 'APPLY_DELTAS',
-        deltas: draftStateDelta ? [...deltas, draftStateDelta] : deltas,
+        deltas: backfillDeltas,
       });
 
       if (!draftStateDelta) {
