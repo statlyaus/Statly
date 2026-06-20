@@ -29,11 +29,7 @@ export type PlayerDataConvergenceAction = {
   categories?: string[];
 };
 
-export type PlayerDataConvergencePlanStatus =
-  | 'allClear'
-  | 'readOnlyFollowUpSafe'
-  | 'reviewRequired'
-  | 'blocked';
+export type PlayerDataConvergencePlanStatus = 'allClear' | 'readOnlyFollowUpSafe' | 'blocked';
 
 export type PlayerDataConvergencePlan = {
   status: PlayerDataConvergencePlanStatus;
@@ -45,10 +41,10 @@ export type PlayerDataConvergencePlan = {
 
 export type PlayerDataConvergencePlannerInput = {
   diagnostic: PlayerDataConvergenceDiagnostic;
-  expectedCategoryKeys?: readonly string[];
+  expectedCategoryKeys: readonly string[];
 };
 
-function unique(values: Iterable<string>): string[] {
+function unique<T>(values: Iterable<T>): T[] {
   return [...new Set(values)];
 }
 
@@ -130,7 +126,7 @@ function missingCategoryAction(
     'Some source rows are missing expected category values; review source coverage before defining any repair plan.',
     {
       count: missingValues.length,
-      sourceIndexes: unique(missingValues.map((value) => String(value.sourceIndex))).map(Number),
+      sourceIndexes: unique(missingValues.map((value) => value.sourceIndex)),
       sourceIdentities: unique(missingValues.map((value) => value.sourceIdentity)),
       categories: unique(missingValues.map((value) => value.category)),
     }
@@ -146,7 +142,7 @@ function staleCategoryAction(
     'Deprecated or stale category keys need explicit mapping review before they can be used in convergence work.',
     {
       count: deprecatedKeys.length,
-      sourceIndexes: unique(deprecatedKeys.map((value) => String(value.sourceIndex))).map(Number),
+      sourceIndexes: unique(deprecatedKeys.map((value) => value.sourceIndex)),
       sourceIdentities: unique(deprecatedKeys.map((value) => value.sourceIdentity)),
       categories: unique(deprecatedKeys.map((value) => value.key)),
     }
@@ -236,7 +232,7 @@ function planStatus(
 
 export function planPlayerDataConvergenceActions({
   diagnostic,
-  expectedCategoryKeys = [],
+  expectedCategoryKeys,
 }: PlayerDataConvergencePlannerInput): PlayerDataConvergencePlan {
   const actions: PlayerDataConvergenceAction[] = [];
   const { skippedNullStatSourceEvidence, partialMissingCategoryValues } =
