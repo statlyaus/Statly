@@ -46,6 +46,41 @@ Current `main` does not have a player data convergence runner, a
 `converge:player-data` package script, or a current rollout protocol for applying
 player directory repairs.
 
+## Current Ladder Status
+
+Current `main` has completed these safe, non-writing player data convergence
+ladder steps:
+
+| Step                                | Status    | Evidence                                                                                                                     |
+| ----------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 read-only diagnostic        | Completed | Current player identity, stats, ranking, and draft read-model ownership were inspected without mutating state.               |
+| Phase 2 pure diagnostic module      | Completed | `src/server/playerDataConvergenceDiagnostic.ts` and fixture tests compare in-memory player/stat/category records.            |
+| Phase 3 tracked-data guard          | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies tracked data remains identity-converged.                      |
+| Phase 4 pure action planner         | Completed | `src/server/playerDataConvergencePlanner.ts` converts diagnostics into non-writing recommendations.                          |
+| Phase 4b tracked-data planner guard | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies warning-only tracked data stays safe for read-only follow-up. |
+
+The current tracked-data warning is narrow and understood: four
+`player_stats_2025.json` rows have all nine real-data category values as `null`.
+Those rows are skipped, with source evidence and a source-data coverage warning,
+not player identity repair candidates.
+
+The current safety position is:
+
+- identity convergence is good for tracked data;
+- the tracked-data shape is warning-only and safe for read-only follow-up;
+- write-capable convergence remains unsafe without a separate approved plan;
+- no runner, package script, Prisma write path, Firestore write path, or durable
+  repair workflow exists yet.
+
+The next possible phase is a temp-DB-only write dry-run design. That design must
+use `/tmp/statly-verify-*.db`, avoid production and protected local database
+writes, define rollback criteria, require human approval before any apply path,
+and still defer any durable runner until explicitly approved.
+
+Stop condition: do not implement write-capable convergence from this ladder
+status. Stop before adding apply behavior, repair behavior, package scripts,
+runners, Prisma writes, Firestore writes, or ranking mutations.
+
 ## Source-Of-Truth Map
 
 | Concern                                           | Current owner                                                              | Canonical source                                           | Notes                                                                                               |
