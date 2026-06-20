@@ -48,11 +48,17 @@ Use a disposable SQLite database under `/tmp`:
 ```bash
 export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
 export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+: > "$STATLY_VERIFY_DB"
 echo "STATLY_VERIFY_DB=${STATLY_VERIFY_DB}"
 ```
 
 Do not use `file:./prisma/dev.db`, `file:prisma/dev.db`, or any path inside the
 repository for destructive smoke verification.
+
+The explicit `: > "$STATLY_VERIFY_DB"` step creates an empty SQLite file before
+Prisma schema setup. This avoids a generic Prisma schema-engine error observed
+when `db push` or `migrate deploy` targets a missing absolute `/tmp` database
+file.
 
 ## Local Full-Stack Smoke
 
@@ -65,6 +71,7 @@ Terminal 1:
 ```bash
 export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
 export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+: > "$STATLY_VERIFY_DB"
 echo "STATLY_VERIFY_DB=${STATLY_VERIFY_DB}"
 npm run dev:full:local
 ```
