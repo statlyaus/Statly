@@ -99,17 +99,17 @@ verification runbook, so the work should be rebuilt in smaller phases.
 
 ## Non-Goals
 
-- Do not implement a convergence runner in this brief.
-- Do not add or change package scripts in this brief.
-- Do not mutate player data, Prisma data, Firestore data, local JSON, or fixture
-  data.
-- Do not change Prisma schema.
-- Do not rewrite rankings, player search, or draft read models as part of the
-  design brief.
-- Do not make Firestore canonical for protected league, draft, roster, or waiver
-  state.
-- Do not use real secrets, production credentials, Firebase exports, or local
-  protected databases for verification.
+- A convergence runner is out of scope for this brief.
+- Package scripts must not be added or changed here.
+- Player data, Prisma data, Firestore data, local JSON, and fixture data must
+  remain untouched.
+- Prisma schema changes are out of scope.
+- Rankings, player search, and draft read models should not be rewritten as part
+  of the design brief.
+- Firestore must not become canonical for protected league, draft, roster, or
+  waiver state.
+- Verification must not use real secrets, production credentials, Firebase
+  exports, or local protected databases.
 
 ## Protected Paths
 
@@ -140,18 +140,18 @@ Recommended first boundary:
   directory rows and match-stat-like records.
 - Report identity coverage, ambiguous name matches, missing canonical IDs,
   category shape mismatches, and draft read-model enrichment misses.
-- Add unit tests using in-memory fixtures only.
-- Do not add package scripts yet.
-- Do not read or write `prisma/dev.db`.
-- Do not write repair output except optional stdout or returned structured
+- Cover the diagnostic with unit tests using in-memory fixtures only.
+- Leave package scripts for a later phase.
+- Keep `prisma/dev.db` unread and unwritten.
+- Repair output should be limited to optional stdout or returned structured
   objects in tests.
 
 The diagnostic should answer:
 
 - Which match-stat records map to an existing Prisma player?
-- Which records only map through fallback canonical IDs?
+- How many records only map through fallback canonical IDs?
 - Which records are ambiguous by name?
-- Which records use category names outside the current real-data preset?
+- Are any records using category names outside the current real-data preset?
 - Which available draft players miss stat enrichment?
 
 Stop if the diagnostic needs product judgment about whether two players should
