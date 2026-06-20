@@ -76,6 +76,13 @@ describe('tracked player data convergence dry-run report', () => {
           proposedRepairCount: 0,
         },
       },
+      simulation: {
+        status: 'readyForTempDbSimulation',
+        safeForTempDbSimulation: true,
+        safeForWritePlanning: false,
+        safeForWriteApply: false,
+        proposedWriteCount: 0,
+      },
       runtimeChecks: {
         tempDatabaseFileExists: true,
         blockers: [],
@@ -156,5 +163,12 @@ describe('tracked player data convergence dry-run report', () => {
         expect.objectContaining({ kind: 'databaseUrlMustNotPointInsideRepository' }),
       ])
     );
+    expect(report.simulation).toMatchObject({
+      status: 'blocked',
+      safeForTempDbSimulation: false,
+      safeForWritePlanning: false,
+      safeForWriteApply: false,
+      proposedWriteCount: 0,
+    });
   });
 });

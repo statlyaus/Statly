@@ -58,6 +58,7 @@ ladder steps:
 | Phase 3 tracked-data guard          | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies tracked data remains identity-converged.                      |
 | Phase 4 pure action planner         | Completed | `src/server/playerDataConvergencePlanner.ts` converts diagnostics into non-writing recommendations.                          |
 | Phase 4b tracked-data planner guard | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies warning-only tracked data stays safe for read-only follow-up. |
+| Phase 5 temp DB simulation contract | Completed | `src/server/playerDataConvergenceTempDbSimulation.ts` projects dry-run evidence into non-writing temp DB simulation gates.   |
 
 The current tracked-data warning is narrow and understood: four
 `player_stats_2025.json` rows have all nine real-data category values as `null`.
@@ -257,6 +258,11 @@ Expected UAT result on current tracked data:
 - `dryRunSummary.safeForWriteApply` is `false`;
 - `dryRunSummary.proposedRepairCount` is `0`;
 - `dryRunSummary.skippedNullStatSourceEvidence` is `4`;
+- `simulation.status` is `readyForTempDbSimulation`;
+- `simulation.safeForTempDbSimulation` is `true`;
+- `simulation.safeForWritePlanning` is `false`;
+- `simulation.safeForWriteApply` is `false`;
+- `simulation.proposedWriteCount` is `0`;
 - skipped source evidence lists Tobie Travaglia, Nathan Fyfe, Lachlan McNeil,
   and Mitchell Duncan.
 
