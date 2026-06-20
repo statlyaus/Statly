@@ -81,6 +81,157 @@ Stop condition: do not implement write-capable convergence from this ladder
 status. Stop before adding apply behavior, repair behavior, package scripts,
 runners, Prisma writes, Firestore writes, or ranking mutations.
 
+## Temp-DB-Only Write Dry-Run Design
+
+This section defines the next safe implementation boundary. It is a design
+contract only. It does not authorize a runner, package script, apply function,
+Prisma write, Firestore write, schema change, ranking mutation, local JSON
+change, fixture rewrite, or durable data repair.
+
+### Scope
+
+The next implementation PR may design and test a write dry-run planner against
+in-memory evidence and a disposable database strategy. It must still stop before
+any command writes to real local, shared, or production data.
+
+A write dry-run means:
+
+- planned write behavior is exercised only against a disposable
+  `/tmp/statly-verify-*.db` database;
+- source evidence is copied or seeded into that temp database only when the
+  command is explicitly approved;
+- all output is structured evidence for review;
+- rollback is deleting the temp database, not repairing mutated local state.
+
+### Temp DB Contract
+
+Any future write dry-run must use the temporary database runbook:
+
+```bash
+export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
+export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+: > "$STATLY_VERIFY_DB"
+```
+
+Before schema setup, seeding, dry-run planning, or temp apply simulation, the
+workflow must prove:
+
+- `DATABASE_URL` is set;
+- `DATABASE_URL` starts with `file://`;
+- `STATLY_VERIFY_DB` is under `/tmp/statly-verify-*.db`;
+- neither variable points inside the repository;
+- neither variable points at `prisma/dev.db`;
+- the script does not override or ignore the caller-provided `DATABASE_URL`.
+
+Before and after the run, capture:
+
+```bash
+git status --short -- prisma/dev.db
+stat -f "%m %z %N" prisma/dev.db 2>/dev/null || stat -c "%Y %s %n" prisma/dev.db
+git status --short --branch
+```
+
+The expected result is no `prisma/dev.db` status output, unchanged
+`prisma/dev.db` stat metadata, and no protected or generated artifacts in git
+status.
+
+### Input Evidence Contract
+
+Dry-run inputs must come from the diagnostic and planner boundaries, not ad hoc
+database queries or fallback assumptions. Every dry-run report must include:
+
+- total canonical players;
+- total source stat records;
+- direct ID matches;
+- canonical ID matches;
+- normalized name plus team matches;
+- ambiguous name matches;
+- unmatched canonical players;
+- unmatched source records;
+- duplicate source identities;
+- missing expected category values;
+- stale or deprecated category keys;
+- skipped null-stat source evidence;
+- proposed repair count;
+- skipped repair count and reasons.
+
+Fallback canonical ID or name/team matching is evidence for review, not proof
+that a repair is safe.
+
+### Deterministic Repair Eligibility
+
+Only deterministic, explainable repairs may enter a future dry-run plan. The
+planner must skip or block:
+
+- ambiguous name matches;
+- unmatched source records;
+- unknown or malformed names;
+- duplicate source identities without a reviewed rule;
+- stale category mappings without an explicit mapping decision;
+- partial missing category values;
+- rows where all expected category values are `null`;
+- any player merge or split requiring product judgment.
+
+The four currently tracked all-null stat rows remain skipped source evidence and
+must not become identity repair candidates.
+
+### Human Approval Gates
+
+Explicit human approval is required before:
+
+- adding an apply function;
+- adding a CLI or package script;
+- running any write-capable command, even against `/tmp`;
+- promoting from dry-run planning to temp apply simulation;
+- writing Prisma player rows outside a disposable temp database;
+- touching Firestore, production, shared, or developer data;
+- changing category mappings used by rankings or fantasy scoring.
+
+Approval for a design brief is not approval to implement writes.
+
+### Stop Conditions
+
+Stop immediately if:
+
+- `DATABASE_URL` is missing, non-`file://`, outside `/tmp`, inside the repo, or
+  points at `prisma/dev.db`;
+- a command references, reads, or mutates `prisma/dev.db`;
+- a command asks for `.env`, real secrets, production credentials, Firebase
+  exports, or service account files;
+- generated files, dataconnect local data, `coverage`, `dist`, or
+  `test-results` appear;
+- any ambiguous name match or unmatched source record is present;
+- product judgment is required to merge, split, create, or delete players;
+- a proposed repair is not explainable from diagnostic evidence;
+- the work requires package scripts, Prisma schema changes, Firestore writes,
+  ranking mutations, local JSON edits, fixture rewrites, branches, or stashes.
+
+### Rollback Criteria
+
+Rollback for a temp dry-run is deletion of the disposable database:
+
+```bash
+rm -f "$STATLY_VERIFY_DB"
+```
+
+If temp apply output is wrong, discard the temp database, fix the planner or
+design, and rerun from a new `/tmp/statly-verify-*.db` path. Do not use local
+untracked database state, stashes, or manual edits as a recovery mechanism.
+
+### Required Evidence Before Any Future Apply Path
+
+Before any later PR proposes an apply path, it must provide:
+
+- focused unit tests for diagnostic, planner, and apply boundaries;
+- a temp-DB-only dry-run report with the input evidence counts above;
+- before/after `prisma/dev.db` status and stat checks;
+- `git diff --check`;
+- lint, typecheck, and prettier checks for touched TypeScript or markdown;
+- a residual-risk note for any skipped browser/API/full-stack smoke.
+
+Write-capable convergence remains blocked until a separate PR satisfies this
+evidence contract and receives explicit approval for the apply boundary.
+
 ## Source-Of-Truth Map
 
 | Concern                                           | Current owner                                                              | Canonical source                                           | Notes                                                                                               |
