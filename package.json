@@ -42,6 +42,7 @@
     "check:etl": "tsx Scripts/check-etl-setup.ts",
     "player-data:dry-run": "tsx Scripts/player-data-convergence-dry-run.ts",
     "player-data:temp-db-runner": "tsx Scripts/player-data-convergence-temp-db-runner.ts",
+    "player-data:temp-db-apply-simulation": "tsx Scripts/player-data-convergence-temp-db-apply-simulation.ts",
     "db:check": "tsx Scripts/check-database.ts",
     "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
     "test:unit": "vitest run --config vitest.config.unit.ts",

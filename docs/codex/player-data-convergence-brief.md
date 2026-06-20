@@ -61,6 +61,7 @@ ladder steps:
 | Phase 5 temp DB simulation contract | Completed | `src/server/playerDataConvergenceTempDbSimulation.ts` projects dry-run evidence into non-writing temp DB simulation gates.   |
 | Phase 6 temp DB preview runner      | Completed | `player-data:temp-db-runner` writes preview/audit evidence only to disposable `/tmp/statly-verify-*.db` tables.              |
 | Phase 7 pure apply plan             | Completed | `src/server/playerDataConvergenceApplyPlan.ts` converts evidence into explicit zero-repair apply plans for current data.     |
+| Phase 8 temp DB apply simulation    | Completed | `player-data:temp-db-apply-simulation` applies the zero-mutation plan to temp-only product-shaped simulation tables.         |
 
 The current tracked-data warning is narrow and understood: four
 `player_stats_2025.json` rows have all nine real-data category values as `null`.
@@ -73,6 +74,8 @@ The current safety position is:
 - the tracked-data shape is warning-only and safe for read-only follow-up;
 - the current apply plan has zero product mutations and preserves null stat
   rows as skipped source evidence;
+- the current temp-DB apply simulation proves that zero-mutation plan without
+  touching durable product data;
 - write-capable convergence remains unsafe without a separate approved plan;
 - no Prisma product write path, Firestore write path, local JSON write path, or
   durable repair workflow exists yet.
@@ -307,6 +310,47 @@ Expected UAT result on current tracked data:
 
 If the preview runner reports `blocked`, stop. Do not add product writes or
 apply behavior until the blockers are resolved in a separate approved task.
+
+### Temp DB Apply Simulation UAT Command
+
+The apply simulation runner is the next temp-only rung. It consumes the current
+apply plan, creates product-shaped simulation tables inside the disposable temp
+DB, and proves the current plan applies zero product mutations. It does not
+write Statly product tables, Prisma `Player` rows, Firestore, local JSON,
+rankings, fixtures, generated files, or protected local data.
+
+```bash
+export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
+export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+: > "$STATLY_VERIFY_DB"
+npm --silent run player-data:temp-db-apply-simulation
+rm -f "$STATLY_VERIFY_DB"
+```
+
+Expected UAT result on current tracked data:
+
+- top-level `status` is `readyForUat`;
+- `applySimulation.status` is `simulationApplied`;
+- `applySimulation.safeForProductApply` is `false`;
+- `applySimulation.simulationTables` lists only
+  `player_data_convergence_apply_simulation_runs`,
+  `player_data_convergence_apply_simulation_mutations`, and
+  `player_data_convergence_apply_simulated_players`;
+- `applySimulation.plannedMutationCount` is `0`;
+- `applySimulation.appliedMutationCount` is `0`;
+- `applySimulation.beforeProductRows` is `0`;
+- `applySimulation.afterProductRows` is `0`;
+- `applySimulation.acceptance.zeroProductMutations` is `true`;
+- `applySimulation.acceptance.productApplyBlocked` is `true`;
+- nested `report.applyPlan.safeForTempDbApplySimulation` is `true`;
+- nested `report.applyPlan.safeForProductApply` is `false`;
+- nested `report.applyPlan.productMutationCount` is `0`;
+- nested `report.applyPlan.skippedEvidence` includes the four all-null stat
+  source rows as skipped evidence.
+
+If the apply simulation reports `blocked`, stop. Do not add durable apply
+behavior or product mutations until the blockers are resolved in a separate
+approved task.
 
 ## Source-Of-Truth Map
 

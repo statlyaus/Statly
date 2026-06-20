@@ -76,6 +76,14 @@ describe('tracked player data convergence dry-run report', () => {
           proposedRepairCount: 0,
         },
       },
+      applyPlan: {
+        status: 'noProductRepairs',
+        safeForTempDbApplySimulation: true,
+        safeForProductApply: false,
+        productMutationCount: 0,
+        productMutations: [],
+        blockers: [],
+      },
       simulation: {
         status: 'readyForTempDbSimulation',
         safeForTempDbSimulation: true,
@@ -144,6 +152,21 @@ describe('tracked player data convergence dry-run report', () => {
       safeForWritePlanning: false,
       safeForWriteApply: false,
     });
+    expect(report.applyPlan).toMatchObject({
+      status: 'requiresReview',
+      safeForTempDbApplySimulation: true,
+      safeForProductApply: false,
+      productMutationCount: 0,
+      productMutations: [],
+      blockers: [],
+    });
+    expect(report.applyPlan.skippedEvidence).toContainEqual(
+      expect.objectContaining({
+        kind: 'nullStatSourceEvidence',
+        count: 1,
+        sourceIdentities: ['tobie travaglia|st kilda'],
+      })
+    );
   });
 
   it('blocks UAT when DATABASE_URL points at protected prisma/dev.db', () => {
