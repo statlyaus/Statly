@@ -3,6 +3,7 @@ import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import { diagnosePlayerDataConvergence } from '@/server/playerDataConvergenceDiagnostic';
 import { planPlayerDataConvergenceTempDbDryRun } from '@/server/playerDataConvergenceDryRunPlan';
 import { planPlayerDataConvergenceActions } from '@/server/playerDataConvergencePlanner';
+import { planPlayerDataConvergenceTempDbSimulation } from '@/server/playerDataConvergenceTempDbSimulation';
 
 export type RawPlayerStatRow = Record<string, unknown>;
 
@@ -73,6 +74,7 @@ export function buildPlayerDataConvergenceTrackedDryRunReport({
     databaseUrl,
     repositoryRoot,
   });
+  const simulation = planPlayerDataConvergenceTempDbSimulation(dryRunPlan);
   const runtimeBlockers = tempDatabaseFileExists
     ? []
     : [
@@ -111,6 +113,18 @@ export function buildPlayerDataConvergenceTrackedDryRunReport({
     },
     skippedSourceEvidence,
     dryRunPlan,
+    simulation: {
+      status: simulation.status,
+      safeForTempDbSimulation: simulation.safeForTempDbSimulation,
+      safeForWritePlanning: simulation.safeForWritePlanning,
+      safeForWriteApply: simulation.safeForWriteApply,
+      proposedWriteCount: simulation.proposedWriteCount,
+      skippedRepairCount: simulation.skippedRepairCount,
+      steps: simulation.steps,
+      approvalGates: simulation.approvalGates,
+      stopConditions: simulation.stopConditions,
+      recommendedNextAction: simulation.recommendedNextAction,
+    },
     runtimeChecks: {
       tempDatabaseFileExists,
       blockers: runtimeBlockers,
