@@ -52,7 +52,7 @@ This skill does not replace Statly council gates. Substantive fixes still requir
 Use this order when a PR is stale:
 
 1. Confirm whether the PR still matches the current source-of-truth docs.
-2. Check whether `origin/main` already contains the intended change.
+2. Check whether the PR's actual base branch already contains the intended change.
 3. Classify the stale state:
    - `ready`: checks pass, reviews resolved, no conflicts.
    - `needs-rebase`: scope still valid, branch is behind or conflicted.
