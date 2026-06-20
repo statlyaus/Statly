@@ -232,6 +232,37 @@ Before any later PR proposes an apply path, it must provide:
 Write-capable convergence remains blocked until a separate PR satisfies this
 evidence contract and receives explicit approval for the apply boundary.
 
+### Current UAT Command
+
+The current acceptance surface is a dry-run harness only. It validates the temp
+DB contract, reads tracked player fixture data, builds convergence diagnostics,
+and prints structured JSON without creating a runner or applying repairs.
+
+```bash
+export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
+export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+: > "$STATLY_VERIFY_DB"
+npm --silent run player-data:dry-run
+rm -f "$STATLY_VERIFY_DB"
+```
+
+Expected UAT result on current tracked data:
+
+- `status` is `readyForUat`;
+- `diagnostic.matchedRecordsByNormalizedNameTeam` is `7544`;
+- `diagnostic.unmatchedSourceRecords` is `0`;
+- `diagnostic.ambiguousNameMatches` is `0`;
+- `planner.safeForNextReadOnlyDryRun` is `true`;
+- `planner.safeForWritePlanning` is `false`;
+- `dryRunSummary.safeForWriteApply` is `false`;
+- `dryRunSummary.proposedRepairCount` is `0`;
+- `dryRunSummary.skippedNullStatSourceEvidence` is `4`;
+- skipped source evidence lists Tobie Travaglia, Nathan Fyfe, Lachlan McNeil,
+  and Mitchell Duncan.
+
+If the command reports `blocked`, do not proceed to any write-capable work.
+Resolve the reported blockers first.
+
 ## Source-Of-Truth Map
 
 | Concern                                           | Current owner                                                              | Canonical source                                           | Notes                                                                                               |
