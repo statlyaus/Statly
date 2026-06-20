@@ -152,6 +152,7 @@ describe('DraftProvider initial hydration', () => {
             totalPicks: 264,
             round: 1,
             direction: 'FORWARD',
+            timePerPick: 60,
             participants: [],
           },
         };
@@ -187,6 +188,7 @@ describe('DraftProvider initial hydration', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('player-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('pick-time')).toHaveTextContent('60');
     });
 
     const joinCountBeforeSnapshot = emit.mock.calls.filter((call) => call[0] === 'draft:join').length;
@@ -212,6 +214,7 @@ describe('DraftProvider initial hydration', () => {
     await waitFor(() => {
       expect(screen.getByTestId('player-count')).toHaveTextContent('1');
       expect(screen.getByTestId('league-id')).toHaveTextContent('league-1');
+      expect(screen.getByTestId('pick-time')).toHaveTextContent('60');
     });
 
     expect(emit.mock.calls.filter((call) => call[0] === 'draft:join')).toHaveLength(
@@ -235,6 +238,41 @@ describe('DraftProvider initial hydration', () => {
             round: 1,
             direction: 'FORWARD',
             settings: {
+              pickSeconds: 60,
+            },
+          } as any,
+          participants: [],
+          availablePlayers: [],
+          picks: [],
+          ts: 200,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    expect(screen.getByTestId('pick-time')).toHaveTextContent('60');
+  });
+
+  it('prefers authoritative pickSeconds over stale timePerPick defaults', () => {
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Sixty Second Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+            timePerPick: 120,
+            pickSeconds: 60,
+            settings: {
+              timePerPick: 120,
               pickSeconds: 60,
             },
           } as any,

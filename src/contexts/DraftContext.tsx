@@ -156,6 +156,41 @@ function firstPresent<T>(...values: T[]): T | undefined {
   return values.find((value) => value !== undefined && value !== null);
 }
 
+function firstFiniteNumber(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    if (value === undefined || value === null || value === '') continue;
+
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return undefined;
+}
+
+function resolveDraftTimePerPick(source: Record<string, any>): number {
+  return (
+    firstFiniteNumber(
+      source.settings?.pickSeconds,
+      source.pickSeconds,
+      source.settings?.timePerPick,
+      source.timePerPick
+    ) ?? 120
+  );
+}
+
+function includesDraftTimingSource(raw: unknown): boolean {
+  const source = asRecord(raw);
+  const settings = asRecord(source.settings);
+
+  return (
+    source.pickDeadlineAt !== undefined ||
+    source.pickSeconds !== undefined ||
+    source.timePerPick !== undefined ||
+    settings.pickSeconds !== undefined ||
+    settings.timePerPick !== undefined
+  );
+}
+
 function getParticipantDraftOrder(
   participant: Record<string, any>,
   member: Record<string, any>,
@@ -246,13 +281,7 @@ function normalizeDraftCore(raw: unknown): DraftCore | null {
       draftType: String(
         source.settings?.draftType ?? source.draftType ?? 'SNAKE'
       ) as DraftCore['settings']['draftType'],
-      timePerPick: Number(
-        source.settings?.timePerPick ??
-          source.settings?.pickSeconds ??
-          source.timePerPick ??
-          source.pickSeconds ??
-          120
-      ),
+      timePerPick: resolveDraftTimePerPick(source),
       timeZone: String(source.settings?.timeZone ?? 'Australia/Melbourne'),
       enableReminders: Boolean(source.settings?.enableReminders ?? true),
       totalRounds: Number(source.settings?.totalRounds ?? 0),
@@ -293,6 +322,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   includesParticipantQueues: boolean;
   includesPicks: boolean;
   includesAvailablePlayers: boolean;
+  includesDraftTiming: boolean;
   ts?: number;
 } {
   if (!raw) {
@@ -307,10 +337,12 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       includesParticipantQueues: false,
       includesPicks: false,
       includesAvailablePlayers: false,
+      includesDraftTiming: false,
     };
   }
 
-  const draftLike = normalizeDraftCore(raw.draft ?? raw);
+  const rawDraft = raw.draft ?? raw;
+  const draftLike = normalizeDraftCore(rawDraft);
 
   const participants = normalizeParticipants((raw as any).participants);
   const includesParticipantQueues = participantQueueIncluded((raw as any).participants);
@@ -345,6 +377,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     includesParticipantQueues,
     includesPicks,
     includesAvailablePlayers,
+    includesDraftTiming: includesDraftTimingSource(rawDraft),
     ts: raw.ts,
   };
 }
@@ -417,6 +450,25 @@ function preserveDraftLeagueAffiliation(
         incomingDraft.settings?.leagueId ||
         currentDraft.settings?.leagueId ||
         currentDraft.leagueId,
+    },
+  };
+}
+
+function preserveDraftTiming(
+  incomingDraft: DraftCore | null,
+  currentDraft: DraftCore | null,
+  includesIncomingTiming: boolean
+): DraftCore | null {
+  if (!incomingDraft || !currentDraft || includesIncomingTiming) {
+    return incomingDraft;
+  }
+
+  return {
+    ...incomingDraft,
+    pickDeadlineAt: currentDraft.pickDeadlineAt ?? incomingDraft.pickDeadlineAt,
+    settings: {
+      ...incomingDraft.settings,
+      timePerPick: currentDraft.settings?.timePerPick ?? incomingDraft.settings.timePerPick,
     },
   };
 }
@@ -600,7 +652,8 @@ function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
     return { ...state, isLoading: false };
   }
 
-  const draft = preserveDraftLeagueAffiliation(snapshot.draft, state.draft);
+  const draftWithLeague = preserveDraftLeagueAffiliation(snapshot.draft, state.draft);
+  const draft = preserveDraftTiming(draftWithLeague, state.draft, snapshot.includesDraftTiming);
   const participants = snapshot.includesParticipantQueues
     ? snapshot.participants
     : mergeParticipantQueues(snapshot.participants, state.participants);
