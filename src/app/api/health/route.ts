@@ -29,6 +29,34 @@ interface ServiceStatus {
 
 const startTime = Date.now();
 
+function isProductionEnvironment(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+function isRedisExplicitlyConfigured(): boolean {
+  return Boolean(
+    process.env.REDIS_URL ||
+      process.env.REDIS_HOST ||
+      process.env.REDIS_PORT ||
+      process.env.REDIS_PASSWORD
+  );
+}
+
+function isRedisRequired(): boolean {
+  return isProductionEnvironment() || isRedisExplicitlyConfigured();
+}
+
+function redisFailureStatus(error: string, responseTime: number): ServiceStatus {
+  const required = isRedisRequired();
+
+  return {
+    status: required ? 'unhealthy' : 'degraded',
+    responseTime,
+    error: required ? error : `Optional local Redis unavailable: ${error}`,
+    lastChecked: new Date().toISOString(),
+  };
+}
+
 async function checkDatabase(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
@@ -70,12 +98,7 @@ async function checkRedis(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
     if (!redisClient.isConnected()) {
-      return {
-        status: 'unhealthy',
-        responseTime: Date.now() - start,
-        error: 'Redis not connected',
-        lastChecked: new Date().toISOString(),
-      };
+      return redisFailureStatus('Redis not connected', Date.now() - start);
     }
 
     // Test basic operations
@@ -99,17 +122,14 @@ async function checkRedis(): Promise<ServiceStatus> {
       lastChecked: new Date().toISOString(),
     };
   } catch (error) {
-    return {
-      status: 'unhealthy',
-      responseTime: Date.now() - start,
-      error:
-        process.env.NODE_ENV === 'production'
-          ? 'Cache service error'
-          : error instanceof Error
-            ? error.message
-            : 'Redis error',
-      lastChecked: new Date().toISOString(),
-    };
+    return redisFailureStatus(
+      process.env.NODE_ENV === 'production'
+        ? 'Cache service error'
+        : error instanceof Error
+          ? error.message
+          : 'Redis error',
+      Date.now() - start
+    );
   }
 }
 
@@ -149,17 +169,15 @@ function checkMemory(): ServiceStatus {
   let error: string | undefined;
 
   if (memoryUsagePercent >= 90) {
-    status = 'unhealthy';
-    error =
-      process.env.NODE_ENV === 'production'
-        ? 'High memory usage detected'
-        : `High memory usage: ${memoryUsagePercent.toFixed(1)}%`;
+    status = isProductionEnvironment() ? 'unhealthy' : 'degraded';
+    error = isProductionEnvironment()
+      ? 'High memory usage detected'
+      : `High memory usage: ${memoryUsagePercent.toFixed(1)}%`;
   } else if (memoryUsagePercent >= 75) {
     status = 'degraded';
-    error =
-      process.env.NODE_ENV === 'production'
-        ? 'Elevated memory usage'
-        : `Elevated memory usage: ${memoryUsagePercent.toFixed(1)}%`;
+    error = isProductionEnvironment()
+      ? 'Elevated memory usage'
+      : `Elevated memory usage: ${memoryUsagePercent.toFixed(1)}%`;
   } else {
     status = 'healthy';
   }
@@ -287,8 +305,11 @@ export async function PATCH(req: NextRequest) {
     ]);
 
     // For readiness, we require all critical services to be healthy
-    const criticalServices = [database, redis, metricsCheck];
-    const isReady = criticalServices.every((service) => service.status === 'healthy');
+    const criticalServices = [database, metricsCheck];
+    const redisReady = isRedisRequired()
+      ? redis.status === 'healthy'
+      : redis.status !== 'unhealthy';
+    const isReady = criticalServices.every((service) => service.status === 'healthy') && redisReady;
 
     const status = isReady ? 200 : 503;
     tracer.complete(status, {
