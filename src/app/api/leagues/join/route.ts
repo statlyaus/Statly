@@ -14,6 +14,10 @@ import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
 
+function normalizeInviteCode(code: string): string {
+  return code.replace(/[^a-z0-9]/gi, '').toUpperCase();
+}
+
 // POST /api/leagues/join - Join league by code
 export async function POST(req: NextRequest) {
   const userId = await getUserIdFromRequest(req);
@@ -30,12 +34,20 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    const normalizedCode = normalizeInviteCode(code);
+
+    if (!normalizedCode) {
+      return NextResponse.json(
+        { success: false, error: 'League code is required' },
+        { status: 400 }
+      );
+    }
 
     // Find league by code
-    console.log('🔍 Looking for league with code:', code.toUpperCase());
+    console.log('🔍 Looking for league with code:', normalizedCode);
 
     // For testing purposes, accept "123ABC" as a test code
-    if (code.toUpperCase() === '123ABC') {
+    if (normalizedCode === '123ABC') {
       console.log('🧪 Using test mode for code 123ABC');
 
       // Create a mock league for testing
@@ -80,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     const leagueSnapshot = await adminDb
       .collection('leagues')
-      .where('code', '==', code.toUpperCase())
+      .where('code', '==', normalizedCode)
       .limit(1)
       .get();
 
@@ -94,7 +106,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `League with code "${code.toUpperCase()}" not found.`,
+          error: `League with code "${normalizedCode}" not found.`,
         },
         { status: 400 }
       );
