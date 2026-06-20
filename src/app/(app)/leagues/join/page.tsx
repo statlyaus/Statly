@@ -8,6 +8,26 @@ import { CalendarPlus, CheckCircle2, ChevronLeft, KeyRound, Loader2, UserPlus } 
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
 import { AppLayout } from '@/components/navigation';
+import { LEAGUE_CONSTRAINTS } from '@/types/leagues';
+
+function normalizeInviteCode(value: string): string {
+  return value
+    .replace(/[^a-z0-9]/gi, '')
+    .toUpperCase()
+    .slice(0, LEAGUE_CONSTRAINTS.code.length);
+}
+
+function trimInviteTeamName(value: string): string {
+  return value.slice(0, LEAGUE_CONSTRAINTS.teamName.maxLength);
+}
+
+function buildJoinReturnPath(code: string, teamName: string): string {
+  const params = new URLSearchParams();
+  if (code) params.set('code', code);
+  if (teamName) params.set('team', teamName);
+  const query = params.toString();
+  return query ? `/leagues/join?${query}` : '/leagues/join';
+}
 
 export default function JoinLeaguePage() {
   const [code, setCode] = useState('');
@@ -27,12 +47,18 @@ export default function JoinLeaguePage() {
     const urlCode = searchParams?.get('code');
     const urlTeam = searchParams?.get('team');
     if (urlCode) {
-      setCode(urlCode.toUpperCase());
+      setCode(normalizeInviteCode(urlCode));
     }
     if (urlTeam) {
-      setTeamName(urlTeam);
+      setTeamName(trimInviteTeamName(urlTeam));
     }
   }, [searchParams]);
+
+  const searchCode = normalizeInviteCode(searchParams?.get('code') || '');
+  const searchTeamName = trimInviteTeamName(searchParams?.get('team') || '');
+  const loginHref = `/login?next=${encodeURIComponent(
+    buildJoinReturnPath(code || searchCode, teamName || searchTeamName)
+  )}`;
 
   const handleJoinLeague = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +80,7 @@ export default function JoinLeaguePage() {
       const result = await fetchApi('leagues/join', {
         method: 'POST',
         body: JSON.stringify({
-          code: code.trim().toUpperCase(),
+          code: normalizeInviteCode(code),
           teamName: teamName.trim() || undefined,
         }),
         headers: {
@@ -98,7 +124,7 @@ export default function JoinLeaguePage() {
               Log in to accept an invite code and attach your team to a league.
             </p>
             <Link
-              href="/login"
+              href={loginHref}
               className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
             >
               Log in
@@ -188,7 +214,7 @@ export default function JoinLeaguePage() {
                   id="code"
                   type="text"
                   value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  onChange={(e) => setCode(normalizeInviteCode(e.target.value))}
                   placeholder="ABC123"
                   maxLength={8}
                   className="mt-2 h-12 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-center font-mono text-lg font-semibold tracking-[0.2em] text-[color:var(--league-text)] outline-none transition placeholder:tracking-normal placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"

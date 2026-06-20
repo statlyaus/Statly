@@ -189,11 +189,12 @@ describe('league membership route Firestore architecture', () => {
 
     const { POST: joinLeague } = await import('../../src/app/api/leagues/join/route');
     const response = await joinLeague(
-      jsonRequest('/api/leagues/join', { code: 'keeper', teamName: 'New Team' })
+      jsonRequest('/api/leagues/join', { code: 'kee-per', teamName: 'New Team' })
     );
     const body = await response.json();
 
     expect(response.status).toBe(201);
+    expect(leaguesCollection.where).toHaveBeenCalledWith('code', '==', 'KEEPER');
     expect(body.data.member).toMatchObject({
       id: 'league-1_joining-user',
       leagueId: 'league-1',
