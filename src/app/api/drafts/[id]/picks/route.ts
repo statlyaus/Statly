@@ -81,6 +81,7 @@ export async function GET(
     const timestamps: number[] = [draftMeta.createdAt.getTime()];
     if (draftMeta.startedAt) timestamps.push(draftMeta.startedAt.getTime());
     if (draftMeta.completedAt) timestamps.push(draftMeta.completedAt.getTime());
+    if (draftMeta.pickStartedAt) timestamps.push(draftMeta.pickStartedAt.getTime());
     if (latestPick?.madeAt) timestamps.push(latestPick.madeAt.getTime());
     const lastUpdated = new Date(Math.max(...timestamps));
 
@@ -100,9 +101,8 @@ export async function GET(
       return notModified;
     }
 
-    const conditionalSince = updatedSince || since;
-    if (conditionalSince) {
-      const sinceDate = new Date(conditionalSince);
+    if (updatedSince) {
+      const sinceDate = new Date(updatedSince);
       if (!Number.isNaN(sinceDate.getTime()) && lastUpdated <= sinceDate) {
         const notModified = new Response(null, { status: 304 });
         notModified.headers.set(
