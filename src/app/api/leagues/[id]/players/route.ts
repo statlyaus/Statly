@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 export const runtime = 'nodejs';
@@ -21,6 +22,67 @@ interface AvailableIndexDoc {
   position?: string;
   available?: boolean;
   team?: string;
+}
+
+async function getPrismaLeaguePlayers(input: {
+  leagueId: string;
+  owned: boolean;
+  limit: number;
+  cursor?: string;
+  team?: string;
+  position?: string;
+}) {
+  const ownerships = await prisma.leagueRosterPlayer.findMany({
+    where: { leagueId: input.leagueId },
+    select: { playerId: true, memberId: true },
+  });
+  const ownedPlayerIds = ownerships.map((ownership) => ownership.playerId);
+
+  if (input.owned && ownedPlayerIds.length === 0) {
+    return { items: [], nextCursor: null, total: 0 };
+  }
+
+  const idFilter: { in?: string[]; notIn?: string[]; gt?: string } = {};
+  if (input.owned) {
+    idFilter.in = ownedPlayerIds;
+  } else if (ownedPlayerIds.length > 0) {
+    idFilter.notIn = ownedPlayerIds;
+  }
+  if (input.cursor) {
+    idFilter.gt = input.cursor;
+  }
+
+  const players = await prisma.player.findMany({
+    where: {
+      active: true,
+      ...(Object.keys(idFilter).length > 0 ? { id: idFilter } : {}),
+      ...(input.team ? { club: input.team } : {}),
+      ...(input.position ? { position: input.position } : {}),
+    },
+    orderBy: { id: 'asc' },
+    take: input.limit,
+    select: {
+      id: true,
+      name: true,
+      club: true,
+      position: true,
+    },
+  });
+
+  const items = players.map((player) => ({
+    id: player.id,
+    name: player.name,
+    team: player.club,
+    position: player.position,
+    ownership: input.owned ? 100 : 0,
+  }));
+  const last = items[items.length - 1];
+
+  return {
+    items,
+    nextCursor: players.length === input.limit && last ? last.id : null,
+    total: items.length,
+  };
 }
 
 // GET /api/leagues/[id]/players?limit=100&cursor=<lastId>&team=XXX&position=YYY&owned=true|false
@@ -47,6 +109,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const position = url.searchParams.get('position') || undefined;
     const ownedStr = url.searchParams.get('owned');
     const owned = ownedStr === 'true' ? true : ownedStr === 'false' ? false : undefined;
+
+    if (typeof owned === 'boolean') {
+      const prismaLeague = await prisma.league.findUnique({
+        where: { id: leagueId },
+        select: { id: true },
+      });
+
+      if (prismaLeague) {
+        const result = await getPrismaLeaguePlayers({
+          leagueId,
+          owned,
+          limit,
+          cursor,
+          team,
+          position,
+        });
+        return NextResponse.json(result, { status: 200 });
+      }
+    }
 
     // Prefer per-league availability index when filtering by owned/unowned
     if (typeof owned === 'boolean') {

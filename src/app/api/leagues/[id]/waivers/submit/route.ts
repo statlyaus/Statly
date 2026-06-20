@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { logger, withTiming } from '@/lib/logger';
 import { revalidateTag } from 'next/cache';
@@ -40,6 +41,14 @@ export const POST = withMetrics(
       const access = await getLeagueMembershipAccess(leagueId, userId);
       if (!access.isMember) {
         return NextResponse.json({ error: 'League membership required' }, { status: 403 });
+      }
+
+      const prismaOwnership = await prisma.leagueRosterPlayer.findFirst({
+        where: { leagueId, playerId: String(playerId) },
+        select: { playerId: true, memberId: true },
+      });
+      if (prismaOwnership) {
+        return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
       // Ownership checks (doc read + roster scan) concurrently to reduce latency
