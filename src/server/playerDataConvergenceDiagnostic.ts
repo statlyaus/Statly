@@ -244,135 +244,200 @@ function recommendNextAction(severity: PlayerDataConvergenceSeverity): string {
   return 'No convergence blockers detected in these in-memory fixtures; Phase 2 temp DB dry-run can be planned when real data is loaded safely.';
 }
 
+type CanonicalIndexes = ReturnType<typeof buildCanonicalIndexes>;
+
+type DiagnosticAccumulator = {
+  matches: PlayerDataRecordMatch[];
+  unmatchedSourceRecords: PlayerDataUnmatchedSourceRecord[];
+  ambiguousNameMatches: PlayerDataAmbiguousNameMatch[];
+  missingExpectedCategoryValues: PlayerDataMissingCategoryValue[];
+  deprecatedCategoryKeys: PlayerDataDeprecatedCategoryKey[];
+  sourceIdentityIndexes: Map<string, number[]>;
+  matchedCanonicalIds: Set<string>;
+  categoryCoverageCounts: Map<string, number>;
+};
+
+function createAccumulator(expectedCategoryKeys: readonly string[]): DiagnosticAccumulator {
+  return {
+    matches: [],
+    unmatchedSourceRecords: [],
+    ambiguousNameMatches: [],
+    missingExpectedCategoryValues: [],
+    deprecatedCategoryKeys: [],
+    sourceIdentityIndexes: new Map<string, number[]>(),
+    matchedCanonicalIds: new Set<string>(),
+    categoryCoverageCounts: new Map(expectedCategoryKeys.map((key) => [key, 0])),
+  };
+}
+
+function trackSourceIdentity(
+  sourceIdentityIndexes: Map<string, number[]>,
+  identity: string,
+  sourceIndex: number
+): void {
+  const identityIndexes = sourceIdentityIndexes.get(identity) ?? [];
+  identityIndexes.push(sourceIndex);
+  sourceIdentityIndexes.set(identity, identityIndexes);
+}
+
+function collectCategoryDiagnostics(
+  record: PlayerDataSourceRecord,
+  sourceIndex: number,
+  identity: string,
+  expectedCategoryKeys: readonly string[],
+  accumulator: DiagnosticAccumulator
+): void {
+  for (const category of expectedCategoryKeys) {
+    if (hasCategoryValue(record, category)) {
+      accumulator.categoryCoverageCounts.set(
+        category,
+        (accumulator.categoryCoverageCounts.get(category) ?? 0) + 1
+      );
+    } else {
+      accumulator.missingExpectedCategoryValues.push({
+        sourceIndex,
+        sourceIdentity: identity,
+        category,
+      });
+    }
+  }
+
+  for (const key of categoryKeys(record)) {
+    const suggestedKey = DEPRECATED_CATEGORY_KEYS[key];
+    if (suggestedKey && expectedCategoryKeys.includes(suggestedKey)) {
+      accumulator.deprecatedCategoryKeys.push({
+        sourceIndex,
+        sourceIdentity: identity,
+        key,
+        suggestedKey,
+      });
+    }
+  }
+}
+
+function findRecordMatch(
+  sourceId: string | undefined,
+  name: string | undefined,
+  team: string | undefined,
+  indexes: CanonicalIndexes
+): { player: CanonicalPlayerRow; method: PlayerDataMatchMethod } | undefined {
+  const directMatch = sourceId ? indexes.byDirectId.get(sourceId) : undefined;
+  if (directMatch) return { player: directMatch, method: 'directId' };
+
+  const canonicalId = sourceId ? buildCanonicalPlayerId(sourceId) : undefined;
+  const canonicalMatch = canonicalId ? indexes.byCanonicalId.get(canonicalId) : undefined;
+  if (canonicalMatch) return { player: canonicalMatch, method: 'canonicalId' };
+
+  const exactNameTeamKey = nameTeamKey(name, team);
+  const nameTeamMatch = exactNameTeamKey ? indexes.byNameTeam.get(exactNameTeamKey) : undefined;
+  if (nameTeamMatch) return { player: nameTeamMatch, method: 'nameTeam' };
+
+  return undefined;
+}
+
+function collectMatchDiagnostics(
+  record: PlayerDataSourceRecord,
+  sourceIndex: number,
+  identity: string,
+  indexes: CanonicalIndexes,
+  accumulator: DiagnosticAccumulator
+): void {
+  const sourceId = readSourceId(record);
+  const name = readSourceName(record);
+  const team = readTeam(record);
+  const match = findRecordMatch(sourceId, name, team, indexes);
+
+  if (match) {
+    accumulator.matches.push({
+      sourceIndex,
+      sourceIdentity: identity,
+      canonicalPlayerId: match.player.id,
+      method: match.method,
+    });
+    accumulator.matchedCanonicalIds.add(match.player.id);
+    return;
+  }
+
+  const nameCandidates = indexes.byName.get(normalizeText(name));
+  if (nameCandidates && nameCandidates.length > 1) {
+    accumulator.ambiguousNameMatches.push({
+      sourceIndex,
+      sourceIdentity: identity,
+      name: name ?? '',
+      team,
+      candidatePlayerIds: nameCandidates.map((player) => player.id),
+    });
+    return;
+  }
+
+  accumulator.unmatchedSourceRecords.push({ sourceIndex, sourceIdentity: identity, name, team });
+}
+
+function collectSourceRecordDiagnostics(
+  record: PlayerDataSourceRecord,
+  sourceIndex: number,
+  expectedCategoryKeys: readonly string[],
+  indexes: CanonicalIndexes,
+  accumulator: DiagnosticAccumulator
+): void {
+  const identity = sourceIdentity(record);
+  trackSourceIdentity(accumulator.sourceIdentityIndexes, identity, sourceIndex);
+  collectCategoryDiagnostics(record, sourceIndex, identity, expectedCategoryKeys, accumulator);
+  collectMatchDiagnostics(record, sourceIndex, identity, indexes, accumulator);
+}
+
 export function diagnosePlayerDataConvergence(
   input: PlayerDataConvergenceInput
 ): PlayerDataConvergenceDiagnostic {
   const indexes = buildCanonicalIndexes(input.canonicalPlayers);
   const sourceRecords = [...input.sourceRecords, ...(input.rankingRecords ?? [])];
   const totalRankingRecords = input.rankingRecords?.length ?? 0;
-  const matches: PlayerDataRecordMatch[] = [];
-  const unmatchedSourceRecords: PlayerDataUnmatchedSourceRecord[] = [];
-  const ambiguousNameMatches: PlayerDataAmbiguousNameMatch[] = [];
-  const missingExpectedCategoryValues: PlayerDataMissingCategoryValue[] = [];
-  const deprecatedCategoryKeys: PlayerDataDeprecatedCategoryKey[] = [];
-  const sourceIdentityIndexes = new Map<string, number[]>();
-  const matchedCanonicalIds = new Set<string>();
-  const categoryCoverageCounts = new Map(input.expectedCategoryKeys.map((key) => [key, 0]));
+  const accumulator = createAccumulator(input.expectedCategoryKeys);
 
   sourceRecords.forEach((record, sourceIndex) => {
-    const identity = sourceIdentity(record);
-    const sourceId = readSourceId(record);
-    const name = readSourceName(record);
-    const team = readTeam(record);
-    const identityIndexes = sourceIdentityIndexes.get(identity) ?? [];
-    identityIndexes.push(sourceIndex);
-    sourceIdentityIndexes.set(identity, identityIndexes);
-
-    for (const category of input.expectedCategoryKeys) {
-      if (hasCategoryValue(record, category)) {
-        categoryCoverageCounts.set(category, (categoryCoverageCounts.get(category) ?? 0) + 1);
-      } else {
-        missingExpectedCategoryValues.push({ sourceIndex, sourceIdentity: identity, category });
-      }
-    }
-
-    for (const key of categoryKeys(record)) {
-      const suggestedKey = DEPRECATED_CATEGORY_KEYS[key];
-      if (suggestedKey && input.expectedCategoryKeys.includes(suggestedKey)) {
-        deprecatedCategoryKeys.push({ sourceIndex, sourceIdentity: identity, key, suggestedKey });
-      }
-    }
-
-    const directMatch = sourceId ? indexes.byDirectId.get(sourceId) : undefined;
-    if (directMatch) {
-      matches.push({
-        sourceIndex,
-        sourceIdentity: identity,
-        canonicalPlayerId: directMatch.id,
-        method: 'directId',
-      });
-      matchedCanonicalIds.add(directMatch.id);
-      return;
-    }
-
-    const canonicalCandidates = [sourceId ? buildCanonicalPlayerId(sourceId) : undefined].filter(
-      (value): value is string => Boolean(value)
+    collectSourceRecordDiagnostics(
+      record,
+      sourceIndex,
+      input.expectedCategoryKeys,
+      indexes,
+      accumulator
     );
-    const canonicalMatch = canonicalCandidates
-      .map((candidate) => indexes.byCanonicalId.get(candidate))
-      .find((candidate): candidate is CanonicalPlayerRow => Boolean(candidate));
-
-    if (canonicalMatch) {
-      matches.push({
-        sourceIndex,
-        sourceIdentity: identity,
-        canonicalPlayerId: canonicalMatch.id,
-        method: 'canonicalId',
-      });
-      matchedCanonicalIds.add(canonicalMatch.id);
-      return;
-    }
-
-    const exactNameTeamKey = nameTeamKey(name, team);
-    const nameTeamMatch = exactNameTeamKey ? indexes.byNameTeam.get(exactNameTeamKey) : undefined;
-    if (nameTeamMatch) {
-      matches.push({
-        sourceIndex,
-        sourceIdentity: identity,
-        canonicalPlayerId: nameTeamMatch.id,
-        method: 'nameTeam',
-      });
-      matchedCanonicalIds.add(nameTeamMatch.id);
-      return;
-    }
-
-    const nameCandidates = indexes.byName.get(normalizeText(name));
-    if (nameCandidates && nameCandidates.length > 1) {
-      ambiguousNameMatches.push({
-        sourceIndex,
-        sourceIdentity: identity,
-        name: name ?? '',
-        team,
-        candidatePlayerIds: nameCandidates.map((player) => player.id),
-      });
-      return;
-    }
-
-    unmatchedSourceRecords.push({ sourceIndex, sourceIdentity: identity, name, team });
   });
 
-  const duplicateSourceIdentities = [...sourceIdentityIndexes.entries()]
+  const duplicateSourceIdentities = [...accumulator.sourceIdentityIndexes.entries()]
     .filter(([, indexes]) => indexes.length > 1)
     .map(([identity, indexes]) => ({ sourceIdentity: identity, sourceIndexes: indexes }));
   const unmatchedCanonicalPlayers = input.canonicalPlayers
-    .filter((player) => !matchedCanonicalIds.has(player.id))
+    .filter((player) => !accumulator.matchedCanonicalIds.has(player.id))
     .map((player) => ({
       canonicalPlayerId: player.id,
       name: player.name,
       team: readTeam(player),
     }));
   const categoryCoverage = input.expectedCategoryKeys.map((category) => {
-    const present = categoryCoverageCounts.get(category) ?? 0;
+    const present = accumulator.categoryCoverageCounts.get(category) ?? 0;
     return {
       category,
       present,
       missing: sourceRecords.length - present,
     };
   });
-  const matchedRecordsByDirectId = matches.filter((match) => match.method === 'directId').length;
-  const matchedRecordsByCanonicalId = matches.filter(
+  const matchedRecordsByDirectId = accumulator.matches.filter(
+    (match) => match.method === 'directId'
+  ).length;
+  const matchedRecordsByCanonicalId = accumulator.matches.filter(
     (match) => match.method === 'canonicalId'
   ).length;
-  const matchedRecordsByNormalizedNameTeam = matches.filter(
+  const matchedRecordsByNormalizedNameTeam = accumulator.matches.filter(
     (match) => match.method === 'nameTeam'
   ).length;
   const severity = severityFor({
-    ambiguousNameMatches: ambiguousNameMatches.length,
-    unmatchedSourceRecords: unmatchedSourceRecords.length,
+    ambiguousNameMatches: accumulator.ambiguousNameMatches.length,
+    unmatchedSourceRecords: accumulator.unmatchedSourceRecords.length,
     unmatchedCanonicalPlayers: unmatchedCanonicalPlayers.length,
     duplicateSourceIdentities: duplicateSourceIdentities.length,
-    missingExpectedCategoryValues: missingExpectedCategoryValues.length,
-    deprecatedCategoryKeys: deprecatedCategoryKeys.length,
+    missingExpectedCategoryValues: accumulator.missingExpectedCategoryValues.length,
+    deprecatedCategoryKeys: accumulator.deprecatedCategoryKeys.length,
   });
 
   return {
@@ -384,20 +449,20 @@ export function diagnosePlayerDataConvergence(
       matchedRecordsByCanonicalId,
       matchedRecordsByNormalizedNameTeam,
       unmatchedCanonicalPlayers: unmatchedCanonicalPlayers.length,
-      unmatchedSourceRecords: unmatchedSourceRecords.length,
-      ambiguousNameMatches: ambiguousNameMatches.length,
+      unmatchedSourceRecords: accumulator.unmatchedSourceRecords.length,
+      ambiguousNameMatches: accumulator.ambiguousNameMatches.length,
       duplicateSourceIdentities: duplicateSourceIdentities.length,
-      missingExpectedCategoryValues: missingExpectedCategoryValues.length,
-      deprecatedCategoryKeys: deprecatedCategoryKeys.length,
+      missingExpectedCategoryValues: accumulator.missingExpectedCategoryValues.length,
+      deprecatedCategoryKeys: accumulator.deprecatedCategoryKeys.length,
       severity,
     },
-    matches,
+    matches: accumulator.matches,
     unmatchedCanonicalPlayers,
-    unmatchedSourceRecords,
-    ambiguousNameMatches,
+    unmatchedSourceRecords: accumulator.unmatchedSourceRecords,
+    ambiguousNameMatches: accumulator.ambiguousNameMatches,
     duplicateSourceIdentities,
-    missingExpectedCategoryValues,
-    deprecatedCategoryKeys,
+    missingExpectedCategoryValues: accumulator.missingExpectedCategoryValues,
+    deprecatedCategoryKeys: accumulator.deprecatedCategoryKeys,
     categoryCoverage,
     recommendedNextAction: recommendNextAction(severity),
   };
