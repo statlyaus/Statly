@@ -3,6 +3,9 @@
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
+import Image from 'next/image';
+
+import { getTeamLogo } from '@/lib/teamLogos';
 import { cn } from '@/lib/utils';
 
 export type DraftLeftRailMode = 'roster' | 'queue' | 'watchlist';
@@ -114,11 +117,23 @@ function RosterPanel({ rosterSlots }: { rosterSlots: DraftLeftRailRosterSlot[] }
               </div>
 
               {slot.player ? (
-                <div className="mt-2 min-w-0">
-                  <p className="truncate font-semibold text-foreground">{slot.player.name}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {slot.player.position} / {slot.player.club}
-                  </p>
+                <div className="mt-2 flex min-w-0 items-center gap-2">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-background p-1 shadow-sm">
+                    <Image
+                      src={getTeamLogo(slot.player.club)}
+                      alt=""
+                      aria-hidden="true"
+                      width={24}
+                      height={24}
+                      className="size-6 object-contain"
+                    />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-foreground">{slot.player.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {slot.player.position} / {slot.player.club}
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground">Awaiting selection</p>

@@ -67,6 +67,9 @@ describe('DraftLeftRail', () => {
       'true'
     );
     expect(screen.getByText('Caleb Daniel')).toBeInTheDocument();
+    const filledSlot = screen.getByText('Caleb Daniel').closest('li');
+    expect(filledSlot?.querySelector('img')).toHaveAttribute('src', '/logos/North Melbourne.svg');
+    expect(filledSlot?.querySelector('img')).toHaveAttribute('alt', '');
     expect(screen.getByText('Empty slot')).toBeInTheDocument();
     expect(screen.queryByText('Queue panel content')).not.toBeInTheDocument();
   });

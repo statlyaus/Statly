@@ -122,28 +122,31 @@ function PlayerIdentityCell({
             width={32}
             height={32}
             unoptimized={teamLogo.endsWith('.svg')}
-            className="h-8 max-w-8 object-contain"
-            style={{ width: 'auto' }}
+            className="size-8 object-contain"
           />
         </span>
         <div className="min-w-0">
           <div className="truncate font-semibold text-foreground">{player.name}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-semibold text-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs leading-none text-muted-foreground">
+            <span className="inline-flex h-6 items-center rounded-md border border-border bg-muted px-2 font-semibold text-foreground">
               {player.position}
             </span>
-            <span className="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground">
+            <span className="inline-flex h-6 items-center rounded-md border border-border bg-background px-2 font-medium text-foreground">
               {teamAbbreviation}
             </span>
-            <span>{player.club}</span>
-            {player.adp && <span className="rounded-md bg-muted px-2 py-0.5">ADP {player.adp}</span>}
+            <span className="inline-flex h-6 items-center">{player.club}</span>
+            {player.adp && (
+              <span className="inline-flex h-6 items-center rounded-md bg-muted px-2">
+                ADP {player.adp}
+              </span>
+            )}
             {isQueued && (
-              <span className="rounded-md bg-primary/10 px-2 py-0.5 font-medium text-primary">
+              <span className="inline-flex h-6 items-center rounded-md bg-primary/10 px-2 font-medium text-primary">
                 Queued
               </span>
             )}
             {isWatched && (
-              <span className="rounded-md bg-accent px-2 py-0.5 font-medium text-accent-foreground">
+              <span className="inline-flex h-6 items-center rounded-md bg-accent px-2 font-medium text-accent-foreground">
                 Watchlist
               </span>
             )}
