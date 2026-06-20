@@ -59,6 +59,7 @@ ladder steps:
 | Phase 4 pure action planner         | Completed | `src/server/playerDataConvergencePlanner.ts` converts diagnostics into non-writing recommendations.                          |
 | Phase 4b tracked-data planner guard | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies warning-only tracked data stays safe for read-only follow-up. |
 | Phase 5 temp DB simulation contract | Completed | `src/server/playerDataConvergenceTempDbSimulation.ts` projects dry-run evidence into non-writing temp DB simulation gates.   |
+| Phase 6 temp DB preview runner      | Completed | `player-data:temp-db-runner` writes preview/audit evidence only to disposable `/tmp/statly-verify-*.db` tables.              |
 
 The current tracked-data warning is narrow and understood: four
 `player_stats_2025.json` rows have all nine real-data category values as `null`.
@@ -268,6 +269,41 @@ Expected UAT result on current tracked data:
 
 If the command reports `blocked`, do not proceed to any write-capable work.
 Resolve the reported blockers first.
+
+### Temp DB Preview Runner UAT Command
+
+The preview runner is the first real runner boundary. It writes audit evidence
+only to preview tables inside the disposable temp DB. It does not write Statly
+product tables, Prisma `Player` rows, Firestore, local JSON, rankings, fixtures,
+or generated files.
+
+```bash
+export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
+export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+: > "$STATLY_VERIFY_DB"
+npm --silent run player-data:temp-db-runner
+rm -f "$STATLY_VERIFY_DB"
+```
+
+Expected UAT result on current tracked data:
+
+- top-level `status` is `readyForUat`;
+- `preview.status` is `previewWritten`;
+- `preview.safeForProductWrites` is `false`;
+- `preview.previewTables` lists only
+  `player_data_convergence_preview_runs` and
+  `player_data_convergence_preview_evidence`;
+- `preview.previewEvidenceRows` is `4`;
+- `preview.acceptance.statusReadyForUat` is `true`;
+- `preview.acceptance.simulationReady` is `true`;
+- `preview.acceptance.proposedWriteCountZero` is `true`;
+- `preview.acceptance.writeApplyBlocked` is `true`;
+- `preview.acceptance.tempDatabasePresent` is `true`;
+- nested `report.simulation.proposedWriteCount` remains `0`;
+- nested `report.simulation.safeForWriteApply` remains `false`.
+
+If the preview runner reports `blocked`, stop. Do not add product writes or
+apply behavior until the blockers are resolved in a separate approved task.
 
 ## Source-Of-Truth Map
 
