@@ -60,6 +60,7 @@ ladder steps:
 | Phase 4b tracked-data planner guard | Completed | `tests/unit/playerDataConvergenceTrackedData.test.ts` verifies warning-only tracked data stays safe for read-only follow-up. |
 | Phase 5 temp DB simulation contract | Completed | `src/server/playerDataConvergenceTempDbSimulation.ts` projects dry-run evidence into non-writing temp DB simulation gates.   |
 | Phase 6 temp DB preview runner      | Completed | `player-data:temp-db-runner` writes preview/audit evidence only to disposable `/tmp/statly-verify-*.db` tables.              |
+| Phase 7 pure apply plan             | Completed | `src/server/playerDataConvergenceApplyPlan.ts` converts evidence into explicit zero-repair apply plans for current data.     |
 
 The current tracked-data warning is narrow and understood: four
 `player_stats_2025.json` rows have all nine real-data category values as `null`.
@@ -70,9 +71,11 @@ The current safety position is:
 
 - identity convergence is good for tracked data;
 - the tracked-data shape is warning-only and safe for read-only follow-up;
+- the current apply plan has zero product mutations and preserves null stat
+  rows as skipped source evidence;
 - write-capable convergence remains unsafe without a separate approved plan;
-- no runner, package script, Prisma write path, Firestore write path, or durable
-  repair workflow exists yet.
+- no Prisma product write path, Firestore write path, local JSON write path, or
+  durable repair workflow exists yet.
 
 The next possible phase is a temp-DB-only write dry-run design. That design must
 use `/tmp/statly-verify-*.db`, avoid production and protected local database
