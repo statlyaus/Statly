@@ -10,7 +10,7 @@ export type PlayerDataConvergenceActionKind =
   | 'identityReviewRequired'
   | 'ambiguousNameReviewRequired'
   | 'sourceRecordReviewRequired'
-  | 'duplicateSourceIdentityReviewRequired'
+  | 'multiRowSourceEvidenceReviewRequired'
   | 'staleCategoryKeyMappingReviewRequired'
   | 'missingExpectedCategoryValueReviewRequired'
   | 'unsafeForWritePlanning'
@@ -206,9 +206,9 @@ function appendIssueActions(
   if (diagnostic.duplicateSourceIdentities.length > 0) {
     actions.push(
       action(
-        'duplicateSourceIdentityReviewRequired',
+        'multiRowSourceEvidenceReviewRequired',
         'warning',
-        'Duplicate source identities need source-quality review before any convergence plan consumes them.',
+        'Repeated matched source identities are multi-row source evidence, not identity repair candidates; review source coverage before any write-capable plan consumes them.',
         {
           count: diagnostic.duplicateSourceIdentities.length,
           sourceIdentities: unique(

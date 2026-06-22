@@ -168,6 +168,32 @@ describe('player data convergence apply plan', () => {
     );
   });
 
+  it('classifies repeated source rows as multi-row evidence, not product repairs', () => {
+    const result = applyPlan({
+      canonicalPlayers: [{ id: 'known_player', name: 'Known Player', club: 'Adelaide' }],
+      sourceRecords: [
+        { player_uid: 'known_player', player_name: 'Known Player', stats: completeStats() },
+        { player_uid: 'known_player', player_name: 'Known Player', stats: completeStats() },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      status: 'requiresReview',
+      safeForTempDbApplySimulation: true,
+      safeForProductApply: false,
+      productMutationCount: 0,
+      productMutations: [],
+      blockers: [],
+    });
+    expect(result.skippedEvidence).toContainEqual(
+      expect.objectContaining({
+        kind: 'multiRowSourceEvidence',
+        count: 1,
+        sourceIdentities: ['known_player'],
+      })
+    );
+  });
+
   it('stays pure and does not import database or runner dependencies', () => {
     const source = readFileSync('src/server/playerDataConvergenceApplyPlan.ts', 'utf8');
     const imports = source

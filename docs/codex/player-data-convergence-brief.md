@@ -156,7 +156,8 @@ database queries or fallback assumptions. Every dry-run report must include:
 - ambiguous name matches;
 - unmatched canonical players;
 - unmatched source records;
-- duplicate source identities;
+- repeated source identities, reported by the planner as multi-row source
+  evidence when they already match canonical players;
 - missing expected category values;
 - stale or deprecated category keys;
 - skipped null-stat source evidence;
@@ -174,7 +175,7 @@ planner must skip or block:
 - ambiguous name matches;
 - unmatched source records;
 - unknown or malformed names;
-- duplicate source identities without a reviewed rule;
+- repeated matched source identities without a reviewed coverage rule;
 - stale category mappings without an explicit mapping decision;
 - partial missing category values;
 - rows where all expected category values are `null`;
@@ -182,6 +183,10 @@ planner must skip or block:
 
 The four currently tracked all-null stat rows remain skipped source evidence and
 must not become identity repair candidates.
+
+The currently tracked repeated source identities are also skipped source
+evidence. They represent multiple matched stat rows for the same player/team in
+the source data, not automatic player identity repairs.
 
 ### Human Approval Gates
 
