@@ -248,4 +248,23 @@ describe('player data convergence runner summary', () => {
       ])
     );
   });
+
+  it('blocks with explicit stage blockers when preview or apply simulation statuses are invalid', () => {
+    const result = summarizePlayerDataConvergenceRunner({
+      report: report(),
+      preview: preview({ status: 'blocked' }),
+      applySimulation: applySimulation({ status: 'blocked' }),
+    });
+
+    expect(result.status).toBe('blocked');
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ stage: 'preview', kind: 'previewStatusInvalid' }),
+        expect.objectContaining({
+          stage: 'applySimulation',
+          kind: 'applySimulationStatusInvalid',
+        }),
+      ])
+    );
+  });
 });

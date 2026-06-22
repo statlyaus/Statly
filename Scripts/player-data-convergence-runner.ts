@@ -35,6 +35,40 @@ function prismaExecutor(prisma: PrismaClient): PlayerDataConvergenceTempDbExecut
   };
 }
 
+function validateTempDatabaseUrl(databaseUrl: string, statlyVerifyDb: string): string {
+  const trimmedUrl = databaseUrl.trim();
+  const trimmedPath = statlyVerifyDb.trim();
+
+  if (!trimmedUrl || !trimmedPath) {
+    throw new Error(
+      'DATABASE_URL and STATLY_VERIFY_DB must both point to a /tmp/statly-verify-*.db file.'
+    );
+  }
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(trimmedUrl);
+  } catch {
+    throw new Error('DATABASE_URL must be a valid file:// URL for the temp verification DB.');
+  }
+
+  const urlPath = decodeURIComponent(parsedUrl.pathname);
+
+  if (
+    parsedUrl.protocol !== 'file:' ||
+    !trimmedPath.startsWith('/tmp/statly-verify-') ||
+    !trimmedPath.endsWith('.db') ||
+    urlPath !== trimmedPath
+  ) {
+    throw new Error(
+      'DATABASE_URL must be file:///tmp/statly-verify-*.db and match STATLY_VERIFY_DB.'
+    );
+  }
+
+  return trimmedUrl;
+}
+
 async function buildReport() {
   const repositoryRoot = process.cwd();
   const statlyVerifyDb = process.env.STATLY_VERIFY_DB ?? '';
@@ -55,8 +89,11 @@ async function buildReport() {
 }
 
 async function main(): Promise<void> {
-  const databaseUrl = process.env.DATABASE_URL ?? '';
   const report = await buildReport();
+  const databaseUrl = validateTempDatabaseUrl(
+    report.dryRunPlan.tempDatabase.databaseUrl,
+    report.dryRunPlan.tempDatabase.statlyVerifyDb
+  );
   let preview = null;
   let applySimulation = null;
 

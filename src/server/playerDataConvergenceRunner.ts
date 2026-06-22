@@ -79,9 +79,21 @@ function previewBlockers(
     ];
   }
 
-  return preview.blockers.map((blocker: PlayerDataConvergenceTempDbRunnerBlocker) =>
+  const blockers = preview.blockers.map((blocker: PlayerDataConvergenceTempDbRunnerBlocker) =>
     runnerBlocker('preview', blocker.kind, blocker.message)
   );
+
+  if (preview.status !== 'previewWritten' && blockers.length === 0) {
+    blockers.push(
+      runnerBlocker(
+        'preview',
+        'previewStatusInvalid',
+        `The temp DB preview stage finished with status "${preview.status}".`
+      )
+    );
+  }
+
+  return blockers;
 }
 
 function applySimulationBlockers(
@@ -97,10 +109,22 @@ function applySimulationBlockers(
     ];
   }
 
-  return applySimulation.blockers.map(
+  const blockers = applySimulation.blockers.map(
     (blocker: PlayerDataConvergenceTempDbApplySimulationBlocker) =>
       runnerBlocker('applySimulation', blocker.kind, blocker.message)
   );
+
+  if (applySimulation.status !== 'simulationApplied' && blockers.length === 0) {
+    blockers.push(
+      runnerBlocker(
+        'applySimulation',
+        'applySimulationStatusInvalid',
+        `The temp DB apply simulation stage finished with status "${applySimulation.status}".`
+      )
+    );
+  }
+
+  return blockers;
 }
 
 function dryRunBlockers(
