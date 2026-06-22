@@ -25,7 +25,7 @@ export type PlayerDataConvergenceApplyPlanBlocker = {
 
 export type PlayerDataConvergenceSkippedEvidenceKind =
   | 'nullStatSourceEvidence'
-  | 'duplicateSourceIdentity'
+  | 'multiRowSourceEvidence'
   | 'missingCategoryValue'
   | 'staleCategoryKey'
   | 'unmatchedCanonicalPlayer';
@@ -97,10 +97,11 @@ function toSkippedEvidence(
     };
   }
 
-  if (action.kind === 'duplicateSourceIdentityReviewRequired') {
+  if (action.kind === 'multiRowSourceEvidenceReviewRequired') {
     return {
-      kind: 'duplicateSourceIdentity',
-      message: 'Duplicate source identities need source-quality review before apply planning.',
+      kind: 'multiRowSourceEvidence',
+      message:
+        'Repeated matched source identities are skipped as multi-row source evidence, not product repair candidates.',
       count: action.count,
       sourceIdentities: action.sourceIdentities,
     };

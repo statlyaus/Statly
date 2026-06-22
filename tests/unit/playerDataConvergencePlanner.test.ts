@@ -158,7 +158,7 @@ describe('player data convergence planner', () => {
     expect(result.safeForNextReadOnlyDryRun).toBe(false);
   });
 
-  it('requires source-quality review for duplicate source identities', () => {
+  it('classifies repeated matched source identities as multi-row source evidence', () => {
     const result = plan({
       canonicalPlayers: [{ id: 'known_player', name: 'Known Player', club: 'Adelaide' }],
       sourceRecords: [
@@ -169,13 +169,14 @@ describe('player data convergence planner', () => {
 
     expect(result.actions).toContainEqual(
       expect.objectContaining({
-        kind: 'duplicateSourceIdentityReviewRequired',
+        kind: 'multiRowSourceEvidenceReviewRequired',
         severity: 'warning',
         count: 1,
         sourceIdentities: ['known_player'],
       })
     );
     expect(result.safeForNextReadOnlyDryRun).toBe(true);
+    expect(result.safeForWritePlanning).toBe(false);
   });
 
   it('requires mapping review for stale snake_case category keys', () => {
