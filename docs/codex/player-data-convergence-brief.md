@@ -62,6 +62,7 @@ ladder steps:
 | Phase 6 temp DB preview runner      | Completed | `player-data:temp-db-runner` writes preview/audit evidence only to disposable `/tmp/statly-verify-*.db` tables.              |
 | Phase 7 pure apply plan             | Completed | `src/server/playerDataConvergenceApplyPlan.ts` converts evidence into explicit zero-repair apply plans for current data.     |
 | Phase 8 temp DB apply simulation    | Completed | `player-data:temp-db-apply-simulation` applies the zero-mutation plan to temp-only product-shaped simulation tables.         |
+| Phase 9 non-durable runner          | Completed | `player-data:runner` orchestrates dry-run, temp DB preview, and temp DB apply simulation into one concise UAT summary.       |
 
 The current tracked-data warning is narrow and understood: four
 `player_stats_2025.json` rows have all nine real-data category values as `null`.
@@ -76,6 +77,8 @@ The current safety position is:
   rows as skipped source evidence;
 - the current temp-DB apply simulation proves that zero-mutation plan without
   touching durable product data;
+- the non-durable runner now provides one command for the approved temp DB UAT
+  ladder;
 - write-capable convergence remains unsafe without a separate approved plan;
 - no Prisma product write path, Firestore write path, local JSON write path, or
   durable repair workflow exists yet.
@@ -356,6 +359,44 @@ Expected UAT result on current tracked data:
 If the apply simulation reports `blocked`, stop. Do not add durable apply
 behavior or product mutations until the blockers are resolved in a separate
 approved task.
+
+### Consolidated Runner UAT Command
+
+The consolidated runner is the current top-level UAT command. It runs the
+tracked dry-run, temp DB preview, and temp DB apply simulation, then prints a
+concise summary. It does not add durable apply behavior and keeps product writes
+blocked.
+
+```bash
+export STATLY_VERIFY_DB="/tmp/statly-verify-$(date +%Y%m%d%H%M%S).db"
+export DATABASE_URL="file://${STATLY_VERIFY_DB}"
+: > "$STATLY_VERIFY_DB"
+npm --silent run player-data:runner
+rm -f "$STATLY_VERIFY_DB"
+```
+
+Expected UAT result on current tracked data:
+
+- top-level `status` is `readyForUat`;
+- `safeForProductWrites` is `false`;
+- `safeForProductApply` is `false`;
+- `summary.matchedRecordsByNormalizedNameTeam` is `7544`;
+- `summary.multiRowSourceEvidence` is `614`;
+- `summary.skippedNullStatSourceEvidence` is `4`;
+- `summary.proposedRepairCount` is `0`;
+- `summary.productMutationCount` is `0`;
+- `summary.appliedMutationCount` is `0`;
+- `summary.previewEvidenceRows` is `4`;
+- `summary.beforeProductRows` is `0`;
+- `summary.afterProductRows` is `0`;
+- `acceptance.dryRunReady`, `acceptance.previewWritten`, and
+  `acceptance.applySimulationApplied` are `true`;
+- `acceptance.productApplyBlocked` is `true`;
+- `blockers` is empty.
+
+If the consolidated runner reports `blocked`, stop. Use the reported stage and
+blocker kind to fix the earlier dry-run, preview, or apply-simulation rung
+before considering any durable apply work.
 
 ## Source-Of-Truth Map
 
