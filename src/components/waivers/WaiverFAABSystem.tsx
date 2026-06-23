@@ -1,19 +1,26 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useMemo, useState } from 'react';
+import Image from 'next/image';
 import {
+  CheckCircleIcon,
   ClockIcon,
   ExclamationTriangleIcon,
-  CheckCircleIcon,
   XCircleIcon,
-  PlusIcon,
-  MinusIcon,
 } from '@heroicons/react/24/outline';
+
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
+import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
+import {
+  FANTASY_CATEGORIES,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+  type PlayerStats,
+} from '@/types/fantasyCategories';
 import { type LeagueActivityItem } from '@/services/leagueDataService';
 
-// Types
+type WaiverClaimStatus = 'pending' | 'successful' | 'failed' | 'outbid';
+
 interface WaiverClaim {
   id: string;
   playerId: string;
@@ -25,38 +32,29 @@ interface WaiverClaim {
   dropPlayerName?: string;
   bidAmount?: number;
   priority: number;
-  status: 'pending' | 'successful' | 'failed' | 'outbid';
+  status: WaiverClaimStatus;
   submittedAt: Date;
   processedAt?: Date;
   userId: string;
   userName: string;
 }
 
-interface FAABBalance {
-  userId: string;
-  userName: string;
-  currentBalance: number;
-  totalBudget: number;
-  pendingBids: number;
-  successfulBids: number;
-  rank: number;
-}
-
-interface WaiverSettings {
-  waiverPeriod: number; // hours
-  fAABBudget: number;
-  minimumBid: number;
-  maxClaims: number;
-  processingDay: string;
-  processingTime: string;
-}
-
 interface PlayerOption {
   id: string;
   name: string;
   team?: string;
+  club?: string;
   position?: string;
   ownership?: number;
+  avgPoints?: number;
+  averagePoints?: number;
+  fantasyPoints?: number;
+  gamesPlayed?: number;
+  stats?: Partial<PlayerStats>;
+  statsTotal?: Partial<PlayerStats>;
+  statlyZScore?: number;
+  statlyZBreakdown?: Array<{ category: FantasyCategoryKey; value: number; zScore: number }>;
+  statlyZMissingCategories?: FantasyCategoryKey[];
 }
 
 type ActivityFeedItem = LeagueActivityItem & {
@@ -74,866 +72,771 @@ interface WaiverFAABSystemProps {
   userClaims?: WaiverClaim[];
   availablePlayers?: PlayerOption[];
   rosterDropOptions?: PlayerOption[];
+  selectedCategories?: FantasyCategoryKey[];
   onSubmitClaim?: (claim: Partial<WaiverClaim>) => void;
   onCancelClaim?: (id: string) => void;
   activityItems?: ActivityFeedItem[];
-  // New optional lazy-loading hooks for players
   onLoadMorePlayers?: () => void;
   loadingMorePlayers?: boolean;
   hasMorePlayers?: boolean;
 }
 
-// Mock data
-const mockUserClaims: WaiverClaim[] = [
-  {
-    id: '1',
-    playerId: 'p1',
-    playerName: 'Tom Mitchell',
-    playerPosition: 'MID',
-    playerTeam: 'HAW',
-    action: 'add',
-    dropPlayerId: 'p2',
-    dropPlayerName: 'Jack Steele',
-    bidAmount: 25,
-    priority: 1,
-    status: 'pending',
-    submittedAt: new Date('2025-08-14T10:30:00'),
-    userId: 'user1',
-    userName: 'You',
-  },
-  {
-    id: '2',
-    playerId: 'p3',
-    playerName: 'Bailey Smith',
-    playerPosition: 'MID',
-    playerTeam: 'WBD',
-    action: 'add',
-    bidAmount: 15,
-    priority: 2,
-    status: 'outbid',
-    submittedAt: new Date('2025-08-13T15:20:00'),
-    processedAt: new Date('2025-08-14T09:00:00'),
-    userId: 'user1',
-    userName: 'You',
-  },
-];
+type WaiverSortKey = 'statlyZ' | 'name' | 'position' | 'club';
 
-const mockFAABBalances: FAABBalance[] = [
-  {
-    userId: 'user1',
-    userName: 'You',
-    currentBalance: 75,
-    totalBudget: 100,
-    pendingBids: 25,
-    successfulBids: 0,
-    rank: 5,
-  },
-  {
-    userId: 'user2',
-    userName: 'The Swans',
-    currentBalance: 82,
-    totalBudget: 100,
-    pendingBids: 18,
-    successfulBids: 0,
-    rank: 2,
-  },
-  {
-    userId: 'user3',
-    userName: 'Eagles Soaring',
-    currentBalance: 45,
-    totalBudget: 100,
-    pendingBids: 0,
-    successfulBids: 55,
-    rank: 8,
-  },
-  {
-    userId: 'user4',
-    userName: 'Tiger Power',
-    currentBalance: 90,
-    totalBudget: 100,
-    pendingBids: 10,
-    successfulBids: 0,
-    rank: 1,
-  },
-];
+const PLAYER_COLUMN_WIDTH = 340;
+const PROFILE_COLUMN_WIDTH = 180;
+const STAT_COLUMN_WIDTH = 88;
+const ACTIONS_COLUMN_WIDTH = 280;
 
-const mockWaiverSettings: WaiverSettings = {
-  waiverPeriod: 48,
-  fAABBudget: 100,
-  minimumBid: 1,
-  maxClaims: 5,
-  processingDay: 'Wednesday',
-  processingTime: '09:00',
-};
+function normalizeCategories(selectedCategories: readonly FantasyCategoryKey[]): FantasyCategoryKey[] {
+  const seen = new Set<FantasyCategoryKey>();
+  const normalized = selectedCategories.filter((category) => {
+    if (!FANTASY_CATEGORIES[category] || seen.has(category)) return false;
+    seen.add(category);
+    return true;
+  });
+
+  return normalized.length > 0 ? normalized : [...REAL_DATA_NINE_CATEGORY_PRESET];
+}
+
+function readPlayerTeam(player: PlayerOption): string {
+  return player.team || player.club || '';
+}
+
+function readStatlyZ(player: PlayerOption): number | null {
+  return typeof player.statlyZScore === 'number' && Number.isFinite(player.statlyZScore)
+    ? player.statlyZScore
+    : null;
+}
+
+function readCategoryAverage(player: PlayerOption, category: FantasyCategoryKey): number | null {
+  const value = player.stats?.[category];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function formatCategoryAverage(value: number | null, category: FantasyCategoryKey): string {
+  if (value === null) return '-';
+
+  const categoryData = FANTASY_CATEGORIES[category];
+  if (categoryData.format === 'percentage') return `${value.toFixed(1)}%`;
+  if (categoryData.format === 'decimal') return value.toFixed(2);
+  return value.toFixed(1);
+}
+
+function claimStatusLabel(status: WaiverClaimStatus): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function ClaimStatusIcon({ status }: { status: WaiverClaimStatus }): React.JSX.Element {
+  if (status === 'successful') {
+    return <CheckCircleIcon className="h-5 w-5 text-[color:var(--league-success)]" aria-hidden="true" />;
+  }
+  if (status === 'failed') {
+    return <XCircleIcon className="h-5 w-5 text-[color:var(--league-danger)]" aria-hidden="true" />;
+  }
+  if (status === 'outbid') {
+    return <ExclamationTriangleIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />;
+  }
+  return <ClockIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />;
+}
+
+function getClaimStatusClass(status: WaiverClaimStatus): string {
+  if (status === 'successful') {
+    return 'border-[color:var(--league-success)]/30 bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]';
+  }
+  if (status === 'failed') {
+    return 'border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] text-[color:var(--league-danger)]';
+  }
+  return 'border-border bg-muted text-muted-foreground';
+}
+
+function getSortValue(player: PlayerOption, sortBy: WaiverSortKey): string | number {
+  if (sortBy === 'statlyZ') return readStatlyZ(player) ?? -Infinity;
+  if (sortBy === 'position') return player.position || 'ZZZ';
+  if (sortBy === 'club') return readPlayerTeam(player) || 'ZZZ';
+  return player.name.toLowerCase();
+}
+
+function WaiverOverview(): React.JSX.Element {
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 text-card-foreground">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Waivers Overview</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Players who are not on a league roster are available through the waiver wire. Add
+            from this free-agent table, and drop a rostered player when your roster would exceed
+            the league maximum.
+          </p>
+        </div>
+        <div className="rounded-md border border-border bg-background p-3">
+          <h2 className="text-sm font-semibold text-foreground">Standard Waivers</h2>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            Unsigned players go on waivers after the draft, weekly play, or roster drops. Claims
+            process by waiver order, then unclaimed players become free agents.
+          </p>
+        </div>
+        <div className="rounded-md border border-border bg-background p-3">
+          <h2 className="text-sm font-semibold text-foreground">Salary Cap Continuous</h2>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            Teams bid from a budget. Claims process in batches; the highest offer wins, with
+            waiver priority used as the tiebreaker.
+          </p>
+        </div>
+        <div className="rounded-md border border-border bg-background p-3">
+          <h2 className="text-sm font-semibold text-foreground">No Waivers</h2>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            Free agents are immediately available. Most leagues use waivers so every manager has
+            a fair claim window.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WaiverToolbar({
+  searchTerm,
+  positionFilter,
+  sortBy,
+  availablePositions,
+  filteredCount,
+  totalCount,
+  onSearchChange,
+  onPositionFilterChange,
+  onSortChange,
+}: {
+  searchTerm: string;
+  positionFilter: string;
+  sortBy: WaiverSortKey;
+  availablePositions: string[];
+  filteredCount: number;
+  totalCount: number;
+  onSearchChange: (value: string) => void;
+  onPositionFilterChange: (value: string) => void;
+  onSortChange: (value: WaiverSortKey) => void;
+}): React.JSX.Element {
+  return (
+    <div className="border-b border-border bg-muted/50 px-4 py-4 sm:px-5">
+      <div className="flex flex-col gap-4 xl:flex-row">
+        <div className="flex-1">
+          <label htmlFor="waiver-player-search" className="sr-only">
+            Search waiver players
+          </label>
+          <input
+            id="waiver-player-search"
+            type="search"
+            value={searchTerm}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search players by name, position, or club..."
+            className="block w-full rounded-md border border-input bg-background px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+
+        <div className="xl:w-48">
+          <label htmlFor="waiver-position-filter" className="sr-only">
+            Filter waiver players by position
+          </label>
+          <select
+            id="waiver-position-filter"
+            value={positionFilter}
+            onChange={(event) => onPositionFilterChange(event.target.value)}
+            className="block w-full rounded-md border border-input bg-background px-3 py-2.5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {availablePositions.map((position) => (
+              <option key={position} value={position}>
+                {position === 'ALL' ? 'All Positions' : position}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="xl:w-48">
+          <label htmlFor="waiver-sort-by" className="sr-only">
+            Sort waiver players
+          </label>
+          <select
+            id="waiver-sort-by"
+            value={sortBy}
+            onChange={(event) => onSortChange(event.target.value as WaiverSortKey)}
+            className="block w-full rounded-md border border-input bg-background px-3 py-2.5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="statlyZ">Sort by Statly Z</option>
+            <option value="name">Sort by Name</option>
+            <option value="position">Sort by Position</option>
+            <option value="club">Sort by Club</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-3 text-sm text-muted-foreground">
+        Showing {filteredCount} of {totalCount} free agents
+      </div>
+    </div>
+  );
+}
+
+function WaiverPlayerTable({
+  players,
+  visibleCategories,
+  selectedPlayerId,
+  bidAmount,
+  dropPlayerId,
+  minimumBid,
+  rosterDropOptions,
+  onSelectPlayer,
+  onBidChange,
+  onDropChange,
+  onSubmitClaim,
+}: {
+  players: PlayerOption[];
+  visibleCategories: FantasyCategoryKey[];
+  selectedPlayerId: string | null;
+  bidAmount: number;
+  dropPlayerId: string;
+  minimumBid: number;
+  rosterDropOptions: PlayerOption[];
+  onSelectPlayer: (playerId: string | null) => void;
+  onBidChange: (value: number) => void;
+  onDropChange: (value: string) => void;
+  onSubmitClaim?: (player: PlayerOption) => void;
+}): React.JSX.Element {
+  const statColumnCount = Math.max(visibleCategories.length, 1);
+  const tableMinWidth =
+    PLAYER_COLUMN_WIDTH +
+    PROFILE_COLUMN_WIDTH +
+    statColumnCount * STAT_COLUMN_WIDTH +
+    ACTIONS_COLUMN_WIDTH;
+
+  return (
+    <div className="relative min-h-0">
+      <div className="max-h-[680px] overflow-auto">
+        <table
+          className="w-full table-fixed border-collapse text-left"
+          style={{ minWidth: tableMinWidth }}
+          aria-label="Available waiver players"
+        >
+          <caption className="sr-only">
+            Available waiver players with profile, league stats, and waiver claim actions.
+          </caption>
+          <colgroup>
+            <col style={{ width: PLAYER_COLUMN_WIDTH }} />
+            <col style={{ width: PROFILE_COLUMN_WIDTH }} />
+            {visibleCategories.length > 0 ? (
+              visibleCategories.map((category) => (
+                <col key={category} style={{ width: STAT_COLUMN_WIDTH }} />
+              ))
+            ) : (
+              <col style={{ width: STAT_COLUMN_WIDTH }} />
+            )}
+            <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
+          </colgroup>
+          <thead className="sticky top-0 z-10 border-b border-border bg-muted/95 text-sm font-medium text-muted-foreground backdrop-blur">
+            <tr>
+              <th
+                scope="col"
+                rowSpan={visibleCategories.length > 0 ? 2 : 1}
+                className="px-4 py-3 font-medium sm:px-5"
+              >
+                Player
+              </th>
+              <th
+                scope="col"
+                rowSpan={visibleCategories.length > 0 ? 2 : 1}
+                className="px-4 py-3 font-medium"
+              >
+                Profile
+              </th>
+              <th
+                scope={visibleCategories.length > 0 ? 'colgroup' : 'col'}
+                colSpan={visibleCategories.length > 0 ? visibleCategories.length : 1}
+                className="border-x border-border/70 px-4 py-3 text-center font-medium"
+              >
+                League Stats
+              </th>
+              <th
+                scope="col"
+                rowSpan={visibleCategories.length > 0 ? 2 : 1}
+                className="px-4 py-3 text-center font-medium sm:px-5"
+              >
+                Actions
+              </th>
+            </tr>
+            {visibleCategories.length > 0 && (
+              <tr className="border-t border-border/70">
+                {visibleCategories.map((category) => {
+                  const categoryData = FANTASY_CATEGORIES[category];
+
+                  return (
+                    <th
+                      key={category}
+                      scope="col"
+                      aria-label={categoryData.label}
+                      className="border-l border-border/70 px-3 py-2 text-center text-[11px] font-semibold uppercase text-muted-foreground first:border-l"
+                      title={categoryData.label}
+                    >
+                      {categoryData.abbrev}
+                    </th>
+                  );
+                })}
+              </tr>
+            )}
+          </thead>
+          <tbody className="divide-y divide-border">
+            {players.map((player) => {
+              const team = readPlayerTeam(player);
+              const teamLogo = getTeamLogo(team);
+              const teamAbbreviation = getTeamAbbreviation(team);
+              const isSelected = selectedPlayerId === player.id;
+              const statlyZ = readStatlyZ(player);
+
+              return (
+                <tr
+                  key={player.id}
+                  className={`transition-colors hover:bg-muted/50 ${
+                    isSelected ? 'bg-primary/5' : ''
+                  }`}
+                >
+                  <th scope="row" className="px-4 py-4 font-normal sm:px-5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-background p-1.5 shadow-sm">
+                        <Image
+                          src={teamLogo}
+                          alt=""
+                          aria-hidden="true"
+                          width={32}
+                          height={32}
+                          unoptimized={teamLogo.endsWith('.svg')}
+                          className="h-8 max-w-8 object-contain"
+                          style={{ width: 'auto' }}
+                        />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-foreground">{player.name}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-semibold text-foreground">
+                            {player.position || 'UNK'}
+                          </span>
+                          <span className="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground">
+                            {teamAbbreviation || '-'}
+                          </span>
+                          <span>{team || 'Club pending'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </th>
+                  <td className="px-4 py-4 align-middle">
+                    <div className="space-y-2">
+                      <div>
+                        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                          Statly Z
+                        </div>
+                        <div className="mt-1 text-lg font-semibold leading-none text-foreground">
+                          {statlyZ === null ? 'Pending' : statlyZ.toFixed(2)}
+                        </div>
+                      </div>
+                      <span className="inline-flex rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                        On waivers
+                      </span>
+                    </div>
+                  </td>
+                  {visibleCategories.length > 0 ? (
+                    visibleCategories.map((category) => (
+                      <td
+                        key={category}
+                        className="border-l border-border/60 px-3 py-4 text-center align-middle text-sm font-semibold text-foreground"
+                        aria-label={`${FANTASY_CATEGORIES[category].label}: ${formatCategoryAverage(
+                          readCategoryAverage(player, category),
+                          category
+                        )}`}
+                      >
+                        <span className="inline-flex min-w-12 justify-center tabular-nums">
+                          {formatCategoryAverage(readCategoryAverage(player, category), category)}
+                        </span>
+                      </td>
+                    ))
+                  ) : (
+                    <td className="border-l border-border/60 px-4 py-4 align-middle text-sm text-muted-foreground">
+                      League categories pending.
+                    </td>
+                  )}
+                  <td className="border-l border-border/60 px-3 py-4 align-middle">
+                    {isSelected ? (
+                      <div className="space-y-3">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <label
+                              htmlFor={`waiver-bid-${player.id}`}
+                              className="text-xs font-medium text-muted-foreground"
+                            >
+                              FAAB bid
+                            </label>
+                            <input
+                              id={`waiver-bid-${player.id}`}
+                              type="number"
+                              min={minimumBid}
+                              value={bidAmount}
+                              onChange={(event) =>
+                                onBidChange(Math.max(minimumBid, Number(event.target.value) || 0))
+                              }
+                              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor={`waiver-drop-${player.id}`}
+                              className="text-xs font-medium text-muted-foreground"
+                            >
+                              Drop player
+                            </label>
+                            <select
+                              id={`waiver-drop-${player.id}`}
+                              value={dropPlayerId}
+                              onChange={(event) => onDropChange(event.target.value)}
+                              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                            >
+                              <option value="">None</option>
+                              {rosterDropOptions.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onSubmitClaim?.(player)}
+                            disabled={!onSubmitClaim || bidAmount < minimumBid}
+                            aria-label={`Submit claim for ${player.name}`}
+                            className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                          >
+                            Submit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onSelectPlayer(null)}
+                            aria-label={`Cancel claim setup for ${player.name}`}
+                            className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onSelectPlayer(player.id)}
+                        className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label={`Claim ${player.name}`}
+                      >
+                        Claim
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function EmptyWaiverTable(): React.JSX.Element {
+  return (
+    <div className="flex min-h-80 flex-col items-center justify-center rounded-lg border border-border bg-card px-6 py-12 text-center text-card-foreground">
+      <ClockIcon className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
+      <h2 className="text-lg font-semibold text-foreground">No free agents available</h2>
+      <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+        Every player is currently rostered or the waiver pool has not loaded yet.
+      </p>
+    </div>
+  );
+}
+
+function MyClaimsPanel({
+  claims,
+  timeZone,
+  onCancelClaim,
+}: {
+  claims: WaiverClaim[];
+  timeZone: string;
+  onCancelClaim?: (id: string) => void;
+}): React.JSX.Element {
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 text-card-foreground">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">My Claims</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Pending and processed waiver claims.</p>
+        </div>
+        <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+          {claims.length}
+        </span>
+      </div>
+
+      {claims.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">No active waiver claims.</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-border">
+          {claims.map((claim) => (
+            <li key={claim.id} className="py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <ClaimStatusIcon status={claim.status} />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-foreground">
+                      Add {claim.playerName}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {claim.playerPosition || 'Position pending'} -{' '}
+                      {claim.playerTeam || 'Club pending'}
+                      {claim.dropPlayerName ? ` - drop ${claim.dropPlayerName}` : ''}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Submitted {formatInTimezone(claim.submittedAt, timeZone, 'PP p')}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <span
+                    className={`rounded-md border px-2 py-1 text-xs font-medium ${getClaimStatusClass(
+                      claim.status
+                    )}`}
+                  >
+                    {claimStatusLabel(claim.status)}
+                  </span>
+                  {claim.status === 'pending' && onCancelClaim && (
+                    <button
+                      type="button"
+                      onClick={() => onCancelClaim(claim.id)}
+                      className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ActivityPanel({
+  activityItems,
+  timeZone,
+}: {
+  activityItems: ActivityFeedItem[];
+  timeZone: string;
+}): React.JSX.Element {
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 text-card-foreground">
+      <h2 className="text-base font-semibold text-foreground">League Activity</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Recent waiver submissions and outcomes.</p>
+
+      {activityItems.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">No recent activity.</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-border">
+          {activityItems.slice(0, 8).map((item) => {
+            const playerText = item.playerName || item.playerId || 'a player';
+            const teamText = item.teamName || item.userId || 'Team';
+
+            return (
+              <li key={item.id} className="py-3 text-sm">
+                <div className="font-medium text-foreground">
+                  {teamText} updated {playerText}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {formatInTimezone(item.timestamp, timeZone, 'PP p')}
+                  {typeof item.bidAmount === 'number' ? ` - $${item.bidAmount}` : ''}
+                  {item.dropPlayerName ? ` - drop ${item.dropPlayerName}` : ''}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 export default function WaiverFAABSystem({
-  userClaims = mockUserClaims,
+  userClaims = [],
   availablePlayers = [],
   rosterDropOptions = [],
+  selectedCategories = [...REAL_DATA_NINE_CATEGORY_PRESET],
   onSubmitClaim,
   onCancelClaim,
   activityItems = [],
   currentBalance,
-  pendingBids,
+  pendingBids = 0,
   totalBudget,
   userTeamName,
-  minimumBid,
+  minimumBid = 1,
   onLoadMorePlayers,
   loadingMorePlayers,
   hasMorePlayers,
-}: WaiverFAABSystemProps) {
-  const [activeTab, setActiveTab] = useState<
-    'my-claims' | 'faab-balances' | 'league-activity' | 'submit-claim'
-  >('my-claims');
+}: WaiverFAABSystemProps): React.JSX.Element {
   const timeZone = useMemo(() => getBrowserTimeZone(), []);
-
-  // Infinite scroll for players list (optional)
-  const playersSentinelRef = useRef<HTMLDivElement | null>(null);
-  React.useEffect(() => {
-    if (!onLoadMorePlayers || !hasMorePlayers) return;
-    const node = playersSentinelRef.current;
-    if (!node) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const first = entries[0];
-        if (first && first.isIntersecting && !loadingMorePlayers) {
-          onLoadMorePlayers();
-        }
-      },
-      { root: null, rootMargin: '200px', threshold: 0 }
+  const [searchTerm, setSearchTerm] = useState('');
+  const [positionFilter, setPositionFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState<WaiverSortKey>('statlyZ');
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [dropPlayerId, setDropPlayerId] = useState('');
+  const [bidAmount, setBidAmount] = useState(minimumBid);
+  const visibleCategories = useMemo(
+    () => normalizeCategories(selectedCategories),
+    [selectedCategories]
+  );
+  const availablePositions = useMemo(() => {
+    const positions = new Set(
+      availablePlayers.map((player) => player.position).filter((position): position is string => Boolean(position))
     );
-    observer.observe(node);
-    return () => {
-      observer.unobserve(node);
-      observer.disconnect();
-    };
-  }, [onLoadMorePlayers, hasMorePlayers, loadingMorePlayers, availablePlayers.length]);
+    return ['ALL', ...Array.from(positions).sort()];
+  }, [availablePlayers]);
+  const filteredPlayers = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const filtered = availablePlayers.filter((player) => {
+      const team = readPlayerTeam(player);
+      const matchesSearch =
+        normalizedSearch.length === 0 ||
+        player.name.toLowerCase().includes(normalizedSearch) ||
+        team.toLowerCase().includes(normalizedSearch) ||
+        (player.position || '').toLowerCase().includes(normalizedSearch);
+      const matchesPosition = positionFilter === 'ALL' || player.position === positionFilter;
 
-  // Keyboard accessible tabs
-  const tabs = useMemo(
-    () =>
-      [
-        { id: 'my-claims', label: 'My Claims' },
-        { id: 'faab-balances', label: 'FAAB Balances' },
-        { id: 'league-activity', label: 'League Activity' },
-        { id: 'submit-claim', label: 'Submit Claim' },
-      ] as const,
-    []
-  );
-  const tabRefs = useRef<HTMLButtonElement[]>([]);
-  const onTabKeyDown = useCallback(
-    (e: React.KeyboardEvent, idx: number) => {
-      const last = tabs.length - 1;
-      if (e.key === 'ArrowRight' || e.key === 'Right') {
-        e.preventDefault();
-        const next = idx === last ? 0 : idx + 1;
-        tabRefs.current[next]?.focus();
-        setActiveTab(tabs[next].id);
-      } else if (e.key === 'ArrowLeft' || e.key === 'Left') {
-        e.preventDefault();
-        const prev = idx === 0 ? last : idx - 1;
-        tabRefs.current[prev]?.focus();
-        setActiveTab(tabs[prev].id);
-      } else if (e.key === 'Home') {
-        e.preventDefault();
-        tabRefs.current[0]?.focus();
-        setActiveTab(tabs[0].id);
-      } else if (e.key === 'End') {
-        e.preventDefault();
-        tabRefs.current[last]?.focus();
-        setActiveTab(tabs[last].id);
-      } else if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        setActiveTab(tabs[idx].id);
-      }
-    },
-    [tabs]
-  );
-
-  const userBalance = useMemo(() => {
-    const mock = mockFAABBalances.find((b: FAABBalance) => b.userName === 'You');
-    const minBid = typeof minimumBid === 'number' ? minimumBid : mockWaiverSettings.minimumBid;
-    return {
-      currentBalance:
-        typeof currentBalance === 'number' ? currentBalance : (mock?.currentBalance ?? 0),
-      pendingBids: typeof pendingBids === 'number' ? pendingBids : (mock?.pendingBids ?? 0),
-      totalBudget:
-        typeof totalBudget === 'number'
-          ? totalBudget
-          : (mock?.totalBudget ?? mockWaiverSettings.fAABBudget),
-      minimumBid: minBid,
-      rank: mock?.rank ?? 0,
-      userName: 'You',
-      userId: 'user1',
-      successfulBids: mock?.successfulBids ?? 0,
-    } as const;
-  }, [currentBalance, pendingBids, totalBudget, minimumBid]);
-
-  const nextProcessing = useMemo(() => {
-    const now = new Date();
-    const nextWed = new Date();
-    nextWed.setDate(now.getDate() + ((3 - now.getDay() + 7) % 7));
-    nextWed.setHours(9, 0, 0, 0);
-
-    if (nextWed <= now) {
-      nextWed.setDate(nextWed.getDate() + 7);
-    }
-
-    return nextWed;
-  }, []);
-
-  const timeUntilProcessing = useMemo(() => {
-    const now = new Date();
-    const diff = nextProcessing.getTime() - now.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
-  }, [nextProcessing]);
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <ClockIcon className="w-5 h-5 text-yellow-500" />;
-      case 'successful':
-        return <CheckCircleIcon className="w-5 h-5 text-green-500" />;
-      case 'failed':
-        return <XCircleIcon className="w-5 h-5 text-red-500" />;
-      case 'outbid':
-        return <ExclamationTriangleIcon className="w-5 h-5 text-orange-500" />;
-      default:
-        return <ClockIcon className="w-5 h-5 text-gray-500" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'successful':
-        return 'bg-green-100 text-green-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      case 'outbid':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Form state
-  const [newClaim, setNewClaim] = useState({
-    playerId: '',
-    playerName: '',
-    playerPosition: '',
-    playerTeam: '',
-    action: 'add' as 'add' | 'drop',
-    dropPlayerId: '',
-    dropPlayerName: '',
-    bidAmount: mockWaiverSettings.minimumBid,
-    priority: 1,
-  });
-
-  const handleSubmitClaim = () => {
-    if (newClaim.action === 'add' && !newClaim.playerId) return;
-    if (newClaim.action === 'drop' && !newClaim.dropPlayerId) return;
-    if (
-      newClaim.action === 'add' &&
-      (!newClaim.playerName || !newClaim.bidAmount || newClaim.bidAmount < userBalance.minimumBid)
-    )
-      return;
-
-    const claim: Partial<WaiverClaim> = {
-      playerId: newClaim.playerId,
-      playerName: newClaim.playerName,
-      playerPosition: newClaim.playerPosition,
-      playerTeam: newClaim.playerTeam,
-      action: newClaim.action,
-      dropPlayerId: newClaim.dropPlayerId || undefined,
-      dropPlayerName: newClaim.dropPlayerName || undefined,
-      bidAmount: newClaim.action === 'add' ? newClaim.bidAmount : undefined,
-      priority: newClaim.priority,
-      status: 'pending',
-      submittedAt: new Date(),
-      userId: 'user1',
-      userName: 'You',
-    };
-
-    onSubmitClaim?.(claim);
-
-    // Reset form
-    setNewClaim({
-      playerId: '',
-      playerName: '',
-      playerPosition: '',
-      playerTeam: '',
-      action: 'add',
-      dropPlayerId: '',
-      dropPlayerName: '',
-      bidAmount: mockWaiverSettings.minimumBid,
-      priority: 1,
+      return matchesSearch && matchesPosition;
     });
 
-    setActiveTab('my-claims');
+    return filtered.sort((a, b) => {
+      const aValue = getSortValue(a, sortBy);
+      const bValue = getSortValue(b, sortBy);
+      if (aValue < bValue) return sortBy === 'statlyZ' ? 1 : -1;
+      if (aValue > bValue) return sortBy === 'statlyZ' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [availablePlayers, positionFilter, searchTerm, sortBy]);
+  const selectedPlayer = useMemo(
+    () => availablePlayers.find((player) => player.id === selectedPlayerId) ?? null,
+    [availablePlayers, selectedPlayerId]
+  );
+  const balanceLabel =
+    typeof currentBalance === 'number'
+      ? `$${currentBalance}`
+      : typeof totalBudget === 'number'
+        ? `$${totalBudget}`
+        : '-';
+
+  const handleSelectPlayer = (playerId: string | null) => {
+    setSelectedPlayerId(playerId);
+    setDropPlayerId('');
+    setBidAmount(minimumBid);
   };
 
-  const onSelectAddPlayer = (playerId: string) => {
-    const p = availablePlayers.find((ap) => ap.id === playerId);
-    if (!p) return;
-    setNewClaim((prev) => ({
-      ...prev,
-      playerId: p.id,
-      playerName: p.name,
-      playerTeam: p.team || '',
-      playerPosition: p.position || '',
-    }));
-  };
-
-  const onSelectDropPlayer = (playerId: string) => {
-    if (!playerId) {
-      setNewClaim((prev) => ({ ...prev, dropPlayerId: '', dropPlayerName: '' }));
-      return;
-    }
-    const p = rosterDropOptions.find((rp) => rp.id === playerId);
-    setNewClaim((prev) => ({
-      ...prev,
-      dropPlayerId: playerId,
-      dropPlayerName: p?.name || playerId,
-    }));
+  const handleSubmitClaim = (player: PlayerOption) => {
+    onSubmitClaim?.({
+      playerId: player.id,
+      playerName: player.name,
+      playerPosition: player.position || '',
+      playerTeam: readPlayerTeam(player),
+      action: 'add',
+      dropPlayerId: dropPlayerId || undefined,
+      dropPlayerName: rosterDropOptions.find((option) => option.id === dropPlayerId)?.name,
+      bidAmount,
+      priority: userClaims.length + 1,
+      status: 'pending',
+      submittedAt: new Date(),
+      userId: '',
+      userName: 'You',
+    });
+    handleSelectPlayer(null);
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Waivers & FAAB</h1>
-          <p className="text-gray-600 mt-1">
-            {userTeamName ? `Team: ${userTeamName}` : 'Manage your waiver claims and FAAB budget'}
-          </p>
-        </div>
+    <div className="space-y-5">
+      <WaiverOverview />
 
-        <div className="text-right">
-          <div className="text-2xl font-bold text-green-600">
-            ${userBalance.currentBalance || 0}
-          </div>
-          <div className="text-sm text-gray-500">FAAB Remaining</div>
-          <div className="text-xs text-gray-400">${userBalance.pendingBids || 0} pending</div>
-        </div>
-      </div>
-
-      {/* Processing Timer */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200"
-      >
-        <div className="flex items-center justify-between">
+      <section className="rounded-lg border border-border bg-card text-card-foreground">
+        <div className="flex flex-col gap-4 border-b border-border px-4 py-4 sm:px-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Next Processing</h3>
-            <p className="text-gray-600">
-              {formatInTimezone(nextProcessing, timeZone, 'PPP')} at{' '}
-              {mockWaiverSettings.processingTime}
+            <h2 className="text-lg font-semibold text-foreground">Waiver Wire</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {userTeamName ? `${userTeamName} can claim available free agents.` : 'Claim available free agents.'}
             </p>
           </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-blue-600">{timeUntilProcessing}</div>
-            <div className="text-sm text-gray-600">Remaining</div>
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+            <div className="rounded-md border border-border bg-background px-3 py-2">
+              <div className="text-xs font-medium text-muted-foreground">FAAB Remaining</div>
+              <div className="mt-1 font-semibold text-foreground">{balanceLabel}</div>
+            </div>
+            <div className="rounded-md border border-border bg-background px-3 py-2">
+              <div className="text-xs font-medium text-muted-foreground">Pending</div>
+              <div className="mt-1 font-semibold text-foreground">${pendingBids}</div>
+            </div>
+            <div className="rounded-md border border-border bg-background px-3 py-2">
+              <div className="text-xs font-medium text-muted-foreground">Pool</div>
+              <div className="mt-1 font-semibold text-foreground">{availablePlayers.length}</div>
+            </div>
           </div>
         </div>
-      </motion.div>
 
-      {/* Tabs */}
-      <div
-        className="flex space-x-1 bg-gray-100 p-1 rounded-lg"
-        role="tablist"
-        aria-label="Waivers sections"
-      >
-        {tabs.map((t, idx) => (
-          <button
-            key={t.id}
-            id={`waivers-tab-${t.id}`}
-            role="tab"
-            aria-selected={activeTab === t.id}
-            aria-controls={`waivers-panel-${t.id}`}
-            tabIndex={activeTab === t.id ? 0 : -1}
-            ref={(el) => {
-              if (el) tabRefs.current[idx] = el;
-            }}
-            onKeyDown={(e) => onTabKeyDown(e, idx)}
-            onClick={() => setActiveTab(t.id)}
-            className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-              activeTab === t.id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+        <WaiverToolbar
+          searchTerm={searchTerm}
+          positionFilter={positionFilter}
+          sortBy={sortBy}
+          availablePositions={availablePositions}
+          filteredCount={filteredPlayers.length}
+          totalCount={availablePlayers.length}
+          onSearchChange={setSearchTerm}
+          onPositionFilterChange={setPositionFilter}
+          onSortChange={setSortBy}
+        />
+
+        {filteredPlayers.length === 0 ? (
+          <div className="p-4">
+            <EmptyWaiverTable />
+          </div>
+        ) : (
+          <WaiverPlayerTable
+            players={filteredPlayers}
+            visibleCategories={visibleCategories}
+            selectedPlayerId={selectedPlayer?.id ?? null}
+            bidAmount={bidAmount}
+            dropPlayerId={dropPlayerId}
+            minimumBid={minimumBid}
+            rosterDropOptions={rosterDropOptions}
+            onSelectPlayer={handleSelectPlayer}
+            onBidChange={setBidAmount}
+            onDropChange={setDropPlayerId}
+            onSubmitClaim={onSubmitClaim ? handleSubmitClaim : undefined}
+          />
+        )}
+
+        {hasMorePlayers && (
+          <div className="border-t border-border px-4 py-4 sm:px-5">
+            <button
+              type="button"
+              onClick={onLoadMorePlayers}
+              disabled={loadingMorePlayers}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingMorePlayers ? 'Loading more...' : 'Load more free agents'}
+            </button>
+          </div>
+        )}
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <MyClaimsPanel claims={userClaims} timeZone={timeZone} onCancelClaim={onCancelClaim} />
+        <ActivityPanel activityItems={activityItems} timeZone={timeZone} />
       </div>
-
-      {/* Tab Content */}
-      <AnimatePresence mode="wait">
-        {activeTab === 'my-claims' && (
-          <motion.div
-            key="my-claims"
-            id="waivers-panel-my-claims"
-            role="tabpanel"
-            aria-labelledby="waivers-tab-my-claims"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white rounded-xl shadow-lg overflow-hidden"
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Your Waiver Claims</h3>
-            </div>
-
-            {userClaims.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <ClockIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>No active waiver claims</p>
-                <button
-                  onClick={() => setActiveTab('submit-claim')}
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Submit Your First Claim
-                </button>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {userClaims.map((claim, index) => (
-                  <motion.div
-                    key={claim.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="p-6"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        {getStatusIcon(claim.status)}
-                        <div>
-                          <div className="font-semibold text-gray-900">
-                            {claim.action === 'add' ? 'Add' : 'Drop'} {claim.playerName}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {claim.playerPosition} - {claim.playerTeam}
-                            {claim.dropPlayerName && ` • Drop ${claim.dropPlayerName}`}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Submitted {formatInTimezone(claim.submittedAt, timeZone, 'PP p')}
-                          </div>
-                          {userTeamName && (
-                            <div className="text-xs text-gray-500">Team: {userTeamName}</div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="font-bold text-gray-900">${claim.bidAmount}</div>
-                          <div className="text-sm text-gray-500">Priority {claim.priority}</div>
-                        </div>
-
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(claim.status)}`}
-                        >
-                          {claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
-                        </span>
-
-                        {claim.status === 'pending' && (
-                          <button
-                            onClick={() => onCancelClaim?.(claim.id)}
-                            className="px-3 py-1 text-red-600 hover:text-red-800 text-sm font-medium"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {activeTab === 'faab-balances' && (
-          <motion.div
-            key="faab-balances"
-            id="waivers-panel-faab-balances"
-            role="tabpanel"
-            aria-labelledby="waivers-tab-faab-balances"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white rounded-xl shadow-lg overflow-hidden"
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">FAAB Balances</h3>
-              <p className="text-sm text-gray-600">
-                Total budget: ${userBalance.totalBudget} per team
-              </p>
-            </div>
-
-            {/* If we have real balance, just show the user's card */}
-            {typeof currentBalance === 'number' ? (
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-blue-100 text-blue-800">
-                      {userBalance.rank || 0}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900">You</div>
-                      <div className="text-sm text-gray-600">
-                        ${userBalance.successfulBids} spent • ${userBalance.pendingBids} pending
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900">
-                      ${userBalance.currentBalance}
-                    </div>
-                    <div className="text-sm text-gray-500">Available</div>
-                    <div className="w-24 bg-gray-200 rounded-full h-2 mt-2">
-                      <div
-                        className="bg-green-600 h-2 rounded-full"
-                        style={{
-                          width: `${Math.min(100, (userBalance.currentBalance / (userBalance.totalBudget || 1)) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {mockFAABBalances.map((balance: FAABBalance, index: number) => (
-                  <motion.div
-                    key={balance.userId}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className={`p-6 ${balance.userName === 'You' ? 'bg-blue-50' : ''}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                            balance.rank <= 3
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}
-                        >
-                          {balance.rank}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-gray-900">
-                            {balance.userName}
-                            {balance.userName === 'You' && (
-                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                                You
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            ${balance.successfulBids} spent • ${balance.pendingBids} pending
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-gray-900">
-                          ${balance.currentBalance}
-                        </div>
-                        <div className="text-sm text-gray-500">Available</div>
-
-                        {/* Balance Bar */}
-                        <div className="w-24 bg-gray-200 rounded-full h-2 mt-2">
-                          <div
-                            className="bg-green-600 h-2 rounded-full"
-                            style={{
-                              width: `${(balance.currentBalance / balance.totalBudget) * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {activeTab === 'league-activity' && (
-          <motion.div
-            key="league-activity"
-            id="waivers-panel-league-activity"
-            role="tabpanel"
-            aria-labelledby="waivers-tab-league-activity"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white rounded-xl shadow-lg p-6"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Recent League Activity</h3>
-            {activityItems.length === 0 ? (
-              <p className="text-sm text-gray-600">No recent activity.</p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {activityItems.map((item: ActivityFeedItem) => {
-                  const isSuccess = item.type === 'waiver-successful';
-                  const isFailed = item.type === 'waiver-failed';
-                  const isCancelled = item.type === 'waiver-cancelled';
-                  const isSubmitted = item.type === 'waiver-submitted';
-                  const Icon = isSuccess
-                    ? CheckCircleIcon
-                    : isFailed
-                      ? XCircleIcon
-                      : isCancelled
-                        ? ExclamationTriangleIcon
-                        : ClockIcon;
-                  const actionText = isSuccess
-                    ? 'won a claim for'
-                    : isFailed
-                      ? 'lost a claim for'
-                      : isCancelled
-                        ? 'cancelled a claim for'
-                        : isSubmitted
-                          ? 'submitted a claim for'
-                          : 'updated';
-                  const playerText = item.playerName || item.playerId || 'a player';
-                  const dropText = item.dropPlayerName ? ` • drop ${item.dropPlayerName}` : '';
-                  return (
-                    <li key={item.id} className="py-3 flex items-start justify-between">
-                      <div className="flex items-start gap-3">
-                        <Icon
-                          className={`w-5 h-5 ${
-                            isSuccess
-                              ? 'text-green-500'
-                              : isFailed
-                                ? 'text-red-500'
-                                : isCancelled
-                                  ? 'text-orange-500'
-                                  : 'text-gray-500'
-                          }`}
-                        />
-                        <div>
-                          <div className="text-sm text-gray-900">
-                            <span className="font-medium">
-                              {item.teamName || item.userId || 'Team'}
-                            </span>{' '}
-                            {actionText} <span className="font-medium">{playerText}</span>
-                            {dropText}
-                            {typeof item.priority === 'number' ? ` • prio ${item.priority}` : ''}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {formatInTimezone(item.timestamp, timeZone, 'PP p')}
-                            {typeof item.bidAmount === 'number' ? ` • $${item.bidAmount}` : ''}
-                            {item.reason ? ` • ${item.reason}` : ''}
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </motion.div>
-        )}
-
-        {activeTab === 'submit-claim' && (
-          <motion.div
-            key="submit-claim"
-            id="waivers-panel-submit-claim"
-            role="tabpanel"
-            aria-labelledby="waivers-tab-submit-claim"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white rounded-xl shadow-lg p-6"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Submit Waiver Claim</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="actionType"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    Action Type
-                  </label>
-                  <select
-                    id="actionType"
-                    value={newClaim.action}
-                    onChange={(e) =>
-                      setNewClaim((prev) => ({ ...prev, action: e.target.value as 'add' | 'drop' }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="add">Add Player</option>
-                    <option value="drop">Drop Player</option>
-                  </select>
-                </div>
-
-                {newClaim.action === 'add' && (
-                  <div>
-                    <label
-                      htmlFor="addPlayerSelect"
-                      className="block text-sm font-medium text-gray-700 mb-2"
-                    >
-                      Select Player to Add
-                    </label>
-                    <select
-                      id="addPlayerSelect"
-                      value={newClaim.playerId}
-                      onChange={(e) => onSelectAddPlayer(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select a player</option>
-                      {availablePlayers.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} {p.team ? `• ${p.team}` : ''}{' '}
-                          {p.position ? `(${p.position})` : ''}
-                          {typeof p.ownership === 'number' ? ` • Own ${p.ownership}%` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    {hasMorePlayers && (
-                      <div className="mt-3 flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={onLoadMorePlayers}
-                          disabled={loadingMorePlayers}
-                          className={`px-3 py-2 border rounded-md text-sm ${loadingMorePlayers ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-                        >
-                          {loadingMorePlayers ? 'Loading more…' : 'Load more players'}
-                        </button>
-                        <div ref={playersSentinelRef} className="h-1 w-1" aria-hidden="true" />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <label
-                    htmlFor="dropPlayerSelect"
-                    className="block text-sm font-medium text-gray-700 mb-2"
-                  >
-                    {newClaim.action === 'add'
-                      ? 'Optional: Select Player to Drop'
-                      : 'Select Player to Drop'}
-                  </label>
-                  <select
-                    id="dropPlayerSelect"
-                    value={newClaim.dropPlayerId}
-                    onChange={(e) => onSelectDropPlayer(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">None</option>
-                    {rosterDropOptions.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.team ? `• ${p.team}` : ''} {p.position ? `(${p.position})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {newClaim.action === 'add' && (
-                  <div>
-                    <label
-                      htmlFor="bidAmount"
-                      className="block text-sm font-medium text-gray-700 mb-2"
-                    >
-                      FAAB Bid Amount
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          setNewClaim((prev) => ({
-                            ...prev,
-                            bidAmount: Math.max(userBalance.minimumBid, prev.bidAmount - 1),
-                          }))
-                        }
-                        className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                      >
-                        <MinusIcon className="w-4 h-4" />
-                      </button>
-                      <input
-                        id="bidAmount"
-                        type="number"
-                        value={newClaim.bidAmount}
-                        onChange={(e) =>
-                          setNewClaim((prev) => ({
-                            ...prev,
-                            bidAmount: parseInt(e.target.value, 10) || 0,
-                          }))
-                        }
-                        min={userBalance.minimumBid}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
-                      />
-                      <button
-                        onClick={() =>
-                          setNewClaim((prev) => ({
-                            ...prev,
-                            bidAmount: prev.bidAmount + 1,
-                          }))
-                        }
-                        className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                      >
-                        <PlusIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Minimum bid: ${userBalance.minimumBid}
-                    </p>
-                  </div>
-                )}
-
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-medium text-gray-900 mb-2">Claim Summary</h4>
-                  <div className="text-sm space-y-1">
-                    <div>
-                      Action: {newClaim.action === 'add' ? 'Add' : 'Drop'}{' '}
-                      {newClaim.playerName ||
-                        (newClaim.action === 'drop' ? newClaim.dropPlayerName : 'Player')}
-                    </div>
-                    {newClaim.action === 'add' && (
-                      <>
-                        <div>Bid: ${newClaim.bidAmount}</div>
-                        <div>Priority: {newClaim.priority}</div>
-                        {newClaim.dropPlayerName && <div>Drop: {newClaim.dropPlayerName}</div>}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleSubmitClaim}
-                  disabled={
-                    (newClaim.action === 'add' &&
-                      (!newClaim.playerId || newClaim.bidAmount < userBalance.minimumBid)) ||
-                    (newClaim.action === 'drop' && !newClaim.dropPlayerId) ||
-                    (typeof currentBalance === 'number' &&
-                      typeof pendingBids === 'number' &&
-                      newClaim.action === 'add' &&
-                      pendingBids + (newClaim.bidAmount || 0) > currentBalance)
-                  }
-                  className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
-                >
-                  Submit Claim
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

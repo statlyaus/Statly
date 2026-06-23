@@ -3,20 +3,26 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('league waivers page Firestore architecture', () => {
-  it('authorizes league membership before Admin SDK league reads', () => {
+  it('redirects the standalone waiver route into the league waivers tab', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/app/(app)/leagues/[id]/waivers/page.tsx'),
       'utf8'
     );
 
-    expect(source).toContain("import { requireUser } from '@/lib/requireUser'");
-    expect(source).toContain("import { verifyLeagueMembership } from '@/lib/leagueMembership'");
-    expect(source).toContain('const userId = await requireUser();');
-    expect(source).toContain('const membership = await verifyLeagueMembership(leagueId, userId);');
-    expect(source).toContain('if (!membership.isMember)');
-    expect(source.indexOf('verifyLeagueMembership(leagueId, userId)')).toBeLessThan(
-      source.indexOf("adminDb.collection('leagues').doc(leagueId)")
+    expect(source).toContain("import { redirect } from 'next/navigation'");
+    expect(source).toContain('redirect(`/leagues/${leagueId}?tab=waivers`);');
+    expect(source).not.toContain("adminDb.collection('leagues').doc(leagueId)");
+    expect(source).not.toContain('LeagueWaiversContainer');
+  });
+
+  it('does not pass server Firestore bootstrap objects into the client container', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/app/(app)/leagues/[id]/waivers/page.tsx'),
+      'utf8'
     );
+
+    expect(source).not.toContain('Object.create(null)');
+    expect(source).not.toContain('membersIndex');
   });
 
   it('does not treat unavailable waiver projections as successful empty data', () => {
