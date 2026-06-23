@@ -254,7 +254,7 @@ export default function LeagueWaiversContainer({
       if (Array.isArray(data.selectedCategories)) {
         setSelectedCategories(data.selectedCategories);
       }
-      if (Array.isArray(data.availablePlayers)) {
+      if (includePlayers && Array.isArray(data.availablePlayers)) {
         setAvailablePlayers((prev) => {
           if (!appendPlayers) return data.availablePlayers ?? [];
 
