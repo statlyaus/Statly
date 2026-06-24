@@ -33,7 +33,7 @@ function getSlotClasses(slot: DraftPickTrainSlot): string {
   }
 
   if (slot.isUserPick && slot.status === 'upcoming') {
-    return 'border-primary bg-accent text-accent-foreground';
+    return 'border-emerald-500/70 bg-emerald-500/10 text-emerald-950 shadow-sm dark:border-emerald-400/70 dark:bg-emerald-400/15 dark:text-emerald-50';
   }
 
   return 'border-border bg-background text-foreground';
@@ -84,7 +84,7 @@ export default function DraftPickTrain({
       </div>
 
       <ol
-        className="flex min-w-0 gap-3 overflow-x-auto px-4 py-4"
+        className="grid auto-cols-[minmax(12.5rem,1fr)] grid-flow-col gap-2 overflow-x-auto px-4 py-4 xl:grid-flow-row xl:grid-cols-[repeat(auto-fit,minmax(12.5rem,1fr))]"
         aria-label="Draft picks"
       >
         {state.slots.map((slot) => {
@@ -95,7 +95,7 @@ export default function DraftPickTrain({
             <li
               key={`${slot.round}-${slot.overall}-${slot.slot}`}
               className={cn(
-                'flex w-[15rem] min-w-[15rem] flex-col gap-3 rounded-lg border p-3',
+                'flex min-w-[12.5rem] flex-col gap-2 rounded-lg border p-3',
                 getSlotClasses(slot)
               )}
             >
@@ -106,7 +106,7 @@ export default function DraftPickTrain({
                   </p>
                   <p className="mt-1 truncate text-sm font-semibold">Slot {slot.slot}</p>
                 </div>
-                <span className="inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-md border border-border/60 bg-background/80 px-2 py-1 text-xs font-medium leading-4 text-foreground">
+                <span className="inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-md border border-current/20 bg-background/85 px-2 py-1 text-xs font-medium leading-4 text-foreground">
                   <StatusIcon slot={slot} />
                   <span className="truncate">{label}</span>
                 </span>

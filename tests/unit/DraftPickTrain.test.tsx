@@ -83,11 +83,17 @@ describe('DraftPickTrain', () => {
 
     const pickList = screen.getByRole('list', { name: 'Draft picks' });
     expect(pickList).toHaveClass('overflow-x-auto');
+    expect(pickList).toHaveClass('auto-cols-[minmax(12.5rem,1fr)]');
+    expect(pickList).toHaveClass('xl:grid-cols-[repeat(auto-fit,minmax(12.5rem,1fr))]');
 
-    for (const pickItem of screen.getAllByRole('listitem')) {
-      expect(pickItem).toHaveClass('w-[15rem]');
-      expect(pickItem).toHaveClass('min-w-[15rem]');
+    const pickItems = screen.getAllByRole('listitem');
+    for (const pickItem of pickItems) {
+      expect(pickItem).toHaveClass('min-w-[12.5rem]');
     }
+
+    expect(pickItems[1]).toHaveClass('bg-primary');
+    expect(pickItems[3]).toHaveClass('bg-emerald-500/10');
+    expect(pickItems[3]).not.toHaveClass('bg-accent');
   });
 });
 
