@@ -75,7 +75,7 @@ describe('LivePickHeader', () => {
     expect(screen.queryByLabelText('Latest draft activity')).not.toBeInTheDocument();
     expect(screen.queryByText('Latest pick')).not.toBeInTheDocument();
     const nextPickStatus = screen.getByRole('status', { name: /you are up next/i });
-    expect(nextPickStatus).toHaveClass('bg-warning/15');
+    expect(nextPickStatus).toHaveClass('bg-draft-user');
     expect(nextPickStatus).not.toHaveClass('bg-accent');
     expect(screen.getByText('On the clock')).toBeInTheDocument();
     expect(within(pickTrain).getByText('Alpha')).toBeInTheDocument();

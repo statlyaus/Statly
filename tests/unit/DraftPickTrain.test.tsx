@@ -91,8 +91,10 @@ describe('DraftPickTrain', () => {
       expect(pickItem).toHaveClass('min-w-[12.5rem]');
     }
 
-    expect(pickItems[1]).toHaveClass('bg-primary');
-    expect(pickItems[3]).toHaveClass('bg-warning/15');
+    expect(pickItems[0]).toHaveClass('bg-draft-complete');
+    expect(pickItems[1]).toHaveClass('bg-draft-live');
+    expect(pickItems[2]).toHaveClass('bg-draft-neutral');
+    expect(pickItems[3]).toHaveClass('bg-draft-user');
     expect(pickItems[3]).not.toHaveClass('bg-accent');
   });
 });

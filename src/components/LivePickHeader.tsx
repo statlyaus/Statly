@@ -277,23 +277,23 @@ export default function LivePickHeader({
   const timerTone =
     timerState.tone === 'urgent'
       ? {
-          badge: 'border-destructive/30 bg-destructive/10 text-destructive',
-          bar: 'bg-destructive',
-          rail: 'bg-destructive/15',
+          badge: 'border-draft-urgent/35 bg-draft-urgent-soft text-draft-urgent',
+          bar: 'bg-draft-urgent',
+          rail: 'bg-draft-urgent-soft',
           label: timerState.label,
         }
       : timerState.tone === 'warning'
         ? {
-            badge: 'border-warning/40 bg-warning/15 text-warning-foreground',
-            bar: 'bg-warning',
-            rail: 'bg-warning/20',
+            badge: 'border-draft-clock/40 bg-draft-clock-soft text-draft-clock-foreground',
+            bar: 'bg-draft-clock',
+            rail: 'bg-draft-clock-soft',
             label: timerState.label,
           }
         : timerState.tone === 'complete'
           ? {
-              badge: 'border-primary/25 bg-primary/10 text-primary',
-              bar: 'bg-primary',
-              rail: 'bg-primary/15',
+              badge: 'border-draft-complete-border bg-draft-complete text-draft-complete-foreground',
+              bar: 'bg-draft-complete-border',
+              rail: 'bg-draft-complete',
               label: timerState.label,
             }
           : timerState.tone === 'neutral'
@@ -304,9 +304,9 @@ export default function LivePickHeader({
                 label: timerState.label,
               }
             : {
-                badge: 'border-primary/25 bg-primary/10 text-primary',
-                bar: 'bg-primary',
-                rail: 'bg-primary/15',
+                badge: 'border-draft-live/25 bg-draft-live-soft text-draft-live',
+                bar: 'bg-draft-live',
+                rail: 'bg-draft-live-soft',
                 label: timerState.label,
               };
   const statusCopy =
@@ -365,7 +365,7 @@ export default function LivePickHeader({
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+              <span className="inline-flex items-center rounded-md border border-draft-live/20 bg-draft-live-soft px-2.5 py-1 text-xs font-semibold text-draft-live">
                 {statusCopy.title}
               </span>
               <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
@@ -373,7 +373,7 @@ export default function LivePickHeader({
               </span>
               {isYourTurn && (
                 <span
-                  className="rounded-md border border-primary bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
+                  className="rounded-md border border-draft-user-border bg-draft-user-strong px-2.5 py-1 text-xs font-semibold text-draft-user-strong-foreground"
                   role="alert"
                   aria-label="It is your turn to pick"
                 >
@@ -413,8 +413,8 @@ export default function LivePickHeader({
               <div
                 className={`inline-flex rounded-md border px-3 py-2 text-sm font-medium transition-opacity ${
                   picksUntilYourTurn === 1
-                    ? `border-warning/60 bg-warning/15 text-warning-foreground ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse`
-                    : 'border-border bg-background text-muted-foreground'
+                    ? `border-draft-user-border bg-draft-user text-draft-user-foreground ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse`
+                    : 'border-draft-neutral-border bg-draft-neutral text-draft-neutral-foreground'
                 }`}
                 role="status"
                 aria-live="polite"

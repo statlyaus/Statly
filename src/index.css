@@ -25,6 +25,26 @@
   --color-destructive: var(--destructive);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-draft-live: var(--draft-live);
+  --color-draft-live-foreground: var(--draft-live-foreground);
+  --color-draft-live-soft: var(--draft-live-soft);
+  --color-draft-user: var(--draft-user);
+  --color-draft-user-border: var(--draft-user-border);
+  --color-draft-user-foreground: var(--draft-user-foreground);
+  --color-draft-user-strong: var(--draft-user-strong);
+  --color-draft-user-strong-foreground: var(--draft-user-strong-foreground);
+  --color-draft-neutral: var(--draft-neutral);
+  --color-draft-neutral-border: var(--draft-neutral-border);
+  --color-draft-neutral-foreground: var(--draft-neutral-foreground);
+  --color-draft-complete: var(--draft-complete);
+  --color-draft-complete-border: var(--draft-complete-border);
+  --color-draft-complete-foreground: var(--draft-complete-foreground);
+  --color-draft-clock: var(--draft-clock);
+  --color-draft-clock-soft: var(--draft-clock-soft);
+  --color-draft-clock-foreground: var(--draft-clock-foreground);
+  --color-draft-urgent: var(--draft-urgent);
+  --color-draft-urgent-soft: var(--draft-urgent-soft);
+  --color-draft-owner: var(--draft-owner);
   --color-overlay: var(--overlay);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -83,6 +103,28 @@
   --app-toolbar-height: 4rem;
   --app-shell-max-width: 2100px;
 
+  /* Live draft room palette */
+  --draft-live: #0f2a44;
+  --draft-live-foreground: #fff;
+  --draft-live-soft: #eaf2f8;
+  --draft-user: #fff3d6;
+  --draft-user-border: #f6a400;
+  --draft-user-foreground: #6b3b00;
+  --draft-user-strong: #f6a400;
+  --draft-user-strong-foreground: #2b1800;
+  --draft-neutral: #f8fafc;
+  --draft-neutral-border: #cbd5e1;
+  --draft-neutral-foreground: #334155;
+  --draft-complete: #dcfce7;
+  --draft-complete-border: #86efac;
+  --draft-complete-foreground: #14532d;
+  --draft-clock: #ea580c;
+  --draft-clock-soft: #ffedd5;
+  --draft-clock-foreground: #7c2d12;
+  --draft-urgent: #dc2626;
+  --draft-urgent-soft: #fee2e2;
+  --draft-owner: #ea580c;
+
   /* League workspace palette */
   --league-page: #f3eee6;
   --league-surface: #fffdfa;
@@ -139,6 +181,26 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --draft-live: #7dd3fc;
+  --draft-live-foreground: #082f49;
+  --draft-live-soft: #0c2a3a;
+  --draft-user: #3f2e05;
+  --draft-user-border: #fbbf24;
+  --draft-user-foreground: #fde68a;
+  --draft-user-strong: #fbbf24;
+  --draft-user-strong-foreground: #271700;
+  --draft-neutral: #1e293b;
+  --draft-neutral-border: #475569;
+  --draft-neutral-foreground: #cbd5e1;
+  --draft-complete: #123524;
+  --draft-complete-border: #22c55e;
+  --draft-complete-foreground: #bbf7d0;
+  --draft-clock: #fb923c;
+  --draft-clock-soft: #431407;
+  --draft-clock-foreground: #fed7aa;
+  --draft-urgent: #f87171;
+  --draft-urgent-soft: #450a0a;
+  --draft-owner: #fb923c;
 }
 
 @layer base {

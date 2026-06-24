@@ -29,14 +29,18 @@ function getStatusLabel(slot: DraftPickTrainSlot): string {
 
 function getSlotClasses(slot: DraftPickTrainSlot): string {
   if (slot.status === 'current') {
-    return 'border-primary bg-primary text-primary-foreground shadow-sm';
+    return 'border-draft-live bg-draft-live text-draft-live-foreground shadow-sm';
+  }
+
+  if (slot.status === 'completed') {
+    return 'border-draft-complete-border bg-draft-complete text-draft-complete-foreground';
   }
 
   if (slot.isUserPick && slot.status === 'upcoming') {
-    return 'border-warning/60 bg-warning/15 text-warning-foreground shadow-sm';
+    return 'border-draft-user-border bg-draft-user text-draft-user-foreground shadow-sm';
   }
 
-  return 'border-border bg-background text-foreground';
+  return 'border-draft-neutral-border bg-draft-neutral text-draft-neutral-foreground';
 }
 
 function StatusIcon({ slot }: { slot: DraftPickTrainSlot }) {
