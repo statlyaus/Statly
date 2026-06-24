@@ -98,7 +98,7 @@ describe('PlayerGrid accessibility', () => {
         .map((header) => header.textContent)
     ).toEqual([
       'Player',
-      'Profile',
+      'Statly Z',
       'League Stats',
       'Actions',
       'G',
@@ -113,8 +113,12 @@ describe('PlayerGrid accessibility', () => {
     ]);
 
     const playerRow = within(table).getByRole('row', { name: /marcus bontempelli/i });
-    expect(within(playerRow).getByText('Statly Z')).toBeInTheDocument();
     expect(within(playerRow).getByText('3.42')).toBeInTheDocument();
+    expect(within(playerRow).queryByText(/combined z score/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by Statly Z' })).toHaveAttribute(
+      'title',
+      "Combined Z score across this league's selected scoring categories."
+    );
     expect(within(playerRow).getByRole('cell', { name: 'Goals: 1.1' })).toBeInTheDocument();
     expect(within(playerRow).getByRole('cell', { name: 'Inside 50s: 4.2' })).toBeInTheDocument();
     expect(
@@ -190,9 +194,12 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('text-muted-foreground');
     expect(source).toContain('focus-visible:ring-ring');
     expect(source).toContain('const PLAYER_COLUMN_WIDTH = 340');
-    expect(source).toContain('const PROFILE_COLUMN_WIDTH = 180');
+    expect(source).toContain('const Z_SCORE_COLUMN_WIDTH = 144');
     expect(source).toContain('const STAT_COLUMN_WIDTH = 88');
     expect(source).toContain('const ACTIONS_COLUMN_WIDTH = 236');
+    expect(source).toContain('sticky left-0 z-20 bg-muted/95');
+    expect(source).toContain('sticky left-0 z-[1] bg-card');
+    expect(source).toContain("onClick={() => onSortChange('statlyZ')}");
     expect(source).toContain('grid grid-cols-3 items-center gap-2');
     expect(source).toContain('h-10 w-full justify-center');
     expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');

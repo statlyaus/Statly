@@ -3,7 +3,7 @@ import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 
 import Image from 'next/image';
 
-import { CheckCircle2, ListPlus, Star } from 'lucide-react';
+import { CheckCircle2, Info, ListPlus, Star } from 'lucide-react';
 
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
@@ -33,13 +33,15 @@ interface PlayerGridProps {
 }
 
 const PLAYER_COLUMN_WIDTH = 340;
-const PROFILE_COLUMN_WIDTH = 180;
+const Z_SCORE_COLUMN_WIDTH = 144;
 const STAT_COLUMN_WIDTH = 88;
 const ACTIONS_COLUMN_WIDTH = 236;
 const TABLE_VIEWPORT_HEIGHT = 680;
 const VIRTUALIZED_ROW_HEIGHT = 112;
 const VIRTUALIZED_ROW_OVERSCAN = 6;
 const VIRTUALIZED_ROW_THRESHOLD = 120;
+const STATLY_Z_DESCRIPTION =
+  "Combined Z score across this league's selected scoring categories.";
 const ACTION_BUTTON_BASE_CLASS =
   'inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const ACTION_BUTTON_DISABLED_CLASS =
@@ -111,8 +113,13 @@ function PlayerIdentityCell({
   isQueued,
   isWatched,
 }: PlayerIdentityCellProps): React.JSX.Element {
+  const showInjury = player.injuryStatus && player.injuryStatus !== 'healthy';
+
   return (
-    <th scope="row" className="px-4 py-4 font-normal sm:px-5">
+    <th
+      scope="row"
+      className="sticky left-0 z-[1] bg-card px-4 py-4 font-normal shadow-[1px_0_0_0_hsl(var(--border))] transition-colors group-hover:bg-muted/50 sm:px-5"
+    >
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-background p-1.5 shadow-sm">
           <Image
@@ -147,6 +154,11 @@ function PlayerIdentityCell({
                 Watchlist
               </span>
             )}
+            {showInjury && (
+              <span className="rounded-md border border-warning/40 bg-warning/15 px-2 py-0.5 font-medium text-warning-foreground">
+                {getInjuryLabel(player.injuryStatus)}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -160,33 +172,14 @@ function getInjuryLabel(status: DraftPlayer['injuryStatus']): string {
   return 'Questionable';
 }
 
-function PlayerProfileCell({ player }: { player: DraftPlayer }): React.JSX.Element {
+function PlayerStatlyZCell({ player }: { player: DraftPlayer }): React.JSX.Element {
   const statlyZScore = typeof player.statlyZScore === 'number' ? player.statlyZScore : null;
-  const showInjury = player.injuryStatus && player.injuryStatus !== 'healthy';
 
   return (
-    <td className="px-4 py-4 align-middle">
-      <div className="min-w-0 space-y-2">
-        <div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Statly Z
-          </div>
-          <div className="mt-1 text-lg font-semibold leading-none text-foreground">
-            {statlyZScore !== null ? statlyZScore.toFixed(2) : 'Pending'}
-          </div>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          Combined Z score across this league&apos;s selected scoring categories.
-        </div>
-
-        {showInjury && (
-          <div>
-            <span className="inline-flex items-center rounded-md border border-warning/40 bg-warning/15 px-2 py-1 text-xs font-medium text-warning-foreground">
-              {getInjuryLabel(player.injuryStatus)}
-            </span>
-          </div>
-        )}
-      </div>
+    <td className="border-l border-border/60 px-4 py-4 text-center align-middle">
+      <span className="inline-flex min-w-16 justify-center text-lg font-semibold leading-none text-foreground tabular-nums">
+        {statlyZScore !== null ? statlyZScore.toFixed(2) : 'Pending'}
+      </span>
     </td>
   );
 }
@@ -353,7 +346,7 @@ function PlayerTableRow({
 }: PlayerTableRowProps): React.JSX.Element {
   const teamLogo = getTeamLogo(player.club);
   const teamAbbreviation = getTeamAbbreviation(player.club);
-  const rowClassName = `cursor-pointer transition-colors [content-visibility:auto] hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+  const rowClassName = `group cursor-pointer transition-colors [content-visibility:auto] hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
     isFocused ? 'bg-accent/50 ring-2 ring-inset ring-ring' : ''
   } ${isSelected ? 'bg-primary/10' : ''}`;
 
@@ -378,7 +371,7 @@ function PlayerTableRow({
         isQueued={isQueued}
         isWatched={isWatched}
       />
-      <PlayerProfileCell player={player} />
+      <PlayerStatlyZCell player={player} />
       <PlayerStatCells player={player} visibleCategories={visibleCategories} />
       <PlayerRowActions
         player={player}
@@ -576,6 +569,8 @@ interface PlayerGridTableProps {
   canMakePick: boolean;
   pendingSelectionId: string | null;
   setScrollTop: (scrollTop: number) => void;
+  sortBy: PlayerGridSortKey;
+  onSortChange: (sort: PlayerGridSortKey) => void;
   onKeyDown: (event: React.KeyboardEvent, playerIndex: number) => void;
   onFocusChange: (index: number | null) => void;
   onSelect: (player: DraftPlayer) => void;
@@ -602,6 +597,8 @@ function PlayerGridTable({
   canMakePick,
   pendingSelectionId,
   setScrollTop,
+  sortBy,
+  onSortChange,
   onKeyDown,
   onFocusChange,
   onSelect,
@@ -626,11 +623,11 @@ function PlayerGridTable({
           aria-label="Available draft players"
         >
           <caption className="sr-only">
-            Available draft players with profile, league stats, and draft actions.
+            Available draft players with Statly Z, league stats, and draft actions.
           </caption>
           <colgroup>
             <col style={{ width: PLAYER_COLUMN_WIDTH }} />
-            <col style={{ width: PROFILE_COLUMN_WIDTH }} />
+            <col style={{ width: Z_SCORE_COLUMN_WIDTH }} />
             {visibleCategories.length > 0 ? (
               visibleCategories.map((category) => (
                 <col key={category} style={{ width: STAT_COLUMN_WIDTH }} />
@@ -645,16 +642,29 @@ function PlayerGridTable({
               <th
                 scope="col"
                 rowSpan={visibleCategories.length > 0 ? 2 : 1}
-                className="px-4 py-3 font-medium sm:px-5"
+                className="sticky left-0 z-20 bg-muted/95 px-4 py-3 font-medium shadow-[1px_0_0_0_hsl(var(--border))] sm:px-5"
               >
                 Player
               </th>
               <th
                 scope="col"
                 rowSpan={visibleCategories.length > 0 ? 2 : 1}
-                className="px-4 py-3 font-medium"
+                aria-sort={sortBy === 'statlyZ' ? 'descending' : 'none'}
+                className="border-l border-border/70 px-3 py-3 text-center font-medium"
               >
-                Profile
+                <button
+                  type="button"
+                  onClick={() => onSortChange('statlyZ')}
+                  className="mx-auto inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted"
+                  aria-label="Sort by Statly Z"
+                  title={STATLY_Z_DESCRIPTION}
+                >
+                  <span>Statly Z</span>
+                  <Info
+                    className="h-3.5 w-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </button>
               </th>
               <th
                 scope={visibleCategories.length > 0 ? 'colgroup' : 'col'}
@@ -798,7 +808,7 @@ export default function PlayerGrid({
   const statColumnCount = Math.max(visibleCategories.length, 1);
   const tableMinWidth =
     PLAYER_COLUMN_WIDTH +
-    PROFILE_COLUMN_WIDTH +
+    Z_SCORE_COLUMN_WIDTH +
     statColumnCount * STAT_COLUMN_WIDTH +
     ACTIONS_COLUMN_WIDTH;
   const shouldWindowRows = filteredPlayers.length > VIRTUALIZED_ROW_THRESHOLD;
@@ -973,6 +983,8 @@ export default function PlayerGrid({
         canMakePick={canMakePick}
         pendingSelectionId={pendingSelectionId}
         setScrollTop={setScrollTop}
+        sortBy={sortBy}
+        onSortChange={onSortChange}
         onKeyDown={handleKeyDown}
         onFocusChange={setFocusedRow}
         onSelect={handlePlayerSelect}
