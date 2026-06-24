@@ -33,7 +33,7 @@ function getSlotClasses(slot: DraftPickTrainSlot): string {
   }
 
   if (slot.isUserPick && slot.status === 'upcoming') {
-    return 'border-emerald-500/70 bg-emerald-500/10 text-emerald-950 shadow-sm dark:border-emerald-400/70 dark:bg-emerald-400/15 dark:text-emerald-50';
+    return 'border-warning/60 bg-warning/15 text-warning-foreground shadow-sm';
   }
 
   return 'border-border bg-background text-foreground';

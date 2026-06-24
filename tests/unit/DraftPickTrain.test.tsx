@@ -92,7 +92,7 @@ describe('DraftPickTrain', () => {
     }
 
     expect(pickItems[1]).toHaveClass('bg-primary');
-    expect(pickItems[3]).toHaveClass('bg-emerald-500/10');
+    expect(pickItems[3]).toHaveClass('bg-warning/15');
     expect(pickItems[3]).not.toHaveClass('bg-accent');
   });
 });
