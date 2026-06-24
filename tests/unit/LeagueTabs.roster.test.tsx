@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import LeagueTabs from '@/components/league/LeagueTabs';
+import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
 
 const myTeamPanelSpy = vi.hoisted(() => vi.fn());
@@ -17,7 +18,11 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/components/MyTeamPanel', () => ({
-  default: (props: { team?: { players?: Array<string | number> }; players: Array<{ id: string }> }) => {
+  default: (props: {
+    team?: { players?: Array<string | number> };
+    players: Array<{ id: string }>;
+    selectedCategories?: string[];
+  }) => {
     myTeamPanelSpy(props);
 
     return (
@@ -40,7 +45,7 @@ const league: League = {
   type: 'private',
   ownerId: 'statly-dev-tester',
   maxTeams: 12,
-  categories: ['goals', 'tackles', 'inside50s'],
+  categories: [...REAL_DATA_NINE_CATEGORY_PRESET],
   tradeSettings: {
     tradeLimit: 10,
     tradeReview: 'none',
@@ -83,6 +88,9 @@ describe('LeagueTabs roster tab', () => {
               { id: 'player-2', name: 'Jacob Wehr', position: 'MID', team: 'GWS' },
             ],
           },
+          leagueSettings: {
+            selectedCategories: [...REAL_DATA_NINE_CATEGORY_PRESET],
+          },
         },
       }),
     });
@@ -106,6 +114,7 @@ describe('LeagueTabs roster tab', () => {
           expect.objectContaining({ id: 'player-1', name: 'Darcy Cameron' }),
           expect.objectContaining({ id: 'player-2', name: 'Jacob Wehr' }),
         ]),
+        selectedCategories: [...REAL_DATA_NINE_CATEGORY_PRESET],
       })
     );
   });

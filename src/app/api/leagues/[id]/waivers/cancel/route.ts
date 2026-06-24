@@ -1,26 +1,15 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { FieldValue } from 'firebase-admin/firestore';
-import { logger, withTiming } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 import { withMetrics } from '@/lib/metrics';
 import { logLeagueActivity } from '@/lib/activity';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
+import { PrismaWaiverClaimStore } from '@/server/waivers/WaiverProcessingService';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-// Explicit type for waiver claim documents
-interface WaiverClaimData {
-  userId: string;
-  status: string;
-  playerId?: string;
-  dropPlayerId?: string;
-  teamId?: string;
-  bidAmount?: number;
-}
 
 export const POST = withMetrics(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -42,13 +31,11 @@ export const POST = withMetrics(
       }
 
       logger.apiRequest('POST', `/api/leagues/${leagueId}/waivers/cancel`, { callerId, claimId });
-      const claimRef = adminDb.doc(`leagues/${leagueId}/waivers/${claimId}`);
-      const claimSnap = await withTiming('waivers.claim.get', () => claimRef.get());
-      if (!claimSnap.exists) {
+      const waiverStore = new PrismaWaiverClaimStore();
+      const claim = await waiverStore.loadClaim(leagueId, claimId);
+      if (!claim) {
         return NextResponse.json({ error: 'Claim not found' }, { status: 404 });
       }
-
-      const claim = claimSnap.data() as WaiverClaimData;
 
       // AuthZ: owner of the claim or league admin/commissioner/owner
       const membership = await getLeagueMembership(leagueId, callerId);
@@ -68,35 +55,11 @@ export const POST = withMetrics(
         );
       }
 
-      // Transactionally set CANCELLED and decrement pendingBidTotal if tracked
-      await adminDb.runTransaction(async (tx) => {
-        const fresh = await tx.get(claimRef);
-        if (!fresh.exists) throw new Error('Claim not found');
-        const data = fresh.data() as WaiverClaimData;
-        if (data.status !== 'PENDING') throw new Error('Not pending');
-
-        // Update claim status
-        tx.update(claimRef, {
-          status: 'CANCELLED',
-          processedAt: FieldValue.serverTimestamp(),
-          cancelledBy: callerId,
-          cancelledAt: FieldValue.serverTimestamp(),
-        });
-
-        // Decrement pre-aggregated pending bid total if it exists
-        const bid = typeof data.bidAmount === 'number' ? data.bidAmount : 0;
-        if (bid > 0) {
-          const bidCents = Math.round(bid * 100);
-          const priorityRef = adminDb.doc(`leagues/${leagueId}/waiverPriorities/${data.userId}`);
-          const prSnap = await tx.get(priorityRef);
-          if (prSnap.exists) {
-            tx.update(priorityRef, {
-              pendingBidTotal: FieldValue.increment(-bid),
-              pendingBidTotalCents: FieldValue.increment(-bidCents),
-              updatedAt: new Date(),
-            });
-          }
-        }
+      await waiverStore.cancelPendingClaim({
+        leagueId,
+        claimId,
+        claim,
+        cancelledBy: callerId,
       });
 
       // audit: waiver-cancelled via shared helper

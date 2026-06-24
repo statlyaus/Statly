@@ -1,19 +1,19 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/AuthContext';
 import { LoadingSpinner } from '@/components/ui';
 import WaiverFAABSystem from '@/components/waivers/WaiverFAABSystem';
-import {
-  leagueDataService,
-  type LeagueWaiverClaim,
-  type LeagueRoster,
-  type LeagueActivityItem,
+import type {
+  LeagueWaiverClaim,
+  LeagueRoster,
+  LeagueActivityItem,
 } from '@/services/leagueDataService';
-import { type DocumentSnapshot } from 'firebase/firestore';
+import type { FantasyCategoryKey, PlayerStats } from '@/types/fantasyCategories';
 
 interface Props {
   leagueId: string;
+  currentUserId?: string | null;
   initialClaims?: Array<{
     id: string;
     userId: string;
@@ -25,19 +25,31 @@ interface Props {
     createdAt: string;
     processedAt?: string;
     processingAt?: string;
+    bidAmount?: number;
   }>;
   initialSettings?: {
-    waiverSettings?: { faabBudget?: number };
+    waiverSettings?: { faabBudget?: number; minimumBid?: number; system?: string };
   };
   availablePlayers?: Array<{
     id: string;
     name: string;
     team?: string;
+    club?: string;
     position?: string;
     ownership?: number;
+    avgPoints?: number;
+    averagePoints?: number;
+    fantasyPoints?: number;
+    gamesPlayed?: number;
+    stats?: Partial<PlayerStats>;
+    statsTotal?: Partial<PlayerStats>;
+    statlyZScore?: number;
+    statlyZBreakdown?: Array<{ category: FantasyCategoryKey; value: number; zScore: number }>;
+    statlyZMissingCategories?: FantasyCategoryKey[];
   }>;
   playersIndex?: Record<string, { id: string; name: string; team?: string; position?: string }>;
   membersIndex?: Record<string, { userId: string; teamId?: string; teamName?: string }>;
+  selectedCategories?: FantasyCategoryKey[];
   initialPlayersCursor?: string | null;
 }
 
@@ -66,18 +78,97 @@ type ActivityFeedItem = LeagueActivityItem & {
   teamName?: string;
 };
 
-type WaiverLoadSource = 'claims' | 'roster' | 'activity' | 'priority';
+type WaiverLoadSource = 'snapshot' | 'players';
+
+type SerializedLeagueRoster = Omit<LeagueRoster, 'createdAt' | 'updatedAt'> & {
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type SerializedLeagueActivityItem = Omit<LeagueActivityItem, 'timestamp'> & {
+  timestamp?: string;
+};
+
+type SerializedWaiverClaim = NonNullable<Props['initialClaims']>[number];
+
+interface WaiverBootstrapResponse {
+  claims?: SerializedWaiverClaim[];
+  roster?: SerializedLeagueRoster | null;
+  activity?: SerializedLeagueActivityItem[];
+  remainingFAAB?: number;
+  initialSettings?: Props['initialSettings'];
+  availablePlayers?: NonNullable<Props['availablePlayers']>;
+  playersIndex?: NonNullable<Props['playersIndex']>;
+  selectedCategories?: FantasyCategoryKey[];
+  nextPlayersCursor?: string | null;
+  activityNextCursor?: string | null;
+  activityHasMore?: boolean;
+  error?: string;
+}
+
+function parseDate(value: Date | string | undefined, fallback = new Date()): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? fallback : date;
+  }
+  return fallback;
+}
+
+function mapClaim(leagueId: string, claim: SerializedWaiverClaim): LeagueWaiverClaim {
+  return {
+    id: claim.id,
+    leagueId,
+    userId: claim.userId,
+    teamId: claim.teamId,
+    playerId: claim.playerId,
+    dropPlayerId: claim.dropPlayerId,
+    priority: claim.priority,
+    status: claim.status,
+    processingAt: claim.processingAt
+      ? parseDate(claim.processingAt)
+      : parseDate(claim.createdAt),
+    processedAt: claim.processedAt ? parseDate(claim.processedAt) : undefined,
+    createdAt: parseDate(claim.createdAt),
+    bidAmount: claim.bidAmount,
+  };
+}
+
+function mapRoster(roster: SerializedLeagueRoster | null | undefined): LeagueRoster | null {
+  if (!roster) return null;
+
+  return {
+    ...roster,
+    createdAt: parseDate(roster.createdAt),
+    updatedAt: parseDate(roster.updatedAt),
+  };
+}
+
+function mapActivity(item: SerializedLeagueActivityItem): LeagueActivityItem {
+  return {
+    ...item,
+    timestamp: parseDate(item.timestamp),
+  };
+}
 
 export default function LeagueWaiversContainer({
   leagueId,
+  currentUserId,
   initialClaims,
   initialSettings: _initialSettings,
   availablePlayers: _availablePlayers,
   playersIndex,
   membersIndex,
+  selectedCategories: _selectedCategories,
   initialPlayersCursor,
 }: Props): React.JSX.Element | null {
   const { user, loading } = useAuth();
+  const effectiveUserId = user?.uid ?? currentUserId ?? null;
+  const hasInitialPlayerBootstrap =
+    _availablePlayers !== undefined ||
+    playersIndex !== undefined ||
+    initialPlayersCursor !== undefined;
+  const shouldRequestInitialPlayers = !hasInitialPlayerBootstrap;
   // Local player paging state
   const [availablePlayers, setAvailablePlayers] = useState(_availablePlayers || []);
   const [playersIdx, setPlayersIdx] = useState(playersIndex || {});
@@ -88,24 +179,14 @@ export default function LeagueWaiversContainer({
   const [loadingMorePlayers, setLoadingMorePlayers] = useState<boolean>(false);
   const [claims, setClaims] = useState<LeagueWaiverClaim[]>(() => {
     if (!initialClaims) return [] as LeagueWaiverClaim[];
-    return initialClaims.map((c) => ({
-      id: c.id,
-      leagueId,
-      userId: c.userId,
-      teamId: c.teamId,
-      playerId: c.playerId,
-      dropPlayerId: c.dropPlayerId,
-      priority: c.priority,
-      status: c.status,
-      // processingAt is the server-side scheduled processing time; fall back to createdAt if absent
-      processingAt: c.processingAt ? new Date(c.processingAt) : new Date(c.createdAt),
-      processedAt: c.processedAt ? new Date(c.processedAt) : undefined,
-      createdAt: new Date(c.createdAt),
-      bidAmount: undefined,
-    })) as LeagueWaiverClaim[];
+    return initialClaims.map((claim) => mapClaim(leagueId, claim));
   });
+  const [selectedCategories, setSelectedCategories] = useState<FantasyCategoryKey[]>(
+    _selectedCategories || []
+  );
   const [roster, setRoster] = useState<LeagueRoster | null>(null);
   const [activity, setActivity] = useState<LeagueActivityItem[]>([]);
+  const [settings, setSettings] = useState(_initialSettings);
   const [remainingFAAB, setRemainingFAAB] = useState<number | undefined>(undefined);
   const [waiverLoadErrors, setWaiverLoadErrors] = useState<
     Partial<Record<WaiverLoadSource, string>>
@@ -118,106 +199,126 @@ export default function LeagueWaiversContainer({
 
   // Activity paging state
   const ACTIVITY_PAGE_SIZE = 50;
-  const [activityLastDoc, setActivityLastDoc] = useState<DocumentSnapshot | null>(null);
-  const [activityHasMore, setActivityHasMore] = useState<boolean>(true);
+  const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
+  const [activityHasMore, setActivityHasMore] = useState<boolean>(false);
   const [loadingMoreActivity, setLoadingMoreActivity] = useState<boolean>(false);
-  const [hasLoadedMoreActivity, setHasLoadedMoreActivity] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (!user?.uid) return;
+  const loadWaiverSnapshot = useCallback(
+    async ({
+      signal,
+      includePlayers = false,
+      appendPlayers = false,
+      appendActivity = false,
+      cursor,
+      playersCursor,
+    }: {
+      signal?: AbortSignal;
+      includePlayers?: boolean;
+      appendPlayers?: boolean;
+      appendActivity?: boolean;
+      cursor?: string | null;
+      playersCursor?: string | null;
+    } = {}) => {
+      const url = new URL(`/api/leagues/${leagueId}/waivers`, window.location.origin);
+      url.searchParams.set('playersLimit', includePlayers ? '100' : '0');
+      url.searchParams.set('activityLimit', String(ACTIVITY_PAGE_SIZE));
+      if (cursor) {
+        url.searchParams.set('activityCursor', cursor);
+      }
+      if (playersCursor) {
+        url.searchParams.set('playersCursor', playersCursor);
+      }
 
-    const clearLoadError = (source: WaiverLoadSource) => {
+      const response = await fetch(url.toString(), { signal });
+      const data = (await response.json().catch(() => ({}))) as WaiverBootstrapResponse;
+      if (!response.ok) {
+        throw new Error(data.error || `Waiver data failed with status ${response.status}`);
+      }
+
+      if (Array.isArray(data.claims)) {
+        setClaims(data.claims.map((claim) => mapClaim(leagueId, claim)));
+      }
+      setRoster(mapRoster(data.roster));
+      setActivity((prev) => {
+        const incoming = Array.isArray(data.activity) ? data.activity.map(mapActivity) : [];
+        if (!appendActivity) return incoming;
+
+        const seen = new Set(prev.map((item) => item.id));
+        return [...prev, ...incoming.filter((item) => !seen.has(item.id))];
+      });
+      setActivityNextCursor(data.activityNextCursor ?? null);
+      setActivityHasMore(Boolean(data.activityHasMore));
+      setRemainingFAAB(
+        typeof data.remainingFAAB === 'number' ? data.remainingFAAB : undefined
+      );
+      if (data.initialSettings) {
+        setSettings(data.initialSettings);
+      }
+      if (Array.isArray(data.selectedCategories)) {
+        setSelectedCategories(data.selectedCategories);
+      }
+      if (includePlayers && Array.isArray(data.availablePlayers)) {
+        setAvailablePlayers((prev) => {
+          if (!appendPlayers) return data.availablePlayers ?? [];
+
+          const seen = new Set(prev.map((player) => player.id));
+          const merged = [...prev];
+          for (const player of data.availablePlayers ?? []) {
+            if (!seen.has(player.id)) merged.push(player);
+          }
+          return merged;
+        });
+        setPlayersCursor(data.nextPlayersCursor ?? null);
+        setHasMorePlayers(Boolean(data.nextPlayersCursor));
+      }
+      if (data.playersIndex) {
+        setPlayersIdx((prev) => ({ ...prev, ...data.playersIndex }));
+      }
       setWaiverLoadErrors((prev) => {
-        if (!prev[source]) return prev;
+        if (!prev.snapshot) return prev;
         const next = { ...prev };
-        delete next[source];
+        delete next.snapshot;
         return next;
       });
-    };
+    },
+    [ACTIVITY_PAGE_SIZE, leagueId]
+  );
 
-    const handleLoadError = (source: WaiverLoadSource, message: string) => (err: unknown) => {
-      const detail = err instanceof Error ? err.message : String(err || message);
-      setWaiverLoadErrors((prev) => ({ ...prev, [source]: detail }));
-      console.error(message, err);
-    };
+  useEffect(() => {
+    if (!effectiveUserId) return;
 
-    const subKey = leagueDataService.subscribeToLeagueWaivers(
-      leagueId,
-      (c) => {
-        clearLoadError('claims');
-        setClaims(c);
-      },
-      user.uid,
-      handleLoadError('claims', 'Waiver claims are unavailable')
-    );
+    const controller = new AbortController();
 
-    const rosterKey = leagueDataService.subscribeToUserRoster(
-      leagueId,
-      user.uid,
-      (r) => {
-        clearLoadError('roster');
-        setRoster(r);
-      },
-      handleLoadError('roster', 'Roster data is unavailable')
-    );
-
-    const activityKey = leagueDataService.subscribeToLeagueActivity(
-      leagueId,
-      (items, pageMeta) => {
-        clearLoadError('activity');
-        // Merge latest snapshot with any previously loaded older items (dedupe by id)
-        setActivity((prev) => {
-          const latestIds = new Set(items.map((i) => i.id));
-          const preservedOlder = prev.filter((p) => !latestIds.has(p.id));
-          return [...items, ...preservedOlder];
+    const bootstrapWaivers = async () => {
+      try {
+        await loadWaiverSnapshot({
+          signal: controller.signal,
+          includePlayers: shouldRequestInitialPlayers,
         });
-        // Only update the paging cursor if we haven't paged older items yet
-        if (!hasLoadedMoreActivity) {
-          setActivityLastDoc(pageMeta?.lastDoc ?? null);
-        }
-        // Heuristic: if we received a full page, likely more exist
-        setActivityHasMore((items?.length ?? 0) === ACTIVITY_PAGE_SIZE);
-      },
-      { pageSize: ACTIVITY_PAGE_SIZE },
-      handleLoadError('activity', 'Waiver activity is unavailable')
-    );
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const detail = error instanceof Error ? error.message : 'Waiver data is unavailable';
+        setWaiverLoadErrors((prev) => ({ ...prev, snapshot: detail }));
+        console.error('Waiver data is unavailable', error);
+      }
+    };
 
-    const faabKey = leagueDataService.subscribeToWaiverPriority(
-      leagueId,
-      user.uid,
-      (remaining) => {
-        clearLoadError('priority');
-        setRemainingFAAB(remaining);
-      },
-      handleLoadError('priority', 'Waiver priority is unavailable')
-    );
+    void bootstrapWaivers();
 
     return () => {
-      leagueDataService.unsubscribe(subKey);
-      leagueDataService.unsubscribe(rosterKey);
-      leagueDataService.unsubscribe(activityKey);
-      leagueDataService.unsubscribe(faabKey);
+      controller.abort();
     };
-  }, [leagueId, user?.uid, hasLoadedMoreActivity]);
+  }, [effectiveUserId, loadWaiverSnapshot, shouldRequestInitialPlayers]);
 
   const handleLoadMoreActivity = async () => {
-    if (!activityLastDoc || loadingMoreActivity) return;
+    if (!activityNextCursor || loadingMoreActivity) return;
     try {
       setLoadingMoreActivity(true);
-      const page = await leagueDataService.getNextActivityPage(
-        leagueId,
-        activityLastDoc,
-        ACTIVITY_PAGE_SIZE,
-        'desc'
-      );
-      setActivity((prev) => {
-        const existing = new Set(prev.map((i) => i.id));
-        const toAppend = page.items.filter((i) => !existing.has(i.id));
-        return [...prev, ...toAppend];
+      await loadWaiverSnapshot({
+        includePlayers: false,
+        appendActivity: true,
+        cursor: activityNextCursor,
       });
-      setActivityLastDoc(page.lastDoc);
-      setHasLoadedMoreActivity(true);
-      setActivityHasMore(page.items.length === ACTIVITY_PAGE_SIZE && !!page.lastDoc);
     } catch (err) {
       console.error('Load more activity error', err);
     } finally {
@@ -273,14 +374,14 @@ export default function LeagueWaiversContainer({
   }, [claims]);
 
   const totalBudget = useMemo(() => {
-    const ws = _initialSettings?.waiverSettings;
+    const ws = settings?.waiverSettings;
     return typeof ws?.faabBudget === 'number' ? ws.faabBudget : undefined;
-  }, [_initialSettings]);
+  }, [settings]);
 
   const minimumBid = useMemo(() => {
-    const ws = _initialSettings?.waiverSettings as { minimumBid?: number } | undefined;
+    const ws = settings?.waiverSettings;
     return typeof ws?.minimumBid === 'number' ? ws.minimumBid : undefined;
-  }, [_initialSettings]);
+  }, [settings]);
 
   const namedActivity = useMemo<ActivityFeedItem[]>(() => {
     return activity.map((it) => ({
@@ -296,7 +397,7 @@ export default function LeagueWaiversContainer({
   }, [activity, playersIdx, membersIndex]);
 
   const handleSubmitClaim = async (claim: Partial<UIWaiverClaim>) => {
-    if (!user?.uid || !leagueId) return;
+    if (!effectiveUserId || !leagueId) return;
 
     // Validate required fields
     if (!claim.playerId) {
@@ -318,7 +419,7 @@ export default function LeagueWaiversContainer({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user.uid,
+          userId: effectiveUserId,
           teamId: roster.id,
           playerId: String(claim.playerId),
           dropPlayerId: claim.dropPlayerId,
@@ -334,6 +435,7 @@ export default function LeagueWaiversContainer({
         console.error('[handleSubmitClaim] Failed:', j);
         return;
       }
+      await loadWaiverSnapshot({ includePlayers: false });
     } catch (err) {
       setSubmitError('Failed to submit waiver claim');
       console.error('[handleSubmitClaim] Error:', err);
@@ -341,17 +443,19 @@ export default function LeagueWaiversContainer({
   };
 
   const handleCancelClaim = async (id: string) => {
-    if (!user?.uid || !leagueId) return;
+    if (!effectiveUserId || !leagueId) return;
     try {
       const res = await fetch(`/api/leagues/${leagueId}/waivers/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, claimId: id }),
+        body: JSON.stringify({ userId: effectiveUserId, claimId: id }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         console.error('Cancel claim failed', j);
+        return;
       }
+      await loadWaiverSnapshot({ includePlayers: false });
     } catch (err) {
       console.error('Failed to cancel waiver claim', err);
     }
@@ -361,54 +465,12 @@ export default function LeagueWaiversContainer({
     if (!hasMorePlayers || !playersCursor || loadingMorePlayers) return;
     try {
       setLoadingMorePlayers(true);
-      const url = new URL(`/api/leagues/${leagueId}/players`, window.location.origin);
-      url.searchParams.set('limit', '100');
-      url.searchParams.set('cursor', playersCursor);
-      url.searchParams.set('owned', 'false'); // only fetch unowned players
-      const ac = new AbortController();
-      const t = setTimeout(() => ac.abort(), 5000);
-      const res = await fetch(url.toString(), { signal: ac.signal });
-      clearTimeout(t);
-      if (!res.ok) {
-        console.error('Players page fetch failed', await res.text());
-        setHasMorePlayers(false);
-        return;
-      }
-      const data = (await res.json()) as {
-        items: Array<{
-          id: string;
-          name: string;
-          team?: string;
-          position?: string;
-          ownership?: number;
-        }>;
-        nextCursor?: string | null;
-      };
-      if (Array.isArray(data.items) && data.items.length) {
-        // Filter out owned players defensively (should already be unowned via API)
-        const incoming = data.items.filter((p) =>
-          typeof p.ownership === 'number' ? p.ownership < 100 : true
-        );
-        setAvailablePlayers((prev) => {
-          const seen = new Set(prev.map((p) => p.id));
-          const merged = [...prev];
-          for (const p of incoming) {
-            if (!seen.has(p.id)) merged.push(p);
-          }
-          return merged;
-        });
-        setPlayersIdx((prev) => {
-          const copy = { ...prev } as Record<
-            string,
-            { id: string; name: string; team?: string; position?: string }
-          >;
-          for (const p of incoming)
-            copy[p.id] = { id: p.id, name: p.name, team: p.team, position: p.position };
-          return copy;
-        });
-      }
-      setPlayersCursor(data.nextCursor ?? null);
-      setHasMorePlayers(!!data.nextCursor);
+      await loadWaiverSnapshot({
+        includePlayers: true,
+        appendPlayers: true,
+        appendActivity: false,
+        playersCursor,
+      });
     } catch (err) {
       console.error('Load more players error', err);
       setHasMorePlayers(false);
@@ -417,8 +479,17 @@ export default function LeagueWaiversContainer({
     }
   };
 
-  if (loading) return <LoadingSpinner />;
-  if (!user) return null;
+  if (loading && !effectiveUserId) return <LoadingSpinner />;
+  if (!effectiveUserId) {
+    return (
+      <div
+        className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground"
+        role="status"
+      >
+        Sign in to manage waiver claims for this league.
+      </div>
+    );
+  }
 
   return (
     <>
@@ -450,6 +521,7 @@ export default function LeagueWaiversContainer({
         totalBudget={totalBudget}
         userTeamName={roster?.teamName}
         minimumBid={minimumBid}
+        selectedCategories={selectedCategories}
         onLoadMorePlayers={hasMorePlayers ? handleLoadMorePlayers : undefined}
         loadingMorePlayers={loadingMorePlayers}
         hasMorePlayers={hasMorePlayers}

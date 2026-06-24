@@ -309,7 +309,6 @@ export default function LivePickHeader({
                 rail: 'bg-primary/15',
                 label: timerState.label,
               };
-  const latestPick = draftData.picks[draftData.picks.length - 1];
   const statusCopy =
     {
       SCHEDULED: {
@@ -358,133 +357,95 @@ export default function LivePickHeader({
       role="banner"
       aria-label="Live draft status"
     >
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,21rem)]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <div
-            className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm"
-            role="region"
-            aria-label="Draft clock"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                  {statusCopy.title}
-                </span>
-                <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                  Round {draftData.round} / {draftData.direction}
-                </span>
-                {isYourTurn && (
-                  <span
-                    className="rounded-md border border-primary bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
-                    role="alert"
-                    aria-label="It is your turn to pick"
-                  >
-                    Your turn
-                  </span>
-                )}
-              </div>
-
-              <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${timerTone.badge}`}>
-                {timerTone.label}
+      <div className="flex min-w-0 flex-col gap-4">
+        <div
+          className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm"
+          role="region"
+          aria-label="Draft clock"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                {statusCopy.title}
               </span>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
-                  Live pick clock
-                </p>
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{statusCopy.detail}</p>
-                <div
-                  className="mt-2 flex items-baseline gap-2 font-mono text-4xl font-semibold tracking-normal text-foreground"
-                  role="timer"
-                  aria-label={`Time remaining: ${formatTime(timeLeft)}`}
-                  aria-live="polite"
+              <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                Round {draftData.round} / {draftData.direction}
+              </span>
+              {isYourTurn && (
+                <span
+                  className="rounded-md border border-primary bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
+                  role="alert"
+                  aria-label="It is your turn to pick"
                 >
-                  <ClockIcon
-                    className={`h-6 w-6 ${timeLeft <= 10 ? 'animate-spin text-destructive' : 'text-muted-foreground'}`}
-                    aria-hidden="true"
-                  />
-                  <span className={timeLeft <= 10 ? 'animate-pulse' : ''}>
-                    {formatTime(timeLeft)}
-                  </span>
-                </div>
-              </div>
-
-              {!isYourTurn && picksUntilYourTurn > 0 && (
-                <div
-                  className={`inline-flex rounded-md border px-3 py-2 text-sm font-medium transition-opacity ${
-                    picksUntilYourTurn === 1
-                      ? `border-primary bg-accent text-accent-foreground ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse`
-                      : 'border-border bg-background text-muted-foreground'
-                  }`}
-                  role="status"
-                  aria-live="polite"
-                  aria-label={`Your turn status: ${picksUntilYourTurn === 1 ? 'You are up next' : `${picksUntilYourTurn} picks until your turn`}`}
-                >
-                  {picksUntilYourTurn === 1
-                    ? "You're up next"
-                    : `${picksUntilYourTurn} pick${picksUntilYourTurn > 1 ? 's' : ''} until your turn`}
-                  {estimatedTimeUntilYourTurn > 0 && (
-                    <span className="ml-1 text-muted-foreground">
-                      / about {formatTime(estimatedTimeUntilYourTurn)}
-                    </span>
-                  )}
-                </div>
+                  Your turn
+                </span>
               )}
             </div>
 
-            <div className={`mt-4 h-2 overflow-hidden rounded-full ${timerTone.rail}`}>
-              <div
-                className={`h-full transition-all duration-1000 ${timerTone.bar}`}
-                style={{ width: `${timerPercent}%` }}
-                role="progressbar"
-                aria-valuenow={timeLeft}
-                aria-valuemin={0}
-                aria-valuemax={timePerPick}
-                aria-label={`Pick timer: ${timerPercent}% remaining`}
-              />
-            </div>
+            <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${timerTone.badge}`}>
+              {timerTone.label}
+            </span>
           </div>
 
-          <DraftPickTrain state={pickTrainState} timeLeft={timeLeft} />
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                Live pick clock
+              </p>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{statusCopy.detail}</p>
+              <div
+                className="mt-2 flex items-baseline gap-2 font-mono text-4xl font-semibold tracking-normal text-foreground"
+                role="timer"
+                aria-label={`Time remaining: ${formatTime(timeLeft)}`}
+                aria-live="polite"
+              >
+                <ClockIcon
+                  className={`h-6 w-6 ${timeLeft <= 10 ? 'animate-spin text-destructive' : 'text-muted-foreground'}`}
+                  aria-hidden="true"
+                />
+                <span className={timeLeft <= 10 ? 'animate-pulse' : ''}>
+                  {formatTime(timeLeft)}
+                </span>
+              </div>
+            </div>
+
+            {!isYourTurn && picksUntilYourTurn > 0 && (
+              <div
+                className={`inline-flex rounded-md border px-3 py-2 text-sm font-medium transition-opacity ${
+                  picksUntilYourTurn === 1
+                    ? `border-primary bg-accent text-accent-foreground ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse`
+                    : 'border-border bg-background text-muted-foreground'
+                }`}
+                role="status"
+                aria-live="polite"
+                aria-label={`Your turn status: ${picksUntilYourTurn === 1 ? 'You are up next' : `${picksUntilYourTurn} picks until your turn`}`}
+              >
+                {picksUntilYourTurn === 1
+                  ? "You're up next"
+                  : `${picksUntilYourTurn} pick${picksUntilYourTurn > 1 ? 's' : ''} until your turn`}
+                {estimatedTimeUntilYourTurn > 0 && (
+                  <span className="ml-1 text-muted-foreground">
+                    / about {formatTime(estimatedTimeUntilYourTurn)}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className={`mt-4 h-2 overflow-hidden rounded-full ${timerTone.rail}`}>
+            <div
+              className={`h-full transition-all duration-1000 ${timerTone.bar}`}
+              style={{ width: `${timerPercent}%` }}
+              role="progressbar"
+              aria-valuenow={timeLeft}
+              aria-valuemin={0}
+              aria-valuemax={timePerPick}
+              aria-label={`Pick timer: ${timerPercent}% remaining`}
+            />
+          </div>
         </div>
 
-        <aside
-          className="min-w-0 self-start rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-5"
-          aria-label="Latest draft activity"
-        >
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Latest pick
-            </p>
-            {latestPick ? (
-              <div className="mt-3">
-                <p className="text-lg font-semibold leading-tight text-foreground">
-                  {latestPick.player.name}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs font-medium text-foreground">
-                    {latestPick.player.position}
-                  </span>
-                  <span>{latestPick.player.club}</span>
-                </div>
-                <p className="mt-4 text-sm text-muted-foreground">
-                  Picked by{' '}
-                  <span className="font-medium text-foreground">
-                    {latestPick.member.displayName}
-                  </span>
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Round {latestPick.round} / Pick {latestPick.overall}
-                  {latestPick.auto && ' / Auto-pick'}
-                </p>
-              </div>
-            ) : (
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Selections will appear here as soon as the draft starts moving.
-              </p>
-            )}
-        </aside>
+        <DraftPickTrain state={pickTrainState} timeLeft={timeLeft} />
       </div>
     </section>
   );

@@ -3,32 +3,28 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('waiver pending bid aggregate architecture', () => {
-  it('decrements both dollar and cent pending bid totals when claims leave pending', () => {
+  it('keeps pending FAAB reservations in canonical Prisma waiver state', () => {
     const cancelSource = readFileSync(
       join(process.cwd(), 'src/app/api/leagues/[id]/waivers/cancel/route.ts'),
       'utf8'
     );
     const processSource = readFileSync(
-      join(process.cwd(), 'src/app/api/leagues/[id]/waivers/process/route.ts'),
+      join(process.cwd(), 'src/server/waivers/WaiverProcessingService.ts'),
       'utf8'
     );
-
-    const cancelDecrementBlock = cancelSource.slice(
-      cancelSource.indexOf('const bid = typeof data.bidAmount'),
-      cancelSource.indexOf('      });', cancelSource.indexOf('const bid = typeof data.bidAmount'))
-    );
-    const processDecrementBlock = processSource.slice(
-      processSource.indexOf('const decrementPendingBidTotal'),
-      processSource.indexOf(
-        '            };',
-        processSource.indexOf('const decrementPendingBidTotal')
-      )
+    const schemaSource = readFileSync(join(process.cwd(), 'prisma/schema.prisma'), 'utf8');
+    const prismaStoreSource = processSource.slice(
+      processSource.indexOf('export class PrismaWaiverClaimStore'),
+      processSource.indexOf('class FirestoreWaiverClaimStore')
     );
 
-    for (const block of [cancelDecrementBlock, processDecrementBlock]) {
-      expect(block).toContain('pendingBidTotal: FieldValue.increment(-bid)');
-      expect(block).toContain('pendingBidTotalCents: FieldValue.increment(-bidCents)');
-      expect(block).toContain('Math.round(bid * 100)');
-    }
+    expect(schemaSource).toContain('model WaiverPriority');
+    expect(prismaStoreSource).toContain('private async reservePendingBid');
+    expect(prismaStoreSource).toContain('private async releasePendingBid');
+    expect(prismaStoreSource).toContain('UPDATE WaiverPriority');
+    expect(prismaStoreSource).toContain('SET pendingBidTotal = CASE');
+    expect(cancelSource).toContain('cancelPendingClaim');
+    expect(cancelSource).not.toContain('FieldValue.increment(-bid)');
+    expect(prismaStoreSource).not.toContain('pendingBidTotalCents');
   });
 });

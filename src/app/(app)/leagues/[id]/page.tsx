@@ -22,12 +22,20 @@ export default async function LeaguePage({
         league={null}
         members={[]}
         leagueId={id}
+        initialUserId={userId}
         errorMsg={toLeaguePageError(id, result.status)}
       />
     );
   }
 
-  return <LeaguePageClient league={result.league} members={result.members} leagueId={id} />;
+  return (
+    <LeaguePageClient
+      league={result.league}
+      members={result.members}
+      leagueId={id}
+      initialUserId={userId}
+    />
+  );
 }
 
 async function getLeaguePageUserId(): Promise<string | null> {

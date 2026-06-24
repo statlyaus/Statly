@@ -8,6 +8,8 @@ interface PlayerRanking extends Player {
   valueOverReplacement: number;
 }
 
+const RANKINGS_REQUEST_TIMEOUT_MS = 10_000;
+
 function normalizeRankingsResponse(response: unknown): PlayerRanking[] {
   const normalizeRows = (rows: unknown[]): PlayerRanking[] =>
     rows.map((row) => {
@@ -45,21 +47,40 @@ export const useRankings = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, RANKINGS_REQUEST_TIMEOUT_MS);
+
     const getRankings = async () => {
       try {
-        setLoading(true);
-        const data = await fetchApi('rankings');
+        if (isActive) setLoading(true);
+        const data = await fetchApi('rankings', { signal: controller.signal });
+        if (!isActive) return;
         setRankings(normalizeRankingsResponse(data));
         setError(null);
       } catch (err) {
-        setError('Failed to fetch player rankings.');
-        console.error(err);
+        if (!isActive) return;
+        if (controller.signal.aborted) {
+          setError('Rankings request timed out.');
+        } else {
+          setError('Failed to fetch player rankings.');
+          console.error(err);
+        }
       } finally {
-        setLoading(false);
+        window.clearTimeout(timeoutId);
+        if (isActive) setLoading(false);
       }
     };
 
     getRankings();
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   return { rankings, loading, error };
