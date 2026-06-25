@@ -197,9 +197,16 @@ describe('PlayerGrid accessibility', () => {
     expect(source).toContain('const Z_SCORE_COLUMN_WIDTH = 144');
     expect(source).toContain('const STAT_COLUMN_WIDTH = 88');
     expect(source).toContain('const ACTIONS_COLUMN_WIDTH = 236');
+    expect(source).toContain('className?: string;');
+    expect(source).toContain(
+      'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm'
+    );
+    expect(source).toContain('className="relative min-h-0 flex-1"');
+    expect(source).toContain('className="h-full overflow-auto"');
     expect(source).toContain('sticky left-0 z-20 bg-muted/95');
     expect(source).toContain('sticky left-0 z-[1] bg-card');
     expect(source).toContain("onClick={() => onSortChange('statlyZ')}");
+    expect(source).not.toContain('className="max-h-[680px] overflow-auto"');
     expect(source).toContain('grid grid-cols-3 items-center gap-2');
     expect(source).toContain('h-10 w-full justify-center');
     expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');

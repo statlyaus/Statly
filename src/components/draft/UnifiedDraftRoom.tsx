@@ -18,7 +18,6 @@ import {
 import type { DraftPlayer, DraftParticipant, DraftPick, DraftSettings } from '@/types/draft';
 
 import ConnectionStatus from './ConnectionStatus';
-import DraftAnalytics from './DraftAnalytics';
 import DraftControls from './DraftControls';
 import DraftLeftRail, { type DraftLeftRailRosterSlot } from './DraftLeftRail';
 import DraftQueue from './DraftQueue';
@@ -470,7 +469,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     participants: feedParticipants,
     userMemberId,
     watchlistPlayerIds: watchlistItems.map((item) => item.playerId),
-    className: 'border-0 shadow-none',
+    className: 'h-full min-h-0 border-0 shadow-none',
   };
   const desktopPickFeed = (
     <PickFeed {...pickFeedProps} contentId={`pick-feed-content:${activeDraft.id}:desktop`} />
@@ -618,7 +617,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           >
             <section
               aria-label="Draft board"
-              className="mt-6 grid gap-4 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(16rem,20rem)_minmax(54rem,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(64rem,1fr)_22rem]"
+              className="mt-6 grid min-h-[calc(100vh-24rem)] items-stretch gap-4 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)] xl:min-h-[calc(100vh-20rem)] xl:grid-cols-[minmax(16rem,20rem)_minmax(54rem,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(64rem,1fr)_22rem]"
             >
               <DraftLeftRail
                 draftStatus={activeDraft.status}
@@ -628,11 +627,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 watchlistCount={watchlistItems.length}
                 queuePanel={queuePanel}
                 watchlistPanel={watchlistPanel}
-                className="min-h-[28rem] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
+                className="h-full min-h-[28rem] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
               />
 
-              <div className="min-w-0 overflow-x-auto">
+              <div className="flex min-h-0 min-w-0 overflow-x-auto">
                 <PlayerGrid
+                  className="h-full min-h-[28rem]"
                   players={filteredPlayers}
                   totalPlayers={playersList.length}
                   onPlayerSelect={handlePlayerSelect}
@@ -655,14 +655,10 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               </div>
 
               <aside className="hidden min-h-0 lg:block" aria-label="Desktop pick feed">
-                <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm">
+                <div className="sticky top-4 flex h-full min-h-[28rem] max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm">
                   {desktopPickFeed}
                 </div>
               </aside>
-            </section>
-
-            <section className="mt-6" aria-label="Draft analytics">
-              <DraftAnalytics draft={draft.draft} picks={picks} participants={participants} />
             </section>
           </section>
         </main>

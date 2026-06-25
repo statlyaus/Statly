@@ -26,7 +26,10 @@ describe('league waivers page Firestore architecture', () => {
   });
 
   it('does not treat unavailable waiver projections as successful empty data', () => {
-    const serviceSource = readFileSync(join(process.cwd(), 'src/services/waiverService.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      join(process.cwd(), 'src/services/waiverService.ts'),
+      'utf8'
+    );
     const containerSource = readFileSync(
       join(process.cwd(), 'src/components/waivers/LeagueWaiversContainer.tsx'),
       'utf8'
@@ -50,6 +53,10 @@ describe('league waivers page Firestore architecture', () => {
       join(process.cwd(), 'src/app/api/leagues/[id]/waivers/process/route.ts'),
       'utf8'
     );
+    const processingServiceSource = readFileSync(
+      join(process.cwd(), 'src/server/waivers/WaiverProcessingService.ts'),
+      'utf8'
+    );
 
     expect(submitSource).not.toContain(
       'dropPlayerId: dropPlayerId ? String(dropPlayerId) : undefined'
@@ -57,20 +64,24 @@ describe('league waivers page Firestore architecture', () => {
     expect(submitSource).not.toContain(
       "bidAmount: typeof validatedBid === 'number' ? validatedBid : undefined"
     );
-    expect(submitSource).toContain('const waiverClaimData = {');
-    expect(submitSource).toContain(
-      '...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {})'
-    );
-    expect(submitSource).toContain(
-      "...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {})"
-    );
+    expect(submitSource).toContain('PrismaWaiverClaimStore');
     expect(processSource).not.toContain('dropPlayerId: claim.dropPlayerId || undefined');
     expect(processSource).not.toContain('bidAmount: claim.bidAmount || undefined');
     expect(processSource).not.toContain('dropPlayerId: freshData.dropPlayerId || undefined');
     expect(processSource).not.toContain('bidAmount: freshData.bidAmount || undefined');
-    expect(processSource).toContain('const failedActivityData = {');
-    expect(processSource).toContain('const successfulActivityData = {');
-    expect(processSource).not.toContain('const freshData = freshSnap.data() as WaiverClaimRaw');
-    expect(processSource).toContain('id: freshSnap.id,');
+    expect(processingServiceSource).not.toContain('dropPlayerId: input.claim.dropPlayerId ||');
+    expect(processingServiceSource).not.toContain('bidAmount: input.claim.bidAmount ||');
+    expect(processingServiceSource).toContain(
+      '...(input.claim.dropPlayerId ? { dropPlayerId: input.claim.dropPlayerId } : {})'
+    );
+    expect(processingServiceSource).toContain(
+      "...(typeof input.claim.bidAmount === 'number' ? { bidAmount: input.claim.bidAmount } : {})"
+    );
+    expect(processingServiceSource).toContain(
+      '...(claim.dropPlayerId ? { dropPlayerId: claim.dropPlayerId } : {})'
+    );
+    expect(processingServiceSource).toContain(
+      "...(typeof claim.bidAmount === 'number' ? { bidAmount: claim.bidAmount } : {})"
+    );
   });
 });

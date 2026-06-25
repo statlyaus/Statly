@@ -6,6 +6,44 @@ Build Statly through durable, root-cause engineering. The best solution is the o
 
 Prefer the smallest change that fully solves the underlying problem. Do not confuse "small" with "local" when the real fault crosses auth, routing, data loading, caching, state, schema, or UI boundaries.
 
+## Loop-First Operating Rule
+
+Every Codex session should make the active loop visible before substantive work starts. The loop is the working frame that turns a prompt into an evidence-backed outcome; it is not a side reference to check at the end.
+
+Default to this sequence:
+
+1. Select the loop that fits the request.
+2. Run the required council gate for substantive work.
+3. State the active loop, ownership boundary, protected files, and verification path.
+4. Implement within that loop.
+5. Review, fix, re-review, and report with concrete evidence.
+
+For every non-trivial task, the first assistant update after reading the prompt must include this visible contract:
+
+```md
+Active loop:
+Boundary:
+Protected files:
+Verification:
+```
+
+For trivial prompts, use an internal loop check and answer directly unless a named skill or repo loop clearly applies.
+
+Use these loops deliberately:
+
+| Work type                                                                            | Primary loop                                       |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| Draft room realtime, picks, queue, watchlist, roster projection, waiver availability | `.agents/skills/draft-reliability-loop/SKILL.md`   |
+| PR status, CI follow-up, stale PR triage                                             | `.agents/skills/pr-babysitter/SKILL.md`            |
+| Turning a prompt, issue, or stale PR intent into narrow PR-ready scope               | `.agents/skills/ticket-to-pr-ready-loop/SKILL.md`  |
+| Final done checks, residual risk, evidence-backed reporting                          | `.agents/skills/completion-contract-loop/SKILL.md` |
+| Fresh clone, bootstrap, setup, or environment verification                           | `.agents/skills/fresh-clone-loop/SKILL.md`         |
+| Docs source-of-truth drift, stale plans, historical completion notes                 | `.agents/skills/docs-sweep-loop/SKILL.md`          |
+| Repeated safe verification runs and quality streaks                                  | `.agents/skills/quality-streak-loop/SKILL.md`      |
+| Repository hygiene, stale branches, protected-file triage                            | `.agents/skills/repository-cleanup-loop/SKILL.md`  |
+
+If no specialized loop fits, use `docs/codex/agent-loop-operating-model.md` as the base loop: plan, implement, review, fix, re-review, and report.
+
 ## Decision Standard
 
 For every non-trivial bug or feature, choose the solution that best satisfies these criteria, in order:
@@ -80,14 +118,6 @@ Statly uses a repo-local adaptation of [karpathy/llm-council](https://github.com
 - Use `npm run codex:council:openrouter -- --prompt "..."` only when a paid OpenRouter council is explicitly desired; OpenRouter requires its API key environment variable.
 - If the logical scaffold is insufficient and Ollama/OpenRouter are unavailable, state that model-backed council review was skipped and continue with the best local review path; do not block urgent or trivial work solely on council availability.
 - Do not paste secrets into council prompts. The council is an engineering review aid, not product runtime code.
-
-## Codex Agent Loops
-
-- Use `docs/codex/agent-loop-operating-model.md` as the repo-local operating model for repeatable Codex loops that plan, implement, review, fix, re-review, and report.
-- Use `.agents/skills/draft-reliability-loop/SKILL.md` for draft-room reliability loops.
-- Use `.agents/skills/pr-babysitter/SKILL.md` for PR monitoring, CI follow-up, and stale PR triage loops.
-- Use `docs/codex/loop-library-adoption.md` for the repo-local Loop Library-inspired workflow set: repository cleanup, completion contracts, ticket-to-PR-ready planning, fresh-clone verification, docs sweeps, and quality streaks.
-- These loop docs do not replace the council gates above; preserve Decision 1 before substantive work and Decision 2 before commit.
 
 ## Architecture Rules
 

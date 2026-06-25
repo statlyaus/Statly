@@ -29,6 +29,7 @@ interface LeagueTabsProps {
   league: League;
   members: LeagueMember[];
   currentUserId?: string;
+  onMembersChange?: (members: LeagueMember[]) => void;
 }
 
 type TabType = 'overview' | 'teams' | 'roster' | 'trades' | 'waivers' | 'draft' | 'settings';
@@ -44,11 +45,15 @@ export default function LeagueTabs({
   league,
   members,
   currentUserId,
+  onMembersChange,
 }: LeagueTabsProps): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [teamActionMessage, setTeamActionMessage] = useState<LeagueSettingsMessage | null>(null);
+  const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null);
+  const [removingUserId, setRemovingUserId] = useState<string | null>(null);
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -80,6 +85,7 @@ export default function LeagueTabs({
 
   const currentMember = members.find((member) => member.userId === currentUserId);
   const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
+  const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;
   const waiverMembersIndex = useMemo(
     () =>
       Object.fromEntries(
@@ -107,6 +113,51 @@ export default function LeagueTabs({
           timeStyle: 'short',
         }).format(draftDate)
       : 'Not scheduled';
+
+  const handleRemoveMember = async (member: LeagueMember) => {
+    if (!canRemoveTeams || member.userId === league.ownerId) return;
+
+    try {
+      setRemovingUserId(member.userId);
+      setTeamActionMessage(null);
+      const response = await authenticatedFetch(
+        `/api/leagues/${league.id}/members`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'removeMember',
+            targetUserId: member.userId,
+          }),
+        },
+        currentUserId
+      );
+      const payload = (await response.json()) as unknown;
+
+      if (!response.ok || !isRecord(payload) || payload.success !== true) {
+        const message =
+          isRecord(payload) && typeof payload.error === 'string'
+            ? payload.error
+            : `status ${response.status}`;
+        throw new Error(message);
+      }
+
+      const nextMembers = members.filter((candidate) => candidate.userId !== member.userId);
+      onMembersChange?.(nextMembers);
+      if (!onMembersChange) {
+        router.refresh?.();
+      }
+      setPendingRemoveUserId(null);
+      setTeamActionMessage({ type: 'success', text: `${member.teamName} removed.` });
+    } catch (error) {
+      setTeamActionMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to remove team.',
+      });
+    } finally {
+      setRemovingUserId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -266,7 +317,24 @@ export default function LeagueTabs({
 
             {activeTab === 'teams' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-gray-900">League Teams</h2>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900">League Teams</h2>
+                  <span className="text-sm font-medium text-gray-600">
+                    {members.length}/{league.maxTeams} teams
+                  </span>
+                </div>
+                {teamActionMessage && (
+                  <div
+                    role={teamActionMessage.type === 'error' ? 'alert' : 'status'}
+                    className={`rounded-lg border px-3 py-2 text-sm ${
+                      teamActionMessage.type === 'error'
+                        ? 'border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] text-[color:var(--league-danger)]'
+                        : 'border-[color:var(--league-success)]/30 bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]'
+                    }`}
+                  >
+                    {teamActionMessage.text}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {members.map((member) => (
                     <div key={member.id} className="bg-gray-50 rounded-lg p-4">
@@ -281,6 +349,40 @@ export default function LeagueTabs({
                       <p className="text-sm text-gray-600">
                         Joined {new Date(member.joinedAt).toLocaleDateString()}
                       </p>
+                      {canRemoveTeams && member.userId !== league.ownerId && (
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          {pendingRemoveUserId === member.userId ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void handleRemoveMember(member)}
+                                disabled={removingUserId === member.userId}
+                                aria-label={`Confirm remove ${member.teamName}`}
+                                className="inline-flex h-9 items-center justify-center rounded-lg bg-[color:var(--league-danger)] px-3 text-sm font-medium text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {removingUserId === member.userId ? 'Removing...' : 'Confirm'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPendingRemoveUserId(null)}
+                                disabled={removingUserId === member.userId}
+                                className="inline-flex h-9 items-center justify-center rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setPendingRemoveUserId(member.userId)}
+                              aria-label={`Remove ${member.teamName}`}
+                              className="inline-flex h-9 items-center justify-center rounded-lg border border-[color:var(--league-danger)]/30 bg-[color:var(--league-surface)] px-3 text-sm font-medium text-[color:var(--league-danger)] transition-colors hover:bg-[color:var(--league-danger-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)]"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -329,6 +431,7 @@ export default function LeagueTabs({
                 </div>
                 <LeagueWaiversContainer
                   leagueId={league.id}
+                  currentUserId={currentUserId}
                   membersIndex={waiverMembersIndex}
                   selectedCategories={league.categories}
                 />

@@ -2,7 +2,11 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
-import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
+import {
+  getLeagueMembership,
+  isLeagueManagerRole,
+  listActiveLeagueMembers,
+} from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -18,6 +22,11 @@ import {
   normalizeDraftPositionLimits,
 } from '@/lib/draftSettings';
 import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import {
+  MAX_LEAGUE_TEAMS,
+  MIN_LEAGUE_TEAMS,
+  getMaxTeamsUpdateError,
+} from '@/server/leagues/leagueCapacity';
 
 type DraftTypeValue = 'SNAKE' | 'LINEAR';
 type WaiverRuleValue = 'WEEKLY' | 'ROLLING';
@@ -371,7 +380,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const prismaLeague = await prisma.league.findUnique({
       where: { id },
-      include: { settings: true },
+      include: {
+        settings: true,
+        _count: { select: { members: true } },
+      },
     });
 
     if (prismaLeague?.settings) {
@@ -416,9 +428,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const maxTeams = parseOptionalInteger(maxTeamsInput);
       if (
         maxTeamsInput !== undefined &&
-        (maxTeams === undefined || maxTeams < 4 || maxTeams > 20)
+        (maxTeams === undefined || maxTeams < MIN_LEAGUE_TEAMS || maxTeams > MAX_LEAGUE_TEAMS)
       ) {
-        return NextResponse.json({ error: 'Max teams must be between 4 and 20' }, { status: 400 });
+        return NextResponse.json(
+          { error: `Max teams must be between ${MIN_LEAGUE_TEAMS} and ${MAX_LEAGUE_TEAMS}` },
+          { status: 400 }
+        );
+      }
+
+      const maxTeamsUpdateError = getMaxTeamsUpdateError({
+        nextMaxTeams: maxTeams,
+        activeMemberCount: prismaLeague._count.members,
+      });
+      if (maxTeamsUpdateError) {
+        return NextResponse.json({ error: maxTeamsUpdateError }, { status: 400 });
       }
 
       const positionLimits = normalizeDraftPositionLimits(
@@ -499,15 +522,32 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
 
+    const maxTeamsInput = leagueInput.maxTeams ?? body.maxTeams;
+    const maxTeams = parseOptionalInteger(maxTeamsInput);
+    if (maxTeamsInput !== undefined && maxTeams === undefined) {
+      return NextResponse.json(
+        { error: `Max teams must be between ${MIN_LEAGUE_TEAMS} and ${MAX_LEAGUE_TEAMS}` },
+        { status: 400 }
+      );
+    }
+
+    if (maxTeamsInput !== undefined) {
+      const maxTeamsUpdateError = getMaxTeamsUpdateError({
+        nextMaxTeams: maxTeams,
+        activeMemberCount: (await listActiveLeagueMembers(id)).length,
+      });
+      if (maxTeamsUpdateError) {
+        return NextResponse.json({ error: maxTeamsUpdateError }, { status: 400 });
+      }
+    }
+
     const categories = normalizeLeagueCategories(scoringInput.categories ?? body.categories);
     await leagueRef.update({
       ...(typeof (leagueInput.name ?? body.name) === 'string' &&
       String(leagueInput.name ?? body.name).trim()
         ? { name: String(leagueInput.name ?? body.name).trim() }
         : {}),
-      ...((leagueInput.maxTeams ?? body.maxTeams)
-        ? { maxTeams: leagueInput.maxTeams ?? body.maxTeams }
-        : {}),
+      ...(maxTeamsInput !== undefined ? { maxTeams } : {}),
       categories,
       ...(body.draftDate || draftInput.draftDate
         ? { draftDate: body.draftDate ?? draftInput.draftDate }

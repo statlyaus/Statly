@@ -5,12 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import LeagueWaiversContainer from '@/components/waivers/LeagueWaiversContainer';
 
 const waiverSystemSpy = vi.hoisted(() => vi.fn());
+const authState = vi.hoisted(() => ({
+  user: { uid: 'statly-dev-tester' } as { uid: string } | null,
+  loading: false,
+}));
 
 vi.mock('@/AuthContext', () => ({
-  useAuth: () => ({
-    user: { uid: 'statly-dev-tester' },
-    loading: false,
-  }),
+  useAuth: () => authState,
 }));
 
 vi.mock('@/components/ui', () => ({
@@ -45,6 +46,8 @@ vi.mock('@/components/waivers/WaiverFAABSystem', () => ({
 describe('LeagueWaiversContainer', () => {
   afterEach(() => {
     waiverSystemSpy.mockClear();
+    authState.user = { uid: 'statly-dev-tester' };
+    authState.loading = false;
     vi.restoreAllMocks();
   });
 
@@ -122,9 +125,7 @@ describe('LeagueWaiversContainer', () => {
               stats: { goals: 0.2, tackles: 4.8, inside50s: 1.1 },
             },
           ],
-          rosterDropOptions: [
-            { id: 'owned-1', name: 'Nick Daicos', team: 'COL', position: 'MID' },
-          ],
+          rosterDropOptions: [{ id: 'owned-1', name: 'Nick Daicos', team: 'COL', position: 'MID' }],
           userClaims: [expect.objectContaining({ id: 'claim-1', playerName: 'Darcy Cameron' })],
           selectedCategories: ['goals', 'tackles', 'inside50s'],
           currentBalance: 91,
@@ -132,6 +133,131 @@ describe('LeagueWaiversContainer', () => {
         })
       );
     });
+  });
+
+  it('loads waiver data with the page-level user id when auth context has not hydrated', async () => {
+    authState.user = null;
+    const player = {
+      id: 'player-1',
+      name: 'Darcy Cameron',
+      team: 'COL',
+      position: 'RUC',
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        claims: [],
+        roster: {
+          id: 'member-1',
+          userId: 'statly-dev-tester',
+          teamName: 'Robbo Rockers',
+          playerIds: [],
+          bench: [],
+          emergencies: [],
+          leagueId: 'league-1',
+          updatedAt: '2026-06-22T00:00:00.000Z',
+          createdAt: '2026-06-22T00:00:00.000Z',
+        },
+        activity: [],
+        remainingFAAB: 91,
+        selectedCategories: ['goals', 'tackles', 'inside50s'],
+        availablePlayers: [player],
+        playersIndex: {
+          'player-1': { id: 'player-1', name: 'Darcy Cameron', team: 'COL', position: 'RUC' },
+        },
+        nextPlayersCursor: null,
+        activityNextCursor: null,
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <LeagueWaiversContainer
+        leagueId="league-1"
+        currentUserId="statly-dev-tester"
+        membersIndex={{}}
+      />
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:3000/api/leagues/league-1/waivers?playersLimit=100&activityLimit=50',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+    });
+    await waitFor(() => {
+      expect(waiverSystemSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          availablePlayers: [player],
+          currentBalance: 91,
+        })
+      );
+    });
+    expect(screen.getByLabelText('Waiver system')).toBeTruthy();
+  });
+
+  it('lets users retry waiver loading after a failed snapshot request', async () => {
+    const user = userEvent.setup();
+    const player = {
+      id: 'player-1',
+      name: 'Darcy Cameron',
+      team: 'COL',
+      position: 'RUC',
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'Waiver data temporarily unavailable' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          claims: [],
+          roster: {
+            id: 'member-1',
+            userId: 'statly-dev-tester',
+            teamName: 'Robbo Rockers',
+            playerIds: [],
+            bench: [],
+            emergencies: [],
+            leagueId: 'league-1',
+            updatedAt: '2026-06-22T00:00:00.000Z',
+            createdAt: '2026-06-22T00:00:00.000Z',
+          },
+          activity: [],
+          remainingFAAB: 91,
+          selectedCategories: ['goals', 'tackles', 'inside50s'],
+          availablePlayers: [player],
+          playersIndex: {
+            'player-1': { id: 'player-1', name: 'Darcy Cameron', team: 'COL', position: 'RUC' },
+          },
+          nextPlayersCursor: null,
+          activityNextCursor: null,
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeagueWaiversContainer leagueId="league-1" membersIndex={{}} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Waiver data temporarily unavailable');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Retry waiver data' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+    expect(waiverSystemSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        availablePlayers: [player],
+        currentBalance: 91,
+      })
+    );
   });
 
   it('keeps the loaded free-agent table when claim refresh snapshots omit players', async () => {

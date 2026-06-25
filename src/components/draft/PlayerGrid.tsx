@@ -5,6 +5,7 @@ import Image from 'next/image';
 
 import { CheckCircle2, Info, ListPlus, Star } from 'lucide-react';
 
+import { cn } from '@/lib/utils';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
@@ -30,6 +31,7 @@ interface PlayerGridProps {
   onSortChange: (sort: PlayerGridSortKey) => void;
   isLoading: boolean;
   emptyStateMessage?: string;
+  className?: string;
 }
 
 const PLAYER_COLUMN_WIDTH = 340;
@@ -504,6 +506,7 @@ function PlayerGridControls({
 interface PlayerGridEmptyStateProps {
   hasActiveFilters: boolean;
   emptyStateMessage?: string;
+  className?: string;
   onClearFilters: () => void;
   onScrollToTop: () => void;
 }
@@ -511,11 +514,17 @@ interface PlayerGridEmptyStateProps {
 function PlayerGridEmptyState({
   hasActiveFilters,
   emptyStateMessage,
+  className,
   onClearFilters,
   onScrollToTop,
 }: PlayerGridEmptyStateProps): React.JSX.Element {
   return (
-    <div className="rounded-lg border border-border bg-card px-6 py-12 text-center text-card-foreground">
+    <div
+      className={cn(
+        'flex h-full min-h-[28rem] flex-col items-center justify-center rounded-lg border border-border bg-card px-6 py-12 text-center text-card-foreground',
+        className
+      )}
+    >
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-2xl">
         🔍
       </div>
@@ -606,10 +615,10 @@ function PlayerGridTable({
   onToggleWatchlist,
 }: PlayerGridTableProps): React.JSX.Element {
   return (
-    <div className="relative">
+    <div className="relative min-h-0 flex-1">
       <div
         ref={scrollContainerRef}
-        className="max-h-[680px] overflow-auto"
+        className="h-full overflow-auto"
         onScroll={(event) => {
           if (shouldWindowRows) {
             setScrollTop(event.currentTarget.scrollTop);
@@ -786,6 +795,7 @@ export default function PlayerGrid({
   onSortChange,
   isLoading,
   emptyStateMessage,
+  className,
 }: PlayerGridProps): React.JSX.Element {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
@@ -938,6 +948,7 @@ export default function PlayerGrid({
       <PlayerGridEmptyState
         hasActiveFilters={hasActiveFilters}
         emptyStateMessage={emptyStateMessage}
+        className={className}
         onClearFilters={() => {
           onSearchChange('');
           onPositionFilterChange('ALL');
@@ -949,7 +960,12 @@ export default function PlayerGrid({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+        className
+      )}
+    >
       <PlayerGridControls
         searchInputRef={searchInputRef}
         searchQuery={searchQuery}

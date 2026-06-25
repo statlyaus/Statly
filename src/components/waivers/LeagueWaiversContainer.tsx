@@ -13,6 +13,7 @@ import type { FantasyCategoryKey, PlayerStats } from '@/types/fantasyCategories'
 
 interface Props {
   leagueId: string;
+  currentUserId?: string | null;
   initialClaims?: Array<{
     id: string;
     userId: string;
@@ -124,9 +125,7 @@ function mapClaim(leagueId: string, claim: SerializedWaiverClaim): LeagueWaiverC
     dropPlayerId: claim.dropPlayerId,
     priority: claim.priority,
     status: claim.status,
-    processingAt: claim.processingAt
-      ? parseDate(claim.processingAt)
-      : parseDate(claim.createdAt),
+    processingAt: claim.processingAt ? parseDate(claim.processingAt) : parseDate(claim.createdAt),
     processedAt: claim.processedAt ? parseDate(claim.processedAt) : undefined,
     createdAt: parseDate(claim.createdAt),
     bidAmount: claim.bidAmount,
@@ -152,6 +151,7 @@ function mapActivity(item: SerializedLeagueActivityItem): LeagueActivityItem {
 
 export default function LeagueWaiversContainer({
   leagueId,
+  currentUserId,
   initialClaims,
   initialSettings: _initialSettings,
   availablePlayers: _availablePlayers,
@@ -161,6 +161,7 @@ export default function LeagueWaiversContainer({
   initialPlayersCursor,
 }: Props): React.JSX.Element | null {
   const { user, loading } = useAuth();
+  const effectiveUserId = user?.uid ?? currentUserId ?? null;
   const hasInitialPlayerBootstrap =
     _availablePlayers !== undefined ||
     playersIndex !== undefined ||
@@ -192,6 +193,7 @@ export default function LeagueWaiversContainer({
     () => Object.values(waiverLoadErrors)[0] ?? null,
     [waiverLoadErrors]
   );
+  const [retryingWaiverSnapshot, setRetryingWaiverSnapshot] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Activity paging state
@@ -245,9 +247,7 @@ export default function LeagueWaiversContainer({
       });
       setActivityNextCursor(data.activityNextCursor ?? null);
       setActivityHasMore(Boolean(data.activityHasMore));
-      setRemainingFAAB(
-        typeof data.remainingFAAB === 'number' ? data.remainingFAAB : undefined
-      );
+      setRemainingFAAB(typeof data.remainingFAAB === 'number' ? data.remainingFAAB : undefined);
       if (data.initialSettings) {
         setSettings(data.initialSettings);
       }
@@ -282,7 +282,7 @@ export default function LeagueWaiversContainer({
   );
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!effectiveUserId) return;
 
     const controller = new AbortController();
 
@@ -305,7 +305,7 @@ export default function LeagueWaiversContainer({
     return () => {
       controller.abort();
     };
-  }, [loadWaiverSnapshot, shouldRequestInitialPlayers, user?.uid]);
+  }, [effectiveUserId, loadWaiverSnapshot, shouldRequestInitialPlayers]);
 
   const handleLoadMoreActivity = async () => {
     if (!activityNextCursor || loadingMoreActivity) return;
@@ -322,6 +322,28 @@ export default function LeagueWaiversContainer({
       setLoadingMoreActivity(false);
     }
   };
+
+  const handleRetryWaiverSnapshot = useCallback(async () => {
+    if (retryingWaiverSnapshot) return;
+
+    try {
+      setRetryingWaiverSnapshot(true);
+      await loadWaiverSnapshot({
+        includePlayers: shouldRequestInitialPlayers && availablePlayers.length === 0,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Waiver data is unavailable';
+      setWaiverLoadErrors((prev) => ({ ...prev, snapshot: detail }));
+      console.error('Waiver data retry failed', error);
+    } finally {
+      setRetryingWaiverSnapshot(false);
+    }
+  }, [
+    availablePlayers.length,
+    loadWaiverSnapshot,
+    retryingWaiverSnapshot,
+    shouldRequestInitialPlayers,
+  ]);
 
   const rosterDropOptions = useMemo(() => {
     if (!roster?.playerIds?.length)
@@ -394,7 +416,7 @@ export default function LeagueWaiversContainer({
   }, [activity, playersIdx, membersIndex]);
 
   const handleSubmitClaim = async (claim: Partial<UIWaiverClaim>) => {
-    if (!user?.uid || !leagueId) return;
+    if (!effectiveUserId || !leagueId) return;
 
     // Validate required fields
     if (!claim.playerId) {
@@ -416,7 +438,7 @@ export default function LeagueWaiversContainer({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user.uid,
+          userId: effectiveUserId,
           teamId: roster.id,
           playerId: String(claim.playerId),
           dropPlayerId: claim.dropPlayerId,
@@ -440,12 +462,12 @@ export default function LeagueWaiversContainer({
   };
 
   const handleCancelClaim = async (id: string) => {
-    if (!user?.uid || !leagueId) return;
+    if (!effectiveUserId || !leagueId) return;
     try {
       const res = await fetch(`/api/leagues/${leagueId}/waivers/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, claimId: id }),
+        body: JSON.stringify({ userId: effectiveUserId, claimId: id }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -476,17 +498,35 @@ export default function LeagueWaiversContainer({
     }
   };
 
-  if (loading) return <LoadingSpinner />;
-  if (!user) return null;
+  if (loading && !effectiveUserId) return <LoadingSpinner />;
+  if (!effectiveUserId) {
+    return (
+      <div
+        className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground"
+        role="status"
+      >
+        Sign in to manage waiver claims for this league.
+      </div>
+    );
+  }
 
   return (
     <>
       {waiverLoadError && (
         <div
-          className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          className="mb-4 flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
           role="alert"
         >
-          {waiverLoadError}
+          <span>{waiverLoadError}</span>
+          <button
+            type="button"
+            onClick={handleRetryWaiverSnapshot}
+            disabled={retryingWaiverSnapshot}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-destructive/30 bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Retry waiver data"
+          >
+            {retryingWaiverSnapshot ? 'Retrying...' : 'Retry'}
+          </button>
         </div>
       )}
       {submitError && (
