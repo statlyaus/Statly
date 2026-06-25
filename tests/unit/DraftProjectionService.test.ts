@@ -39,6 +39,8 @@ describe('DraftProjectionService', () => {
       round: 1,
       direction: DraftDirection.FORWARD,
       completedAt: null,
+      pickStartedAt: new Date('2026-06-14T10:00:00.000Z'),
+      pickDeadlineAt: new Date('2026-06-14T10:01:00.000Z'),
       lobbyStatus: null,
       league: {
         name: 'Test AFL Champions League',
@@ -77,6 +79,9 @@ describe('DraftProjectionService', () => {
       draftId: 'draft-1',
       leagueId: 'league-1',
       name: 'Test AFL Champions League - LIVE',
+      timePerPick: 60,
+      pickStartedAt: '2026-06-14T10:00:00.000Z',
+      pickDeadlineAt: '2026-06-14T10:01:00.000Z',
     });
   });
 

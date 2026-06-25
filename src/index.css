@@ -28,6 +28,9 @@
   --color-draft-live: var(--draft-live);
   --color-draft-live-foreground: var(--draft-live-foreground);
   --color-draft-live-soft: var(--draft-live-soft);
+  --color-draft-current: var(--draft-current);
+  --color-draft-current-border: var(--draft-current-border);
+  --color-draft-current-foreground: var(--draft-current-foreground);
   --color-draft-user: var(--draft-user);
   --color-draft-user-border: var(--draft-user-border);
   --color-draft-user-foreground: var(--draft-user-foreground);
@@ -107,22 +110,25 @@
   --draft-live: #0f2a44;
   --draft-live-foreground: #fff;
   --draft-live-soft: #eaf2f8;
-  --draft-user: #fff3d6;
-  --draft-user-border: #f6a400;
-  --draft-user-foreground: #6b3b00;
+  --draft-current: #dc2626;
+  --draft-current-border: #fca5a5;
+  --draft-current-foreground: #fff;
+  --draft-user: #facc15;
+  --draft-user-border: #eab308;
+  --draft-user-foreground: #2b1800;
   --draft-user-strong: #f6a400;
   --draft-user-strong-foreground: #2b1800;
   --draft-neutral: #f8fafc;
   --draft-neutral-border: #cbd5e1;
   --draft-neutral-foreground: #334155;
-  --draft-complete: #dcfce7;
-  --draft-complete-border: #86efac;
-  --draft-complete-foreground: #14532d;
+  --draft-complete: #166534;
+  --draft-complete-border: #22c55e;
+  --draft-complete-foreground: #fff;
   --draft-clock: #ea580c;
-  --draft-clock-soft: #ffedd5;
-  --draft-clock-foreground: #7c2d12;
-  --draft-urgent: #dc2626;
-  --draft-urgent-soft: #fee2e2;
+  --draft-clock-soft: #c2410c;
+  --draft-clock-foreground: #fff;
+  --draft-urgent: #fff;
+  --draft-urgent-soft: #991b1b;
   --draft-owner: #ea580c;
 
   /* League workspace palette */
@@ -184,9 +190,12 @@
   --draft-live: #7dd3fc;
   --draft-live-foreground: #082f49;
   --draft-live-soft: #0c2a3a;
-  --draft-user: #3f2e05;
-  --draft-user-border: #fbbf24;
-  --draft-user-foreground: #fde68a;
+  --draft-current: #dc2626;
+  --draft-current-border: #fca5a5;
+  --draft-current-foreground: #fff;
+  --draft-user: #facc15;
+  --draft-user-border: #eab308;
+  --draft-user-foreground: #2b1800;
   --draft-user-strong: #fbbf24;
   --draft-user-strong-foreground: #271700;
   --draft-neutral: #1e293b;
@@ -194,11 +203,11 @@
   --draft-neutral-foreground: #cbd5e1;
   --draft-complete: #123524;
   --draft-complete-border: #22c55e;
-  --draft-complete-foreground: #bbf7d0;
+  --draft-complete-foreground: #fff;
   --draft-clock: #fb923c;
   --draft-clock-soft: #431407;
-  --draft-clock-foreground: #fed7aa;
-  --draft-urgent: #f87171;
+  --draft-clock-foreground: #fff;
+  --draft-urgent: #fff;
   --draft-urgent-soft: #450a0a;
   --draft-owner: #fb923c;
 }
@@ -227,4 +236,30 @@
 
 .animate-slide-in-right {
   animation: slide-in-right 0.3s ease-out;
+}
+
+@keyframes draft-current-bop {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--draft-current-border),
+      0 0 18px color-mix(in oklab, var(--draft-current-border) 45%, transparent);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px var(--draft-current-border),
+      0 0 30px color-mix(in oklab, var(--draft-current-border) 65%, transparent);
+    transform: translateY(-2px);
+  }
+}
+
+.draft-current-pick {
+  animation: draft-current-bop 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draft-current-pick {
+    animation: none;
+  }
 }

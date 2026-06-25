@@ -48,6 +48,8 @@ type DraftDelta =
           currentPick?: number;
           round?: number;
           direction?: 'FORWARD' | 'REVERSE';
+          pickStartedAt?: string | null;
+          pickDeadlineAt?: string | null;
         };
         liveState?: {
           currentPick?: number;
@@ -164,6 +166,8 @@ export class DraftRealtimeDispatcher {
                   : state.currentPick.round % 2 === 1
                     ? 'FORWARD'
                     : 'REVERSE',
+              pickStartedAt: state.paused ? null : state.currentPick.startedAt.toISOString(),
+              pickDeadlineAt: state.paused ? null : state.currentPick.expiresAt.toISOString(),
             },
             liveState: {
               currentPick: state.currentPick.pickNumber,

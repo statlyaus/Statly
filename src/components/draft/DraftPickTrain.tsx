@@ -29,7 +29,7 @@ function getStatusLabel(slot: DraftPickTrainSlot): string {
 
 function getSlotClasses(slot: DraftPickTrainSlot): string {
   if (slot.status === 'current') {
-    return 'border-draft-live bg-draft-live text-draft-live-foreground shadow-sm';
+    return 'draft-current-pick border-draft-current-border bg-draft-current text-draft-current-foreground';
   }
 
   if (slot.status === 'completed') {
@@ -41,6 +41,18 @@ function getSlotClasses(slot: DraftPickTrainSlot): string {
   }
 
   return 'border-draft-neutral-border bg-draft-neutral text-draft-neutral-foreground';
+}
+
+function getStatusBadgeClasses(slot: DraftPickTrainSlot): string {
+  if (slot.isUserPick) {
+    return 'border-draft-user-foreground/25 bg-draft-user-foreground/10 text-draft-user-foreground';
+  }
+
+  if (slot.status === 'current' || slot.status === 'completed') {
+    return 'border-white/25 bg-white/15 text-white';
+  }
+
+  return 'border-current/20 bg-background/85 text-foreground';
 }
 
 function StatusIcon({ slot }: { slot: DraftPickTrainSlot }) {
@@ -110,7 +122,12 @@ export default function DraftPickTrain({
                   </p>
                   <p className="mt-1 truncate text-sm font-semibold">Slot {slot.slot}</p>
                 </div>
-                <span className="inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-md border border-current/20 bg-background/85 px-2 py-1 text-xs font-medium leading-4 text-foreground">
+                <span
+                  className={cn(
+                    'inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium leading-4',
+                    getStatusBadgeClasses(slot)
+                  )}
+                >
                   <StatusIcon slot={slot} />
                   <span className="truncate">{label}</span>
                 </span>

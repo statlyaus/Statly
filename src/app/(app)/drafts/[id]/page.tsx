@@ -75,7 +75,9 @@ export default function DraftPage() {
     <DraftErrorBoundary>
       <SocketProvider uid={user.uid}>
         <DraftProvider draftId={draftId} userId={user.uid}>
-          <UnifiedDraftRoom draftId={draftId} userId={user.uid} />
+          <div className="bg-neutral-950 [&>.min-h-screen]:bg-neutral-950">
+            <UnifiedDraftRoom draftId={draftId} userId={user.uid} />
+          </div>
         </DraftProvider>
       </SocketProvider>
     </DraftErrorBoundary>

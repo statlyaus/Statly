@@ -53,6 +53,24 @@ describe('draft command routes', () => {
     expect(draftContext).toContain('pickDeadlineAt');
   });
 
+  it('keeps Socket.IO snapshots and state patches aligned with authoritative timer fields', () => {
+    const socketServer = read('src/server/socketioServer.ts');
+    const dispatcher = read('src/server/draft/services/DraftRealtimeDispatcher.ts');
+    const projection = read('src/server/draft/services/DraftProjectionService.ts');
+
+    expect(projection).toContain('timePerPick: draft.league.settings.pickSeconds');
+    expect(projection).toContain('pickStartedAt: draft.pickStartedAt?.toISOString() ?? null');
+    expect(projection).toContain('pickDeadlineAt: draft.pickDeadlineAt?.toISOString() ?? null');
+    expect(socketServer).toContain('timePerPick: legacyUpdate.timePerPick');
+    expect(socketServer).toContain('pickDeadlineAt: legacyUpdate.pickDeadlineAt ?? null');
+    expect(dispatcher).toContain(
+      'pickStartedAt: state.paused ? null : state.currentPick.startedAt.toISOString()'
+    );
+    expect(dispatcher).toContain(
+      'pickDeadlineAt: state.paused ? null : state.currentPick.expiresAt.toISOString()'
+    );
+  });
+
   it('uses the shared authenticated request helper for manual pick commands', () => {
     const pickCommand = read('src/server/draft/api/handlePickCommand.ts');
 
@@ -68,7 +86,9 @@ describe('draft command routes', () => {
     expect(pickCommand).toContain('void draftRealtimePublisher.publishCommandResult(result)');
     expect(pickCommand).not.toContain('await draftRealtimePublisher.publishCommandResult(result)');
     expect(autoPickRoute).toContain('void draftRealtimePublisher.publishCommandResult(result)');
-    expect(autoPickRoute).not.toContain('await draftRealtimePublisher.publishCommandResult(result)');
+    expect(autoPickRoute).not.toContain(
+      'await draftRealtimePublisher.publishCommandResult(result)'
+    );
   });
 
   it('supports the authenticated client POST path used by DraftContext.startDraft', () => {

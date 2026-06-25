@@ -15,6 +15,9 @@ export interface LegacyDraftUpdate {
   round: number;
   direction: LiveDraftState['currentPick'] extends { slot: number } ? 'FORWARD' | 'REVERSE' : never;
   status: LiveDraftState['status'];
+  timePerPick: number;
+  pickStartedAt?: string | null;
+  pickDeadlineAt?: string | null;
   picks: Array<{
     id: string;
     overall: number;
@@ -190,9 +193,7 @@ export class DraftProjectionService {
       timerSettings: {
         durationSeconds: pickTimeLimit,
         autopickAfterExpiry: draft.league.settings.allowAutoPick,
-        ...(pausedTimeRemaining !== undefined
-          ? { pausedTimeRemaining }
-          : {}),
+        ...(pausedTimeRemaining !== undefined ? { pausedTimeRemaining } : {}),
       },
       draftSettings: {
         totalRounds,
@@ -271,6 +272,9 @@ export class DraftProjectionService {
       round: draft.round,
       direction: draft.direction,
       status: mapDraftStatus(draft.status, draft.lobbyStatus),
+      timePerPick: draft.league.settings.pickSeconds,
+      pickStartedAt: draft.pickStartedAt?.toISOString() ?? null,
+      pickDeadlineAt: draft.pickDeadlineAt?.toISOString() ?? null,
       picks: draft.picks.map((pick) => ({
         id: pick.id,
         overall: pick.overall,

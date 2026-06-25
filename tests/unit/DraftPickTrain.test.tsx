@@ -3,18 +3,11 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import DraftPickTrain from '@/components/draft/DraftPickTrain';
-import {
-  toDraftPickTrainState,
-  type DraftPickTrainState,
-} from '@/lib/mappers/draftUiMappers';
+import { toDraftPickTrainState, type DraftPickTrainState } from '@/lib/mappers/draftUiMappers';
 import type { DraftParticipant, DraftPick, DraftState } from '@/types/draft';
 
 vi.mock('next/image', () => ({
-  default: ({
-    alt,
-    src,
-    ...props
-  }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) => (
+  default: ({ alt, src, ...props }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) => (
     <img alt={alt} src={src} {...props} />
   ),
 }));
@@ -92,7 +85,8 @@ describe('DraftPickTrain', () => {
     }
 
     expect(pickItems[0]).toHaveClass('bg-draft-complete');
-    expect(pickItems[1]).toHaveClass('bg-draft-live');
+    expect(pickItems[1]).toHaveClass('bg-draft-current');
+    expect(pickItems[1]).toHaveClass('draft-current-pick');
     expect(pickItems[2]).toHaveClass('bg-draft-neutral');
     expect(pickItems[3]).toHaveClass('bg-draft-user');
     expect(pickItems[3]).not.toHaveClass('bg-accent');

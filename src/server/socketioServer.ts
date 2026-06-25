@@ -167,7 +167,9 @@ async function getDeltasSince(draftId: string, since: number): Promise<DraftDelt
 }
 
 async function runAutoPickForExpiredTimer(draftId: string): Promise<void> {
-  const draft = await draftRepository.transaction((tx) => draftRepository.getDraftAggregate(tx, draftId));
+  const draft = await draftRepository.transaction((tx) =>
+    draftRepository.getDraftAggregate(tx, draftId)
+  );
   if (!draft) {
     logger.warn('Skipping timer auto-pick for missing draft', { draftId });
     return;
@@ -194,7 +196,10 @@ async function runAutoPickForExpiredTimer(draftId: string): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.startsWith('conflict:')) {
-      logger.info('Skipping stale timer auto-pick after draft state changed', { draftId, error: message });
+      logger.info('Skipping stale timer auto-pick after draft state changed', {
+        draftId,
+        error: message,
+      });
       return;
     }
     logger.error('Failed to auto-pick after timer expiry', { draftId, error: message });
@@ -620,6 +625,9 @@ io.on('connection', (socket) => {
                 totalPicks: legacyUpdate.totalPicks,
                 round: legacyUpdate.round,
                 direction: legacyUpdate.direction,
+                timePerPick: legacyUpdate.timePerPick,
+                pickStartedAt: legacyUpdate.pickStartedAt ?? null,
+                pickDeadlineAt: legacyUpdate.pickDeadlineAt ?? null,
                 participants: legacyUpdate.participants,
               }
             : null,
