@@ -50,6 +50,63 @@ function getCategorySortValue(player: DraftPlayer, sortBy: PlayerSortKey): numbe
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function compareNullableScoreDesc(
+  aValue: number | null,
+  bValue: number | null,
+  aName: string,
+  bName: string
+): number {
+  if (aValue === null && bValue === null) return aName.localeCompare(bName);
+  if (aValue === null) return 1;
+  if (bValue === null) return -1;
+  return bValue - aValue || aName.localeCompare(bName);
+}
+
+function filterDraftPlayers(
+  players: DraftPlayer[],
+  query: string,
+  positionFilter: string
+): DraftPlayer[] {
+  const normalizedQuery = query.toLowerCase();
+
+  return players.filter((player) => {
+    const matchesQuery =
+      !normalizedQuery ||
+      player.name.toLowerCase().includes(normalizedQuery) ||
+      player.club.toLowerCase().includes(normalizedQuery) ||
+      player.position.toLowerCase().includes(normalizedQuery);
+    const matchesPosition = positionFilter === 'ALL' || player.position === positionFilter;
+
+    return matchesQuery && matchesPosition;
+  });
+}
+
+function sortDraftPlayers(players: DraftPlayer[], sortBy: PlayerSortKey): DraftPlayer[] {
+  return [...players].sort((a, b) => {
+    if (sortBy === 'statlyZ') {
+      const aScore = typeof a.statlyZScore === 'number' ? a.statlyZScore : null;
+      const bScore = typeof b.statlyZScore === 'number' ? b.statlyZScore : null;
+      return compareNullableScoreDesc(aScore, bScore, a.name, b.name);
+    }
+
+    if (sortBy === 'adp') {
+      return (a.adp ?? Number.MAX_SAFE_INTEGER) - (b.adp ?? Number.MAX_SAFE_INTEGER);
+    }
+
+    if (sortBy.startsWith('category:')) {
+      return compareNullableScoreDesc(
+        getCategorySortValue(a, sortBy),
+        getCategorySortValue(b, sortBy),
+        a.name,
+        b.name
+      );
+    }
+
+    const textSort = sortBy as 'name' | 'position' | 'club';
+    return a[textSort].localeCompare(b[textSort]);
+  });
+}
+
 function buildRosterSlots({
   settings,
   picks,
@@ -171,57 +228,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   // Filter + sort available players (efficient & stable)
   const filteredPlayers = useMemo(() => {
-    let players = playersList;
-
-    // Search (deferred for typing responsiveness)
-    if (deferredQuery) {
-      const q = deferredQuery.toLowerCase();
-      players = players.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.club.toLowerCase().includes(q) ||
-          p.position.toLowerCase().includes(q)
-      );
-    }
-
-    // Position filter
-    if (positionFilter !== 'ALL') {
-      players = players.filter((p) => p.position === positionFilter);
-    }
-
-    // Create a copy to avoid mutating context state
-    const arr = [...players];
-    arr.sort((a, b) => {
-      if (sortBy === 'statlyZ') {
-        const aScore = typeof a.statlyZScore === 'number' ? a.statlyZScore : null;
-        const bScore = typeof b.statlyZScore === 'number' ? b.statlyZScore : null;
-
-        if (aScore === null && bScore === null) return a.name.localeCompare(b.name);
-        if (aScore === null) return 1;
-        if (bScore === null) return -1;
-
-        return bScore - aScore || a.name.localeCompare(b.name);
-      }
-
-      if (sortBy === 'adp') {
-        return (a.adp ?? Number.MAX_SAFE_INTEGER) - (b.adp ?? Number.MAX_SAFE_INTEGER);
-      }
-
-      if (sortBy.startsWith('category:')) {
-        const aValue = getCategorySortValue(a, sortBy);
-        const bValue = getCategorySortValue(b, sortBy);
-
-        if (aValue === null && bValue === null) return a.name.localeCompare(b.name);
-        if (aValue === null) return 1;
-        if (bValue === null) return -1;
-
-        return bValue - aValue || a.name.localeCompare(b.name);
-      }
-
-      const textSort = sortBy as 'name' | 'position' | 'club';
-      return a[textSort].localeCompare(b[textSort]);
-    });
-    return arr;
+    return sortDraftPlayers(filterDraftPlayers(playersList, deferredQuery, positionFilter), sortBy);
   }, [playersList, deferredQuery, positionFilter, sortBy]);
 
   // Unique positions for the filter dropdown

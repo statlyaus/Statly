@@ -578,7 +578,72 @@ function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null
       liveState: livePatch,
     },
     ts: Date.now(),
+	  };
+	}
+
+type AvailablePlayersHydration = {
+  players: DraftPlayer[];
+  selectedCategories: FantasyCategoryKey[];
+  statSeason: number | null;
+  statSeasons: number[];
+  draftReadiness: DraftOperationalReadiness | null;
+};
+
+async function loadAvailablePlayersHydration({
+  draftId,
+  statSeason,
+  onFirstPage,
+}: {
+  draftId: string;
+  statSeason?: number | null;
+  onFirstPage?: (hydration: AvailablePlayersHydration) => void;
+}): Promise<AvailablePlayersHydration> {
+  const pageSize = 100;
+  const statSeasonQuery =
+    typeof statSeason === 'number' ? `&statSeason=${encodeURIComponent(statSeason)}` : '';
+  const hydration: AvailablePlayersHydration = {
+    players: [],
+    selectedCategories: [],
+    statSeason: statSeason ?? null,
+    statSeasons: [],
+    draftReadiness: null,
   };
+
+  for (let page = 1, hasMore = true; hasMore; page += 1) {
+    const res = await fetchApi(
+      `drafts/${draftId}/players?page=${page}&pageSize=${pageSize}${statSeasonQuery}`,
+      {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      }
+    );
+    const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
+
+    hydration.draftReadiness =
+      (res?.data?.draftReadiness as DraftOperationalReadiness | null | undefined) ??
+      hydration.draftReadiness;
+
+    if (page === 1) {
+      hydration.selectedCategories = toArray<FantasyCategoryKey>(
+        res?.data?.selectedCategories ?? res?.selectedCategories
+      );
+      hydration.statSeason =
+        typeof res?.data?.statSeason === 'number' ? res.data.statSeason : hydration.statSeason;
+      hydration.statSeasons = toArray<number>(res?.data?.statSeasons);
+    }
+
+    if (players.length > 0) {
+      hydration.players.push(...players);
+    }
+
+    if (page === 1 && players.length > 0) {
+      onFirstPage?.({ ...hydration, players: [...hydration.players] });
+    }
+
+    hasMore = Boolean(res?.data?.pagination?.hasMore) && players.length > 0;
+  }
+
+  return hydration;
 }
 
 /* --------------------------------- Reducer --------------------------------- */
@@ -1030,75 +1095,26 @@ export function DraftProvider({
     setStatus: handleStatusChange,
   });
 
-  const hydrateAvailablePlayers = useCallback(async (statSeason?: number | null, force = false) => {
-    if (availablePlayersHydratingRef.current && !force) return;
+	  const hydrateAvailablePlayers = useCallback(async (statSeason?: number | null, force = false) => {
+	    if (availablePlayersHydratingRef.current && !force) return;
 
-    availablePlayersHydratingRef.current = true;
+	    availablePlayersHydratingRef.current = true;
 
-    try {
-      const pageSize = 100;
-      let page = 1;
-      let hasMore = true;
-      const allPlayers: DraftPlayer[] = [];
-      let selectedCategories: FantasyCategoryKey[] = [];
-      let hydratedStatSeason: number | null = statSeason ?? null;
-      let hydratedStatSeasons: number[] = [];
-      let draftReadiness: DraftOperationalReadiness | null = null;
+	    try {
+	      const hydration = await loadAvailablePlayersHydration({
+	        draftId,
+	        statSeason,
+	        onFirstPage: (firstPage) => {
+	          if (!isMounted.current) return;
+	          dispatch({ type: 'SET_AVAILABLE_PLAYERS', ...firstPage });
+	        },
+	      });
 
-      while (hasMore) {
-        const statSeasonQuery =
-          typeof statSeason === 'number' ? `&statSeason=${encodeURIComponent(statSeason)}` : '';
-        const res = await fetchApi(
-          `drafts/${draftId}/players?page=${page}&pageSize=${pageSize}${statSeasonQuery}`,
-          {
-            cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache' },
-          }
-        );
-        const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
-        draftReadiness =
-          (res?.data?.draftReadiness as DraftOperationalReadiness | null | undefined) ??
-          draftReadiness;
-        if (page === 1) {
-          selectedCategories = toArray<FantasyCategoryKey>(
-            res?.data?.selectedCategories ?? res?.selectedCategories
-          );
-          hydratedStatSeason =
-            typeof res?.data?.statSeason === 'number' ? res.data.statSeason : hydratedStatSeason;
-          hydratedStatSeasons = toArray<number>(res?.data?.statSeasons);
-        }
-
-        if (players.length > 0) {
-          allPlayers.push(...players);
-        }
-
-        if (page === 1 && players.length > 0 && isMounted.current) {
-          dispatch({
-            type: 'SET_AVAILABLE_PLAYERS',
-            players: allPlayers,
-            selectedCategories,
-            statSeason: hydratedStatSeason,
-            statSeasons: hydratedStatSeasons,
-            draftReadiness,
-          });
-        }
-
-        hasMore = Boolean(res?.data?.pagination?.hasMore) && players.length > 0;
-        page += 1;
-      }
-
-      if (!isMounted.current) return;
-      dispatch({
-        type: 'SET_AVAILABLE_PLAYERS',
-        players: allPlayers,
-        selectedCategories,
-        statSeason: hydratedStatSeason,
-        statSeasons: hydratedStatSeasons,
-        draftReadiness,
-      });
-    } catch {
-      // Keep the draft usable even if the player pool hydrate fails.
-    } finally {
+	      if (!isMounted.current) return;
+	      dispatch({ type: 'SET_AVAILABLE_PLAYERS', ...hydration });
+	    } catch {
+	      // Keep the draft usable even if the player pool hydrate fails.
+	    } finally {
       availablePlayersHydratingRef.current = false;
     }
   }, [draftId]);

@@ -172,6 +172,128 @@ function toExistingDraft(draft: DraftResponseShape): ExistingDraft {
   };
 }
 
+function shuffleMembers(orderedMembers: LeagueMember[]): LeagueMember[] {
+  const shuffled = [...orderedMembers];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function validateDraftScheduledTime(scheduledTime: string): string | null {
+  const selected = new Date(scheduledTime);
+
+  if (Number.isNaN(selected.getTime())) {
+    return 'Please choose a valid draft start time.';
+  }
+
+  if (selected.getTime() <= Date.now()) {
+    return 'Scheduled time must be in the future.';
+  }
+
+  return null;
+}
+
+function getOrderedDraftMembers(input: {
+  members: LeagueMember[];
+  draftOrderMembers: LeagueMember[];
+  draftSettings: DraftSettings;
+  draftOrderRandomized: boolean;
+}): LeagueMember[] {
+  const orderedMembers =
+    input.draftOrderMembers.length === input.members.length ? input.draftOrderMembers : input.members;
+
+  if (input.draftSettings.pickOrder === 'random' && !input.draftOrderRandomized) {
+    return shuffleMembers(orderedMembers);
+  }
+
+  return orderedMembers;
+}
+
+function buildDraftParticipants(input: {
+  orderedMembers: LeagueMember[];
+  league: League;
+  currentUserId?: string;
+}): DraftParticipant[] {
+  let participants = input.orderedMembers.map((member, index) => ({
+    userId: member.userId,
+    memberId: member.id,
+    displayName: member.teamName || `Team ${index + 1}`,
+    draftOrder: index + 1,
+    isOwner: member.userId === input.league.ownerId,
+  }));
+
+  if (input.league.id !== 'test-league-id' || !input.currentUserId) {
+    return participants;
+  }
+
+  const alreadyIncluded = participants.some((participant) => participant.userId === input.currentUserId);
+  if (!alreadyIncluded) {
+    const lastIndex = participants.length - 1;
+    const replacement = {
+      userId: input.currentUserId,
+      memberId: 'self',
+      displayName: 'Your Team',
+      draftOrder: participants[lastIndex]?.draftOrder || participants.length,
+      isOwner: true,
+    };
+
+    if (lastIndex >= 0) participants[lastIndex] = replacement;
+    else participants.push(replacement);
+  }
+
+  return participants.map((participant) => ({
+    ...participant,
+    isOwner: participant.userId === input.currentUserId,
+  }));
+}
+
+function buildDraftCreatePayload(input: {
+  league: League;
+  members: LeagueMember[];
+  draftSettings: DraftSettings;
+  participants: DraftParticipant[];
+  currentUserId?: string;
+}) {
+  const draftPayloadBase = {
+    name: `${input.league.name} Draft`,
+    leagueSize: input.members.length,
+    draftType: input.draftSettings.draftType,
+    timePerPick: input.draftSettings.timePerPick,
+    scheduledTime: input.draftSettings.scheduledTime,
+    timeZone: input.draftSettings.timeZone,
+    enableReminders: input.draftSettings.enableReminders,
+    pickOrder: input.draftSettings.pickOrder,
+    positionLimits: input.draftSettings.positionLimits,
+    autoPickRules: input.draftSettings.autoPickRules,
+    rosterSize: getRosterSizeFromPositionLimits(input.draftSettings.positionLimits),
+    benchSize: getBenchSizeFromPositionLimits(input.draftSettings.positionLimits),
+    leagueData: {
+      name: input.league.name,
+      maxTeams: input.league.maxTeams,
+      categories: input.league.categories,
+      ownerId:
+        input.league.id === 'test-league-id' && input.currentUserId
+          ? input.currentUserId
+          : input.league.ownerId,
+    },
+    participants: input.participants,
+  } as const;
+
+  return input.league.id === 'test-league-id'
+    ? { ...draftPayloadBase }
+    : { ...draftPayloadBase, leagueId: input.league.id };
+}
+
+function isDraftLinkedToLeague(league: League, createdDraft: DraftResponseShape): boolean {
+  return (
+    league.id === 'test-league-id' ||
+    createdDraft.leagueId === league.id ||
+    createdDraft.league?.id === league.id
+  );
+}
+
 export default function DraftManager({
   league,
   members,
@@ -283,15 +405,6 @@ export default function DraftManager({
     setDraftOrderRandomized(false);
   }, [members]);
 
-  const shuffleMembers = (orderedMembers: LeagueMember[]) => {
-    const shuffled = [...orderedMembers];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
-
   const randomizeDraftOrder = () => {
     setDraftOrderMemberIds((current) =>
       shuffleMembers(
@@ -358,106 +471,45 @@ export default function DraftManager({
     }));
   };
 
-  const createDraft = async () => {
-    if (!canCreateDraft) return;
+	  const createDraft = async () => {
+	    if (!canCreateDraft) return;
 
-    setSavingDraft(true);
-    setError(null);
+	    setSavingDraft(true);
+	    setError(null);
 
-    try {
-      // Client-side validation to avoid server rejection due to clock skew/timezone issues
-      const selected = new Date(draftSettings.scheduledTime);
-      if (Number.isNaN(selected.getTime())) {
-        setError('Please choose a valid draft start time.');
-        setSavingDraft(false);
-        return;
-      }
-      if (selected.getTime() <= Date.now()) {
-        setError('Scheduled time must be in the future.');
-        setSavingDraft(false);
-        return;
-      }
+	    try {
+	      const validationError = validateDraftScheduledTime(draftSettings.scheduledTime);
+	      if (validationError) {
+	        setError(validationError);
+	        return;
+	      }
 
-      // Step 1: Create the draft with league synchronization
-      // Build participants; ensure current user is included for test leagues
+	      const orderedMembers = getOrderedDraftMembers({
+	        members,
+	        draftOrderMembers,
+	        draftSettings,
+	        draftOrderRandomized,
+	      });
+	      const participants = buildDraftParticipants({ orderedMembers, league, currentUserId });
+	      const draftPayload = buildDraftCreatePayload({
+	        league,
+	        members,
+	        draftSettings,
+	        participants,
+	        currentUserId,
+	      });
 
-      let orderedMembers =
-        draftOrderMembers.length === members.length ? draftOrderMembers : members;
-      if (draftSettings.pickOrder === 'random' && !draftOrderRandomized) {
-        orderedMembers = shuffleMembers(orderedMembers);
-      }
+	      const response = await fetchApi('drafts', {
+	        method: 'POST',
+	        body: JSON.stringify(draftPayload),
+	      });
 
-      let participants: DraftParticipant[] = orderedMembers.map((member, index) => ({
-        userId: member.userId,
-        memberId: member.id,
-        displayName: member.teamName || `Team ${index + 1}`,
-        draftOrder: index + 1,
-        isOwner: member.userId === league.ownerId,
-      }));
+	      if (response.success) {
+	        const createdDraft = response.data as DraftResponseShape;
 
-      if (league.id === 'test-league-id' && currentUserId) {
-        const alreadyIncluded = participants.some((p) => p.userId === currentUserId);
-        if (!alreadyIncluded) {
-          // Replace the last bot with the current user
-          const lastIndex = participants.length - 1;
-          const replacement = {
-            userId: currentUserId,
-            memberId: 'self',
-            displayName: 'Your Team',
-            draftOrder: participants[lastIndex]?.draftOrder || participants.length,
-            isOwner: true,
-          };
-          if (lastIndex >= 0) participants[lastIndex] = replacement;
-          else participants.push(replacement);
-        }
-        // Ensure only the current user is marked owner in test mode
-        participants = participants.map((p) => ({ ...p, isOwner: p.userId === currentUserId }));
-      }
-
-      const draftPayloadBase = {
-        name: `${league.name} Draft`,
-        leagueSize: members.length,
-        draftType: draftSettings.draftType,
-        timePerPick: draftSettings.timePerPick,
-        scheduledTime: draftSettings.scheduledTime,
-        timeZone: draftSettings.timeZone,
-        enableReminders: draftSettings.enableReminders,
-        pickOrder: draftSettings.pickOrder,
-        positionLimits: draftSettings.positionLimits,
-        autoPickRules: draftSettings.autoPickRules,
-        rosterSize: getRosterSizeFromPositionLimits(draftSettings.positionLimits),
-        benchSize: getBenchSizeFromPositionLimits(draftSettings.positionLimits),
-        // Sync league data
-        leagueData: {
-          name: league.name,
-          maxTeams: league.maxTeams,
-          categories: league.categories,
-          ownerId: league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId,
-        },
-        // Sync member data
-        participants,
-      } as const;
-
-      const draftPayload =
-        league.id === 'test-league-id'
-          ? { ...draftPayloadBase }
-          : { ...draftPayloadBase, leagueId: league.id };
-
-      const response = await fetchApi('drafts', {
-        method: 'POST',
-        body: JSON.stringify(draftPayload),
-      });
-
-      if (response.success) {
-        const createdDraft = response.data as DraftResponseShape;
-        const draftLinkedToLeague =
-          league.id === 'test-league-id' ||
-          createdDraft.leagueId === league.id ||
-          createdDraft.league?.id === league.id;
-
-        if (!draftLinkedToLeague) {
-          throw new Error('Draft was created without the expected league link');
-        }
+	        if (!isDraftLinkedToLeague(league, createdDraft)) {
+	          throw new Error('Draft was created without the expected league link');
+	        }
 
         setExistingDraft(toExistingDraft(createdDraft));
         await refreshDraftState();

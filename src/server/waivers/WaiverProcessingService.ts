@@ -149,6 +149,53 @@ function normalizeDate(value: unknown): Date {
   return new Date();
 }
 
+function toFirestoreWaiverClaim(
+  document: FirebaseFirestore.QueryDocumentSnapshot,
+  leagueId: string
+): WaiverClaim {
+  const data = document.data();
+
+  return {
+    id: document.id,
+    leagueId: typeof data.leagueId === 'string' ? data.leagueId : leagueId,
+    userId: typeof data.userId === 'string' ? data.userId : '',
+    teamId: typeof data.teamId === 'string' ? data.teamId : '',
+    playerId: typeof data.playerId === 'string' ? data.playerId : '',
+    priority: typeof data.priority === 'number' ? data.priority : 1,
+    status: typeof data.status === 'string' ? data.status : 'PENDING',
+    createdAt: normalizeDate(data.createdAt),
+    ...(typeof data.dropPlayerId === 'string' ? { dropPlayerId: data.dropPlayerId } : {}),
+    ...(typeof data.bidAmount === 'number' ? { bidAmount: data.bidAmount } : {}),
+  };
+}
+
+async function loadWaiverPriorityByUserId(leagueId: string): Promise<Map<string, number>> {
+  const prioritySnap = await adminDb.collection(`leagues/${leagueId}/waiverPriorities`).get();
+  const priorityByUserId = new Map<string, number>();
+
+  for (const document of prioritySnap.docs) {
+    const data = document.data();
+    const userId = typeof data.userId === 'string' ? data.userId : document.id;
+
+    if (typeof data.priority === 'number') {
+      priorityByUserId.set(userId, data.priority);
+    }
+  }
+
+  return priorityByUserId;
+}
+
+function applyWaiverPriorities(
+  claims: WaiverClaim[],
+  priorityByUserId: Map<string, number>
+): WaiverClaim[] {
+  return claims.map((claim) => {
+    const waiverPriority = priorityByUserId.get(claim.userId);
+
+    return typeof waiverPriority === 'number' ? { ...claim, waiverPriority } : claim;
+  });
+}
+
 function parseActionDetails(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
 
@@ -1111,48 +1158,19 @@ export class FirestoreWaiverClaimStore implements ClaimStore {
       let query: FirebaseFirestore.Query = pendingCol.orderBy('__name__').limit(pageSize);
       if (cursor) query = query.startAfter(cursor);
 
-      const snap = await query.get();
-      if (snap.empty) break;
+	      const snap = await query.get();
+	      if (snap.empty) break;
 
-      for (const document of snap.docs) {
-        const data = document.data();
-        pending.push({
-          id: document.id,
-          leagueId: typeof data.leagueId === 'string' ? data.leagueId : leagueId,
-          userId: typeof data.userId === 'string' ? data.userId : '',
-          teamId: typeof data.teamId === 'string' ? data.teamId : '',
-          playerId: typeof data.playerId === 'string' ? data.playerId : '',
-          priority: typeof data.priority === 'number' ? data.priority : 1,
-          status: typeof data.status === 'string' ? data.status : 'PENDING',
-          createdAt: normalizeDate(data.createdAt),
-          ...(typeof data.dropPlayerId === 'string' ? { dropPlayerId: data.dropPlayerId } : {}),
-          ...(typeof data.bidAmount === 'number' ? { bidAmount: data.bidAmount } : {}),
-        });
-      }
+	      for (const document of snap.docs) {
+	        pending.push(toFirestoreWaiverClaim(document, leagueId));
+	      }
 
-      if (snap.size < pageSize) break;
-      cursor = snap.docs[snap.docs.length - 1] ?? null;
-    }
+	      if (snap.size < pageSize) break;
+	      cursor = snap.docs[snap.docs.length - 1] ?? null;
+	    }
 
-    const prioritySnap = await adminDb.collection(`leagues/${leagueId}/waiverPriorities`).get();
-    const priorityByUserId = new Map<string, number>();
-    for (const document of prioritySnap.docs) {
-      const data = document.data();
-      const userId = typeof data.userId === 'string' ? data.userId : document.id;
-      if (typeof data.priority === 'number') {
-        priorityByUserId.set(userId, data.priority);
-      }
-    }
-
-    for (const claim of pending) {
-      const waiverPriority = priorityByUserId.get(claim.userId);
-      if (typeof waiverPriority === 'number') {
-        claim.waiverPriority = waiverPriority;
-      }
-    }
-
-    return pending;
-  }
+	    return applyWaiverPriorities(pending, await loadWaiverPriorityByUserId(leagueId));
+	  }
 
   async markSuccessful(input: {
     leagueId: string;
