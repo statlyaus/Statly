@@ -102,6 +102,35 @@
   --league-warning-soft: #f6ecdc;
   --league-danger: #a84f44;
   --league-danger-soft: #f7e7e3;
+
+  /* Draft broadcast palette */
+  --draft-broadcast-page: #090d14;
+  --draft-broadcast-canvas: #0c121b;
+  --draft-broadcast-panel: #121a27;
+  --draft-broadcast-panel-strong: #182231;
+  --draft-broadcast-muted-surface: #202c3d;
+  --draft-broadcast-table: #111a26;
+  --draft-broadcast-table-row: #162231;
+  --draft-broadcast-table-row-hover: #1d2b3d;
+  --draft-broadcast-field: rgba(255, 255, 255, 0.09);
+  --draft-broadcast-field-strong: rgba(255, 255, 255, 0.16);
+  --draft-broadcast-border: #2c3a4d;
+  --draft-broadcast-border-soft: rgba(148, 163, 184, 0.18);
+  --draft-broadcast-text: #f4f7fb;
+  --draft-broadcast-muted: #a7b3c5;
+  --draft-broadcast-red: #d91f2d;
+  --draft-broadcast-red-soft: rgba(217, 31, 45, 0.18);
+  --draft-broadcast-red-glow: rgba(217, 31, 45, 0.42);
+  --draft-broadcast-green: #13763a;
+  --draft-broadcast-green-soft: rgba(19, 118, 58, 0.22);
+  --draft-broadcast-yellow: #ffd21a;
+  --draft-broadcast-yellow-soft: rgba(255, 210, 26, 0.22);
+  --draft-broadcast-yellow-glow: rgba(255, 210, 26, 0.28);
+  --draft-broadcast-yellow-text: #261b02;
+  --draft-broadcast-contrast-text: #111827;
+  --draft-broadcast-contrast-muted: #475569;
+  --draft-broadcast-overlay: rgba(5, 9, 15, 0.82);
+  --draft-broadcast-shadow-deep: rgba(1, 6, 15, 0.92);
 }
 
 .dark {

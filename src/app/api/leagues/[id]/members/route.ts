@@ -25,7 +25,7 @@ export async function GET(
   const tracer = withRequestTracing(req, { endpoint: 'league-members', leagueId });
 
   try {
-    if (process.env.NODE_ENV !== "production" && leagueId === 'development-league-id') {
+    if (process.env.NODE_ENV !== 'production' && leagueId === 'development-league-id') {
       const now = Date.now();
       const developmentMembers: LeagueMember[] = [
         {
@@ -43,7 +43,9 @@ export async function GET(
       ].map((member, index) => ({
         ...member,
         leagueId,
-        joinedAt: Timestamp.fromMillis(now - index * 86400000).toDate().toISOString(),
+        joinedAt: Timestamp.fromMillis(now - index * 86400000)
+          .toDate()
+          .toISOString(),
         isActive: true,
       }));
 
@@ -256,6 +258,7 @@ async function handleRemoveMember(
 
   // Mark member as inactive instead of deleting
   const topLevelMemberId = getTopLevelMemberId(leagueId, member);
+  const nextMemberCount = Math.max(0, activeMembers.length - 1);
   const batch = adminDb.batch();
   queueLeagueMembershipPatch(
     batch,
@@ -269,6 +272,9 @@ async function handleRemoveMember(
       topLevelMemberId,
     }
   );
+  batch.update(adminDb.collection('leagues').doc(leagueId), {
+    memberCount: nextMemberCount,
+  });
   await batch.commit();
 
   await syncPrismaMemberBestEffort({
@@ -282,6 +288,10 @@ async function handleRemoveMember(
   return NextResponse.json({
     success: true,
     message: 'Member removed successfully',
+    data: {
+      removedUserId: targetUserId,
+      memberCount: nextMemberCount,
+    },
   });
 }
 

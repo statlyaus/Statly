@@ -40,6 +40,8 @@ export interface DraftSnapshot {
   availablePlayers?: DraftPlayer[] | Record<string, DraftPlayer> | Map<string, DraftPlayer>;
   draftReadiness?: DraftOperationalReadiness | null;
   selectedCategories?: FantasyCategoryKey[] | null;
+  statSeason?: number | null;
+  statSeasons?: number[] | null;
   liveState?: DraftLiveState | null;
   ts?: number; // server event time (ms)
 }
@@ -82,6 +84,8 @@ interface DraftState {
   availablePlayers: DraftPlayer[];
   draftReadiness: DraftOperationalReadiness | null;
   selectedCategories: FantasyCategoryKey[];
+  statSeason: number | null;
+  statSeasons: number[];
   watchlistItems: DraftWatchlistItem[];
   liveState: DraftLiveState;
   connection: { status: ConnectionStatus; latencyMs?: number; lastEventAt?: number };
@@ -101,6 +105,7 @@ interface DraftContextValue extends DraftState {
   toggleWatchlist: (playerId: string) => Promise<void>;
   isInWatchlist: (playerId: string) => boolean;
   forceRefresh: () => Promise<void>;
+  setStatSeason: (season: number) => Promise<void>;
   canMakePick: boolean;
 }
 
@@ -283,6 +288,8 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   availablePlayers: DraftPlayer[];
   draftReadiness: DraftOperationalReadiness | null;
   selectedCategories: FantasyCategoryKey[];
+  statSeason: number | null;
+  statSeasons: number[];
   liveState: DraftLiveState;
   includesParticipantQueues: boolean;
   includesPicks: boolean;
@@ -297,6 +304,8 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       availablePlayers: [],
       draftReadiness: null,
       selectedCategories: [],
+      statSeason: null,
+      statSeasons: [],
       liveState: {},
       includesParticipantQueues: false,
       includesPicks: false,
@@ -325,6 +334,13 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     (pl) => !pickedIds.has(String(pl.id))
   );
   const selectedCategories = toArray<FantasyCategoryKey>((raw as any).selectedCategories);
+  const statSeason =
+    typeof (raw as any).statSeason === 'number' && Number.isFinite((raw as any).statSeason)
+      ? (raw as any).statSeason
+      : null;
+  const statSeasons = toArray<number>((raw as any).statSeasons).filter(
+    (season) => typeof season === 'number' && Number.isFinite(season)
+  );
   const draftReadiness =
     ((raw as any).draftReadiness as DraftOperationalReadiness | null | undefined) ?? null;
 
@@ -335,6 +351,8 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     availablePlayers,
     draftReadiness,
     selectedCategories,
+    statSeason,
+    statSeasons,
     liveState: raw.liveState ?? {},
     includesParticipantQueues,
     includesPicks,
@@ -560,7 +578,72 @@ function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null
       liveState: livePatch,
     },
     ts: Date.now(),
+	  };
+	}
+
+type AvailablePlayersHydration = {
+  players: DraftPlayer[];
+  selectedCategories: FantasyCategoryKey[];
+  statSeason: number | null;
+  statSeasons: number[];
+  draftReadiness: DraftOperationalReadiness | null;
+};
+
+async function loadAvailablePlayersHydration({
+  draftId,
+  statSeason,
+  onFirstPage,
+}: {
+  draftId: string;
+  statSeason?: number | null;
+  onFirstPage?: (hydration: AvailablePlayersHydration) => void;
+}): Promise<AvailablePlayersHydration> {
+  const pageSize = 100;
+  const statSeasonQuery =
+    typeof statSeason === 'number' ? `&statSeason=${encodeURIComponent(statSeason)}` : '';
+  const hydration: AvailablePlayersHydration = {
+    players: [],
+    selectedCategories: [],
+    statSeason: statSeason ?? null,
+    statSeasons: [],
+    draftReadiness: null,
   };
+
+  for (let page = 1, hasMore = true; hasMore; page += 1) {
+    const res = await fetchApi(
+      `drafts/${draftId}/players?page=${page}&pageSize=${pageSize}${statSeasonQuery}`,
+      {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      }
+    );
+    const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
+
+    hydration.draftReadiness =
+      (res?.data?.draftReadiness as DraftOperationalReadiness | null | undefined) ??
+      hydration.draftReadiness;
+
+    if (page === 1) {
+      hydration.selectedCategories = toArray<FantasyCategoryKey>(
+        res?.data?.selectedCategories ?? res?.selectedCategories
+      );
+      hydration.statSeason =
+        typeof res?.data?.statSeason === 'number' ? res.data.statSeason : hydration.statSeason;
+      hydration.statSeasons = toArray<number>(res?.data?.statSeasons);
+    }
+
+    if (players.length > 0) {
+      hydration.players.push(...players);
+    }
+
+    if (page === 1 && players.length > 0) {
+      onFirstPage?.({ ...hydration, players: [...hydration.players] });
+    }
+
+    hasMore = Boolean(res?.data?.pagination?.hasMore) && players.length > 0;
+  }
+
+  return hydration;
 }
 
 /* --------------------------------- Reducer --------------------------------- */
@@ -571,8 +654,11 @@ type Action =
       type: 'SET_AVAILABLE_PLAYERS';
       players: DraftPlayer[];
       selectedCategories?: FantasyCategoryKey[];
+      statSeason?: number | null;
+      statSeasons?: number[];
       draftReadiness?: DraftOperationalReadiness | null;
     }
+  | { type: 'SET_STAT_SEASON'; season: number }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
   | { type: 'SET_PERSISTED_PICKS'; picks: DraftPick[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
@@ -612,6 +698,8 @@ function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
       snapshot.selectedCategories.length > 0
         ? snapshot.selectedCategories
         : state.selectedCategories,
+    statSeason: snapshot.statSeason ?? state.statSeason,
+    statSeasons: snapshot.statSeasons.length > 0 ? snapshot.statSeasons : state.statSeasons,
     liveState: snapshot.liveState,
     isLoading: false,
     error: null,
@@ -806,6 +894,15 @@ function reducer(state: DraftState, action: Action): DraftState {
         availablePlayers: excludeDraftedAvailablePlayers(action.players, state.picks),
         draftReadiness: action.draftReadiness ?? state.draftReadiness,
         selectedCategories: action.selectedCategories ?? state.selectedCategories,
+        statSeason: action.statSeason ?? state.statSeason,
+        statSeasons: action.statSeasons ?? state.statSeasons,
+        error: null,
+      };
+    case 'SET_STAT_SEASON':
+      return {
+        ...state,
+        statSeason: action.season,
+        availablePlayers: [],
         error: null,
       };
     case 'SET_WATCHLIST':
@@ -932,6 +1029,8 @@ export function DraftProvider({
       availablePlayers: snap.availablePlayers,
       draftReadiness: snap.draftReadiness,
       selectedCategories: snap.selectedCategories,
+      statSeason: snap.statSeason,
+      statSeasons: snap.statSeasons,
       watchlistItems: [],
       liveState: snap.liveState,
       connection: { status: 'disconnected', lastEventAt: snap.ts },
@@ -996,61 +1095,26 @@ export function DraftProvider({
     setStatus: handleStatusChange,
   });
 
-  const hydrateAvailablePlayers = useCallback(async () => {
-    if (availablePlayersHydratingRef.current) return;
+	  const hydrateAvailablePlayers = useCallback(async (statSeason?: number | null, force = false) => {
+	    if (availablePlayersHydratingRef.current && !force) return;
 
-    availablePlayersHydratingRef.current = true;
+	    availablePlayersHydratingRef.current = true;
 
-    try {
-      const pageSize = 100;
-      let page = 1;
-      let hasMore = true;
-      const allPlayers: DraftPlayer[] = [];
-      let selectedCategories: FantasyCategoryKey[] = [];
-      let draftReadiness: DraftOperationalReadiness | null = null;
+	    try {
+	      const hydration = await loadAvailablePlayersHydration({
+	        draftId,
+	        statSeason,
+	        onFirstPage: (firstPage) => {
+	          if (!isMounted.current) return;
+	          dispatch({ type: 'SET_AVAILABLE_PLAYERS', ...firstPage });
+	        },
+	      });
 
-      while (hasMore) {
-        const res = await fetchApi(`drafts/${draftId}/players?page=${page}&pageSize=${pageSize}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' },
-        });
-        const players = toArray<DraftPlayer>(res?.data?.players ?? res?.players);
-        draftReadiness =
-          (res?.data?.draftReadiness as DraftOperationalReadiness | null | undefined) ??
-          draftReadiness;
-        if (page === 1) {
-          selectedCategories = toArray<FantasyCategoryKey>(
-            res?.data?.selectedCategories ?? res?.selectedCategories
-          );
-        }
-
-        if (players.length > 0) {
-          allPlayers.push(...players);
-        }
-
-        if (page === 1 && players.length > 0 && isMounted.current) {
-          dispatch({
-            type: 'SET_AVAILABLE_PLAYERS',
-            players: allPlayers,
-            selectedCategories,
-            draftReadiness,
-          });
-        }
-
-        hasMore = Boolean(res?.data?.pagination?.hasMore) && players.length > 0;
-        page += 1;
-      }
-
-      if (!isMounted.current) return;
-      dispatch({
-        type: 'SET_AVAILABLE_PLAYERS',
-        players: allPlayers,
-        selectedCategories,
-        draftReadiness,
-      });
-    } catch {
-      // Keep the draft usable even if the player pool hydrate fails.
-    } finally {
+	      if (!isMounted.current) return;
+	      dispatch({ type: 'SET_AVAILABLE_PLAYERS', ...hydration });
+	    } catch {
+	      // Keep the draft usable even if the player pool hydrate fails.
+	    } finally {
       availablePlayersHydratingRef.current = false;
     }
   }, [draftId]);
@@ -1170,8 +1234,8 @@ export function DraftProvider({
     ) {
       return;
     }
-    void hydrateAvailablePlayers();
-  }, [state.draft, state.availablePlayers, hydrateAvailablePlayers]);
+	    void hydrateAvailablePlayers(state.statSeason);
+	  }, [state.draft, state.availablePlayers, state.statSeason, hydrateAvailablePlayers]);
 
   useEffect(() => {
     if (!shouldHydratePersistedPicks(state.draft, state.picks)) return;
@@ -1203,7 +1267,7 @@ export function DraftProvider({
           availablePlayersHydratingRef.current
         )
       ) {
-        await hydrateAvailablePlayers();
+	        await hydrateAvailablePlayers(state.statSeason);
       }
       if (memberId) {
         await Promise.all([hydrateMyQueue(memberId), hydrateMyWatchlist(memberId)]);
@@ -1217,7 +1281,24 @@ export function DraftProvider({
     } finally {
       if (isMounted.current) dispatch({ type: 'SET_LOADING', loading: false });
     }
-  }, [draftId, hydrateAvailablePlayers, hydrateMyQueue, hydrateMyWatchlist, memberId]);
+	  }, [
+	    draftId,
+	    hydrateAvailablePlayers,
+	    hydrateMyQueue,
+	    hydrateMyWatchlist,
+	    memberId,
+	    state.statSeason,
+	  ]);
+
+	  const setStatSeason = useCallback(
+	    async (season: number) => {
+	      if (!Number.isFinite(season) || season === state.statSeason) return;
+
+      dispatch({ type: 'SET_STAT_SEASON', season });
+      await hydrateAvailablePlayers(season, true);
+    },
+	    [hydrateAvailablePlayers, state.statSeason]
+	  );
 
   const fetchPersistedPickBackfill = useCallback(async () => {
     if (!state.draft) return;
@@ -1595,6 +1676,7 @@ export function DraftProvider({
       toggleWatchlist,
       isInWatchlist,
       forceRefresh,
+      setStatSeason,
       canMakePick,
     }),
     [
@@ -1605,6 +1687,7 @@ export function DraftProvider({
       isInWatchlist,
       makePick,
       removeFromWatchlist,
+      setStatSeason,
       startDraft,
       state,
       toggleWatchlist,

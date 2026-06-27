@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildAvailableDraftPlayer,
+  buildDraftPlayerStatsLookup,
   calculateStatlyZScores,
   type StatlyZPlayerInput,
 } from '@/server/draft/readModels/draftPlayerReadModel';
@@ -62,5 +64,40 @@ describe('calculateStatlyZScores', () => {
       value: 6,
       zScore: -1,
     });
+  });
+
+  it('projects season match-log totals into per-game averages for the selected season', () => {
+    const lookup = buildDraftPlayerStatsLookup(
+      [
+        {
+          id: 'tyson-stengle-geelong',
+          name: 'Tyson Stengle',
+          team: 'Geelong',
+          position: 'MID',
+          games: 16,
+          statsSeason: 2025,
+          availableStatSeasons: [2025],
+          stats: { goals: 22, marks: 43, tackles: 54, hitouts: 0 },
+          statsBySeason: {
+            '2025': {
+              games: 16,
+              stats: { goals: 22, marks: 43, tackles: 54, hitouts: 0 },
+            },
+          },
+        },
+      ],
+      { season: 2025 }
+    );
+
+    const player = buildAvailableDraftPlayer(
+      { id: 'tyson_stengle', name: 'Tyson Stengle', club: 'Geelong', position: 'MID' },
+      lookup
+    );
+
+    expect(player.gamesPlayed).toBe(16);
+    expect(player.statsSeason).toBe(2025);
+    expect(player.stats?.goals).toBe(1.4);
+    expect(player.stats?.marks).toBe(2.7);
+    expect(player.stats?.tackles).toBe(3.4);
   });
 });

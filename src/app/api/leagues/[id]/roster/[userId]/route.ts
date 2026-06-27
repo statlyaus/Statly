@@ -4,6 +4,16 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import {
+  buildAvailableDraftPlayer,
+  loadDraftPlayerStatsLookup,
+  parseSelectedCategories,
+  type DraftPlayerStatsLookup,
+} from '@/server/draft/readModels/draftPlayerReadModel';
+import {
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -76,6 +86,11 @@ function deriveDeterministicStats(position: string | null | undefined, seedKey: 
   return { price, averageScore, lastGameScore, projectedScore, form } as const;
 }
 
+function getSelectedLeagueCategories(rawCategories: unknown): FantasyCategoryKey[] {
+  const selectedCategories = parseSelectedCategories(rawCategories);
+  return selectedCategories.length > 0 ? selectedCategories : [...REAL_DATA_NINE_CATEGORY_PRESET];
+}
+
 const PutSchema = z.object({
   playerIds: z.array(z.string()).default([]),
   captainId: z.string().optional().nullable(),
@@ -111,6 +126,8 @@ export async function GET(
 
     if (!member) return errorResponse('User is not a member of this league', 404);
     if (!league) return errorResponse('League not found', 404);
+
+    const selectedCategories = getSelectedLeagueCategories(league.categoriesJson);
 
     // Read normalized roster rows first; fallback to JSON list
     // Use raw SQL to avoid depending on Prisma schema migrations
@@ -199,19 +216,47 @@ export async function GET(
       .map((pid) => byId.get(String(pid)))
       .filter(Boolean) as typeof players;
 
+    let statsLookup: DraftPlayerStatsLookup | null = null;
+    try {
+      statsLookup = await loadDraftPlayerStatsLookup();
+    } catch (error) {
+      logger.warn('League roster stat enrichment unavailable', {
+        leagueId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Deterministic (cacheable) stats instead of per-request randomness
     const playersWithStats = orderedPlayers.map((player) => {
-      const stats = deriveDeterministicStats(player.position, `${player.id}:${leagueId}`);
+      const fallbackStats = deriveDeterministicStats(player.position, `${player.id}:${leagueId}`);
+      const enrichedPlayer = buildAvailableDraftPlayer(
+        {
+          id: player.id,
+          name: player.name,
+          position: player.position ?? '',
+          club: player.club ?? '',
+        },
+        statsLookup
+      );
+      const averageScore = enrichedPlayer.averagePoints ?? fallbackStats.averageScore;
+
       return {
         id: player.id,
         name: player.name,
         position: player.position,
         team: player.club,
-        price: stats.price,
-        averageScore: stats.averageScore,
-        lastGameScore: stats.lastGameScore,
-        projectedScore: stats.projectedScore,
-        form: stats.form,
+        club: player.club,
+        stats: enrichedPlayer.stats ?? {},
+        statsTotal: enrichedPlayer.statsTotal ?? {},
+        gamesPlayed: enrichedPlayer.gamesPlayed ?? 0,
+        avgPoints: enrichedPlayer.avgPoints ?? averageScore,
+        averagePoints: enrichedPlayer.averagePoints ?? averageScore,
+        fantasyPoints: enrichedPlayer.fantasyPoints ?? averageScore,
+        price: fallbackStats.price,
+        averageScore,
+        lastGameScore: fallbackStats.lastGameScore,
+        projectedScore: fallbackStats.projectedScore,
+        form: fallbackStats.form,
         isCaptain: roster?.captainId === player.id,
         isViceCaptain: roster?.viceCaptainId === player.id,
       };
@@ -235,6 +280,7 @@ export async function GET(
         updatedAt: roster?.updatedAt || new Date(),
       },
       leagueSettings: {
+        selectedCategories,
         enableCaptainSystem: Boolean(league.settings?.enableCaptainSystem ?? true),
         captainMultiplier: Number(league.settings?.captainMultiplier ?? 2.0),
         viceCaptainMultiplier: Number(league.settings?.viceCaptainMultiplier ?? 1.5),

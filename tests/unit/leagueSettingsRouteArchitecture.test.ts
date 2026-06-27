@@ -11,8 +11,9 @@ describe('league settings route architecture', () => {
 
     expect(source).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
     expect(source).toContain(
-      "import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership'"
+      'getLeagueMembership,\n  isLeagueManagerRole,\n  listActiveLeagueMembers'
     );
+    expect(source).toContain("from '@/lib/leagueMembership'");
     expect(source).toContain('authorizeLeagueSettingsRead(request, id)');
     expect(source).toContain('authorizeLeagueSettingsWrite(request, id)');
     expect(source).toContain('const userId = await getAuthenticatedUserId(request);');

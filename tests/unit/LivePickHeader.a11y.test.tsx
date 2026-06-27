@@ -64,19 +64,21 @@ const draftData = {
 
 describe('LivePickHeader', () => {
   it('renders canonical live status with accessible timer and pick train', () => {
-    render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={3} />);
+    render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={2} />);
 
     expect(screen.getByRole('banner', { name: 'Live draft status' })).toBeInTheDocument();
     expect(screen.getByRole('timer', { name: /time remaining/i })).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: /pick timer/i })).toBeInTheDocument();
     const pickTrain = screen.getByRole('region', { name: 'Draft pick train' });
-    const latestActivity = screen.getByLabelText('Latest draft activity');
 
     expect(pickTrain).toBeInTheDocument();
-    expect(latestActivity).toHaveClass('self-start');
-    expect(latestActivity).toHaveClass('min-w-0');
+    expect(screen.queryByLabelText('Latest draft activity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Latest pick')).not.toBeInTheDocument();
+    const nextPickStatus = screen.getByRole('status', { name: /you are up next/i });
+    expect(nextPickStatus).toHaveClass('bg-[color:var(--draft-broadcast-yellow)]');
+    expect(nextPickStatus).not.toHaveClass('bg-accent');
     expect(screen.getByText('On the clock')).toBeInTheDocument();
     expect(within(pickTrain).getByText('Alpha')).toBeInTheDocument();
-    expect(screen.getAllByText('Marcus Bontempelli').length).toBeGreaterThan(0);
+    expect(within(pickTrain).getByText('Marcus Bontempelli')).toBeInTheDocument();
   });
 });

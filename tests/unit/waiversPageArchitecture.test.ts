@@ -3,24 +3,33 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('league waivers page Firestore architecture', () => {
-  it('authorizes league membership before Admin SDK league reads', () => {
+  it('redirects the standalone waiver route into the league waivers tab', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/app/(app)/leagues/[id]/waivers/page.tsx'),
       'utf8'
     );
 
-    expect(source).toContain("import { requireUser } from '@/lib/requireUser'");
-    expect(source).toContain("import { verifyLeagueMembership } from '@/lib/leagueMembership'");
-    expect(source).toContain('const userId = await requireUser();');
-    expect(source).toContain('const membership = await verifyLeagueMembership(leagueId, userId);');
-    expect(source).toContain('if (!membership.isMember)');
-    expect(source.indexOf('verifyLeagueMembership(leagueId, userId)')).toBeLessThan(
-      source.indexOf("adminDb.collection('leagues').doc(leagueId)")
+    expect(source).toContain("import { redirect } from 'next/navigation'");
+    expect(source).toContain('redirect(`/leagues/${leagueId}?tab=waivers`);');
+    expect(source).not.toContain("adminDb.collection('leagues').doc(leagueId)");
+    expect(source).not.toContain('LeagueWaiversContainer');
+  });
+
+  it('does not pass server Firestore bootstrap objects into the client container', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/app/(app)/leagues/[id]/waivers/page.tsx'),
+      'utf8'
     );
+
+    expect(source).not.toContain('Object.create(null)');
+    expect(source).not.toContain('membersIndex');
   });
 
   it('does not treat unavailable waiver projections as successful empty data', () => {
-    const serviceSource = readFileSync(join(process.cwd(), 'src/services/waiverService.ts'), 'utf8');
+    const serviceSource = readFileSync(
+      join(process.cwd(), 'src/services/waiverService.ts'),
+      'utf8'
+    );
     const containerSource = readFileSync(
       join(process.cwd(), 'src/components/waivers/LeagueWaiversContainer.tsx'),
       'utf8'
@@ -44,6 +53,10 @@ describe('league waivers page Firestore architecture', () => {
       join(process.cwd(), 'src/app/api/leagues/[id]/waivers/process/route.ts'),
       'utf8'
     );
+    const processingServiceSource = readFileSync(
+      join(process.cwd(), 'src/server/waivers/WaiverProcessingService.ts'),
+      'utf8'
+    );
 
     expect(submitSource).not.toContain(
       'dropPlayerId: dropPlayerId ? String(dropPlayerId) : undefined'
@@ -51,20 +64,24 @@ describe('league waivers page Firestore architecture', () => {
     expect(submitSource).not.toContain(
       "bidAmount: typeof validatedBid === 'number' ? validatedBid : undefined"
     );
-    expect(submitSource).toContain('const waiverClaimData = {');
-    expect(submitSource).toContain(
-      '...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {})'
-    );
-    expect(submitSource).toContain(
-      "...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {})"
-    );
+    expect(submitSource).toContain('PrismaWaiverClaimStore');
     expect(processSource).not.toContain('dropPlayerId: claim.dropPlayerId || undefined');
     expect(processSource).not.toContain('bidAmount: claim.bidAmount || undefined');
     expect(processSource).not.toContain('dropPlayerId: freshData.dropPlayerId || undefined');
     expect(processSource).not.toContain('bidAmount: freshData.bidAmount || undefined');
-    expect(processSource).toContain('const failedActivityData = {');
-    expect(processSource).toContain('const successfulActivityData = {');
-    expect(processSource).not.toContain('const freshData = freshSnap.data() as WaiverClaimRaw');
-    expect(processSource).toContain('id: freshSnap.id,');
+    expect(processingServiceSource).not.toContain('dropPlayerId: input.claim.dropPlayerId ||');
+    expect(processingServiceSource).not.toContain('bidAmount: input.claim.bidAmount ||');
+    expect(processingServiceSource).toContain(
+      '...(input.claim.dropPlayerId ? { dropPlayerId: input.claim.dropPlayerId } : {})'
+    );
+    expect(processingServiceSource).toContain(
+      "...(typeof input.claim.bidAmount === 'number' ? { bidAmount: input.claim.bidAmount } : {})"
+    );
+    expect(processingServiceSource).toContain(
+      '...(claim.dropPlayerId ? { dropPlayerId: claim.dropPlayerId } : {})'
+    );
+    expect(processingServiceSource).toContain(
+      "...(typeof claim.bidAmount === 'number' ? { bidAmount: claim.bidAmount } : {})"
+    );
   });
 });
