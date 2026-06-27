@@ -47,6 +47,8 @@ type DraftPlayerStatsProjection = {
   averagePoints: number;
   fantasyPoints: number;
   gamesPlayed: number;
+  statsSeason: number;
+  availableStatSeasons: number[];
   stats: Partial<PlayerStats>;
   statsTotal: Partial<PlayerStats>;
 };
@@ -76,6 +78,10 @@ export type AvailableDraftPlayerSource = {
 };
 
 export type DraftPlayerStatsLookup = ReturnType<typeof buildDraftPlayerStatsLookup>;
+export type DraftStatSeasonOptions = {
+  selectedSeason: number;
+  availableSeasons: number[];
+};
 
 function normalizeLookupPart(value: string | null | undefined): string {
   return String(value ?? '')
@@ -100,8 +106,12 @@ export function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
   return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
 }
 
-function readNumericStat(player: Player, key: keyof PlayerStats): number {
-  const stats = player.stats ?? {};
+function readNumericStat(
+  player: Player,
+  key: keyof PlayerStats,
+  statsSource: Record<string, unknown> | undefined = player.stats
+): number {
+  const stats = statsSource ?? {};
   const aliases: Record<string, string[]> = {
     disposalEffPct: ['disposalEffPct', 'disposalEfficiency'],
     timeOnGroundPct: ['timeOnGroundPct', 'togPct'],
@@ -210,17 +220,18 @@ export function calculateStatlyZScores(
 
 function buildCompleteStats(
   player: Player,
-  gamesPlayed: number
+  gamesPlayed: number,
+  statsSource?: Record<string, unknown>
 ): PlayerStats & { aflFantasy?: number } {
   const stats = STAT_KEYS.reduce(
     (acc, key) => {
-      acc[key] = readNumericStat(player, key);
+      acc[key] = readNumericStat(player, key, statsSource);
       return acc;
     },
     { games: gamesPlayed } as PlayerStats
   );
 
-  const aflFantasy = player.stats?.aflFantasy;
+  const aflFantasy = statsSource?.aflFantasy ?? player.stats?.aflFantasy;
   if (typeof aflFantasy === 'number' && Number.isFinite(aflFantasy)) {
     return { ...stats, aflFantasy };
   }
@@ -228,16 +239,55 @@ function buildCompleteStats(
   return stats;
 }
 
-function projectDraftPlayerStats(player: Player): DraftPlayerStatsProjection | null {
-  const explicitGames = typeof player.games === 'number' && player.games > 0 ? player.games : null;
-  const hasAnyStats = STAT_KEYS.some((key) => readNumericStat(player, key) !== 0);
+function getSeasonStatsSource(
+  player: Player,
+  requestedSeason?: number | null
+): { season: number; games: number; stats: Record<string, unknown> } | null {
+  const seasons = player.statsBySeason ?? {};
+  const selectedSeason =
+    requestedSeason ?? player.statsSeason ?? Number(player.availableStatSeasons?.[0] ?? 0);
 
-  if (!explicitGames && !hasAnyStats) {
+  if (selectedSeason && seasons[String(selectedSeason)]) {
+    const seasonStats = seasons[String(selectedSeason)];
+    return {
+      season: selectedSeason,
+      games: seasonStats.games,
+      stats: seasonStats.stats,
+    };
+  }
+
+  if (requestedSeason) {
     return null;
   }
 
-  const gamesPlayed = explicitGames ?? 1;
-  const completeStats = buildCompleteStats(player, gamesPlayed);
+  const fallbackGames = typeof player.games === 'number' && player.games > 0 ? player.games : 0;
+  if (!fallbackGames && !player.stats) return null;
+
+  return {
+    season: selectedSeason || new Date().getFullYear(),
+    games: fallbackGames,
+    stats: player.stats ?? {},
+  };
+}
+
+function projectDraftPlayerStats(
+  player: Player,
+  requestedSeason?: number | null
+): DraftPlayerStatsProjection | null {
+  const seasonSource = getSeasonStatsSource(player, requestedSeason);
+  if (!seasonSource || seasonSource.games <= 0) {
+    return null;
+  }
+
+  const explicitGames = seasonSource.games;
+  const hasAnyStats = STAT_KEYS.some((key) => readNumericStat(player, key, seasonSource.stats) !== 0);
+
+  if (!hasAnyStats) {
+    return null;
+  }
+
+  const gamesPlayed = explicitGames;
+  const completeStats = buildCompleteStats(player, gamesPlayed, seasonSource.stats);
   const statsTotal: Partial<PlayerStats> = {};
   const stats: Partial<PlayerStats> = {};
 
@@ -257,19 +307,44 @@ function projectDraftPlayerStats(player: Player): DraftPlayerStatsProjection | n
     averagePoints: score,
     fantasyPoints: score,
     gamesPlayed,
+    statsSeason: seasonSource.season,
+    availableStatSeasons: player.availableStatSeasons ?? [seasonSource.season],
     stats,
     statsTotal,
   };
 }
 
-export function buildDraftPlayerStatsLookup(players: Player[]) {
+export function getDraftStatSeasonOptions(
+  players: Player[],
+  requestedSeason?: number | null
+): DraftStatSeasonOptions {
+  const currentSeason = new Date().getFullYear();
+  const availableSeasonSet = new Set<number>([currentSeason]);
+
+  for (const player of players) {
+    for (const season of player.availableStatSeasons ?? []) {
+      if (Number.isFinite(season)) availableSeasonSet.add(season);
+    }
+  }
+
+  const availableSeasons = Array.from(availableSeasonSet).sort((a, b) => b - a);
+  const selectedSeason =
+    requestedSeason && availableSeasonSet.has(requestedSeason) ? requestedSeason : currentSeason;
+
+  return { selectedSeason, availableSeasons };
+}
+
+export function buildDraftPlayerStatsLookup(
+  players: Player[],
+  options: { season?: number | null } = {}
+) {
   const byId = new Map<string, DraftPlayerStatsProjection>();
   const byNameAndTeam = new Map<string, DraftPlayerStatsProjection>();
   const byName = new Map<string, DraftPlayerStatsProjection>();
   const ambiguousNames = new Set<string>();
 
   for (const player of players) {
-    const projection = projectDraftPlayerStats(player);
+    const projection = projectDraftPlayerStats(player, options.season);
     if (!projection) continue;
 
     byId.set(player.id, projection);
@@ -299,8 +374,16 @@ export function buildDraftPlayerStatsLookup(players: Player[]) {
   return { byId, byNameAndTeam, byName };
 }
 
-export async function loadDraftPlayerStatsLookup(): Promise<DraftPlayerStatsLookup> {
-  return buildDraftPlayerStatsLookup(await getPlayers());
+export async function loadDraftPlayerStatsLookup(
+  options: { season?: number | null } = {}
+): Promise<DraftPlayerStatsLookup> {
+  return buildDraftPlayerStatsLookup(await getPlayers(), options);
+}
+
+export async function loadDraftStatSeasonOptions(
+  requestedSeason?: number | null
+): Promise<DraftStatSeasonOptions> {
+  return getDraftStatSeasonOptions(await getPlayers(), requestedSeason);
 }
 
 function findStatsProjection(

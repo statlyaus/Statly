@@ -74,12 +74,12 @@ vi.mock('@/components/PickFeed', () => ({
     pickFeedSpy({ className, contentId });
 
     return (
-    <aside aria-label="Pick feed">
-      <div id={contentId ?? 'pick-feed-content'}>
-        Pick Feed
-        <button type="button">Feed filter</button>
-      </div>
-    </aside>
+      <aside aria-label="Pick feed">
+        <div id={contentId ?? 'pick-feed-content'}>
+          Pick Feed
+          <button type="button">Feed filter</button>
+        </div>
+      </aside>
     );
   },
 }));
@@ -262,7 +262,10 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(screen.queryByRole('tablist', { name: 'Draft room sections' })).not.toBeInTheDocument();
 
     expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain('h-full');
-    expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain('min-h-[28rem]');
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain('min-h-[30rem]');
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain(
+      'bg-[color:var(--draft-broadcast-table)]'
+    );
     expect(pickFeedSpy.mock.calls.at(0)?.[0].className).toContain('h-full');
 
     expect(screen.queryByText('Current snake or linear cycle.')).not.toBeInTheDocument();

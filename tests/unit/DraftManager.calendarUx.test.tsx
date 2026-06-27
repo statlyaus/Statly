@@ -75,8 +75,13 @@ describe('DraftManager calendar UX', () => {
     });
     expect(apiMocks.fetchApi).toHaveBeenCalledWith('leagues/league-1/draft');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create Draft for League' }));
+    expect(screen.getByText('Prepare the league draft room')).toBeInTheDocument();
+    expect(screen.getByText('Draft setup preview')).toBeInTheDocument();
+    expect(screen.getByText('18 roster spots per team, 4 bench')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare draft settings' }));
+
+    expect(screen.getByText('Format and Clock')).toBeInTheDocument();
     expect(screen.getByLabelText('Draft date')).toBeInTheDocument();
     expect(screen.getByLabelText('Draft time')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start in 10 minutes' })).toBeInTheDocument();

@@ -10,7 +10,13 @@ import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
 
-type PlayerGridSortKey = 'statlyZ' | 'name' | 'position' | 'club' | 'adp';
+type PlayerGridSortKey =
+  | 'statlyZ'
+  | 'name'
+  | 'position'
+  | 'club'
+  | 'adp'
+  | `category:${FantasyCategoryKey}`;
 
 interface PlayerGridProps {
   players: DraftPlayer[];
@@ -29,6 +35,9 @@ interface PlayerGridProps {
   availablePositions: string[];
   sortBy: PlayerGridSortKey;
   onSortChange: (sort: PlayerGridSortKey) => void;
+  statSeason?: number | null;
+  statSeasons?: number[];
+  onStatSeasonChange?: (season: number) => void;
   isLoading: boolean;
   emptyStateMessage?: string;
   className?: string;
@@ -38,24 +47,13 @@ const PLAYER_COLUMN_WIDTH = 340;
 const Z_SCORE_COLUMN_WIDTH = 144;
 const STAT_COLUMN_WIDTH = 88;
 const ACTIONS_COLUMN_WIDTH = 236;
-const TABLE_VIEWPORT_HEIGHT = 680;
-const VIRTUALIZED_ROW_HEIGHT = 112;
-const VIRTUALIZED_ROW_OVERSCAN = 6;
-const VIRTUALIZED_ROW_THRESHOLD = 120;
-const STATLY_Z_DESCRIPTION =
-  "Combined Z score across this league's selected scoring categories.";
+const STATLY_Z_DESCRIPTION = "Combined Z score across this league's selected scoring categories.";
 const ACTION_BUTTON_BASE_CLASS =
-  'inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const ACTION_BUTTON_DISABLED_CLASS =
-  'cursor-not-allowed border border-border bg-muted text-muted-foreground';
-const ACTION_BUTTON_OUTLINE_CLASS = 'border border-input bg-background text-foreground hover:bg-muted';
-
-interface VisibleRowRange {
-  start: number;
-  end: number;
-  topSpacerHeight: number;
-  bottomSpacerHeight: number;
-}
+  'cursor-not-allowed border border-border bg-muted/70 text-muted-foreground';
+const ACTION_BUTTON_OUTLINE_CLASS =
+  'border border-input bg-[color:var(--draft-broadcast-field)] text-foreground hover:bg-[color:var(--draft-broadcast-field-strong)]';
 
 function formatLeagueStat(player: DraftPlayer, category: FantasyCategoryKey): string {
   const categoryData = FANTASY_CATEGORIES[category];
@@ -70,6 +68,17 @@ function formatLeagueStat(player: DraftPlayer, category: FantasyCategoryKey): st
   }
 
   return value.toFixed(categoryData.format === 'decimal' ? 2 : 1);
+}
+
+function getCategorySortKey(category: FantasyCategoryKey): PlayerGridSortKey {
+  return `category:${category}`;
+}
+
+function getStatSeasonLabel(season: number): string {
+  const currentSeason = new Date().getFullYear();
+  if (season === currentSeason) return `${season} current`;
+  if (season === currentSeason - 1) return `${season} previous`;
+  return String(season);
 }
 
 function isPromiseLike(value: void | Promise<void>): value is Promise<void> {
@@ -96,7 +105,9 @@ function getQueueActionClass(isDisabled: boolean): string {
 
 function getSelectActionClass(isDisabled: boolean): string {
   return `${ACTION_BUTTON_BASE_CLASS} font-semibold ${
-    isDisabled ? 'cursor-not-allowed bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground hover:bg-primary/90'
+    isDisabled
+      ? 'cursor-not-allowed bg-muted text-muted-foreground'
+      : 'bg-primary text-primary-foreground hover:bg-primary/90'
   }`;
 }
 
@@ -120,10 +131,10 @@ function PlayerIdentityCell({
   return (
     <th
       scope="row"
-      className="sticky left-0 z-[1] bg-card px-4 py-4 font-normal shadow-[1px_0_0_0_hsl(var(--border))] transition-colors group-hover:bg-muted/50 sm:px-5"
+      className="sticky left-0 z-[1] bg-card px-4 py-4 font-normal shadow-[1px_0_0_0_var(--draft-broadcast-border-soft)] transition-colors group-hover:bg-[color:var(--draft-broadcast-table-row-hover)] sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-background p-1.5 shadow-sm">
+        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-[color:var(--draft-broadcast-field)] p-1.5 shadow-sm">
           <Image
             src={teamLogo}
             alt=""
@@ -138,21 +149,23 @@ function PlayerIdentityCell({
         <div className="min-w-0">
           <div className="truncate font-semibold text-foreground">{player.name}</div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-semibold text-foreground">
+            <span className="rounded-md border border-border bg-[color:var(--draft-broadcast-field)] px-2 py-0.5 font-semibold text-foreground">
               {player.position}
             </span>
-            <span className="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground">
+            <span className="rounded-md border border-border bg-[color:var(--draft-broadcast-field)] px-2 py-0.5 font-medium text-foreground">
               {teamAbbreviation}
             </span>
             <span>{player.club}</span>
-            {player.adp && <span className="rounded-md bg-muted px-2 py-0.5">ADP {player.adp}</span>}
+            {player.adp && (
+              <span className="rounded-md bg-muted px-2 py-0.5">ADP {player.adp}</span>
+            )}
             {isQueued && (
-              <span className="rounded-md bg-primary/10 px-2 py-0.5 font-medium text-primary">
+              <span className="rounded-md border border-primary/30 bg-primary/15 px-2 py-0.5 font-medium text-primary">
                 Queued
               </span>
             )}
             {isWatched && (
-              <span className="rounded-md bg-accent px-2 py-0.5 font-medium text-accent-foreground">
+              <span className="rounded-md border border-border bg-accent px-2 py-0.5 font-medium text-accent-foreground">
                 Watchlist
               </span>
             )}
@@ -191,10 +204,7 @@ interface PlayerStatCellsProps {
   visibleCategories: FantasyCategoryKey[];
 }
 
-function PlayerStatCells({
-  player,
-  visibleCategories,
-}: PlayerStatCellsProps): React.JSX.Element {
+function PlayerStatCells({ player, visibleCategories }: PlayerStatCellsProps): React.JSX.Element {
   if (visibleCategories.length === 0) {
     return (
       <td className="border-l border-border/60 px-4 py-4 align-middle text-sm text-muted-foreground">
@@ -215,9 +225,7 @@ function PlayerStatCells({
             className="border-l border-border/60 px-3 py-4 text-center align-middle text-sm font-semibold text-foreground"
             aria-label={`${categoryData.label}: ${displayValue}`}
           >
-            <span className="inline-flex min-w-12 justify-center tabular-nums">
-              {displayValue}
-            </span>
+            <span className="inline-flex min-w-12 justify-center tabular-nums">{displayValue}</span>
           </td>
         );
       })}
@@ -267,11 +275,7 @@ function PlayerRowActions({
           className={getWatchActionClass(actionDisabled, isWatched)}
           aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
         >
-          <Star
-            className="h-4 w-4"
-            aria-hidden="true"
-            fill={isWatched ? 'currentColor' : 'none'}
-          />
+          <Star className="h-4 w-4" aria-hidden="true" fill={isWatched ? 'currentColor' : 'none'} />
           <span className="hidden 2xl:inline">{isWatched ? 'Watched' : 'Watch'}</span>
         </button>
         <button
@@ -348,9 +352,9 @@ function PlayerTableRow({
 }: PlayerTableRowProps): React.JSX.Element {
   const teamLogo = getTeamLogo(player.club);
   const teamAbbreviation = getTeamAbbreviation(player.club);
-  const rowClassName = `group cursor-pointer transition-colors [content-visibility:auto] hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
-    isFocused ? 'bg-accent/50 ring-2 ring-inset ring-ring' : ''
-  } ${isSelected ? 'bg-primary/10' : ''}`;
+  const rowClassName = `group cursor-pointer bg-[color:var(--draft-broadcast-table)] transition-colors [content-visibility:auto] hover:bg-[color:var(--draft-broadcast-table-row-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+    isFocused ? 'bg-[color:var(--draft-broadcast-table-row-hover)] ring-2 ring-inset ring-ring' : ''
+  } ${isSelected ? 'bg-primary/15' : ''}`;
 
   return (
     <tr
@@ -400,6 +404,9 @@ interface PlayerGridControlsProps {
   availablePositions: string[];
   sortBy: PlayerGridSortKey;
   onSortChange: (sort: PlayerGridSortKey) => void;
+  statSeason?: number | null;
+  statSeasons?: number[];
+  onStatSeasonChange?: (season: number) => void;
   filteredPlayerCount: number;
   totalPlayers: number;
   hasActiveFilters: boolean;
@@ -414,13 +421,16 @@ function PlayerGridControls({
   availablePositions,
   sortBy,
   onSortChange,
+  statSeason,
+  statSeasons = [],
+  onStatSeasonChange,
   filteredPlayerCount,
   totalPlayers,
   hasActiveFilters,
 }: PlayerGridControlsProps): React.JSX.Element {
   return (
-    <div className="border-b border-border bg-muted/50 px-4 py-4 sm:px-5">
-      <div className="flex flex-col gap-4 xl:flex-row">
+    <div className="border-b border-border bg-[color:var(--draft-broadcast-panel)] px-4 py-4 sm:px-5">
+      <div className="flex flex-col gap-3 xl:flex-row">
         <div className="flex-1">
           <label htmlFor="player-search" className="sr-only">
             Search players
@@ -449,9 +459,32 @@ function PlayerGridControls({
               value={searchQuery}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Search players by name, position, or club..."
-              className="block w-full rounded-md border border-input bg-background py-2.5 pl-10 pr-3 leading-5 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              className="block h-12 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] py-2.5 pl-10 pr-3 text-sm leading-5 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
+        </div>
+
+        <div className="xl:w-44">
+          <label htmlFor="stats-season" className="sr-only">
+            Stats season
+          </label>
+          <select
+            id="stats-season"
+            value={statSeason ?? ''}
+            onChange={(event) => onStatSeasonChange?.(Number(event.target.value))}
+            disabled={!onStatSeasonChange || statSeasons.length === 0}
+            className="block h-12 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {statSeasons.length === 0 ? (
+              <option value="">Stats season</option>
+            ) : (
+              statSeasons.map((season) => (
+                <option key={season} value={season}>
+                  {getStatSeasonLabel(season)}
+                </option>
+              ))
+            )}
+          </select>
         </div>
 
         <div className="xl:w-48">
@@ -462,7 +495,7 @@ function PlayerGridControls({
             id="position-filter"
             value={positionFilter}
             onChange={(event) => onPositionFilterChange(event.target.value)}
-            className="block w-full rounded-md border border-input bg-background px-3 py-2.5 leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="block h-12 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             {availablePositions.map((position) => (
               <option key={position} value={position}>
@@ -480,7 +513,7 @@ function PlayerGridControls({
             id="sort-by"
             value={sortBy}
             onChange={(event) => onSortChange(event.target.value as PlayerGridSortKey)}
-            className="block w-full rounded-md border border-input bg-background px-3 py-2.5 leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="block h-12 w-full rounded-md border border-input bg-[color:var(--draft-broadcast-field)] px-3 py-2.5 text-sm leading-5 text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="statlyZ">Sort by Statly Z</option>
             <option value="adp">Sort by ADP</option>
@@ -491,7 +524,7 @@ function PlayerGridControls({
         </div>
       </div>
 
-      <div className="mt-3 text-sm text-muted-foreground">
+      <div className="mt-3 text-sm font-medium text-muted-foreground">
         <div>
           Showing {filteredPlayerCount} of {totalPlayers} players
           {hasActiveFilters && (
@@ -525,7 +558,7 @@ function PlayerGridEmptyState({
         className
       )}
     >
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-2xl">
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--draft-broadcast-field)] text-2xl">
         🔍
       </div>
       <h3 className="text-lg font-semibold text-foreground">
@@ -542,14 +575,14 @@ function PlayerGridEmptyState({
           <button
             type="button"
             onClick={onClearFilters}
-            className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Clear filters
           </button>
           <button
             type="button"
             onClick={onScrollToTop}
-            className="inline-flex items-center rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex items-center rounded-full border border-border bg-[color:var(--draft-broadcast-field)] px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Scroll to top
           </button>
@@ -561,12 +594,8 @@ function PlayerGridEmptyState({
 
 interface PlayerGridTableProps {
   filteredPlayers: DraftPlayer[];
-  visiblePlayers: DraftPlayer[];
   visibleCategories: FantasyCategoryKey[];
-  visibleRange: VisibleRowRange;
   tableMinWidth: number;
-  statColumnCount: number;
-  shouldWindowRows: boolean;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   rowRefs: React.MutableRefObject<Array<HTMLTableRowElement | null>>;
   focusedRow: number | null;
@@ -577,7 +606,6 @@ interface PlayerGridTableProps {
   selectionInFlight: boolean;
   canMakePick: boolean;
   pendingSelectionId: string | null;
-  setScrollTop: (scrollTop: number) => void;
   sortBy: PlayerGridSortKey;
   onSortChange: (sort: PlayerGridSortKey) => void;
   onKeyDown: (event: React.KeyboardEvent, playerIndex: number) => void;
@@ -589,12 +617,8 @@ interface PlayerGridTableProps {
 
 function PlayerGridTable({
   filteredPlayers,
-  visiblePlayers,
   visibleCategories,
-  visibleRange,
   tableMinWidth,
-  statColumnCount,
-  shouldWindowRows,
   scrollContainerRef,
   rowRefs,
   focusedRow,
@@ -605,7 +629,6 @@ function PlayerGridTable({
   selectionInFlight,
   canMakePick,
   pendingSelectionId,
-  setScrollTop,
   sortBy,
   onSortChange,
   onKeyDown,
@@ -618,12 +641,7 @@ function PlayerGridTable({
     <div className="relative min-h-0 flex-1">
       <div
         ref={scrollContainerRef}
-        className="h-full overflow-auto"
-        onScroll={(event) => {
-          if (shouldWindowRows) {
-            setScrollTop(event.currentTarget.scrollTop);
-          }
-        }}
+        className="h-full overflow-auto bg-[color:var(--draft-broadcast-table)]"
       >
         <table
           className="w-full table-fixed border-collapse text-left"
@@ -646,12 +664,12 @@ function PlayerGridTable({
             )}
             <col style={{ width: ACTIONS_COLUMN_WIDTH }} />
           </colgroup>
-          <thead className="sticky top-0 z-10 border-b border-border bg-muted/95 text-sm font-medium text-muted-foreground backdrop-blur">
+          <thead className="sticky top-0 z-10 border-b border-border bg-[color:var(--draft-broadcast-panel)] text-sm font-medium text-muted-foreground backdrop-blur">
             <tr>
               <th
                 scope="col"
                 rowSpan={visibleCategories.length > 0 ? 2 : 1}
-                className="sticky left-0 z-20 bg-muted/95 px-4 py-3 font-medium shadow-[1px_0_0_0_hsl(var(--border))] sm:px-5"
+                className="sticky left-0 z-20 bg-[color:var(--draft-broadcast-panel)] px-4 py-3 font-semibold shadow-[1px_0_0_0_var(--draft-broadcast-border-soft)] sm:px-5"
               >
                 Player
               </th>
@@ -659,33 +677,30 @@ function PlayerGridTable({
                 scope="col"
                 rowSpan={visibleCategories.length > 0 ? 2 : 1}
                 aria-sort={sortBy === 'statlyZ' ? 'descending' : 'none'}
-                className="border-l border-border/70 px-3 py-3 text-center font-medium"
+                className="border-l border-border/70 px-3 py-3 text-center font-semibold"
               >
                 <button
                   type="button"
                   onClick={() => onSortChange('statlyZ')}
-                  className="mx-auto inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-muted"
+                  className="mx-auto inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase text-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   aria-label="Sort by Statly Z"
                   title={STATLY_Z_DESCRIPTION}
                 >
                   <span>Statly Z</span>
-                  <Info
-                    className="h-3.5 w-3.5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                 </button>
               </th>
               <th
                 scope={visibleCategories.length > 0 ? 'colgroup' : 'col'}
                 colSpan={visibleCategories.length > 0 ? visibleCategories.length : 1}
-                className="border-x border-border/70 px-4 py-3 text-center font-medium"
+                className="border-x border-border/70 px-4 py-3 text-center font-semibold"
               >
                 League Stats
               </th>
               <th
                 scope="col"
                 rowSpan={visibleCategories.length > 0 ? 2 : 1}
-                className="px-4 py-3 text-center font-medium sm:px-5"
+                className="px-4 py-3 text-center font-semibold sm:px-5"
               >
                 Actions
               </th>
@@ -700,29 +715,26 @@ function PlayerGridTable({
                       key={category}
                       scope="col"
                       aria-label={categoryData.label}
+                      aria-sort={sortBy === getCategorySortKey(category) ? 'descending' : 'none'}
                       className="border-l border-border/70 px-3 py-2 text-center text-[11px] font-semibold uppercase text-muted-foreground first:border-l"
                       title={categoryData.label}
                     >
-                      {categoryData.abbrev}
+                      <button
+                        type="button"
+                        onClick={() => onSortChange(getCategorySortKey(category))}
+                        className="mx-auto inline-flex min-h-7 min-w-10 items-center justify-center rounded-md px-2 text-[11px] font-semibold uppercase text-muted-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        aria-label={`Sort by ${categoryData.label}`}
+                      >
+                        {categoryData.abbrev}
+                      </button>
                     </th>
                   );
                 })}
               </tr>
             )}
           </thead>
-          <tbody className="divide-y divide-border">
-            {shouldWindowRows && visibleRange.topSpacerHeight > 0 && (
-              <tr aria-hidden="true" role="presentation">
-                <td
-                  colSpan={2 + statColumnCount + 1}
-                  className="border-0 p-0"
-                  style={{ height: visibleRange.topSpacerHeight }}
-                />
-              </tr>
-            )}
-            {visiblePlayers.map((player, visibleIndex) => {
-              const index = visibleRange.start + visibleIndex;
-
+          <tbody className="divide-y divide-[color:var(--draft-broadcast-border-soft)]">
+            {filteredPlayers.map((player, index) => {
               return (
                 <PlayerTableRow
                   key={player.id}
@@ -748,21 +760,12 @@ function PlayerGridTable({
                 />
               );
             })}
-            {shouldWindowRows && visibleRange.bottomSpacerHeight > 0 && (
-              <tr aria-hidden="true" role="presentation">
-                <td
-                  colSpan={2 + statColumnCount + 1}
-                  className="border-0 p-0"
-                  style={{ height: visibleRange.bottomSpacerHeight }}
-                />
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
 
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/75">
+        <div className="absolute inset-0 flex items-center justify-center bg-[color:var(--draft-broadcast-overlay)]">
           <div className="text-center">
             <div
               className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"
@@ -793,6 +796,9 @@ export default function PlayerGrid({
   availablePositions,
   sortBy,
   onSortChange,
+  statSeason,
+  statSeasons,
+  onStatSeasonChange,
   isLoading,
   emptyStateMessage,
   className,
@@ -800,7 +806,6 @@ export default function PlayerGrid({
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -821,34 +826,6 @@ export default function PlayerGrid({
     Z_SCORE_COLUMN_WIDTH +
     statColumnCount * STAT_COLUMN_WIDTH +
     ACTIONS_COLUMN_WIDTH;
-  const shouldWindowRows = filteredPlayers.length > VIRTUALIZED_ROW_THRESHOLD;
-  const visibleRange = useMemo(() => {
-    if (!shouldWindowRows) {
-      return {
-        start: 0,
-        end: filteredPlayers.length,
-        topSpacerHeight: 0,
-        bottomSpacerHeight: 0,
-      };
-    }
-
-    const firstVisibleRow = Math.floor(scrollTop / VIRTUALIZED_ROW_HEIGHT);
-    const start = Math.max(0, firstVisibleRow - VIRTUALIZED_ROW_OVERSCAN);
-    const visibleRowCount =
-      Math.ceil(TABLE_VIEWPORT_HEIGHT / VIRTUALIZED_ROW_HEIGHT) + VIRTUALIZED_ROW_OVERSCAN * 2;
-    const end = Math.min(filteredPlayers.length, start + visibleRowCount);
-
-    return {
-      start,
-      end,
-      topSpacerHeight: start * VIRTUALIZED_ROW_HEIGHT,
-      bottomSpacerHeight: (filteredPlayers.length - end) * VIRTUALIZED_ROW_HEIGHT,
-    };
-  }, [filteredPlayers.length, scrollTop, shouldWindowRows]);
-  const visiblePlayers = useMemo(
-    () => filteredPlayers.slice(visibleRange.start, visibleRange.end),
-    [filteredPlayers, visibleRange.end, visibleRange.start]
-  );
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -924,21 +901,13 @@ export default function PlayerGrid({
   // Focus management
   useEffect(() => {
     if (focusedRow !== null) {
-      if (shouldWindowRows) {
-        scrollContainerRef.current?.scrollTo?.({
-          top: Math.max(0, focusedRow * VIRTUALIZED_ROW_HEIGHT - TABLE_VIEWPORT_HEIGHT / 2),
-          behavior: 'auto',
-        });
-      } else {
-        rowRefs.current[focusedRow]?.scrollIntoView({ block: 'center' });
-      }
+      rowRefs.current[focusedRow]?.scrollIntoView({ block: 'center' });
     }
-  }, [focusedRow, shouldWindowRows]);
+  }, [focusedRow]);
 
   useEffect(() => {
     rowRefs.current = [];
     setFocusedRow(null);
-    setScrollTop(0);
     scrollContainerRef.current?.scrollTo?.({ top: 0, behavior: 'auto' });
   }, [searchQuery, positionFilter, sortBy, filteredPlayers.length]);
 
@@ -975,6 +944,9 @@ export default function PlayerGrid({
         availablePositions={availablePositions}
         sortBy={sortBy}
         onSortChange={onSortChange}
+        statSeason={statSeason}
+        statSeasons={statSeasons}
+        onStatSeasonChange={onStatSeasonChange}
         filteredPlayerCount={filteredPlayers.length}
         totalPlayers={totalPlayers}
         hasActiveFilters={hasActiveFilters}
@@ -982,12 +954,8 @@ export default function PlayerGrid({
 
       <PlayerGridTable
         filteredPlayers={filteredPlayers}
-        visiblePlayers={visiblePlayers}
         visibleCategories={visibleCategories}
-        visibleRange={visibleRange}
         tableMinWidth={tableMinWidth}
-        statColumnCount={statColumnCount}
-        shouldWindowRows={shouldWindowRows}
         scrollContainerRef={scrollContainerRef}
         rowRefs={rowRefs}
         focusedRow={focusedRow}
@@ -998,7 +966,6 @@ export default function PlayerGrid({
         selectionInFlight={selectionInFlight}
         canMakePick={canMakePick}
         pendingSelectionId={pendingSelectionId}
-        setScrollTop={setScrollTop}
         sortBy={sortBy}
         onSortChange={onSortChange}
         onKeyDown={handleKeyDown}

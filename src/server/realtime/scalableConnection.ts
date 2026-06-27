@@ -1,6 +1,7 @@
 import { Redis, Cluster } from 'ioredis';
 
 import { logger } from '../../lib/logger';
+import { shouldDisableRedisClients } from '../../lib/redisConfig';
 
 import type {
   Redis as IORedisClient,
@@ -44,7 +45,7 @@ interface ConnectionHealth {
 const SHUTDOWN_HANDLERS_SYMBOL = Symbol.for('scalableRedisShutdownHandlersRegistered');
 
 function isNextProductionBuild(): boolean {
-  return process.env.NEXT_PHASE === 'phase-production-build' || process.env.REDIS_DISABLED === '1';
+  return shouldDisableRedisClients();
 }
 
 function createDisabledRedisClient(): IORedisClient {

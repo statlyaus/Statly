@@ -277,79 +277,85 @@ export default function LivePickHeader({
   const timerTone =
     timerState.tone === 'urgent'
       ? {
-          badge: 'border-destructive/30 bg-destructive/10 text-destructive',
-          bar: 'bg-destructive',
-          rail: 'bg-destructive/15',
+          badge:
+            'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]',
+          bar: 'bg-[color:var(--draft-broadcast-red)]',
+          rail: 'bg-[color:var(--draft-broadcast-red-soft)]',
           label: timerState.label,
         }
       : timerState.tone === 'warning'
         ? {
-            badge: 'border-warning/40 bg-warning/15 text-warning-foreground',
-            bar: 'bg-warning',
-            rail: 'bg-warning/20',
+            badge:
+              'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)]',
+            bar: 'bg-[color:var(--draft-broadcast-yellow)]',
+            rail: 'bg-[color:var(--draft-broadcast-yellow-soft)]',
             label: timerState.label,
           }
         : timerState.tone === 'complete'
           ? {
-              badge: 'border-primary/25 bg-primary/10 text-primary',
-              bar: 'bg-primary',
-              rail: 'bg-primary/15',
+              badge:
+                'border-[color:var(--draft-broadcast-green)] bg-[color:var(--draft-broadcast-green)] text-white',
+              bar: 'bg-[color:var(--draft-broadcast-green)]',
+              rail: 'bg-[color:var(--draft-broadcast-green-soft)]',
               label: timerState.label,
             }
           : timerState.tone === 'neutral'
             ? {
-                badge: 'border-border bg-muted text-muted-foreground',
-                bar: 'bg-muted-foreground',
-                rail: 'bg-muted',
+                badge:
+                  'border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)]',
+                bar: 'bg-[color:var(--draft-broadcast-muted)]',
+                rail: 'bg-[color:var(--draft-broadcast-panel-strong)]',
                 label: timerState.label,
               }
             : {
-                badge: 'border-primary/25 bg-primary/10 text-primary',
-                bar: 'bg-primary',
-                rail: 'bg-primary/15',
+                badge:
+                  'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-white',
+                bar: 'bg-[color:var(--draft-broadcast-red)]',
+                rail: 'bg-[color:var(--draft-broadcast-red-soft)]',
                 label: timerState.label,
               };
-  const statusCopy =
-    {
-      SCHEDULED: {
-        title: 'Draft scheduled',
-        detail:
-          'The room is ready. Participants can prepare queues before the league owner starts the draft.',
-      },
-      LOBBY: {
-        title: 'Draft lobby',
-        detail: 'The lobby is open for final queue and roster checks.',
-      },
-      COUNTDOWN: {
-        title: 'Draft countdown',
-        detail: 'The draft is waiting for its scheduled launch.',
-      },
-      LIVE: {
-        title: sequence.current ? `Pick ${sequence.current.overall}` : `Pick ${draftData.currentPick}`,
-        detail: sequence.current
-          ? `${sequence.current.displayName} is on the clock.`
-          : 'The draft clock is live.',
-      },
-      PAUSED: {
-        title: 'Draft paused',
-        detail: 'The clock is stopped until the league owner resumes the room.',
-      },
-      COMPLETED: {
-        title: 'Draft complete',
-        detail: 'All picks are finalized and the draft history is available for review.',
-      },
-      CANCELLED: {
-        title: 'Draft cancelled',
-        detail: 'This draft is no longer accepting picks.',
-      },
-      WAITING: {
-        title: 'Draft starting soon',
-        detail: 'Waiting for participants and final room readiness before the draft begins.',
-      },
-    }[normalizedStatus] ?? {
-      title: 'Draft room',
-      detail: 'The room is loading the latest draft state.',
-    };
+  const statusCopy = {
+    SCHEDULED: {
+      title: 'Draft scheduled',
+      detail:
+        'The room is ready. Participants can prepare queues before the league owner starts the draft.',
+    },
+    LOBBY: {
+      title: 'Draft lobby',
+      detail: 'The lobby is open for final queue and roster checks.',
+    },
+    COUNTDOWN: {
+      title: 'Draft countdown',
+      detail: 'The draft is waiting for its scheduled launch.',
+    },
+    LIVE: {
+      title: sequence.current
+        ? `Pick ${sequence.current.overall}`
+        : `Pick ${draftData.currentPick}`,
+      detail: sequence.current
+        ? `${sequence.current.displayName} is on the clock.`
+        : 'The draft clock is live.',
+    },
+    PAUSED: {
+      title: 'Draft paused',
+      detail: 'The clock is stopped until the league owner resumes the room.',
+    },
+    COMPLETED: {
+      title: 'Draft complete',
+      detail: 'All picks are finalized and the draft history is available for review.',
+    },
+    CANCELLED: {
+      title: 'Draft cancelled',
+      detail: 'This draft is no longer accepting picks.',
+    },
+    WAITING: {
+      title: 'Draft starting soon',
+      detail: 'Waiting for participants and final room readiness before the draft begins.',
+    },
+  }[normalizedStatus] ?? {
+    title: 'Draft room',
+    detail: 'The room is loading the latest draft state.',
+  };
 
   return (
     <section
@@ -359,21 +365,21 @@ export default function LivePickHeader({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <div
-          className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm"
+          className="rounded-2xl border border-t-4 border-[color:var(--draft-broadcast-border)] border-t-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-panel)] p-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)]"
           role="region"
           aria-label="Draft clock"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+              <span className="inline-flex items-center rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] px-2.5 py-1 text-xs font-semibold text-white">
                 {statusCopy.title}
               </span>
-              <span className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <span className="rounded-md border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-2.5 py-1 text-xs font-medium text-[color:var(--draft-broadcast-muted)]">
                 Round {draftData.round} / {draftData.direction}
               </span>
               {isYourTurn && (
                 <span
-                  className="rounded-md border border-primary bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
+                  className="rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)]"
                   role="alert"
                   aria-label="It is your turn to pick"
                 >
@@ -382,25 +388,29 @@ export default function LivePickHeader({
               )}
             </div>
 
-            <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${timerTone.badge}`}>
+            <span
+              className={`rounded-md border px-2 py-1 text-xs font-semibold ${timerTone.badge}`}
+            >
               {timerTone.label}
             </span>
           </div>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-xs font-medium uppercase tracking-normal text-[color:var(--draft-broadcast-muted)]">
                 Live pick clock
               </p>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{statusCopy.detail}</p>
+              <p className="mt-1 max-w-2xl text-sm text-[color:var(--draft-broadcast-muted)]">
+                {statusCopy.detail}
+              </p>
               <div
-                className="mt-2 flex items-baseline gap-2 font-mono text-4xl font-semibold tracking-normal text-foreground"
+                className="mt-2 flex items-baseline gap-2 font-mono text-5xl font-semibold tracking-normal text-[color:var(--draft-broadcast-text)]"
                 role="timer"
                 aria-label={`Time remaining: ${formatTime(timeLeft)}`}
                 aria-live="polite"
               >
                 <ClockIcon
-                  className={`h-6 w-6 ${timeLeft <= 10 ? 'animate-spin text-destructive' : 'text-muted-foreground'}`}
+                  className={`h-6 w-6 ${timeLeft <= 10 ? 'animate-spin text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
                   aria-hidden="true"
                 />
                 <span className={timeLeft <= 10 ? 'animate-pulse' : ''}>
@@ -413,8 +423,8 @@ export default function LivePickHeader({
               <div
                 className={`inline-flex rounded-md border px-3 py-2 text-sm font-medium transition-opacity ${
                   picksUntilYourTurn === 1
-                    ? `border-warning/60 bg-warning/15 text-warning-foreground ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse`
-                    : 'border-border bg-background text-muted-foreground'
+                    ? `border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ${isFlashing ? 'opacity-100' : 'opacity-80'} animate-pulse`
+                    : 'border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)]'
                 }`}
                 role="status"
                 aria-live="polite"
@@ -424,7 +434,7 @@ export default function LivePickHeader({
                   ? "You're up next"
                   : `${picksUntilYourTurn} pick${picksUntilYourTurn > 1 ? 's' : ''} until your turn`}
                 {estimatedTimeUntilYourTurn > 0 && (
-                  <span className="ml-1 text-muted-foreground">
+                  <span className="ml-1 opacity-75">
                     / about {formatTime(estimatedTimeUntilYourTurn)}
                   </span>
                 )}

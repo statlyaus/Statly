@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import {
   PlayIcon,
   CalendarIcon,
-  UsersIcon,
   CogIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -552,19 +551,67 @@ export default function DraftManager({
       date: getTomorrowDraftStartDate(),
     },
   ];
+  const rosterSize = getRosterSizeFromPositionLimits(draftSettings.positionLimits);
+  const benchSize = getBenchSizeFromPositionLimits(draftSettings.positionLimits);
+  const totalDraftPicks = members.length * rosterSize;
+  const readinessItems = [
+    {
+      label: 'League members',
+      detail: `${members.length}/${league.maxTeams} teams joined`,
+      complete: hasEnoughMembers,
+      incompleteLabel: 'Need at least 4 teams',
+    },
+    {
+      label: 'Commissioner access',
+      detail: isCommissioner ? 'You can configure and launch the draft' : 'Owner or manager only',
+      complete: isCommissioner,
+      incompleteLabel: 'Commissioner only',
+    },
+    {
+      label: 'Roster shape',
+      detail: `${rosterSize} roster spots per team, ${benchSize} bench`,
+      complete: true,
+      incompleteLabel: '',
+    },
+  ];
 
   return (
-    <div className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <PlayIcon className="h-6 w-6 text-primary" />
-          <h2 className="text-xl font-semibold text-foreground">Draft Management</h2>
+    <div className="rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+      <div className="border-b border-border p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              <PlayIcon className="h-4 w-4 text-primary" />
+              Draft Management
+            </div>
+            <h2 className="text-2xl font-semibold text-foreground">
+              Prepare the league draft room
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Set the start time, draft order, roster limits, and auto-pick behaviour before the
+              room opens to league members.
+            </p>
+          </div>
+          <div className="grid min-w-0 grid-cols-3 overflow-hidden rounded-lg border border-border bg-background text-center sm:min-w-80">
+            <div className="border-r border-border p-3">
+              <p className="text-xs font-medium text-muted-foreground">Teams</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{members.length}</p>
+            </div>
+            <div className="border-r border-border p-3">
+              <p className="text-xs font-medium text-muted-foreground">Rounds</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{rosterSize}</p>
+            </div>
+            <div className="p-3">
+              <p className="text-xs font-medium text-muted-foreground">Picks</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{totalDraftPicks}</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 flex items-center space-x-2 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
+        <div className="mx-6 mt-6 flex items-center space-x-2 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
           <ExclamationTriangleIcon className="h-5 w-5 text-destructive" />
           <span className="text-destructive">{error}</span>
         </div>
@@ -575,7 +622,7 @@ export default function DraftManager({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 rounded-lg border border-border bg-muted/50 p-4"
+          className="m-6 rounded-lg border border-border bg-muted/50 p-4"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -604,48 +651,78 @@ export default function DraftManager({
 
       {/* Draft Creation Section */}
       {!existingDraft && (
-        <div className="space-y-4">
+        <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
           {/* Prerequisites Check */}
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3">
-              <UsersIcon className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                League Members: {members.length}/{league.maxTeams}
-              </span>
-              {hasEnoughMembers ? (
-                <CheckCircleIcon className="h-5 w-5 text-primary" />
-              ) : (
-                <span className="text-xs text-destructive">Need at least 4 members</span>
-              )}
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {readinessItems.map((item) => (
+                <div key={item.label} className="rounded-lg border border-border bg-background p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{item.label}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
+                    </div>
+                    {item.complete ? (
+                      <CheckCircleIcon className="h-5 w-5 shrink-0 text-primary" />
+                    ) : (
+                      <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-destructive" />
+                    )}
+                  </div>
+                  {!item.complete && (
+                    <p className="mt-3 text-xs font-medium text-destructive">
+                      {item.incompleteLabel}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
 
-            <div className="flex items-center space-x-3">
-              <CogIcon className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Commissioner Access</span>
-              {isCommissioner ? (
-                <CheckCircleIcon className="h-5 w-5 text-primary" />
-              ) : (
-                <span className="text-xs text-destructive">Commissioner only</span>
-              )}
+            <div className="rounded-lg border border-border bg-background p-4">
+              <div className="flex items-center gap-2">
+                <CogIcon className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-foreground">Draft setup preview</h3>
+              </div>
+              <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <p className="text-muted-foreground">Default format</p>
+                  <p className="font-medium text-foreground">Snake draft</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Pick clock</p>
+                  <p className="font-medium text-foreground">2 minutes per pick</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Auto-pick</p>
+                  <p className="font-medium text-foreground">Queue first, then best available</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Draft order</p>
+                  <p className="font-medium text-foreground">Randomized unless changed</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Create Draft Button */}
-          {canCreateDraft && (
-            <div className="border-t border-border pt-4">
+          <aside className="rounded-lg border border-border bg-muted/30 p-4">
+            <p className="text-sm font-semibold text-foreground">Next step</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Review the schedule and commissioner settings, then create the draft room for league
+              members.
+            </p>
+
+            {/* Create Draft Button */}
+            {canCreateDraft && (
               <button
                 onClick={() => setShowDraftSettings(true)}
-                className="flex w-full items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-4 flex w-full items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <CalendarIcon className="h-5 w-5" />
-                <span>Create Draft for League</span>
+                <span>Prepare draft settings</span>
               </button>
-            </div>
-          )}
+            )}
 
-          {!canCreateDraft && (
-            <div className="border-t border-border pt-4">
-              <div className="rounded-lg bg-muted p-3 text-center">
+            {!canCreateDraft && (
+              <div className="mt-4 rounded-lg border border-border bg-background p-3 text-center">
                 <span className="text-sm text-muted-foreground">
                   {!isCommissioner
                     ? 'Only a league commissioner can create a draft'
@@ -654,8 +731,8 @@ export default function DraftManager({
                       : 'Draft requirements not met'}
                 </span>
               </div>
-            </div>
-          )}
+            )}
+          </aside>
         </div>
       )}
 
@@ -664,24 +741,41 @@ export default function DraftManager({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-card p-6 text-card-foreground shadow-xl"
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-xl"
           >
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Draft Settings</h3>
+            <div className="border-b border-border p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Draft setup
+                  </p>
+                  <h3 className="mt-2 text-2xl font-semibold text-foreground">Draft Settings</h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    Configure the launch time, order, roster shape, and automation before the draft
+                    room opens.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background px-4 py-3 text-sm">
+                  <p className="font-medium text-foreground">{members.length} teams</p>
+                  <p className="text-muted-foreground">{totalDraftPicks} total picks</p>
+                </div>
+              </div>
+            </div>
 
-            <div className="space-y-4">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
               {/* Scheduled Time */}
-              <div className="rounded-lg border border-border bg-background p-4">
+              <section className="rounded-lg border border-border bg-background p-5">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h4 className="text-sm font-medium text-foreground">Draft Start Time</h4>
+                    <h4 className="text-base font-semibold text-foreground">Draft Start Time</h4>
                     <p className="mt-1 text-sm text-muted-foreground">{draftStartSummary}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
                     Earliest {formatDraftStartDateTime(minimumDraftStartValue)}
                   </p>
                 </div>
@@ -730,70 +824,92 @@ export default function DraftManager({
                     </button>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              {/* Draft Type */}
-              <div>
-                <label
-                  htmlFor="draftType"
-                  className="mb-1 block text-sm font-medium text-foreground"
-                >
-                  Draft Type
-                </label>
-                <select
-                  id="draftType"
-                  value={draftSettings.draftType}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({
-                      ...prev,
-                      draftType: e.target.value as 'snake' | 'linear',
-                    }))
-                  }
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="snake">Snake Draft</option>
-                  <option value="linear">Linear Draft</option>
-                </select>
-              </div>
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="mb-4">
+                  <h4 className="text-base font-semibold text-foreground">Format and Clock</h4>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Choose the draft style and how long each team has on the clock.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Draft Type */}
+                  <div>
+                    <label
+                      htmlFor="draftType"
+                      className="mb-1 block text-sm font-medium text-foreground"
+                    >
+                      Draft Type
+                    </label>
+                    <select
+                      id="draftType"
+                      value={draftSettings.draftType}
+                      onChange={(e) =>
+                        setDraftSettings((prev) => ({
+                          ...prev,
+                          draftType: e.target.value as 'snake' | 'linear',
+                        }))
+                      }
+                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="snake">Snake Draft</option>
+                      <option value="linear">Linear Draft</option>
+                    </select>
+                  </div>
 
-              {/* Time Per Pick */}
-              <div>
-                <label
-                  htmlFor="timePerPick"
-                  className="mb-1 block text-sm font-medium text-foreground"
-                >
-                  Time Per Pick (seconds)
-                </label>
-                <select
-                  id="timePerPick"
-                  value={draftSettings.timePerPick}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({ ...prev, timePerPick: parseInt(e.target.value) }))
-                  }
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {TIME_PER_PICK_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {/* Time Per Pick */}
+                  <div>
+                    <label
+                      htmlFor="timePerPick"
+                      className="mb-1 block text-sm font-medium text-foreground"
+                    >
+                      Time Per Pick
+                    </label>
+                    <select
+                      id="timePerPick"
+                      value={draftSettings.timePerPick}
+                      onChange={(e) =>
+                        setDraftSettings((prev) => ({
+                          ...prev,
+                          timePerPick: parseInt(e.target.value),
+                        }))
+                      }
+                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {TIME_PER_PICK_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </section>
 
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <label htmlFor="pickOrder" className="block text-sm font-medium text-foreground">
-                    Draft Order
-                  </label>
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-base font-semibold text-foreground">Draft Order</h4>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Randomize the order or fine-tune the queue before creating the room.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={randomizeDraftOrder}
-                    className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex items-center justify-center gap-1 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <ArrowPathIcon className="h-4 w-4" />
                     Randomize
                   </button>
                 </div>
+                <label
+                  htmlFor="pickOrder"
+                  className="mb-1 block text-sm font-medium text-foreground"
+                >
+                  Order mode
+                </label>
                 <select
                   id="pickOrder"
                   value={draftSettings.pickOrder}
@@ -803,22 +919,30 @@ export default function DraftManager({
                       pickOrder: e.target.value as DraftPickOrderMode,
                     }))
                   }
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="random">Randomized order</option>
                   <option value="manual">Manual order</option>
                 </select>
-                <div className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border">
+                {draftOrderRandomized && (
+                  <p className="mt-2 text-xs font-medium text-primary">Draft order randomized.</p>
+                )}
+                <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border">
                   {draftOrderMembers.map((member, index) => (
                     <div
                       key={member.id}
-                      className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-b-0"
+                      className="flex items-center justify-between gap-3 border-b border-border bg-card px-3 py-3 last:border-b-0"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {index + 1}. {member.teamName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{member.role}</p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-semibold text-foreground">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {member.teamName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{member.role}</p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <button
@@ -826,7 +950,7 @@ export default function DraftManager({
                           onClick={() => moveDraftOrderMember(member.id, -1)}
                           disabled={index === 0}
                           aria-label={`Move ${member.teamName} up in draft order`}
-                          className="rounded-md border border-border p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                          className="rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                         >
                           <ArrowUpIcon className="h-4 w-4" />
                         </button>
@@ -835,7 +959,7 @@ export default function DraftManager({
                           onClick={() => moveDraftOrderMember(member.id, 1)}
                           disabled={index === draftOrderMembers.length - 1}
                           aria-label={`Move ${member.teamName} down in draft order`}
-                          className="rounded-md border border-border p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                          className="rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                         >
                           <ArrowDownIcon className="h-4 w-4" />
                         </button>
@@ -843,16 +967,26 @@ export default function DraftManager({
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              <div>
-                <p className="mb-2 block text-sm font-medium text-foreground">Position Limits</p>
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-base font-semibold text-foreground">Position Limits</h4>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Set how many players each team drafts by line.
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium text-foreground">
+                    {rosterSize} spots, {benchSize} bench
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   {POSITION_LIMIT_KEYS.map((key) => (
-                    <div key={key}>
+                    <div key={key} className="rounded-lg border border-border bg-card p-3">
                       <label
                         htmlFor={`position-${key}`}
-                        className="block text-xs text-muted-foreground"
+                        className="block text-xs font-semibold uppercase text-muted-foreground"
                       >
                         {key}
                       </label>
@@ -868,73 +1002,95 @@ export default function DraftManager({
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              <div className="rounded-lg border border-border p-3">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="autoPickEnabled"
-                    checked={draftSettings.autoPickRules.enabled}
-                    onChange={(e) => updateAutoPickRules({ enabled: e.target.checked })}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
-                  />
-                  <label htmlFor="autoPickEnabled" className="ml-2 text-sm text-foreground">
-                    Auto-pick when clock expires
-                  </label>
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        id="autoPickEnabled"
+                        checked={draftSettings.autoPickRules.enabled}
+                        onChange={(e) => updateAutoPickRules({ enabled: e.target.checked })}
+                        className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                      />
+                      <div>
+                        <label
+                          htmlFor="autoPickEnabled"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Auto-pick when clock expires
+                        </label>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Keeps the draft moving when a manager misses their pick.
+                        </p>
+                      </div>
+                    </div>
+                    <label
+                      htmlFor="autoPickStrategy"
+                      className="mt-3 block text-sm font-medium text-foreground"
+                    >
+                      Auto-pick Priority
+                    </label>
+                    <select
+                      id="autoPickStrategy"
+                      value={draftSettings.autoPickRules.strategy}
+                      onChange={(e) =>
+                        updateAutoPickRules({
+                          strategy: e.target.value as DraftAutoPickRules['strategy'],
+                        })
+                      }
+                      disabled={!draftSettings.autoPickRules.enabled}
+                      className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
+                    >
+                      <option value="queue-first">Queue first, then best available</option>
+                      <option value="best-available">Best available</option>
+                      <option value="fill-positions">Fill position needs</option>
+                    </select>
+                  </div>
+
+                  {/* Enable Reminders */}
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        id="reminders"
+                        checked={draftSettings.enableReminders}
+                        onChange={(e) =>
+                          setDraftSettings((prev) => ({
+                            ...prev,
+                            enableReminders: e.target.checked,
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                      />
+                      <div>
+                        <label htmlFor="reminders" className="text-sm font-medium text-foreground">
+                          Send draft reminders to league members
+                        </label>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Notify managers before the scheduled draft start.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <label
-                  htmlFor="autoPickStrategy"
-                  className="mt-3 block text-sm font-medium text-foreground"
-                >
-                  Auto-pick Priority
-                </label>
-                <select
-                  id="autoPickStrategy"
-                  value={draftSettings.autoPickRules.strategy}
-                  onChange={(e) =>
-                    updateAutoPickRules({
-                      strategy: e.target.value as DraftAutoPickRules['strategy'],
-                    })
-                  }
-                  disabled={!draftSettings.autoPickRules.enabled}
-                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
-                >
-                  <option value="queue-first">Queue first, then best available</option>
-                  <option value="best-available">Best available</option>
-                  <option value="fill-positions">Fill position needs</option>
-                </select>
-              </div>
-
-              {/* Enable Reminders */}
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="reminders"
-                  checked={draftSettings.enableReminders}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({ ...prev, enableReminders: e.target.checked }))
-                  }
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
-                />
-                <label htmlFor="reminders" className="ml-2 text-sm text-foreground">
-                  Send draft reminders to league members
-                </label>
-              </div>
+              </section>
             </div>
 
-            <div className="mt-6 flex space-x-3">
+            <div className="flex flex-col gap-3 border-t border-border bg-card p-6 sm:flex-row">
               <button
                 onClick={() => setShowDraftSettings(false)}
                 disabled={savingDraft}
-                className="flex-1 rounded-lg border border-border px-4 py-2 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="flex-1 rounded-lg border border-border px-4 py-3 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={createDraft}
                 disabled={savingDraft || !draftSettings.scheduledTime}
-                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {savingDraft ? (
                   <>

@@ -32,6 +32,8 @@ export interface DraftPlayer {
   stats?: Partial<import('@/types/fantasyCategories').PlayerStats>;
   statsTotal?: Partial<import('@/types/fantasyCategories').PlayerStats>;
   gamesPlayed?: number;
+  statsSeason?: number;
+  availableStatSeasons?: number[];
   statlyZScore?: number;
   statlyZBreakdown?: Array<{ category: FantasyCategoryKey; value: number; zScore: number }>;
   statlyZMissingCategories?: FantasyCategoryKey[];

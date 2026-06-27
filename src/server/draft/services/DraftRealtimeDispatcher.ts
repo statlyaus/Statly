@@ -139,7 +139,7 @@ export class DraftRealtimeDispatcher {
 
   private dispatchToLocal(draftId: string, event: DraftRealtimeEventType, payload: unknown): void {
     if (!this.io) {
-      logger.warn('Skipping realtime dispatch without attached Socket.IO server', {
+      logger.debug('Skipping local realtime emit without attached Socket.IO server', {
         draftId,
         event,
       });
