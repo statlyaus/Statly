@@ -81,5 +81,11 @@ describe('tracked player data convergence apply plan', () => {
         ]),
       })
     );
+    expect(applyPlan.skippedEvidence).toContainEqual(
+      expect.objectContaining({
+        kind: 'multiRowSourceEvidence',
+        count: 614,
+      })
+    );
   });
 });
