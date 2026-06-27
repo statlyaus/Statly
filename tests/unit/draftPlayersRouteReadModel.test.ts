@@ -89,33 +89,41 @@ describe('draft players read model route', () => {
         team: 'North Melbourne',
         position: 'DEF',
         games: 22,
-        stats: {
-          kicks: 220,
-          handballs: 176,
-          marks: 132,
-          tackles: 88,
-          goals: 11,
-          hitouts: 0,
-          clearances: 44,
-          inside50s: 66,
-          rebound50s: 55,
-          clangers: 33,
-          contestedPossessions: 110,
-          uncontestedPossessions: 286,
-          freesFor: 22,
-          freesAgainst: 11,
-          onePercenters: 44,
-          goalAssists: 22,
-          timeOnGroundPct: 84,
-          disposalEffPct: 78,
-          turnovers: 44,
-          intercepts: 66,
-          metresGained: 6600,
-          contestedMarks: 22,
-          effectiveDisposals: 308,
-          scoreInvolvements: 99,
-          aflFantasy: 1980,
+        statsSeason: 2026,
+        availableStatSeasons: [2026, 2025],
+        statsBySeason: {
+          '2026': {
+            games: 22,
+            stats: {
+              kicks: 220,
+              handballs: 176,
+              marks: 132,
+              tackles: 88,
+              goals: 11,
+              hitouts: 0,
+              clearances: 44,
+              inside50s: 66,
+              rebound50s: 55,
+              clangers: 33,
+              contestedPossessions: 110,
+              uncontestedPossessions: 286,
+              freesFor: 22,
+              freesAgainst: 11,
+              onePercenters: 44,
+              goalAssists: 22,
+              timeOnGroundPct: 84,
+              disposalEffPct: 78,
+              turnovers: 44,
+              intercepts: 66,
+              metresGained: 6600,
+              contestedMarks: 22,
+              effectiveDisposals: 308,
+              scoreInvolvements: 99,
+              aflFantasy: 1980,
+            },
+          },
         },
+        stats: {},
       },
     ]);
   });
@@ -129,6 +137,8 @@ describe('draft players read model route', () => {
     const body = await response.json();
 
     expect(body.data.selectedCategories).toEqual([...REAL_DATA_NINE_CATEGORY_PRESET]);
+    expect(body.data.statSeason).toBe(2026);
+    expect(body.data.statSeasons).toEqual([2026, 2025]);
     const [calebDaniel, unknownPlayer] = body.data.players;
 
     expect(body.data.players[0]).toMatchObject({
@@ -219,23 +229,31 @@ describe('draft players read model route', () => {
       },
     });
     prismaMocks.player.findMany.mockImplementation(async (args) => {
-      if (args?.take === 2 && args?.skip === 0) {
+      if (args?.take === 3 && args?.skip === 0) {
         return [pagePlayer];
       }
 
       return [pagePlayer, cohortOnlyPlayer];
     });
-    dataMocks.getPlayers.mockResolvedValueOnce([
+    const cohortStatsPlayers = [
       {
         id: 'ace_player',
         name: 'Ace Player',
         team: 'Adelaide',
         position: 'DEF',
         games: 1,
-        stats: {
-          goals: 10,
-          aflFantasy: 100,
+        statsSeason: 2026,
+        availableStatSeasons: [2026],
+        statsBySeason: {
+          '2026': {
+            games: 1,
+            stats: {
+              goals: 10,
+              aflFantasy: 100,
+            },
+          },
         },
+        stats: {},
       },
       {
         id: 'baseline_player',
@@ -243,15 +261,24 @@ describe('draft players read model route', () => {
         team: 'Brisbane',
         position: 'MID',
         games: 1,
-        stats: {
-          goals: 0,
-          aflFantasy: 50,
+        statsSeason: 2026,
+        availableStatSeasons: [2026],
+        statsBySeason: {
+          '2026': {
+            games: 1,
+            stats: {
+              goals: 1,
+              aflFantasy: 50,
+            },
+          },
         },
+        stats: {},
       },
-    ]);
+    ];
+    dataMocks.getPlayers.mockResolvedValueOnce(cohortStatsPlayers).mockResolvedValueOnce(cohortStatsPlayers);
 
     const response = await GET(
-      request(`/api/drafts/${draftId}/players?q=Ace&position=DEF&page=1&pageSize=1`),
+      request(`/api/drafts/${draftId}/players?q=Ace&position=DEF&page=1&pageSize=2`),
       {
         params: Promise.resolve({ id: draftId }),
       }
@@ -275,7 +302,7 @@ describe('draft players read model route', () => {
     });
 
     const pageCall = prismaMocks.player.findMany.mock.calls.find(
-      ([args]) => args?.take === 2 && args?.skip === 0
+      ([args]) => args?.take === 3 && args?.skip === 0
     );
     const cohortCall = prismaMocks.player.findMany.mock.calls.find(
       ([args]) => args?.take === undefined
@@ -289,7 +316,7 @@ describe('draft players read model route', () => {
         picks: { none: { draftId } },
       },
       skip: 0,
-      take: 2,
+      take: 3,
     });
     expect(pageCall?.[0].where.name).toEqual({ contains: 'Ace' });
     expect(cohortCall?.[0]).toMatchObject({

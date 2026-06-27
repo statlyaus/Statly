@@ -8,6 +8,11 @@ import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
 import { withMetrics } from '@/lib/metrics';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
+import {
+  PrismaWaiverClaimStore,
+  WaiverClaimStoreError,
+  type WaiverSettings as ProcessingWaiverSettings,
+} from '@/server/waivers/WaiverProcessingService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -98,98 +103,24 @@ export const POST = withMetrics(
         validatedBid = bidAmount;
       }
 
-      const waiversCollection = adminDb.collection(`leagues/${leagueId}/waivers`);
+      const freshOwnershipDoc = await withTiming('waivers.ownership.recheck', () =>
+        ownershipRef.get()
+      );
+      if (freshOwnershipDoc.exists) {
+        return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
+      }
 
-      // Transaction builds waiver and increments pendingBidTotal if FAAB
-      const claimId = await adminDb.runTransaction(async (tx) => {
-        // Re-check ownership inside transaction for safety
-        const ownershipDocTx = await tx.get(ownershipRef);
-        if (ownershipDocTx.exists) throw new Error('PLAYER_OWNED');
-
-        // If FAAB, ensure we are not exceeding remaining (using pre-aggregated pendingBidTotal if present)
-        if (isFAAB && typeof validatedBid === 'number') {
-          const priorityRef = adminDb.doc(`leagues/${leagueId}/waiverPriorities/${userId}`);
-          const prioritySnap = await tx.get(priorityRef);
-          const remainingFAAB = prioritySnap.exists
-            ? (prioritySnap.data()?.remainingFAAB as number | undefined)
-            : undefined;
-          if (typeof remainingFAAB === 'number') {
-            // Store and calculate in cents to avoid floating point issues
-            const existingPendingBidTotal =
-              typeof prioritySnap.data()?.pendingBidTotal === 'number'
-                ? (prioritySnap.data()!.pendingBidTotal as number)
-                : 0;
-            const existingPendingBidTotalCentsField = prioritySnap.data()?.pendingBidTotalCents as
-              | number
-              | undefined;
-            const pendingBidTotalCents =
-              typeof existingPendingBidTotalCentsField === 'number'
-                ? Math.round(existingPendingBidTotalCentsField)
-                : Math.round(existingPendingBidTotal * 100);
-            const validatedBidCents = Math.round(validatedBid * 100);
-            const remainingFAABCents = Math.round(remainingFAAB * 100);
-
-            if (pendingBidTotalCents + validatedBidCents > remainingFAABCents) {
-              throw new Error('INSUFFICIENT_FAAB');
-            }
-
-            const newPendingBidTotalCents = pendingBidTotalCents + validatedBidCents;
-
-            if (prioritySnap.exists) {
-              tx.update(priorityRef, {
-                pendingBidTotalCents: newPendingBidTotalCents,
-                pendingBidTotal: newPendingBidTotalCents / 100,
-                updatedAt: new Date(),
-              });
-            } else {
-              tx.set(
-                priorityRef,
-                {
-                  leagueId,
-                  userId,
-                  pendingBidTotalCents: validatedBidCents,
-                  pendingBidTotal: validatedBidCents / 100,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                },
-                { merge: true }
-              );
-            }
-          }
-        }
-
-        const newDocRef = waiversCollection.doc();
-        const waiverClaimData = {
-          leagueId,
-          userId,
-          teamId,
-          playerId: String(playerId),
-          priority: Number(priority) || 1,
-          status: 'PENDING',
-          createdAt: new Date(),
-          ...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {}),
-          ...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {}),
-        };
-        tx.set(newDocRef, waiverClaimData);
-
-        // Audit log
-        const activityRef = adminDb.collection(`leagues/${leagueId}/activity`).doc();
-        const activityData = {
-          type: 'waiver-submitted',
-          leagueId,
-          userId,
-          teamId,
-          playerId: String(playerId),
-          priority: Number(priority) || 1,
-          timestamp: new Date(),
-          claimId: newDocRef.id,
-          ...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {}),
-          ...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {}),
-        };
-        tx.set(activityRef, activityData);
-
-        return newDocRef.id;
+      const submittedClaim = await new PrismaWaiverClaimStore().submitClaim({
+        leagueId,
+        userId,
+        teamId: String(teamId),
+        playerId: String(playerId),
+        priority: Number(priority) || 1,
+        waiverSettings: (ws ?? {}) as ProcessingWaiverSettings,
+        ...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {}),
+        ...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {}),
       });
+      const claimId = submittedClaim.id;
 
       logger.info('waiver submitted', {
         leagueId,
@@ -216,8 +147,17 @@ export const POST = withMetrics(
         if (err.message === 'PLAYER_OWNED') {
           return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
         }
-        if (err.message === 'INSUFFICIENT_FAAB') {
+        if (
+          err.message === 'INSUFFICIENT_FAAB' ||
+          (err instanceof WaiverClaimStoreError && err.code === 'INSUFFICIENT_FAAB')
+        ) {
           return NextResponse.json({ error: 'Insufficient FAAB remaining' }, { status: 400 });
+        }
+        if (err instanceof WaiverClaimStoreError && err.code === 'TEAM_NOT_FOUND') {
+          return NextResponse.json({ error: 'Team not found' }, { status: 403 });
+        }
+        if (err instanceof WaiverClaimStoreError && err.code === 'FAAB_BALANCE_UNAVAILABLE') {
+          return NextResponse.json({ error: 'FAAB balance unavailable' }, { status: 400 });
         }
       }
       logger.apiError('POST', '/api/leagues/[id]/waivers/submit', err);

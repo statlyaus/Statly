@@ -115,15 +115,21 @@ export default function PickFeed({
 
   // Auto-scroll to top when new picks come in (if enabled)
   useEffect(() => {
-    if (autoScroll && picks.length > 0) {
-      // Small delay to ensure DOM is updated
-      setTimeout(() => {
-        const feedElement = document.getElementById(contentId);
-        if (feedElement) {
-          feedElement.scrollTop = 0;
-        }
-      }, 100);
+    if (!autoScroll || picks.length === 0) {
+      return undefined;
     }
+
+    // Small delay to ensure DOM is updated before moving the live feed back to the newest pick.
+    const timeoutId = window.setTimeout(() => {
+      if (typeof document === 'undefined') return;
+
+      const feedElement = document.getElementById(contentId);
+      if (feedElement) {
+        feedElement.scrollTop = 0;
+      }
+    }, 100);
+
+    return () => window.clearTimeout(timeoutId);
   }, [picks.length, autoScroll, contentId]);
 
   const filterOptions = [
@@ -143,12 +149,12 @@ export default function PickFeed({
   return (
     <aside
       className={cn(
-        'overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+        'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm',
         className
       )}
       aria-label="Pick feed"
     >
-      <div className="border-b border-border bg-muted px-4 py-4">
+      <div className="shrink-0 border-b border-border bg-muted px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
@@ -223,9 +229,9 @@ export default function PickFeed({
         </div>
       </div>
 
-      <div id={contentId} className="max-h-[calc(100vh-220px)] overflow-y-auto">
+      <div id={contentId} className="min-h-0 flex-1 overflow-y-auto">
         {filteredPicks.length === 0 ? (
-          <div className="px-6 py-14 text-center text-muted-foreground">
+          <div className="flex min-h-full flex-col items-center justify-center px-6 py-14 text-center text-muted-foreground">
             <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
               <Sparkles className="size-7" />
             </div>
@@ -322,7 +328,7 @@ export default function PickFeed({
       </div>
 
       {filteredPicks.length > 0 && (
-        <div className="border-t border-border bg-muted px-4 py-3 text-center text-xs text-muted-foreground">
+        <div className="shrink-0 border-t border-border bg-muted px-4 py-3 text-center text-xs text-muted-foreground">
           Showing {filteredPicks.length} of {picks.length} total picks
         </div>
       )}

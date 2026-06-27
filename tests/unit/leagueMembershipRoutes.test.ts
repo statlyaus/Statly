@@ -10,6 +10,9 @@ const authMocks = vi.hoisted(() => ({
 const firestoreMocks = vi.hoisted(() => ({
   batch: vi.fn(),
   collection: vi.fn(),
+  runTransaction: vi.fn(),
+  transactionGet: vi.fn(),
+  transactionSet: vi.fn(),
 }));
 
 const membershipMocks = vi.hoisted(() => ({
@@ -37,6 +40,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {
     batch: firestoreMocks.batch,
     collection: firestoreMocks.collection,
+    runTransaction: firestoreMocks.runTransaction,
   },
 }));
 
@@ -44,6 +48,7 @@ vi.mock('../../src/lib/firebaseAdmin', () => ({
   adminDb: {
     batch: firestoreMocks.batch,
     collection: firestoreMocks.collection,
+    runTransaction: firestoreMocks.runTransaction,
   },
 }));
 
@@ -124,6 +129,13 @@ describe('league membership route Firestore architecture', () => {
       source: 'embedded',
       memberDocId: 'league-1_request-user',
     });
+    firestoreMocks.transactionGet.mockImplementation((ref: { get?: () => unknown }) => ref.get?.());
+    firestoreMocks.runTransaction.mockImplementation((callback) =>
+      callback({
+        get: firestoreMocks.transactionGet,
+        set: firestoreMocks.transactionSet,
+      })
+    );
     prismaMocks.syncPrismaLeagueMember.mockResolvedValue({ synced: true });
     prismaMocks.syncPrismaLeagueOwner.mockResolvedValue({ synced: true });
   });
@@ -145,38 +157,45 @@ describe('league membership route Firestore architecture', () => {
       'utf8'
     );
 
-    expect(source).toContain('process.env.NODE_ENV !== "production"');
+    expect(source).toContain("process.env.NODE_ENV !== 'production'");
     expect(source).toContain('development-league-id');
     expect(source).not.toContain('test-league-id');
   });
 
   it('joins a league from canonical active members without reading the top-level mirror', async () => {
-    const batch = { commit: vi.fn().mockResolvedValue(undefined), set: vi.fn() };
+    const leagueData = {
+      name: 'AFL Keepers',
+      code: 'KEEPER',
+      type: 'private',
+      status: 'preseason',
+      maxTeams: 4,
+      draftDate: '2026-06-01T10:00:00.000Z',
+    };
     const leagueQueryGet = vi.fn().mockResolvedValue({
       empty: false,
       size: 1,
       docs: [
         {
           id: 'league-1',
-          data: () => ({
-            name: 'AFL Keepers',
-            code: 'KEEPER',
-            type: 'private',
-            status: 'preseason',
-            maxTeams: 4,
-            draftDate: '2026-06-01T10:00:00.000Z',
-          }),
+          data: () => leagueData,
         },
       ],
     });
+    const leagueDocRef = {
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        id: 'league-1',
+        data: () => leagueData,
+      }),
+    };
     const leaguesCollection = {
+      doc: vi.fn(() => leagueDocRef),
       where: vi.fn(() => ({
         limit: vi.fn(() => ({ get: leagueQueryGet })),
       })),
     };
 
     authMocks.getUserIdFromRequest.mockResolvedValue('joining-user');
-    firestoreMocks.batch.mockReturnValue(batch);
     firestoreMocks.collection.mockImplementation((collectionName: string) => {
       if (collectionName === 'leagues') return leaguesCollection;
       throw new Error(`Unexpected top-level collection read: ${collectionName}`);
@@ -201,6 +220,16 @@ describe('league membership route Firestore architecture', () => {
       userId: 'joining-user',
       teamName: 'New Team',
     });
+    expect(firestoreMocks.runTransaction).toHaveBeenCalled();
+    expect(membershipMocks.queueLeagueMembershipSet).toHaveBeenCalledWith(
+      expect.objectContaining({ set: firestoreMocks.transactionSet }),
+      expect.objectContaining({ userId: 'joining-user', teamName: 'New Team' })
+    );
+    expect(firestoreMocks.transactionSet).toHaveBeenCalledWith(
+      leagueDocRef,
+      expect.objectContaining({ memberCount: 3 }),
+      { merge: true }
+    );
     expect(membershipMocks.listActiveLeagueMembers).toHaveBeenCalledWith('league-1');
     expect(prismaMocks.syncPrismaLeagueMember).toHaveBeenCalledWith(
       expect.objectContaining({ draftSlot: 3, memberId: 'league-1_joining-user' })
@@ -304,6 +333,81 @@ describe('league membership route Firestore architecture', () => {
         leagueId: 'league-1',
         memberId: 'league-1_target-user',
         teamName: 'Renamed Team',
+      })
+    );
+  });
+
+  it('removes a member and updates the canonical league member count', async () => {
+    const batch = { commit: vi.fn().mockResolvedValue(undefined), set: vi.fn(), update: vi.fn() };
+    const leagueDocRef = {
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        id: 'league-1',
+        data: () => ({
+          id: 'league-1',
+          name: 'AFL Keepers',
+          ownerId: 'owner-user',
+          status: 'preseason',
+          maxTeams: 4,
+        }),
+      }),
+    };
+    const leaguesCollection = {
+      doc: vi.fn(() => leagueDocRef),
+    };
+
+    authMocks.getUserIdFromRequest.mockResolvedValue('owner-user');
+    firestoreMocks.batch.mockReturnValue(batch);
+    firestoreMocks.collection.mockImplementation((collectionName: string) => {
+      if (collectionName === 'leagues') return leaguesCollection;
+      throw new Error(`Unexpected top-level collection read: ${collectionName}`);
+    });
+    membershipMocks.listActiveLeagueMembers.mockResolvedValue([
+      activeMember({
+        id: 'league-1_owner-user',
+        userId: 'owner-user',
+        teamName: 'Owner Team',
+        role: 'owner',
+      }),
+      activeMember({
+        id: 'league-1_target-user',
+        userId: 'target-user',
+        teamName: 'Target Team',
+      }),
+      activeMember({ id: 'league-1_other-user', userId: 'other-user', teamName: 'Other Team' }),
+    ]);
+
+    const { POST: mutateLeagueMember } = await import(
+      '../../src/app/api/leagues/[id]/members/route'
+    );
+    const response = await mutateLeagueMember(
+      jsonRequest('/api/leagues/league-1/members', {
+        action: 'removeMember',
+        targetUserId: 'target-user',
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data).toMatchObject({
+      removedUserId: 'target-user',
+      memberCount: 2,
+    });
+    expect(membershipMocks.queueLeagueMembershipPatch).toHaveBeenCalledWith(
+      batch,
+      'league-1',
+      'target-user',
+      expect.objectContaining({ isActive: false }),
+      { topLevelMemberId: 'league-1_target-user' }
+    );
+    expect(batch.update).toHaveBeenCalledWith(leagueDocRef, { memberCount: 2 });
+    expect(prismaMocks.syncPrismaLeagueMember).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leagueId: 'league-1',
+        userId: 'target-user',
+        memberId: 'league-1_target-user',
+        isActive: false,
       })
     );
   });

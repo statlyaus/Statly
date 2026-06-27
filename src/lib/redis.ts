@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
 import { logger } from './logger';
+import { shouldDisableRedisClients } from './redisConfig';
 
 interface RedisConfig {
   host: string;
@@ -11,7 +12,7 @@ interface RedisConfig {
 }
 
 function isNextProductionBuild(): boolean {
-  return process.env.NEXT_PHASE === 'phase-production-build' || process.env.REDIS_DISABLED === '1';
+  return shouldDisableRedisClients();
 }
 
 class RedisClient {

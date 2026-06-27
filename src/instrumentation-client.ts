@@ -1,11 +1,13 @@
 type RouterTransitionHandler = (href: string, navigationType: string) => void;
 
 export async function register(): Promise<void> {
-  if (process.env.NEXT_RUNTIME === 'edge') {
+  const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+  if (process.env.NEXT_RUNTIME === 'edge' && sentryDsn) {
     const Sentry = await import('@sentry/nextjs');
 
     Sentry.init({
-      dsn: 'https://6ffbb0f42b9432dc3e0ef0aff3c60f94@o4509945105481728.ingest.us.sentry.io/4509945108299776',
+      dsn: sentryDsn,
 
       // Performance monitoring
       tracesSampleRate: 1.0,

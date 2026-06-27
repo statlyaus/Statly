@@ -1,8 +1,15 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import Image from 'next/image';
 import type { Player, Team } from '../types/players';
 import { useRankings } from '@/hooks/useRankings';
+import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
+import {
+  FANTASY_CATEGORIES,
+  type FantasyCategory,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
 import {
   UserIcon,
   TrophyIcon,
@@ -16,6 +23,7 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
+import { ArrowLeftRight, Crown, Eye } from 'lucide-react';
 
 type MyTeamPanelProps = {
   team: Team | undefined;
@@ -36,6 +44,8 @@ type MyTeamPanelProps = {
   onRefresh?: () => void;
   /** Optional: loading state */
   isLoading?: boolean;
+  /** Optional: league-selected scoring categories to show as per-game averages */
+  selectedCategories?: FantasyCategoryKey[];
   className?: string;
 };
 
@@ -88,12 +98,12 @@ function capFirst(str = '') {
 
 const rosterTarget = 22;
 const filterTypes: FilterType[] = ['all', 'starters', 'bench', 'captain', 'injury'];
-const tableSortFields: Array<[SortField, string]> = [
-  ['name', 'Player'],
-  ['position', 'Pos'],
-  ['team', 'Club'],
+const sortControlFields: Array<[SortField, string]> = [
   ['totalValue', 'Statly Z'],
   ['recent', 'Form'],
+  ['name', 'Name'],
+  ['position', 'Position'],
+  ['team', 'Club'],
 ];
 const activeSortLabel = {
   name: 'Name',
@@ -103,6 +113,16 @@ const activeSortLabel = {
   recent: 'Form',
 } satisfies Record<SortField, string>;
 const positionOrder = ['RUC', 'MID', 'DEF', 'FWD'];
+const ROSTER_PLAYER_COLUMN_WIDTH = 340;
+const ROSTER_PROFILE_COLUMN_WIDTH = 180;
+const ROSTER_STAT_COLUMN_WIDTH = 88;
+const ROSTER_ACTIONS_COLUMN_WIDTH = 236;
+const ROSTER_ACTION_BUTTON_BASE_CLASS =
+  'inline-flex h-10 w-full items-center justify-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+const ROSTER_ACTION_BUTTON_OUTLINE_CLASS =
+  'border border-input bg-background text-foreground hover:bg-muted';
+const ROSTER_ACTION_BUTTON_PRIMARY_CLASS =
+  'border border-border bg-accent text-accent-foreground hover:bg-accent/80';
 
 function getSafeRankings(rankings: unknown): RankingEntry[] {
   return Array.isArray(rankings) ? rankings : [];
@@ -176,6 +196,44 @@ function playerMatchesSearch(player: Player, searchTerm: string) {
 function readPlayerScore(player: Player, key: 'averageScore' | 'projectedScore' | 'form') {
   const value = (player as ExtendedPlayer)[key] ?? (key === 'averageScore' ? player.avg : undefined);
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function normalizeCategoryColumns(
+  selectedCategories: readonly FantasyCategoryKey[]
+): FantasyCategoryKey[] {
+  const seen = new Set<FantasyCategoryKey>();
+
+  return selectedCategories.filter((category) => {
+    if (!FANTASY_CATEGORIES[category] || seen.has(category)) return false;
+    seen.add(category);
+    return true;
+  });
+}
+
+function readCategoryAverage(player: Player, category: FantasyCategoryKey): number | null {
+  const statValue = player.stats?.[category];
+  if (typeof statValue === 'number' && Number.isFinite(statValue)) return statValue;
+  if (typeof statValue === 'string' && statValue.trim()) {
+    const parsed = Number.parseFloat(statValue);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  const playerValue = (player as unknown as Record<string, unknown>)[category];
+  return typeof playerValue === 'number' && Number.isFinite(playerValue) ? playerValue : null;
+}
+
+function formatCategoryAverage(value: number | null, category: FantasyCategory): string {
+  if (value === null) return '—';
+
+  switch (category.format) {
+    case 'percentage':
+      return `${value.toFixed(1)}%`;
+    case 'decimal':
+      return value.toFixed(2);
+    case 'number':
+    default:
+      return value.toFixed(1);
+  }
 }
 
 function getPlayerStatlyZ(player: Player, ranking?: RankingEntry): number | null {
@@ -524,6 +582,8 @@ function RosterToolbar({
   sortDirection,
   onSearchChange,
   onFilterChange,
+  onSortFieldChange,
+  onSortDirectionToggle,
 }: {
   searchTerm: string;
   filterType: FilterType;
@@ -532,6 +592,8 @@ function RosterToolbar({
   sortDirection: SortDirection;
   onSearchChange: (value: string) => void;
   onFilterChange: (value: FilterType) => void;
+  onSortFieldChange: (value: SortField) => void;
+  onSortDirectionToggle: () => void;
 }) {
   return (
     <div className="border-b border-slate-200 px-4 py-3 sm:px-5">
@@ -550,6 +612,30 @@ function RosterToolbar({
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="roster-sort-field" className="sr-only">
+            Sort roster
+          </label>
+          <select
+            id="roster-sort-field"
+            value={sortField}
+            onChange={(event) => onSortFieldChange(event.target.value as SortField)}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
+          >
+            {sortControlFields.map(([field, label]) => (
+              <option key={field} value={field}>
+                Sort by {label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onSortDirectionToggle}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2"
+            aria-label={`Sort ${sortDirection === 'desc' ? 'low to high' : 'high to low'}`}
+          >
+            <ArrowsUpDownIcon className="h-4 w-4" aria-hidden="true" />
+            {sortDirection === 'desc' ? 'High first' : 'Low first'}
+          </button>
           {filterTypes.map((filter) => (
             <button
               key={filter}
@@ -579,67 +665,102 @@ function RosterToolbar({
 function RosterTable({
   teamName,
   players,
+  categoryColumns,
   selectedPlayer,
-  sortField,
   rosterSlotById,
   rankingById,
-  onSort,
   onPlayerClick,
   onTeamAction,
   getPerformanceIcon,
 }: {
   teamName: string;
   players: Player[];
+  categoryColumns: FantasyCategoryKey[];
   selectedPlayer: Player | null;
-  sortField: SortField;
   rosterSlotById: Map<string, number>;
   rankingById: Map<string, RankingEntry>;
-  onSort: (field: SortField) => void;
   onPlayerClick: (player: Player) => void;
   onTeamAction?: MyTeamPanelProps['onTeamAction'];
   getPerformanceIcon: (player: Player) => React.ReactNode;
 }) {
+  const statColumnCount = Math.max(categoryColumns.length, 1);
+  const tableMinWidth =
+    ROSTER_PLAYER_COLUMN_WIDTH +
+    ROSTER_PROFILE_COLUMN_WIDTH +
+    statColumnCount * ROSTER_STAT_COLUMN_WIDTH +
+    ROSTER_ACTIONS_COLUMN_WIDTH;
+  const headerRowCount = categoryColumns.length > 0 ? 2 : 1;
+
   return (
-    <table className="min-w-full divide-y divide-slate-200 text-sm" aria-label={`${teamName} roster table`}>
-      <thead className="sticky top-0 z-10 bg-slate-50">
+    <table
+      className="w-full table-fixed border-collapse text-left text-sm"
+      style={{ minWidth: tableMinWidth }}
+      aria-label={`${teamName} roster table`}
+      aria-rowcount={players.length + headerRowCount}
+    >
+      <caption className="sr-only">
+        {teamName} roster players with profile, league stats, and roster actions.
+      </caption>
+      <colgroup>
+        <col style={{ width: ROSTER_PLAYER_COLUMN_WIDTH }} />
+        <col style={{ width: ROSTER_PROFILE_COLUMN_WIDTH }} />
+        {categoryColumns.length > 0 ? (
+          categoryColumns.map((category) => (
+            <col key={category} style={{ width: ROSTER_STAT_COLUMN_WIDTH }} />
+          ))
+        ) : (
+          <col style={{ width: ROSTER_STAT_COLUMN_WIDTH }} />
+        )}
+        <col style={{ width: ROSTER_ACTIONS_COLUMN_WIDTH }} />
+      </colgroup>
+      <thead className="sticky top-0 z-10 border-b border-border bg-muted/95 text-sm font-medium text-muted-foreground backdrop-blur">
         <tr>
-          {tableSortFields.map(([field, label]) => (
-            <th
-              key={field}
-              scope="col"
-              className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 ${
-                field === 'totalValue' || field === 'recent' ? 'text-right' : ''
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => onSort(field)}
-                className={`inline-flex items-center gap-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 ${
-                  field === 'totalValue' || field === 'recent' ? 'justify-end' : ''
-                }`}
-              >
-                {label}
-                {sortField === field && (
-                  <ArrowsUpDownIcon className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
-                )}
-              </button>
-            </th>
-          ))}
-          <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Avg
+          <th scope="col" rowSpan={headerRowCount} className="px-4 py-3 text-left font-medium sm:px-5">
+            Player
           </th>
-          <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <th scope="col" rowSpan={headerRowCount} className="px-4 py-3 text-left font-medium">
+            Profile
+          </th>
+          <th
+            scope={categoryColumns.length > 0 ? 'colgroup' : 'col'}
+            colSpan={statColumnCount}
+            className="border-x border-border/70 px-4 py-3 text-center font-medium"
+          >
+            League Stats
+          </th>
+          <th scope="col" rowSpan={headerRowCount} className="px-4 py-3 text-left font-medium">
             Actions
           </th>
         </tr>
+        {categoryColumns.length > 0 && (
+          <tr className="border-t border-border/70">
+            {categoryColumns.map((category) => {
+              const categoryData = FANTASY_CATEGORIES[category];
+              const shortLabel = categoryData.abbrev ?? categoryData.shortLabel ?? categoryData.label;
+
+              return (
+                <th
+                  key={category}
+                  scope="col"
+                  aria-label={categoryData.label}
+                  title={categoryData.label}
+                  className="border-l border-border/60 px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide"
+                >
+                  {shortLabel}
+                </th>
+              );
+            })}
+          </tr>
+        )}
       </thead>
-      <tbody className="divide-y divide-slate-100 bg-white">
+      <tbody className="divide-y divide-border bg-background">
         {players.map((player, index) => (
           <RosterRow
             key={player.id}
             player={player}
             index={index}
             selected={selectedPlayer?.id === player.id}
+            categoryColumns={categoryColumns}
             rosterSlotById={rosterSlotById}
             ranking={rankingById.get(String(player.id))}
             onPlayerClick={onPlayerClick}
@@ -652,10 +773,19 @@ function RosterTable({
   );
 }
 
+function getRosterPositionLabel(player: Player) {
+  return player.position ? player.position.toUpperCase() : '—';
+}
+
+function getRosterClubLabel(player: Player) {
+  return player.team ? capWords(player.team) : '—';
+}
+
 function RosterRow({
   player,
   index,
   selected,
+  categoryColumns,
   rosterSlotById,
   ranking,
   onPlayerClick,
@@ -665,81 +795,230 @@ function RosterRow({
   player: Player;
   index: number;
   selected: boolean;
+  categoryColumns: FantasyCategoryKey[];
   rosterSlotById: Map<string, number>;
   ranking?: RankingEntry;
   onPlayerClick: (player: Player) => void;
   onTeamAction?: MyTeamPanelProps['onTeamAction'];
   getPerformanceIcon: (player: Player) => React.ReactNode;
 }) {
-  const statlyZ = getPlayerStatlyZ(player, ranking);
-  const averageScore = readPlayerScore(player, 'averageScore');
-  const form = readPlayerScore(player, 'form') ?? readPlayerScore(player, 'projectedScore');
   const rosterIndex = rosterSlotById.get(String(player.id)) ?? index;
   const role = rosterIndex < 18 ? 'Starter' : 'Bench';
+  const rowClassName = `cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+    selected ? 'bg-primary/10' : ''
+  }`;
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onPlayerClick(player);
+    }
+  };
 
   return (
-    <tr className={`transition hover:bg-slate-50 ${selected ? 'bg-blue-50/70' : ''}`}>
-      <td className="px-4 py-3">
+    <tr
+      className={rowClassName}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onClick={() => onPlayerClick(player)}
+      aria-label={`${capWords(player.name)}, ${getRosterPositionLabel(player)}, ${getRosterClubLabel(player)}. Press Enter to review.`}
+      aria-rowindex={index + (categoryColumns.length > 0 ? 3 : 2)}
+      data-selected={selected ? 'true' : undefined}
+    >
+      <RosterIdentityCell
+        player={player}
+        role={role}
+        getPerformanceIcon={getPerformanceIcon}
+      />
+      <RosterProfileCell player={player} ranking={ranking} />
+      <RosterStatCells player={player} categoryColumns={categoryColumns} />
+      <RosterRowActions player={player} onTeamAction={onTeamAction} />
+    </tr>
+  );
+}
+
+function RosterIdentityCell({
+  player,
+  role,
+  getPerformanceIcon,
+}: {
+  player: Player;
+  role: string;
+  getPerformanceIcon: (player: Player) => React.ReactNode;
+}) {
+  const club = player.team || '';
+  const teamLogo = getTeamLogo(club);
+  const teamAbbreviation = club ? getTeamAbbreviation(club) : '—';
+
+  return (
+    <th scope="row" className="px-4 py-4 font-normal sm:px-5">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border border-border bg-background p-1.5 shadow-sm">
+          <Image
+            src={teamLogo}
+            alt=""
+            aria-hidden="true"
+            width={32}
+            height={32}
+            unoptimized={teamLogo.endsWith('.svg')}
+            className="h-8 max-w-8 object-contain"
+            style={{ width: 'auto' }}
+          />
+        </span>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-semibold text-foreground">
+              {capWords(player.name)}
+            </span>
+            {getPerformanceIcon(player)}
+            {player.injury && (
+              <InformationCircleIcon className="h-4 w-4 text-destructive" aria-label={player.injury} />
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-semibold text-foreground">
+              {getRosterPositionLabel(player)}
+            </span>
+            <span className="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground">
+              {teamAbbreviation}
+            </span>
+            <span>{getRosterClubLabel(player)}</span>
+            <span className="rounded-md bg-muted px-2 py-0.5">{role}</span>
+            <PlayerRoleBadges player={player} />
+          </div>
+        </div>
+      </div>
+    </th>
+  );
+}
+
+function RosterProfileCell({
+  player,
+  ranking,
+}: {
+  player: Player;
+  ranking?: RankingEntry;
+}) {
+  const statlyZ = getPlayerStatlyZ(player, ranking);
+  const averageScore = readPlayerScore(player, 'averageScore');
+
+  return (
+    <td className="px-4 py-4 align-middle">
+      <div className="min-w-0 space-y-2">
+        <div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Statly Z
+          </div>
+          <div className="mt-1 text-lg font-semibold leading-none text-foreground">
+            {statlyZ === null ? 'Pending' : statlyZ.toFixed(2)}
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Combined Z score across this league&apos;s selected scoring categories.
+        </div>
+        <div className="flex flex-wrap gap-1.5 text-xs">
+          {ranking?.rank && (
+            <span className="rounded-md bg-primary/10 px-2 py-1 font-semibold text-primary">
+              #{ranking.rank}
+            </span>
+          )}
+          {averageScore !== null && (
+            <span className="rounded-md bg-muted px-2 py-1 font-medium text-muted-foreground">
+              Avg {averageScore.toFixed(1)}
+            </span>
+          )}
+        </div>
+      </div>
+    </td>
+  );
+}
+
+function RosterStatCells({
+  player,
+  categoryColumns,
+}: {
+  player: Player;
+  categoryColumns: FantasyCategoryKey[];
+}) {
+  if (categoryColumns.length === 0) {
+    return (
+      <td className="border-l border-border/60 px-4 py-4 align-middle text-sm text-muted-foreground">
+        League categories pending.
+      </td>
+    );
+  }
+
+  return (
+    <>
+      {categoryColumns.map((category) => {
+        const categoryData = FANTASY_CATEGORIES[category];
+        const value = readCategoryAverage(player, category);
+        const displayValue = formatCategoryAverage(value, categoryData);
+
+        return (
+          <td
+            key={category}
+            className="border-l border-border/60 px-3 py-4 text-center align-middle text-sm font-semibold text-foreground"
+            aria-label={`${categoryData.label}: ${displayValue}`}
+          >
+            <span className="inline-flex min-w-12 justify-center tabular-nums">
+              {displayValue}
+            </span>
+          </td>
+        );
+      })}
+    </>
+  );
+}
+
+function RosterRowActions({
+  player,
+  onTeamAction,
+}: {
+  player: Player;
+  onTeamAction?: MyTeamPanelProps['onTeamAction'];
+}) {
+  return (
+    <td className="border-l border-border/60 px-3 py-4 align-middle">
+      <div className="grid grid-cols-3 items-center gap-2">
         <button
           type="button"
-          onClick={() => onPlayerClick(player)}
-          className="group flex min-w-64 items-center gap-3 text-left focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+          onClick={(event) => {
+            event.stopPropagation();
+            onTeamAction?.('view', player);
+          }}
+          className={`${ROSTER_ACTION_BUTTON_BASE_CLASS} ${ROSTER_ACTION_BUTTON_OUTLINE_CLASS}`}
+          aria-label={`View ${player.name}`}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-600">
-            {capWords(player.name).charAt(0)}
-          </span>
-          <span className="min-w-0">
-            <span className="flex items-center gap-1.5 font-semibold text-slate-950 group-hover:text-blue-700">
-              {capWords(player.name)}
-              {getPerformanceIcon(player)}
-              {player.injury && (
-                <InformationCircleIcon className="h-4 w-4 text-red-500" aria-label={player.injury} />
-              )}
-            </span>
-            <span className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-              <span>{role}</span>
-              <PlayerRoleBadges player={player} />
-            </span>
-          </span>
+          <Eye className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden 2xl:inline">View</span>
         </button>
-      </td>
-      <td className="px-4 py-3">
-        {player.position ? (
-          <span className={`inline-flex items-center rounded border px-2 py-1 text-xs font-semibold ${getPositionColor(player.position)}`}>
-            {capFirst(player.position)}
-          </span>
-        ) : (
-          <span className="text-slate-400">—</span>
-        )}
-      </td>
-      <td className="px-4 py-3 font-medium text-slate-700">{capWords(player.team || '—')}</td>
-      <td className="px-4 py-3 text-right">
-        <div className="flex flex-col items-end">
-          {ranking?.rank && <span className="text-xs font-semibold text-blue-600">#{ranking.rank}</span>}
-          <span className="font-semibold text-slate-950">{statlyZ === null ? '—' : statlyZ.toFixed(2)}</span>
-        </div>
-      </td>
-      <td className="px-4 py-3 text-right font-semibold text-slate-800">
-        {form === null ? '—' : form.toFixed(0)}
-      </td>
-      <td className="px-4 py-3 text-right font-semibold text-slate-800">
-        {averageScore === null ? '—' : averageScore.toFixed(1)}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex justify-end gap-2">
-          {(['view', 'captain', 'trade'] as const).map((action) => (
-            <button
-              key={action}
-              type="button"
-              onClick={() => onTeamAction?.(action, player)}
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
-            >
-              {capFirst(action)}
-            </button>
-          ))}
-        </div>
-      </td>
-    </tr>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onTeamAction?.('captain', player);
+          }}
+          className={`${ROSTER_ACTION_BUTTON_BASE_CLASS} ${ROSTER_ACTION_BUTTON_PRIMARY_CLASS}`}
+          aria-label={`Set ${player.name} as captain`}
+        >
+          <Crown className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden 2xl:inline">Captain</span>
+        </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onTeamAction?.('trade', player);
+          }}
+          className={`${ROSTER_ACTION_BUTTON_BASE_CLASS} ${ROSTER_ACTION_BUTTON_OUTLINE_CLASS}`}
+          aria-label={`Open trade for ${player.name}`}
+        >
+          <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden 2xl:inline">Trade</span>
+        </button>
+      </div>
+    </td>
   );
 }
 
@@ -754,6 +1033,7 @@ const MyTeamPanel = ({
   maxHeight = '600px',
   onRefresh,
   isLoading = false,
+  selectedCategories = [],
   className = '',
 }: MyTeamPanelProps) => {
   const { rankings, loading: rankingsLoading } = useRankings();
@@ -763,6 +1043,10 @@ const MyTeamPanel = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const rankingEntries = getSafeRankings(rankings);
+  const categoryColumns = useMemo(
+    () => normalizeCategoryColumns(selectedCategories),
+    [selectedCategories]
+  );
 
   const draftedPlayers = useMemo(() => {
     if (!team) return [];
@@ -794,17 +1078,14 @@ const MyTeamPanel = ({
     });
   }, [draftedPlayers, searchTerm, filterType, sortField, sortDirection, rankingById]);
 
-  const handleSort = useCallback(
-    (field: SortField) => {
-      if (sortField === field) {
-        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-      } else {
-        setSortField(field);
-        setSortDirection('desc');
-      }
-    },
-    [sortField, sortDirection]
-  );
+  const handleSortFieldChange = useCallback((field: SortField) => {
+    setSortField(field);
+    setSortDirection('desc');
+  }, []);
+
+  const handleSortDirectionToggle = useCallback(() => {
+    setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+  }, []);
 
   const handlePlayerClick = useCallback(
     (player: Player) => {
@@ -870,6 +1151,8 @@ const MyTeamPanel = ({
             sortDirection={sortDirection}
             onSearchChange={setSearchTerm}
             onFilterChange={setFilterType}
+            onSortFieldChange={handleSortFieldChange}
+            onSortDirectionToggle={handleSortDirectionToggle}
           />
         )}
 
@@ -887,11 +1170,10 @@ const MyTeamPanel = ({
             <RosterTable
               teamName={team.name || 'My Team'}
               players={filteredAndSortedPlayers}
+              categoryColumns={categoryColumns}
               selectedPlayer={selectedPlayer}
-              sortField={sortField}
               rosterSlotById={rosterSlotById}
               rankingById={rankingById}
-              onSort={handleSort}
               onPlayerClick={handlePlayerClick}
               onTeamAction={onTeamAction}
               getPerformanceIcon={getPerformanceIcon}

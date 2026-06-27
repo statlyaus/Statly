@@ -154,4 +154,20 @@ describe('PickFeed', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('Manual scroll mode')).toBeInTheDocument();
   });
+
+  it('fills its parent column while keeping picks in the scrollable body', () => {
+    render(<PickFeed {...defaultProps} className="h-full" contentId="desktop-pick-feed" />);
+
+    const feed = screen.getByLabelText('Pick feed');
+    const content = document.getElementById('desktop-pick-feed');
+
+    expect(feed).toHaveClass('flex');
+    expect(feed).toHaveClass('h-full');
+    expect(feed).toHaveClass('min-h-0');
+    expect(feed).toHaveClass('flex-col');
+    expect(content).toHaveClass('min-h-0');
+    expect(content).toHaveClass('flex-1');
+    expect(content).toHaveClass('overflow-y-auto');
+    expect(content).not.toHaveClass('max-h-[calc(100vh-220px)]');
+  });
 });

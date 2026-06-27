@@ -1,9 +1,11 @@
 export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
+  const sentryDsn = process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+  if (process.env.NEXT_RUNTIME === 'nodejs' && sentryDsn) {
     const Sentry = await import('@sentry/node');
 
     Sentry.init({
-      dsn: 'https://6ffbb0f42b9432dc3e0ef0aff3c60f94@o4509945105481728.ingest.us.sentry.io/4509945108299776',
+      dsn: sentryDsn,
 
       // Performance monitoring
       tracesSampleRate: 1.0,

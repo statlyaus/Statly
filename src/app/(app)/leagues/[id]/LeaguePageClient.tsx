@@ -11,15 +11,29 @@ interface Props {
   league: League | null;
   members: LeagueMember[];
   leagueId: string;
+  initialUserId?: string | null;
   errorMsg?: string | null;
 }
 
-export default function LeaguePageClient({ league, members, leagueId, errorMsg }: Props) {
+export default function LeaguePageClient({
+  league,
+  members,
+  leagueId,
+  initialUserId,
+  errorMsg,
+}: Props) {
   const { user } = useAuth();
+  const currentUserId = user?.uid ?? initialUserId ?? undefined;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(errorMsg ?? null);
   const [curLeague, setCurLeague] = useState<League | null>(league);
   const [curMembers, setCurMembers] = useState<LeagueMember[]>(members);
+
+  useEffect(() => {
+    setError(errorMsg ?? null);
+    setCurLeague(league);
+    setCurMembers(members);
+  }, [errorMsg, league, members]);
 
   // Optional: client refresh if server failed
   useEffect(() => {
@@ -70,6 +84,18 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleMembersChange = (nextMembers: LeagueMember[]) => {
+    setCurMembers(nextMembers);
+    setCurLeague((current) =>
+      current
+        ? {
+            ...current,
+            currentTeams: nextMembers.length,
+          }
+        : current
+    );
   };
 
   if (error) {
@@ -127,7 +153,12 @@ export default function LeaguePageClient({ league, members, leagueId, errorMsg }
     <AppLayout>
       <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-6 text-[color:var(--league-text)] sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[var(--app-shell-max-width)]">
-          <LeagueTabs league={curLeague} members={curMembers} currentUserId={user?.uid} />
+          <LeagueTabs
+            league={curLeague}
+            members={curMembers}
+            currentUserId={currentUserId}
+            onMembersChange={handleMembersChange}
+          />
         </div>
       </main>
     </AppLayout>
