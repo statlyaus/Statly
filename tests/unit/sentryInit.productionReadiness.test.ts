@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+const forbiddenSentryIngestHost = ['ingest', 'us', 'sentry', 'io'].join('.');
+
 describe('Sentry browser initialization', () => {
   it('does not run browser SDK initialization during SSR module evaluation', () => {
     const source = readFileSync(join(process.cwd(), 'src/lib/sentry-init.ts'), 'utf8');
@@ -11,7 +13,7 @@ describe('Sentry browser initialization', () => {
     expect(browserGuardIndex).toBeGreaterThanOrEqual(0);
     expect(initIndex).toBeGreaterThan(browserGuardIndex);
     expect(source).toContain('process.env.NEXT_PUBLIC_SENTRY_DSN');
-    expect(source).not.toContain('ingest.us.sentry.io');
+    expect(source).not.toContain(forbiddenSentryIngestHost);
   });
 
   it('keeps every Sentry DSN configured through environment variables', () => {
@@ -21,7 +23,7 @@ describe('Sentry browser initialization', () => {
       'src/instrumentation-client.ts',
     ].map((filePath) => readFileSync(join(process.cwd(), filePath), 'utf8'));
 
-    expect(sentrySources.join('\n')).not.toContain('ingest.us.sentry.io');
+    expect(sentrySources.join('\n')).not.toContain(forbiddenSentryIngestHost);
     expect(sentrySources[0]).toContain('process.env.NEXT_PUBLIC_SENTRY_DSN');
     expect(sentrySources[1]).toContain('process.env.SENTRY_DSN');
     expect(sentrySources[2]).toContain('process.env.NEXT_PUBLIC_SENTRY_DSN');

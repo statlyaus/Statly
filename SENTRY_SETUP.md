@@ -55,7 +55,7 @@ org=YOUR_ACTUAL_ORG_NAME
 project=YOUR_ACTUAL_PROJECT_NAME
 
 [auth]
-token=YOUR_AUTH_TOKEN
+# Set SENTRY_AUTH_TOKEN in your local environment. Do not commit token values.
 ```
 
 ### 2. Get Your Sentry Auth Token
@@ -73,7 +73,6 @@ You can add these to your `.env.local` file for environment-specific configurati
 NEXT_PUBLIC_SENTRY_DSN=<your-sentry-dsn>
 SENTRY_ORG=your-org-name
 SENTRY_PROJECT=your-project-name
-SENTRY_AUTH_TOKEN=your-auth-token
 ```
 
 ## Features Enabled
