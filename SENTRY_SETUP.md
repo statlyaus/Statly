@@ -70,7 +70,7 @@ token=YOUR_AUTH_TOKEN
 You can add these to your `.env.local` file for environment-specific configuration:
 
 ```bash
-NEXT_PUBLIC_SENTRY_DSN=https://6ffbb0f42b9432dc3e0ef0aff3c60f94@o4509945105481728.ingest.us.sentry.io/4509945108299776
+NEXT_PUBLIC_SENTRY_DSN=<your-sentry-dsn>
 SENTRY_ORG=your-org-name
 SENTRY_PROJECT=your-project-name
 SENTRY_AUTH_TOKEN=your-auth-token
