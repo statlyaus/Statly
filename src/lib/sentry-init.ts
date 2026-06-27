@@ -2,11 +2,12 @@ import * as Sentry from '@sentry/react';
 
 const sentryDebugEnabled =
   process.env.NEXT_PUBLIC_SENTRY_DEBUG === 'true' || process.env.NEXT_PUBLIC_SENTRY_DEBUG === '1';
+const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && sentryDsn) {
   // Initialize browser Sentry as early as possible without running browser SDK setup on SSR.
   Sentry.init({
-    dsn: 'https://6ffbb0f42b9432dc3e0ef0aff3c60f94@o4509945105481728.ingest.us.sentry.io/4509945108299776',
+    dsn: sentryDsn,
     // Setting this option to true will send default PII data to Sentry.
     // For example, automatic IP address collection on events
     sendDefaultPii: true,
