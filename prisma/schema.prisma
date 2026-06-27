@@ -371,6 +371,21 @@ model TeamAction {
   @@index([processingAt])
 }
 
+model WaiverPriority {
+  id              String   @id @default(cuid())
+  leagueId        String
+  memberId        String
+  priority        Int
+  remainingFAAB   Float?
+  pendingBidTotal Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([leagueId, memberId])
+  @@index([leagueId, priority])
+  @@index([memberId])
+}
+
 enum TeamActionType {
   TRADE_PROPOSAL
   WAIVER_CLAIM

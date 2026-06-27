@@ -406,6 +406,7 @@ export class DraftApplicationService {
         }
 
         let nextSchedulingVersion = draft.schedulingVersion;
+        let nextPickStartedAt: Date | null = null;
         let pickDeadlineAt: Date | null = null;
 
         if (nextState.isComplete) {
@@ -423,7 +424,7 @@ export class DraftApplicationService {
           }
           nextSchedulingVersion = draft.schedulingVersion + 1;
         } else {
-          const nextPickStartedAt = new Date();
+          nextPickStartedAt = new Date();
           pickDeadlineAt = buildPickDeadline(nextPickStartedAt, draft.settings.pickSeconds);
           const timingUpdated = await draftRepository.updateDraftTiming(tx, {
             draftId,
@@ -446,6 +447,16 @@ export class DraftApplicationService {
           turn.round,
           turn.slot
         );
+        const eventPayload = {
+          ...eventPick,
+          currentPick: nextState.nextPick,
+          status: nextState.isComplete ? DraftStatus.COMPLETED : draft.status,
+          nextRound: nextState.nextRound,
+          nextDirection: nextState.nextDirection,
+          pickStartedAt: nextState.isComplete ? null : nextPickStartedAt?.toISOString(),
+          pickDeadlineAt: pickDeadlineAt?.toISOString() ?? null,
+          isComplete: nextState.isComplete,
+        };
         const events = nextState.isComplete
           ? buildCommandEvents('draft:pick-made', 'draft:completed')
           : buildCommandEvents('draft:pick-made');
@@ -454,7 +465,7 @@ export class DraftApplicationService {
           leagueId: draft.leagueId,
           events,
           publishState: true,
-          payload: eventPick,
+          payload: eventPayload,
         });
 
         return {
@@ -630,6 +641,7 @@ export class DraftApplicationService {
         }
 
         let nextSchedulingVersion = draft.schedulingVersion;
+        let nextPickStartedAt: Date | null = null;
         let pickDeadlineAt: Date | null = null;
 
         if (nextState.isComplete) {
@@ -647,7 +659,7 @@ export class DraftApplicationService {
           }
           nextSchedulingVersion = draft.schedulingVersion + 1;
         } else {
-          const nextPickStartedAt = new Date();
+          nextPickStartedAt = new Date();
           pickDeadlineAt = buildPickDeadline(nextPickStartedAt, draft.settings.pickSeconds);
           const timingUpdated = await draftRepository.updateDraftTiming(tx, {
             draftId,
@@ -670,6 +682,16 @@ export class DraftApplicationService {
           turn.round,
           turn.slot
         );
+        const eventPayload = {
+          ...eventPick,
+          currentPick: nextState.nextPick,
+          status: nextState.isComplete ? DraftStatus.COMPLETED : draft.status,
+          nextRound: nextState.nextRound,
+          nextDirection: nextState.nextDirection,
+          pickStartedAt: nextState.isComplete ? null : nextPickStartedAt?.toISOString(),
+          pickDeadlineAt: pickDeadlineAt?.toISOString() ?? null,
+          isComplete: nextState.isComplete,
+        };
         const events = nextState.isComplete
           ? buildCommandEvents('draft:auto-pick', 'draft:completed')
           : buildCommandEvents('draft:auto-pick');
@@ -678,7 +700,7 @@ export class DraftApplicationService {
           leagueId: draft.leagueId,
           events,
           publishState: true,
-          payload: eventPick,
+          payload: eventPayload,
         });
 
         return {

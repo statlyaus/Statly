@@ -90,6 +90,13 @@ export interface DraftPickEventPayload {
   auto: boolean;
   madeAt: string;
   timestamp: Date;
+  currentPick?: number;
+  status?: DraftStatus;
+  nextRound?: number;
+  nextDirection?: DraftDirection;
+  pickStartedAt?: string | null;
+  pickDeadlineAt?: string | null;
+  isComplete?: boolean;
 }
 
 export type DraftCommandEventType =

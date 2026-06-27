@@ -22,6 +22,15 @@ export type PlayerBase = {
 // Canonical player shape used across the app
 export interface Player extends Omit<PlayerBase, 'stats'> {
   stats?: Record<string, Numeric | string>;
+  statsBySeason?: Record<
+    string,
+    {
+      games: number;
+      stats: Record<string, Numeric | string>;
+    }
+  >;
+  statsSeason?: number;
+  availableStatSeasons?: number[];
   avg?: number;
   injury?: string;
   summary?: string;

@@ -157,6 +157,53 @@ const STAT_KEYS = [
   'supercoach',
   'corridorGains',
 ];
+const AVERAGE_STAT_KEYS = new Set(['timeOnGroundPct', 'disposalEfficiency']);
+
+function readNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function readSeason(row: AnyObj): number {
+  return readNumber(pick(row, ['season'])) ?? 0;
+}
+
+function readRound(row: AnyObj): number {
+  const rawRound = pick<unknown>(row, ['round', 'roundNumber'], 0);
+  if (typeof rawRound === 'string') {
+    const match = rawRound.match(/\d+/);
+    return match ? Number(match[0]) : 0;
+  }
+  return readNumber(rawRound) ?? 0;
+}
+
+function isNewerRow(candidate: AnyObj, current: AnyObj): boolean {
+  const candidateSeason = readSeason(candidate);
+  const currentSeason = readSeason(current);
+  if (candidateSeason !== currentSeason) return candidateSeason > currentSeason;
+  return readRound(candidate) > readRound(current);
+}
+
+function buildSeasonStats(rows: AnyObj[]): {
+  season: number;
+  games: number;
+  stats: Record<string, number>;
+} {
+  const games = rows.length;
+  const season = readSeason(rows[0]);
+  const stats: Record<string, number> = {};
+
+  for (const key of STAT_KEYS) {
+    const total = rows.reduce((sum, row) => sum + (readNumber(row[key]) ?? 0), 0);
+    stats[key] = AVERAGE_STAT_KEYS.has(key) && games > 0 ? total / games : total;
+  }
+
+  return { season, games, stats };
+}
 
 async function loadAllPlayers(): Promise<Player[]> {
   if (_cache) return _cache;
@@ -168,48 +215,70 @@ async function loadAllPlayers(): Promise<Player[]> {
   // normalize keys per row
   const norm = rows.map(normalizeKeys);
 
-  // group by (name, team) and keep the latest by season/round if present
-  const byKey = new Map<string, AnyObj>();
+  // Group by (name, team), then aggregate match-log rows into season summaries.
+  const byKey = new Map<string, AnyObj[]>();
   for (const r of norm) {
     const name = (pick<string>(r, ['name', 'playerName', 'player']) ?? 'Unknown').toString();
     const team = (pick<string>(r, ['team', 'club']) ?? 'N/A').toString();
     const key = `${toSlug(name)}|${toSlug(team)}`;
 
-    const cur = byKey.get(key);
-    if (!cur) {
-      byKey.set(key, r);
-      continue;
+    const rowsForPlayer = byKey.get(key);
+    if (rowsForPlayer) {
+      rowsForPlayer.push(r);
+    } else {
+      byKey.set(key, [r]);
     }
-    const aS = Number(pick<string>(r, ['season'], '0'));
-    const aR = Number(pick<string>(r, ['round', 'roundNumber'], '0'));
-    const bS = Number(pick<string>(cur, ['season'], '0'));
-    const bR = Number(pick<string>(cur, ['round', 'roundNumber'], '0'));
-    const newer = aS > bS || (aS === bS && aR > bR);
-    if (newer) byKey.set(key, r);
   }
 
   // build Player objects with unique ids + nested stats
-  const players: Player[] = Array.from(byKey.values()).map((r) => {
+  const players: Player[] = Array.from(byKey.values()).map((rows) => {
+    const latestRow = rows.reduce((latest, row) => (isNewerRow(row, latest) ? row : latest), rows[0]);
     const name = (
-      pick<string>(r, ['name', 'playerName', 'player'], 'Unknown') as string
+      pick<string>(latestRow, ['name', 'playerName', 'player'], 'Unknown') as string
     ).toString();
-    const team = (pick<string>(r, ['team', 'club'], 'N/A') as string).toString();
-    const position = (pick<string>(r, ['position', 'pos'], '') as string).toString();
+    const team = (pick<string>(latestRow, ['team', 'club'], 'N/A') as string).toString();
+    const position = (pick<string>(latestRow, ['position', 'pos'], '') as string).toString();
 
     const rawId =
-      pick<string>(r, ['id', 'player_id', 'playerId', 'aflId']) ??
+      pick<string>(latestRow, ['id', 'player_id', 'playerId', 'aflId']) ??
       `${toSlug(name)}-${toSlug(team)}`;
     const id = rawId.toString();
 
-    const stats: Record<string, unknown> = {};
-    for (const key of STAT_KEYS) {
-      if (key in r) stats[key] = (r as AnyObj)[key];
+    const rowsBySeason = new Map<number, AnyObj[]>();
+    for (const row of rows) {
+      const season = readSeason(row);
+      if (!season) continue;
+      const seasonRows = rowsBySeason.get(season);
+      if (seasonRows) seasonRows.push(row);
+      else rowsBySeason.set(season, [row]);
     }
 
-    const { status, injury: rawInjury, ...rest } = r as AnyObj;
+    const availableStatSeasons = Array.from(rowsBySeason.keys()).sort((a, b) => b - a);
+    const statsBySeason = Object.fromEntries(
+      availableStatSeasons.map((season) => {
+        const seasonStats = buildSeasonStats(rowsBySeason.get(season) ?? []);
+        return [String(season), { games: seasonStats.games, stats: seasonStats.stats }];
+      })
+    );
+    const latestSeason = availableStatSeasons[0];
+    const latestSeasonStats = latestSeason ? statsBySeason[String(latestSeason)] : undefined;
+
+    const { status, injury: rawInjury, ...rest } = latestRow as AnyObj;
     const injury = (rawInjury ?? status) as string | undefined;
 
-    return { id, name, team, position, injury, ...rest, stats } as Player;
+    return {
+      id,
+      name,
+      team,
+      position,
+      injury,
+      ...rest,
+      games: latestSeasonStats?.games,
+      stats: latestSeasonStats?.stats ?? {},
+      statsBySeason,
+      statsSeason: latestSeason,
+      availableStatSeasons,
+    } as Player;
   });
 
   players.sort((a, b) => a.name.localeCompare(b.name));

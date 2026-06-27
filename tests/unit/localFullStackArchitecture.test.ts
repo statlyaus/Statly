@@ -32,6 +32,7 @@ describe('local full stack development architecture', () => {
     expect(scripts['dev:seed:local']).toBe('tsx Scripts/dev/seed-local-stack.ts');
     expect(scripts['dev:smoke:local']).toBe('tsx Scripts/dev/smoke-local-stack.ts');
     expect(scripts['dev:full:local']).toBe('bash Scripts/dev/full-local-stack.sh');
+    expect(scripts['dev:full:all']).toBe('bash Scripts/dev/full-local-stack.sh');
   });
 
   it('starts the app stack with Firebase emulator environment variables', () => {

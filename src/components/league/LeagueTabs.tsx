@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { League, LeagueMember } from '@/types/leagues';
@@ -21,6 +21,7 @@ import {
 } from '@/lib/draftSettings';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import MyTeamPanel from '@/components/MyTeamPanel';
+import LeagueWaiversContainer from '@/components/waivers/LeagueWaiversContainer';
 import type { Player, Team } from '@/types/players';
 import DraftManager from './DraftManager';
 
@@ -28,6 +29,7 @@ interface LeagueTabsProps {
   league: League;
   members: LeagueMember[];
   currentUserId?: string;
+  onMembersChange?: (members: LeagueMember[]) => void;
 }
 
 type TabType = 'overview' | 'teams' | 'roster' | 'trades' | 'waivers' | 'draft' | 'settings';
@@ -43,11 +45,15 @@ export default function LeagueTabs({
   league,
   members,
   currentUserId,
+  onMembersChange,
 }: LeagueTabsProps): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [teamActionMessage, setTeamActionMessage] = useState<LeagueSettingsMessage | null>(null);
+  const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null);
+  const [removingUserId, setRemovingUserId] = useState<string | null>(null);
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -79,6 +85,21 @@ export default function LeagueTabs({
 
   const currentMember = members.find((member) => member.userId === currentUserId);
   const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
+  const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;
+  const waiverMembersIndex = useMemo(
+    () =>
+      Object.fromEntries(
+        members.map((member) => [
+          member.userId,
+          {
+            userId: member.userId,
+            teamId: member.id,
+            teamName: member.teamName,
+          },
+        ])
+      ),
+    [members]
+  );
   const draftReadiness = league.draftReadiness ?? null;
   const draftRoomPath =
     draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
@@ -92,6 +113,51 @@ export default function LeagueTabs({
           timeStyle: 'short',
         }).format(draftDate)
       : 'Not scheduled';
+
+  const handleRemoveMember = async (member: LeagueMember) => {
+    if (!canRemoveTeams || member.userId === league.ownerId) return;
+
+    try {
+      setRemovingUserId(member.userId);
+      setTeamActionMessage(null);
+      const response = await authenticatedFetch(
+        `/api/leagues/${league.id}/members`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'removeMember',
+            targetUserId: member.userId,
+          }),
+        },
+        currentUserId
+      );
+      const payload = (await response.json()) as unknown;
+
+      if (!response.ok || !isRecord(payload) || payload.success !== true) {
+        const message =
+          isRecord(payload) && typeof payload.error === 'string'
+            ? payload.error
+            : `status ${response.status}`;
+        throw new Error(message);
+      }
+
+      const nextMembers = members.filter((candidate) => candidate.userId !== member.userId);
+      onMembersChange?.(nextMembers);
+      if (!onMembersChange) {
+        router.refresh?.();
+      }
+      setPendingRemoveUserId(null);
+      setTeamActionMessage({ type: 'success', text: `${member.teamName} removed.` });
+    } catch (error) {
+      setTeamActionMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to remove team.',
+      });
+    } finally {
+      setRemovingUserId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -251,7 +317,24 @@ export default function LeagueTabs({
 
             {activeTab === 'teams' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-semibold text-gray-900">League Teams</h2>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900">League Teams</h2>
+                  <span className="text-sm font-medium text-gray-600">
+                    {members.length}/{league.maxTeams} teams
+                  </span>
+                </div>
+                {teamActionMessage && (
+                  <div
+                    role={teamActionMessage.type === 'error' ? 'alert' : 'status'}
+                    className={`rounded-lg border px-3 py-2 text-sm ${
+                      teamActionMessage.type === 'error'
+                        ? 'border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] text-[color:var(--league-danger)]'
+                        : 'border-[color:var(--league-success)]/30 bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]'
+                    }`}
+                  >
+                    {teamActionMessage.text}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {members.map((member) => (
                     <div key={member.id} className="bg-gray-50 rounded-lg p-4">
@@ -266,6 +349,40 @@ export default function LeagueTabs({
                       <p className="text-sm text-gray-600">
                         Joined {new Date(member.joinedAt).toLocaleDateString()}
                       </p>
+                      {canRemoveTeams && member.userId !== league.ownerId && (
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          {pendingRemoveUserId === member.userId ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void handleRemoveMember(member)}
+                                disabled={removingUserId === member.userId}
+                                aria-label={`Confirm remove ${member.teamName}`}
+                                className="inline-flex h-9 items-center justify-center rounded-lg bg-[color:var(--league-danger)] px-3 text-sm font-medium text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {removingUserId === member.userId ? 'Removing...' : 'Confirm'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPendingRemoveUserId(null)}
+                                disabled={removingUserId === member.userId}
+                                className="inline-flex h-9 items-center justify-center rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setPendingRemoveUserId(member.userId)}
+                              aria-label={`Remove ${member.teamName}`}
+                              className="inline-flex h-9 items-center justify-center rounded-lg border border-[color:var(--league-danger)]/30 bg-[color:var(--league-surface)] px-3 text-sm font-medium text-[color:var(--league-danger)] transition-colors hover:bg-[color:var(--league-danger-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)]"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -306,22 +423,18 @@ export default function LeagueTabs({
 
             {activeTab === 'waivers' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div>
                   <h2 className="text-xl font-semibold text-gray-900">Waiver Wire</h2>
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/leagues/${league.id}/waivers`)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    Open waivers
-                  </button>
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
-                  <p className="text-sm text-gray-600">
-                    Submit claims, review waiver order, and process league waiver activity from the
-                    dedicated waiver workspace.
+                  <p className="mt-1 text-sm text-gray-600">
+                    Submit claims, review your queue, and track league waiver activity.
                   </p>
                 </div>
+                <LeagueWaiversContainer
+                  leagueId={league.id}
+                  currentUserId={currentUserId}
+                  membersIndex={waiverMembersIndex}
+                  selectedCategories={league.categories}
+                />
               </div>
             )}
 
@@ -435,6 +548,20 @@ const POSITION_LIMIT_LABELS: Record<PositionLimitKey, string> = {
 };
 
 const CATEGORY_PRESET = [...REAL_DATA_NINE_CATEGORY_PRESET];
+const FANTASY_CATEGORY_KEYS = new Set(Object.keys(FANTASY_CATEGORIES));
+
+function normalizeFantasyCategoryList(
+  value: unknown,
+  fallback: readonly FantasyCategoryKey[] = CATEGORY_PRESET
+): FantasyCategoryKey[] {
+  if (!Array.isArray(value)) return [...fallback];
+
+  const selectedCategories = value
+    .map(String)
+    .filter((category): category is FantasyCategoryKey => FANTASY_CATEGORY_KEYS.has(category));
+
+  return selectedCategories.length > 0 ? selectedCategories : [...fallback];
+}
 
 function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
   const draftDate =
@@ -1005,15 +1132,21 @@ type LeagueRosterRecord = Record<string, unknown> & {
 interface NormalizedLeagueRosterResponse {
   roster: LeagueRosterRecord | null;
   players: Player[];
+  selectedCategories: FantasyCategoryKey[];
 }
 
-function normalizeLeagueRosterResponse(payload: unknown): NormalizedLeagueRosterResponse {
+function normalizeLeagueRosterResponse(
+  payload: unknown,
+  fallbackCategories: readonly FantasyCategoryKey[] = CATEGORY_PRESET
+): NormalizedLeagueRosterResponse {
   const responseBody =
     isRecord(payload) && isRecord(payload.data) ? payload.data : isRecord(payload) ? payload : null;
   const roster =
     responseBody && isRecord(responseBody.roster)
       ? (responseBody.roster as LeagueRosterRecord)
       : null;
+  const leagueSettings =
+    responseBody && isRecord(responseBody.leagueSettings) ? responseBody.leagueSettings : null;
   const rosterPlayers = roster && Array.isArray(roster.players) ? roster.players : [];
   const responsePlayers =
     responseBody && Array.isArray(responseBody.players) ? (responseBody.players as Player[]) : [];
@@ -1021,6 +1154,10 @@ function normalizeLeagueRosterResponse(payload: unknown): NormalizedLeagueRoster
   return {
     roster,
     players: rosterPlayers.length > 0 ? rosterPlayers : responsePlayers,
+    selectedCategories: normalizeFantasyCategoryList(
+      leagueSettings?.selectedCategories,
+      fallbackCategories
+    ),
   };
 }
 
@@ -1038,6 +1175,17 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
   const [loading, setLoading] = useState(false);
   const [roster, setRoster] = useState<LeagueRosterRecord | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const rosterCategoryFallback = useMemo(
+    () => normalizeFantasyCategoryList(league.categories, CATEGORY_PRESET),
+    [league.categories]
+  );
+  const [selectedCategories, setSelectedCategories] = useState<FantasyCategoryKey[]>(() => [
+    ...rosterCategoryFallback,
+  ]);
+
+  useEffect(() => {
+    setSelectedCategories([...rosterCategoryFallback]);
+  }, [rosterCategoryFallback]);
 
   // Get current user's team from league members
   const currentUserTeam = members.find((member) => member.userId === currentUserId);
@@ -1052,9 +1200,10 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
         if (response.ok) {
           const rosterData = await response.json();
-          const nextRoster = normalizeLeagueRosterResponse(rosterData);
+          const nextRoster = normalizeLeagueRosterResponse(rosterData, rosterCategoryFallback);
           setRoster(nextRoster.roster);
           setPlayers(nextRoster.players);
+          setSelectedCategories(nextRoster.selectedCategories);
         } else {
           console.error('Failed to fetch roster data');
         }
@@ -1066,7 +1215,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
     };
 
     void fetchRosterData();
-  }, [league?.id, currentUserId]);
+  }, [league?.id, currentUserId, rosterCategoryFallback]);
 
   // Convert roster data to Team format for MyTeamPanel
   const teamPlayerIds = getRosterPlayerIds(roster, players);
@@ -1160,9 +1309,10 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
               );
               if (rosterResponse.ok) {
                 const rosterData = await rosterResponse.json();
-                const nextRoster = normalizeLeagueRosterResponse(rosterData);
+                const nextRoster = normalizeLeagueRosterResponse(rosterData, rosterCategoryFallback);
                 setRoster(nextRoster.roster);
                 setPlayers(nextRoster.players);
+                setSelectedCategories(nextRoster.selectedCategories);
                 setLastAction(`${action} completed successfully`);
               }
             } catch (error) {
@@ -1191,9 +1341,10 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
       const response = await fetch(`/api/leagues/${league.id}/roster/${currentUserId}`);
       if (response.ok) {
         const rosterData = await response.json();
-        const nextRoster = normalizeLeagueRosterResponse(rosterData);
+        const nextRoster = normalizeLeagueRosterResponse(rosterData, rosterCategoryFallback);
         setRoster(nextRoster.roster);
         setPlayers(nextRoster.players);
+        setSelectedCategories(nextRoster.selectedCategories);
         setLastAction('Team data refreshed');
       } else {
         setLastAction('Refresh failed');
@@ -1257,6 +1408,7 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
         onRefresh={handleRefresh}
         showAdvancedFeatures={true}
         sortByValue={true}
+        selectedCategories={selectedCategories}
         maxHeight="600px"
         isLoading={loading}
       />

@@ -30,6 +30,21 @@ const DraftControls = memo(function DraftControls({
   const statusDescription = isPaused
     ? 'The clock is stopped. Resume when you want picks and auto-picks to continue.'
     : 'Pause only if you need to intervene. This stops the live clock and all auto-pick activity.';
+  const controlTone = isPaused
+    ? {
+        icon: 'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)]',
+        status:
+          'border-[color:var(--draft-broadcast-yellow)] bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)]',
+        button:
+          'bg-[color:var(--draft-broadcast-green)] text-[color:var(--draft-broadcast-text)] hover:opacity-90',
+      }
+    : {
+        icon: 'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)]',
+        status:
+          'border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)]',
+        button:
+          'bg-[color:var(--draft-broadcast-red)] text-[color:var(--draft-broadcast-text)] hover:opacity-90',
+      };
 
   // Cleanup AbortController on unmount
   useEffect(() => {
@@ -144,14 +159,10 @@ const DraftControls = memo(function DraftControls({
       {ConfirmationModal}
       {(draftStatus === 'LIVE' || isPaused) && (
         <section className="w-full px-4 pt-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card/95 px-5 py-4 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-5 py-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <div
-                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
-                  isPaused
-                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
-                    : 'border-orange-500/30 bg-orange-500/10 text-orange-700'
-                }`}
+                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${controlTone.icon}`}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -164,22 +175,22 @@ const DraftControls = memo(function DraftControls({
               </div>
               <div className="min-w-0 space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-border/70 bg-background px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  <span className="inline-flex items-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--draft-broadcast-muted)]">
                     League owner
                   </span>
                   <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      isPaused
-                        ? 'bg-amber-500/10 text-amber-700'
-                        : 'bg-orange-500/10 text-orange-700'
-                    }`}
+                    className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${controlTone.status}`}
                   >
                     {statusLabel}
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{actionLabel}</p>
-                  <p className="text-sm text-muted-foreground">{statusDescription}</p>
+                  <p className="text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
+                    {actionLabel}
+                  </p>
+                  <p className="text-sm text-[color:var(--draft-broadcast-muted)]">
+                    {statusDescription}
+                  </p>
                 </div>
               </div>
             </div>
@@ -189,11 +200,7 @@ const DraftControls = memo(function DraftControls({
                 type="button"
                 onClick={isPaused ? handleResumeDraft : handlePauseDraft}
                 disabled={isLoading}
-                className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
-                  isPaused
-                    ? 'bg-foreground text-background hover:bg-foreground/90'
-                    : 'bg-amber-600 text-white hover:bg-amber-700'
-                }`}
+                className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${controlTone.button}`}
                 aria-label={actionLabel}
               >
                 {isLoading ? actionVerb : actionLabel}

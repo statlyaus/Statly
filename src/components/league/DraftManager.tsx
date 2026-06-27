@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import {
   PlayIcon,
   CalendarIcon,
-  UsersIcon,
   CogIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -85,7 +84,74 @@ interface LeagueDraftReadModel {
   draft?: DraftResponseShape | null;
 }
 
+const DRAFT_START_OFFSET_MS = 10 * 60 * 1000;
+const MINIMUM_DRAFT_START_OFFSET_MS = 5 * 60 * 1000;
+
 const DRAFT_STATUSES = new Set(['SCHEDULED', 'LOBBY', 'COUNTDOWN', 'LIVE', 'PAUSED', 'COMPLETED']);
+
+function toDateTimeLocalInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
+function getMinimumDraftStartDate(): Date {
+  return new Date(Date.now() + MINIMUM_DRAFT_START_OFFSET_MS);
+}
+
+function getDraftStartDatePart(value: string): string {
+  return value.split('T')[0] ?? '';
+}
+
+function getDraftStartTimePart(value: string): string {
+  return value.split('T')[1]?.slice(0, 5) ?? '';
+}
+
+function toScheduledTimeValue(datePart: string, timePart: string): string {
+  if (!datePart || !timePart) return '';
+  return `${datePart}T${timePart}`;
+}
+
+function getTonightDraftStartDate(): Date {
+  const candidate = new Date();
+  candidate.setHours(20, 0, 0, 0);
+
+  const minimum = getMinimumDraftStartDate();
+  if (candidate.getTime() <= minimum.getTime()) {
+    return minimum;
+  }
+
+  return candidate;
+}
+
+function getTomorrowDraftStartDate(): Date {
+  const candidate = new Date();
+  candidate.setDate(candidate.getDate() + 1);
+  candidate.setHours(19, 0, 0, 0);
+  return candidate;
+}
+
+function formatDraftStartDateTime(value: string): string {
+  const date = new Date(value);
+
+  return new Intl.DateTimeFormat('en-AU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function formatDraftStartSummary(value: string, timeZone: string): string {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) {
+    return 'Choose a draft start time.';
+  }
+
+  return `Draft starts ${formatDraftStartDateTime(value)} (${timeZone})`;
+}
 
 function normalizeExistingDraftStatus(status: string | null | undefined): ExistingDraft['status'] {
   const normalized = status?.toUpperCase();
@@ -104,6 +170,128 @@ function toExistingDraft(draft: DraftResponseShape): ExistingDraft {
     startAt,
     createdAt: draft.createdAt ?? startAt,
   };
+}
+
+function shuffleMembers(orderedMembers: LeagueMember[]): LeagueMember[] {
+  const shuffled = [...orderedMembers];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function validateDraftScheduledTime(scheduledTime: string): string | null {
+  const selected = new Date(scheduledTime);
+
+  if (Number.isNaN(selected.getTime())) {
+    return 'Please choose a valid draft start time.';
+  }
+
+  if (selected.getTime() <= Date.now()) {
+    return 'Scheduled time must be in the future.';
+  }
+
+  return null;
+}
+
+function getOrderedDraftMembers(input: {
+  members: LeagueMember[];
+  draftOrderMembers: LeagueMember[];
+  draftSettings: DraftSettings;
+  draftOrderRandomized: boolean;
+}): LeagueMember[] {
+  const orderedMembers =
+    input.draftOrderMembers.length === input.members.length ? input.draftOrderMembers : input.members;
+
+  if (input.draftSettings.pickOrder === 'random' && !input.draftOrderRandomized) {
+    return shuffleMembers(orderedMembers);
+  }
+
+  return orderedMembers;
+}
+
+function buildDraftParticipants(input: {
+  orderedMembers: LeagueMember[];
+  league: League;
+  currentUserId?: string;
+}): DraftParticipant[] {
+  let participants = input.orderedMembers.map((member, index) => ({
+    userId: member.userId,
+    memberId: member.id,
+    displayName: member.teamName || `Team ${index + 1}`,
+    draftOrder: index + 1,
+    isOwner: member.userId === input.league.ownerId,
+  }));
+
+  if (input.league.id !== 'test-league-id' || !input.currentUserId) {
+    return participants;
+  }
+
+  const alreadyIncluded = participants.some((participant) => participant.userId === input.currentUserId);
+  if (!alreadyIncluded) {
+    const lastIndex = participants.length - 1;
+    const replacement = {
+      userId: input.currentUserId,
+      memberId: 'self',
+      displayName: 'Your Team',
+      draftOrder: participants[lastIndex]?.draftOrder || participants.length,
+      isOwner: true,
+    };
+
+    if (lastIndex >= 0) participants[lastIndex] = replacement;
+    else participants.push(replacement);
+  }
+
+  return participants.map((participant) => ({
+    ...participant,
+    isOwner: participant.userId === input.currentUserId,
+  }));
+}
+
+function buildDraftCreatePayload(input: {
+  league: League;
+  members: LeagueMember[];
+  draftSettings: DraftSettings;
+  participants: DraftParticipant[];
+  currentUserId?: string;
+}) {
+  const draftPayloadBase = {
+    name: `${input.league.name} Draft`,
+    leagueSize: input.members.length,
+    draftType: input.draftSettings.draftType,
+    timePerPick: input.draftSettings.timePerPick,
+    scheduledTime: input.draftSettings.scheduledTime,
+    timeZone: input.draftSettings.timeZone,
+    enableReminders: input.draftSettings.enableReminders,
+    pickOrder: input.draftSettings.pickOrder,
+    positionLimits: input.draftSettings.positionLimits,
+    autoPickRules: input.draftSettings.autoPickRules,
+    rosterSize: getRosterSizeFromPositionLimits(input.draftSettings.positionLimits),
+    benchSize: getBenchSizeFromPositionLimits(input.draftSettings.positionLimits),
+    leagueData: {
+      name: input.league.name,
+      maxTeams: input.league.maxTeams,
+      categories: input.league.categories,
+      ownerId:
+        input.league.id === 'test-league-id' && input.currentUserId
+          ? input.currentUserId
+          : input.league.ownerId,
+    },
+    participants: input.participants,
+  } as const;
+
+  return input.league.id === 'test-league-id'
+    ? { ...draftPayloadBase }
+    : { ...draftPayloadBase, leagueId: input.league.id };
+}
+
+function isDraftLinkedToLeague(league: League, createdDraft: DraftResponseShape): boolean {
+  return (
+    league.id === 'test-league-id' ||
+    createdDraft.leagueId === league.id ||
+    createdDraft.league?.id === league.id
+  );
 }
 
 export default function DraftManager({
@@ -191,12 +379,10 @@ export default function DraftManager({
       }
 
       if (!next.scheduledTime) {
-        const nowPlusTen = new Date(Date.now() + 10 * 60 * 1000);
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const localStr = `${nowPlusTen.getFullYear()}-${pad(nowPlusTen.getMonth() + 1)}-${pad(
-          nowPlusTen.getDate()
-        )}T${pad(nowPlusTen.getHours())}:${pad(nowPlusTen.getMinutes())}`;
-        next = { ...next, scheduledTime: localStr };
+        next = {
+          ...next,
+          scheduledTime: toDateTimeLocalInputValue(new Date(Date.now() + DRAFT_START_OFFSET_MS)),
+        };
       }
 
       return next;
@@ -218,15 +404,6 @@ export default function DraftManager({
     });
     setDraftOrderRandomized(false);
   }, [members]);
-
-  const shuffleMembers = (orderedMembers: LeagueMember[]) => {
-    const shuffled = [...orderedMembers];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
 
   const randomizeDraftOrder = () => {
     setDraftOrderMemberIds((current) =>
@@ -273,106 +450,66 @@ export default function DraftManager({
     }));
   };
 
-  const createDraft = async () => {
-    if (!canCreateDraft) return;
+  const updateScheduledDate = (datePart: string) => {
+    setDraftSettings((prev) => ({
+      ...prev,
+      scheduledTime: toScheduledTimeValue(datePart, getDraftStartTimePart(prev.scheduledTime)),
+    }));
+  };
 
-    setSavingDraft(true);
-    setError(null);
+  const updateScheduledClockTime = (timePart: string) => {
+    setDraftSettings((prev) => ({
+      ...prev,
+      scheduledTime: toScheduledTimeValue(getDraftStartDatePart(prev.scheduledTime), timePart),
+    }));
+  };
 
-    try {
-      // Client-side validation to avoid server rejection due to clock skew/timezone issues
-      const selected = new Date(draftSettings.scheduledTime);
-      if (Number.isNaN(selected.getTime())) {
-        setError('Please choose a valid draft start time.');
-        setSavingDraft(false);
-        return;
-      }
-      if (selected.getTime() <= Date.now()) {
-        setError('Scheduled time must be in the future.');
-        setSavingDraft(false);
-        return;
-      }
+  const applyScheduledTimePreset = (date: Date) => {
+    setDraftSettings((prev) => ({
+      ...prev,
+      scheduledTime: toDateTimeLocalInputValue(date),
+    }));
+  };
 
-      // Step 1: Create the draft with league synchronization
-      // Build participants; ensure current user is included for test leagues
+	  const createDraft = async () => {
+	    if (!canCreateDraft) return;
 
-      let orderedMembers =
-        draftOrderMembers.length === members.length ? draftOrderMembers : members;
-      if (draftSettings.pickOrder === 'random' && !draftOrderRandomized) {
-        orderedMembers = shuffleMembers(orderedMembers);
-      }
+	    setSavingDraft(true);
+	    setError(null);
 
-      let participants: DraftParticipant[] = orderedMembers.map((member, index) => ({
-        userId: member.userId,
-        memberId: member.id,
-        displayName: member.teamName || `Team ${index + 1}`,
-        draftOrder: index + 1,
-        isOwner: member.userId === league.ownerId,
-      }));
+	    try {
+	      const validationError = validateDraftScheduledTime(draftSettings.scheduledTime);
+	      if (validationError) {
+	        setError(validationError);
+	        return;
+	      }
 
-      if (league.id === 'test-league-id' && currentUserId) {
-        const alreadyIncluded = participants.some((p) => p.userId === currentUserId);
-        if (!alreadyIncluded) {
-          // Replace the last bot with the current user
-          const lastIndex = participants.length - 1;
-          const replacement = {
-            userId: currentUserId,
-            memberId: 'self',
-            displayName: 'Your Team',
-            draftOrder: participants[lastIndex]?.draftOrder || participants.length,
-            isOwner: true,
-          };
-          if (lastIndex >= 0) participants[lastIndex] = replacement;
-          else participants.push(replacement);
-        }
-        // Ensure only the current user is marked owner in test mode
-        participants = participants.map((p) => ({ ...p, isOwner: p.userId === currentUserId }));
-      }
+	      const orderedMembers = getOrderedDraftMembers({
+	        members,
+	        draftOrderMembers,
+	        draftSettings,
+	        draftOrderRandomized,
+	      });
+	      const participants = buildDraftParticipants({ orderedMembers, league, currentUserId });
+	      const draftPayload = buildDraftCreatePayload({
+	        league,
+	        members,
+	        draftSettings,
+	        participants,
+	        currentUserId,
+	      });
 
-      const draftPayloadBase = {
-        name: `${league.name} Draft`,
-        leagueSize: members.length,
-        draftType: draftSettings.draftType,
-        timePerPick: draftSettings.timePerPick,
-        scheduledTime: draftSettings.scheduledTime,
-        timeZone: draftSettings.timeZone,
-        enableReminders: draftSettings.enableReminders,
-        pickOrder: draftSettings.pickOrder,
-        positionLimits: draftSettings.positionLimits,
-        autoPickRules: draftSettings.autoPickRules,
-        rosterSize: getRosterSizeFromPositionLimits(draftSettings.positionLimits),
-        benchSize: getBenchSizeFromPositionLimits(draftSettings.positionLimits),
-        // Sync league data
-        leagueData: {
-          name: league.name,
-          maxTeams: league.maxTeams,
-          categories: league.categories,
-          ownerId: league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId,
-        },
-        // Sync member data
-        participants,
-      } as const;
+	      const response = await fetchApi('drafts', {
+	        method: 'POST',
+	        body: JSON.stringify(draftPayload),
+	      });
 
-      const draftPayload =
-        league.id === 'test-league-id'
-          ? { ...draftPayloadBase }
-          : { ...draftPayloadBase, leagueId: league.id };
+	      if (response.success) {
+	        const createdDraft = response.data as DraftResponseShape;
 
-      const response = await fetchApi('drafts', {
-        method: 'POST',
-        body: JSON.stringify(draftPayload),
-      });
-
-      if (response.success) {
-        const createdDraft = response.data as DraftResponseShape;
-        const draftLinkedToLeague =
-          league.id === 'test-league-id' ||
-          createdDraft.leagueId === league.id ||
-          createdDraft.league?.id === league.id;
-
-        if (!draftLinkedToLeague) {
-          throw new Error('Draft was created without the expected league link');
-        }
+	        if (!isDraftLinkedToLeague(league, createdDraft)) {
+	          throw new Error('Draft was created without the expected league link');
+	        }
 
         setExistingDraft(toExistingDraft(createdDraft));
         await refreshDraftState();
@@ -442,18 +579,91 @@ export default function DraftManager({
     });
   };
 
+  const minimumDraftStartValue = toDateTimeLocalInputValue(getMinimumDraftStartDate());
+  const scheduledDatePart = getDraftStartDatePart(draftSettings.scheduledTime);
+  const scheduledTimePart = getDraftStartTimePart(draftSettings.scheduledTime);
+  const draftStartSummary = formatDraftStartSummary(
+    draftSettings.scheduledTime,
+    draftSettings.timeZone
+  );
+  const draftStartPresets = [
+    {
+      label: 'In 10 min',
+      ariaLabel: 'Start in 10 minutes',
+      date: new Date(Date.now() + DRAFT_START_OFFSET_MS),
+    },
+    {
+      label: 'Tonight',
+      ariaLabel: 'Start tonight',
+      date: getTonightDraftStartDate(),
+    },
+    {
+      label: 'Tomorrow',
+      ariaLabel: 'Start tomorrow',
+      date: getTomorrowDraftStartDate(),
+    },
+  ];
+  const rosterSize = getRosterSizeFromPositionLimits(draftSettings.positionLimits);
+  const benchSize = getBenchSizeFromPositionLimits(draftSettings.positionLimits);
+  const totalDraftPicks = members.length * rosterSize;
+  const readinessItems = [
+    {
+      label: 'League members',
+      detail: `${members.length}/${league.maxTeams} teams joined`,
+      complete: hasEnoughMembers,
+      incompleteLabel: 'Need at least 4 teams',
+    },
+    {
+      label: 'Commissioner access',
+      detail: isCommissioner ? 'You can configure and launch the draft' : 'Owner or manager only',
+      complete: isCommissioner,
+      incompleteLabel: 'Commissioner only',
+    },
+    {
+      label: 'Roster shape',
+      detail: `${rosterSize} roster spots per team, ${benchSize} bench`,
+      complete: true,
+      incompleteLabel: '',
+    },
+  ];
+
   return (
-    <div className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <PlayIcon className="h-6 w-6 text-primary" />
-          <h2 className="text-xl font-semibold text-foreground">Draft Management</h2>
+    <div className="rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+      <div className="border-b border-border p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              <PlayIcon className="h-4 w-4 text-primary" />
+              Draft Management
+            </div>
+            <h2 className="text-2xl font-semibold text-foreground">
+              Prepare the league draft room
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Set the start time, draft order, roster limits, and auto-pick behaviour before the
+              room opens to league members.
+            </p>
+          </div>
+          <div className="grid min-w-0 grid-cols-3 overflow-hidden rounded-lg border border-border bg-background text-center sm:min-w-80">
+            <div className="border-r border-border p-3">
+              <p className="text-xs font-medium text-muted-foreground">Teams</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{members.length}</p>
+            </div>
+            <div className="border-r border-border p-3">
+              <p className="text-xs font-medium text-muted-foreground">Rounds</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{rosterSize}</p>
+            </div>
+            <div className="p-3">
+              <p className="text-xs font-medium text-muted-foreground">Picks</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{totalDraftPicks}</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 flex items-center space-x-2 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
+        <div className="mx-6 mt-6 flex items-center space-x-2 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
           <ExclamationTriangleIcon className="h-5 w-5 text-destructive" />
           <span className="text-destructive">{error}</span>
         </div>
@@ -464,7 +674,7 @@ export default function DraftManager({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 rounded-lg border border-border bg-muted/50 p-4"
+          className="m-6 rounded-lg border border-border bg-muted/50 p-4"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -493,48 +703,78 @@ export default function DraftManager({
 
       {/* Draft Creation Section */}
       {!existingDraft && (
-        <div className="space-y-4">
+        <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
           {/* Prerequisites Check */}
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3">
-              <UsersIcon className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                League Members: {members.length}/{league.maxTeams}
-              </span>
-              {hasEnoughMembers ? (
-                <CheckCircleIcon className="h-5 w-5 text-primary" />
-              ) : (
-                <span className="text-xs text-destructive">Need at least 4 members</span>
-              )}
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {readinessItems.map((item) => (
+                <div key={item.label} className="rounded-lg border border-border bg-background p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{item.label}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
+                    </div>
+                    {item.complete ? (
+                      <CheckCircleIcon className="h-5 w-5 shrink-0 text-primary" />
+                    ) : (
+                      <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-destructive" />
+                    )}
+                  </div>
+                  {!item.complete && (
+                    <p className="mt-3 text-xs font-medium text-destructive">
+                      {item.incompleteLabel}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
 
-            <div className="flex items-center space-x-3">
-              <CogIcon className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Commissioner Access</span>
-              {isCommissioner ? (
-                <CheckCircleIcon className="h-5 w-5 text-primary" />
-              ) : (
-                <span className="text-xs text-destructive">Commissioner only</span>
-              )}
+            <div className="rounded-lg border border-border bg-background p-4">
+              <div className="flex items-center gap-2">
+                <CogIcon className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-foreground">Draft setup preview</h3>
+              </div>
+              <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <p className="text-muted-foreground">Default format</p>
+                  <p className="font-medium text-foreground">Snake draft</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Pick clock</p>
+                  <p className="font-medium text-foreground">2 minutes per pick</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Auto-pick</p>
+                  <p className="font-medium text-foreground">Queue first, then best available</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Draft order</p>
+                  <p className="font-medium text-foreground">Randomized unless changed</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Create Draft Button */}
-          {canCreateDraft && (
-            <div className="border-t border-border pt-4">
+          <aside className="rounded-lg border border-border bg-muted/30 p-4">
+            <p className="text-sm font-semibold text-foreground">Next step</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Review the schedule and commissioner settings, then create the draft room for league
+              members.
+            </p>
+
+            {/* Create Draft Button */}
+            {canCreateDraft && (
               <button
                 onClick={() => setShowDraftSettings(true)}
-                className="flex w-full items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-4 flex w-full items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <CalendarIcon className="h-5 w-5" />
-                <span>Create Draft for League</span>
+                <span>Prepare draft settings</span>
               </button>
-            </div>
-          )}
+            )}
 
-          {!canCreateDraft && (
-            <div className="border-t border-border pt-4">
-              <div className="rounded-lg bg-muted p-3 text-center">
+            {!canCreateDraft && (
+              <div className="mt-4 rounded-lg border border-border bg-background p-3 text-center">
                 <span className="text-sm text-muted-foreground">
                   {!isCommissioner
                     ? 'Only a league commissioner can create a draft'
@@ -543,8 +783,8 @@ export default function DraftManager({
                       : 'Draft requirements not met'}
                 </span>
               </div>
-            </div>
-          )}
+            )}
+          </aside>
         </div>
       )}
 
@@ -553,98 +793,175 @@ export default function DraftManager({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 p-4 backdrop-blur-sm"
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-card p-6 text-card-foreground shadow-xl"
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-xl"
           >
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Draft Settings</h3>
+            <div className="border-b border-border p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Draft setup
+                  </p>
+                  <h3 className="mt-2 text-2xl font-semibold text-foreground">Draft Settings</h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    Configure the launch time, order, roster shape, and automation before the draft
+                    room opens.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background px-4 py-3 text-sm">
+                  <p className="font-medium text-foreground">{members.length} teams</p>
+                  <p className="text-muted-foreground">{totalDraftPicks} total picks</p>
+                </div>
+              </div>
+            </div>
 
-            <div className="space-y-4">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
               {/* Scheduled Time */}
-              <div>
-                <label
-                  htmlFor="scheduledTime"
-                  className="mb-1 block text-sm font-medium text-foreground"
-                >
-                  Draft Start Time
-                </label>
-                <input
-                  id="scheduledTime"
-                  type="datetime-local"
-                  value={draftSettings.scheduledTime}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({ ...prev, scheduledTime: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-                  min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)} // At least 5 minutes from now
-                />
-              </div>
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-base font-semibold text-foreground">Draft Start Time</h4>
+                    <p className="mt-1 text-sm text-muted-foreground">{draftStartSummary}</p>
+                  </div>
+                  <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                    Earliest {formatDraftStartDateTime(minimumDraftStartValue)}
+                  </p>
+                </div>
 
-              {/* Draft Type */}
-              <div>
-                <label
-                  htmlFor="draftType"
-                  className="mb-1 block text-sm font-medium text-foreground"
-                >
-                  Draft Type
-                </label>
-                <select
-                  id="draftType"
-                  value={draftSettings.draftType}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({
-                      ...prev,
-                      draftType: e.target.value as 'snake' | 'linear',
-                    }))
-                  }
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="snake">Snake Draft</option>
-                  <option value="linear">Linear Draft</option>
-                </select>
-              </div>
-
-              {/* Time Per Pick */}
-              <div>
-                <label
-                  htmlFor="timePerPick"
-                  className="mb-1 block text-sm font-medium text-foreground"
-                >
-                  Time Per Pick (seconds)
-                </label>
-                <select
-                  id="timePerPick"
-                  value={draftSettings.timePerPick}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({ ...prev, timePerPick: parseInt(e.target.value) }))
-                  }
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {TIME_PER_PICK_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <label htmlFor="pickOrder" className="block text-sm font-medium text-foreground">
-                    Draft Order
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label
+                    htmlFor="scheduledDate"
+                    className="flex flex-col gap-1 text-sm font-medium text-foreground"
+                  >
+                    Draft date
+                    <input
+                      id="scheduledDate"
+                      type="date"
+                      value={scheduledDatePart}
+                      onChange={(e) => updateScheduledDate(e.target.value)}
+                      className="h-11 rounded-lg border border-input bg-card px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                      min={getDraftStartDatePart(minimumDraftStartValue)}
+                    />
                   </label>
+
+                  <label
+                    htmlFor="scheduledClockTime"
+                    className="flex flex-col gap-1 text-sm font-medium text-foreground"
+                  >
+                    Draft time
+                    <input
+                      id="scheduledClockTime"
+                      type="time"
+                      value={scheduledTimePart}
+                      onChange={(e) => updateScheduledClockTime(e.target.value)}
+                      className="h-11 rounded-lg border border-input bg-card px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {draftStartPresets.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      aria-label={preset.ariaLabel}
+                      onClick={() => applyScheduledTimePreset(preset.date)}
+                      className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="mb-4">
+                  <h4 className="text-base font-semibold text-foreground">Format and Clock</h4>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Choose the draft style and how long each team has on the clock.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Draft Type */}
+                  <div>
+                    <label
+                      htmlFor="draftType"
+                      className="mb-1 block text-sm font-medium text-foreground"
+                    >
+                      Draft Type
+                    </label>
+                    <select
+                      id="draftType"
+                      value={draftSettings.draftType}
+                      onChange={(e) =>
+                        setDraftSettings((prev) => ({
+                          ...prev,
+                          draftType: e.target.value as 'snake' | 'linear',
+                        }))
+                      }
+                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="snake">Snake Draft</option>
+                      <option value="linear">Linear Draft</option>
+                    </select>
+                  </div>
+
+                  {/* Time Per Pick */}
+                  <div>
+                    <label
+                      htmlFor="timePerPick"
+                      className="mb-1 block text-sm font-medium text-foreground"
+                    >
+                      Time Per Pick
+                    </label>
+                    <select
+                      id="timePerPick"
+                      value={draftSettings.timePerPick}
+                      onChange={(e) =>
+                        setDraftSettings((prev) => ({
+                          ...prev,
+                          timePerPick: parseInt(e.target.value),
+                        }))
+                      }
+                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {TIME_PER_PICK_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-base font-semibold text-foreground">Draft Order</h4>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Randomize the order or fine-tune the queue before creating the room.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={randomizeDraftOrder}
-                    className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex items-center justify-center gap-1 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <ArrowPathIcon className="h-4 w-4" />
                     Randomize
                   </button>
                 </div>
+                <label
+                  htmlFor="pickOrder"
+                  className="mb-1 block text-sm font-medium text-foreground"
+                >
+                  Order mode
+                </label>
                 <select
                   id="pickOrder"
                   value={draftSettings.pickOrder}
@@ -654,22 +971,30 @@ export default function DraftManager({
                       pickOrder: e.target.value as DraftPickOrderMode,
                     }))
                   }
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="random">Randomized order</option>
                   <option value="manual">Manual order</option>
                 </select>
-                <div className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border">
+                {draftOrderRandomized && (
+                  <p className="mt-2 text-xs font-medium text-primary">Draft order randomized.</p>
+                )}
+                <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border">
                   {draftOrderMembers.map((member, index) => (
                     <div
                       key={member.id}
-                      className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-b-0"
+                      className="flex items-center justify-between gap-3 border-b border-border bg-card px-3 py-3 last:border-b-0"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {index + 1}. {member.teamName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{member.role}</p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-semibold text-foreground">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {member.teamName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{member.role}</p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <button
@@ -677,7 +1002,7 @@ export default function DraftManager({
                           onClick={() => moveDraftOrderMember(member.id, -1)}
                           disabled={index === 0}
                           aria-label={`Move ${member.teamName} up in draft order`}
-                          className="rounded-md border border-border p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                          className="rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                         >
                           <ArrowUpIcon className="h-4 w-4" />
                         </button>
@@ -686,7 +1011,7 @@ export default function DraftManager({
                           onClick={() => moveDraftOrderMember(member.id, 1)}
                           disabled={index === draftOrderMembers.length - 1}
                           aria-label={`Move ${member.teamName} down in draft order`}
-                          className="rounded-md border border-border p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                          className="rounded-md border border-border p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                         >
                           <ArrowDownIcon className="h-4 w-4" />
                         </button>
@@ -694,16 +1019,26 @@ export default function DraftManager({
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              <div>
-                <p className="mb-2 block text-sm font-medium text-foreground">Position Limits</p>
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-base font-semibold text-foreground">Position Limits</h4>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Set how many players each team drafts by line.
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium text-foreground">
+                    {rosterSize} spots, {benchSize} bench
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   {POSITION_LIMIT_KEYS.map((key) => (
-                    <div key={key}>
+                    <div key={key} className="rounded-lg border border-border bg-card p-3">
                       <label
                         htmlFor={`position-${key}`}
-                        className="block text-xs text-muted-foreground"
+                        className="block text-xs font-semibold uppercase text-muted-foreground"
                       >
                         {key}
                       </label>
@@ -719,73 +1054,95 @@ export default function DraftManager({
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              <div className="rounded-lg border border-border p-3">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="autoPickEnabled"
-                    checked={draftSettings.autoPickRules.enabled}
-                    onChange={(e) => updateAutoPickRules({ enabled: e.target.checked })}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
-                  />
-                  <label htmlFor="autoPickEnabled" className="ml-2 text-sm text-foreground">
-                    Auto-pick when clock expires
-                  </label>
+              <section className="rounded-lg border border-border bg-background p-5">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        id="autoPickEnabled"
+                        checked={draftSettings.autoPickRules.enabled}
+                        onChange={(e) => updateAutoPickRules({ enabled: e.target.checked })}
+                        className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                      />
+                      <div>
+                        <label
+                          htmlFor="autoPickEnabled"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Auto-pick when clock expires
+                        </label>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Keeps the draft moving when a manager misses their pick.
+                        </p>
+                      </div>
+                    </div>
+                    <label
+                      htmlFor="autoPickStrategy"
+                      className="mt-3 block text-sm font-medium text-foreground"
+                    >
+                      Auto-pick Priority
+                    </label>
+                    <select
+                      id="autoPickStrategy"
+                      value={draftSettings.autoPickRules.strategy}
+                      onChange={(e) =>
+                        updateAutoPickRules({
+                          strategy: e.target.value as DraftAutoPickRules['strategy'],
+                        })
+                      }
+                      disabled={!draftSettings.autoPickRules.enabled}
+                      className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
+                    >
+                      <option value="queue-first">Queue first, then best available</option>
+                      <option value="best-available">Best available</option>
+                      <option value="fill-positions">Fill position needs</option>
+                    </select>
+                  </div>
+
+                  {/* Enable Reminders */}
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        id="reminders"
+                        checked={draftSettings.enableReminders}
+                        onChange={(e) =>
+                          setDraftSettings((prev) => ({
+                            ...prev,
+                            enableReminders: e.target.checked,
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                      />
+                      <div>
+                        <label htmlFor="reminders" className="text-sm font-medium text-foreground">
+                          Send draft reminders to league members
+                        </label>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Notify managers before the scheduled draft start.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <label
-                  htmlFor="autoPickStrategy"
-                  className="mt-3 block text-sm font-medium text-foreground"
-                >
-                  Auto-pick Priority
-                </label>
-                <select
-                  id="autoPickStrategy"
-                  value={draftSettings.autoPickRules.strategy}
-                  onChange={(e) =>
-                    updateAutoPickRules({
-                      strategy: e.target.value as DraftAutoPickRules['strategy'],
-                    })
-                  }
-                  disabled={!draftSettings.autoPickRules.enabled}
-                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:bg-muted disabled:text-muted-foreground"
-                >
-                  <option value="queue-first">Queue first, then best available</option>
-                  <option value="best-available">Best available</option>
-                  <option value="fill-positions">Fill position needs</option>
-                </select>
-              </div>
-
-              {/* Enable Reminders */}
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="reminders"
-                  checked={draftSettings.enableReminders}
-                  onChange={(e) =>
-                    setDraftSettings((prev) => ({ ...prev, enableReminders: e.target.checked }))
-                  }
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
-                />
-                <label htmlFor="reminders" className="ml-2 text-sm text-foreground">
-                  Send draft reminders to league members
-                </label>
-              </div>
+              </section>
             </div>
 
-            <div className="mt-6 flex space-x-3">
+            <div className="flex flex-col gap-3 border-t border-border bg-card p-6 sm:flex-row">
               <button
                 onClick={() => setShowDraftSettings(false)}
                 disabled={savingDraft}
-                className="flex-1 rounded-lg border border-border px-4 py-2 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="flex-1 rounded-lg border border-border px-4 py-3 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={createDraft}
                 disabled={savingDraft || !draftSettings.scheduledTime}
-                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {savingDraft ? (
                   <>

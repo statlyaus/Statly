@@ -3,18 +3,11 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import DraftPickTrain from '@/components/draft/DraftPickTrain';
-import {
-  toDraftPickTrainState,
-  type DraftPickTrainState,
-} from '@/lib/mappers/draftUiMappers';
+import { toDraftPickTrainState, type DraftPickTrainState } from '@/lib/mappers/draftUiMappers';
 import type { DraftParticipant, DraftPick, DraftState } from '@/types/draft';
 
 vi.mock('next/image', () => ({
-  default: ({
-    alt,
-    src,
-    ...props
-  }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) => (
+  default: ({ alt, src, ...props }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) => (
     <img alt={alt} src={src} {...props} />
   ),
 }));
@@ -83,11 +76,20 @@ describe('DraftPickTrain', () => {
 
     const pickList = screen.getByRole('list', { name: 'Draft picks' });
     expect(pickList).toHaveClass('overflow-x-auto');
+    expect(pickList).toHaveClass('auto-cols-[minmax(13.5rem,1fr)]');
+    expect(pickList).toHaveClass('xl:grid-cols-[repeat(auto-fit,minmax(13.5rem,1fr))]');
 
-    for (const pickItem of screen.getAllByRole('listitem')) {
-      expect(pickItem).toHaveClass('w-[15rem]');
-      expect(pickItem).toHaveClass('min-w-[15rem]');
+    const pickItems = screen.getAllByRole('listitem');
+    for (const pickItem of pickItems) {
+      expect(pickItem).toHaveClass('min-w-[13.5rem]');
+      expect(pickItem).toHaveClass('min-h-[11rem]');
     }
+
+    expect(pickItems[1]).toHaveClass('bg-[color:var(--draft-broadcast-panel-strong)]');
+    expect(pickItems[1]).toHaveClass('border-[color:var(--draft-broadcast-red)]');
+    expect(pickItems[3]).toHaveClass('bg-[color:var(--draft-broadcast-panel-strong)]');
+    expect(pickItems[3]).toHaveClass('border-[color:var(--draft-broadcast-yellow)]');
+    expect(pickItems[3]).not.toHaveClass('bg-accent');
   });
 });
 

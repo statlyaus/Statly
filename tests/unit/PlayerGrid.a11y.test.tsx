@@ -98,7 +98,7 @@ describe('PlayerGrid accessibility', () => {
         .map((header) => header.textContent)
     ).toEqual([
       'Player',
-      'Profile',
+      'Statly Z',
       'League Stats',
       'Actions',
       'G',
@@ -113,8 +113,14 @@ describe('PlayerGrid accessibility', () => {
     ]);
 
     const playerRow = within(table).getByRole('row', { name: /marcus bontempelli/i });
-    expect(within(playerRow).getByText('Statly Z')).toBeInTheDocument();
     expect(within(playerRow).getByText('3.42')).toBeInTheDocument();
+    expect(within(playerRow).queryByText(/combined z score/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by Statly Z' })).toHaveAttribute(
+      'title',
+      "Combined Z score across this league's selected scoring categories."
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Goals' }));
+    expect(defaultProps.onSortChange).toHaveBeenCalledWith('category:goals');
     expect(within(playerRow).getByRole('cell', { name: 'Goals: 1.1' })).toBeInTheDocument();
     expect(within(playerRow).getByRole('cell', { name: 'Inside 50s: 4.2' })).toBeInTheDocument();
     expect(
@@ -164,10 +170,10 @@ describe('PlayerGrid accessibility', () => {
     });
   });
 
-  it('windows large draft player pools instead of mounting every row', () => {
-    const largePool = Array.from({ length: 320 }, (_, index) => buildPlayer(index + 1));
+  it('renders large draft player pools without truncating available rows', () => {
+    const largePool = Array.from({ length: 130 }, (_, index) => buildPlayer(index + 1));
 
-    render(
+    const { container } = render(
       <PlayerGrid
         {...defaultProps}
         players={largePool}
@@ -176,23 +182,37 @@ describe('PlayerGrid accessibility', () => {
       />
     );
 
-    expect(screen.getByText('Showing 320 of 320 players')).toBeInTheDocument();
+    expect(screen.getByText('Showing 130 of 130 players')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /select player 001/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /select player 320/i })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('row').length).toBeLessThan(80);
+    expect(container.querySelector('button[aria-label="Select Player 130"]')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /available draft players/i })).toHaveAttribute(
+      'aria-rowcount',
+      '132'
+    );
   });
 
   it('keeps the draft player table aligned to semantic tokens and compact radii', () => {
     const source = readFileSync(join(process.cwd(), 'src/components/draft/PlayerGrid.tsx'), 'utf8');
 
     expect(source).toContain('border border-border bg-card text-card-foreground');
-    expect(source).toContain('bg-background');
+    expect(source).toContain('bg-[color:var(--draft-broadcast-panel)]');
     expect(source).toContain('text-muted-foreground');
     expect(source).toContain('focus-visible:ring-ring');
     expect(source).toContain('const PLAYER_COLUMN_WIDTH = 340');
-    expect(source).toContain('const PROFILE_COLUMN_WIDTH = 180');
+    expect(source).toContain('const Z_SCORE_COLUMN_WIDTH = 144');
     expect(source).toContain('const STAT_COLUMN_WIDTH = 88');
     expect(source).toContain('const ACTIONS_COLUMN_WIDTH = 236');
+    expect(source).toContain('className?: string;');
+    expect(source).toContain(
+      'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm'
+    );
+    expect(source).toContain('className="relative min-h-0 flex-1"');
+    expect(source).toContain('className="h-full overflow-auto bg-[color:var(--draft-broadcast-table)]"');
+    expect(source).toContain('sticky left-0 z-20 bg-[color:var(--draft-broadcast-panel)]');
+    expect(source).toContain('sticky left-0 z-[1] bg-card');
+    expect(source).toContain("onClick={() => onSortChange('statlyZ')}");
+    expect(source).toContain('onClick={() => onSortChange(getCategorySortKey(category))}');
+    expect(source).not.toContain('className="max-h-[680px] overflow-auto"');
     expect(source).toContain('grid grid-cols-3 items-center gap-2');
     expect(source).toContain('h-10 w-full justify-center');
     expect(source).toContain('inline-flex min-w-12 justify-center tabular-nums');

@@ -76,12 +76,13 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     // - { error: { message: string, code?: string } }
     // - { success: false, error: { message, code, details }, timestamp }
     let errorData: unknown = null;
+    let responseText = '';
     try {
-      errorData = await response.json();
+      responseText = await response.text();
+      errorData = responseText.trim() ? JSON.parse(responseText) : null;
     } catch (_parseError) {
-      // Get response text for better error context
-      const responseText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${response.statusText} - ${responseText.trim()}`);
+      const suffix = responseText.trim() ? ` - ${responseText.trim()}` : '';
+      throw new Error(`HTTP ${response.status}: ${response.statusText}${suffix}`);
     }
 
     const messages: string[] = [];

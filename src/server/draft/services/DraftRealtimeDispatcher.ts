@@ -48,6 +48,7 @@ type DraftDelta =
           currentPick?: number;
           round?: number;
           direction?: 'FORWARD' | 'REVERSE';
+          pickDeadlineAt?: string;
         };
         liveState?: {
           currentPick?: number;
@@ -139,7 +140,7 @@ export class DraftRealtimeDispatcher {
 
   private dispatchToLocal(draftId: string, event: DraftRealtimeEventType, payload: unknown): void {
     if (!this.io) {
-      logger.warn('Skipping realtime dispatch without attached Socket.IO server', {
+      logger.debug('Skipping local realtime emit without attached Socket.IO server', {
         draftId,
         event,
       });
@@ -164,6 +165,7 @@ export class DraftRealtimeDispatcher {
                   : state.currentPick.round % 2 === 1
                     ? 'FORWARD'
                     : 'REVERSE',
+              pickDeadlineAt: state.currentPick.expiresAt.toISOString(),
             },
             liveState: {
               currentPick: state.currentPick.pickNumber,
@@ -192,7 +194,7 @@ export class DraftRealtimeDispatcher {
         this.emitToDraftRooms(draftId, 'pick:made', payload);
         this.emitCompatDelta(draftId, {
           type: 'PICK_MADE',
-          payload: { pick: pickPayload },
+          payload: this.buildPickDeltaPayload(pickPayload),
           ts: Date.now(),
         });
         return;
@@ -203,7 +205,7 @@ export class DraftRealtimeDispatcher {
         this.emitToDraftRooms(draftId, 'draft:pick', payload);
         this.emitCompatDelta(draftId, {
           type: 'PICK_MADE',
-          payload: { pick: pickPayload },
+          payload: this.buildPickDeltaPayload(pickPayload),
           ts: Date.now(),
         });
         return;
@@ -257,6 +259,19 @@ export class DraftRealtimeDispatcher {
       draftId,
       status,
       timestamp: new Date().toISOString(),
+    };
+  }
+
+  private buildPickDeltaPayload(pick: DraftPickEventPayload) {
+    return {
+      pick,
+      currentPick: pick.currentPick,
+      isComplete: pick.isComplete,
+      status: pick.status,
+      round: pick.nextRound,
+      direction: pick.nextDirection,
+      pickStartedAt: pick.pickStartedAt,
+      pickDeadlineAt: pick.pickDeadlineAt,
     };
   }
 }

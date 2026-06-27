@@ -49,4 +49,19 @@ describe('fetchApi', () => {
     const devToken = ['dev', 'statly-dev-tester'].join(':');
     expect(new Headers(init?.headers).get('Authorization')).toBe(`Bearer ${devToken}`);
   });
+
+  it('reports non-JSON error responses without reading the body twice', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('Chunk failed to load', {
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: { 'content-type': 'text/plain' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchApi('user/draft-settings')).rejects.toThrow(
+      'HTTP 500: Internal Server Error - Chunk failed to load'
+    );
+  });
 });

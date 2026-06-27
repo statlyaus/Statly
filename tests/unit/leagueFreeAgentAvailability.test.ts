@@ -14,8 +14,15 @@ const leagueAccessMocks = vi.hoisted(() => ({
 }));
 
 const prismaMocks = vi.hoisted(() => ({
+  $executeRaw: vi.fn(),
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
   league: {
     findUnique: vi.fn(),
+  },
+  leagueMember: {
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
   },
   leagueRosterPlayer: {
     findMany: vi.fn(),
@@ -24,6 +31,12 @@ const prismaMocks = vi.hoisted(() => ({
   player: {
     findMany: vi.fn(),
     count: vi.fn(),
+  },
+  teamAction: {
+    create: vi.fn(),
+    update: vi.fn(),
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
   },
 }));
 
@@ -83,10 +96,22 @@ const firestoreMocks = vi.hoisted(() => {
 
     if (collectionPath.endsWith('/rosters')) return emptyQuery;
     if (collectionPath.endsWith('/waivers')) {
-      return { doc: vi.fn(() => ({ id: 'claim-1', path: `${collectionPath}/claim-1` })) };
+      return {
+        doc: vi.fn((claimId?: string) => ({
+          id: claimId ?? 'claim-1',
+          path: `${collectionPath}/${claimId ?? 'claim-1'}`,
+          set: vi.fn().mockResolvedValue(undefined),
+          update: vi.fn().mockResolvedValue(undefined),
+        })),
+      };
     }
     if (collectionPath.endsWith('/activity')) {
-      return { doc: vi.fn(() => ({ path: `${collectionPath}/activity-1` })) };
+      return {
+        doc: vi.fn(() => ({
+          path: `${collectionPath}/activity-1`,
+          set: vi.fn().mockResolvedValue(undefined),
+        })),
+      };
     }
 
     return emptyQuery;
@@ -246,6 +271,13 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     });
 
     prismaMocks.league.findUnique.mockResolvedValue({ id: 'league-1' });
+    prismaMocks.leagueMember.findFirst.mockResolvedValue({
+      id: 'member-1',
+      userId: 'statly-dev-tester',
+    });
+    prismaMocks.leagueMember.findMany.mockResolvedValue([
+      { id: 'member-1', userId: 'statly-dev-tester', draftSlot: 1, joinedAt: new Date() },
+    ]);
     prismaMocks.leagueRosterPlayer.findMany.mockResolvedValue([
       { playerId: 'drafted-player', memberId: 'member-1' },
     ]);
@@ -257,6 +289,13 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
       { id: 'free-player', name: 'Free Player', club: 'SYD', position: 'FWD' },
     ]);
     prismaMocks.player.count.mockResolvedValue(1);
+    prismaMocks.teamAction.create.mockResolvedValue({ id: 'claim-1' });
+    prismaMocks.teamAction.update.mockResolvedValue({ id: 'claim-1' });
+    prismaMocks.$queryRaw.mockResolvedValue([]);
+    prismaMocks.$executeRaw.mockResolvedValue(1);
+    prismaMocks.$transaction.mockImplementation((work: (client: typeof prismaMocks) => unknown) =>
+      work(prismaMocks)
+    );
     firestoreMocks.adminDb.runTransaction.mockImplementation(async (work) => {
       const tx = {
         get: vi.fn(async () => ({ exists: false, data: () => undefined })),
@@ -381,6 +420,15 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
 
     expect(response.status).toBe(201);
     expect(body).toEqual({ id: 'claim-1' });
+    expect(prismaMocks.teamAction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          leagueId: 'league-1',
+          memberId: 'member-1',
+          actionType: 'WAIVER_CLAIM',
+        }),
+      })
+    );
   });
 
   it('continues through Firestore waiver checks when the Prisma ownership pre-check fails', async () => {
@@ -399,7 +447,8 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
 
     expect(response.status).toBe(201);
     expect(body).toEqual({ id: 'claim-1' });
-    expect(firestoreMocks.adminDb.runTransaction).toHaveBeenCalled();
+    expect(prismaMocks.teamAction.create).toHaveBeenCalled();
+    expect(firestoreMocks.adminDb.runTransaction).not.toHaveBeenCalled();
   });
 });
 
