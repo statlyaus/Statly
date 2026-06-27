@@ -37,4 +37,17 @@ describe('roster ownership migration architecture', () => {
     expect(source).toContain('const reqUserId = await getAuthenticatedUserId(request)');
     expect(source).not.toContain('getUserIdFromRequest');
   });
+
+  it('enriches roster API players through the shared draft player stats read model', () => {
+    const source = readFileSync(
+      join(root, 'src/app/api/leagues/[id]/roster/[userId]/route.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('loadDraftPlayerStatsLookup');
+    expect(source).toContain('buildAvailableDraftPlayer');
+    expect(source).toContain('parseSelectedCategories');
+    expect(source).toContain('selectedCategories');
+    expect(source).toContain('stats: enrichedPlayer.stats');
+  });
 });

@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import MyTeamPanel from '@/components/MyTeamPanel';
+import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
 const useRankingsMock = vi.hoisted(() => vi.fn());
 
@@ -56,12 +57,13 @@ describe('MyTeamPanel', () => {
 
     const table = screen.getByRole('table', { name: 'Robbo Rockers roster table' });
     expect(within(table).getByRole('columnheader', { name: 'Player' })).toBeInTheDocument();
-    expect(within(table).getByRole('columnheader', { name: 'Statly Z' })).toBeInTheDocument();
-    expect(within(table).getByRole('columnheader', { name: 'Avg' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Profile' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'League Stats' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
     expect(within(table).getByText('Darcy Cameron')).toBeInTheDocument();
     expect(within(table).getByText('#3')).toBeInTheDocument();
     expect(within(table).getByText('14.67')).toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'Avg' })).not.toBeInTheDocument();
 
     expect(screen.queryByText('No Team Selected')).not.toBeInTheDocument();
     expect(screen.queryByText('Optimize Lineup')).not.toBeInTheDocument();
@@ -94,6 +96,62 @@ describe('MyTeamPanel', () => {
     expect(screen.getAllByText('0.00').length).toBeGreaterThan(0);
     expect(screen.getAllByText('0.0').length).toBeGreaterThan(0);
     expect(screen.getByText('Projection 0.0')).toBeInTheDocument();
+  });
+
+  it('renders league-selected category averages in a draft-style League Stats group', () => {
+    useRankingsMock.mockReturnValue({
+      rankings: [{ id: 'player-1', rank: 3, totalValue: 14.67, valueOverReplacement: 14.67 }],
+      loading: false,
+      error: null,
+    });
+
+    render(
+      <MyTeamPanel
+        team={{ id: 'team-1', name: 'Category Squad', players: ['player-1'] }}
+        players={[
+          {
+            id: 'player-1',
+            name: 'Darcy Cameron',
+            position: 'RUC',
+            team: 'Collingwood',
+            avg: 84,
+            stats: {
+              goals: 0.5,
+              tackles: 4,
+              inside50s: 3,
+              intercepts: 2,
+              contestedMarks: 1,
+              rebound50s: 5,
+              contestedPossessions: 8,
+              effectiveDisposals: 14,
+              scoreInvolvements: 6,
+            },
+          },
+        ]}
+        selectedCategories={[...REAL_DATA_NINE_CATEGORY_PRESET]}
+      />
+    );
+
+    const table = screen.getByRole('table', { name: 'Category Squad roster table' });
+    [
+      'Goals',
+      'Tackles',
+      'Inside 50s',
+      'Intercepts',
+      'Contested Marks',
+      'Rebound 50s',
+      'Contested Possessions',
+      'Effective Disposals',
+      'Score Involvements',
+    ].forEach((headerName) => {
+      expect(within(table).getByRole('columnheader', { name: headerName })).toBeInTheDocument();
+    });
+
+    expect(within(table).getByRole('columnheader', { name: 'League Stats' })).toBeInTheDocument();
+    expect(within(table).getByLabelText('Goals: 0.5')).toBeInTheDocument();
+    expect(within(table).getByLabelText('Effective Disposals: 14.0')).toBeInTheDocument();
+    expect(within(table).getByText('0.5')).toBeInTheDocument();
+    expect(within(table).getByText('14.0')).toBeInTheDocument();
   });
 
   it('does not crash when rankings are returned in a non-array shape', () => {

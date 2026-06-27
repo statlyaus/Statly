@@ -16,9 +16,9 @@ import {
   toFeedParticipants,
 } from '@/lib/mappers/draftUiMappers';
 import type { DraftPlayer, DraftParticipant, DraftPick, DraftSettings } from '@/types/draft';
+import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 
 import ConnectionStatus from './ConnectionStatus';
-import DraftAnalytics from './DraftAnalytics';
 import DraftControls from './DraftControls';
 import DraftLeftRail, { type DraftLeftRailRosterSlot } from './DraftLeftRail';
 import DraftQueue from './DraftQueue';
@@ -30,10 +30,81 @@ interface UnifiedDraftRoomProps {
   userId: string;
 }
 
-type PlayerSortKey = 'statlyZ' | 'name' | 'position' | 'club' | 'adp';
+type PlayerSortKey =
+  | 'statlyZ'
+  | 'name'
+  | 'position'
+  | 'club'
+  | 'adp'
+  | `category:${FantasyCategoryKey}`;
 
 function getPositiveInteger(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function getCategorySortValue(player: DraftPlayer, sortBy: PlayerSortKey): number | null {
+  if (!sortBy.startsWith('category:')) return null;
+
+  const category = sortBy.slice('category:'.length) as FantasyCategoryKey;
+  const value = player.stats?.[category];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function compareNullableScoreDesc(
+  aValue: number | null,
+  bValue: number | null,
+  aName: string,
+  bName: string
+): number {
+  if (aValue === null && bValue === null) return aName.localeCompare(bName);
+  if (aValue === null) return 1;
+  if (bValue === null) return -1;
+  return bValue - aValue || aName.localeCompare(bName);
+}
+
+function filterDraftPlayers(
+  players: DraftPlayer[],
+  query: string,
+  positionFilter: string
+): DraftPlayer[] {
+  const normalizedQuery = query.toLowerCase();
+
+  return players.filter((player) => {
+    const matchesQuery =
+      !normalizedQuery ||
+      player.name.toLowerCase().includes(normalizedQuery) ||
+      player.club.toLowerCase().includes(normalizedQuery) ||
+      player.position.toLowerCase().includes(normalizedQuery);
+    const matchesPosition = positionFilter === 'ALL' || player.position === positionFilter;
+
+    return matchesQuery && matchesPosition;
+  });
+}
+
+function sortDraftPlayers(players: DraftPlayer[], sortBy: PlayerSortKey): DraftPlayer[] {
+  return [...players].sort((a, b) => {
+    if (sortBy === 'statlyZ') {
+      const aScore = typeof a.statlyZScore === 'number' ? a.statlyZScore : null;
+      const bScore = typeof b.statlyZScore === 'number' ? b.statlyZScore : null;
+      return compareNullableScoreDesc(aScore, bScore, a.name, b.name);
+    }
+
+    if (sortBy === 'adp') {
+      return (a.adp ?? Number.MAX_SAFE_INTEGER) - (b.adp ?? Number.MAX_SAFE_INTEGER);
+    }
+
+    if (sortBy.startsWith('category:')) {
+      return compareNullableScoreDesc(
+        getCategorySortValue(a, sortBy),
+        getCategorySortValue(b, sortBy),
+        a.name,
+        b.name
+      );
+    }
+
+    const textSort = sortBy as 'name' | 'position' | 'club';
+    return a[textSort].localeCompare(b[textSort]);
+  });
 }
 
 function buildRosterSlots({
@@ -157,45 +228,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   // Filter + sort available players (efficient & stable)
   const filteredPlayers = useMemo(() => {
-    let players = playersList;
-
-    // Search (deferred for typing responsiveness)
-    if (deferredQuery) {
-      const q = deferredQuery.toLowerCase();
-      players = players.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.club.toLowerCase().includes(q) ||
-          p.position.toLowerCase().includes(q)
-      );
-    }
-
-    // Position filter
-    if (positionFilter !== 'ALL') {
-      players = players.filter((p) => p.position === positionFilter);
-    }
-
-    // Create a copy to avoid mutating context state
-    const arr = [...players];
-    arr.sort((a, b) => {
-      if (sortBy === 'statlyZ') {
-        const aScore = typeof a.statlyZScore === 'number' ? a.statlyZScore : null;
-        const bScore = typeof b.statlyZScore === 'number' ? b.statlyZScore : null;
-
-        if (aScore === null && bScore === null) return a.name.localeCompare(b.name);
-        if (aScore === null) return 1;
-        if (bScore === null) return -1;
-
-        return bScore - aScore || a.name.localeCompare(b.name);
-      }
-
-      if (sortBy === 'adp') {
-        return (a.adp ?? Number.MAX_SAFE_INTEGER) - (b.adp ?? Number.MAX_SAFE_INTEGER);
-      }
-
-      return a[sortBy].localeCompare(b[sortBy]);
-    });
-    return arr;
+    return sortDraftPlayers(filterDraftPlayers(playersList, deferredQuery, positionFilter), sortBy);
   }, [playersList, deferredQuery, positionFilter, sortBy]);
 
   // Unique positions for the filter dropdown
@@ -305,14 +338,21 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   }, [draftState, participants.length, picks, userId, userMemberId]);
   const statusTone =
     {
-      SCHEDULED: 'bg-primary/10 text-primary ring-1 ring-primary/20',
-      LOBBY: 'bg-muted text-muted-foreground ring-1 ring-border',
-      COUNTDOWN: 'bg-primary/10 text-primary ring-1 ring-primary/20',
-      LIVE: 'bg-primary text-primary-foreground ring-1 ring-primary/30',
-      PAUSED: 'bg-muted text-muted-foreground ring-1 ring-border',
-      COMPLETED: 'bg-muted text-muted-foreground ring-1 ring-border',
-      CANCELLED: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
-    }[draftStatus] ?? 'bg-muted text-muted-foreground ring-1 ring-border';
+      SCHEDULED:
+        'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
+      LOBBY:
+        'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]',
+      COUNTDOWN:
+        'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
+      LIVE: 'bg-[color:var(--draft-broadcast-red)] text-white ring-1 ring-[color:var(--draft-broadcast-red)]',
+      PAUSED:
+        'bg-[color:var(--draft-broadcast-yellow)] text-[color:var(--draft-broadcast-yellow-text)] ring-1 ring-[color:var(--draft-broadcast-yellow)]',
+      COMPLETED:
+        'bg-[color:var(--draft-broadcast-green)] text-white ring-1 ring-[color:var(--draft-broadcast-green)]',
+      CANCELLED:
+        'bg-[color:var(--draft-broadcast-red-soft)] text-[color:var(--draft-broadcast-text)] ring-1 ring-[color:var(--draft-broadcast-red)]',
+    }[draftStatus] ??
+    'bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] ring-1 ring-[color:var(--draft-broadcast-border)]';
 
   // Modal focus management
   useEffect(() => {
@@ -470,7 +510,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     participants: feedParticipants,
     userMemberId,
     watchlistPlayerIds: watchlistItems.map((item) => item.playerId),
-    className: 'border-0 shadow-none',
+    className: 'h-full min-h-0 border-0 shadow-none',
   };
   const desktopPickFeed = (
     <PickFeed {...pickFeedProps} contentId={`pick-feed-content:${activeDraft.id}:desktop`} />
@@ -481,11 +521,17 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
   return (
     <DraftErrorBoundary>
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="min-h-screen bg-[color:var(--draft-broadcast-page)] text-[color:var(--draft-broadcast-text)]">
         {/* Connection Status */}
         <ConnectionStatus status={draft.connection.status} onRefresh={() => draft.forceRefresh()} />
 
-        <div className={isCompletedDraft ? 'space-y-4 pb-4 opacity-45' : 'space-y-4 pb-4'}>
+        <div
+          className={
+            isCompletedDraft
+              ? 'mx-auto max-w-[2100px] space-y-4 pb-4 opacity-45'
+              : 'mx-auto max-w-[2100px] space-y-4 pb-4'
+          }
+        >
           {/* Draft Controls (for league owners) */}
           <DraftControls
             draftId={draftId}
@@ -513,11 +559,11 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         </div>
 
         {/* Main Content */}
-        <main className="w-full px-3 pb-6 sm:px-5 lg:px-8">
+        <main className="mx-auto w-full max-w-[2100px] px-4 pb-6 sm:px-6 lg:px-8">
           {isCompletedDraft ? (
             <section
               aria-label="Draft complete next steps"
-              className="rounded-3xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6"
+              className="rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-5 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:p-6"
             >
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(36rem,48rem)] xl:items-end">
                 <div className="min-w-0">
@@ -526,15 +572,15 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   >
                     Completed
                   </span>
-                  <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                  <h1 className="mt-4 text-2xl font-semibold tracking-tight text-[color:var(--draft-broadcast-text)] sm:text-3xl">
                     Draft complete
                   </h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--draft-broadcast-muted)] sm:text-base">
                     {displayDraftTitle} is finalized with {displayCurrentPick} of{' '}
                     {activeDraft.totalPicks} picks complete. Choose where to go next; the draft room
                     remains below as a read-only reference.
                   </p>
-                  <p className="mt-3 text-sm font-medium text-foreground">
+                  <p className="mt-3 text-sm font-medium text-[color:var(--draft-broadcast-text)]">
                     Your roster: {filledRosterSlots} of {rosterSlots.length} slots filled.
                   </p>
                 </div>
@@ -542,34 +588,34 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   <Link
                     href={leagueHubHref}
                     aria-label="Go back to league hub"
-                    className="rounded-2xl border border-border bg-background p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-2xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="block text-sm font-semibold text-foreground">
+                    <span className="block text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
                       Go back to league hub
                     </span>
-                    <span className="mt-2 block text-xs leading-5 text-muted-foreground">
+                    <span className="mt-2 block text-xs leading-5 text-[color:var(--draft-broadcast-muted)]">
                       Return to league command, settings, fixtures, and season tools.
                     </span>
                   </Link>
                   <Link
                     href={historyHref}
                     aria-label="Review completed draft"
-                    className="rounded-2xl border border-primary bg-primary p-4 text-left text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-2xl border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-4 text-left text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="block text-sm font-semibold">Review completed draft</span>
-                    <span className="mt-2 block text-xs leading-5 text-primary-foreground/80">
+                    <span className="mt-2 block text-xs leading-5 text-white/80">
                       Open the final pick timeline, round tables, and every team result.
                     </span>
                   </Link>
                   <Link
                     href={rosterHref}
                     aria-label="Review my roster"
-                    className="rounded-2xl border border-border bg-background p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-2xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] p-4 text-left transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span className="block text-sm font-semibold text-foreground">
+                    <span className="block text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
                       Review my roster
                     </span>
-                    <span className="mt-2 block text-xs leading-5 text-muted-foreground">
+                    <span className="mt-2 block text-xs leading-5 text-[color:var(--draft-broadcast-muted)]">
                       Inspect your drafted squad inside the league roster view.
                     </span>
                   </Link>
@@ -577,7 +623,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
               </div>
             </section>
           ) : (
-            <section className="rounded-3xl border border-border bg-card px-4 py-3 text-card-foreground shadow-sm sm:px-5">
+            <section className="rounded-3xl border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] px-4 py-3 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-46px_var(--draft-broadcast-shadow-deep)] sm:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
@@ -586,23 +632,25 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     >
                       {draftStatus}
                     </span>
-                    <span className="text-sm font-semibold text-foreground">
+                    <span className="text-sm font-semibold text-[color:var(--draft-broadcast-text)]">
                       {displayDraftTitle}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{displayDraftSubtitle}</p>
+                  <p className="mt-2 text-sm text-[color:var(--draft-broadcast-muted)]">
+                    {displayDraftSubtitle}
+                  </p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
                   <Link
                     href="/drafts"
-                    className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex items-center rounded-full bg-[color:var(--draft-broadcast-red)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Back to drafts
                   </Link>
                   <Link
                     href={historyHref}
-                    className="inline-flex items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex items-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {historyLinkLabel}
                   </Link>
@@ -618,7 +666,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           >
             <section
               aria-label="Draft board"
-              className="mt-6 grid gap-4 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)] xl:grid-cols-[minmax(16rem,20rem)_minmax(54rem,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(64rem,1fr)_22rem]"
+              className="mt-6 grid min-h-[calc(100vh-24rem)] items-stretch gap-4 lg:grid-cols-[minmax(17rem,19rem)_minmax(0,1fr)] xl:min-h-[calc(100vh-20rem)] xl:grid-cols-[minmax(18rem,20rem)_minmax(52rem,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(62rem,1fr)_22rem]"
             >
               <DraftLeftRail
                 draftStatus={activeDraft.status}
@@ -628,11 +676,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 watchlistCount={watchlistItems.length}
                 queuePanel={queuePanel}
                 watchlistPanel={watchlistPanel}
-                className="min-h-[28rem] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
+                className="h-full min-h-[30rem] border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-panel)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--input:var(--draft-broadcast-border)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)] lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]"
               />
 
-              <div className="min-w-0 overflow-x-auto">
+              <div className="flex min-h-0 min-w-0 overflow-x-auto">
                 <PlayerGrid
+                  className="h-full min-h-[30rem] border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-table)] text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] [--accent:var(--draft-broadcast-muted-surface)] [--accent-foreground:var(--draft-broadcast-text)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-table)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--input:var(--draft-broadcast-border)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)] [--primary:var(--draft-broadcast-red)] [--primary-foreground:#fff]"
                   players={filteredPlayers}
                   totalPlayers={playersList.length}
                   onPlayerSelect={handlePlayerSelect}
@@ -649,20 +698,21 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   availablePositions={availablePositions}
                   sortBy={sortBy}
                   onSortChange={setSortBy}
+                  statSeason={draft.statSeason}
+                  statSeasons={draft.statSeasons}
+                  onStatSeasonChange={(season) => {
+                    void draft.setStatSeason(season);
+                  }}
                   isLoading={draft.isSaving}
                   emptyStateMessage={emptyPlayerMessage}
                 />
               </div>
 
               <aside className="hidden min-h-0 lg:block" aria-label="Desktop pick feed">
-                <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-border bg-card p-3 text-card-foreground shadow-sm">
+                <div className="sticky top-4 flex h-full min-h-[30rem] max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-3 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-48px_var(--draft-broadcast-shadow-deep)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-panel)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--input:var(--draft-broadcast-border)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)]">
                   {desktopPickFeed}
                 </div>
               </aside>
-            </section>
-
-            <section className="mt-6" aria-label="Draft analytics">
-              <DraftAnalytics draft={draft.draft} picks={picks} participants={participants} />
             </section>
           </section>
         </main>
@@ -671,7 +721,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         <button
           ref={openFeedBtnRef}
           onClick={() => setIsPickFeedOpen(true)}
-          className="fixed bottom-4 right-4 z-40 rounded-full bg-primary p-3 text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          className="fixed bottom-4 right-4 z-40 rounded-full border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] p-3 text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
           aria-label="Open Pick Feed"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -687,7 +737,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
         {/* Mobile Pick Feed Modal */}
         {isPickFeedOpen && (
           <div
-            className="fixed inset-0 z-50 bg-foreground/50 lg:hidden"
+            className="fixed inset-0 z-50 bg-[color:var(--draft-broadcast-overlay)] lg:hidden"
             role="presentation"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
@@ -701,7 +751,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             }}
           >
             <div
-              className="absolute right-0 top-0 h-full w-80 overflow-y-auto bg-card p-4 text-card-foreground shadow-lg"
+              className="absolute right-0 top-0 h-full w-80 overflow-y-auto border-l border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-4 text-[color:var(--draft-broadcast-text)] shadow-[0_22px_70px_-30px_var(--draft-broadcast-shadow-deep)] [--background:var(--draft-broadcast-panel-strong)] [--border:var(--draft-broadcast-border)] [--card:var(--draft-broadcast-panel)] [--card-foreground:var(--draft-broadcast-text)] [--foreground:var(--draft-broadcast-text)] [--muted:var(--draft-broadcast-muted-surface)] [--muted-foreground:var(--draft-broadcast-muted)]"
               role="dialog"
               aria-modal="true"
               aria-labelledby="pickFeedTitle"
@@ -711,7 +761,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 <button
                   ref={closeBtnRef}
                   onClick={() => setIsPickFeedOpen(false)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] text-[color:var(--draft-broadcast-muted)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] hover:text-[color:var(--draft-broadcast-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Close Pick Feed"
                 >
                   <svg

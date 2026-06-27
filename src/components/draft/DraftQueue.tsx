@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useAlert, AlertContainer } from '@/components/ui';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import React, { useCallback, useState } from 'react';
+import { AlertContainer, useAlert } from '@/components/ui';
+import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
+import { GripVertical, ListPlus, Pencil, Trash2, X } from 'lucide-react';
 import type { DraftPlayer } from '@/types/draft';
+import { cn } from '@/lib/utils';
 
 interface DraftQueueProps {
   queue: string[];
@@ -30,12 +32,10 @@ export default function DraftQueue({
   const [isEditing, setIsEditing] = useState(false);
   const { success, error, alerts, removeAlert } = useAlert();
 
-  // Get player details for queue items
   const queuePlayers = queue
     .map((id) => availablePlayers.find((p) => p.id === id))
     .filter(Boolean) as DraftPlayer[];
 
-  // Handle drag and drop reordering
   const handleDragEnd = useCallback(
     (result: any) => {
       if (!result.destination) return;
@@ -49,16 +49,13 @@ export default function DraftQueue({
     [queue, onQueueUpdate]
   );
 
-  // Remove player from queue
   const handleRemovePlayer = useCallback(
     (playerId: string) => {
-      const newQueue = queue.filter((id) => id !== playerId);
-      onQueueUpdate(newQueue);
+      onQueueUpdate(queue.filter((id) => id !== playerId));
     },
     [queue, onQueueUpdate]
   );
 
-  // Clear entire queue
   const handleClearQueue = useCallback(() => {
     if (typeof confirm === 'function') {
       confirm({
@@ -76,75 +73,92 @@ export default function DraftQueue({
           }
         },
       });
-    } else {
-      // Fallback to blocking confirm if no provider
-      if (
-        window.confirm('Are you sure you want to clear your entire queue? This cannot be undone.')
-      ) {
-        try {
-          onQueueUpdate([]);
-          success('Queue cleared');
-        } catch (e) {
-          error('Failed to clear queue', e instanceof Error ? e.message : String(e));
-        }
+    } else if (
+      window.confirm('Are you sure you want to clear your entire queue? This cannot be undone.')
+    ) {
+      try {
+        onQueueUpdate([]);
+        success('Queue cleared');
+      } catch (e) {
+        error('Failed to clear queue', e instanceof Error ? e.message : String(e));
       }
     }
   }, [confirm, onQueueUpdate, success, error]);
 
-  // Add player to queue
   const handleAddToQueue = useCallback(
     (player: DraftPlayer) => {
       if (queue.includes(player.id)) return;
 
-      const newQueue = [...queue, player.id];
-      onQueueUpdate(newQueue);
+      onQueueUpdate([...queue, player.id]);
     },
     [queue, onQueueUpdate]
   );
 
-  // Filter available players not in queue
   const availableForQueue = availablePlayers.filter(
     (player) => !queue.includes(player.id) && player.isAvailable
   );
 
   return (
-    <div className="space-y-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div role="status" aria-live="polite" aria-atomic="true">
         <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
       </div>
-      {/* Queue Management */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Your Draft Queue</h3>
-          <div className="flex space-x-2">
+
+      <section
+        className="rounded-md border border-border bg-background p-3"
+        aria-label="Draft queue"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-foreground">Draft Queue</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {queue.length === 0
+                ? 'Build your auto-pick priority list.'
+                : `${queue.length} queued`}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1">
             <button
+              type="button"
               onClick={() => setIsEditing(!isEditing)}
-              className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={isEditing ? 'Finish editing draft queue' : 'Edit draft queue'}
+              title={isEditing ? 'Done' : 'Edit'}
             >
-              {isEditing ? 'Done Editing' : 'Edit Queue'}
+              {isEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
             </button>
             <button
+              type="button"
               onClick={handleClearQueue}
               disabled={queue.length === 0 || isLoading}
-              className="px-3 py-2 text-sm font-medium text-red-700 bg-red-100 rounded-md hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Clear draft queue"
+              title="Clear"
             >
-              Clear Queue
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* Queue Items */}
         {queue.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <div className="text-4xl mb-3">📋</div>
-            <p>Your queue is empty</p>
-            <p className="text-sm">Add players below to build your priority list</p>
+          <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30 px-3 py-5 text-center">
+            <ListPlus className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-2 text-sm font-medium text-foreground">Your queue is empty</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Add players below in the order you want them drafted.
+            </p>
           </div>
         ) : (
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="draft-queue">
               {(provided) => (
-                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                <ol
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
+                  className="mt-3 flex max-h-72 flex-col gap-2 overflow-y-auto pr-1"
+                  aria-label="Queued players"
+                >
                   {queuePlayers.map((player, index) => (
                     <Draggable
                       key={player.id}
@@ -153,103 +167,114 @@ export default function DraftQueue({
                       isDragDisabled={!isEditing}
                     >
                       {(provided, snapshot) => (
-                        <div
+                        <li
                           ref={provided.innerRef}
                           {...provided.draggableProps}
                           {...provided.dragHandleProps}
-                          className={`bg-gray-50 rounded-lg p-4 border-2 transition-all ${
-                            snapshot.isDragging
-                              ? 'border-blue-300 shadow-lg rotate-2'
-                              : 'border-transparent hover:border-gray-200'
-                          }`}
+                          className={cn(
+                            'rounded-md border border-border bg-card px-3 py-2 text-card-foreground transition-colors',
+                            snapshot.isDragging && 'border-primary shadow-lg',
+                            isEditing && 'cursor-grab active:cursor-grabbing'
+                          )}
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div className="text-lg font-bold text-gray-400 w-8">
-                                #{index + 1}
-                              </div>
-                              <div>
-                                <h4 className="font-semibold text-gray-900">{player.name}</h4>
-                                <div className="flex items-center space-x-2 text-sm text-gray-500">
-                                  <span className="px-2 py-1 bg-gray-200 rounded text-xs font-medium">
-                                    {player.position}
-                                  </span>
-                                  <span>{player.club}</span>
-                                  {player.adp && <span>• ADP: {player.adp}</span>}
-                                </div>
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+                              {index + 1}
+                            </span>
+
+                            {isEditing && (
+                              <GripVertical
+                                className="h-4 w-4 shrink-0 text-muted-foreground"
+                                aria-hidden="true"
+                              />
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <h3 className="truncate text-sm font-semibold text-foreground">
+                                {player.name}
+                              </h3>
+                              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                                <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+                                  {player.position}
+                                </span>
+                                <span className="truncate">{player.club}</span>
+                                {player.adp && <span className="shrink-0">ADP {player.adp}</span>}
                               </div>
                             </div>
 
                             {isEditing && (
                               <button
+                                type="button"
                                 onClick={() => handleRemovePlayer(player.id)}
-                                className="text-red-500 hover:text-red-700 transition-colors"
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 aria-label={`Remove ${player.name} from queue`}
                               >
-                                <svg
-                                  className="w-5 h-5"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M6 18L18 6M6 6l12 12"
-                                  />
-                                </svg>
+                                <X className="h-4 w-4" />
                               </button>
                             )}
                           </div>
-                        </div>
+                        </li>
                       )}
                     </Draggable>
                   ))}
                   {provided.placeholder}
-                </div>
+                </ol>
               )}
             </Droppable>
           </DragDropContext>
         )}
-      </div>
+      </section>
 
-      {/* Available Players to Add */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Add to Queue</h3>
+      <section
+        className="flex min-h-0 flex-1 flex-col rounded-md border border-border bg-background p-3"
+        aria-label="Available players for queue"
+      >
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-foreground">Add to Queue</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {availableForQueue.length} available players
+          </p>
+        </div>
 
         {availableForQueue.length === 0 ? (
-          <p className="text-gray-500 text-center py-4">No available players to add to queue</p>
+          <p className="mt-3 rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
+            No available players to add.
+          </p>
         ) : (
-          <div className="grid gap-3 max-h-96 overflow-y-auto">
+          <ol className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
             {availableForQueue.slice(0, 50).map((player) => (
-              <div
+              <li
                 key={player.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                className="rounded-md border border-border bg-card px-3 py-2 text-card-foreground"
               >
-                <div>
-                  <h4 className="font-medium text-gray-900">{player.name}</h4>
-                  <div className="flex items-center space-x-2 text-sm text-gray-500">
-                    <span className="px-2 py-1 bg-gray-200 rounded text-xs font-medium">
-                      {player.position}
-                    </span>
-                    <span>{player.club}</span>
-                    {player.adp && <span>• ADP: {player.adp}</span>}
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-semibold text-foreground">
+                      {player.name}
+                    </h3>
+                    <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+                        {player.position}
+                      </span>
+                      <span className="truncate">{player.club}</span>
+                      {player.adp && <span className="shrink-0">ADP {player.adp}</span>}
+                    </div>
                   </div>
-                </div>
 
-                <button
-                  onClick={() => handleAddToQueue(player)}
-                  disabled={isLoading}
-                  className="px-3 py-1 text-sm font-medium text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 disabled:opacity-50 transition-colors"
-                >
-                  Add to Queue
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAddToQueue(player)}
+                    disabled={isLoading}
+                    className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              </li>
             ))}
-          </div>
+          </ol>
         )}
-      </div>
+      </section>
     </div>
   );
 }

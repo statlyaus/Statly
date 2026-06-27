@@ -37,9 +37,11 @@ describe('draft manager design architecture', () => {
   it('keeps the create-draft controls and behavior hooks intact', () => {
     const draftManagerSource = source();
 
-    expect(draftManagerSource).toContain('Create Draft for League');
+    expect(draftManagerSource).toContain('Prepare the league draft room');
+    expect(draftManagerSource).toContain('Prepare draft settings');
     expect(draftManagerSource).toContain('Join Draft Room');
     expect(draftManagerSource).toContain('Draft Start Time');
+    expect(draftManagerSource).toContain('Format and Clock');
     expect(draftManagerSource).toContain('Draft Order');
     expect(draftManagerSource).toContain('Position Limits');
     expect(draftManagerSource).toContain('Auto-pick when clock expires');

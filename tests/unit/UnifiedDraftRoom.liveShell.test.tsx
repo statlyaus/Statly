@@ -14,6 +14,7 @@ type DraftRoomPlayerFixture = {
 
 const playerGridSpy = vi.hoisted(() => vi.fn());
 const draftLeftRailSpy = vi.hoisted(() => vi.fn());
+const pickFeedSpy = vi.hoisted(() => vi.fn());
 
 const draftContext = vi.hoisted<{
   status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
@@ -69,14 +70,18 @@ vi.mock('@/components/LivePickHeader', () => ({
 }));
 
 vi.mock('@/components/PickFeed', () => ({
-  default: ({ contentId }: { contentId?: string }) => (
-    <aside aria-label="Pick feed">
-      <div id={contentId ?? 'pick-feed-content'}>
-        Pick Feed
-        <button type="button">Feed filter</button>
-      </div>
-    </aside>
-  ),
+  default: ({ className, contentId }: { className?: string; contentId?: string }) => {
+    pickFeedSpy({ className, contentId });
+
+    return (
+      <aside aria-label="Pick feed">
+        <div id={contentId ?? 'pick-feed-content'}>
+          Pick Feed
+          <button type="button">Feed filter</button>
+        </div>
+      </aside>
+    );
+  },
 }));
 
 vi.mock('@/components/draft/DraftLeftRail', () => ({
@@ -224,6 +229,7 @@ describe('UnifiedDraftRoom live shell composition', () => {
   beforeEach(() => {
     playerGridSpy.mockClear();
     draftLeftRailSpy.mockClear();
+    pickFeedSpy.mockClear();
     draftContext.status = 'LIVE';
     draftContext.availablePlayers = [
       {
@@ -252,7 +258,15 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(screen.getByRole('complementary', { name: 'Pick feed' })).toBeInTheDocument();
     expect(screen.getByText('Draft queue panel')).toBeInTheDocument();
     expect(screen.getByText('Watchlist panel')).toBeInTheDocument();
+    expect(screen.queryByText('Draft analytics panel')).not.toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Draft room sections' })).not.toBeInTheDocument();
+
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain('h-full');
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain('min-h-[30rem]');
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].className).toContain(
+      'bg-[color:var(--draft-broadcast-table)]'
+    );
+    expect(pickFeedSpy.mock.calls.at(0)?.[0].className).toContain('h-full');
 
     expect(screen.queryByText('Current snake or linear cycle.')).not.toBeInTheDocument();
     expect(screen.queryByText('Live board position.')).not.toBeInTheDocument();

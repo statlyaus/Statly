@@ -11,6 +11,9 @@ import {
 } from '@/lib/leagueMembership';
 import { syncPrismaLeagueMember } from '@/lib/prismaLeagueBridge';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
+import { isLeagueAtCapacity } from '@/server/leagues/leagueCapacity';
+
+type MembershipTransaction = Parameters<typeof queueLeagueMembershipSet>[0];
 
 export const runtime = 'nodejs';
 
@@ -126,75 +129,108 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const activeMembers = await listActiveLeagueMembers(league.id);
+    const joinResult = await adminDb.runTransaction(async (tx) => {
+      const leagueRef = adminDb.collection('leagues').doc(league.id);
+      const freshLeagueDoc = await tx.get(leagueRef);
+      if (!freshLeagueDoc.exists) {
+        return { ok: false as const, status: 404, error: 'League not found' };
+      }
 
-    if (activeMembers.length >= league.maxTeams) {
-      return NextResponse.json({ success: false, error: 'League is full' }, { status: 400 });
-    }
+      const freshLeague = { id: freshLeagueDoc.id, ...freshLeagueDoc.data() } as League;
+      if (freshLeague.status !== 'preseason') {
+        return {
+          ok: false as const,
+          status: 400,
+          error: 'League is no longer accepting new members',
+        };
+      }
 
-    // Check if user is already a member
-    const existingMember = activeMembers.find((member) => member.userId === userId);
+      const activeMembers = await listActiveLeagueMembers(freshLeague.id);
+      if (
+        isLeagueAtCapacity({
+          activeMemberCount: activeMembers.length,
+          maxTeams: freshLeague.maxTeams,
+        })
+      ) {
+        return { ok: false as const, status: 400, error: 'League is full' };
+      }
 
-    if (existingMember) {
+      const existingMember = activeMembers.find((member) => member.userId === userId);
+      if (existingMember) {
+        return { ok: false as const, status: 400, error: 'Already a member of this league' };
+      }
+
+      let finalTeamName = teamName?.trim();
+      if (!finalTeamName) {
+        finalTeamName = `${freshLeague.name} Team ${activeMembers.length + 1}`;
+      }
+
+      const duplicateName = activeMembers.find(
+        (member) => member.teamName.trim().toLowerCase() === finalTeamName!.toLowerCase()
+      );
+      if (duplicateName) {
+        return { ok: false as const, status: 400, error: 'Team name already taken' };
+      }
+
+      const newMember: Omit<LeagueMember, 'id'> = {
+        leagueId: freshLeague.id,
+        userId,
+        role: 'member',
+        teamName: finalTeamName,
+        joinedAt: new Date().toISOString(),
+        isActive: true,
+      };
+
+      const deterministicMemberId = queueLeagueMembershipSet(
+        tx as unknown as MembershipTransaction,
+        newMember
+      );
+      tx.set(
+        leagueRef,
+        {
+          memberCount: activeMembers.length + 1,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      return {
+        ok: true as const,
+        draftSlot: activeMembers.length + 1,
+        league: freshLeague,
+        member: newMember,
+        memberId: deterministicMemberId,
+      };
+    });
+
+    if (!joinResult.ok) {
       return NextResponse.json(
-        { success: false, error: 'Already a member of this league' },
-        { status: 400 }
+        { success: false, error: joinResult.error },
+        { status: joinResult.status }
       );
     }
-
-    // Validate team name
-    let finalTeamName = teamName?.trim();
-    if (!finalTeamName) {
-      finalTeamName = `${league.name} Team ${activeMembers.length + 1}`;
-    }
-
-    // Check for duplicate team names
-    const duplicateName = activeMembers.find(
-      (member) => member.teamName.trim().toLowerCase() === finalTeamName!.toLowerCase()
-    );
-
-    if (duplicateName) {
-      return NextResponse.json(
-        { success: false, error: 'Team name already taken' },
-        { status: 400 }
-      );
-    }
-
-    // Create league member
-    const newMember: Omit<LeagueMember, 'id'> = {
-      leagueId: league.id,
-      userId,
-      role: 'member',
-      teamName: finalTeamName,
-      joinedAt: new Date().toISOString(),
-      isActive: true,
-    };
-
-    const batch = adminDb.batch();
-    const deterministicMemberId = queueLeagueMembershipSet(batch, newMember);
-    await batch.commit();
 
     try {
       await syncPrismaLeagueMember({
-        leagueId: league.id,
+        leagueId: joinResult.league.id,
         userId,
-        memberId: deterministicMemberId,
-        role: newMember.role,
-        teamName: newMember.teamName,
-        draftSlot: activeMembers.length + 1,
+        memberId: joinResult.memberId,
+        role: joinResult.member.role,
+        teamName: joinResult.member.teamName,
+        draftSlot: joinResult.draftSlot,
         isActive: true,
       });
     } catch (syncError) {
       console.warn('Failed to sync joined league member into Prisma mirror', {
-        leagueId: league.id,
+        leagueId: joinResult.league.id,
         userId,
         error: syncError instanceof Error ? syncError.message : String(syncError),
       });
     }
 
     const createdMember: LeagueMember = {
-      id: deterministicMemberId,
-      ...newMember,
+      id: joinResult.memberId,
+      ...joinResult.member,
     };
 
     return NextResponse.json(
@@ -203,12 +239,12 @@ export async function POST(req: NextRequest) {
         data: {
           member: createdMember,
           league: {
-            id: league.id,
-            name: league.name,
-            code: league.code,
-            type: league.type,
-            status: league.status,
-            draftDate: league.draftDate,
+            id: joinResult.league.id,
+            name: joinResult.league.name,
+            code: joinResult.league.code,
+            type: joinResult.league.type,
+            status: joinResult.league.status,
+            draftDate: joinResult.league.draftDate,
           },
         },
       },
