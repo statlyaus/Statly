@@ -11,7 +11,7 @@
     "socket": "bash -lc 'cd \"$(git rev-parse --show-toplevel)\" && NODE_ENV=development tsx -r dotenv/config ./src/server/socketioServer.ts'",
     "dev:full": "concurrently \"npm run dev\" \"npm run socket\"",
     "dev:with-worker": "concurrently \"npm run dev\" \"npm run draft-worker:dev\"",
-    "dev:full:all": "concurrently -k -n web,socket,draft-worker -c blue,magenta,green \"npm:dev\" \"npm:socket\" \"npm:draft-worker:dev\"",
+    "dev:full:all": "bash Scripts/dev/full-local-stack.sh",
     "dev:firebase": "npx firebase emulators:start --only auth,firestore --project statly-4cbed",
     "dev:seed:local": "tsx Scripts/dev/seed-local-stack.ts",
     "dev:smoke:local": "tsx Scripts/dev/smoke-local-stack.ts",
