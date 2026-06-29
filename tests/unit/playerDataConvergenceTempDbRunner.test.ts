@@ -120,10 +120,10 @@ function executor(): PlayerDataConvergenceTempDbExecutor & {
       executedSql.push(sql);
       return 1;
     }),
-    query: async <T,>(sql: string): Promise<T[]> => {
+    query: vi.fn(async <T,>(sql: string): Promise<T[]> => {
       queries.push(sql);
       return [{ count: 4 }] as T[];
-    },
+    }),
   };
 }
 

@@ -1,3 +1,8 @@
+import { AppLayout } from '@/components/navigation';
+import { LeagueTradeProposalForm } from '@/components/league/LeagueTradeProposalForm';
+import { tags } from '@/lib/cacheTags';
+import { cookies, headers } from 'next/headers';
+
 export const revalidate = 60;
 
 function formatTimestamp(lastUpdated?: { toMillis?: () => number } | number): string {
@@ -6,11 +11,6 @@ function formatTimestamp(lastUpdated?: { toMillis?: () => number } | number): st
     return new Date(lastUpdated.toMillis()).toLocaleString();
   return '—';
 }
-
-import { AppLayout } from '@/components/navigation';
-import { LeagueTradeProposalForm } from '@/components/league/LeagueTradeProposalForm';
-import { tags } from '@/lib/cacheTags';
-import { cookies, headers } from 'next/headers';
 
 type TradeSummary = {
   tradeId: string;

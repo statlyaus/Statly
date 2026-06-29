@@ -35,7 +35,8 @@ describe('trade list Firestore architecture', () => {
     expect(routeSource).toContain("'Cache-Control': 'private, no-store'");
     expect(routeSource).not.toContain('s-maxage=60');
 
-    expect(pageSource).toContain("import { cookies } from 'next/headers'");
+    expect(pageSource).toContain("import { cookies, headers } from 'next/headers'");
+    expect(pageSource).toContain('const headerStore = await headers()');
     expect(pageSource).toContain('headers: { cookie: cookieStore.toString() }');
   });
 });
