@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/AuthContext';
 import { LoadingSpinner } from '@/components/ui';
+import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import WaiverFAABSystem from '@/components/waivers/WaiverFAABSystem';
 import type {
   LeagueWaiverClaim,
@@ -51,6 +52,7 @@ interface Props {
   membersIndex?: Record<string, { userId: string; teamId?: string; teamName?: string }>;
   selectedCategories?: FantasyCategoryKey[];
   initialPlayersCursor?: string | null;
+  initialPlayerId?: string | null;
 }
 
 // Minimal shape matching WaiverFAABSystem's expected userClaims prop
@@ -159,6 +161,7 @@ export default function LeagueWaiversContainer({
   membersIndex,
   selectedCategories: _selectedCategories,
   initialPlayersCursor,
+  initialPlayerId,
 }: Props): React.JSX.Element | null {
   const { user, loading } = useAuth();
   const effectiveUserId = user?.uid ?? currentUserId ?? null;
@@ -434,18 +437,22 @@ export default function LeagueWaiversContainer({
 
     try {
       setSubmitError(null);
-      const res = await fetch(`/api/leagues/${leagueId}/waivers/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: effectiveUserId,
-          teamId: roster.id,
-          playerId: String(claim.playerId),
-          dropPlayerId: claim.dropPlayerId,
-          priority: claim.priority ?? 1,
-          bidAmount: claim.bidAmount,
-        }),
-      });
+      const res = await authenticatedFetch(
+        `/api/leagues/${leagueId}/waivers/submit`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: effectiveUserId,
+            teamId: roster.id,
+            playerId: String(claim.playerId),
+            dropPlayerId: claim.dropPlayerId,
+            priority: claim.priority ?? 1,
+            bidAmount: claim.bidAmount,
+          }),
+        },
+        effectiveUserId
+      );
 
       if (!res.ok) {
         const j = await res.json().catch(() => ({}) as { error?: string });
@@ -464,11 +471,15 @@ export default function LeagueWaiversContainer({
   const handleCancelClaim = async (id: string) => {
     if (!effectiveUserId || !leagueId) return;
     try {
-      const res = await fetch(`/api/leagues/${leagueId}/waivers/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: effectiveUserId, claimId: id }),
-      });
+      const res = await authenticatedFetch(
+        `/api/leagues/${leagueId}/waivers/cancel`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: effectiveUserId, claimId: id }),
+        },
+        effectiveUserId
+      );
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         console.error('Cancel claim failed', j);
@@ -553,6 +564,7 @@ export default function LeagueWaiversContainer({
         onLoadMorePlayers={hasMorePlayers ? handleLoadMorePlayers : undefined}
         loadingMorePlayers={loadingMorePlayers}
         hasMorePlayers={hasMorePlayers}
+        initialPlayerId={initialPlayerId}
       />
 
       {/* Load older activity */}

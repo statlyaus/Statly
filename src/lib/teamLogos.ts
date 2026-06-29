@@ -169,4 +169,11 @@ export function getTeamAbbreviation(teamName: string): string {
   return getTeamDefinition(teamName)?.abbreviation ?? teamName.trim().substring(0, 3).toUpperCase();
 }
 
+/**
+ * Get canonical team name for display
+ */
+export function getTeamName(teamName: string): string {
+  return getTeamDefinition(teamName)?.name ?? teamName.trim();
+}
+
 export default teamLogos;

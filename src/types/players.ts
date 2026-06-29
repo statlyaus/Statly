@@ -32,6 +32,9 @@ export interface Player extends Omit<PlayerBase, 'stats'> {
   statsSeason?: number;
   availableStatSeasons?: number[];
   avg?: number;
+  averageScore?: number;
+  projectedScore?: number;
+  form?: number;
   injury?: string;
   summary?: string;
 

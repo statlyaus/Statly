@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronUpIcon,
@@ -9,18 +10,18 @@ import {
   MagnifyingGlassIcon,
   ArrowPathIcon,
   ChartBarIcon,
-  TrophyIcon,
-  FireIcon,
   EyeIcon,
   CalendarIcon,
-  UserIcon,
   XMarkIcon,
   InformationCircleIcon,
+  ArrowsUpDownIcon,
 } from '@heroicons/react/24/outline';
 import type { MatchLog } from '@/types/matchLogs';
+import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 
 type SortDirection = 'asc' | 'desc';
 type SortField = keyof MatchLog;
+type QuickFilter = 'all' | 'withValue' | 'categoryData' | 'zeroValue';
 
 interface MatchLogTableProps {
   matchLogs: MatchLog[];
@@ -30,16 +31,42 @@ interface MatchLogTableProps {
   onMatchSelect?: (matchLog: MatchLog) => void;
   className?: string;
   showAdvancedStats?: boolean;
+  compact?: boolean;
 }
 
 interface FilterState {
   searchTerm: string;
-  minFantasyPoints: string;
-  maxFantasyPoints: string;
+  minStatlyValue: string;
+  maxStatlyValue: string;
   result: 'all' | 'W' | 'L' | 'D';
   minRound: string;
   maxRound: string;
 }
+
+const OpponentCell = ({ opponent }: { opponent: string }) => {
+  const logo = getTeamLogo(opponent);
+  const abbreviation = getTeamAbbreviation(opponent);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background p-1 shadow-sm">
+        <Image
+          src={logo}
+          alt=""
+          aria-hidden="true"
+          width={24}
+          height={24}
+          className="h-6 w-6 object-contain"
+          unoptimized={logo.endsWith('.svg')}
+        />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate font-semibold text-foreground">{opponent}</span>
+        <span className="block text-xs font-medium uppercase text-muted-foreground">{abbreviation}</span>
+      </span>
+    </div>
+  );
+};
 
 const MatchLogTable = ({
   matchLogs,
@@ -49,15 +76,17 @@ const MatchLogTable = ({
   onMatchSelect,
   className = '',
   showAdvancedStats = false,
+  compact = false,
 }: MatchLogTableProps) => {
-  const [sortField, setSortField] = useState<SortField>('round');
+  const [sortField, setSortField] = useState<SortField>('season');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<MatchLog | null>(null);
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [filters, setFilters] = useState<FilterState>({
     searchTerm: '',
-    minFantasyPoints: '',
-    maxFantasyPoints: '',
+    minStatlyValue: '',
+    maxStatlyValue: '',
     result: 'all',
     minRound: '',
     maxRound: '',
@@ -67,24 +96,43 @@ const MatchLogTable = ({
   const stats = useMemo(() => {
     if (!matchLogs || matchLogs.length === 0) return null;
 
-    const validLogs = matchLogs.filter((log) => log.fantasyPoints != null);
-    if (validLogs.length === 0) return null;
-
-    const fantasyPoints = validLogs.map((log) => log.fantasyPoints!);
+    const statlyValues = matchLogs
+      .map((log) => log.totalValue)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
     const goals = matchLogs.map((log) => log.goals || 0);
     const disposals = matchLogs.map((log) => log.disposals || 0);
+    const tackles = matchLogs.map((log) => log.tackles || 0);
+    const clearances = matchLogs.map((log) => log.clearances || 0);
 
     return {
       totalMatches: matchLogs.length,
-      avgFantasyPoints: Math.round(fantasyPoints.reduce((a, b) => a + b, 0) / fantasyPoints.length),
-      bestFantasyPoints: Math.max(...fantasyPoints),
-      worstFantasyPoints: Math.min(...fantasyPoints),
+      avgStatlyValue:
+        statlyValues.length > 0
+          ? statlyValues.reduce((a, b) => a + b, 0) / statlyValues.length
+          : null,
+      bestStatlyValue: statlyValues.length > 0 ? Math.max(...statlyValues) : null,
       totalGoals: goals.reduce((a, b) => a + b, 0),
       avgGoals: (goals.reduce((a, b) => a + b, 0) / matchLogs.length).toFixed(1),
       avgDisposals: Math.round(disposals.reduce((a, b) => a + b, 0) / matchLogs.length),
+      avgTackles: (tackles.reduce((a, b) => a + b, 0) / matchLogs.length).toFixed(1),
+      avgClearances: (clearances.reduce((a, b) => a + b, 0) / matchLogs.length).toFixed(1),
       wins: matchLogs.filter((log) => log.result === 'W').length,
       losses: matchLogs.filter((log) => log.result === 'L').length,
       draws: matchLogs.filter((log) => log.result === 'D').length,
+    };
+  }, [matchLogs]);
+
+  const quickFilterCounts = useMemo<Record<QuickFilter, number>>(() => {
+    const hasCategoryData = (log: MatchLog) =>
+      [log.goals, log.disposals, log.marks, log.tackles, log.clearances, log.inside50s, log.rebound50s, log.hitouts].some(
+        (value) => typeof value === 'number' && value > 0
+      );
+
+    return {
+      all: matchLogs.length,
+      withValue: matchLogs.filter((log) => typeof log.totalValue === 'number' && log.totalValue > 0).length,
+      categoryData: matchLogs.filter(hasCategoryData).length,
+      zeroValue: matchLogs.filter((log) => !log.totalValue).length,
     };
   }, [matchLogs]);
 
@@ -94,22 +142,25 @@ const MatchLogTable = ({
 
     // Apply filters
     if (filters.searchTerm) {
+      const normalizedSearch = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(
         (log) =>
-          log.opponent.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-          log.venue?.toLowerCase().includes(filters.searchTerm.toLowerCase())
+          log.opponent.toLowerCase().includes(normalizedSearch) ||
+          log.venue?.toLowerCase().includes(normalizedSearch) ||
+          String(log.season ?? '').includes(normalizedSearch) ||
+          String(log.round ?? '').includes(normalizedSearch)
       );
     }
 
-    if (filters.minFantasyPoints) {
+    if (filters.minStatlyValue) {
       filtered = filtered.filter(
-        (log) => (log.fantasyPoints || 0) >= parseInt(filters.minFantasyPoints)
+        (log) => (log.totalValue || 0) >= Number(filters.minStatlyValue)
       );
     }
 
-    if (filters.maxFantasyPoints) {
+    if (filters.maxStatlyValue) {
       filtered = filtered.filter(
-        (log) => (log.fantasyPoints || 0) <= parseInt(filters.maxFantasyPoints)
+        (log) => (log.totalValue || 0) <= Number(filters.maxStatlyValue)
       );
     }
 
@@ -123,6 +174,18 @@ const MatchLogTable = ({
 
     if (filters.maxRound) {
       filtered = filtered.filter((log) => log.round <= parseInt(filters.maxRound));
+    }
+
+    if (quickFilter === 'withValue') {
+      filtered = filtered.filter((log) => typeof log.totalValue === 'number' && log.totalValue > 0);
+    } else if (quickFilter === 'categoryData') {
+      filtered = filtered.filter((log) =>
+        [log.goals, log.disposals, log.marks, log.tackles, log.clearances, log.inside50s, log.rebound50s, log.hitouts].some(
+          (value) => typeof value === 'number' && value > 0
+        )
+      );
+    } else if (quickFilter === 'zeroValue') {
+      filtered = filtered.filter((log) => !log.totalValue);
     }
 
     // Sort data
@@ -142,11 +205,15 @@ const MatchLogTable = ({
 
       if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
+      const seasonDelta = (a.season ?? 0) - (b.season ?? 0);
+      if (seasonDelta !== 0) return sortDirection === 'asc' ? seasonDelta : -seasonDelta;
+      const roundDelta = (a.round ?? 0) - (b.round ?? 0);
+      if (roundDelta !== 0) return sortDirection === 'asc' ? roundDelta : -roundDelta;
+      return a.opponent.localeCompare(b.opponent);
     });
 
     return filtered;
-  }, [matchLogs, filters, sortField, sortDirection]);
+  }, [matchLogs, filters, quickFilter, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -162,21 +229,62 @@ const MatchLogTable = ({
   };
 
   const clearFilters = () => {
+    setQuickFilter('all');
     setFilters({
       searchTerm: '',
-      minFantasyPoints: '',
-      maxFantasyPoints: '',
+      minStatlyValue: '',
+      maxStatlyValue: '',
       result: 'all',
       minRound: '',
       maxRound: '',
     });
   };
 
-  const getPerformanceColor = (points: number | undefined, avgPoints: number) => {
-    if (!points) return 'text-base-content/50';
-    if (points >= avgPoints * 1.2) return 'text-success font-semibold';
-    if (points >= avgPoints * 0.8) return 'text-base-content';
-    return 'text-warning';
+  const activeFilterCount = [
+    quickFilter !== 'all' ? quickFilter : '',
+    filters.searchTerm,
+    filters.minStatlyValue,
+    filters.maxStatlyValue,
+    filters.minRound,
+    filters.maxRound,
+    filters.result !== 'all' ? filters.result : '',
+  ].filter(Boolean).length;
+
+  const sortOptions: Array<{ field: SortField; label: string }> = [
+    { field: 'season', label: 'Season' },
+    { field: 'round', label: 'Round' },
+    { field: 'opponent', label: 'Opponent' },
+    { field: 'totalValue', label: 'Statly Value' },
+    { field: 'disposals', label: 'Disposals' },
+    { field: 'marks', label: 'Marks' },
+    { field: 'tackles', label: 'Tackles' },
+    { field: 'clearances', label: 'Clearances' },
+  ];
+  const quickFilterLabels: Record<QuickFilter, string> = {
+    all: 'All',
+    withValue: 'Value',
+    categoryData: 'Categories',
+    zeroValue: 'Zero',
+  };
+
+  const getValueColor = (value: number | undefined, averageValue: number | null) => {
+    if (typeof value !== 'number' || averageValue === null) return 'text-muted-foreground';
+    if (value >= averageValue + 0.35) return 'text-emerald-700 font-semibold';
+    if (value >= averageValue - 0.35) return 'text-foreground';
+    return 'text-amber-700';
+  };
+
+  const formatVenue = (venue: string | undefined): string => {
+    const value = venue?.trim();
+    return value ? value : 'Venue unavailable';
+  };
+
+  const formatRound = (round: number | undefined): string => {
+    return typeof round === 'number' && Number.isFinite(round) && round > 0 ? String(round) : 'TBC';
+  };
+
+  const formatNumberCell = (value: number | undefined): string => {
+    return typeof value === 'number' && Number.isFinite(value) ? String(value) : '—';
   };
 
   const getResultBadge = (result: string | undefined) => {
@@ -192,10 +300,24 @@ const MatchLogTable = ({
     }
   };
 
-  const SortButton = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+  const SortButton = ({
+    field,
+    children,
+    align = 'left',
+  }: {
+    field: SortField;
+    children: React.ReactNode;
+    align?: 'left' | 'center' | 'right';
+  }) => (
     <button
       onClick={() => handleSort(field)}
-      className="flex items-center gap-1 hover:text-primary transition-colors duration-200 font-medium"
+      className={`flex w-full items-center gap-1 font-medium transition-colors duration-200 hover:text-primary ${
+        align === 'right'
+          ? 'justify-end text-right'
+          : align === 'center'
+            ? 'justify-center text-center'
+            : 'justify-start text-left'
+      }`}
       aria-label={`Sort by ${field}`}
     >
       {children}
@@ -213,13 +335,11 @@ const MatchLogTable = ({
 
   if (isLoading) {
     return (
-      <div className={`card bg-base-100 shadow-xl ${className}`}>
-        <div className="card-body">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <ArrowPathIcon className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-              <p className="text-base-content/70">Loading match logs...</p>
-            </div>
+      <div className={`rounded-lg border border-border bg-card shadow-sm ${className}`}>
+        <div className="flex items-center justify-center py-16">
+          <div className="text-center">
+            <ArrowPathIcon className="mx-auto mb-4 h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading match logs...</p>
           </div>
         </div>
       </div>
@@ -228,103 +348,160 @@ const MatchLogTable = ({
 
   if (!matchLogs || matchLogs.length === 0) {
     return (
-      <div className={`card bg-base-100 shadow-xl ${className}`}>
-        <div className="card-body">
-          <div className="text-center py-12">
-            <ChartBarIcon className="w-16 h-16 text-base-content/30 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-base-content mb-2">
-              No Match Data Available
-            </h3>
-            <p className="text-base-content/70 mb-4">
-              {playerName
-                ? `No match logs found for ${playerName}`
-                : 'No match logs available to display'}
-            </p>
-            {onRefresh && (
-              <button onClick={onRefresh} className="btn btn-primary gap-2">
-                <ArrowPathIcon className="w-4 h-4" />
-                Refresh Data
-              </button>
-            )}
+      <div className={`rounded-lg border border-border bg-card p-5 shadow-sm ${className}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-card-foreground">Match Logs</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Round-by-round AFL category records</p>
           </div>
+        </div>
+
+        <div className="mt-5 rounded-lg border border-dashed border-border bg-muted/30 p-6">
+          <ChartBarIcon className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
+          <h3 className="mt-4 text-base font-semibold text-card-foreground">
+            No match data available
+          </h3>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground">
+            {playerName
+              ? `No match logs were returned for ${playerName}.`
+              : 'No match logs were returned for this player.'}
+          </p>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="mt-4 inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
+              Refresh Data
+            </button>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* Statistics Overview */}
-      {stats && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"
-        >
-          <div className="stat bg-base-200 rounded-lg p-4">
-            <div className="stat-figure text-primary">
-              <TrophyIcon className="w-8 h-8" />
-            </div>
-            <div className="stat-title text-xs">Matches</div>
-            <div className="stat-value text-2xl">{stats.totalMatches}</div>
-          </div>
-          <div className="stat bg-base-200 rounded-lg p-4">
-            <div className="stat-figure text-secondary">
-              <ChartBarIcon className="w-8 h-8" />
-            </div>
-            <div className="stat-title text-xs">Avg Points</div>
-            <div className="stat-value text-2xl">{stats.avgFantasyPoints}</div>
-          </div>
-          <div className="stat bg-base-200 rounded-lg p-4">
-            <div className="stat-figure text-success">
-              <FireIcon className="w-8 h-8" />
-            </div>
-            <div className="stat-title text-xs">Best</div>
-            <div className="stat-value text-2xl">{stats.bestFantasyPoints}</div>
-          </div>
-          <div className="stat bg-base-200 rounded-lg p-4">
-            <div className="stat-figure text-info">
-              <UserIcon className="w-8 h-8" />
-            </div>
-            <div className="stat-title text-xs">Wins</div>
-            <div className="stat-value text-2xl">{stats.wins}</div>
-          </div>
-          <div className="stat bg-base-200 rounded-lg p-4">
-            <div className="stat-title text-xs">Avg Goals</div>
-            <div className="stat-value text-2xl">{stats.avgGoals}</div>
-          </div>
-          <div className="stat bg-base-200 rounded-lg p-4">
-            <div className="stat-title text-xs">Avg Disposals</div>
-            <div className="stat-value text-2xl">{stats.avgDisposals}</div>
-          </div>
-        </motion.div>
-      )}
-
+    <div className={`min-w-0 space-y-3 ${className}`}>
       {/* Controls */}
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-base-content">
+      <div className="min-w-0 rounded-lg border border-border bg-card p-4 shadow-sm">
+        <div className="min-w-0">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-foreground">
                 {playerName ? `${playerName}'s Match Logs` : 'Match Logs'}
               </h2>
-              <div className="badge badge-primary">{filteredAndSortedLogs.length} matches</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <div className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                  {filteredAndSortedLogs.length} matches
+                </div>
+                {activeFilterCount > 0 ? (
+                  <div className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                    {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`btn btn-sm gap-2 ${showFilters ? 'btn-primary' : 'btn-outline'}`}
+                className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  showFilters
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-background text-foreground hover:bg-muted'
+                }`}
               >
-                <FunnelIcon className="w-4 h-4" />
+                <FunnelIcon className="h-4 w-4" />
                 Filters
               </button>
               {onRefresh && (
-                <button onClick={onRefresh} className="btn btn-sm btn-outline gap-2">
-                  <ArrowPathIcon className="w-4 h-4" />
+                <button
+                  onClick={onRefresh}
+                  className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ArrowPathIcon className="h-4 w-4" />
                   Refresh
                 </button>
               )}
+            </div>
+          </div>
+
+          <div className="mb-4 border-t border-border pt-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="relative min-w-0 flex-1">
+                <label htmlFor="match-log-search" className="sr-only">
+                  Search match logs
+                </label>
+                <MagnifyingGlassIcon
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  id="match-log-search"
+                  type="search"
+                  placeholder="Search season, round, opponent, or ground"
+                  value={filters.searchTerm}
+                  onChange={(event) => handleFilterChange('searchTerm', event.target.value)}
+                  className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label htmlFor="match-log-sort-field" className="sr-only">
+                  Sort match logs
+                </label>
+                <select
+                  id="match-log-sort-field"
+                  value={sortField}
+                  onChange={(event) => {
+                    setSortField(event.target.value as SortField);
+                    setSortDirection('desc');
+                  }}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20"
+                >
+                  {sortOptions.map((option) => (
+                    <option key={option.field} value={option.field}>
+                      Sort by {option.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2"
+                  aria-label={`Sort ${sortDirection === 'desc' ? 'low to high' : 'high to low'}`}
+                >
+                  <ArrowsUpDownIcon className="h-4 w-4" aria-hidden="true" />
+                  {sortDirection === 'desc' ? 'High first' : 'Low first'}
+                </button>
+                {(Object.keys(quickFilterLabels) as QuickFilter[]).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setQuickFilter(filter)}
+                    className={`rounded-md border px-3 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                      quickFilter === filter
+                        ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                        : 'border-border bg-background text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {quickFilterLabels[filter]}
+                    <span
+                      className={
+                        quickFilter === filter
+                          ? 'ml-2 text-primary-foreground/80'
+                          : 'ml-2 text-muted-foreground'
+                      }
+                    >
+                      {quickFilterCounts[filter]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-2 text-sm text-muted-foreground">
+              Sorted by {sortOptions.find((option) => option.field === sortField)?.label ?? 'Round'}{' '}
+              {sortDirection === 'desc' ? 'high to low' : 'low to high'}.
             </div>
           </div>
 
@@ -335,58 +512,47 @@ const MatchLogTable = ({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="border-t border-base-300 pt-4 mb-4"
+                className="mb-4 border-t border-border pt-4"
               >
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-[minmax(180px,1fr)_140px_auto] items-end gap-3">
                   <div className="form-control">
-                    <label htmlFor="search-input" className="label">
-                      <span className="label-text">Search</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="search-input"
-                        type="text"
-                        placeholder="Search opponent or venue..."
-                        className="input input-bordered w-full pl-10"
-                        value={filters.searchTerm}
-                        onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-                      />
-                      <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-base-content/40" />
-                    </div>
-                  </div>
-
-                  <div className="form-control">
-                    <label htmlFor="min-points-input" className="label">
-                      <span className="label-text">Fantasy Points Range</span>
+                    <label
+                      htmlFor="min-points-input"
+                      className="mb-1 block text-xs font-semibold text-muted-foreground"
+                    >
+                      Statly Value
                     </label>
                     <div className="flex gap-2">
                       <input
                         id="min-points-input"
                         type="number"
                         placeholder="Min"
-                        className="input input-bordered flex-1"
-                        value={filters.minFantasyPoints}
-                        onChange={(e) => handleFilterChange('minFantasyPoints', e.target.value)}
+                        className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring"
+                        value={filters.minStatlyValue}
+                        onChange={(e) => handleFilterChange('minStatlyValue', e.target.value)}
                       />
                       <input
                         id="max-points-input"
                         type="number"
                         placeholder="Max"
-                        className="input input-bordered flex-1"
-                        value={filters.maxFantasyPoints}
-                        onChange={(e) => handleFilterChange('maxFantasyPoints', e.target.value)}
-                        aria-label="Maximum fantasy points"
+                        className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring"
+                        value={filters.maxStatlyValue}
+                        onChange={(e) => handleFilterChange('maxStatlyValue', e.target.value)}
+                        aria-label="Maximum Statly value"
                       />
                     </div>
                   </div>
 
                   <div className="form-control">
-                    <label htmlFor="result-select" className="label">
-                      <span className="label-text">Result</span>
+                    <label
+                      htmlFor="result-select"
+                      className="mb-1 block text-xs font-semibold text-muted-foreground"
+                    >
+                      Result
                     </label>
                     <select
                       id="result-select"
-                      className="select select-bordered"
+                      className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring"
                       value={filters.result}
                       onChange={(e) => handleFilterChange('result', e.target.value)}
                     >
@@ -397,37 +563,12 @@ const MatchLogTable = ({
                     </select>
                   </div>
 
-                  <div className="form-control">
-                    <label htmlFor="min-round-input" className="label">
-                      <span className="label-text">Round Range</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        id="min-round-input"
-                        type="number"
-                        placeholder="Min"
-                        className="input input-bordered flex-1"
-                        value={filters.minRound}
-                        onChange={(e) => handleFilterChange('minRound', e.target.value)}
-                      />
-                      <input
-                        id="max-round-input"
-                        type="number"
-                        placeholder="Max"
-                        className="input input-bordered flex-1"
-                        value={filters.maxRound}
-                        onChange={(e) => handleFilterChange('maxRound', e.target.value)}
-                        aria-label="Maximum round"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-control">
-                    <div className="label">
-                      <span className="label-text">Actions</span>
-                    </div>
-                    <button onClick={clearFilters} className="btn btn-outline gap-2">
-                      <XMarkIcon className="w-4 h-4" />
+                  <div className="flex items-end">
+                    <button
+                      onClick={clearFilters}
+                      className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
                       Clear Filters
                     </button>
                   </div>
@@ -437,102 +578,169 @@ const MatchLogTable = ({
           </AnimatePresence>
 
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="table table-zebra w-full">
-              <thead>
-                <tr>
-                  <th className="text-left">
+          <div className="max-h-[680px] max-w-full overflow-auto rounded-md border border-border">
+            <table
+              className="w-full table-fixed border-separate border-spacing-0 text-left text-sm"
+              style={{ minWidth: compact ? 980 : 1240 }}
+              aria-label={`${playerName ?? 'Player'} match logs table`}
+              aria-rowcount={filteredAndSortedLogs.length + 1}
+            >
+              <colgroup>
+                <col className="w-20" />
+                <col className="w-20" />
+                <col className="w-[260px]" />
+                <col className="w-[180px]" />
+                {!compact && <col className="w-20" />}
+                {!compact && <col className="w-20" />}
+                <col className="w-16" />
+                <col className="w-16" />
+                <col className="w-16" />
+                <col className="w-16" />
+                {!compact && <col className="w-16" />}
+                {!compact && <col className="w-16" />}
+                {!compact && <col className="w-16" />}
+                <col className="w-24" />
+                {!compact && <col className="w-24" />}
+              </colgroup>
+              <thead className="sticky top-0 z-10 border-b border-border bg-muted/95 text-sm font-medium text-muted-foreground backdrop-blur">
+                <tr className="text-xs font-semibold uppercase text-muted-foreground">
+                  <th className="border-b border-border px-3 py-3 text-left">
+                    <SortButton field="season">Season</SortButton>
+                  </th>
+                  <th className="border-b border-border px-3 py-3 text-left">
                     <SortButton field="round">Round</SortButton>
                   </th>
-                  <th className="text-left">
+                  <th className="border-b border-border px-3 py-3 text-left">
                     <SortButton field="opponent">Opponent</SortButton>
                   </th>
-                  <th className="text-center">Result</th>
-                  <th className="text-right">
-                    <SortButton field="goals">Goals</SortButton>
+                  <th className="border-b border-border px-3 py-3 text-left">Ground</th>
+                  {!compact && <th className="border-b border-border px-3 py-3 text-center">Result</th>}
+                  {!compact && (
+                    <th className="border-b border-border px-3 py-3 text-center">
+                      <SortButton field="goals" align="center">Goals</SortButton>
+                    </th>
+                  )}
+                  <th className="border-b border-border px-3 py-3 text-center">
+                    <SortButton field="disposals" align="center">D</SortButton>
                   </th>
-                  <th className="text-right">
-                    <SortButton field="disposals">Disposals</SortButton>
+                  <th className="border-b border-border px-3 py-3 text-center">
+                    <SortButton field="marks" align="center">M</SortButton>
                   </th>
-                  <th className="text-right">
-                    <SortButton field="marks">Marks</SortButton>
+                  <th className="border-b border-border px-3 py-3 text-center">
+                    <SortButton field="tackles" align="center">T</SortButton>
                   </th>
-                  <th className="text-right">
-                    <SortButton field="tackles">Tackles</SortButton>
+                  <th className="border-b border-border px-3 py-3 text-center">
+                    <SortButton field="clearances" align="center">CLR</SortButton>
                   </th>
-                  <th className="text-right">
-                    <SortButton field="fantasyPoints">Fantasy Points</SortButton>
-                  </th>
-                  {showAdvancedStats && (
+                  {!compact && (
                     <>
-                      <th className="text-right">
-                        <SortButton field="superCoachScore">SC Score</SortButton>
+                      <th className="border-b border-border px-3 py-3 text-center">
+                        <SortButton field="inside50s" align="center">I50</SortButton>
                       </th>
-                      <th className="text-right">
-                        <SortButton field="dreamTeamScore">DT Score</SortButton>
+                      <th className="border-b border-border px-3 py-3 text-center">
+                        <SortButton field="rebound50s" align="center">R50</SortButton>
                       </th>
-                      <th className="text-center">TOG%</th>
+                      <th className="border-b border-border px-3 py-3 text-center">
+                        <SortButton field="hitouts" align="center">HO</SortButton>
+                      </th>
                     </>
                   )}
-                  <th className="text-center">Actions</th>
+                  <th className="border-b border-border px-3 py-3 text-right">
+                    <SortButton field="totalValue" align="right">Value</SortButton>
+                  </th>
+                  {showAdvancedStats && !compact && (
+                    <>
+                      <th className="border-b border-border px-2 py-2 text-right">
+                        <SortButton field="superCoachScore" align="right">SC Score</SortButton>
+                      </th>
+                      <th className="border-b border-border px-2 py-2 text-right">
+                        <SortButton field="dreamTeamScore" align="right">DT Score</SortButton>
+                      </th>
+                      <th className="border-b border-border px-2 py-2 text-center">TOG%</th>
+                    </>
+                  )}
+                  {!compact && <th className="border-b border-border px-3 py-3 text-center">Actions</th>}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border bg-background">
                 <AnimatePresence>
                   {filteredAndSortedLogs.map((log, index) => (
                     <motion.tr
-                      key={`${log.round}-${log.opponent}`}
+                      key={`${log.round}-${log.opponent}-${log.matchDate ?? 'no-date'}-${index}`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
                       transition={{ delay: index * 0.05 }}
-                      className="hover:bg-base-200/50 cursor-pointer transition-colors duration-200"
-                      onClick={() => onMatchSelect?.(log)}
+                      className="cursor-pointer transition-colors duration-200 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      tabIndex={0}
+                      aria-label={`${log.season ?? 'Unknown season'} round ${formatRound(log.round)} versus ${log.opponent} at ${formatVenue(log.venue)}. Press Enter to review.`}
+                      aria-rowindex={index + 2}
+                      onClick={() => {
+                        setSelectedMatch(log);
+                        onMatchSelect?.(log);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedMatch(log);
+                          onMatchSelect?.(log);
+                        }
+                      }}
                     >
-                      <td className="font-medium">{log.round}</td>
-                      <td>
-                        <div>
-                          <div className="font-medium">{log.opponent}</div>
-                          {log.venue && (
-                            <div className="text-xs text-base-content/60">{log.venue}</div>
-                          )}
-                        </div>
+                      <td className="px-3 py-3 font-semibold text-foreground tabular-nums">{log.season ?? '—'}</td>
+                      <td className="px-3 py-3 font-semibold text-foreground tabular-nums">{formatRound(log.round)}</td>
+                      <td className="px-3 py-3">
+                        <OpponentCell opponent={log.opponent} />
                       </td>
-                      <td className="text-center">{getResultBadge(log.result)}</td>
-                      <td className="text-right font-mono">{log.goals ?? '-'}</td>
-                      <td className="text-right font-mono">{log.disposals ?? '-'}</td>
-                      <td className="text-right font-mono">{log.marks ?? '-'}</td>
-                      <td className="text-right font-mono">{log.tackles ?? '-'}</td>
+                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                        <span className="block truncate">{formatVenue(log.venue)}</span>
+                      </td>
+                      {!compact && <td className="px-3 py-3 text-center">{getResultBadge(log.result)}</td>}
+                      {!compact && <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.goals)}</td>}
+                      <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.disposals)}</td>
+                      <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.marks)}</td>
+                      <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.tackles)}</td>
+                      <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.clearances)}</td>
+                      {!compact && (
+                        <>
+                          <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.inside50s)}</td>
+                          <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.rebound50s)}</td>
+                          <td className="px-3 py-3 text-center font-medium tabular-nums">{formatNumberCell(log.hitouts)}</td>
+                        </>
+                      )}
                       <td
-                        className={`text-right font-mono font-semibold ${
+                        className={`px-3 py-3 text-right font-semibold tabular-nums ${
                           stats
-                            ? getPerformanceColor(log.fantasyPoints, stats.avgFantasyPoints)
+                            ? getValueColor(log.totalValue, stats.avgStatlyValue)
                             : ''
                         }`}
                       >
-                        {log.fantasyPoints ?? '-'}
+                        {typeof log.totalValue === 'number' ? log.totalValue.toFixed(2) : '-'}
                       </td>
-                      {showAdvancedStats && (
+                      {showAdvancedStats && !compact && (
                         <>
-                          <td className="text-right font-mono">{log.superCoachScore ?? '-'}</td>
-                          <td className="text-right font-mono">{log.dreamTeamScore ?? '-'}</td>
-                          <td className="text-center font-mono">
+                          <td className="px-3 py-3 text-right font-medium tabular-nums">{log.superCoachScore ?? '—'}</td>
+                          <td className="px-3 py-3 text-right font-medium tabular-nums">{log.dreamTeamScore ?? '—'}</td>
+                          <td className="px-3 py-3 text-center font-medium tabular-nums">
                             {log.timeOnGround ? `${log.timeOnGround}%` : '-'}
                           </td>
                         </>
                       )}
-                      <td className="text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedMatch(log);
-                          }}
-                          className="btn btn-ghost btn-xs gap-1"
-                          aria-label="View match details"
-                        >
-                          <EyeIcon className="w-3 h-3" />
-                        </button>
-                      </td>
+                      {!compact && (
+                        <td className="px-3 py-3 text-center">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedMatch(log);
+                            }}
+                            className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-input bg-background px-2 text-xs font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label="View match details"
+                          >
+                            <EyeIcon className="h-3.5 w-3.5" />
+                            View
+                          </button>
+                        </td>
+                      )}
                     </motion.tr>
                   ))}
                 </AnimatePresence>
@@ -541,10 +749,14 @@ const MatchLogTable = ({
           </div>
 
           {filteredAndSortedLogs.length === 0 && (
-            <div className="text-center py-8">
-              <InformationCircleIcon className="w-12 h-12 text-base-content/30 mx-auto mb-2" />
-              <p className="text-base-content/70">No matches found with current filters</p>
-              <button onClick={clearFilters} className="btn btn-sm btn-outline mt-2">
+            <div className="py-8 text-center">
+              <InformationCircleIcon className="mx-auto mb-2 h-12 w-12 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">No matches found with current filters</p>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="mt-3 rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 Clear Filters
               </button>
             </div>
@@ -558,7 +770,7 @@ const MatchLogTable = ({
           <div className="modal-box max-w-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-lg">
-                Round {selectedMatch.round} vs {selectedMatch.opponent}
+                {selectedMatch.season ? `${selectedMatch.season} ` : ''}Round {formatRound(selectedMatch.round)} vs {selectedMatch.opponent}
               </h3>
               <button
                 onClick={() => setSelectedMatch(null)}
@@ -570,8 +782,12 @@ const MatchLogTable = ({
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
               <div className="stat bg-base-200 rounded-lg">
-                <div className="stat-title">Fantasy Points</div>
-                <div className="stat-value text-primary">{selectedMatch.fantasyPoints ?? '-'}</div>
+                <div className="stat-title">Statly Value</div>
+                <div className="stat-value text-primary">
+                  {typeof selectedMatch.totalValue === 'number'
+                    ? selectedMatch.totalValue.toFixed(2)
+                    : '-'}
+                </div>
               </div>
               <div className="stat bg-base-200 rounded-lg">
                 <div className="stat-title">Goals</div>
@@ -603,6 +819,12 @@ const MatchLogTable = ({
                     <div className="flex items-center gap-2">
                       <CalendarIcon className="w-4 h-4 text-base-content/60" />
                       <span>Venue: {selectedMatch.venue}</span>
+                    </div>
+                  )}
+                  {!selectedMatch.venue && (
+                    <div className="flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4 text-base-content/60" />
+                      <span>Venue unavailable</span>
                     </div>
                   )}
                   {selectedMatch.matchDate && (

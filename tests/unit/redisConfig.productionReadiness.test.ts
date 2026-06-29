@@ -23,13 +23,13 @@ describe('Redis production readiness config', () => {
       hasPlaceholderRedisConfig({
         REDIS_HOST: placeholderHost,
         REDIS_PASSWORD: placeholderPassword,
-      } as NodeJS.ProcessEnv)
+      } as unknown as NodeJS.ProcessEnv)
     ).toBe(true);
     expect(
       shouldDisableRedisClients({
         REDIS_HOST: placeholderHost,
         REDIS_PASSWORD: placeholderPassword,
-      } as NodeJS.ProcessEnv)
+      } as unknown as NodeJS.ProcessEnv)
     ).toBe(true);
   });
 
@@ -39,7 +39,7 @@ describe('Redis production readiness config', () => {
         REDIS_HOST: 'redis.internal',
         REDIS_PORT: '6379',
         REDIS_PASSWORD: configuredPassword,
-      } as NodeJS.ProcessEnv)
+      } as unknown as NodeJS.ProcessEnv)
     ).toBe(false);
   });
 

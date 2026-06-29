@@ -77,7 +77,7 @@ describe('team actions route architecture', () => {
       { params: Promise.resolve({ id: 'league-1', userId: 'user-1' }) }
     );
 
-    expect(response.status).toBe(401);
+    expect(response!.status).toBe(401);
     expect(rosterMocks.ensureRosterTables).not.toHaveBeenCalled();
     expect(membershipMocks.verifyLeagueMembership).not.toHaveBeenCalled();
   });
@@ -94,7 +94,7 @@ describe('team actions route architecture', () => {
       { params: Promise.resolve({ id: 'league-1', userId: 'other-user' }) }
     );
 
-    expect(response.status).toBe(403);
+    expect(response!.status).toBe(403);
     expect(rosterMocks.ensureRosterTables).not.toHaveBeenCalled();
     expect(membershipMocks.verifyLeagueMembership).not.toHaveBeenCalled();
   });

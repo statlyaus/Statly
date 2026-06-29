@@ -1,6 +1,10 @@
 import type { NextRequest } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
-import { DEVELOPMENT_AUTH_COOKIE, isDevelopmentAuthEnabled } from '@/lib/devAuth';
+import {
+  DEVELOPMENT_AUTH_COOKIE,
+  DEVELOPMENT_AUTH_USER_ID,
+  isDevelopmentAuthEnabled,
+} from '@/lib/devAuth';
 
 /**
  * Resolve the authenticated user id from the request.
@@ -14,6 +18,12 @@ export async function getUserIdFromRequest(request: NextRequest): Promise<string
 
     const devCookieUser = request.cookies.get(DEVELOPMENT_AUTH_COOKIE)?.value;
     if (devCookieUser) return devCookieUser;
+
+    return (
+      process.env.BYPASS_UID ??
+      process.env.NEXT_PUBLIC_BYPASS_UID ??
+      DEVELOPMENT_AUTH_USER_ID
+    );
   }
 
   const sessionCookie = request.cookies.get('statly_session')?.value;

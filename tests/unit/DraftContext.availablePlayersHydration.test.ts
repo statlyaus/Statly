@@ -45,7 +45,7 @@ describe('shouldHydrateAvailablePlayers', () => {
         playerId: 'player-1',
         player: { id: 'player-1' },
       },
-    ] as DraftPick[];
+    ] as unknown as DraftPick[];
 
     expect(
       excludeDraftedAvailablePlayers(

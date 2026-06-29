@@ -1,7 +1,11 @@
 import type React from 'react';
 import LeaguePageClient from './LeaguePageClient';
 import { adminAuth } from '@/lib/firebaseAdmin';
-import { DEVELOPMENT_AUTH_COOKIE, isDevelopmentAuthEnabled } from '@/lib/devAuth';
+import {
+  DEVELOPMENT_AUTH_COOKIE,
+  DEVELOPMENT_AUTH_USER_ID,
+  isDevelopmentAuthEnabled,
+} from '@/lib/devAuth';
 import { loadAuthorizedLeagueDetail } from '@/server/leagues/leagueDetail';
 import { cookies, headers } from 'next/headers';
 
@@ -48,6 +52,8 @@ async function getLeaguePageUserId(): Promise<string | null> {
 
     const devCookieUser = cookieStore.get(DEVELOPMENT_AUTH_COOKIE)?.value;
     if (devCookieUser) return devCookieUser;
+
+    return process.env.BYPASS_UID || process.env.NEXT_PUBLIC_BYPASS_UID || DEVELOPMENT_AUTH_USER_ID;
   }
 
   const sessionCookie = cookieStore.get('statly_session')?.value;
