@@ -112,6 +112,9 @@ describe('ensureLeagueDraftSetupConverged', () => {
           lobbyOpenAt: new Date('2026-05-02T00:05:00.000Z'),
         }),
       },
+      player: {
+        count: vi.fn().mockResolvedValue(100),
+      },
       draftOrder: {
         create: vi.fn().mockResolvedValue({}),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -125,6 +128,12 @@ describe('ensureLeagueDraftSetupConverged', () => {
       },
       player: {
         count: vi.fn().mockResolvedValue(100),
+        groupBy: vi.fn().mockResolvedValue([
+          { position: 'DEF', _count: { _all: 25 } },
+          { position: 'MID', _count: { _all: 35 } },
+          { position: 'RUC', _count: { _all: 15 } },
+          { position: 'FWD', _count: { _all: 25 } },
+        ]),
       },
     };
     const readiness = await ensureLeagueDraftSetupConverged({

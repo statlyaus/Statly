@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import teamLogosDefault, { getTeamAbbreviation, getTeamLogo, teamLogos } from './teamLogos';
+import teamLogosDefault, { getTeamAbbreviation, getTeamLogo, getTeamName, teamLogos } from './teamLogos';
 
 const logoCases = [
   ['Adelaide Crows', '/logos/Adelaide.svg'],
@@ -97,9 +97,15 @@ describe('teamLogos', () => {
     expect(getTeamAbbreviation(teamName)).toBe(expectedAbbreviation);
   });
 
+  it('normalizes aliases to canonical display names', () => {
+    expect(getTeamName('kangaroos')).toBe('North Melbourne');
+    expect(getTeamName('Greater Western Sydney')).toBe('GWS');
+  });
+
   it('falls back when no team alias matches', () => {
     expect(getTeamLogo('Tasmania Devils')).toBe('/logos/fallback.svg');
     expect(getTeamAbbreviation('Tasmania Devils')).toBe('TAS');
+    expect(getTeamName('Tasmania Devils')).toBe('Tasmania Devils');
   });
 
   it('keeps the named and default logo exports backwards compatible', () => {

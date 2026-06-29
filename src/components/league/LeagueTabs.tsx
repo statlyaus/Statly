@@ -41,6 +41,24 @@ interface Tab {
   badge?: number;
 }
 
+const TAB_IDS: readonly TabType[] = [
+  'overview',
+  'teams',
+  'roster',
+  'trades',
+  'waivers',
+  'draft',
+  'settings',
+];
+
+function isLeagueTab(value: unknown): value is TabType {
+  return typeof value === 'string' && TAB_IDS.includes(value as TabType);
+}
+
+function getLeagueTabFromSearch(value: string | null): TabType | null {
+  return isLeagueTab(value) ? value : null;
+}
+
 export default function LeagueTabs({
   league,
   members,
@@ -50,21 +68,20 @@ export default function LeagueTabs({
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(
+    () => getLeagueTabFromSearch(searchParams?.get('tab') ?? null) ?? 'overview'
+  );
   const [teamActionMessage, setTeamActionMessage] = useState<LeagueSettingsMessage | null>(null);
   const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
 
   // Handle URL tab parameter
   useEffect(() => {
-    const tabParam = searchParams?.get('tab') as TabType;
-    if (
-      tabParam &&
-      ['overview', 'teams', 'roster', 'trades', 'waivers', 'draft', 'settings'].includes(tabParam)
-    ) {
+    const tabParam = getLeagueTabFromSearch(searchParams?.get('tab') ?? null);
+    if (tabParam && tabParam !== activeTab) {
       setActiveTab(tabParam);
     }
-  }, [searchParams]);
+  }, [activeTab, searchParams]);
 
   const handleTabChange = (tabId: TabType) => {
     setActiveTab(tabId);
@@ -84,6 +101,7 @@ export default function LeagueTabs({
   ];
 
   const currentMember = members.find((member) => member.userId === currentUserId);
+  const selectedPlayerId = searchParams?.get('playerId') ?? null;
   const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
   const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;
   const waiverMembersIndex = useMemo(
@@ -210,24 +228,25 @@ export default function LeagueTabs({
         </div>
       </section>
 
-      {/* Tab Navigation */}
-      <div className="bg-white rounded-xl shadow-lg">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6" aria-label="Tabs">
+      <div className="overflow-hidden rounded-[22px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_18px_60px_-48px_rgba(23,34,48,0.38)]">
+        <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)]/80">
+          <nav className="flex gap-1 overflow-x-auto px-3 py-3" aria-label="League sections">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => handleTabChange(tab.id)}
-                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                aria-current={activeTab === tab.id ? 'page' : undefined}
+                className={`inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'bg-[color:var(--league-primary)] text-[color:var(--league-primary-foreground)] shadow-sm'
+                    : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
                 }`}
               >
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <span>{tab.name}</span>
                   {tab.badge && (
-                    <span className="bg-red-100 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                    <span className="rounded-full bg-[color:var(--league-danger-soft)] px-2 py-0.5 text-xs font-semibold text-[color:var(--league-danger)]">
                       {tab.badge}
                     </span>
                   )}
@@ -238,7 +257,7 @@ export default function LeagueTabs({
         </div>
 
         {/* Tab Content */}
-        <div className="p-6">
+        <div className="p-5 sm:p-6">
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 20 }}
@@ -316,12 +335,46 @@ export default function LeagueTabs({
             )}
 
             {activeTab === 'teams' && (
-              <div className="space-y-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">League Teams</h2>
-                  <span className="text-sm font-medium text-gray-600">
-                    {members.length}/{league.maxTeams} teams
-                  </span>
+              <section className="space-y-5">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                      Team registry
+                    </p>
+                    <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[color:var(--league-text)]">
+                      League Teams
+                    </h2>
+                    <p className="mt-1 max-w-2xl text-sm text-[color:var(--league-text-muted)]">
+                      Active ownership and team access for {league.name}. Commissioner actions are
+                      available only where the team can be managed.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)]">
+                    <div className="border-r border-[color:var(--league-border)] px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                        Active
+                      </p>
+                      <p className="mt-1 text-xl font-semibold text-[color:var(--league-text)]">
+                        {members.length}
+                      </p>
+                    </div>
+                    <div className="border-r border-[color:var(--league-border)] px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                        Capacity
+                      </p>
+                      <p className="mt-1 text-xl font-semibold text-[color:var(--league-text)]">
+                        {league.maxTeams}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                        Open
+                      </p>
+                      <p className="mt-1 text-xl font-semibold text-[color:var(--league-text)]">
+                        {Math.max(league.maxTeams - members.length, 0)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 {teamActionMessage && (
                   <div
@@ -335,58 +388,126 @@ export default function LeagueTabs({
                     {teamActionMessage.text}
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {members.map((member) => (
-                    <div key={member.id} className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium text-gray-900">{member.teamName}</h3>
-                        {member.role === 'owner' && (
-                          <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                            Owner
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Joined {new Date(member.joinedAt).toLocaleDateString()}
-                      </p>
-                      {canRemoveTeams && member.userId !== league.ownerId && (
-                        <div className="mt-4 flex flex-wrap items-center gap-2">
-                          {pendingRemoveUserId === member.userId ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => void handleRemoveMember(member)}
-                                disabled={removingUserId === member.userId}
-                                aria-label={`Confirm remove ${member.teamName}`}
-                                className="inline-flex h-9 items-center justify-center rounded-lg bg-[color:var(--league-danger)] px-3 text-sm font-medium text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)] disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {removingUserId === member.userId ? 'Removing...' : 'Confirm'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setPendingRemoveUserId(null)}
-                                disabled={removingUserId === member.userId}
-                                className="inline-flex h-9 items-center justify-center rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 text-sm font-medium text-[color:var(--league-text)] transition-colors hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setPendingRemoveUserId(member.userId)}
-                              aria-label={`Remove ${member.teamName}`}
-                              className="inline-flex h-9 items-center justify-center rounded-lg border border-[color:var(--league-danger)]/30 bg-[color:var(--league-surface)] px-3 text-sm font-medium text-[color:var(--league-danger)] transition-colors hover:bg-[color:var(--league-danger-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)]"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                <div className="overflow-hidden rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)]">
+                  <table className="min-w-full table-fixed border-collapse text-left">
+                    <colgroup>
+                      <col className="w-[34%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[14%]" />
+                    </colgroup>
+                    <thead className="bg-[color:var(--league-page)]">
+                      <tr className="border-b border-[color:var(--league-border)]">
+                        <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Team
+                        </th>
+                        <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Access
+                        </th>
+                        <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Joined
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[color:var(--league-border)]">
+                      {members.map((member) => {
+                        const roleLabel = getLeagueMemberRoleLabel(member, league);
+                        const canRemoveMember = canRemoveTeams && member.userId !== league.ownerId;
+
+                        return (
+                          <tr
+                            key={member.id}
+                            className="bg-[color:var(--league-surface)] transition-colors hover:bg-[color:var(--league-page)]"
+                          >
+                            <td className="px-4 py-4">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] text-sm font-semibold text-[color:var(--league-text)]">
+                                  {getTeamInitials(member.teamName)}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
+                                    {member.teamName || 'Unnamed team'}
+                                  </p>
+                                  <p className="mt-0.5 truncate text-xs text-[color:var(--league-text-muted)]">
+                                    {member.userId}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className="inline-flex h-7 items-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-xs font-semibold text-[color:var(--league-text)]">
+                                {roleLabel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                                <span
+                                  className={`size-2 rounded-full ${
+                                    member.isActive
+                                      ? 'bg-[color:var(--league-success)]'
+                                      : 'bg-[color:var(--league-text-muted)]'
+                                  }`}
+                                />
+                                {member.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-sm text-[color:var(--league-text-muted)]">
+                              {formatLeagueMemberJoinedAt(member.joinedAt)}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex justify-end">
+                                {canRemoveMember ? (
+                                  pendingRemoveUserId === member.userId ? (
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleRemoveMember(member)}
+                                        disabled={removingUserId === member.userId}
+                                        aria-label={`Confirm remove ${member.teamName}`}
+                                        className="inline-flex h-9 items-center justify-center rounded-md bg-[color:var(--league-danger)] px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)] disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        {removingUserId === member.userId ? 'Removing' : 'Confirm'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setPendingRemoveUserId(null)}
+                                        disabled={removingUserId === member.userId}
+                                        className="inline-flex h-9 items-center justify-center rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 text-xs font-semibold text-[color:var(--league-text)] transition-colors hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPendingRemoveUserId(member.userId)}
+                                      aria-label={`Remove ${member.teamName}`}
+                                      className="inline-flex h-9 items-center justify-center rounded-md border border-[color:var(--league-danger)]/30 bg-[color:var(--league-surface)] px-3 text-xs font-semibold text-[color:var(--league-danger)] transition-colors hover:bg-[color:var(--league-danger-soft)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-danger)]"
+                                    >
+                                      Remove
+                                    </button>
+                                  )
+                                ) : (
+                                  <span className="text-xs font-medium text-[color:var(--league-text-muted)]">
+                                    -
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+              </section>
             )}
 
             {activeTab === 'roster' && (
@@ -434,6 +555,7 @@ export default function LeagueTabs({
                   currentUserId={currentUserId}
                   membersIndex={waiverMembersIndex}
                   selectedCategories={league.categories}
+                  initialPlayerId={selectedPlayerId}
                 />
               </div>
             )}
@@ -639,6 +761,46 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
+}
+
+function getLeagueMemberRoleLabel(member: LeagueMember, league: League): string {
+  if (member.userId === league.ownerId || member.role?.toLowerCase() === 'owner') {
+    return 'Owner';
+  }
+
+  if (member.role?.toLowerCase() === 'manager') {
+    return 'Manager';
+  }
+
+  if (member.role?.toLowerCase() === 'commissioner') {
+    return 'Commissioner';
+  }
+
+  return 'Member';
+}
+
+function formatLeagueMemberJoinedAt(value: string): string {
+  if (!value) return 'Not recorded';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Not recorded';
+
+  return new Intl.DateTimeFormat('en-AU', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(parsed);
+}
+
+function getTeamInitials(teamName: string): string {
+  const initials = teamName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join('');
+
+  return initials || 'T';
 }
 
 function asString(value: unknown, fallback: string): string {

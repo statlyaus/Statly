@@ -8,7 +8,9 @@ export default function AppRouteLayout({ children }: { readonly children: ReactN
   return (
     <PageErrorBoundary name="AppRouteLayout">
       <PerformanceMonitor />
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        {children}
+      </AuthProvider>
     </PageErrorBoundary>
   );
 }

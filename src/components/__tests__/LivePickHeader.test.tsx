@@ -46,13 +46,15 @@ describe('LivePickHeader', () => {
   it('renders draft-order indicators as static list items instead of buttons', () => {
     render(<LivePickHeader draftData={draftData} isYourTurn={false} yourSlot={3} />);
 
-    const draftOrder = screen.getByRole('list', { name: 'Draft order' });
+    const draftOrder = screen.getByRole('list', { name: 'Draft picks' });
     const items = within(draftOrder).getAllByRole('listitem');
 
-    expect(items).toHaveLength(3);
-    expect(within(items[0]).getByText('Team 1: Alpha (currently picking)')).toBeInTheDocument();
-    expect(within(items[1]).getByText('Team 2: Beta (next to pick)')).toBeInTheDocument();
-    expect(within(items[2]).getByText('Team 3: Gamma (your team)')).toBeInTheDocument();
+    expect(items).toHaveLength(5);
+    expect(within(items[0]).getByText('Alpha')).toBeInTheDocument();
+    expect(within(items[0]).getByText('On the clock')).toBeInTheDocument();
+    expect(within(items[1]).getByText('Beta')).toBeInTheDocument();
+    expect(within(items[2]).getByText('Gamma')).toBeInTheDocument();
+    expect(within(items[2]).getByText('Your next pick')).toBeInTheDocument();
     expect(within(draftOrder).queryAllByRole('button')).toHaveLength(0);
   });
 });

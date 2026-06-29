@@ -38,7 +38,7 @@ describe('useDashboardSettings', () => {
   });
 
   it('falls back to default when Firestore data missing', async () => {
-    vi.mocked(getDoc).mockResolvedValueOnce({ exists: () => false });
+    vi.mocked(getDoc).mockResolvedValueOnce({ exists: (() => false) as any } as any);
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
     );
@@ -49,7 +49,7 @@ describe('useDashboardSettings', () => {
   });
 
   it('falls back to default when Firestore data invalid', async () => {
-    vi.mocked(getDoc).mockResolvedValueOnce({ exists: () => true, data: () => null });
+    vi.mocked(getDoc).mockResolvedValueOnce({ exists: (() => true) as any, data: () => null } as any);
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}

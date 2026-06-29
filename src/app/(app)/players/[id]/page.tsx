@@ -4,8 +4,24 @@ import { useEffect, useState } from 'react';
 import { fetchApi } from '@/lib/api';
 import { useParams, notFound } from 'next/navigation';
 import type { Player } from '@/types/players';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 import { PlayerDetail } from '@/components/PlayerDetail';
+import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner } from '@/components/ui';
+
+function isPlayerResponse(value: unknown): value is ApiSuccessResponse<Player> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { success?: unknown }).success === true &&
+    typeof (value as { data?: unknown }).data === 'object' &&
+    (value as { data?: unknown }).data !== null
+  );
+}
+
+function normalizePlayerResponse(value: unknown): Player {
+  return isPlayerResponse(value) ? value.data : (value as Player);
+}
 
 export default function PlayerPage() {
   const params = useParams();
@@ -21,7 +37,7 @@ export default function PlayerPage() {
       try {
         setLoading(true);
         const data = await fetchApi(`players/${id}`);
-        setPlayer(data);
+        setPlayer(normalizePlayerResponse(data));
       } catch (err) {
         setError('Failed to fetch player data.');
         console.error(err);
@@ -35,14 +51,20 @@ export default function PlayerPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner />
-      </div>
+      <AppLayout>
+        <div className="flex justify-center items-center h-64">
+          <LoadingSpinner />
+        </div>
+      </AppLayout>
     );
   }
 
   if (error) {
-    return <p className="text-red-500 text-center">{error}</p>;
+    return (
+      <AppLayout>
+        <p className="text-red-500 text-center">{error}</p>
+      </AppLayout>
+    );
   }
 
   if (!player) {
@@ -50,8 +72,8 @@ export default function PlayerPage() {
   }
 
   return (
-    <div>
+    <AppLayout>
       <PlayerDetail player={player} />
-    </div>
+    </AppLayout>
   );
 }

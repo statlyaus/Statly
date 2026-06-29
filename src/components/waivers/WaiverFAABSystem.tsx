@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import {
   CheckCircleIcon,
@@ -79,6 +79,7 @@ interface WaiverFAABSystemProps {
   onLoadMorePlayers?: () => void;
   loadingMorePlayers?: boolean;
   hasMorePlayers?: boolean;
+  initialPlayerId?: string | null;
 }
 
 type WaiverSortKey = 'statlyZ' | 'name' | 'position' | 'club';
@@ -683,6 +684,7 @@ export default function WaiverFAABSystem({
   onLoadMorePlayers,
   loadingMorePlayers,
   hasMorePlayers,
+  initialPlayerId,
 }: WaiverFAABSystemProps): React.JSX.Element {
   const timeZone = useMemo(() => getBrowserTimeZone(), []);
   const [searchTerm, setSearchTerm] = useState('');
@@ -739,6 +741,17 @@ export default function WaiverFAABSystem({
     setDropPlayerId('');
     setBidAmount(minimumBid);
   };
+
+  useEffect(() => {
+    if (!initialPlayerId || selectedPlayerId === initialPlayerId) return;
+    const player = availablePlayers.find((candidate) => candidate.id === initialPlayerId);
+    if (!player) return;
+
+    setSelectedPlayerId(initialPlayerId);
+    setSearchTerm(player.name);
+    setDropPlayerId('');
+    setBidAmount(minimumBid);
+  }, [availablePlayers, initialPlayerId, minimumBid, selectedPlayerId]);
 
   const handleSubmitClaim = (player: PlayerOption) => {
     onSubmitClaim?.({
