@@ -85,18 +85,11 @@ const members: LeagueMember[] = [
 
 describe('LeagueTabs draft actions', () => {
   it('does not show prepare draft actions after the draft is completed', () => {
-    render(
-      <LeagueTabs
-        league={completedLeague}
-        members={members}
-      />
-    );
+    render(<LeagueTabs league={completedLeague} members={members} />);
 
     expect(screen.queryByRole('button', { name: 'Prepare draft' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Enter draft room' })).not.toBeInTheDocument();
     expect(screen.getByText('Draft complete. Rosters are ready to review.')).toBeInTheDocument();
-    expect(
-      screen.getByText('The league is ready for roster, trade, and waiver management.')
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Next action')).not.toBeInTheDocument();
   });
 });

@@ -368,67 +368,102 @@ export default function LeagueTabs({
           >
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <section>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
-                    League snapshot
-                  </p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
-                        Teams
+                <section className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4 shadow-sm sm:p-5">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                        League snapshot
                       </p>
-                      <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                      <h2 className="mt-1 text-xl font-semibold tracking-tight text-[color:var(--league-text)]">
+                        Current state
+                      </h2>
+                    </div>
+                    <p className="text-sm text-[color:var(--league-text-muted)]">
+                      {activeMembers.length} teams, {league.categories.length} scoring categories
+                    </p>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Teams
+                        </p>
+                        <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1 text-xs font-semibold text-[color:var(--league-text)]">
+                          {openTeamSlots === 0 ? 'Full' : `${openTeamSlots} open`}
+                        </span>
+                      </div>
+                      <p className="mt-4 text-3xl font-semibold text-[color:var(--league-text)]">
                         {activeMembers.length}/{league.maxTeams}
                       </p>
-                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-                        {openTeamSlots === 0
-                          ? 'League is full'
-                          : `${openTeamSlots} team ${openTeamSlots === 1 ? 'slot' : 'slots'} open`}
-                      </p>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[color:var(--league-surface-muted)]">
+                        <div
+                          className="h-full rounded-full bg-[color:var(--league-primary)]"
+                          style={{
+                            width: `${Math.min((activeMembers.length / league.maxTeams) * 100, 100)}%`,
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
-                        Waiver priority
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Waiver priority
+                        </p>
+                        <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1 text-xs font-semibold capitalize text-[color:var(--league-text)]">
+                          {waiverPolicyLabel}
+                        </span>
+                      </div>
+                      <p className="mt-4 text-3xl font-semibold text-[color:var(--league-text)]">
                         {waiverPriorityLabel}
                       </p>
-                      <p className="mt-1 text-sm capitalize text-[color:var(--league-text-muted)]">
-                        {waiverPolicyLabel} reset
+                      <p className="mt-2 text-sm capitalize text-[color:var(--league-text-muted)]">
+                        {waiverPolicyLabel} reset policy
                       </p>
                     </div>
-                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
-                        Trade offers
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Trade offers
+                        </p>
+                        <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1 text-xs font-semibold text-[color:var(--league-text)]">
+                          Pending
+                        </span>
+                      </div>
+                      <p className="mt-4 text-3xl font-semibold text-[color:var(--league-text)]">
                         {overviewTradesStatus === 'loading' ? '...' : overviewTrades.length}
                       </p>
-                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                      <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
                         {overviewTradesStatus === 'error'
                           ? 'Open trade centre to review'
                           : overviewTrades.length === 1
-                            ? 'Pending offer'
-                            : 'Pending offers'}
+                            ? 'Offer awaiting review'
+                            : 'Offers awaiting review'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
-                        Scoring
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                          Scoring
+                        </p>
+                        <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1 text-xs font-semibold text-[color:var(--league-text)]">
+                          Categories
+                        </span>
+                      </div>
+                      <p className="mt-4 text-3xl font-semibold text-[color:var(--league-text)]">
                         {league.categories.length}
                       </p>
-                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                      <p className="mt-2 text-sm text-[color:var(--league-text-muted)]">
                         {categorySummary}
-                        {league.categories.length > 4 ? ` +${league.categories.length - 4} more` : ''}
+                        {league.categories.length > 4
+                          ? ` +${league.categories.length - 4} more`
+                          : ''}
                       </p>
                     </div>
                   </div>
                 </section>
 
                 <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
@@ -446,16 +481,24 @@ export default function LeagueTabs({
                         View teams
                       </button>
                     </div>
-                    <div className="mt-4 divide-y divide-[color:var(--league-border)]">
+                    <div className="mt-4 overflow-hidden rounded-xl border border-[color:var(--league-border)]">
                       {overviewTeams.map((member) => (
-                        <div key={member.id} className="flex items-center justify-between gap-3 py-3">
-                          <div className="min-w-0">
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between gap-3 border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 last:border-b-0"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] text-sm font-semibold text-[color:var(--league-text)]">
+                              {member.teamName?.slice(0, 1).toUpperCase() ?? 'T'}
+                            </span>
+                            <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
                               {member.teamName || 'Unnamed team'}
                             </p>
                             <p className="mt-0.5 text-xs capitalize text-[color:var(--league-text-muted)]">
                               {getLeagueMemberRoleLabel(member, league)}
                             </p>
+                            </div>
                           </div>
                           <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-1 text-xs font-semibold text-[color:var(--league-text)]">
                             {member.isActive === false ? 'Inactive' : 'Active'}
@@ -466,7 +509,7 @@ export default function LeagueTabs({
                   </div>
 
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                    <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
                         Your team
                       </p>
@@ -479,7 +522,7 @@ export default function LeagueTabs({
                           : 'Member access'}
                       </p>
                     </div>
-                    <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                    <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
                         Draft
                       </p>
@@ -499,7 +542,7 @@ export default function LeagueTabs({
                 </section>
 
                 <section className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
@@ -546,7 +589,7 @@ export default function LeagueTabs({
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-sm">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
@@ -577,41 +620,6 @@ export default function LeagueTabs({
                           : 'Waiver order has not been set for your team yet.'}
                       </p>
                     </div>
-                  </div>
-                </section>
-
-                <section className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-5">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
-                        Next action
-                      </p>
-                      <h2 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
-                        {overviewTrades.length > 0
-                          ? 'Review pending trade offers'
-                          : isDraftComplete
-                            ? 'Review rosters and waiver options'
-                            : 'Finish draft setup'}
-                      </h2>
-                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-                        {isDraftComplete
-                          ? 'The league is ready for roster, trade, and waiver management.'
-                          : draftRoomPath
-                            ? 'Enter the draft room to manage readiness, queue, watchlist, and picks.'
-                          : 'Open the draft tab to configure the draft room and commissioner settings.'}
-                      </p>
-                    </div>
-                    {!isDraftComplete && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          draftRoomPath ? router.push(draftRoomPath) : handleTabChange('draft')
-                        }
-                        className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                      >
-                        {draftRoomPath ? 'Enter draft room' : 'Prepare draft'}
-                      </button>
-                    )}
                   </div>
                 </section>
               </div>

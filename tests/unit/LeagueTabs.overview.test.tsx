@@ -86,6 +86,7 @@ describe('LeagueTabs overview snapshot', () => {
     render(<LeagueTabs league={league} members={members} currentUserId="user-2" />);
 
     expect(screen.getByText('League snapshot')).toBeInTheDocument();
+    expect(screen.getByText('Current state')).toBeInTheDocument();
     expect(screen.getByText('2/4')).toBeInTheDocument();
     expect(screen.getAllByText('Priority 2').length).toBeGreaterThan(0);
     expect(screen.getByText('League table snapshot')).toBeInTheDocument();
@@ -99,6 +100,7 @@ describe('LeagueTabs overview snapshot', () => {
 
     expect(screen.getByText('Player A, Player B')).toBeInTheDocument();
     expect(screen.getByText('Your claim position')).toBeInTheDocument();
+    expect(screen.queryByText('Next action')).not.toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(authenticatedFetchMock).toHaveBeenCalledWith(
       '/api/trades/list?leagueId=league-1&status=PENDING&pageSize=3',
