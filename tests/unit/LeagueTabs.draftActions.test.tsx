@@ -89,7 +89,6 @@ describe('LeagueTabs draft actions', () => {
 
     expect(screen.queryByRole('button', { name: 'Prepare draft' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Enter draft room' })).not.toBeInTheDocument();
-    expect(screen.getByText('Draft complete. Rosters are ready to review.')).toBeInTheDocument();
     expect(screen.queryByText('Next action')).not.toBeInTheDocument();
   });
 });

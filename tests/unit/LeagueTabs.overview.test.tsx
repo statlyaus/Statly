@@ -85,11 +85,13 @@ describe('LeagueTabs overview snapshot', () => {
 
     render(<LeagueTabs league={league} members={members} currentUserId="user-2" />);
 
-    expect(screen.getByText('League snapshot')).toBeInTheDocument();
-    expect(screen.getByText('Current state')).toBeInTheDocument();
-    expect(screen.getByText('2/4')).toBeInTheDocument();
+    expect(screen.getByText('League overview')).toBeInTheDocument();
+    expect(screen.getAllByText('Snapshot League').length).toBeGreaterThan(0);
+    expect(screen.getByText('2/4 teams')).toBeInTheDocument();
+    expect(screen.getByText('Trade offers')).toBeInTheDocument();
+    expect(screen.getByText('5 categories')).toBeInTheDocument();
     expect(screen.getAllByText('Priority 2').length).toBeGreaterThan(0);
-    expect(screen.getByText('League table snapshot')).toBeInTheDocument();
+    expect(screen.getByText('Team preview')).toBeInTheDocument();
     expect(screen.getByText('First Team')).toBeInTheDocument();
     expect(screen.getAllByText('Second Team').length).toBeGreaterThan(0);
     expect(screen.getByText('Offers needing review')).toBeInTheDocument();
@@ -101,7 +103,6 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByText('Player A, Player B')).toBeInTheDocument();
     expect(screen.getByText('Your claim position')).toBeInTheDocument();
     expect(screen.queryByText('Next action')).not.toBeInTheDocument();
-    expect(screen.getByText('5')).toBeInTheDocument();
     expect(authenticatedFetchMock).toHaveBeenCalledWith(
       '/api/trades/list?leagueId=league-1&status=PENDING&pageSize=3',
       {},
