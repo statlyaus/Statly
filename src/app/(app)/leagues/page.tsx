@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   ArrowRight,
   CalendarClock,
+  CheckCircle2,
   Loader2,
   Plus,
   ShieldCheck,
@@ -38,6 +39,16 @@ function formatTeamCount(league: League): string {
   return typeof league.currentTeams === 'number'
     ? `${league.currentTeams}/${league.maxTeams} teams`
     : `${league.maxTeams} teams max`;
+}
+
+function formatLeagueCode(code?: string): string | null {
+  if (!code) return null;
+  if (code.startsWith('DRAFT_')) return 'Draft setup';
+  return `Code ${code}`;
+}
+
+function getStatusIcon(status: League['status']) {
+  return status === 'completed' ? CheckCircle2 : ShieldCheck;
 }
 
 export default function LeaguesPage() {
@@ -163,22 +174,27 @@ export default function LeaguesPage() {
               </p>
             </section>
           ) : leagues.length > 0 ? (
-            <section className="overflow-hidden rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_22px_70px_-48px_rgba(23,34,48,0.4)]">
-              <div className="flex flex-col gap-2 border-b border-[color:var(--league-border)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
+            <section className="overflow-hidden rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_80px_-54px_rgba(23,34,48,0.48)]">
+              <div className="flex flex-col gap-3 border-b border-[color:var(--league-border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
                     League directory
                   </p>
-                  <h2 className="mt-1 text-xl font-semibold tracking-tight text-[color:var(--league-text)]">
-                    Open a workspace
-                  </h2>
+                  <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-end sm:gap-3">
+                    <h2 className="text-xl font-semibold tracking-tight text-[color:var(--league-text)]">
+                      Open a workspace
+                    </h2>
+                    <p className="text-sm text-[color:var(--league-text-muted)]">
+                      Review draft timing, scoring, and league state at a glance.
+                    </p>
+                  </div>
                 </div>
-                <p className="text-sm text-[color:var(--league-text-muted)]">
+                <p className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-1.5 text-xs font-semibold text-[color:var(--league-text)]">
                   {leagues.length} {leagues.length === 1 ? 'league' : 'leagues'} available
                 </p>
               </div>
 
-              <div className="hidden border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:grid md:grid-cols-[minmax(0,1.7fr)_0.8fr_0.7fr_1fr_auto] md:items-center md:gap-4">
+              <div className="hidden border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:grid md:grid-cols-[minmax(0,1.8fr)_0.8fr_0.75fr_1fr_auto] md:items-center md:gap-4">
                 <span>League</span>
                 <span>Status</span>
                 <span>Scoring</span>
@@ -187,71 +203,87 @@ export default function LeaguesPage() {
               </div>
 
               <div className="divide-y divide-[color:var(--league-border)]">
-                {leagues.map((league) => (
-                  <Link
-                    href={`/leagues/${league.id}`}
-                    key={league.id}
-                    aria-label={`Open ${league.name} league command center`}
-                    className="group grid gap-4 px-5 py-4 transition hover:bg-[color:var(--league-page)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--league-primary)] sm:px-6 md:grid-cols-[minmax(0,1.7fr)_0.8fr_0.7fr_1fr_auto] md:items-center md:gap-4"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-sm font-semibold text-[color:var(--league-primary)]">
-                          {league.name.trim().charAt(0).toUpperCase() || 'L'}
-                        </span>
-                        <div className="min-w-0">
-                          <h2 className="truncate text-base font-semibold tracking-tight text-[color:var(--league-text)]">
-                            {league.name}
-                          </h2>
-                          <p className="mt-1 truncate text-sm text-[color:var(--league-text-muted)]">
-                            {formatTeamCount(league)}
-                            {league.code ? ` | ${league.code}` : ''}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                {leagues.map((league, index) => {
+                  const StatusIcon = getStatusIcon(league.status);
+                  const leagueCode = formatLeagueCode(league.code);
 
-                    <div className="flex items-center justify-between gap-3 md:block">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
-                        Status
-                      </span>
-                      <span className="inline-flex w-fit rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-primary-soft)] px-2.5 py-1 text-xs font-semibold capitalize text-[color:var(--league-primary)]">
-                        {formatStatusLabel(league.status)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 md:block">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
-                        Scoring
-                      </span>
-                      <span className="text-sm font-semibold text-[color:var(--league-text)]">
-                        {league.categories.length} categories
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 md:block">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
-                        Draft
-                      </span>
-                      <span className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--league-text)]">
-                        <CalendarClock
-                          className="hidden h-4 w-4 text-[color:var(--league-text-muted)] lg:block"
-                          aria-hidden="true"
-                        />
-                        {formatDraftDate(league.draftDate)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-[color:var(--league-border)] pt-3 text-sm font-semibold text-[color:var(--league-primary)] md:justify-end md:border-t-0 md:pt-0">
-                      <span className="md:sr-only">Open league command center</span>
-                      <span className="hidden md:inline">Open</span>
-                      <ArrowRight
-                        className="h-4 w-4 transition group-hover:translate-x-0.5"
+                  return (
+                    <Link
+                      href={`/leagues/${league.id}`}
+                      key={league.id}
+                      aria-label={`Open ${league.name} league command center`}
+                      className="group relative grid gap-4 px-5 py-4 transition hover:bg-[color:var(--league-page)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--league-primary)] sm:px-6 md:grid-cols-[minmax(0,1.8fr)_0.8fr_0.75fr_1fr_auto] md:items-center md:gap-4"
+                    >
+                      <span
+                        className="absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-transparent transition group-hover:bg-[color:var(--league-primary)]"
                         aria-hidden="true"
                       />
-                    </div>
-                  </Link>
-                ))}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] text-xs font-semibold tabular-nums text-[color:var(--league-primary)]">
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          <div className="min-w-0">
+                            <h2 className="truncate text-base font-semibold tracking-tight text-[color:var(--league-text)]">
+                              {league.name}
+                            </h2>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[color:var(--league-text-muted)]">
+                              <span>{formatTeamCount(league)}</span>
+                              {leagueCode ? (
+                                <span className="rounded-full bg-[color:var(--league-page)] px-2 py-0.5 text-xs font-medium text-[color:var(--league-text-muted)]">
+                                  {leagueCode}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 md:block">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
+                          Status
+                        </span>
+                        <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-primary-soft)] px-2.5 py-1 text-xs font-semibold capitalize text-[color:var(--league-primary)]">
+                          <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                          {formatStatusLabel(league.status)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 md:block">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
+                          Scoring
+                        </span>
+                        <span className="text-sm font-semibold text-[color:var(--league-text)]">
+                          {league.categories.length} categories
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 md:block">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
+                          Draft
+                        </span>
+                        <span className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                          <CalendarClock
+                            className="hidden h-4 w-4 text-[color:var(--league-text-muted)] lg:block"
+                            aria-hidden="true"
+                          />
+                          {formatDraftDate(league.draftDate)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-[color:var(--league-border)] pt-3 text-sm font-semibold text-[color:var(--league-primary)] md:justify-end md:border-t-0 md:pt-0">
+                        <span className="md:sr-only">Open league command center</span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-transparent px-3 py-1.5 transition group-hover:border-[color:var(--league-border)] group-hover:bg-[color:var(--league-surface)]">
+                          <span className="hidden md:inline">Open</span>
+                          <ArrowRight
+                            className="h-4 w-4 transition group-hover:translate-x-0.5"
+                            aria-hidden="true"
+                          />
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             </section>
           ) : (
