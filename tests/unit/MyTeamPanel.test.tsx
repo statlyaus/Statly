@@ -51,9 +51,12 @@ describe('MyTeamPanel', () => {
     expect(screen.getByRole('heading', { name: 'Robbo Rockers' })).toBeInTheDocument();
     expect(screen.getByText('2 / 22')).toBeInTheDocument();
     expect(screen.getByText('11.54')).toBeInTheDocument();
-    expect(screen.getByText('Avg Statly Z')).toBeInTheDocument();
-    expect(screen.getByText('RUC 1')).toBeInTheDocument();
-    expect(screen.getByText('MID 1')).toBeInTheDocument();
+    expect(screen.getByText('Statly Z Coverage')).toBeInTheDocument();
+    expect(screen.getByText('2 of 2 players matched')).toBeInTheDocument();
+    expect(screen.getByText('League Categories')).toBeInTheDocument();
+    expect(screen.getByText('Position Mix')).toBeInTheDocument();
+    expect(screen.getByLabelText('RUC: 1 / 2 target')).toBeInTheDocument();
+    expect(screen.getByLabelText('MID: 1 / 8 target')).toBeInTheDocument();
 
     const table = screen.getByRole('table', { name: 'Robbo Rockers roster table' });
     expect(within(table).getByRole('columnheader', { name: 'Player' })).toBeInTheDocument();
@@ -69,7 +72,7 @@ describe('MyTeamPanel', () => {
     expect(screen.queryByText('Optimize Lineup')).not.toBeInTheDocument();
   });
 
-  it('renders zero Statly Z and scoring metrics as real values', () => {
+  it('renders zero Statly Z as a real value when rankings match', () => {
     useRankingsMock.mockReturnValue({
       rankings: [{ id: 'player-zero', rank: 99, totalValue: 0, valueOverReplacement: 0 }],
       loading: false,
@@ -94,8 +97,8 @@ describe('MyTeamPanel', () => {
     );
 
     expect(screen.getAllByText('0.00').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('0.0').length).toBeGreaterThan(0);
-    expect(screen.getByText('Projection 0.0')).toBeInTheDocument();
+    expect(screen.getByText('1 of 1 players matched')).toBeInTheDocument();
+    expect(screen.queryByText('Projection 0.0')).not.toBeInTheDocument();
   });
 
   it('renders league-selected category averages in a draft-style League Stats group', () => {
@@ -152,6 +155,9 @@ describe('MyTeamPanel', () => {
     expect(within(table).getByLabelText('Effective Disposals: 14.0')).toBeInTheDocument();
     expect(within(table).getByText('0.5')).toBeInTheDocument();
     expect(within(table).getByText('14.0')).toBeInTheDocument();
+    expect(within(table).queryByText('Avg 84.0')).not.toBeInTheDocument();
+    expect(screen.getByText('League Categories')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
   });
 
   it('does not crash when rankings are returned in a non-array shape', () => {
@@ -177,6 +183,7 @@ describe('MyTeamPanel', () => {
 
     expect(screen.getByRole('heading', { name: 'Safe Rankings' })).toBeInTheDocument();
     expect(screen.getByText('Fallback Player')).toBeInTheDocument();
-    expect(screen.getByText('0 rankings loaded')).toBeInTheDocument();
+    expect(screen.getByText('Not available')).toBeInTheDocument();
+    expect(screen.getByText('No Statly Z rankings matched 1 roster players')).toBeInTheDocument();
   });
 });
