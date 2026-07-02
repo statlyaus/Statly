@@ -194,6 +194,58 @@ function normalizeParticipants(raw: unknown): DraftParticipant[] {
   return toArray<any>(raw).map(normalizeParticipant);
 }
 
+function normalizeWatchlistItem(
+  raw: unknown,
+  fallbackPlayer?: DraftPlayer,
+  fallbackPriority = 0
+): DraftWatchlistItem | null {
+  const source = asRecord(raw);
+  const playerSource = asRecord(firstPresent(source.player, fallbackPlayer));
+  const playerId = firstPresent(source.playerId, playerSource.id, fallbackPlayer?.id);
+
+  if (!playerId) return null;
+
+  const priority = Number(firstPresent(source.priority, source.rank, fallbackPriority));
+  const normalizedPriority = Number.isFinite(priority) ? priority : fallbackPriority;
+
+  return {
+    id: String(firstPresent(source.id, `watchlist-${playerId}`)),
+    playerId: String(playerId),
+    priority: normalizedPriority,
+    rank: normalizedPriority,
+    addedAt: String(firstPresent(source.addedAt, source.createdAt, new Date().toISOString())),
+    notes: source.notes ?? undefined,
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+    player: {
+      id: String(firstPresent(playerSource.id, playerId)),
+      name: String(firstPresent(playerSource.name, fallbackPlayer?.name, 'Unknown Player')),
+      position: String(firstPresent(playerSource.position, fallbackPlayer?.position, 'NA')),
+      club: String(firstPresent(playerSource.club, fallbackPlayer?.club, '')),
+    },
+  };
+}
+
+function sortWatchlistItems(items: DraftWatchlistItem[]): DraftWatchlistItem[] {
+  return items
+    .slice()
+    .sort((a, b) => Number(a?.rank ?? a?.priority ?? 0) - Number(b?.rank ?? b?.priority ?? 0));
+}
+
+function mergeWatchlistItem(
+  items: DraftWatchlistItem[],
+  itemToMerge: DraftWatchlistItem
+): DraftWatchlistItem[] {
+  const mergedByPlayerId = new Map<string, DraftWatchlistItem>();
+
+  for (const item of items) {
+    mergedByPlayerId.set(String(item.playerId), item);
+  }
+  mergedByPlayerId.set(String(itemToMerge.playerId), itemToMerge);
+
+  return sortWatchlistItems(Array.from(mergedByPlayerId.values()));
+}
+
 function participantQueueIncluded(raw: unknown): boolean {
   return toArray<any>(raw).some((participant) => {
     const member = participant?.member ?? participant;
@@ -1161,16 +1213,13 @@ export function DraftProvider({
             rank?: number;
             addedAt?: string;
           }
-        >(res?.data?.watchlist ?? res?.watchlist)
-          .map((item) => ({
-            ...item,
-            rank: Number(item.rank ?? item.priority ?? 0),
-            addedAt: item.addedAt ?? item.createdAt ?? new Date().toISOString(),
-          }))
-          .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0));
+        >(res?.data?.watchlist ?? res?.watchlist).flatMap((item) => {
+          const normalized = normalizeWatchlistItem(item);
+          return normalized ? [normalized] : [];
+        });
 
         if (!isMounted.current) return;
-        dispatch({ type: 'SET_WATCHLIST', items });
+        dispatch({ type: 'SET_WATCHLIST', items: sortWatchlistItems(items) });
       } catch {
         // Watchlist hydration is best-effort; keep the room usable if it fails.
       }
@@ -1558,7 +1607,7 @@ export function DraftProvider({
         const nextPriority =
           Math.max(0, ...state.watchlistItems.map((item) => Number(item.priority ?? 0))) + 1;
 
-        await fetchApi(`drafts/${draftId}/watchlist`, {
+        const res = await fetchApi(`drafts/${draftId}/watchlist`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1568,7 +1617,20 @@ export function DraftProvider({
           }),
         });
 
-        await hydrateMyWatchlist(memberId);
+        const persistedItem = normalizeWatchlistItem(
+          res?.data?.watchlistItem ?? res?.watchlistItem,
+          player,
+          nextPriority
+        );
+
+        if (persistedItem) {
+          dispatch({
+            type: 'SET_WATCHLIST',
+            items: mergeWatchlistItem(state.watchlistItems, persistedItem),
+          });
+        } else {
+          await hydrateMyWatchlist(memberId);
+        }
       } catch (err: any) {
         if (isMounted.current) {
           dispatch({
