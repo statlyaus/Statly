@@ -81,6 +81,188 @@ function getInjuryLabel(player: WatchlistRow['player']): string | null {
   return null;
 }
 
+function WatchlistPlayerMeta({ row }: { row: WatchlistRow }) {
+  const avgPoints = row.player.avgPoints ?? row.player.averagePoints;
+
+  return (
+    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+        {row.player.position}
+      </span>
+      <span className="truncate">{row.player.club}</span>
+      {typeof row.player.adp === 'number' && <span className="shrink-0">ADP {row.player.adp}</span>}
+      {typeof avgPoints === 'number' && <span className="shrink-0">{avgPoints.toFixed(1)} avg</span>}
+    </div>
+  );
+}
+
+function WatchlistPlayerSignals({ row }: { row: WatchlistRow }) {
+  const injuryLabel = getInjuryLabel(row.player);
+
+  if (!injuryLabel && !row.item.notes) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+      {injuryLabel && (
+        <span className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive">
+          <AlertCircle className="h-3 w-3" aria-hidden="true" />
+          {injuryLabel}
+        </span>
+      )}
+      {row.item.notes && (
+        <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-1.5 py-0.5">
+          <Clock className="h-3 w-3" aria-hidden="true" />
+          {row.item.notes}
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface WatchlistRowActionsProps {
+  row: WatchlistRow;
+  canActOnPlayer: boolean;
+  canDraft: boolean;
+  isLoading: boolean;
+  isWatchlistPending: boolean;
+  onAddToQueue?: (player: DraftPlayer) => void | Promise<void>;
+  onDraftPlayer: (player: DraftPlayer) => void | Promise<void>;
+  onRemoveFromWatchlist: (playerId: string) => void | Promise<void>;
+}
+
+function WatchlistRowActions({
+  row,
+  canActOnPlayer,
+  canDraft,
+  isLoading,
+  isWatchlistPending,
+  onAddToQueue,
+  onDraftPlayer,
+  onRemoveFromWatchlist,
+}: WatchlistRowActionsProps) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {onAddToQueue && (
+        <button
+          type="button"
+          onClick={() => {
+            if (row.draftablePlayer) void onAddToQueue(row.draftablePlayer);
+          }}
+          disabled={!canActOnPlayer || row.isQueued || isLoading}
+          className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={
+            row.isQueued
+              ? `${row.player.name} is already in your draft queue`
+              : `Add ${row.player.name} to draft queue`
+          }
+        >
+          <ListPlus className="h-3.5 w-3.5" aria-hidden="true" />
+          {row.isQueued ? 'Queued' : 'Queue'}
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={() => {
+          if (row.draftablePlayer) void onDraftPlayer(row.draftablePlayer);
+        }}
+        disabled={!canActOnPlayer || !canDraft || isLoading}
+        className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2 text-xs font-semibold text-white shadow-[0_0_18px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label={
+          canDraft
+            ? `Draft ${row.player.name}`
+            : `Cannot draft ${row.player.name} until you are on the clock`
+        }
+      >
+        <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+        Draft
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          void onRemoveFromWatchlist(String(row.item.playerId));
+        }}
+        disabled={isWatchlistPending}
+        className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label={`Remove ${row.player.name} from watchlist`}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+interface WatchlistPlayerRowProps {
+  row: WatchlistRow;
+  canDraft: boolean;
+  isLoading: boolean;
+  pendingWatchlistIds: ReadonlySet<string>;
+  onAddToQueue?: (player: DraftPlayer) => void | Promise<void>;
+  onDraftPlayer: (player: DraftPlayer) => void | Promise<void>;
+  onRemoveFromWatchlist: (playerId: string) => void | Promise<void>;
+}
+
+function WatchlistPlayerRow({
+  row,
+  canDraft,
+  isLoading,
+  pendingWatchlistIds,
+  onAddToQueue,
+  onDraftPlayer,
+  onRemoveFromWatchlist,
+}: WatchlistPlayerRowProps) {
+  const availabilityLabel = getAvailabilityLabel(row);
+  const canActOnPlayer = Boolean(row.draftablePlayer) && !row.isDrafted && !row.isUnavailable;
+  const isWatchlistPending = pendingWatchlistIds.has(String(row.item.playerId));
+
+  return (
+    <li
+      className={cn(
+        'rounded-md border border-border bg-card px-3 py-2 text-card-foreground transition-colors',
+        canActOnPlayer && 'hover:bg-muted/60',
+        !canActOnPlayer && 'opacity-75'
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+          {row.order}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-semibold text-foreground">{row.player.name}</h3>
+              <WatchlistPlayerMeta row={row} />
+            </div>
+
+            <span
+              className={cn(
+                'shrink-0 rounded-md border px-1.5 py-0.5 text-[0.6875rem] font-semibold uppercase',
+                getAvailabilityClassName(row)
+              )}
+            >
+              {availabilityLabel}
+            </span>
+          </div>
+
+          <WatchlistPlayerSignals row={row} />
+          <WatchlistRowActions
+            row={row}
+            canActOnPlayer={canActOnPlayer}
+            canDraft={canDraft}
+            isLoading={isLoading}
+            isWatchlistPending={isWatchlistPending}
+            onAddToQueue={onAddToQueue}
+            onDraftPlayer={onDraftPlayer}
+            onRemoveFromWatchlist={onRemoveFromWatchlist}
+          />
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export default function DraftWatchlist({
   players,
   draftedPlayerIds,
@@ -248,126 +430,17 @@ export default function DraftWatchlist({
           aria-label="Watchlisted players"
         >
           {filteredRows.map((row) => {
-            const availabilityLabel = getAvailabilityLabel(row);
-            const injuryLabel = getInjuryLabel(row.player);
-            const canActOnPlayer =
-              Boolean(row.draftablePlayer) && !row.isDrafted && !row.isUnavailable;
-            const avgPoints = row.player.avgPoints ?? row.player.averagePoints;
-            const isWatchlistPending = pendingWatchlistIds.has(String(row.item.playerId));
-
             return (
-              <li
+              <WatchlistPlayerRow
                 key={`${row.item.playerId}:${row.order}`}
-                className={cn(
-                  'rounded-md border border-border bg-card px-3 py-2 text-card-foreground transition-colors',
-                  canActOnPlayer && 'hover:bg-muted/60',
-                  !canActOnPlayer && 'opacity-75'
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
-                    {row.order}
-                  </span>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="truncate text-sm font-semibold text-foreground">
-                          {row.player.name}
-                        </h3>
-                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                          <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-                            {row.player.position}
-                          </span>
-                          <span className="truncate">{row.player.club}</span>
-                          {typeof row.player.adp === 'number' && (
-                            <span className="shrink-0">ADP {row.player.adp}</span>
-                          )}
-                          {typeof avgPoints === 'number' && (
-                            <span className="shrink-0">{avgPoints.toFixed(1)} avg</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <span
-                        className={cn(
-                          'shrink-0 rounded-md border px-1.5 py-0.5 text-[0.6875rem] font-semibold uppercase',
-                          getAvailabilityClassName(row)
-                        )}
-                      >
-                        {availabilityLabel}
-                      </span>
-                    </div>
-
-                    {(injuryLabel || row.item.notes) && (
-                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-                        {injuryLabel && (
-                          <span className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-destructive">
-                            <AlertCircle className="h-3 w-3" aria-hidden="true" />
-                            {injuryLabel}
-                          </span>
-                        )}
-                        {row.item.notes && (
-                          <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-1.5 py-0.5">
-                            <Clock className="h-3 w-3" aria-hidden="true" />
-                            {row.item.notes}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {onAddToQueue && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (row.draftablePlayer) void onAddToQueue(row.draftablePlayer);
-                          }}
-                          disabled={!canActOnPlayer || row.isQueued || isLoading}
-                          className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={
-                            row.isQueued
-                              ? `${row.player.name} is already in your draft queue`
-                              : `Add ${row.player.name} to draft queue`
-                          }
-                        >
-                          <ListPlus className="h-3.5 w-3.5" aria-hidden="true" />
-                          {row.isQueued ? 'Queued' : 'Queue'}
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (row.draftablePlayer) void onDraftPlayer(row.draftablePlayer);
-                        }}
-                        disabled={!canActOnPlayer || !canDraft || isLoading}
-                        className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-[color:var(--draft-broadcast-red)] bg-[color:var(--draft-broadcast-red)] px-2 text-xs font-semibold text-white shadow-[0_0_18px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={
-                          canDraft
-                            ? `Draft ${row.player.name}`
-                            : `Cannot draft ${row.player.name} until you are on the clock`
-                        }
-                      >
-                        <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-                        Draft
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void onRemoveFromWatchlist(String(row.item.playerId));
-                        }}
-                        disabled={isWatchlistPending}
-                        className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={`Remove ${row.player.name} from watchlist`}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </li>
+                row={row}
+                canDraft={canDraft}
+                isLoading={isLoading}
+                pendingWatchlistIds={pendingWatchlistIds}
+                onAddToQueue={onAddToQueue}
+                onDraftPlayer={onDraftPlayer}
+                onRemoveFromWatchlist={onRemoveFromWatchlist}
+              />
             );
           })}
         </ol>
