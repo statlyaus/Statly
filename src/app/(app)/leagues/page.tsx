@@ -31,10 +31,6 @@ function formatDraftDate(value?: string): string {
   }).format(date);
 }
 
-function formatStatusLabel(status: League['status']): string {
-  return status.replace(/_/g, ' ');
-}
-
 function formatTeamCount(league: League): string {
   return typeof league.currentTeams === 'number'
     ? `${league.currentTeams}/${league.maxTeams} teams`
@@ -47,8 +43,19 @@ function formatLeagueCode(code?: string): string | null {
   return `Code ${code}`;
 }
 
-function getStatusIcon(status: League['status']) {
-  return status === 'completed' ? CheckCircle2 : ShieldCheck;
+function getDraftPhase(league: League): { label: string; detail: string } {
+  if (league.status === 'completed') {
+    return { label: 'Draft complete', detail: 'Rosters set' };
+  }
+
+  if (league.status === 'active') {
+    return { label: 'Season live', detail: 'Draft finished' };
+  }
+
+  return {
+    label: league.draftDate ? 'Draft scheduled' : 'Draft pending',
+    detail: league.draftDate ? formatDraftDate(league.draftDate) : 'Set draft time',
+  };
 }
 
 export default function LeaguesPage() {
@@ -185,7 +192,7 @@ export default function LeaguesPage() {
                       Open a workspace
                     </h2>
                     <p className="text-sm text-[color:var(--league-text-muted)]">
-                      Review draft timing, scoring, and league state at a glance.
+                      Review draft timing, scoring, and roster setup at a glance.
                     </p>
                   </div>
                 </div>
@@ -196,7 +203,7 @@ export default function LeaguesPage() {
 
               <div className="hidden border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:grid md:grid-cols-[minmax(0,1.8fr)_0.8fr_0.75fr_1fr_auto] md:items-center md:gap-4">
                 <span>League</span>
-                <span>Status</span>
+                <span>Draft status</span>
                 <span>Scoring</span>
                 <span>Draft</span>
                 <span className="text-right">Action</span>
@@ -204,7 +211,11 @@ export default function LeaguesPage() {
 
               <div className="divide-y divide-[color:var(--league-border)]">
                 {leagues.map((league, index) => {
-                  const StatusIcon = getStatusIcon(league.status);
+                  const draftPhase = getDraftPhase(league);
+                  const DraftPhaseIcon =
+                    league.status === 'completed' || league.status === 'active'
+                      ? CheckCircle2
+                      : CalendarClock;
                   const leagueCode = formatLeagueCode(league.code);
 
                   return (
@@ -241,12 +252,20 @@ export default function LeaguesPage() {
 
                       <div className="flex items-center justify-between gap-3 md:block">
                         <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
-                          Status
+                          Draft status
                         </span>
-                        <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-primary-soft)] px-2.5 py-1 text-xs font-semibold capitalize text-[color:var(--league-primary)]">
-                          <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                          {formatStatusLabel(league.status)}
-                        </span>
+                        <div className="flex items-center justify-between gap-2 md:block">
+                          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1 text-xs font-semibold text-[color:var(--league-text)]">
+                            <DraftPhaseIcon
+                              className="h-3.5 w-3.5 text-[color:var(--league-text-muted)]"
+                              aria-hidden="true"
+                            />
+                            {draftPhase.label}
+                          </span>
+                          <p className="mt-1 hidden text-xs text-[color:var(--league-text-muted)] md:block">
+                            {draftPhase.detail}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-3 md:block">
