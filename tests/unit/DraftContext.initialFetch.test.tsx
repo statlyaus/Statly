@@ -540,6 +540,11 @@ describe('DraftProvider initial hydration', () => {
       expect(resolvePlayer3Add).toBeDefined();
     });
 
+    expect(screen.getByTestId('watchlist-count')).toHaveTextContent('3');
+    expect(screen.getByTestId('watchlist-order')).toHaveTextContent(
+      'player-1,player-2,player-3'
+    );
+
     act(() => {
       resolvePlayer2Add?.();
       resolvePlayer3Add?.();

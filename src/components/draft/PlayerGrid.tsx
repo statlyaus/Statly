@@ -27,6 +27,7 @@ interface PlayerGridProps {
   canMakePick: boolean;
   queuedPlayerIds: string[];
   watchedPlayerIds: string[];
+  pendingWatchlistPlayerIds?: string[];
   selectedCategories: FantasyCategoryKey[];
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -238,6 +239,7 @@ interface PlayerRowActionsProps {
   isWatched: boolean;
   isQueued: boolean;
   isLoading: boolean;
+  isWatchlistPending: boolean;
   selectionInFlight: boolean;
   canMakePick: boolean;
   pendingSelectionId: string | null;
@@ -251,6 +253,7 @@ function PlayerRowActions({
   isWatched,
   isQueued,
   isLoading,
+  isWatchlistPending,
   selectionInFlight,
   canMakePick,
   pendingSelectionId,
@@ -259,6 +262,7 @@ function PlayerRowActions({
   onSelect,
 }: PlayerRowActionsProps): React.JSX.Element {
   const actionDisabled = isLoading || selectionInFlight;
+  const watchlistDisabled = isWatchlistPending;
   const queueDisabled = actionDisabled || isQueued;
   const selectDisabled = !canMakePick || actionDisabled;
 
@@ -271,8 +275,8 @@ function PlayerRowActions({
             event.stopPropagation();
             onToggleWatchlist(player);
           }}
-          disabled={actionDisabled}
-          className={getWatchActionClass(actionDisabled, isWatched)}
+          disabled={watchlistDisabled}
+          className={getWatchActionClass(watchlistDisabled, isWatched)}
           aria-label={`${isWatched ? 'Remove' : 'Add'} ${player.name} ${isWatched ? 'from' : 'to'} watchlist`}
         >
           <Star className="h-4 w-4" aria-hidden="true" fill={isWatched ? 'currentColor' : 'none'} />
@@ -319,6 +323,7 @@ interface PlayerTableRowProps {
   isQueued: boolean;
   isWatched: boolean;
   isLoading: boolean;
+  isWatchlistPending: boolean;
   selectionInFlight: boolean;
   canMakePick: boolean;
   pendingSelectionId: string | null;
@@ -339,6 +344,7 @@ function PlayerTableRow({
   isQueued,
   isWatched,
   isLoading,
+  isWatchlistPending,
   selectionInFlight,
   canMakePick,
   pendingSelectionId,
@@ -384,6 +390,7 @@ function PlayerTableRow({
         isWatched={isWatched}
         isQueued={isQueued}
         isLoading={isLoading}
+        isWatchlistPending={isWatchlistPending}
         selectionInFlight={selectionInFlight}
         canMakePick={canMakePick}
         pendingSelectionId={pendingSelectionId}
@@ -602,6 +609,7 @@ interface PlayerGridTableProps {
   selectedPlayerId: string | null;
   queuedIds: ReadonlySet<string>;
   watchedIds: ReadonlySet<string>;
+  pendingWatchlistIds: ReadonlySet<string>;
   isLoading: boolean;
   selectionInFlight: boolean;
   canMakePick: boolean;
@@ -625,6 +633,7 @@ function PlayerGridTable({
   selectedPlayerId,
   queuedIds,
   watchedIds,
+  pendingWatchlistIds,
   isLoading,
   selectionInFlight,
   canMakePick,
@@ -744,6 +753,7 @@ function PlayerGridTable({
                   isSelected={selectedPlayerId === player.id}
                   isQueued={queuedIds.has(player.id)}
                   isWatched={watchedIds.has(player.id)}
+                  isWatchlistPending={pendingWatchlistIds.has(player.id)}
                   isLoading={isLoading}
                   selectionInFlight={selectionInFlight}
                   canMakePick={canMakePick}
@@ -788,6 +798,7 @@ export default function PlayerGrid({
   canMakePick,
   queuedPlayerIds,
   watchedPlayerIds,
+  pendingWatchlistPlayerIds = [],
   selectedCategories,
   searchQuery,
   onSearchChange,
@@ -811,6 +822,10 @@ export default function PlayerGrid({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const queuedIds = useMemo(() => new Set(queuedPlayerIds), [queuedPlayerIds]);
   const watchedIds = useMemo(() => new Set(watchedPlayerIds), [watchedPlayerIds]);
+  const pendingWatchlistIds = useMemo(
+    () => new Set(pendingWatchlistPlayerIds),
+    [pendingWatchlistPlayerIds]
+  );
   const visibleCategories = useMemo(
     () => selectedCategories.filter((category) => FANTASY_CATEGORIES[category]),
     [selectedCategories]
@@ -962,6 +977,7 @@ export default function PlayerGrid({
         selectedPlayerId={selectedPlayerId}
         queuedIds={queuedIds}
         watchedIds={watchedIds}
+        pendingWatchlistIds={pendingWatchlistIds}
         isLoading={isLoading}
         selectionInFlight={selectionInFlight}
         canMakePick={canMakePick}
