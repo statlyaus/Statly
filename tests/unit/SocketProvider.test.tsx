@@ -43,6 +43,7 @@ describe('SocketProvider', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.useRealTimers();
     authMock.currentUser = null;
     isDevelopmentAuthEnabled.mockReturnValue(false);
     process.env.NEXT_PUBLIC_SOCKET_URL = originalSocketUrl;
@@ -87,6 +88,33 @@ describe('SocketProvider', () => {
         'http://localhost:3002',
         expect.objectContaining({
           auth: { token: 'dev:dev-user' },
+        })
+      )
+    );
+  });
+
+  it('waits for Firebase auth restoration before creating the socket', async () => {
+    delete process.env.NEXT_PUBLIC_SOCKET_URL;
+    getIdToken.mockResolvedValue('restored-token');
+    authMock.currentUser = null;
+
+    render(
+      <SocketProvider uid="restored-user">
+        <div />
+      </SocketProvider>
+    );
+
+    expect(io).not.toHaveBeenCalled();
+
+    window.setTimeout(() => {
+      authMock.currentUser = { getIdToken };
+    }, 10);
+
+    await waitFor(() =>
+      expect(io).toHaveBeenCalledWith(
+        'http://localhost:3002',
+        expect.objectContaining({
+          auth: { token: 'restored-token' },
         })
       )
     );
