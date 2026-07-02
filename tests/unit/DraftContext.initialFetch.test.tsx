@@ -43,6 +43,9 @@ function DraftStateProbe() {
       <button type="button" onClick={() => void draft.toggleWatchlist('player-2')}>
         Toggle player 2 watchlist
       </button>
+      <button type="button" onClick={() => void draft.toggleWatchlist('player-3')}>
+        Toggle player 3 watchlist
+      </button>
     </div>
   );
 }
@@ -382,6 +385,171 @@ describe('DraftProvider initial hydration', () => {
     await waitFor(() => {
       expect(screen.getByTestId('watchlist-count')).toHaveTextContent('2');
       expect(screen.getByTestId('watchlist-order')).toHaveTextContent('player-1,player-2');
+    });
+  });
+
+  it('retains rapid watchlist adds resolved from stale render state', async () => {
+    let resolvePlayer2Add: (() => void) | undefined;
+    let resolvePlayer3Add: (() => void) | undefined;
+
+    fetchApi.mockImplementation(async (endpoint: string, options?: RequestInit) => {
+      if (endpoint === 'drafts/draft-1') {
+        return {
+          success: true,
+          data: {
+            id: 'draft-1',
+            name: 'Watchlist Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+            participants: [
+              {
+                slot: 1,
+                member: {
+                  id: 'member-1',
+                  userId: 'statly-dev-tester',
+                  displayName: 'Tester',
+                },
+              },
+            ],
+            selectedCategories: [],
+            draftReadiness: null,
+            liveState: {},
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/draft-1/players?page=1&pageSize=100') {
+        return {
+          success: true,
+          data: {
+            players: [
+              {
+                id: 'player-1',
+                name: 'Player One',
+                position: 'MID',
+                club: 'Sydney',
+                statlyZScore: 1,
+              },
+              {
+                id: 'player-2',
+                name: 'Player Two',
+                position: 'DEF',
+                club: 'Richmond',
+                statlyZScore: 2,
+              },
+              {
+                id: 'player-3',
+                name: 'Player Three',
+                position: 'FWD',
+                club: 'Brisbane',
+                statlyZScore: 3,
+              },
+            ],
+            pagination: { hasMore: false },
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/draft-1/watchlist?memberId=member-1') {
+        return {
+          success: true,
+          data: {
+            watchlist: [
+              {
+                id: 'watchlist-1',
+                playerId: 'player-1',
+                priority: 1,
+                rank: 1,
+                addedAt: '2026-06-13T10:00:00.000Z',
+                player: {
+                  id: 'player-1',
+                  name: 'Player One',
+                  position: 'MID',
+                  club: 'Sydney',
+                },
+              },
+            ],
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/draft-1/watchlist' && options?.method === 'POST') {
+        const payload = JSON.parse(String(options.body ?? '{}')) as { playerId?: string };
+
+        if (payload.playerId === 'player-2') {
+          await new Promise<void>((resolve) => {
+            resolvePlayer2Add = resolve;
+          });
+        }
+
+        if (payload.playerId === 'player-3') {
+          await new Promise<void>((resolve) => {
+            resolvePlayer3Add = resolve;
+          });
+        }
+
+        return {
+          success: true,
+          data: {
+            watchlistItem: {
+              id: `watchlist-${payload.playerId}`,
+              playerId: payload.playerId,
+              priority: payload.playerId === 'player-2' ? 2 : 3,
+              createdAt: '2026-06-13T10:01:00.000Z',
+              player:
+                payload.playerId === 'player-2'
+                  ? {
+                      id: 'player-2',
+                      name: 'Player Two',
+                      position: 'DEF',
+                      club: 'Richmond',
+                    }
+                  : {
+                      id: 'player-3',
+                      name: 'Player Three',
+                      position: 'FWD',
+                      club: 'Brisbane',
+                    },
+            },
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider draftId="draft-1" userId="statly-dev-tester">
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('watchlist-order')).toHaveTextContent('player-1');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle player 2 watchlist' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle player 3 watchlist' }));
+
+    await waitFor(() => {
+      expect(resolvePlayer2Add).toBeDefined();
+      expect(resolvePlayer3Add).toBeDefined();
+    });
+
+    act(() => {
+      resolvePlayer2Add?.();
+      resolvePlayer3Add?.();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('watchlist-count')).toHaveTextContent('3');
+      expect(screen.getByTestId('watchlist-order')).toHaveTextContent(
+        'player-1,player-2,player-3'
+      );
     });
   });
 
