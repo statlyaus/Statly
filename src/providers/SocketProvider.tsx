@@ -13,6 +13,8 @@ interface Props {
 }
 
 const SocketContext = createContext<Socket | null>(null);
+const SOCKET_AUTH_RETRY_DELAY_MS = 250;
+const SOCKET_AUTH_RETRY_ATTEMPTS = 16;
 
 function isSocketDisabled(): boolean {
   return process.env.NEXT_PUBLIC_SOCKET_DISABLED === 'true';
@@ -31,6 +33,28 @@ export async function resolveSocketAuthToken(uid: string): Promise<string | null
   return null;
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function resolveSocketAuthTokenWithRetry(
+  uid: string,
+  isCancelled: () => boolean
+): Promise<string | null> {
+  for (let attempt = 0; attempt < SOCKET_AUTH_RETRY_ATTEMPTS; attempt += 1) {
+    if (isCancelled()) return null;
+
+    const token = await resolveSocketAuthToken(uid);
+    if (token || isCancelled()) return token;
+
+    await wait(SOCKET_AUTH_RETRY_DELAY_MS);
+  }
+
+  return resolveSocketAuthToken(uid);
+}
+
 export function SocketProvider({ uid, children }: Props): React.JSX.Element {
   const [socket, setSocket] = useState<Socket | null>(null);
 
@@ -47,7 +71,7 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
 
     const connectSocket = async () => {
       try {
-        const token = await resolveSocketAuthToken(uid);
+        const token = await resolveSocketAuthTokenWithRetry(uid, () => cancelled);
         if (cancelled) {
           return;
         }
