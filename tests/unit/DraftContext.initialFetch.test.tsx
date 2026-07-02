@@ -33,8 +33,15 @@ function DraftStateProbe() {
       <div data-testid="player-count">{draft.availablePlayers.length}</div>
       <div data-testid="pick-count">{draft.picks.length}</div>
       <div data-testid="pick-order">{draft.picks.map((pick) => pick.id).join(',')}</div>
+      <div data-testid="watchlist-count">{draft.watchlistItems.length}</div>
+      <div data-testid="watchlist-order">
+        {draft.watchlistItems.map((item) => item.playerId).join(',')}
+      </div>
       <button type="button" onClick={() => void draft.makePick('player-1')}>
         Pick player 1
+      </button>
+      <button type="button" onClick={() => void draft.toggleWatchlist('player-2')}>
+        Toggle player 2 watchlist
       </button>
     </div>
   );
@@ -256,6 +263,126 @@ describe('DraftProvider initial hydration', () => {
     );
 
     expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1,pick-2');
+  });
+
+  it('retains existing watchlist items when adding another player', async () => {
+    fetchApi.mockImplementation(async (endpoint: string, options?: RequestInit) => {
+      if (endpoint === 'drafts/draft-1') {
+        return {
+          success: true,
+          data: {
+            id: 'draft-1',
+            name: 'Watchlist Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 24,
+            round: 1,
+            direction: 'FORWARD',
+            participants: [
+              {
+                slot: 1,
+                member: {
+                  id: 'member-1',
+                  userId: 'statly-dev-tester',
+                  displayName: 'Tester',
+                },
+              },
+            ],
+            selectedCategories: [],
+            draftReadiness: null,
+            liveState: {},
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/draft-1/players?page=1&pageSize=100') {
+        return {
+          success: true,
+          data: {
+            players: [
+              {
+                id: 'player-1',
+                name: 'Player One',
+                position: 'MID',
+                club: 'Sydney',
+                statlyZScore: 1,
+              },
+              {
+                id: 'player-2',
+                name: 'Player Two',
+                position: 'DEF',
+                club: 'Richmond',
+                statlyZScore: 2,
+              },
+            ],
+            pagination: { hasMore: false },
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/draft-1/watchlist?memberId=member-1') {
+        return {
+          success: true,
+          data: {
+            watchlist: [
+              {
+                id: 'watchlist-1',
+                playerId: 'player-1',
+                priority: 1,
+                rank: 1,
+                addedAt: '2026-06-13T10:00:00.000Z',
+                player: {
+                  id: 'player-1',
+                  name: 'Player One',
+                  position: 'MID',
+                  club: 'Sydney',
+                },
+              },
+            ],
+          },
+        };
+      }
+
+      if (endpoint === 'drafts/draft-1/watchlist' && options?.method === 'POST') {
+        return {
+          success: true,
+          data: {
+            watchlistItem: {
+              id: 'watchlist-2',
+              playerId: 'player-2',
+              priority: 2,
+              createdAt: '2026-06-13T10:01:00.000Z',
+              player: {
+                id: 'player-2',
+                name: 'Player Two',
+                position: 'DEF',
+                club: 'Richmond',
+              },
+            },
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider draftId="draft-1" userId="statly-dev-tester">
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('watchlist-order')).toHaveTextContent('player-1');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle player 2 watchlist' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('watchlist-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('watchlist-order')).toHaveTextContent('player-1,player-2');
+    });
   });
 
   it('hydrates an in-progress draft with persisted picks and authoritative deadline after refresh', async () => {
