@@ -87,6 +87,7 @@ interface DraftState {
   statSeason: number | null;
   statSeasons: number[];
   watchlistItems: DraftWatchlistItem[];
+  pendingWatchlistPlayerIds: string[];
   liveState: DraftLiveState;
   connection: { status: ConnectionStatus; latencyMs?: number; lastEventAt?: number };
   isLoading: boolean;
@@ -192,6 +193,74 @@ function normalizeParticipant(participant: any, index: number): DraftParticipant
 
 function normalizeParticipants(raw: unknown): DraftParticipant[] {
   return toArray<any>(raw).map(normalizeParticipant);
+}
+
+function normalizeWatchlistItem(
+  raw: unknown,
+  fallbackPlayer?: DraftPlayer,
+  fallbackPriority = 0
+): DraftWatchlistItem | null {
+  const source = asRecord(raw);
+  const playerSource = asRecord(firstPresent(source.player, fallbackPlayer));
+  const playerId = firstPresent(source.playerId, playerSource.id, fallbackPlayer?.id);
+
+  if (!playerId) return null;
+
+  const priority = Number(firstPresent(source.priority, source.rank, fallbackPriority));
+  const normalizedPriority = Number.isFinite(priority) ? priority : fallbackPriority;
+
+  return {
+    id: String(firstPresent(source.id, `watchlist-${playerId}`)),
+    playerId: String(playerId),
+    priority: normalizedPriority,
+    rank: normalizedPriority,
+    addedAt: String(firstPresent(source.addedAt, source.createdAt, new Date().toISOString())),
+    notes: source.notes ?? undefined,
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+    player: {
+      id: String(firstPresent(playerSource.id, playerId)),
+      name: String(firstPresent(playerSource.name, fallbackPlayer?.name, 'Unknown Player')),
+      position: String(firstPresent(playerSource.position, fallbackPlayer?.position, 'NA')),
+      club: String(firstPresent(playerSource.club, fallbackPlayer?.club, '')),
+    },
+  };
+}
+
+function sortWatchlistItems(items: DraftWatchlistItem[]): DraftWatchlistItem[] {
+  return items
+    .slice()
+    .sort((a, b) => Number(a?.rank ?? a?.priority ?? 0) - Number(b?.rank ?? b?.priority ?? 0));
+}
+
+function mergeWatchlistItem(
+  items: DraftWatchlistItem[],
+  itemToMerge: DraftWatchlistItem
+): DraftWatchlistItem[] {
+  const mergedByPlayerId = new Map<string, DraftWatchlistItem>();
+
+  for (const item of items) {
+    mergedByPlayerId.set(String(item.playerId), item);
+  }
+  mergedByPlayerId.set(String(itemToMerge.playerId), itemToMerge);
+
+  return sortWatchlistItems(Array.from(mergedByPlayerId.values()));
+}
+
+function removeWatchlistItem(
+  items: DraftWatchlistItem[],
+  playerId: string
+): DraftWatchlistItem[] {
+  return items.filter((item) => String(item.playerId) !== String(playerId));
+}
+
+function setPendingPlayerId(ids: string[], playerId: string, pending: boolean): string[] {
+  const id = String(playerId);
+  const exists = ids.some((entry) => String(entry) === id);
+
+  if (pending) return exists ? ids : [...ids, id];
+
+  return ids.filter((entry) => String(entry) !== id);
 }
 
 function participantQueueIncluded(raw: unknown): boolean {
@@ -660,6 +729,9 @@ type Action =
     }
   | { type: 'SET_STAT_SEASON'; season: number }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
+  | { type: 'MERGE_WATCHLIST_ITEM'; item: DraftWatchlistItem }
+  | { type: 'REMOVE_WATCHLIST_ITEM'; playerId: string }
+  | { type: 'SET_WATCHLIST_PENDING'; playerId: string; pending: boolean }
   | { type: 'SET_PERSISTED_PICKS'; picks: DraftPick[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
@@ -911,6 +983,27 @@ function reducer(state: DraftState, action: Action): DraftState {
         watchlistItems: action.items,
         error: null,
       };
+    case 'MERGE_WATCHLIST_ITEM':
+      return {
+        ...state,
+        watchlistItems: mergeWatchlistItem(state.watchlistItems, action.item),
+        error: null,
+      };
+    case 'REMOVE_WATCHLIST_ITEM':
+      return {
+        ...state,
+        watchlistItems: removeWatchlistItem(state.watchlistItems, action.playerId),
+        error: null,
+      };
+    case 'SET_WATCHLIST_PENDING':
+      return {
+        ...state,
+        pendingWatchlistPlayerIds: setPendingPlayerId(
+          state.pendingWatchlistPlayerIds,
+          action.playerId,
+          action.pending
+        ),
+      };
     case 'SET_PERSISTED_PICKS':
       return applyPersistedPicksState(state, action.picks);
     case 'APPLY_DELTAS': {
@@ -1032,6 +1125,7 @@ export function DraftProvider({
       statSeason: snap.statSeason,
       statSeasons: snap.statSeasons,
       watchlistItems: [],
+      pendingWatchlistPlayerIds: [],
       liveState: snap.liveState,
       connection: { status: 'disconnected', lastEventAt: snap.ts },
       isLoading: !initialSnapshot,
@@ -1161,16 +1255,13 @@ export function DraftProvider({
             rank?: number;
             addedAt?: string;
           }
-        >(res?.data?.watchlist ?? res?.watchlist)
-          .map((item) => ({
-            ...item,
-            rank: Number(item.rank ?? item.priority ?? 0),
-            addedAt: item.addedAt ?? item.createdAt ?? new Date().toISOString(),
-          }))
-          .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0));
+        >(res?.data?.watchlist ?? res?.watchlist).flatMap((item) => {
+          const normalized = normalizeWatchlistItem(item);
+          return normalized ? [normalized] : [];
+        });
 
         if (!isMounted.current) return;
-        dispatch({ type: 'SET_WATCHLIST', items });
+        dispatch({ type: 'SET_WATCHLIST', items: sortWatchlistItems(items) });
       } catch {
         // Watchlist hydration is best-effort; keep the room usable if it fails.
       }
@@ -1532,6 +1623,7 @@ export function DraftProvider({
 
   const addToWatchlist = useCallback(
     async (playerId: string) => {
+      const normalizedPlayerId = String(playerId);
       const player = state.availablePlayers.find((entry) => String(entry.id) === String(playerId));
       if (!player) {
         dispatch({
@@ -1549,16 +1641,33 @@ export function DraftProvider({
         return;
       }
 
-      if (state.watchlistItems.some((item) => String(item.playerId) === String(playerId))) {
+      if (
+        state.pendingWatchlistPlayerIds.some((id) => String(id) === normalizedPlayerId) ||
+        state.watchlistItems.some((item) => String(item.playerId) === normalizedPlayerId)
+      ) {
         return;
       }
 
-      dispatch({ type: 'SET_SAVING', saving: true });
-      try {
-        const nextPriority =
-          Math.max(0, ...state.watchlistItems.map((item) => Number(item.priority ?? 0))) + 1;
+      const nextPriority =
+        Math.max(0, ...state.watchlistItems.map((item) => Number(item.priority ?? 0))) + 1;
+      const optimisticItem = normalizeWatchlistItem(
+        {
+          id: `optimistic-watchlist-${normalizedPlayerId}`,
+          playerId: normalizedPlayerId,
+          priority: nextPriority,
+          addedAt: new Date().toISOString(),
+        },
+        player,
+        nextPriority
+      );
 
-        await fetchApi(`drafts/${draftId}/watchlist`, {
+      dispatch({ type: 'SET_WATCHLIST_PENDING', playerId: normalizedPlayerId, pending: true });
+      if (optimisticItem) {
+        dispatch({ type: 'MERGE_WATCHLIST_ITEM', item: optimisticItem });
+      }
+
+      try {
+        const res = await fetchApi(`drafts/${draftId}/watchlist`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1568,7 +1677,20 @@ export function DraftProvider({
           }),
         });
 
-        await hydrateMyWatchlist(memberId);
+        const persistedItem = normalizeWatchlistItem(
+          res?.data?.watchlistItem ?? res?.watchlistItem,
+          player,
+          nextPriority
+        );
+
+        if (persistedItem) {
+          dispatch({
+            type: 'MERGE_WATCHLIST_ITEM',
+            item: persistedItem,
+          });
+        } else {
+          await hydrateMyWatchlist(memberId);
+        }
       } catch (err: any) {
         if (isMounted.current) {
           dispatch({
@@ -1576,15 +1698,30 @@ export function DraftProvider({
             error: err?.message ?? 'Failed to add player to watchlist',
           });
         }
+        dispatch({ type: 'REMOVE_WATCHLIST_ITEM', playerId: normalizedPlayerId });
       } finally {
-        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+        if (isMounted.current) {
+          dispatch({
+            type: 'SET_WATCHLIST_PENDING',
+            playerId: normalizedPlayerId,
+            pending: false,
+          });
+        }
       }
     },
-    [draftId, hydrateMyWatchlist, memberId, state.availablePlayers, state.watchlistItems]
+    [
+      draftId,
+      hydrateMyWatchlist,
+      memberId,
+      state.availablePlayers,
+      state.pendingWatchlistPlayerIds,
+      state.watchlistItems,
+    ]
   );
 
   const removeFromWatchlist = useCallback(
     async (playerId: string) => {
+      const normalizedPlayerId = String(playerId);
       if (!memberId) {
         dispatch({
           type: 'SET_ERROR',
@@ -1593,17 +1730,22 @@ export function DraftProvider({
         return;
       }
 
-      dispatch({ type: 'SET_SAVING', saving: true });
+      if (state.pendingWatchlistPlayerIds.some((id) => String(id) === normalizedPlayerId)) {
+        return;
+      }
+
+      const existingItem = state.watchlistItems.find(
+        (item) => String(item.playerId) === normalizedPlayerId
+      );
+      if (!existingItem) return;
+
+      dispatch({ type: 'SET_WATCHLIST_PENDING', playerId: normalizedPlayerId, pending: true });
+      dispatch({ type: 'REMOVE_WATCHLIST_ITEM', playerId: normalizedPlayerId });
       try {
         await fetchApi(
           `drafts/${draftId}/watchlist?memberId=${encodeURIComponent(memberId)}&playerId=${encodeURIComponent(playerId)}`,
           { method: 'DELETE' }
         );
-
-        dispatch({
-          type: 'SET_WATCHLIST',
-          items: state.watchlistItems.filter((item) => String(item.playerId) !== String(playerId)),
-        });
       } catch (err: any) {
         if (isMounted.current) {
           dispatch({
@@ -1611,15 +1753,26 @@ export function DraftProvider({
             error: err?.message ?? 'Failed to remove player from watchlist',
           });
         }
+        dispatch({ type: 'MERGE_WATCHLIST_ITEM', item: existingItem });
       } finally {
-        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+        if (isMounted.current) {
+          dispatch({
+            type: 'SET_WATCHLIST_PENDING',
+            playerId: normalizedPlayerId,
+            pending: false,
+          });
+        }
       }
     },
-    [draftId, memberId, state.watchlistItems]
+    [draftId, memberId, state.pendingWatchlistPlayerIds, state.watchlistItems]
   );
 
   const toggleWatchlist = useCallback(
     async (playerId: string) => {
+      if (state.pendingWatchlistPlayerIds.some((id) => String(id) === String(playerId))) {
+        return;
+      }
+
       if (state.watchlistItems.some((item) => String(item.playerId) === String(playerId))) {
         await removeFromWatchlist(playerId);
         return;
@@ -1627,7 +1780,7 @@ export function DraftProvider({
 
       await addToWatchlist(playerId);
     },
-    [addToWatchlist, removeFromWatchlist, state.watchlistItems]
+    [addToWatchlist, removeFromWatchlist, state.pendingWatchlistPlayerIds, state.watchlistItems]
   );
 
   const isInWatchlist = useCallback(

@@ -112,6 +112,10 @@ function executor(): PlayerDataConvergenceTempDbExecutor & {
 } {
   const executedSql: string[] = [];
   const queries: string[] = [];
+  const query = vi.fn(async (sql: string, _params?: readonly unknown[]): Promise<unknown[]> => {
+    queries.push(sql);
+    return [{ count: 4 }];
+  });
 
   return {
     executedSql,
@@ -120,10 +124,7 @@ function executor(): PlayerDataConvergenceTempDbExecutor & {
       executedSql.push(sql);
       return 1;
     }),
-    query: vi.fn(async <T,>(sql: string): Promise<T[]> => {
-      queries.push(sql);
-      return [{ count: 4 }] as T[];
-    }),
+    query: query as unknown as PlayerDataConvergenceTempDbExecutor['query'],
   };
 }
 
