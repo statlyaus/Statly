@@ -712,6 +712,7 @@ type Action =
     }
   | { type: 'SET_STAT_SEASON'; season: number }
   | { type: 'SET_WATCHLIST'; items: DraftWatchlistItem[] }
+  | { type: 'MERGE_WATCHLIST_ITEM'; item: DraftWatchlistItem }
   | { type: 'SET_PERSISTED_PICKS'; picks: DraftPick[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
@@ -961,6 +962,12 @@ function reducer(state: DraftState, action: Action): DraftState {
       return {
         ...state,
         watchlistItems: action.items,
+        error: null,
+      };
+    case 'MERGE_WATCHLIST_ITEM':
+      return {
+        ...state,
+        watchlistItems: mergeWatchlistItem(state.watchlistItems, action.item),
         error: null,
       };
     case 'SET_PERSISTED_PICKS':
@@ -1625,8 +1632,8 @@ export function DraftProvider({
 
         if (persistedItem) {
           dispatch({
-            type: 'SET_WATCHLIST',
-            items: mergeWatchlistItem(state.watchlistItems, persistedItem),
+            type: 'MERGE_WATCHLIST_ITEM',
+            item: persistedItem,
           });
         } else {
           await hydrateMyWatchlist(memberId);
