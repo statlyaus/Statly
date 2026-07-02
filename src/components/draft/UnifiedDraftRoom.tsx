@@ -501,6 +501,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       watchlistItems={watchlistItems}
       onAddToQueue={handleAddWatchlistPlayerToQueue}
       queuedPlayerIds={queuePlayerIds}
+      pendingWatchlistPlayerIds={draft.pendingWatchlistPlayerIds}
       onRemoveFromWatchlist={draft.removeFromWatchlist}
       isLoading={draft.isSaving}
     />
@@ -690,6 +691,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   canMakePick={draft.canMakePick}
                   queuedPlayerIds={me?.queue || []}
                   watchedPlayerIds={watchlistItems.map((item) => item.playerId)}
+                  pendingWatchlistPlayerIds={draft.pendingWatchlistPlayerIds}
                   selectedCategories={selectedCategories}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}

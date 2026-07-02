@@ -29,6 +29,7 @@ interface WatchlistProps {
   watchlistItems: WatchlistItem[];
   onAddToQueue?: (player: DraftPlayer) => void | Promise<void>;
   queuedPlayerIds?: string[];
+  pendingWatchlistPlayerIds?: string[];
   onRemoveFromWatchlist: (playerId: string) => void | Promise<void>;
   isLoading?: boolean;
 }
@@ -89,6 +90,7 @@ export default function DraftWatchlist({
   watchlistItems,
   onAddToQueue,
   queuedPlayerIds = [],
+  pendingWatchlistPlayerIds = [],
   onRemoveFromWatchlist,
   isLoading = false,
 }: WatchlistProps) {
@@ -102,6 +104,10 @@ export default function DraftWatchlist({
   const queuedIds = useMemo(
     () => new Set(queuedPlayerIds.map((id) => String(id))),
     [queuedPlayerIds]
+  );
+  const pendingWatchlistIds = useMemo(
+    () => new Set(pendingWatchlistPlayerIds.map((id) => String(id))),
+    [pendingWatchlistPlayerIds]
   );
   const playerById = useMemo(
     () => new Map(players.map((player) => [String(player.id), player])),
@@ -247,6 +253,7 @@ export default function DraftWatchlist({
             const canActOnPlayer =
               Boolean(row.draftablePlayer) && !row.isDrafted && !row.isUnavailable;
             const avgPoints = row.player.avgPoints ?? row.player.averagePoints;
+            const isWatchlistPending = pendingWatchlistIds.has(String(row.item.playerId));
 
             return (
               <li
@@ -351,7 +358,7 @@ export default function DraftWatchlist({
                         onClick={() => {
                           void onRemoveFromWatchlist(String(row.item.playerId));
                         }}
-                        disabled={isLoading}
+                        disabled={isWatchlistPending}
                         className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                         aria-label={`Remove ${row.player.name} from watchlist`}
                       >

@@ -170,6 +170,24 @@ describe('PlayerGrid accessibility', () => {
     });
   });
 
+  it('keeps unrelated watchlist buttons available while one player is pending', () => {
+    const twoPlayers = [players[0], { ...players[0], id: 'player-2', name: 'Adam Treloar' }];
+
+    render(
+      <PlayerGrid
+        {...defaultProps}
+        players={twoPlayers}
+        totalPlayers={twoPlayers.length}
+        pendingWatchlistPlayerIds={['player-1']}
+      />
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Add Marcus Bontempelli to watchlist' })
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add Adam Treloar to watchlist' })).not.toBeDisabled();
+  });
+
   it('renders large draft player pools without truncating available rows', () => {
     const largePool = Array.from({ length: 130 }, (_, index) => buildPlayer(index + 1));
 
