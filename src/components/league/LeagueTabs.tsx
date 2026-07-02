@@ -41,6 +41,14 @@ interface Tab {
   badge?: number;
 }
 
+type OverviewTradeSummary = {
+  tradeId: string;
+  tradeName?: string;
+  status: string;
+  playerNames: string[];
+  lastUpdated?: number;
+};
+
 const TAB_IDS: readonly TabType[] = [
   'overview',
   'teams',
@@ -74,6 +82,10 @@ export default function LeagueTabs({
   const [teamActionMessage, setTeamActionMessage] = useState<LeagueSettingsMessage | null>(null);
   const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [overviewTrades, setOverviewTrades] = useState<OverviewTradeSummary[]>([]);
+  const [overviewTradesStatus, setOverviewTradesStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -104,6 +116,26 @@ export default function LeagueTabs({
   const selectedPlayerId = searchParams?.get('playerId') ?? null;
   const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
   const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;
+  const activeMembers = members.filter((member) => member.isActive !== false);
+  const openTeamSlots = Math.max(league.maxTeams - activeMembers.length, 0);
+  const waiverOrder = league.waiverWire?.waiverOrder ?? [];
+  const waiverPriorityIndex = currentMember
+    ? waiverOrder.findIndex(
+        (memberId) => memberId === currentMember.id || memberId === currentMember.userId
+      )
+    : -1;
+  const waiverPriorityLabel =
+    waiverPriorityIndex >= 0 ? `Priority ${waiverPriorityIndex + 1}` : 'Not set';
+  const waiverPolicyLabel =
+    league.waiverRule ?? league.waiverWire?.waiverResetPolicy ?? 'weekly';
+  const overviewTeams = activeMembers.slice(0, 5);
+  const categorySummary = league.categories
+    .slice(0, 4)
+    .map(
+      (category) =>
+        FANTASY_CATEGORIES[category]?.abbrev ?? FANTASY_CATEGORIES[category]?.label ?? category
+    )
+    .join(', ');
   const waiverMembersIndex = useMemo(
     () =>
       Object.fromEntries(
@@ -135,6 +167,72 @@ export default function LeagueTabs({
           timeStyle: 'short',
         }).format(draftDate)
       : 'Not scheduled';
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    let cancelled = false;
+
+    async function loadOverviewTrades() {
+      setOverviewTradesStatus('loading');
+
+      try {
+        const response = await authenticatedFetch(
+          `/api/trades/list?leagueId=${encodeURIComponent(league.id)}&status=PENDING&pageSize=3`,
+          {},
+          currentUserId
+        );
+
+        if (!response?.ok) {
+          throw new Error(`status ${response?.status ?? 'unknown'}`);
+        }
+
+        const payload = (await response.json()) as unknown;
+        const trades = isRecord(payload) && Array.isArray(payload.trades) ? payload.trades : [];
+        const summaries = trades
+          .map((trade): OverviewTradeSummary | null => {
+            if (!isRecord(trade) || !isRecord(trade.summary)) return null;
+            const summary = trade.summary;
+            const tradeId =
+              typeof summary.tradeId === 'string'
+                ? summary.tradeId
+                : typeof trade.tradeId === 'string'
+                  ? trade.tradeId
+                  : null;
+
+            if (!tradeId) return null;
+
+            return {
+              tradeId,
+              tradeName: typeof summary.tradeName === 'string' ? summary.tradeName : undefined,
+              status: typeof summary.status === 'string' ? summary.status : 'PENDING',
+              playerNames: Array.isArray(summary.playerNames)
+                ? summary.playerNames.filter((name): name is string => typeof name === 'string')
+                : [],
+              lastUpdated:
+                typeof summary.lastUpdated === 'number' ? summary.lastUpdated : undefined,
+            };
+          })
+          .filter((trade): trade is OverviewTradeSummary => trade !== null);
+
+        if (!cancelled) {
+          setOverviewTrades(summaries);
+          setOverviewTradesStatus('ready');
+        }
+      } catch {
+        if (!cancelled) {
+          setOverviewTrades([]);
+          setOverviewTradesStatus('error');
+        }
+      }
+    }
+
+    void loadOverviewTrades();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, league.id]);
 
   const handleRemoveMember = async (member: LeagueMember) => {
     if (!canRemoveTeams || member.userId === league.ownerId) return;
@@ -270,62 +368,237 @@ export default function LeagueTabs({
           >
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <section className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                      Your team
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-gray-900">
-                      {currentMember?.teamName ?? 'Team not set'}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      {currentMember?.role === 'owner' || currentMember?.role === 'manager'
-                        ? 'Commissioner access'
-                        : 'Member access'}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                      Draft status
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-gray-900">
-                      {draftReadiness?.status ?? 'Not prepared'}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      {isDraftComplete
-                        ? 'This draft has already been completed.'
-                        : draftRoomPath
-                          ? 'Room is available for this league.'
-                          : (draftReadiness?.blockers[0]?.message ??
-                            'Configure draft settings to prepare the room.')}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                      Scoring
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-gray-900">
-                      {league.categories.length} categories
-                    </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      {league.categories
-                        .slice(0, 3)
-                        .map((category) => FANTASY_CATEGORIES[category]?.label ?? category)
-                        .join(', ')}
-                    </p>
+                <section>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                    League snapshot
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                        Teams
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                        {activeMembers.length}/{league.maxTeams}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                        {openTeamSlots === 0
+                          ? 'League is full'
+                          : `${openTeamSlots} team ${openTeamSlots === 1 ? 'slot' : 'slots'} open`}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                        Waiver priority
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                        {waiverPriorityLabel}
+                      </p>
+                      <p className="mt-1 text-sm capitalize text-[color:var(--league-text-muted)]">
+                        {waiverPolicyLabel} reset
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                        Trade offers
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                        {overviewTradesStatus === 'loading' ? '...' : overviewTrades.length}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                        {overviewTradesStatus === 'error'
+                          ? 'Open trade centre to review'
+                          : overviewTrades.length === 1
+                            ? 'Pending offer'
+                            : 'Pending offers'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                        Scoring
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-[color:var(--league-text)]">
+                        {league.categories.length}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                        {categorySummary}
+                        {league.categories.length > 4 ? ` +${league.categories.length - 4} more` : ''}
+                      </p>
+                    </div>
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-gray-200 bg-white p-5">
+                <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                          Teams
+                        </p>
+                        <h2 className="mt-1 text-xl font-semibold text-[color:var(--league-text)]">
+                          League table snapshot
+                        </h2>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange('teams')}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                      >
+                        View teams
+                      </button>
+                    </div>
+                    <div className="mt-4 divide-y divide-[color:var(--league-border)]">
+                      {overviewTeams.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between gap-3 py-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
+                              {member.teamName || 'Unnamed team'}
+                            </p>
+                            <p className="mt-0.5 text-xs capitalize text-[color:var(--league-text-muted)]">
+                              {getLeagueMemberRoleLabel(member, league)}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-1 text-xs font-semibold text-[color:var(--league-text)]">
+                            {member.isActive === false ? 'Inactive' : 'Active'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                        Your team
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-[color:var(--league-text)]">
+                        {currentMember?.teamName ?? 'Team not set'}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                        {currentMember?.role === 'owner' || currentMember?.role === 'manager'
+                          ? 'Commissioner access'
+                          : 'Member access'}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                        Draft
+                      </p>
+                      <p className="mt-2 text-lg font-semibold text-[color:var(--league-text)]">
+                        {draftReadiness?.status ?? 'Not prepared'}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                        {isDraftComplete
+                          ? 'Draft complete. Rosters are ready to review.'
+                          : draftRoomPath
+                            ? 'Draft room is available.'
+                            : (draftReadiness?.blockers[0]?.message ??
+                              'Draft setup still needs attention.')}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                          Trades
+                        </p>
+                        <h2 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                          Offers needing review
+                        </h2>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/leagues/${league.id}/trades`)}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                      >
+                        Trade centre
+                      </button>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {overviewTradesStatus === 'loading' ? (
+                        <p className="text-sm text-[color:var(--league-text-muted)]">
+                          Checking pending offers...
+                        </p>
+                      ) : overviewTrades.length > 0 ? (
+                        overviewTrades.map((trade) => (
+                          <div
+                            key={trade.tradeId}
+                            className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-3"
+                          >
+                            <p className="text-sm font-semibold text-[color:var(--league-text)]">
+                              {trade.tradeName ?? `Trade ${trade.tradeId.slice(0, 8)}`}
+                            </p>
+                            <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
+                              {trade.playerNames.length > 0
+                                ? trade.playerNames.join(', ')
+                                : 'Player details available in trade centre'}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-[color:var(--league-text-muted)]">
+                          No pending trade offers.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                          Waivers
+                        </p>
+                        <h2 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                          Your claim position
+                        </h2>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange('waivers')}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                      >
+                        Waivers
+                      </button>
+                    </div>
+                    <div className="mt-4 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                      <p className="text-2xl font-semibold text-[color:var(--league-text)]">
+                        {waiverPriorityLabel}
+                      </p>
+                      <p className="mt-1 text-sm capitalize text-[color:var(--league-text-muted)]">
+                        {waiverPolicyLabel} waiver order
+                      </p>
+                      <p className="mt-3 text-sm text-[color:var(--league-text-muted)]">
+                        {waiverPriorityIndex >= 0
+                          ? 'Use the waiver tab to submit claims and check the queue before processing.'
+                          : 'Waiver order has not been set for your team yet.'}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-5">
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <h2 className="text-lg font-semibold text-gray-900">Next action</h2>
-                      <p className="mt-1 text-sm text-gray-600">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                        Next action
+                      </p>
+                      <h2 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                        {overviewTrades.length > 0
+                          ? 'Review pending trade offers'
+                          : isDraftComplete
+                            ? 'Review rosters and waiver options'
+                            : 'Finish draft setup'}
+                      </h2>
+                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
                         {isDraftComplete
-                          ? 'The draft is complete. Review rosters and manage teams from the league workspace.'
+                          ? 'The league is ready for roster, trade, and waiver management.'
                           : draftRoomPath
                             ? 'Enter the draft room to manage readiness, queue, watchlist, and picks.'
-                            : 'Open the draft tab to configure the draft room and commissioner settings.'}
+                          : 'Open the draft tab to configure the draft room and commissioner settings.'}
                       </p>
                     </div>
                     {!isDraftComplete && (

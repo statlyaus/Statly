@@ -5,6 +5,8 @@ import LeagueTabs from '@/components/league/LeagueTabs';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 import type { League, LeagueMember } from '@/types/leagues';
 
+const authenticatedFetchMock = vi.hoisted(() => vi.fn());
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/leagues/league-1',
   useRouter: () => ({
@@ -16,7 +18,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/lib/authenticatedFetch', () => ({
-  authenticatedFetch: vi.fn(),
+  authenticatedFetch: authenticatedFetchMock,
 }));
 
 const completedDraftReadiness: DraftOperationalReadiness = {
@@ -87,17 +89,14 @@ describe('LeagueTabs draft actions', () => {
       <LeagueTabs
         league={completedLeague}
         members={members}
-        currentUserId="statly-dev-tester"
       />
     );
 
     expect(screen.queryByRole('button', { name: 'Prepare draft' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Enter draft room' })).not.toBeInTheDocument();
-    expect(screen.getByText('This draft has already been completed.')).toBeInTheDocument();
+    expect(screen.getByText('Draft complete. Rosters are ready to review.')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'The draft is complete. Review rosters and manage teams from the league workspace.'
-      )
+      screen.getByText('The league is ready for roster, trade, and waiver management.')
     ).toBeInTheDocument();
   });
 });
