@@ -119,8 +119,12 @@ export default function LeagueTabs({
     [members]
   );
   const draftReadiness = league.draftReadiness ?? null;
+  const isDraftComplete =
+    draftReadiness?.status === 'completed' ||
+    draftReadiness?.lifecycle.isComplete === true ||
+    league.status === 'completed';
   const draftRoomPath =
-    draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
+    !isDraftComplete && draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
       ? `/drafts/${draftReadiness.draftId}`
       : null;
   const draftDate = league.draftDate ? new Date(league.draftDate) : null;
@@ -208,7 +212,7 @@ export default function LeagueTabs({
               >
                 Enter draft room
               </button>
-            ) : (
+            ) : !isDraftComplete ? (
               <button
                 type="button"
                 onClick={() => handleTabChange('draft')}
@@ -216,7 +220,7 @@ export default function LeagueTabs({
               >
                 Prepare draft
               </button>
-            )}
+            ) : null}
             <button
               type="button"
               onClick={() => handleTabChange('teams')}
@@ -288,10 +292,12 @@ export default function LeagueTabs({
                       {draftReadiness?.status ?? 'Not prepared'}
                     </p>
                     <p className="mt-1 text-sm text-gray-600">
-                      {draftRoomPath
-                        ? 'Room is available for this league.'
-                        : (draftReadiness?.blockers[0]?.message ??
-                          'Configure draft settings to prepare the room.')}
+                      {isDraftComplete
+                        ? 'This draft has already been completed.'
+                        : draftRoomPath
+                          ? 'Room is available for this league.'
+                          : (draftReadiness?.blockers[0]?.message ??
+                            'Configure draft settings to prepare the room.')}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -315,20 +321,24 @@ export default function LeagueTabs({
                     <div>
                       <h2 className="text-lg font-semibold text-gray-900">Next action</h2>
                       <p className="mt-1 text-sm text-gray-600">
-                        {draftRoomPath
-                          ? 'Enter the draft room to manage readiness, queue, watchlist, and picks.'
-                          : 'Open the draft tab to configure the draft room and commissioner settings.'}
+                        {isDraftComplete
+                          ? 'The draft is complete. Review rosters and manage teams from the league workspace.'
+                          : draftRoomPath
+                            ? 'Enter the draft room to manage readiness, queue, watchlist, and picks.'
+                            : 'Open the draft tab to configure the draft room and commissioner settings.'}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        draftRoomPath ? router.push(draftRoomPath) : handleTabChange('draft')
-                      }
-                      className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                    >
-                      {draftRoomPath ? 'Enter draft room' : 'Prepare draft'}
-                    </button>
+                    {!isDraftComplete && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          draftRoomPath ? router.push(draftRoomPath) : handleTabChange('draft')
+                        }
+                        className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                      >
+                        {draftRoomPath ? 'Enter draft room' : 'Prepare draft'}
+                      </button>
+                    )}
                   </div>
                 </section>
               </div>
