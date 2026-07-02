@@ -8,10 +8,8 @@ import {
   CheckCircle2,
   Loader2,
   Plus,
-  ShieldCheck,
   Trophy,
   UserPlus,
-  Users,
 } from 'lucide-react';
 
 import { useAuth } from '@/AuthContext';
@@ -35,12 +33,6 @@ function formatTeamCount(league: League): string {
   return typeof league.currentTeams === 'number'
     ? `${league.currentTeams}/${league.maxTeams} teams`
     : `${league.maxTeams} teams max`;
-}
-
-function formatLeagueCode(code?: string): string | null {
-  if (!code) return null;
-  if (code.startsWith('DRAFT_')) return 'Draft setup';
-  return `Code ${code}`;
 }
 
 function getDraftPhase(league: League): { label: string; detail: string } {
@@ -93,8 +85,15 @@ export default function LeaguesPage() {
     }
   }, [user]);
 
-  const activeCount = useMemo(
-    () => leagues.filter((league) => league.status === 'active').length,
+  const draftScheduledCount = useMemo(
+    () => leagues.filter((league) => league.status === 'preseason' && league.draftDate).length,
+    [leagues]
+  );
+
+  const draftCompleteCount = useMemo(
+    () =>
+      leagues.filter((league) => league.status === 'completed' || league.status === 'active')
+        .length,
     [leagues]
   );
 
@@ -139,12 +138,8 @@ export default function LeaguesPage() {
           <section className="grid gap-3 sm:grid-cols-3">
             {[
               { label: 'Leagues', value: leagues.length, icon: Trophy },
-              { label: 'Active', value: activeCount, icon: ShieldCheck },
-              {
-                label: 'Teams available',
-                value: leagues.reduce((sum, league) => sum + Math.max(league.maxTeams || 0, 0), 0),
-                icon: Users,
-              },
+              { label: 'Drafts scheduled', value: draftScheduledCount, icon: CalendarClock },
+              { label: 'Drafts complete', value: draftCompleteCount, icon: CheckCircle2 },
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -201,12 +196,12 @@ export default function LeaguesPage() {
                 </p>
               </div>
 
-              <div className="hidden border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:grid md:grid-cols-[minmax(0,1.8fr)_0.8fr_0.75fr_1fr_auto] md:items-center md:gap-4">
+              <div className="hidden border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:grid md:grid-cols-[minmax(0,1.7fr)_9.5rem_7rem_10rem_4.5rem] md:items-center md:gap-4">
                 <span>League</span>
                 <span>Draft status</span>
                 <span>Scoring</span>
                 <span>Draft</span>
-                <span className="text-right">Action</span>
+                <span className="justify-self-end">Action</span>
               </div>
 
               <div className="divide-y divide-[color:var(--league-border)]">
@@ -216,14 +211,13 @@ export default function LeaguesPage() {
                     league.status === 'completed' || league.status === 'active'
                       ? CheckCircle2
                       : CalendarClock;
-                  const leagueCode = formatLeagueCode(league.code);
 
                   return (
                     <Link
                       href={`/leagues/${league.id}`}
                       key={league.id}
                       aria-label={`Open ${league.name} league command center`}
-                      className="group relative grid gap-4 px-5 py-4 transition hover:bg-[color:var(--league-page)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--league-primary)] sm:px-6 md:grid-cols-[minmax(0,1.8fr)_0.8fr_0.75fr_1fr_auto] md:items-center md:gap-4"
+                      className="group relative grid gap-4 px-5 py-4 transition hover:bg-[color:var(--league-page)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--league-primary)] sm:px-6 md:grid-cols-[minmax(0,1.7fr)_9.5rem_7rem_10rem_4.5rem] md:items-center md:gap-4"
                     >
                       <span
                         className="absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-transparent transition group-hover:bg-[color:var(--league-primary)]"
@@ -240,11 +234,6 @@ export default function LeaguesPage() {
                             </h2>
                             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[color:var(--league-text-muted)]">
                               <span>{formatTeamCount(league)}</span>
-                              {leagueCode ? (
-                                <span className="rounded-full bg-[color:var(--league-page)] px-2 py-0.5 text-xs font-medium text-[color:var(--league-text-muted)]">
-                                  {leagueCode}
-                                </span>
-                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -290,7 +279,7 @@ export default function LeaguesPage() {
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between border-t border-[color:var(--league-border)] pt-3 text-sm font-semibold text-[color:var(--league-primary)] md:justify-end md:border-t-0 md:pt-0">
+                      <div className="flex items-center justify-between border-t border-[color:var(--league-border)] pt-3 text-sm font-semibold text-[color:var(--league-primary)] md:justify-end md:justify-self-end md:border-t-0 md:pt-0">
                         <span className="md:sr-only">Open league command center</span>
                         <span className="inline-flex items-center gap-2 rounded-full border border-transparent px-3 py-1.5 transition group-hover:border-[color:var(--league-border)] group-hover:bg-[color:var(--league-surface)]">
                           <span className="hidden md:inline">Open</span>
