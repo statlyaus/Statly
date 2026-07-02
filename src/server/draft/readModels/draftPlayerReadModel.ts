@@ -319,19 +319,27 @@ export function getDraftStatSeasonOptions(
   requestedSeason?: number | null
 ): DraftStatSeasonOptions {
   const currentSeason = new Date().getFullYear();
-  const availableSeasonSet = new Set<number>([currentSeason]);
+  const availableSeasonSet = new Set<number>();
 
   for (const player of players) {
+    if (typeof player.statsSeason === 'number' && Number.isFinite(player.statsSeason)) {
+      availableSeasonSet.add(player.statsSeason);
+    }
+
     for (const season of player.availableStatSeasons ?? []) {
       if (Number.isFinite(season)) availableSeasonSet.add(season);
     }
   }
 
   const availableSeasons = Array.from(availableSeasonSet).sort((a, b) => b - a);
+  const fallbackSeason = availableSeasons[0] ?? currentSeason;
   const selectedSeason =
-    requestedSeason && availableSeasonSet.has(requestedSeason) ? requestedSeason : currentSeason;
+    requestedSeason && availableSeasonSet.has(requestedSeason) ? requestedSeason : fallbackSeason;
 
-  return { selectedSeason, availableSeasons };
+  return {
+    selectedSeason,
+    availableSeasons: availableSeasons.length > 0 ? availableSeasons : [fallbackSeason],
+  };
 }
 
 export function buildDraftPlayerStatsLookup(
