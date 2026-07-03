@@ -22,13 +22,15 @@ describe('league member identity route architecture', () => {
     expect(route).toContain("return NextResponse.json({ error: 'Invalid request body' }");
   });
 
-  it('normalizes team symbol input through the shared validation helper', () => {
+  it('normalizes team setting input through shared validation helpers', () => {
     const route = source();
 
     expect(route).toContain('normalizeTeamSymbolPosition');
     expect(route).toContain('normalizeTeamSymbolUrl');
     expect(route).toContain('normalizeTeamSymbolZoom');
-    expect(route).toContain('const teamLogoUrl = normalizeTeamSymbolUrl(body.teamLogoUrl);');
+    expect(route).toContain('function parseTeamName(value: unknown): string');
+    expect(route).toContain('function parseNotificationSettings');
+    expect(route).toContain('teamLogoUrl: normalizeTeamSymbolUrl(body.teamLogoUrl)');
     expect(route).toContain(
       'teamLogoPositionX: normalizeTeamSymbolPosition(body.teamLogoPositionX)'
     );
@@ -39,15 +41,16 @@ describe('league member identity route architecture', () => {
     expect(route).toContain("return NextResponse.json({ error: error.message }, { status: 400 });");
   });
 
-  it('updates Prisma first and Firestore fallback with the same field', () => {
+  it('updates Prisma first and Firestore fallback with partial member settings', () => {
     const route = source();
 
     expect(route).toContain('await prisma.leagueMember.update({');
     expect(route).toContain('where: { id: membership.memberDocId }');
-    expect(route).toContain('data: { teamLogoUrl, teamLogoPositionX, teamLogoPositionY, teamLogoZoom }');
-    expect(route).toContain('teamLogoPositionX,');
-    expect(route).toContain('teamLogoPositionY,');
-    expect(route).toContain('teamLogoZoom,');
+    expect(route).toContain('const prismaData:');
+    expect(route).toContain('const firestorePatch:');
+    expect(route).toContain('data: prismaData');
+    expect(route).toContain('notificationSettingsJson');
+    expect(route).toContain('queueLeagueMembershipPatch(batch, id, userId, firestorePatch)');
     expect(route).toContain('await batch.commit();');
   });
 

@@ -10,6 +10,7 @@ describe('league settings UI architecture', () => {
     const leagueTabsSource = source();
 
     expect(leagueTabsSource).toContain('<LeagueSettingsPanel');
+    expect(leagueTabsSource).toContain("{ id: 'league-settings', name: 'League Settings' }");
     expect(leagueTabsSource).toContain('memberCount={members.length}');
     expect(leagueTabsSource).toContain('currentUserId={currentUserId}');
     expect(leagueTabsSource).toContain(
@@ -45,26 +46,42 @@ describe('league settings UI architecture', () => {
     expect(leagueTabsSource).toContain('Save league settings');
   });
 
-  it('keeps team identity editing available to ordinary league members', () => {
+  it('keeps member-owned team settings available to ordinary league members', () => {
     const leagueTabsSource = source();
 
+    expect(leagueTabsSource).toContain('<TeamSettingsPanel');
+    expect(leagueTabsSource).toContain("{ id: 'team-settings', name: 'Team Settings' }");
+    expect(leagueTabsSource).toContain("value === 'settings'");
+    expect(leagueTabsSource).toContain("return isAdmin ? 'league-settings' : 'team-settings'");
+    expect(leagueTabsSource).toContain('Team Settings');
+    expect(leagueTabsSource).toContain('Team details');
+    expect(leagueTabsSource).toContain('Team name');
     expect(leagueTabsSource).toContain('Team identity');
     expect(leagueTabsSource).toContain('Team symbol URL');
     expect(leagueTabsSource).toContain('Upload team symbol');
+    expect(leagueTabsSource).toContain('Trade offers');
+    expect(leagueTabsSource).toContain('Waiver updates');
+    expect(leagueTabsSource).toContain('Draft reminders');
+    expect(leagueTabsSource).toContain('Scoring alerts');
     expect(leagueTabsSource).toContain('Zoom');
     expect(leagueTabsSource).toContain('Horizontal centre');
     expect(leagueTabsSource).toContain('Vertical centre');
     expect(leagueTabsSource).toContain('lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]');
-    expect(leagueTabsSource).toContain('aspect-square w-72');
-    expect(leagueTabsSource).toContain('lg:w-[22rem]');
+    expect(leagueTabsSource).toContain('aspect-square w-full max-w-sm');
     expect(leagueTabsSource).toContain('mix-blend-difference');
     expect(leagueTabsSource).toContain('teamLogoPositionX');
     expect(leagueTabsSource).toContain('teamLogoPositionY');
     expect(leagueTabsSource).toContain('teamLogoZoom');
+    expect(leagueTabsSource).toContain('notificationSettings');
     expect(leagueTabsSource).toContain('`/api/leagues/${league.id}/members/me`');
     expect(leagueTabsSource).toContain("method: 'PATCH'");
-    expect(leagueTabsSource.indexOf('Team identity')).toBeLessThan(
-      leagueTabsSource.indexOf('<fieldset disabled={!isAdmin || isSaving}')
+    expect(leagueTabsSource.indexOf('function TeamSettingsPanel')).toBeLessThan(
+      leagueTabsSource.indexOf('function LeagueSettingsPanel')
     );
+    expect(
+      leagueTabsSource
+        .slice(leagueTabsSource.indexOf('function LeagueSettingsPanel'))
+        .includes('Team identity')
+    ).toBe(false);
   });
 });

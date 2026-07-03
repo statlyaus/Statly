@@ -10,7 +10,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/leagues/league-1',
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   useSearchParams: () => ({
-    get: (key: string) => (key === 'tab' ? 'settings' : null),
+    get: (key: string) => (key === 'tab' ? 'team-settings' : null),
   }),
 }));
 
@@ -39,6 +39,12 @@ const members: LeagueMember[] = [
     userId: 'member-user',
     role: 'member',
     teamName: 'Member Team',
+    notificationSettings: {
+      tradePush: true,
+      waiverPush: true,
+      draftReminder: true,
+      scoringAlerts: true,
+    },
     joinedAt: '2026-06-01T00:00:00.000Z',
     isActive: true,
   },
@@ -102,10 +108,12 @@ describe('LeagueTabs team identity settings', () => {
             data: {
               member: {
                 ...members[0],
+                teamName: body.teamName ?? members[0].teamName,
                 teamLogoUrl: body.teamLogoUrl,
                 teamLogoPositionX: body.teamLogoPositionX,
                 teamLogoPositionY: body.teamLogoPositionY,
                 teamLogoZoom: body.teamLogoZoom,
+                notificationSettings: body.notificationSettings ?? members[0].notificationSettings,
               },
             },
           }),
@@ -164,6 +172,48 @@ describe('LeagueTabs team identity settings', () => {
       transform: 'scale(1.5)',
       transformOrigin: '30% 80%',
     });
+  });
+
+  it('lets an ordinary member save team name and league notification preferences', async () => {
+    mockLeagueFetches();
+
+    render(<LeagueTabs league={league} members={members} currentUserId="member-user" />);
+
+    expect(await screen.findByRole('heading', { name: 'Team Settings' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Team name'), {
+      target: { value: 'Updated Member Team' },
+    });
+    fireEvent.click(screen.getByLabelText('Trade offers'));
+    fireEvent.click(screen.getByLabelText('Scoring alerts'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save team settings' }));
+
+    await waitFor(() => {
+      expect(authenticatedFetchMock).toHaveBeenCalledWith(
+        '/api/leagues/league-1/members/me',
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teamName: 'Updated Member Team',
+            notificationSettings: {
+              tradePush: false,
+              waiverPush: true,
+              draftReminder: true,
+              scoringAlerts: false,
+            },
+          }),
+        },
+        'member-user'
+      );
+    });
+
+    expect(await screen.findByText('Team settings saved.')).toBeInTheDocument();
+    expect(authenticatedFetchMock).not.toHaveBeenCalledWith(
+      '/api/leagues/league-1/settings',
+      expect.anything(),
+      expect.anything()
+    );
   });
 
   it('rejects unsupported upload files before making a network request', async () => {
