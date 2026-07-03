@@ -78,7 +78,7 @@ describe('LeagueTabs team identity settings', () => {
   });
 
   function mockLeagueFetches() {
-    authenticatedFetchMock.mockImplementation((url: string) => {
+    authenticatedFetchMock.mockImplementation((url: string, options?: RequestInit) => {
       if (url.includes('/trades/list')) {
         return Promise.resolve({
           ok: true,
@@ -94,6 +94,7 @@ describe('LeagueTabs team identity settings', () => {
       }
 
       if (url === '/api/leagues/league-1/members/me') {
+        const body = typeof options?.body === 'string' ? JSON.parse(options.body) : {};
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -101,7 +102,9 @@ describe('LeagueTabs team identity settings', () => {
             data: {
               member: {
                 ...members[0],
-                teamLogoUrl: 'https://cdn.example.com/member-team.png',
+                teamLogoUrl: body.teamLogoUrl,
+                teamLogoPositionX: body.teamLogoPositionX,
+                teamLogoPositionY: body.teamLogoPositionY,
               },
             },
           }),
@@ -126,6 +129,12 @@ describe('LeagueTabs team identity settings', () => {
     fireEvent.change(screen.getByLabelText('Team symbol URL'), {
       target: { value: 'https://cdn.example.com/member-team.png' },
     });
+    fireEvent.change(screen.getByLabelText(/Horizontal centre/), {
+      target: { value: '30' },
+    });
+    fireEvent.change(screen.getByLabelText(/Vertical centre/), {
+      target: { value: '80' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save team symbol' }));
 
     await waitFor(() => {
@@ -134,13 +143,20 @@ describe('LeagueTabs team identity settings', () => {
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ teamLogoUrl: 'https://cdn.example.com/member-team.png' }),
+          body: JSON.stringify({
+            teamLogoUrl: 'https://cdn.example.com/member-team.png',
+            teamLogoPositionX: 30,
+            teamLogoPositionY: 80,
+          }),
         },
         'member-user'
       );
     });
 
     expect(await screen.findByText('Team symbol saved.')).toBeInTheDocument();
+    expect(screen.getByAltText('Member Team symbol preview')).toHaveStyle({
+      objectPosition: '30% 80%',
+    });
   });
 
   it('rejects unsupported upload files before making a network request', async () => {
@@ -154,6 +170,27 @@ describe('LeagueTabs team identity settings', () => {
     });
 
     expect(await screen.findByText('Upload a PNG, JPEG, or WebP image.')).toBeInTheDocument();
+    expect(authenticatedFetchMock).not.toHaveBeenCalledWith(
+      '/api/leagues/league-1/members/me',
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('previews supported upload files before saving so members can adjust the thumbnail', async () => {
+    mockLeagueFetches();
+
+    render(<LeagueTabs league={league} members={members} currentUserId="member-user" />);
+
+    const file = new File(['png-bytes'], 'symbol.png', { type: 'image/png' });
+    fireEvent.change(await screen.findByLabelText('Upload team symbol'), {
+      target: { files: [file] },
+    });
+
+    const preview = await screen.findByAltText('Member Team symbol preview');
+    await waitFor(() => {
+      expect(preview).toHaveAttribute('src', expect.stringContaining('data:image/png;base64'));
+    });
     expect(authenticatedFetchMock).not.toHaveBeenCalledWith(
       '/api/leagues/league-1/members/me',
       expect.anything(),

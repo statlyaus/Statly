@@ -480,6 +480,9 @@ export default function LeagueTabs({
                                 src={member.teamLogoUrl}
                                 alt={`${member.teamName || 'Team'} symbol`}
                                 referrerPolicy="no-referrer"
+                                style={{
+                                  objectPosition: getTeamLogoObjectPosition(member),
+                                }}
                                 className="h-full w-full object-cover"
                               />
                             ) : (
@@ -1063,6 +1066,18 @@ function getTeamInitials(teamName: string): string {
   return initials || 'T';
 }
 
+function getTeamLogoPositionValue(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(100, Math.round(value)))
+    : 50;
+}
+
+function getTeamLogoObjectPosition(member: Pick<LeagueMember, 'teamLogoPositionX' | 'teamLogoPositionY'>): string {
+  return `${getTeamLogoPositionValue(member.teamLogoPositionX)}% ${getTeamLogoPositionValue(
+    member.teamLogoPositionY
+  )}%`;
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1079,7 +1094,11 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function resizeTeamSymbolDataUrl(dataUrl: string): Promise<string> {
+function resizeTeamSymbolDataUrl(
+  dataUrl: string,
+  positionX = 50,
+  positionY = 50
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => {
@@ -1093,8 +1112,10 @@ function resizeTeamSymbolDataUrl(dataUrl: string): Promise<string> {
       }
 
       const size = Math.min(image.naturalWidth, image.naturalHeight);
-      const sourceX = Math.max(0, (image.naturalWidth - size) / 2);
-      const sourceY = Math.max(0, (image.naturalHeight - size) / 2);
+      const maxSourceX = Math.max(0, image.naturalWidth - size);
+      const maxSourceY = Math.max(0, image.naturalHeight - size);
+      const sourceX = Math.round(maxSourceX * (getTeamLogoPositionValue(positionX) / 100));
+      const sourceY = Math.round(maxSourceY * (getTeamLogoPositionValue(positionY) / 100));
       context.drawImage(
         image,
         sourceX,
@@ -1194,6 +1215,15 @@ function LeagueSettingsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<LeagueSettingsMessage | null>(null);
   const [teamSymbolUrl, setTeamSymbolUrl] = useState(currentMember?.teamLogoUrl ?? '');
+  const [teamSymbolPositionX, setTeamSymbolPositionX] = useState(
+    getTeamLogoPositionValue(currentMember?.teamLogoPositionX)
+  );
+  const [teamSymbolPositionY, setTeamSymbolPositionY] = useState(
+    getTeamLogoPositionValue(currentMember?.teamLogoPositionY)
+  );
+  const [pendingTeamSymbolUploadDataUrl, setPendingTeamSymbolUploadDataUrl] = useState<
+    string | null
+  >(null);
   const [teamSymbolMessage, setTeamSymbolMessage] = useState<LeagueSettingsMessage | null>(null);
   const [isSavingTeamSymbol, setIsSavingTeamSymbol] = useState(false);
 
@@ -1203,7 +1233,10 @@ function LeagueSettingsPanel({
 
   useEffect(() => {
     setTeamSymbolUrl(currentMember?.teamLogoUrl ?? '');
-  }, [currentMember?.teamLogoUrl]);
+    setTeamSymbolPositionX(getTeamLogoPositionValue(currentMember?.teamLogoPositionX));
+    setTeamSymbolPositionY(getTeamLogoPositionValue(currentMember?.teamLogoPositionY));
+    setPendingTeamSymbolUploadDataUrl(null);
+  }, [currentMember?.teamLogoPositionX, currentMember?.teamLogoPositionY, currentMember?.teamLogoUrl]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -1282,18 +1315,38 @@ function LeagueSettingsPanel({
     }));
   };
 
-  const saveTeamSymbol = async (nextTeamSymbolUrl: string) => {
+  const saveTeamSymbol = async (
+    nextTeamSymbolUrl: string,
+    nextPositionX = teamSymbolPositionX,
+    nextPositionY = teamSymbolPositionY
+  ) => {
     if (!currentUserId || !currentMember) return;
+
+    const normalizedPositionX = getTeamLogoPositionValue(nextPositionX);
+    const normalizedPositionY = getTeamLogoPositionValue(nextPositionY);
 
     try {
       setIsSavingTeamSymbol(true);
       setTeamSymbolMessage(null);
+      const shouldResizePendingUpload =
+        pendingTeamSymbolUploadDataUrl && nextTeamSymbolUrl === pendingTeamSymbolUploadDataUrl;
+      const teamLogoUrlForSave = shouldResizePendingUpload
+        ? await resizeTeamSymbolDataUrl(
+            pendingTeamSymbolUploadDataUrl,
+            normalizedPositionX,
+            normalizedPositionY
+          )
+        : nextTeamSymbolUrl;
       const response = await authenticatedFetch(
         `/api/leagues/${league.id}/members/me`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ teamLogoUrl: nextTeamSymbolUrl }),
+          body: JSON.stringify({
+            teamLogoUrl: teamLogoUrlForSave,
+            teamLogoPositionX: normalizedPositionX,
+            teamLogoPositionY: normalizedPositionY,
+          }),
         },
         currentUserId
       );
@@ -1311,10 +1364,15 @@ function LeagueSettingsPanel({
             } as LeagueMember)
           : {
               ...currentMember,
-              teamLogoUrl: nextTeamSymbolUrl || undefined,
+              teamLogoUrl: teamLogoUrlForSave || undefined,
+              teamLogoPositionX: normalizedPositionX,
+              teamLogoPositionY: normalizedPositionY,
             };
 
       setTeamSymbolUrl(nextMember.teamLogoUrl ?? '');
+      setTeamSymbolPositionX(getTeamLogoPositionValue(nextMember.teamLogoPositionX));
+      setTeamSymbolPositionY(getTeamLogoPositionValue(nextMember.teamLogoPositionY));
+      setPendingTeamSymbolUploadDataUrl(null);
       onMemberIdentityChange?.(nextMember);
       setTeamSymbolMessage({ type: 'success', text: 'Team symbol saved.' });
     } catch (error) {
@@ -1341,9 +1399,8 @@ function LeagueSettingsPanel({
     try {
       setTeamSymbolMessage(null);
       const dataUrl = await readFileAsDataUrl(file);
-      const resizedDataUrl = await resizeTeamSymbolDataUrl(dataUrl);
-      setTeamSymbolUrl(resizedDataUrl);
-      await saveTeamSymbol(resizedDataUrl);
+      setPendingTeamSymbolUploadDataUrl(dataUrl);
+      setTeamSymbolUrl(dataUrl);
     } catch (error) {
       setTeamSymbolMessage({
         type: 'error',
@@ -1433,6 +1490,9 @@ function LeagueSettingsPanel({
                   src={teamSymbolUrl}
                   alt={`${currentMember.teamName} symbol preview`}
                   referrerPolicy="no-referrer"
+                  style={{
+                    objectPosition: `${teamSymbolPositionX}% ${teamSymbolPositionY}%`,
+                  }}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -1463,7 +1523,10 @@ function LeagueSettingsPanel({
                 type="url"
                 value={teamSymbolUrl.startsWith('data:') ? '' : teamSymbolUrl}
                 placeholder="https://example.com/team-symbol.png"
-                onChange={(event) => setTeamSymbolUrl(event.target.value)}
+                onChange={(event) => {
+                  setPendingTeamSymbolUploadDataUrl(null);
+                  setTeamSymbolUrl(event.target.value);
+                }}
                 className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               />
             </label>
@@ -1496,6 +1559,49 @@ function LeagueSettingsPanel({
               className="block w-full text-sm text-[color:var(--league-text-muted)] file:mr-4 file:rounded-md file:border-0 file:bg-[color:var(--league-page)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[color:var(--league-text)]"
             />
           </label>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Horizontal centre
+              <div className="flex items-center gap-3">
+                <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Left</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={teamSymbolPositionX}
+                  onChange={(event) =>
+                    setTeamSymbolPositionX(getTeamLogoPositionValue(Number(event.target.value)))
+                  }
+                  className="w-full accent-[color:var(--league-primary)]"
+                />
+                <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
+                  Right
+                </span>
+              </div>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Vertical centre
+              <div className="flex items-center gap-3">
+                <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Top</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={teamSymbolPositionY}
+                  onChange={(event) =>
+                    setTeamSymbolPositionY(getTeamLogoPositionValue(Number(event.target.value)))
+                  }
+                  className="w-full accent-[color:var(--league-primary)]"
+                />
+                <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
+                  Bottom
+                </span>
+              </div>
+            </label>
+          </div>
         </section>
       )}
 

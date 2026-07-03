@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_TEAM_SYMBOL_DATA_URL_LENGTH, normalizeTeamSymbolUrl } from '@/lib/teamSymbol';
+import {
+  DEFAULT_TEAM_SYMBOL_POSITION,
+  MAX_TEAM_SYMBOL_DATA_URL_LENGTH,
+  normalizeTeamSymbolPosition,
+  normalizeTeamSymbolUrl,
+} from '@/lib/teamSymbol';
 
 const INVALID_TEAM_SYMBOL_MESSAGE =
   'Team symbol must be an http(s) URL or a PNG, JPEG, or WebP data URL';
@@ -53,5 +58,20 @@ describe('team symbol validation', () => {
     const oversized = `data:image/png;base64,${'a'.repeat(MAX_TEAM_SYMBOL_DATA_URL_LENGTH)}`;
 
     expect(() => normalizeTeamSymbolUrl(oversized)).toThrow('Uploaded team symbol is too large');
+  });
+
+  it('normalizes team symbol focus positions to percentages', () => {
+    expect(normalizeTeamSymbolPosition(25)).toBe(25);
+    expect(normalizeTeamSymbolPosition('75')).toBe(75);
+    expect(normalizeTeamSymbolPosition(25.6)).toBe(26);
+    expect(normalizeTeamSymbolPosition(-20)).toBe(0);
+    expect(normalizeTeamSymbolPosition(140)).toBe(100);
+  });
+
+  it('falls back to centered focus for missing or invalid positions', () => {
+    expect(normalizeTeamSymbolPosition(undefined)).toBe(DEFAULT_TEAM_SYMBOL_POSITION);
+    expect(normalizeTeamSymbolPosition(null)).toBe(DEFAULT_TEAM_SYMBOL_POSITION);
+    expect(normalizeTeamSymbolPosition('not-a-number')).toBe(DEFAULT_TEAM_SYMBOL_POSITION);
+    expect(normalizeTeamSymbolPosition(undefined, 35)).toBe(35);
   });
 });

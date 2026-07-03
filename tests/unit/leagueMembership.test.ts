@@ -104,6 +104,8 @@ describe('leagueMembership architecture helpers', () => {
           role: 'OWNER',
           teamName: 'Owner Team',
           teamLogoUrl: 'https://cdn.example.com/owner.png',
+          teamLogoPositionX: 35,
+          teamLogoPositionY: 70,
           joinedAt: new Date('2026-06-01T00:00:00.000Z'),
         },
       ],
@@ -121,6 +123,8 @@ describe('leagueMembership architecture helpers', () => {
         role: 'OWNER',
         teamName: 'Owner Team',
         teamLogoUrl: 'https://cdn.example.com/owner.png',
+        teamLogoPositionX: 35,
+        teamLogoPositionY: 70,
         joinedAt: new Date('2026-06-01T00:00:00.000Z'),
         isActive: true,
         status: 'ACTIVE',
@@ -189,6 +193,8 @@ describe('leagueMembership architecture helpers', () => {
       role: 'owner',
       teamName: 'Owner Team',
       teamLogoUrl: undefined,
+      teamLogoPositionX: undefined,
+      teamLogoPositionY: undefined,
       isActive: true,
       status: 'ACTIVE',
       draftPreferences: {
@@ -208,6 +214,8 @@ describe('leagueMembership architecture helpers', () => {
       role: 'member',
       teamName: 'Symbol Team',
       teamLogoUrl: 'https://cdn.example.com/symbol-team.png',
+      teamLogoPositionX: 25,
+      teamLogoPositionY: 80,
       joinedAt: '2026-07-03T00:00:00.000Z',
     });
 
@@ -217,6 +225,8 @@ describe('leagueMembership architecture helpers', () => {
       role: 'member',
       teamName: 'Symbol Team',
       teamLogoUrl: 'https://cdn.example.com/symbol-team.png',
+      teamLogoPositionX: 25,
+      teamLogoPositionY: 80,
       isActive: true,
       status: 'ACTIVE',
     });
@@ -225,20 +235,28 @@ describe('leagueMembership architecture helpers', () => {
   it('patches team symbols without changing unrelated membership fields', () => {
     const patch = toCanonicalLeagueMembershipPatch({
       teamLogoUrl: 'data:image/png;base64,abc123',
+      teamLogoPositionX: 10,
+      teamLogoPositionY: 90,
     });
 
     expect(patch).toEqual({
       teamLogoUrl: 'data:image/png;base64,abc123',
+      teamLogoPositionX: 10,
+      teamLogoPositionY: 90,
     });
   });
 
   it('preserves null team symbols in membership patches so symbols can be cleared', () => {
     const patch = toCanonicalLeagueMembershipPatch({
       teamLogoUrl: null,
+      teamLogoPositionX: null,
+      teamLogoPositionY: null,
     });
 
     expect(patch).toEqual({
       teamLogoUrl: null,
+      teamLogoPositionX: null,
+      teamLogoPositionY: null,
     });
   });
 

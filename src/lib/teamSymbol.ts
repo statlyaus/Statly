@@ -8,6 +8,7 @@ const INVALID_TEAM_SYMBOL_MESSAGE =
   'Team symbol must be an http(s) URL or a PNG, JPEG, or WebP data URL';
 
 export const MAX_TEAM_SYMBOL_DATA_URL_LENGTH = 120_000;
+export const DEFAULT_TEAM_SYMBOL_POSITION = 50;
 
 export function normalizeTeamSymbolUrl(value: unknown): string | null {
   if (value === null || value === undefined) return null;
@@ -43,4 +44,16 @@ export function normalizeTeamSymbolUrl(value: unknown): string | null {
   }
 
   return parsed.toString();
+}
+
+export function normalizeTeamSymbolPosition(
+  value: unknown,
+  fallback = DEFAULT_TEAM_SYMBOL_POSITION
+): number {
+  if (value === null || value === undefined || value === '') return fallback;
+
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value));
+  if (!Number.isFinite(parsed)) return fallback;
+
+  return Math.max(0, Math.min(100, Math.round(parsed)));
 }

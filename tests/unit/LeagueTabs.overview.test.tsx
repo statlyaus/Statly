@@ -50,6 +50,8 @@ const members: LeagueMember[] = [
     role: 'owner',
     teamName: 'First Team',
     teamLogoUrl: 'https://cdn.example.com/first-team.png',
+    teamLogoPositionX: 20,
+    teamLogoPositionY: 75,
     joinedAt: '2026-06-01T00:00:00.000Z',
     isActive: true,
   },
@@ -109,6 +111,7 @@ describe('LeagueTabs overview snapshot', () => {
 
     const firstTeamSymbol = screen.getByRole('img', { name: 'First Team symbol' });
     expect(firstTeamSymbol).toHaveAttribute('src', 'https://cdn.example.com/first-team.png');
+    expect(firstTeamSymbol).toHaveStyle({ objectPosition: '20% 75%' });
     expect(screen.getAllByText('Second Team').length).toBeGreaterThan(0);
     expect(screen.getByText('ST')).toBeInTheDocument();
     expect(screen.getByText('Third Team')).toBeInTheDocument();

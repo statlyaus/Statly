@@ -51,6 +51,10 @@ describe('league settings UI architecture', () => {
     expect(leagueTabsSource).toContain('Team identity');
     expect(leagueTabsSource).toContain('Team symbol URL');
     expect(leagueTabsSource).toContain('Upload team symbol');
+    expect(leagueTabsSource).toContain('Horizontal centre');
+    expect(leagueTabsSource).toContain('Vertical centre');
+    expect(leagueTabsSource).toContain('teamLogoPositionX');
+    expect(leagueTabsSource).toContain('teamLogoPositionY');
     expect(leagueTabsSource).toContain('`/api/leagues/${league.id}/members/me`');
     expect(leagueTabsSource).toContain("method: 'PATCH'");
     expect(leagueTabsSource.indexOf('Team identity')).toBeLessThan(
