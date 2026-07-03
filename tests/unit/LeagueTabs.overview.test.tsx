@@ -104,11 +104,13 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByText('Trade offers')).toBeInTheDocument();
     expect(screen.getByText('5 categories')).toBeInTheDocument();
     expect(screen.getAllByText('Priority 2').length).toBeGreaterThan(0);
-    expect(screen.getByText('Team symbols')).toBeInTheDocument();
+    expect(screen.getAllByText('Teams').length).toBeGreaterThan(1);
     expect(screen.getByText('4-team league')).toBeInTheDocument();
     expect(screen.queryByText('League table')).not.toBeInTheDocument();
     expect(screen.queryByText('Role')).not.toBeInTheDocument();
     expect(screen.queryByText('Status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Owner')).not.toBeInTheDocument();
+    expect(screen.queryByText('Member')).not.toBeInTheDocument();
 
     const firstTeamSymbol = screen.getByRole('img', { name: 'First Team symbol' });
     expect(firstTeamSymbol).toHaveAttribute('src', 'https://cdn.example.com/first-team.png');

@@ -458,7 +458,7 @@ export default function LeagueTabs({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Team symbols
+                          Teams
                         </p>
                         <h3 className="mt-1 text-lg font-semibold text-slate-950">
                           {league.maxTeams}-team league
@@ -477,9 +477,9 @@ export default function LeagueTabs({
                       {overviewTeams.map((member) => (
                         <div
                           key={member.id}
-                          className="group flex min-h-36 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-4 text-center transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_18px_35px_-28px_rgba(15,23,42,0.45)]"
+                          className="group flex min-h-32 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-center transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_18px_35px_-28px_rgba(15,23,42,0.45)]"
                         >
-                          <div className="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                          <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:size-28">
                             {member.teamLogoUrl ? (
                               <img
                                 src={member.teamLogoUrl}
@@ -494,11 +494,8 @@ export default function LeagueTabs({
                               </span>
                             )}
                           </div>
-                          <p className="mt-3 min-h-10 text-sm font-semibold leading-5 text-slate-950">
+                          <p className="mt-3 text-sm font-semibold leading-5 text-slate-950">
                             {member.teamName || 'Unnamed team'}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {getLeagueMemberRoleLabel(member, league)}
                           </p>
                         </div>
                       ))}
