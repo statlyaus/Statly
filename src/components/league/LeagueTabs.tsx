@@ -1514,17 +1514,17 @@ function LeagueSettingsPanel({
 
       {currentMember && (
         <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(180px,220px)] lg:items-start">
-            <div>
-              <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-                Team identity
-              </h3>
-              <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-                Set the symbol shown for {currentMember.teamName} across this league.
-              </p>
-            </div>
-            <div className="justify-self-start lg:justify-self-end">
-              <div className="relative flex aspect-square w-44 items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] shadow-sm sm:w-52 lg:w-56">
+          <div className="grid gap-6 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] lg:items-start">
+            <div className="flex flex-col gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+                  Team identity
+                </h3>
+                <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                  Set the symbol shown for {currentMember.teamName} across this league.
+                </p>
+              </div>
+              <div className="relative flex aspect-square w-72 max-w-full items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] shadow-sm sm:w-80 lg:w-[22rem]">
                 {teamSymbolUrl ? (
                   <img
                     src={teamSymbolUrl}
@@ -1538,7 +1538,7 @@ function LeagueSettingsPanel({
                     className="h-full w-full object-cover will-change-transform"
                   />
                 ) : (
-                  <span className="text-4xl font-semibold text-[color:var(--league-text)]">
+                  <span className="text-5xl font-semibold text-[color:var(--league-text)]">
                     {getTeamInitials(currentMember.teamName)}
                   </span>
                 )}
@@ -1548,130 +1548,134 @@ function LeagueSettingsPanel({
                 />
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-3 rounded-xl border border-white/45 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]"
+                  className="pointer-events-none absolute inset-4 rounded-xl border border-white/45 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]"
                 />
               </div>
             </div>
-          </div>
 
-          {teamSymbolMessage && (
-            <div
-              role="status"
-              className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
-                teamSymbolMessage.type === 'success'
-                  ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
-                  : 'border-red-200 bg-red-50 text-red-700'
-              }`}
-            >
-              {teamSymbolMessage.text}
+            <div className="flex flex-col gap-5">
+              {teamSymbolMessage && (
+                <div
+                  role="status"
+                  className={`rounded-lg border px-4 py-3 text-sm ${
+                    teamSymbolMessage.type === 'success'
+                      ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
+                      : 'border-red-200 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {teamSymbolMessage.text}
+                </div>
+              )}
+
+              <div className="grid gap-4">
+                <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                  Team symbol URL
+                  <input
+                    type="url"
+                    value={teamSymbolUrl.startsWith('data:') ? '' : teamSymbolUrl}
+                    placeholder="https://example.com/team-symbol.png"
+                    onChange={(event) => {
+                      setPendingTeamSymbolUploadDataUrl(null);
+                      setTeamSymbolUrl(event.target.value);
+                    }}
+                    className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  />
+                </label>
+
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                  <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                    Upload team symbol
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(event) => void handleTeamSymbolUpload(event.target.files?.[0])}
+                      className="block w-full text-sm text-[color:var(--league-text-muted)] file:mr-4 file:rounded-md file:border-0 file:bg-[color:var(--league-page)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[color:var(--league-text)]"
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void saveTeamSymbol(teamSymbolUrl)}
+                      disabled={isSavingTeamSymbol}
+                      className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                    >
+                      {isSavingTeamSymbol ? 'Saving...' : 'Save team symbol'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveTeamSymbol('')}
+                      disabled={isSavingTeamSymbol}
+                      className="inline-flex h-10 items-center justify-center rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                  Zoom
+                  <div className="flex items-center gap-3">
+                    <span className="w-10 text-xs text-[color:var(--league-text-muted)]">1x</span>
+                    <input
+                      type="range"
+                      min={MIN_TEAM_SYMBOL_ZOOM}
+                      max={MAX_TEAM_SYMBOL_ZOOM}
+                      step="0.05"
+                      value={teamSymbolZoom}
+                      onChange={(event) =>
+                        setTeamSymbolZoom(getTeamLogoZoomValue(Number(event.target.value)))
+                      }
+                      className="w-full accent-[color:var(--league-primary)]"
+                    />
+                    <span className="w-12 text-right text-xs text-[color:var(--league-text-muted)]">
+                      {teamSymbolZoom.toFixed(2)}x
+                    </span>
+                  </div>
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                  Horizontal centre
+                  <div className="flex items-center gap-3">
+                    <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Left</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={teamSymbolPositionX}
+                      onChange={(event) =>
+                        setTeamSymbolPositionX(getTeamLogoPositionValue(Number(event.target.value)))
+                      }
+                      className="w-full accent-[color:var(--league-primary)]"
+                    />
+                    <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
+                      Right
+                    </span>
+                  </div>
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                  Vertical centre
+                  <div className="flex items-center gap-3">
+                    <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Top</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={teamSymbolPositionY}
+                      onChange={(event) =>
+                        setTeamSymbolPositionY(getTeamLogoPositionValue(Number(event.target.value)))
+                      }
+                      className="w-full accent-[color:var(--league-primary)]"
+                    />
+                    <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
+                      Bottom
+                    </span>
+                  </div>
+                </label>
+              </div>
             </div>
-          )}
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto]">
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
-              Team symbol URL
-              <input
-                type="url"
-                value={teamSymbolUrl.startsWith('data:') ? '' : teamSymbolUrl}
-                placeholder="https://example.com/team-symbol.png"
-                onChange={(event) => {
-                  setPendingTeamSymbolUploadDataUrl(null);
-                  setTeamSymbolUrl(event.target.value);
-                }}
-                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-              />
-            </label>
-            <div className="flex items-end gap-2">
-              <button
-                type="button"
-                onClick={() => void saveTeamSymbol(teamSymbolUrl)}
-                disabled={isSavingTeamSymbol}
-                className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
-              >
-                {isSavingTeamSymbol ? 'Saving...' : 'Save team symbol'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void saveTeamSymbol('')}
-                disabled={isSavingTeamSymbol}
-                className="inline-flex h-10 items-center justify-center rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-
-          <label className="mt-4 flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
-            Upload team symbol
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => void handleTeamSymbolUpload(event.target.files?.[0])}
-              className="block w-full text-sm text-[color:var(--league-text-muted)] file:mr-4 file:rounded-md file:border-0 file:bg-[color:var(--league-page)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[color:var(--league-text)]"
-            />
-          </label>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
-              Zoom
-              <div className="flex items-center gap-3">
-                <span className="w-10 text-xs text-[color:var(--league-text-muted)]">1x</span>
-                <input
-                  type="range"
-                  min={MIN_TEAM_SYMBOL_ZOOM}
-                  max={MAX_TEAM_SYMBOL_ZOOM}
-                  step="0.05"
-                  value={teamSymbolZoom}
-                  onChange={(event) =>
-                    setTeamSymbolZoom(getTeamLogoZoomValue(Number(event.target.value)))
-                  }
-                  className="w-full accent-[color:var(--league-primary)]"
-                />
-                <span className="w-12 text-right text-xs text-[color:var(--league-text-muted)]">
-                  {teamSymbolZoom.toFixed(2)}x
-                </span>
-              </div>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
-              Horizontal centre
-              <div className="flex items-center gap-3">
-                <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Left</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={teamSymbolPositionX}
-                  onChange={(event) =>
-                    setTeamSymbolPositionX(getTeamLogoPositionValue(Number(event.target.value)))
-                  }
-                  className="w-full accent-[color:var(--league-primary)]"
-                />
-                <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
-                  Right
-                </span>
-              </div>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
-              Vertical centre
-              <div className="flex items-center gap-3">
-                <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Top</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={teamSymbolPositionY}
-                  onChange={(event) =>
-                    setTeamSymbolPositionY(getTeamLogoPositionValue(Number(event.target.value)))
-                  }
-                  className="w-full accent-[color:var(--league-primary)]"
-                />
-                <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
-                  Bottom
-                </span>
-              </div>
-            </label>
           </div>
         </section>
       )}

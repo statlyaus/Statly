@@ -54,8 +54,9 @@ describe('league settings UI architecture', () => {
     expect(leagueTabsSource).toContain('Zoom');
     expect(leagueTabsSource).toContain('Horizontal centre');
     expect(leagueTabsSource).toContain('Vertical centre');
-    expect(leagueTabsSource).toContain('aspect-square w-44');
-    expect(leagueTabsSource).toContain('lg:w-56');
+    expect(leagueTabsSource).toContain('lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]');
+    expect(leagueTabsSource).toContain('aspect-square w-72');
+    expect(leagueTabsSource).toContain('lg:w-[22rem]');
     expect(leagueTabsSource).toContain('mix-blend-difference');
     expect(leagueTabsSource).toContain('teamLogoPositionX');
     expect(leagueTabsSource).toContain('teamLogoPositionY');
