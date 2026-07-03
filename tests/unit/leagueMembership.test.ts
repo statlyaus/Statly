@@ -36,6 +36,7 @@ import {
   listActiveUserLeagueMemberships,
   queueLeagueMembershipSet,
   toCanonicalLeagueMembershipData,
+  toCanonicalLeagueMembershipPatch,
   verifyLeagueMembership,
 } from '../../src/lib/leagueMembership';
 
@@ -102,6 +103,7 @@ describe('leagueMembership architecture helpers', () => {
           userId: 'owner-user',
           role: 'OWNER',
           teamName: 'Owner Team',
+          teamLogoUrl: 'https://cdn.example.com/owner.png',
           joinedAt: new Date('2026-06-01T00:00:00.000Z'),
         },
       ],
@@ -118,6 +120,7 @@ describe('leagueMembership architecture helpers', () => {
         userId: 'owner-user',
         role: 'OWNER',
         teamName: 'Owner Team',
+        teamLogoUrl: 'https://cdn.example.com/owner.png',
         joinedAt: new Date('2026-06-01T00:00:00.000Z'),
         isActive: true,
         status: 'ACTIVE',
@@ -185,6 +188,7 @@ describe('leagueMembership architecture helpers', () => {
       userId: 'user-1',
       role: 'owner',
       teamName: 'Owner Team',
+      teamLogoUrl: undefined,
       isActive: true,
       status: 'ACTIVE',
       draftPreferences: {
@@ -194,6 +198,47 @@ describe('leagueMembership architecture helpers', () => {
         priorityPositions: ['MID', 'FWD', 'DEF', 'RUC'],
         maxDraftTime: 90,
       },
+    });
+  });
+
+  it('persists team symbols in canonical membership documents', () => {
+    const data = toCanonicalLeagueMembershipData({
+      leagueId: 'league-1',
+      userId: 'user-1',
+      role: 'member',
+      teamName: 'Symbol Team',
+      teamLogoUrl: 'https://cdn.example.com/symbol-team.png',
+      joinedAt: '2026-07-03T00:00:00.000Z',
+    });
+
+    expect(data).toMatchObject({
+      leagueId: 'league-1',
+      userId: 'user-1',
+      role: 'member',
+      teamName: 'Symbol Team',
+      teamLogoUrl: 'https://cdn.example.com/symbol-team.png',
+      isActive: true,
+      status: 'ACTIVE',
+    });
+  });
+
+  it('patches team symbols without changing unrelated membership fields', () => {
+    const patch = toCanonicalLeagueMembershipPatch({
+      teamLogoUrl: 'data:image/png;base64,abc123',
+    });
+
+    expect(patch).toEqual({
+      teamLogoUrl: 'data:image/png;base64,abc123',
+    });
+  });
+
+  it('preserves null team symbols in membership patches so symbols can be cleared', () => {
+    const patch = toCanonicalLeagueMembershipPatch({
+      teamLogoUrl: null,
+    });
+
+    expect(patch).toEqual({
+      teamLogoUrl: null,
     });
   });
 

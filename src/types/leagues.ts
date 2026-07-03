@@ -54,6 +54,7 @@ export interface LeagueMemberDoc {
   userId: string;
   role: MemberRole;
   teamName: string;
+  teamLogoUrl?: string;
   joinedAt: Timestamp; // Firestore Timestamp
   leftAt?: Timestamp; // Firestore Timestamp
   isActive?: boolean;
@@ -66,6 +67,7 @@ export interface LeagueMember {
   userId: string;
   role: MemberRole;
   teamName: string;
+  teamLogoUrl?: string;
   joinedAt: string; // ISO timestamp
   leftAt?: string; // ISO timestamp
   isActive?: boolean;

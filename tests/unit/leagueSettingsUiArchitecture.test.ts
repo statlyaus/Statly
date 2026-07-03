@@ -44,4 +44,17 @@ describe('league settings UI architecture', () => {
     expect(leagueTabsSource).toContain('if (!isAdmin) return;');
     expect(leagueTabsSource).toContain('Save league settings');
   });
+
+  it('keeps team identity editing available to ordinary league members', () => {
+    const leagueTabsSource = source();
+
+    expect(leagueTabsSource).toContain('Team identity');
+    expect(leagueTabsSource).toContain('Team symbol URL');
+    expect(leagueTabsSource).toContain('Upload team symbol');
+    expect(leagueTabsSource).toContain('`/api/leagues/${league.id}/members/me`');
+    expect(leagueTabsSource).toContain("method: 'PATCH'");
+    expect(leagueTabsSource.indexOf('Team identity')).toBeLessThan(
+      leagueTabsSource.indexOf('<fieldset disabled={!isAdmin || isSaving}')
+    );
+  });
 });

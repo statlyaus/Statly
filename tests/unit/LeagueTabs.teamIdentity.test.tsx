@@ -1,0 +1,163 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import LeagueTabs from '@/components/league/LeagueTabs';
+import type { League, LeagueMember } from '@/types/leagues';
+
+const authenticatedFetchMock = vi.hoisted(() => vi.fn());
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/leagues/league-1',
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => ({
+    get: (key: string) => (key === 'tab' ? 'settings' : null),
+  }),
+}));
+
+vi.mock('@/lib/authenticatedFetch', () => ({
+  authenticatedFetch: authenticatedFetchMock,
+}));
+
+const league: League = {
+  id: 'league-1',
+  name: 'Identity League',
+  code: 'ABC12345',
+  type: 'private',
+  ownerId: 'owner-user',
+  maxTeams: 12,
+  categories: ['goals', 'tackles', 'inside50s'],
+  tradeSettings: { tradeLimit: 10, tradeReview: 'none' },
+  waiverWire: { waiverOrder: [], waiverPeriodHours: 24, waiverResetPolicy: 'weekly' },
+  createdAt: '2026-06-01T00:00:00.000Z',
+  status: 'preseason',
+};
+
+const members: LeagueMember[] = [
+  {
+    id: 'member-1',
+    leagueId: 'league-1',
+    userId: 'member-user',
+    role: 'member',
+    teamName: 'Member Team',
+    joinedAt: '2026-06-01T00:00:00.000Z',
+    isActive: true,
+  },
+];
+
+const settingsPayload = {
+  success: true,
+  data: {
+    league: {
+      id: 'league-1',
+      name: 'Identity League',
+      code: 'ABC12345',
+      maxTeams: 12,
+      locked: false,
+    },
+    scoring: { scoringFormat: 'nine-category', categories: ['goals', 'tackles', 'inside50s'] },
+    roster: {
+      rosterSize: 18,
+      benchSize: 4,
+      positionLimits: { DEF: 6, MID: 8, RUC: 2, FWD: 6, BENCH: 4 },
+    },
+    draft: {
+      draftDate: '2026-07-03T00:00:00.000Z',
+      draftType: 'snake',
+      timePerPick: 120,
+      pickOrder: 'random',
+      timeZone: 'Australia/Melbourne',
+      autoPickRules: { enabled: true, strategy: 'queue-first' },
+    },
+    waiver: { waiverRule: 'weekly' },
+  },
+};
+
+describe('LeagueTabs team identity settings', () => {
+  beforeEach(() => {
+    authenticatedFetchMock.mockReset();
+  });
+
+  function mockLeagueFetches() {
+    authenticatedFetchMock.mockImplementation((url: string) => {
+      if (url.includes('/trades/list')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ trades: [] }),
+        });
+      }
+
+      if (url === '/api/leagues/league-1/settings') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => settingsPayload,
+        });
+      }
+
+      if (url === '/api/leagues/league-1/members/me') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            success: true,
+            data: {
+              member: {
+                ...members[0],
+                teamLogoUrl: 'https://cdn.example.com/member-team.png',
+              },
+            },
+          }),
+        });
+      }
+
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: async () => ({ success: false, error: `Unexpected URL ${url}` }),
+      });
+    });
+  }
+
+  it('lets an ordinary member save a pasted team symbol URL', async () => {
+    mockLeagueFetches();
+
+    render(<LeagueTabs league={league} members={members} currentUserId="member-user" />);
+
+    expect(await screen.findByText('Team identity')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Team symbol URL'), {
+      target: { value: 'https://cdn.example.com/member-team.png' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save team symbol' }));
+
+    await waitFor(() => {
+      expect(authenticatedFetchMock).toHaveBeenCalledWith(
+        '/api/leagues/league-1/members/me',
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamLogoUrl: 'https://cdn.example.com/member-team.png' }),
+        },
+        'member-user'
+      );
+    });
+
+    expect(await screen.findByText('Team symbol saved.')).toBeInTheDocument();
+  });
+
+  it('rejects unsupported upload files before making a network request', async () => {
+    mockLeagueFetches();
+
+    render(<LeagueTabs league={league} members={members} currentUserId="member-user" />);
+
+    const file = new File(['<svg></svg>'], 'symbol.svg', { type: 'image/svg+xml' });
+    fireEvent.change(await screen.findByLabelText('Upload team symbol'), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByText('Upload a PNG, JPEG, or WebP image.')).toBeInTheDocument();
+    expect(authenticatedFetchMock).not.toHaveBeenCalledWith(
+      '/api/leagues/league-1/members/me',
+      expect.anything(),
+      expect.anything()
+    );
+  });
+});

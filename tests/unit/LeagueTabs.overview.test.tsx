@@ -49,6 +49,7 @@ const members: LeagueMember[] = [
     userId: 'user-1',
     role: 'owner',
     teamName: 'First Team',
+    teamLogoUrl: 'https://cdn.example.com/first-team.png',
     joinedAt: '2026-06-01T00:00:00.000Z',
     isActive: true,
   },
@@ -59,6 +60,15 @@ const members: LeagueMember[] = [
     role: 'member',
     teamName: 'Second Team',
     joinedAt: '2026-06-02T00:00:00.000Z',
+    isActive: true,
+  },
+  {
+    id: 'member-3',
+    leagueId: 'league-1',
+    userId: 'user-3',
+    role: 'member',
+    teamName: 'Third Team',
+    joinedAt: '2026-06-03T00:00:00.000Z',
     isActive: true,
   },
 ];
@@ -87,13 +97,22 @@ describe('LeagueTabs overview snapshot', () => {
 
     expect(screen.getByText('League overview')).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot League').length).toBeGreaterThan(0);
-    expect(screen.getByText('2/4 teams')).toBeInTheDocument();
+    expect(screen.getByText('3/4 teams')).toBeInTheDocument();
     expect(screen.getByText('Trade offers')).toBeInTheDocument();
     expect(screen.getByText('5 categories')).toBeInTheDocument();
     expect(screen.getAllByText('Priority 2').length).toBeGreaterThan(0);
-    expect(screen.getByText('Team preview')).toBeInTheDocument();
-    expect(screen.getByText('First Team')).toBeInTheDocument();
+    expect(screen.getByText('Team symbols')).toBeInTheDocument();
+    expect(screen.getByText('4-team league')).toBeInTheDocument();
+    expect(screen.queryByText('League table')).not.toBeInTheDocument();
+    expect(screen.queryByText('Role')).not.toBeInTheDocument();
+    expect(screen.queryByText('Status')).not.toBeInTheDocument();
+
+    const firstTeamSymbol = screen.getByRole('img', { name: 'First Team symbol' });
+    expect(firstTeamSymbol).toHaveAttribute('src', 'https://cdn.example.com/first-team.png');
     expect(screen.getAllByText('Second Team').length).toBeGreaterThan(0);
+    expect(screen.getByText('ST')).toBeInTheDocument();
+    expect(screen.getByText('Third Team')).toBeInTheDocument();
+    expect(screen.getByText('TT')).toBeInTheDocument();
     expect(screen.getByText('Offers needing review')).toBeInTheDocument();
 
     await waitFor(() => {

@@ -128,7 +128,7 @@ export default function LeagueTabs({
     waiverPriorityIndex >= 0 ? `Priority ${waiverPriorityIndex + 1}` : 'Not set';
   const waiverPolicyLabel =
     league.waiverRule ?? league.waiverWire?.waiverResetPolicy ?? 'weekly';
-  const overviewTeams = activeMembers.slice(0, 5);
+  const overviewTeams = activeMembers.slice(0, league.maxTeams);
   const categorySummary = league.categories
     .slice(0, 4)
     .map(
@@ -449,13 +449,15 @@ export default function LeagueTabs({
                     </div>
                   </div>
 
-                  <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Team preview
+                          Team symbols
                         </p>
-                        <h3 className="mt-1 text-lg font-semibold text-slate-950">League table</h3>
+                        <h3 className="mt-1 text-lg font-semibold text-slate-950">
+                          {league.maxTeams}-team league
+                        </h3>
                       </div>
                       <button
                         type="button"
@@ -465,27 +467,36 @@ export default function LeagueTabs({
                         View teams
                       </button>
                     </div>
-                    <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-slate-200 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      <span>Team</span>
-                      <span>Role</span>
-                      <span>Status</span>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                      {overviewTeams.map((member) => (
+                        <div
+                          key={member.id}
+                          className="group flex min-h-36 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-4 text-center transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_18px_35px_-28px_rgba(15,23,42,0.45)]"
+                        >
+                          <div className="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            {member.teamLogoUrl ? (
+                              <img
+                                src={member.teamLogoUrl}
+                                alt={`${member.teamName || 'Team'} symbol`}
+                                referrerPolicy="no-referrer"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-lg font-semibold text-slate-700">
+                                {getTeamInitials(member.teamName || 'Team')}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-3 min-h-10 text-sm font-semibold leading-5 text-slate-950">
+                            {member.teamName || 'Unnamed team'}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {getLeagueMemberRoleLabel(member, league)}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                    {overviewTeams.map((member) => (
-                      <div
-                        key={member.id}
-                        className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0"
-                      >
-                        <span className="truncate text-sm font-semibold text-slate-950">
-                          {member.teamName || 'Unnamed team'}
-                        </span>
-                        <span className="text-xs capitalize text-slate-600">
-                          {getLeagueMemberRoleLabel(member, league)}
-                        </span>
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                          {member.isActive === false ? 'Inactive' : 'Active'}
-                        </span>
-                      </div>
-                    ))}
                   </div>
                 </section>
 
@@ -853,6 +864,13 @@ export default function LeagueTabs({
                 isAdmin={isAdmin}
                 isActive
                 currentUserId={currentUserId}
+                currentMember={currentMember}
+                onMemberIdentityChange={(nextMember) => {
+                  const nextMembers = members.map((member) =>
+                    member.id === nextMember.id ? { ...member, ...nextMember } : member
+                  );
+                  onMembersChange?.(nextMembers);
+                }}
               />
             )}
           </motion.div>
@@ -910,6 +928,9 @@ const POSITION_LIMIT_LABELS: Record<PositionLimitKey, string> = {
 
 const CATEGORY_PRESET = [...REAL_DATA_NINE_CATEGORY_PRESET];
 const FANTASY_CATEGORY_KEYS = new Set(Object.keys(FANTASY_CATEGORIES));
+const TEAM_SYMBOL_UPLOAD_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const TEAM_SYMBOL_UPLOAD_MAX_BYTES = 2_000_000;
+const TEAM_SYMBOL_CANVAS_SIZE = 256;
 
 function normalizeFantasyCategoryList(
   value: unknown,
@@ -1042,6 +1063,56 @@ function getTeamInitials(teamName: string): string {
   return initials || 'T';
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('Could not read image file.'));
+    };
+    reader.onerror = () => reject(new Error('Could not read image file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function resizeTeamSymbolDataUrl(dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = TEAM_SYMBOL_CANVAS_SIZE;
+      canvas.height = TEAM_SYMBOL_CANVAS_SIZE;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Could not prepare image.'));
+        return;
+      }
+
+      const size = Math.min(image.naturalWidth, image.naturalHeight);
+      const sourceX = Math.max(0, (image.naturalWidth - size) / 2);
+      const sourceY = Math.max(0, (image.naturalHeight - size) / 2);
+      context.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        size,
+        size,
+        0,
+        0,
+        TEAM_SYMBOL_CANVAS_SIZE,
+        TEAM_SYMBOL_CANVAS_SIZE
+      );
+      resolve(canvas.toDataURL('image/webp', 0.82));
+    };
+    image.onerror = () => reject(new Error('Could not load image file.'));
+    image.src = dataUrl;
+  });
+}
+
 function asString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value : fallback;
 }
@@ -1105,12 +1176,16 @@ function LeagueSettingsPanel({
   isAdmin,
   isActive,
   currentUserId,
+  currentMember,
+  onMemberIdentityChange,
 }: {
   league: League;
   memberCount: number;
   isAdmin: boolean;
   isActive: boolean;
   currentUserId?: string;
+  currentMember?: LeagueMember;
+  onMemberIdentityChange?: (member: LeagueMember) => void;
 }) {
   const [settings, setSettings] = useState<LeagueSettingsResponse>(() =>
     createFallbackLeagueSettings(league)
@@ -1118,10 +1193,17 @@ function LeagueSettingsPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<LeagueSettingsMessage | null>(null);
+  const [teamSymbolUrl, setTeamSymbolUrl] = useState(currentMember?.teamLogoUrl ?? '');
+  const [teamSymbolMessage, setTeamSymbolMessage] = useState<LeagueSettingsMessage | null>(null);
+  const [isSavingTeamSymbol, setIsSavingTeamSymbol] = useState(false);
 
   useEffect(() => {
     setSettings(createFallbackLeagueSettings(league));
   }, [league]);
+
+  useEffect(() => {
+    setTeamSymbolUrl(currentMember?.teamLogoUrl ?? '');
+  }, [currentMember?.teamLogoUrl]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -1200,6 +1282,76 @@ function LeagueSettingsPanel({
     }));
   };
 
+  const saveTeamSymbol = async (nextTeamSymbolUrl: string) => {
+    if (!currentUserId || !currentMember) return;
+
+    try {
+      setIsSavingTeamSymbol(true);
+      setTeamSymbolMessage(null);
+      const response = await authenticatedFetch(
+        `/api/leagues/${league.id}/members/me`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamLogoUrl: nextTeamSymbolUrl }),
+        },
+        currentUserId
+      );
+      const payload = await response.json();
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? `status ${response.status}`);
+      }
+
+      const nextMember =
+        isRecord(payload.data) && isRecord(payload.data.member)
+          ? ({
+              ...currentMember,
+              ...payload.data.member,
+            } as LeagueMember)
+          : {
+              ...currentMember,
+              teamLogoUrl: nextTeamSymbolUrl || undefined,
+            };
+
+      setTeamSymbolUrl(nextMember.teamLogoUrl ?? '');
+      onMemberIdentityChange?.(nextMember);
+      setTeamSymbolMessage({ type: 'success', text: 'Team symbol saved.' });
+    } catch (error) {
+      setTeamSymbolMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to save team symbol.',
+      });
+    } finally {
+      setIsSavingTeamSymbol(false);
+    }
+  };
+
+  const handleTeamSymbolUpload = async (file: File | undefined) => {
+    if (!file) return;
+    if (!TEAM_SYMBOL_UPLOAD_TYPES.has(file.type)) {
+      setTeamSymbolMessage({ type: 'error', text: 'Upload a PNG, JPEG, or WebP image.' });
+      return;
+    }
+    if (file.size > TEAM_SYMBOL_UPLOAD_MAX_BYTES) {
+      setTeamSymbolMessage({ type: 'error', text: 'Upload an image smaller than 2 MB.' });
+      return;
+    }
+
+    try {
+      setTeamSymbolMessage(null);
+      const dataUrl = await readFileAsDataUrl(file);
+      const resizedDataUrl = await resizeTeamSymbolDataUrl(dataUrl);
+      setTeamSymbolUrl(resizedDataUrl);
+      await saveTeamSymbol(resizedDataUrl);
+    } catch (error) {
+      setTeamSymbolMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to upload team symbol.',
+      });
+    }
+  };
+
   const handleSaveSettings = async () => {
     if (!isAdmin) return;
 
@@ -1262,6 +1414,89 @@ function LeagueSettingsPanel({
         >
           {message.text}
         </div>
+      )}
+
+      {currentMember && (
+        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+                Team identity
+              </h3>
+              <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+                Set the symbol shown for {currentMember.teamName} across this league.
+              </p>
+            </div>
+            <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+              {teamSymbolUrl ? (
+                <img
+                  src={teamSymbolUrl}
+                  alt={`${currentMember.teamName} symbol preview`}
+                  referrerPolicy="no-referrer"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-xl font-semibold text-slate-700">
+                  {getTeamInitials(currentMember.teamName)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {teamSymbolMessage && (
+            <div
+              role="status"
+              className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
+                teamSymbolMessage.type === 'success'
+                  ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
+                  : 'border-red-200 bg-red-50 text-red-700'
+              }`}
+            >
+              {teamSymbolMessage.text}
+            </div>
+          )}
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto]">
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Team symbol URL
+              <input
+                type="url"
+                value={teamSymbolUrl.startsWith('data:') ? '' : teamSymbolUrl}
+                placeholder="https://example.com/team-symbol.png"
+                onChange={(event) => setTeamSymbolUrl(event.target.value)}
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+              />
+            </label>
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => void saveTeamSymbol(teamSymbolUrl)}
+                disabled={isSavingTeamSymbol}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+              >
+                {isSavingTeamSymbol ? 'Saving...' : 'Save team symbol'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveTeamSymbol('')}
+                disabled={isSavingTeamSymbol}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <label className="mt-4 flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+            Upload team symbol
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(event) => void handleTeamSymbolUpload(event.target.files?.[0])}
+              className="block w-full text-sm text-[color:var(--league-text-muted)] file:mr-4 file:rounded-md file:border-0 file:bg-[color:var(--league-page)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[color:var(--league-text)]"
+            />
+          </label>
+        </section>
       )}
 
       <fieldset disabled={!isAdmin || isSaving} className="flex flex-col gap-6 disabled:opacity-75">

@@ -22,6 +22,7 @@ export interface LeagueMembershipWrite {
   userId: string;
   role?: string;
   teamName?: string;
+  teamLogoUrl?: string | null;
   joinedAt?: unknown;
   leftAt?: unknown;
   isActive?: boolean;
@@ -54,6 +55,7 @@ export interface LeagueMembershipListItem {
   userId: string;
   role: string;
   teamName: string;
+  teamLogoUrl?: string;
   joinedAt?: unknown;
   leftAt?: unknown;
   isActive: boolean;
@@ -135,6 +137,7 @@ export function toCanonicalLeagueMembershipData(
     userId: membership.userId,
     role: membership.role ?? 'member',
     teamName: membership.teamName ?? 'Team',
+    teamLogoUrl: membership.teamLogoUrl ?? undefined,
     joinedAt: membership.joinedAt ?? new Date().toISOString(),
     isActive,
     status: isActive ? 'ACTIVE' : 'REMOVED',
@@ -168,6 +171,7 @@ export function toCanonicalLeagueMembershipPatch(
 
   if (updates.role !== undefined) patch.role = updates.role;
   if (updates.teamName !== undefined) patch.teamName = updates.teamName;
+  if (updates.teamLogoUrl !== undefined) patch.teamLogoUrl = updates.teamLogoUrl;
   if (updates.joinedAt !== undefined) patch.joinedAt = updates.joinedAt;
   if (updates.leftAt !== undefined) patch.leftAt = updates.leftAt;
   if (updates.isActive !== undefined) {
@@ -277,6 +281,7 @@ export async function getLeagueMembership(
           userId: true,
           role: true,
           teamName: true,
+          teamLogoUrl: true,
           joinedAt: true,
         },
         take: 1,
@@ -292,6 +297,7 @@ export async function getLeagueMembership(
 
     const role = String(member?.role ?? 'OWNER');
     const teamName = member?.teamName ?? 'Team';
+    const teamLogoUrl = member?.teamLogoUrl ?? undefined;
     const joinedAt = member?.joinedAt;
 
     return {
@@ -303,6 +309,7 @@ export async function getLeagueMembership(
         userId: member?.userId ?? userId,
         role,
         teamName,
+        teamLogoUrl,
         ...(joinedAt ? { joinedAt } : {}),
         isActive: true,
         status: 'ACTIVE',
@@ -406,6 +413,7 @@ function toLeagueMembershipListItem(
     userId: String(data.userId ?? (source === 'embedded' ? doc.id : '')),
     role: String(data.role ?? 'member'),
     teamName: String(data.teamName ?? ''),
+    teamLogoUrl: typeof data.teamLogoUrl === 'string' ? data.teamLogoUrl : undefined,
     joinedAt: data.joinedAt,
     leftAt: data.leftAt,
     isActive: isActiveMembershipData(data),

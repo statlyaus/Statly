@@ -59,6 +59,7 @@ model LeagueMember {
   userId        String
   role          LeagueRole
   teamName      String
+  teamLogoUrl   String?
   draftSlot     Int?
   joinedAt      DateTime             @default(now())
   league        League               @relation(fields: [leagueId], references: [id])
