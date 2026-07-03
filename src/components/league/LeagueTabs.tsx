@@ -1475,7 +1475,7 @@ function LeagueSettingsPanel({
 
       {currentMember && (
         <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(180px,220px)] lg:items-start">
             <div>
               <h3 className="text-base font-semibold text-[color:var(--league-text)]">
                 Team identity
@@ -1484,22 +1484,32 @@ function LeagueSettingsPanel({
                 Set the symbol shown for {currentMember.teamName} across this league.
               </p>
             </div>
-            <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-              {teamSymbolUrl ? (
-                <img
-                  src={teamSymbolUrl}
-                  alt={`${currentMember.teamName} symbol preview`}
-                  referrerPolicy="no-referrer"
-                  style={{
-                    objectPosition: `${teamSymbolPositionX}% ${teamSymbolPositionY}%`,
-                  }}
-                  className="h-full w-full object-cover"
+            <div className="justify-self-start lg:justify-self-end">
+              <div className="relative flex aspect-square w-44 items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] shadow-sm sm:w-52 lg:w-56">
+                {teamSymbolUrl ? (
+                  <img
+                    src={teamSymbolUrl}
+                    alt={`${currentMember.teamName} symbol preview`}
+                    referrerPolicy="no-referrer"
+                    style={{
+                      objectPosition: `${teamSymbolPositionX}% ${teamSymbolPositionY}%`,
+                    }}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-4xl font-semibold text-[color:var(--league-text)]">
+                    {getTeamInitials(currentMember.teamName)}
+                  </span>
+                )}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,transparent_calc(50%-0.5px),rgba(255,255,255,0.72)_calc(50%-0.5px),rgba(255,255,255,0.72)_calc(50%+0.5px),transparent_calc(50%+0.5px)),linear-gradient(to_bottom,transparent_calc(50%-0.5px),rgba(255,255,255,0.72)_calc(50%-0.5px),rgba(255,255,255,0.72)_calc(50%+0.5px),transparent_calc(50%+0.5px))] mix-blend-difference"
                 />
-              ) : (
-                <span className="text-xl font-semibold text-slate-700">
-                  {getTeamInitials(currentMember.teamName)}
-                </span>
-              )}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-3 rounded-xl border border-white/45 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]"
+                />
+              </div>
             </div>
           </div>
 

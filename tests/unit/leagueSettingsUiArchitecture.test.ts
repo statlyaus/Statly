@@ -53,6 +53,9 @@ describe('league settings UI architecture', () => {
     expect(leagueTabsSource).toContain('Upload team symbol');
     expect(leagueTabsSource).toContain('Horizontal centre');
     expect(leagueTabsSource).toContain('Vertical centre');
+    expect(leagueTabsSource).toContain('aspect-square w-44');
+    expect(leagueTabsSource).toContain('lg:w-56');
+    expect(leagueTabsSource).toContain('mix-blend-difference');
     expect(leagueTabsSource).toContain('teamLogoPositionX');
     expect(leagueTabsSource).toContain('teamLogoPositionY');
     expect(leagueTabsSource).toContain('`/api/leagues/${league.id}/members/me`');
