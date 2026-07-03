@@ -6,7 +6,11 @@ import { getLeagueMembership, queueLeagueMembershipPatch } from '@/lib/leagueMem
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { normalizeTeamSymbolPosition, normalizeTeamSymbolUrl } from '@/lib/teamSymbol';
+import {
+  normalizeTeamSymbolPosition,
+  normalizeTeamSymbolUrl,
+  normalizeTeamSymbolZoom,
+} from '@/lib/teamSymbol';
 
 function parseTeamLogoUrl(body: Record<string, unknown>): string | null {
   const teamLogoUrl = normalizeTeamSymbolUrl(body.teamLogoUrl);
@@ -17,6 +21,7 @@ function parseTeamLogoPosition(body: Record<string, unknown>) {
   return {
     teamLogoPositionX: normalizeTeamSymbolPosition(body.teamLogoPositionX),
     teamLogoPositionY: normalizeTeamSymbolPosition(body.teamLogoPositionY),
+    teamLogoZoom: normalizeTeamSymbolZoom(body.teamLogoZoom),
   };
 }
 
@@ -50,9 +55,10 @@ export async function PATCH(
     let teamLogoUrl: string | null;
     let teamLogoPositionX: number;
     let teamLogoPositionY: number;
+    let teamLogoZoom: number;
     try {
       teamLogoUrl = parseTeamLogoUrl(body);
-      ({ teamLogoPositionX, teamLogoPositionY } = parseTeamLogoPosition(body));
+      ({ teamLogoPositionX, teamLogoPositionY, teamLogoZoom } = parseTeamLogoPosition(body));
     } catch (error) {
       if (error instanceof Error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
@@ -64,7 +70,7 @@ export async function PATCH(
     if (membership.source === 'prisma' && membership.memberDocId) {
       const updatedMember = await prisma.leagueMember.update({
         where: { id: membership.memberDocId },
-        data: { teamLogoUrl, teamLogoPositionX, teamLogoPositionY },
+        data: { teamLogoUrl, teamLogoPositionX, teamLogoPositionY, teamLogoZoom },
         select: {
           id: true,
           leagueId: true,
@@ -74,6 +80,7 @@ export async function PATCH(
           teamLogoUrl: true,
           teamLogoPositionX: true,
           teamLogoPositionY: true,
+          teamLogoZoom: true,
           joinedAt: true,
         },
       });
@@ -90,6 +97,7 @@ export async function PATCH(
             teamLogoUrl: updatedMember.teamLogoUrl ?? undefined,
             teamLogoPositionX: updatedMember.teamLogoPositionX ?? undefined,
             teamLogoPositionY: updatedMember.teamLogoPositionY ?? undefined,
+            teamLogoZoom: updatedMember.teamLogoZoom ?? undefined,
             joinedAt: updatedMember.joinedAt.toISOString(),
             isActive: true,
           },
@@ -102,6 +110,7 @@ export async function PATCH(
       teamLogoUrl,
       teamLogoPositionX,
       teamLogoPositionY,
+      teamLogoZoom,
     });
     await batch.commit();
 
@@ -117,6 +126,7 @@ export async function PATCH(
           teamLogoUrl: teamLogoUrl ?? undefined,
           teamLogoPositionX,
           teamLogoPositionY,
+          teamLogoZoom,
           joinedAt:
             typeof membership.data?.joinedAt === 'string'
               ? membership.data.joinedAt

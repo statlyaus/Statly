@@ -9,6 +9,9 @@ const INVALID_TEAM_SYMBOL_MESSAGE =
 
 export const MAX_TEAM_SYMBOL_DATA_URL_LENGTH = 120_000;
 export const DEFAULT_TEAM_SYMBOL_POSITION = 50;
+export const DEFAULT_TEAM_SYMBOL_ZOOM = 1;
+export const MIN_TEAM_SYMBOL_ZOOM = 1;
+export const MAX_TEAM_SYMBOL_ZOOM = 3;
 
 export function normalizeTeamSymbolUrl(value: unknown): string | null {
   if (value === null || value === undefined) return null;
@@ -56,4 +59,16 @@ export function normalizeTeamSymbolPosition(
   if (!Number.isFinite(parsed)) return fallback;
 
   return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
+export function normalizeTeamSymbolZoom(
+  value: unknown,
+  fallback = DEFAULT_TEAM_SYMBOL_ZOOM
+): number {
+  if (value === null || value === undefined || value === '') return fallback;
+
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value));
+  if (!Number.isFinite(parsed)) return fallback;
+
+  return Math.max(MIN_TEAM_SYMBOL_ZOOM, Math.min(MAX_TEAM_SYMBOL_ZOOM, Math.round(parsed * 20) / 20));
 }

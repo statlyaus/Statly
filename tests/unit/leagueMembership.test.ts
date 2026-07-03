@@ -106,6 +106,7 @@ describe('leagueMembership architecture helpers', () => {
           teamLogoUrl: 'https://cdn.example.com/owner.png',
           teamLogoPositionX: 35,
           teamLogoPositionY: 70,
+          teamLogoZoom: 1.6,
           joinedAt: new Date('2026-06-01T00:00:00.000Z'),
         },
       ],
@@ -125,6 +126,7 @@ describe('leagueMembership architecture helpers', () => {
         teamLogoUrl: 'https://cdn.example.com/owner.png',
         teamLogoPositionX: 35,
         teamLogoPositionY: 70,
+        teamLogoZoom: 1.6,
         joinedAt: new Date('2026-06-01T00:00:00.000Z'),
         isActive: true,
         status: 'ACTIVE',
@@ -195,6 +197,7 @@ describe('leagueMembership architecture helpers', () => {
       teamLogoUrl: undefined,
       teamLogoPositionX: undefined,
       teamLogoPositionY: undefined,
+      teamLogoZoom: undefined,
       isActive: true,
       status: 'ACTIVE',
       draftPreferences: {
@@ -216,6 +219,7 @@ describe('leagueMembership architecture helpers', () => {
       teamLogoUrl: 'https://cdn.example.com/symbol-team.png',
       teamLogoPositionX: 25,
       teamLogoPositionY: 80,
+      teamLogoZoom: 2,
       joinedAt: '2026-07-03T00:00:00.000Z',
     });
 
@@ -227,6 +231,7 @@ describe('leagueMembership architecture helpers', () => {
       teamLogoUrl: 'https://cdn.example.com/symbol-team.png',
       teamLogoPositionX: 25,
       teamLogoPositionY: 80,
+      teamLogoZoom: 2,
       isActive: true,
       status: 'ACTIVE',
     });
@@ -237,12 +242,14 @@ describe('leagueMembership architecture helpers', () => {
       teamLogoUrl: 'data:image/png;base64,abc123',
       teamLogoPositionX: 10,
       teamLogoPositionY: 90,
+      teamLogoZoom: 1.75,
     });
 
     expect(patch).toEqual({
       teamLogoUrl: 'data:image/png;base64,abc123',
       teamLogoPositionX: 10,
       teamLogoPositionY: 90,
+      teamLogoZoom: 1.75,
     });
   });
 
@@ -251,12 +258,14 @@ describe('leagueMembership architecture helpers', () => {
       teamLogoUrl: null,
       teamLogoPositionX: null,
       teamLogoPositionY: null,
+      teamLogoZoom: null,
     });
 
     expect(patch).toEqual({
       teamLogoUrl: null,
       teamLogoPositionX: null,
       teamLogoPositionY: null,
+      teamLogoZoom: null,
     });
   });
 

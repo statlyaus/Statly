@@ -105,6 +105,7 @@ describe('LeagueTabs team identity settings', () => {
                 teamLogoUrl: body.teamLogoUrl,
                 teamLogoPositionX: body.teamLogoPositionX,
                 teamLogoPositionY: body.teamLogoPositionY,
+                teamLogoZoom: body.teamLogoZoom,
               },
             },
           }),
@@ -135,6 +136,9 @@ describe('LeagueTabs team identity settings', () => {
     fireEvent.change(screen.getByLabelText(/Vertical centre/), {
       target: { value: '80' },
     });
+    fireEvent.change(screen.getByLabelText(/Zoom/), {
+      target: { value: '1.5' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save team symbol' }));
 
     await waitFor(() => {
@@ -147,6 +151,7 @@ describe('LeagueTabs team identity settings', () => {
             teamLogoUrl: 'https://cdn.example.com/member-team.png',
             teamLogoPositionX: 30,
             teamLogoPositionY: 80,
+            teamLogoZoom: 1.5,
           }),
         },
         'member-user'
@@ -156,6 +161,8 @@ describe('LeagueTabs team identity settings', () => {
     expect(await screen.findByText('Team symbol saved.')).toBeInTheDocument();
     expect(screen.getByAltText('Member Team symbol preview')).toHaveStyle({
       objectPosition: '30% 80%',
+      transform: 'scale(1.5)',
+      transformOrigin: '30% 80%',
     });
   });
 

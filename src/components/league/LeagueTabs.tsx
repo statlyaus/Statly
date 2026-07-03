@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type { League, LeagueMember } from '@/types/leagues';
@@ -20,6 +20,11 @@ import {
   type PositionLimitKey,
 } from '@/lib/draftSettings';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import {
+  DEFAULT_TEAM_SYMBOL_ZOOM,
+  MAX_TEAM_SYMBOL_ZOOM,
+  MIN_TEAM_SYMBOL_ZOOM,
+} from '@/lib/teamSymbol';
 import MyTeamPanel from '@/components/MyTeamPanel';
 import LeagueWaiversContainer from '@/components/waivers/LeagueWaiversContainer';
 import type { Player, Team } from '@/types/players';
@@ -480,10 +485,8 @@ export default function LeagueTabs({
                                 src={member.teamLogoUrl}
                                 alt={`${member.teamName || 'Team'} symbol`}
                                 referrerPolicy="no-referrer"
-                                style={{
-                                  objectPosition: getTeamLogoObjectPosition(member),
-                                }}
-                                className="h-full w-full object-cover"
+                                style={getTeamLogoImageStyle(member)}
+                                className="h-full w-full object-cover will-change-transform"
                               />
                             ) : (
                               <span className="text-lg font-semibold text-slate-700">
@@ -1072,10 +1075,30 @@ function getTeamLogoPositionValue(value: number | undefined): number {
     : 50;
 }
 
-function getTeamLogoObjectPosition(member: Pick<LeagueMember, 'teamLogoPositionX' | 'teamLogoPositionY'>): string {
+function getTeamLogoZoomValue(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(MIN_TEAM_SYMBOL_ZOOM, Math.min(MAX_TEAM_SYMBOL_ZOOM, Math.round(value * 20) / 20))
+    : DEFAULT_TEAM_SYMBOL_ZOOM;
+}
+
+function getTeamLogoObjectPosition(
+  member: Pick<LeagueMember, 'teamLogoPositionX' | 'teamLogoPositionY'>
+): string {
   return `${getTeamLogoPositionValue(member.teamLogoPositionX)}% ${getTeamLogoPositionValue(
     member.teamLogoPositionY
   )}%`;
+}
+
+function getTeamLogoImageStyle(
+  member: Pick<LeagueMember, 'teamLogoPositionX' | 'teamLogoPositionY' | 'teamLogoZoom'>
+): CSSProperties {
+  const objectPosition = getTeamLogoObjectPosition(member);
+  const zoom = getTeamLogoZoomValue(member.teamLogoZoom);
+  return {
+    objectPosition,
+    transform: `scale(${zoom})`,
+    transformOrigin: objectPosition,
+  };
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -1097,7 +1120,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
 function resizeTeamSymbolDataUrl(
   dataUrl: string,
   positionX = 50,
-  positionY = 50
+  positionY = 50,
+  zoom = DEFAULT_TEAM_SYMBOL_ZOOM
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -1111,7 +1135,7 @@ function resizeTeamSymbolDataUrl(
         return;
       }
 
-      const size = Math.min(image.naturalWidth, image.naturalHeight);
+      const size = Math.min(image.naturalWidth, image.naturalHeight) / getTeamLogoZoomValue(zoom);
       const maxSourceX = Math.max(0, image.naturalWidth - size);
       const maxSourceY = Math.max(0, image.naturalHeight - size);
       const sourceX = Math.round(maxSourceX * (getTeamLogoPositionValue(positionX) / 100));
@@ -1221,6 +1245,9 @@ function LeagueSettingsPanel({
   const [teamSymbolPositionY, setTeamSymbolPositionY] = useState(
     getTeamLogoPositionValue(currentMember?.teamLogoPositionY)
   );
+  const [teamSymbolZoom, setTeamSymbolZoom] = useState(
+    getTeamLogoZoomValue(currentMember?.teamLogoZoom)
+  );
   const [pendingTeamSymbolUploadDataUrl, setPendingTeamSymbolUploadDataUrl] = useState<
     string | null
   >(null);
@@ -1235,8 +1262,14 @@ function LeagueSettingsPanel({
     setTeamSymbolUrl(currentMember?.teamLogoUrl ?? '');
     setTeamSymbolPositionX(getTeamLogoPositionValue(currentMember?.teamLogoPositionX));
     setTeamSymbolPositionY(getTeamLogoPositionValue(currentMember?.teamLogoPositionY));
+    setTeamSymbolZoom(getTeamLogoZoomValue(currentMember?.teamLogoZoom));
     setPendingTeamSymbolUploadDataUrl(null);
-  }, [currentMember?.teamLogoPositionX, currentMember?.teamLogoPositionY, currentMember?.teamLogoUrl]);
+  }, [
+    currentMember?.teamLogoPositionX,
+    currentMember?.teamLogoPositionY,
+    currentMember?.teamLogoUrl,
+    currentMember?.teamLogoZoom,
+  ]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -1318,12 +1351,14 @@ function LeagueSettingsPanel({
   const saveTeamSymbol = async (
     nextTeamSymbolUrl: string,
     nextPositionX = teamSymbolPositionX,
-    nextPositionY = teamSymbolPositionY
+    nextPositionY = teamSymbolPositionY,
+    nextZoom = teamSymbolZoom
   ) => {
     if (!currentUserId || !currentMember) return;
 
     const normalizedPositionX = getTeamLogoPositionValue(nextPositionX);
     const normalizedPositionY = getTeamLogoPositionValue(nextPositionY);
+    const normalizedZoom = getTeamLogoZoomValue(nextZoom);
 
     try {
       setIsSavingTeamSymbol(true);
@@ -1334,7 +1369,8 @@ function LeagueSettingsPanel({
         ? await resizeTeamSymbolDataUrl(
             pendingTeamSymbolUploadDataUrl,
             normalizedPositionX,
-            normalizedPositionY
+            normalizedPositionY,
+            normalizedZoom
           )
         : nextTeamSymbolUrl;
       const response = await authenticatedFetch(
@@ -1346,6 +1382,7 @@ function LeagueSettingsPanel({
             teamLogoUrl: teamLogoUrlForSave,
             teamLogoPositionX: normalizedPositionX,
             teamLogoPositionY: normalizedPositionY,
+            teamLogoZoom: normalizedZoom,
           }),
         },
         currentUserId
@@ -1367,11 +1404,13 @@ function LeagueSettingsPanel({
               teamLogoUrl: teamLogoUrlForSave || undefined,
               teamLogoPositionX: normalizedPositionX,
               teamLogoPositionY: normalizedPositionY,
+              teamLogoZoom: normalizedZoom,
             };
 
       setTeamSymbolUrl(nextMember.teamLogoUrl ?? '');
       setTeamSymbolPositionX(getTeamLogoPositionValue(nextMember.teamLogoPositionX));
       setTeamSymbolPositionY(getTeamLogoPositionValue(nextMember.teamLogoPositionY));
+      setTeamSymbolZoom(getTeamLogoZoomValue(nextMember.teamLogoZoom));
       setPendingTeamSymbolUploadDataUrl(null);
       onMemberIdentityChange?.(nextMember);
       setTeamSymbolMessage({ type: 'success', text: 'Team symbol saved.' });
@@ -1491,10 +1530,12 @@ function LeagueSettingsPanel({
                     src={teamSymbolUrl}
                     alt={`${currentMember.teamName} symbol preview`}
                     referrerPolicy="no-referrer"
-                    style={{
-                      objectPosition: `${teamSymbolPositionX}% ${teamSymbolPositionY}%`,
-                    }}
-                    className="h-full w-full object-cover"
+                    style={getTeamLogoImageStyle({
+                      teamLogoPositionX: teamSymbolPositionX,
+                      teamLogoPositionY: teamSymbolPositionY,
+                      teamLogoZoom: teamSymbolZoom,
+                    })}
+                    className="h-full w-full object-cover will-change-transform"
                   />
                 ) : (
                   <span className="text-4xl font-semibold text-[color:var(--league-text)]">
@@ -1570,7 +1611,27 @@ function LeagueSettingsPanel({
             />
           </label>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+              Zoom
+              <div className="flex items-center gap-3">
+                <span className="w-10 text-xs text-[color:var(--league-text-muted)]">1x</span>
+                <input
+                  type="range"
+                  min={MIN_TEAM_SYMBOL_ZOOM}
+                  max={MAX_TEAM_SYMBOL_ZOOM}
+                  step="0.05"
+                  value={teamSymbolZoom}
+                  onChange={(event) =>
+                    setTeamSymbolZoom(getTeamLogoZoomValue(Number(event.target.value)))
+                  }
+                  className="w-full accent-[color:var(--league-primary)]"
+                />
+                <span className="w-12 text-right text-xs text-[color:var(--league-text-muted)]">
+                  {teamSymbolZoom.toFixed(2)}x
+                </span>
+              </div>
+            </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
               Horizontal centre
               <div className="flex items-center gap-3">

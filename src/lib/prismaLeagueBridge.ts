@@ -29,6 +29,7 @@ export interface PrismaLeagueMirrorMember {
   teamLogoUrl?: string;
   teamLogoPositionX?: number;
   teamLogoPositionY?: number;
+  teamLogoZoom?: number;
   draftSlot?: number;
   isActive: boolean;
 }
@@ -73,6 +74,7 @@ export interface SyncPrismaLeagueMemberInput {
   teamLogoUrl?: string | null;
   teamLogoPositionX?: number | null;
   teamLogoPositionY?: number | null;
+  teamLogoZoom?: number | null;
   draftSlot?: number;
   isActive?: boolean;
   timeZone?: string;
@@ -330,6 +332,7 @@ export async function syncPrismaLeagueMember(
         teamLogoUrl: input.teamLogoUrl,
         teamLogoPositionX: input.teamLogoPositionX,
         teamLogoPositionY: input.teamLogoPositionY,
+        teamLogoZoom: input.teamLogoZoom,
         draftSlot: input.draftSlot,
         isActive: true,
       }
@@ -436,6 +439,7 @@ async function upsertPrismaMember(
     teamLogoUrl: member.teamLogoUrl,
     teamLogoPositionX: member.teamLogoPositionX,
     teamLogoPositionY: member.teamLogoPositionY,
+    teamLogoZoom: member.teamLogoZoom,
     draftSlot: member.draftSlot,
   };
 
@@ -499,6 +503,7 @@ function toMirrorMember(
     teamLogoUrl: stringOrUndefined(data.teamLogoUrl),
     teamLogoPositionX: numberOrUndefined(data.teamLogoPositionX),
     teamLogoPositionY: numberOrUndefined(data.teamLogoPositionY),
+    teamLogoZoom: numberOrUndefined(data.teamLogoZoom),
     draftSlot: numberOrUndefined(data.draftSlot),
     isActive: true,
   };

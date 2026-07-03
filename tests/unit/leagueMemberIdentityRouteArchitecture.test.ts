@@ -25,9 +25,9 @@ describe('league member identity route architecture', () => {
   it('normalizes team symbol input through the shared validation helper', () => {
     const route = source();
 
-    expect(route).toContain(
-      "import { normalizeTeamSymbolPosition, normalizeTeamSymbolUrl } from '@/lib/teamSymbol'"
-    );
+    expect(route).toContain('normalizeTeamSymbolPosition');
+    expect(route).toContain('normalizeTeamSymbolUrl');
+    expect(route).toContain('normalizeTeamSymbolZoom');
     expect(route).toContain('const teamLogoUrl = normalizeTeamSymbolUrl(body.teamLogoUrl);');
     expect(route).toContain(
       'teamLogoPositionX: normalizeTeamSymbolPosition(body.teamLogoPositionX)'
@@ -35,6 +35,7 @@ describe('league member identity route architecture', () => {
     expect(route).toContain(
       'teamLogoPositionY: normalizeTeamSymbolPosition(body.teamLogoPositionY)'
     );
+    expect(route).toContain('teamLogoZoom: normalizeTeamSymbolZoom(body.teamLogoZoom)');
     expect(route).toContain("return NextResponse.json({ error: error.message }, { status: 400 });");
   });
 
@@ -43,9 +44,10 @@ describe('league member identity route architecture', () => {
 
     expect(route).toContain('await prisma.leagueMember.update({');
     expect(route).toContain('where: { id: membership.memberDocId }');
-    expect(route).toContain('data: { teamLogoUrl, teamLogoPositionX, teamLogoPositionY }');
+    expect(route).toContain('data: { teamLogoUrl, teamLogoPositionX, teamLogoPositionY, teamLogoZoom }');
     expect(route).toContain('teamLogoPositionX,');
     expect(route).toContain('teamLogoPositionY,');
+    expect(route).toContain('teamLogoZoom,');
     expect(route).toContain('await batch.commit();');
   });
 

@@ -62,6 +62,7 @@ model LeagueMember {
   teamLogoUrl   String?
   teamLogoPositionX Int?
   teamLogoPositionY Int?
+  teamLogoZoom  Float?
   draftSlot     Int?
   joinedAt      DateTime             @default(now())
   league        League               @relation(fields: [leagueId], references: [id])

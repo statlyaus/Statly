@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_TEAM_SYMBOL_POSITION,
+  DEFAULT_TEAM_SYMBOL_ZOOM,
   MAX_TEAM_SYMBOL_DATA_URL_LENGTH,
   normalizeTeamSymbolPosition,
   normalizeTeamSymbolUrl,
+  normalizeTeamSymbolZoom,
 } from '@/lib/teamSymbol';
 
 const INVALID_TEAM_SYMBOL_MESSAGE =
@@ -73,5 +75,19 @@ describe('team symbol validation', () => {
     expect(normalizeTeamSymbolPosition(null)).toBe(DEFAULT_TEAM_SYMBOL_POSITION);
     expect(normalizeTeamSymbolPosition('not-a-number')).toBe(DEFAULT_TEAM_SYMBOL_POSITION);
     expect(normalizeTeamSymbolPosition(undefined, 35)).toBe(35);
+  });
+
+  it('normalizes team symbol zoom to the supported crop range', () => {
+    expect(normalizeTeamSymbolZoom(1.5)).toBe(1.5);
+    expect(normalizeTeamSymbolZoom('2.34')).toBe(2.35);
+    expect(normalizeTeamSymbolZoom(0.25)).toBe(1);
+    expect(normalizeTeamSymbolZoom(4)).toBe(3);
+  });
+
+  it('falls back to default zoom for missing or invalid values', () => {
+    expect(normalizeTeamSymbolZoom(undefined)).toBe(DEFAULT_TEAM_SYMBOL_ZOOM);
+    expect(normalizeTeamSymbolZoom(null)).toBe(DEFAULT_TEAM_SYMBOL_ZOOM);
+    expect(normalizeTeamSymbolZoom('not-a-number')).toBe(DEFAULT_TEAM_SYMBOL_ZOOM);
+    expect(normalizeTeamSymbolZoom(undefined, 1.75)).toBe(1.75);
   });
 });
