@@ -15,9 +15,9 @@ test('league roster pulls through completed team data into the review table', as
   await page.goto(`/leagues/${leagueId}?tab=roster`);
 
   await expect(page.getByRole('heading', { name: 'Robbo Rockers' })).toBeVisible();
-  await expect(page.getByText('Avg Statly Z')).toBeVisible();
-  await expect(page.getByText('Scoring Profile')).toBeVisible();
-  await expect(page.getByText('Composition')).toBeVisible();
+  await expect(page.getByText('Statly Z Coverage')).toBeVisible();
+  await expect(page.getByText('League Categories')).toBeVisible();
+  await expect(page.getByText('Position Mix')).toBeVisible();
   await expect(page.getByRole('table', { name: 'Robbo Rockers roster table' })).toBeVisible();
   await expect(page.getByText('No Team Selected')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Propose Trade' })).toHaveCount(0);
