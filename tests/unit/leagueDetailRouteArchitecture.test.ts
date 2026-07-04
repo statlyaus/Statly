@@ -90,6 +90,6 @@ describe('league detail route architecture', () => {
     expect(tabsSource).not.toContain('badge: 2');
     expect(existsSync(join(process.cwd(), 'src/components/league/LeagueOverview.tsx'))).toBe(false);
     expect(tabsSource).toContain('League command center');
-    expect(tabsSource).toContain('Draft status');
+    expect(tabsSource).toContain('Draft setup status');
   });
 });

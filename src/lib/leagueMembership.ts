@@ -22,6 +22,10 @@ export interface LeagueMembershipWrite {
   userId: string;
   role?: string;
   teamName?: string;
+  teamLogoUrl?: string | null;
+  teamLogoPositionX?: number | null;
+  teamLogoPositionY?: number | null;
+  teamLogoZoom?: number | null;
   joinedAt?: unknown;
   leftAt?: unknown;
   isActive?: boolean;
@@ -54,6 +58,10 @@ export interface LeagueMembershipListItem {
   userId: string;
   role: string;
   teamName: string;
+  teamLogoUrl?: string;
+  teamLogoPositionX?: number;
+  teamLogoPositionY?: number;
+  teamLogoZoom?: number;
   joinedAt?: unknown;
   leftAt?: unknown;
   isActive: boolean;
@@ -135,6 +143,10 @@ export function toCanonicalLeagueMembershipData(
     userId: membership.userId,
     role: membership.role ?? 'member',
     teamName: membership.teamName ?? 'Team',
+    teamLogoUrl: membership.teamLogoUrl ?? undefined,
+    teamLogoPositionX: membership.teamLogoPositionX ?? undefined,
+    teamLogoPositionY: membership.teamLogoPositionY ?? undefined,
+    teamLogoZoom: membership.teamLogoZoom ?? undefined,
     joinedAt: membership.joinedAt ?? new Date().toISOString(),
     isActive,
     status: isActive ? 'ACTIVE' : 'REMOVED',
@@ -168,6 +180,10 @@ export function toCanonicalLeagueMembershipPatch(
 
   if (updates.role !== undefined) patch.role = updates.role;
   if (updates.teamName !== undefined) patch.teamName = updates.teamName;
+  if (updates.teamLogoUrl !== undefined) patch.teamLogoUrl = updates.teamLogoUrl;
+  if (updates.teamLogoPositionX !== undefined) patch.teamLogoPositionX = updates.teamLogoPositionX;
+  if (updates.teamLogoPositionY !== undefined) patch.teamLogoPositionY = updates.teamLogoPositionY;
+  if (updates.teamLogoZoom !== undefined) patch.teamLogoZoom = updates.teamLogoZoom;
   if (updates.joinedAt !== undefined) patch.joinedAt = updates.joinedAt;
   if (updates.leftAt !== undefined) patch.leftAt = updates.leftAt;
   if (updates.isActive !== undefined) {
@@ -277,6 +293,10 @@ export async function getLeagueMembership(
           userId: true,
           role: true,
           teamName: true,
+          teamLogoUrl: true,
+          teamLogoPositionX: true,
+          teamLogoPositionY: true,
+          teamLogoZoom: true,
           joinedAt: true,
         },
         take: 1,
@@ -292,6 +312,10 @@ export async function getLeagueMembership(
 
     const role = String(member?.role ?? 'OWNER');
     const teamName = member?.teamName ?? 'Team';
+    const teamLogoUrl = member?.teamLogoUrl ?? undefined;
+    const teamLogoPositionX = member?.teamLogoPositionX ?? undefined;
+    const teamLogoPositionY = member?.teamLogoPositionY ?? undefined;
+    const teamLogoZoom = member?.teamLogoZoom ?? undefined;
     const joinedAt = member?.joinedAt;
 
     return {
@@ -303,6 +327,10 @@ export async function getLeagueMembership(
         userId: member?.userId ?? userId,
         role,
         teamName,
+        teamLogoUrl,
+        teamLogoPositionX,
+        teamLogoPositionY,
+        teamLogoZoom,
         ...(joinedAt ? { joinedAt } : {}),
         isActive: true,
         status: 'ACTIVE',
@@ -406,6 +434,10 @@ function toLeagueMembershipListItem(
     userId: String(data.userId ?? (source === 'embedded' ? doc.id : '')),
     role: String(data.role ?? 'member'),
     teamName: String(data.teamName ?? ''),
+    teamLogoUrl: typeof data.teamLogoUrl === 'string' ? data.teamLogoUrl : undefined,
+    teamLogoPositionX: typeof data.teamLogoPositionX === 'number' ? data.teamLogoPositionX : undefined,
+    teamLogoPositionY: typeof data.teamLogoPositionY === 'number' ? data.teamLogoPositionY : undefined,
+    teamLogoZoom: typeof data.teamLogoZoom === 'number' ? data.teamLogoZoom : undefined,
     joinedAt: data.joinedAt,
     leftAt: data.leftAt,
     isActive: isActiveMembershipData(data),

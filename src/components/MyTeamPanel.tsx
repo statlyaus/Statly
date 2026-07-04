@@ -56,6 +56,7 @@ interface TeamStats {
   totalPlayers: number;
   totalValue: number;
   avgValue: number;
+  statlyZCount: number;
   averageScore: number;
   projectedScore: number;
   positionBreakdown: Record<string, number>;
@@ -113,6 +114,12 @@ const activeSortLabel = {
   recent: 'Form',
 } satisfies Record<SortField, string>;
 const positionOrder = ['RUC', 'MID', 'DEF', 'FWD'];
+const positionTargets: Record<string, number> = {
+  DEF: 6,
+  MID: 8,
+  RUC: 2,
+  FWD: 6,
+};
 const ROSTER_PLAYER_COLUMN_WIDTH = 340;
 const ROSTER_PROFILE_COLUMN_WIDTH = 180;
 const ROSTER_STAT_COLUMN_WIDTH = 88;
@@ -130,16 +137,6 @@ function getSafeRankings(rankings: unknown): RankingEntry[] {
 
 function formatMetric(value: number | null | undefined, digits = 1) {
   return value == null || !Number.isFinite(value) ? '—' : value.toFixed(digits);
-}
-
-function getPositionColor(position: string) {
-  const colors = {
-    DEF: 'text-blue-600 bg-blue-50',
-    MID: 'text-green-600 bg-green-50',
-    FWD: 'text-red-600 bg-red-50',
-    RUC: 'text-purple-600 bg-purple-50',
-  };
-  return colors[position as keyof typeof colors] || 'text-gray-600 bg-gray-50';
 }
 
 function getRosterSlotById(players: Player[]) {
@@ -284,6 +281,7 @@ function calculateTeamStats(
     totalPlayers: draftedPlayers.length,
     totalValue,
     avgValue: statlyZValues.length > 0 ? totalValue / statlyZValues.length : 0,
+    statlyZCount: statlyZValues.length,
     averageScore: averageScores.length > 0 ? sumAverage / averageScores.length : 0,
     projectedScore: projectedScores.length > 0 ? sumProjected / projectedScores.length : 0,
     positionBreakdown,
@@ -518,40 +516,78 @@ function TeamMetricGrid({
   teamStats,
   openSlots,
   rankingStatus,
+  categoryColumns,
   positionBreakdownEntries,
 }: {
   teamStats: TeamStats;
   openSlots: number;
   rankingStatus: string;
+  categoryColumns: FantasyCategoryKey[];
   positionBreakdownEntries: Array<[string, number]>;
 }) {
+  const hasStatlyZ = teamStats.statlyZCount > 0;
+  const categorySummary =
+    categoryColumns.length > 0
+      ? categoryColumns
+          .slice(0, 4)
+          .map((category) => FANTASY_CATEGORIES[category].shortLabel ?? FANTASY_CATEGORIES[category].label)
+          .join(', ')
+      : 'League categories pending';
+
   return (
     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       <MetricCard label="Roster" value={`${teamStats.totalPlayers} / ${rosterTarget}`}>
         {teamStats.rosterComplete ? 'Complete' : `${openSlots} slots remaining`}
       </MetricCard>
-      <MetricCard label="Avg Statly Z" value={formatMetric(teamStats.avgValue, 2)}>
+      <MetricCard label="Statly Z Coverage" value={hasStatlyZ ? formatMetric(teamStats.avgValue, 2) : 'Not available'}>
         {rankingStatus}
       </MetricCard>
-      <MetricCard label="Scoring Profile" value={formatMetric(teamStats.averageScore, 1)}>
-        Projection {formatMetric(teamStats.projectedScore, 1)}
+      <MetricCard label="League Categories" value={`${categoryColumns.length}`}>
+        {categorySummary}
+        {categoryColumns.length > 4 ? ` +${categoryColumns.length - 4} more` : ''}
       </MetricCard>
-      <MetricCard label="Composition" value={null}>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {positionBreakdownEntries.length > 0 ? (
-            positionBreakdownEntries.map(([position, count]) => (
-              <span
-                key={position}
-                className={`inline-flex items-center rounded border px-2 py-1 text-xs font-semibold ${getPositionColor(position)}`}
-              >
-                {position} {count}
+      <MetricCard label="Position Mix" value={null}>
+        <PositionMix positionBreakdownEntries={positionBreakdownEntries} />
+      </MetricCard>
+    </div>
+  );
+}
+
+function PositionMix({
+  positionBreakdownEntries,
+}: {
+  positionBreakdownEntries: Array<[string, number]>;
+}) {
+  if (positionBreakdownEntries.length === 0) {
+    return <span className="text-sm text-slate-500">No positions yet</span>;
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      {positionBreakdownEntries.map(([position, count]) => {
+        const target = positionTargets[position] ?? null;
+        const denominator = target ?? rosterTarget;
+        const width = Math.min((count / denominator) * 100, 100);
+        const isBalanced = target === null || count === target;
+        const label = target === null ? `${count}` : `${count} / ${target}`;
+
+        return (
+          <div key={position} className="space-y-1">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="font-semibold text-slate-800">{position}</span>
+              <span className={isBalanced ? 'text-slate-500' : 'font-semibold text-slate-900'}>
+                {label}
               </span>
-            ))
-          ) : (
-            <span className="text-sm text-slate-500">No positions yet</span>
-          )}
-        </div>
-      </MetricCard>
+            </div>
+            <div
+              className="h-2 overflow-hidden rounded-full bg-slate-100"
+              aria-label={`${position}: ${label}${target === null ? '' : ' target'}`}
+            >
+              <div className="h-full rounded-full bg-slate-700" style={{ width: `${width}%` }} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -900,7 +936,6 @@ function RosterProfileCell({
   ranking?: RankingEntry;
 }) {
   const statlyZ = getPlayerStatlyZ(player, ranking);
-  const averageScore = readPlayerScore(player, 'averageScore');
 
   return (
     <td className="px-4 py-4 align-middle">
@@ -920,11 +955,6 @@ function RosterProfileCell({
           {ranking?.rank && (
             <span className="rounded-md bg-primary/10 px-2 py-1 font-semibold text-primary">
               #{ranking.rank}
-            </span>
-          )}
-          {averageScore !== null && (
-            <span className="rounded-md bg-muted px-2 py-1 font-medium text-muted-foreground">
-              Avg {averageScore.toFixed(1)}
             </span>
           )}
         </div>
@@ -1118,7 +1148,9 @@ const MyTeamPanel = ({
   const positionBreakdownEntries = getPositionBreakdownEntries(teamStats.positionBreakdown);
   const rankingStatus = rankingsLoading
     ? 'Updating rankings'
-    : `${rankingById.size.toLocaleString()} rankings loaded`;
+    : teamStats.statlyZCount > 0
+      ? `${teamStats.statlyZCount.toLocaleString()} of ${teamStats.totalPlayers.toLocaleString()} players matched`
+      : `No Statly Z rankings matched ${teamStats.totalPlayers.toLocaleString()} roster players`;
 
   return (
     <section aria-labelledby="team-heading" className={className}>
@@ -1138,6 +1170,7 @@ const MyTeamPanel = ({
             teamStats={teamStats}
             openSlots={openSlots}
             rankingStatus={rankingStatus}
+            categoryColumns={categoryColumns}
             positionBreakdownEntries={positionBreakdownEntries}
           />
         </div>

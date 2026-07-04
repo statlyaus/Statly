@@ -54,9 +54,21 @@ export interface LeagueMemberDoc {
   userId: string;
   role: MemberRole;
   teamName: string;
+  teamLogoUrl?: string;
+  teamLogoPositionX?: number;
+  teamLogoPositionY?: number;
+  teamLogoZoom?: number;
+  notificationSettings?: LeagueMemberNotificationSettings;
   joinedAt: Timestamp; // Firestore Timestamp
   leftAt?: Timestamp; // Firestore Timestamp
   isActive?: boolean;
+}
+
+export interface LeagueMemberNotificationSettings {
+  tradePush: boolean;
+  waiverPush: boolean;
+  draftReminder: boolean;
+  scoringAlerts: boolean;
 }
 
 // API/UI shape for league members (client-side), dates as ISO strings
@@ -66,6 +78,11 @@ export interface LeagueMember {
   userId: string;
   role: MemberRole;
   teamName: string;
+  teamLogoUrl?: string;
+  teamLogoPositionX?: number;
+  teamLogoPositionY?: number;
+  teamLogoZoom?: number;
+  notificationSettings?: LeagueMemberNotificationSettings;
   joinedAt: string; // ISO timestamp
   leftAt?: string; // ISO timestamp
   isActive?: boolean;

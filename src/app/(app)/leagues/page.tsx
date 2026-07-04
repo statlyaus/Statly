@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CalendarClock, Loader2, Plus, ShieldCheck, Trophy, UserPlus, Users } from 'lucide-react';
+import {
+  ArrowRight,
+  CalendarClock,
+  CheckCircle2,
+  Loader2,
+  Plus,
+  Trophy,
+  UserPlus,
+} from 'lucide-react';
 
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
@@ -19,6 +27,27 @@ function formatDraftDate(value?: string): string {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date);
+}
+
+function formatTeamCount(league: League): string {
+  return typeof league.currentTeams === 'number'
+    ? `${league.currentTeams}/${league.maxTeams} teams`
+    : `${league.maxTeams} teams max`;
+}
+
+function getDraftPhase(league: League): { label: string; detail: string } {
+  if (league.status === 'completed') {
+    return { label: 'Draft complete', detail: 'Rosters set' };
+  }
+
+  if (league.status === 'active') {
+    return { label: 'Season live', detail: 'Draft finished' };
+  }
+
+  return {
+    label: league.draftDate ? 'Draft scheduled' : 'Draft pending',
+    detail: league.draftDate ? formatDraftDate(league.draftDate) : 'Set draft time',
+  };
 }
 
 export default function LeaguesPage() {
@@ -56,8 +85,15 @@ export default function LeaguesPage() {
     }
   }, [user]);
 
-  const activeCount = useMemo(
-    () => leagues.filter((league) => league.status === 'active').length,
+  const draftScheduledCount = useMemo(
+    () => leagues.filter((league) => league.status === 'preseason' && league.draftDate).length,
+    [leagues]
+  );
+
+  const draftCompleteCount = useMemo(
+    () =>
+      leagues.filter((league) => league.status === 'completed' || league.status === 'active')
+        .length,
     [leagues]
   );
 
@@ -102,12 +138,8 @@ export default function LeaguesPage() {
           <section className="grid gap-3 sm:grid-cols-3">
             {[
               { label: 'Leagues', value: leagues.length, icon: Trophy },
-              { label: 'Active', value: activeCount, icon: ShieldCheck },
-              {
-                label: 'Teams available',
-                value: leagues.reduce((sum, league) => sum + Math.max(league.maxTeams || 0, 0), 0),
-                icon: Users,
-              },
+              { label: 'Drafts scheduled', value: draftScheduledCount, icon: CalendarClock },
+              { label: 'Drafts complete', value: draftCompleteCount, icon: CheckCircle2 },
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -144,52 +176,123 @@ export default function LeaguesPage() {
               </p>
             </section>
           ) : leagues.length > 0 ? (
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {leagues.map((league) => (
-                <Link
-                  href={`/leagues/${league.id}`}
-                  key={league.id}
-                  className="group rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_18px_55px_-44px_rgba(23,34,48,0.4)] transition hover:-translate-y-0.5 hover:border-[color:var(--league-primary)]/35 hover:shadow-[0_24px_60px_-42px_rgba(23,34,48,0.45)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <h2 className="truncate text-lg font-semibold tracking-tight text-[color:var(--league-text)]">
-                        {league.name}
-                      </h2>
-                      <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-                        {league.maxTeams} teams max
-                      </p>
-                    </div>
-                    <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-primary-soft)] px-2.5 py-1 text-xs font-semibold capitalize text-[color:var(--league-primary)]">
-                      {league.status}
-                    </span>
+            <section className="overflow-hidden rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_80px_-54px_rgba(23,34,48,0.48)]">
+              <div className="flex flex-col gap-3 border-b border-[color:var(--league-border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                    League directory
+                  </p>
+                  <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-end sm:gap-3">
+                    <h2 className="text-xl font-semibold tracking-tight text-[color:var(--league-text)]">
+                      Open a workspace
+                    </h2>
+                    <p className="text-sm text-[color:var(--league-text-muted)]">
+                      Review draft timing, scoring, and roster setup at a glance.
+                    </p>
                   </div>
+                </div>
+                <p className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-1.5 text-xs font-semibold text-[color:var(--league-text)]">
+                  {leagues.length} {leagues.length === 1 ? 'league' : 'leagues'} available
+                </p>
+              </div>
 
-                  <dl className="mt-5 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-3">
-                      <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
-                        Categories
-                      </dt>
-                      <dd className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
-                        {league.categories.length}
-                      </dd>
-                    </div>
-                    <div className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-3">
-                      <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
-                        Draft
-                      </dt>
-                      <dd className="mt-1 text-sm font-semibold text-[color:var(--league-text)]">
-                        {formatDraftDate(league.draftDate)}
-                      </dd>
-                    </div>
-                  </dl>
+              <div className="hidden border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:grid md:grid-cols-[minmax(0,1.7fr)_9.5rem_7rem_10rem_4.5rem] md:items-center md:gap-4">
+                <span>League</span>
+                <span>Draft status</span>
+                <span>Scoring</span>
+                <span>Draft</span>
+                <span className="justify-self-end">Action</span>
+              </div>
 
-                  <div className="mt-5 flex items-center gap-2 border-t border-[color:var(--league-border)] pt-4 text-xs font-medium text-[color:var(--league-text-muted)]">
-                    <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-                    Open league command center
-                  </div>
-                </Link>
-              ))}
+              <div className="divide-y divide-[color:var(--league-border)]">
+                {leagues.map((league, index) => {
+                  const draftPhase = getDraftPhase(league);
+                  const DraftPhaseIcon =
+                    league.status === 'completed' || league.status === 'active'
+                      ? CheckCircle2
+                      : CalendarClock;
+
+                  return (
+                    <Link
+                      href={`/leagues/${league.id}`}
+                      key={league.id}
+                      aria-label={`Open ${league.name} league command center`}
+                      className="group relative grid gap-4 px-5 py-4 transition hover:bg-[color:var(--league-page)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--league-primary)] sm:px-6 md:grid-cols-[minmax(0,1.7fr)_9.5rem_7rem_10rem_4.5rem] md:items-center md:gap-4"
+                    >
+                      <span
+                        className="absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-transparent transition group-hover:bg-[color:var(--league-primary)]"
+                        aria-hidden="true"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] text-xs font-semibold tabular-nums text-[color:var(--league-primary)]">
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          <div className="min-w-0">
+                            <h2 className="truncate text-base font-semibold tracking-tight text-[color:var(--league-text)]">
+                              {league.name}
+                            </h2>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[color:var(--league-text-muted)]">
+                              <span>{formatTeamCount(league)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 md:block">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
+                          Draft status
+                        </span>
+                        <div className="flex items-center justify-between gap-2 md:block">
+                          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1 text-xs font-semibold text-[color:var(--league-text)]">
+                            <DraftPhaseIcon
+                              className="h-3.5 w-3.5 text-[color:var(--league-text-muted)]"
+                              aria-hidden="true"
+                            />
+                            {draftPhase.label}
+                          </span>
+                          <p className="mt-1 hidden text-xs text-[color:var(--league-text-muted)] md:block">
+                            {draftPhase.detail}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 md:block">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
+                          Scoring
+                        </span>
+                        <span className="text-sm font-semibold text-[color:var(--league-text)]">
+                          {league.categories.length} categories
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 md:block">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)] md:hidden">
+                          Draft
+                        </span>
+                        <span className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                          <CalendarClock
+                            className="hidden h-4 w-4 text-[color:var(--league-text-muted)] lg:block"
+                            aria-hidden="true"
+                          />
+                          {formatDraftDate(league.draftDate)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-[color:var(--league-border)] pt-3 text-sm font-semibold text-[color:var(--league-primary)] md:justify-end md:justify-self-end md:border-t-0 md:pt-0">
+                        <span className="md:sr-only">Open league command center</span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-transparent px-3 py-1.5 transition group-hover:border-[color:var(--league-border)] group-hover:bg-[color:var(--league-surface)]">
+                          <span className="hidden md:inline">Open</span>
+                          <ArrowRight
+                            className="h-4 w-4 transition group-hover:translate-x-0.5"
+                            aria-hidden="true"
+                          />
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             </section>
           ) : (
             <section className="rounded-[28px] border border-dashed border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-8 text-center">

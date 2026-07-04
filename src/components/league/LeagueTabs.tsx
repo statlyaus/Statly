@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import type { League, LeagueMember } from '@/types/leagues';
+import type { League, LeagueMember, LeagueMemberNotificationSettings } from '@/types/leagues';
 import {
   FANTASY_CATEGORIES,
   REAL_DATA_NINE_CATEGORY_PRESET,
@@ -20,6 +20,11 @@ import {
   type PositionLimitKey,
 } from '@/lib/draftSettings';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import {
+  DEFAULT_TEAM_SYMBOL_ZOOM,
+  MAX_TEAM_SYMBOL_ZOOM,
+  MIN_TEAM_SYMBOL_ZOOM,
+} from '@/lib/teamSymbol';
 import MyTeamPanel from '@/components/MyTeamPanel';
 import LeagueWaiversContainer from '@/components/waivers/LeagueWaiversContainer';
 import type { Player, Team } from '@/types/players';
@@ -32,7 +37,15 @@ interface LeagueTabsProps {
   onMembersChange?: (members: LeagueMember[]) => void;
 }
 
-type TabType = 'overview' | 'teams' | 'roster' | 'trades' | 'waivers' | 'draft' | 'settings';
+type TabType =
+  | 'overview'
+  | 'teams'
+  | 'roster'
+  | 'trades'
+  | 'waivers'
+  | 'draft'
+  | 'team-settings'
+  | 'league-settings';
 
 interface Tab {
   id: TabType;
@@ -41,6 +54,14 @@ interface Tab {
   badge?: number;
 }
 
+type OverviewTradeSummary = {
+  tradeId: string;
+  tradeName?: string;
+  status: string;
+  playerNames: string[];
+  lastUpdated?: number;
+};
+
 const TAB_IDS: readonly TabType[] = [
   'overview',
   'teams',
@@ -48,14 +69,19 @@ const TAB_IDS: readonly TabType[] = [
   'trades',
   'waivers',
   'draft',
-  'settings',
+  'team-settings',
+  'league-settings',
 ];
 
 function isLeagueTab(value: unknown): value is TabType {
   return typeof value === 'string' && TAB_IDS.includes(value as TabType);
 }
 
-function getLeagueTabFromSearch(value: string | null): TabType | null {
+function getLeagueTabFromSearch(value: string | null, isAdmin = false): TabType | null {
+  if (value === 'settings') {
+    return isAdmin ? 'league-settings' : 'team-settings';
+  }
+
   return isLeagueTab(value) ? value : null;
 }
 
@@ -68,42 +94,71 @@ export default function LeagueTabs({
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const [activeTab, setActiveTab] = useState<TabType>(
-    () => getLeagueTabFromSearch(searchParams?.get('tab') ?? null) ?? 'overview'
-  );
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [teamActionMessage, setTeamActionMessage] = useState<LeagueSettingsMessage | null>(null);
   const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [overviewTrades, setOverviewTrades] = useState<OverviewTradeSummary[]>([]);
+  const [overviewTradesStatus, setOverviewTradesStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+
+  const currentMember = members.find((member) => member.userId === currentUserId);
+  const selectedPlayerId = searchParams?.get('playerId') ?? null;
+  const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
+  const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;
+  const activeMembers = members.filter((member) => member.isActive !== false);
+  const openTeamSlots = Math.max(league.maxTeams - activeMembers.length, 0);
+  const waiverOrder = league.waiverWire?.waiverOrder ?? [];
+  const waiverPriorityIndex = currentMember
+    ? waiverOrder.findIndex(
+        (memberId) => memberId === currentMember.id || memberId === currentMember.userId
+      )
+    : -1;
+  const waiverPriorityLabel =
+    waiverPriorityIndex >= 0 ? `Priority ${waiverPriorityIndex + 1}` : 'Not set';
+  const waiverPolicyLabel =
+    league.waiverRule ?? league.waiverWire?.waiverResetPolicy ?? 'weekly';
+  const overviewTeams = activeMembers.slice(0, league.maxTeams);
+  const categorySummary = league.categories
+    .slice(0, 4)
+    .map(
+      (category) =>
+        FANTASY_CATEGORIES[category]?.abbrev ?? FANTASY_CATEGORIES[category]?.label ?? category
+    )
+    .join(', ');
 
   // Handle URL tab parameter
   useEffect(() => {
-    const tabParam = getLeagueTabFromSearch(searchParams?.get('tab') ?? null);
+    const tabParam = getLeagueTabFromSearch(searchParams?.get('tab') ?? null, isAdmin);
     if (tabParam && tabParam !== activeTab) {
       setActiveTab(tabParam);
+      return;
     }
-  }, [activeTab, searchParams]);
+
+    if (activeTab === 'league-settings' && !isAdmin) {
+      setActiveTab('team-settings');
+    }
+  }, [activeTab, isAdmin, searchParams]);
 
   const handleTabChange = (tabId: TabType) => {
     setActiveTab(tabId);
-    // Update URL without full page reload
     const newUrl = `${pathname}?tab=${tabId}`;
     router.push(newUrl, { scroll: false });
   };
 
-  const tabs: Tab[] = [
+  const baseTabs: Tab[] = [
     { id: 'overview', name: 'Overview' },
     { id: 'teams', name: 'Teams' },
     { id: 'roster', name: 'My Roster' },
     { id: 'trades', name: 'Trades' },
     { id: 'waivers', name: 'Waivers' },
     { id: 'draft', name: 'Draft' },
-    { id: 'settings', name: 'Settings' },
+    { id: 'team-settings', name: 'Team Settings' },
   ];
-
-  const currentMember = members.find((member) => member.userId === currentUserId);
-  const selectedPlayerId = searchParams?.get('playerId') ?? null;
-  const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
-  const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;
+  const tabs: Tab[] = isAdmin
+    ? [...baseTabs, { id: 'league-settings', name: 'League Settings' }]
+    : baseTabs;
   const waiverMembersIndex = useMemo(
     () =>
       Object.fromEntries(
@@ -119,8 +174,12 @@ export default function LeagueTabs({
     [members]
   );
   const draftReadiness = league.draftReadiness ?? null;
+  const isDraftComplete =
+    draftReadiness?.status === 'completed' ||
+    draftReadiness?.lifecycle.isComplete === true ||
+    league.status === 'completed';
   const draftRoomPath =
-    draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
+    !isDraftComplete && draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
       ? `/drafts/${draftReadiness.draftId}`
       : null;
   const draftDate = league.draftDate ? new Date(league.draftDate) : null;
@@ -131,6 +190,72 @@ export default function LeagueTabs({
           timeStyle: 'short',
         }).format(draftDate)
       : 'Not scheduled';
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    let cancelled = false;
+
+    async function loadOverviewTrades() {
+      setOverviewTradesStatus('loading');
+
+      try {
+        const response = await authenticatedFetch(
+          `/api/trades/list?leagueId=${encodeURIComponent(league.id)}&status=PENDING&pageSize=3`,
+          {},
+          currentUserId
+        );
+
+        if (!response?.ok) {
+          throw new Error(`status ${response?.status ?? 'unknown'}`);
+        }
+
+        const payload = (await response.json()) as unknown;
+        const trades = isRecord(payload) && Array.isArray(payload.trades) ? payload.trades : [];
+        const summaries = trades
+          .map((trade): OverviewTradeSummary | null => {
+            if (!isRecord(trade) || !isRecord(trade.summary)) return null;
+            const summary = trade.summary;
+            const tradeId =
+              typeof summary.tradeId === 'string'
+                ? summary.tradeId
+                : typeof trade.tradeId === 'string'
+                  ? trade.tradeId
+                  : null;
+
+            if (!tradeId) return null;
+
+            return {
+              tradeId,
+              tradeName: typeof summary.tradeName === 'string' ? summary.tradeName : undefined,
+              status: typeof summary.status === 'string' ? summary.status : 'PENDING',
+              playerNames: Array.isArray(summary.playerNames)
+                ? summary.playerNames.filter((name): name is string => typeof name === 'string')
+                : [],
+              lastUpdated:
+                typeof summary.lastUpdated === 'number' ? summary.lastUpdated : undefined,
+            };
+          })
+          .filter((trade): trade is OverviewTradeSummary => trade !== null);
+
+        if (!cancelled) {
+          setOverviewTrades(summaries);
+          setOverviewTradesStatus('ready');
+        }
+      } catch {
+        if (!cancelled) {
+          setOverviewTrades([]);
+          setOverviewTradesStatus('error');
+        }
+      }
+    }
+
+    void loadOverviewTrades();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, league.id]);
 
   const handleRemoveMember = async (member: LeagueMember) => {
     if (!canRemoveTeams || member.userId === league.ownerId) return;
@@ -208,7 +333,7 @@ export default function LeagueTabs({
               >
                 Enter draft room
               </button>
-            ) : (
+            ) : !isDraftComplete ? (
               <button
                 type="button"
                 onClick={() => handleTabChange('draft')}
@@ -216,7 +341,7 @@ export default function LeagueTabs({
               >
                 Prepare draft
               </button>
-            )}
+            ) : null}
             <button
               type="button"
               onClick={() => handleTabChange('teams')}
@@ -266,69 +391,215 @@ export default function LeagueTabs({
           >
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <section className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                      Your team
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-gray-900">
-                      {currentMember?.teamName ?? 'Team not set'}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      {currentMember?.role === 'owner' || currentMember?.role === 'manager'
-                        ? 'Commissioner access'
-                        : 'Member access'}
-                    </p>
+                <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-[0_24px_70px_-52px_rgba(15,23,42,0.45)] sm:p-5">
+                  <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+                    <div className="rounded-[22px] bg-[color:var(--league-primary)] p-5 text-[color:var(--league-primary-foreground)] shadow-[0_24px_70px_-48px_rgba(15,23,42,0.7)] sm:p-6">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">
+                        League overview
+                      </p>
+                      <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                        {league.name}
+                      </h2>
+                      <p className="mt-2 text-sm text-white/70">
+                        {league.type === 'private' ? 'Private' : 'Public'} ·{' '}
+                        {activeMembers.length}/{league.maxTeams} teams · Draft{' '}
+                        {draftReadiness?.status ?? league.status}
+                      </p>
+                      <p className="mt-1 text-sm text-white/55">
+                        {openTeamSlots === 0
+                          ? 'League is full'
+                          : `${openTeamSlots} team ${openTeamSlots === 1 ? 'slot' : 'slots'} open`}
+                        {' · '}
+                        {categorySummary}
+                        {league.categories.length > 4
+                          ? ` +${league.categories.length - 4} more`
+                          : ''}
+                      </p>
+
+                      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                        <div>
+                          <p className="text-3xl font-semibold text-white">
+                            {activeMembers.length}
+                          </p>
+                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
+                            teams
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-3xl font-semibold text-white">
+                            {overviewTrades.length}
+                          </p>
+                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
+                            Trade offers
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-3xl font-semibold text-white">
+                            {league.categories.length} categories
+                          </p>
+                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
+                            Scoring
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Your team
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-slate-950">
+                          {currentMember?.teamName ?? 'Team not set'}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {currentMember?.role === 'owner' || currentMember?.role === 'manager'
+                            ? 'Commissioner access'
+                            : 'Member access'}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Waiver position
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-slate-950">
+                          {waiverPriorityLabel}
+                        </p>
+                        <p className="mt-1 text-sm capitalize text-slate-600">
+                          {waiverPolicyLabel} order
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                      Draft status
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-gray-900">
-                      {draftReadiness?.status ?? 'Not prepared'}
-                    </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      {draftRoomPath
-                        ? 'Room is available for this league.'
-                        : (draftReadiness?.blockers[0]?.message ??
-                          'Configure draft settings to prepare the room.')}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                      Scoring
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-gray-900">
-                      {league.categories.length} categories
-                    </p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      {league.categories
-                        .slice(0, 3)
-                        .map((category) => FANTASY_CATEGORIES[category]?.label ?? category)
-                        .join(', ')}
-                    </p>
+
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Teams
+                        </p>
+                        <h3 className="mt-1 text-lg font-semibold text-slate-950">
+                          {league.maxTeams}-team league
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange('teams')}
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                      >
+                        View teams
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                      {overviewTeams.map((member) => (
+                        <div
+                          key={member.id}
+                          className="group flex min-h-32 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-center transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_18px_35px_-28px_rgba(15,23,42,0.45)]"
+                        >
+                          <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:size-28">
+                            {member.teamLogoUrl ? (
+                              <img
+                                src={member.teamLogoUrl}
+                                alt={`${member.teamName || 'Team'} symbol`}
+                                referrerPolicy="no-referrer"
+                                style={getTeamLogoImageStyle(member)}
+                                className="h-full w-full object-cover will-change-transform"
+                              />
+                            ) : (
+                              <span className="text-lg font-semibold text-slate-700">
+                                {getTeamInitials(member.teamName || 'Team')}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-3 text-sm font-semibold leading-5 text-slate-950">
+                            {member.teamName || 'Unnamed team'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-gray-200 bg-white p-5">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900">Next action</h2>
-                      <p className="mt-1 text-sm text-gray-600">
-                        {draftRoomPath
-                          ? 'Enter the draft room to manage readiness, queue, watchlist, and picks.'
-                          : 'Open the draft tab to configure the draft room and commissioner settings.'}
+                <section className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.35)]">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Trades
+                        </p>
+                        <h2 className="mt-1 text-lg font-semibold text-slate-950">
+                          Offers needing review
+                        </h2>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/leagues/${league.id}/trades`)}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                      >
+                        Trade centre
+                      </button>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {overviewTradesStatus === 'loading' ? (
+                        <p className="text-sm text-slate-600">
+                          Checking pending offers...
+                        </p>
+                      ) : overviewTrades.length > 0 ? (
+                        overviewTrades.map((trade) => (
+                          <div
+                            key={trade.tradeId}
+                            className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                          >
+                            <p className="text-sm font-semibold text-slate-950">
+                              {trade.tradeName ?? `Trade ${trade.tradeId.slice(0, 8)}`}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-600">
+                              {trade.playerNames.length > 0
+                                ? trade.playerNames.join(', ')
+                                : 'Player details available in trade centre'}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+                          No pending trade offers.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.35)]">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Waivers
+                        </p>
+                        <h2 className="mt-1 text-lg font-semibold text-slate-950">
+                          Your claim position
+                        </h2>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange('waivers')}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                      >
+                        Waivers
+                      </button>
+                    </div>
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-2xl font-semibold text-slate-950">
+                        {waiverPriorityLabel}
+                      </p>
+                      <p className="mt-1 text-sm capitalize text-slate-600">
+                        {waiverPolicyLabel} waiver order
+                      </p>
+                      <p className="mt-3 text-sm text-slate-600">
+                        {waiverPriorityIndex >= 0
+                          ? 'Use the waiver tab to submit claims and check the queue before processing.'
+                          : 'Waiver order has not been set for your team yet.'}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        draftRoomPath ? router.push(draftRoomPath) : handleTabChange('draft')
-                      }
-                      className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                    >
-                      {draftRoomPath ? 'Enter draft room' : 'Prepare draft'}
-                    </button>
                   </div>
                 </section>
               </div>
@@ -607,7 +878,21 @@ export default function LeagueTabs({
               </div>
             )}
 
-            {activeTab === 'settings' && (
+            {activeTab === 'team-settings' && (
+              <TeamSettingsPanel
+                league={league}
+                currentUserId={currentUserId}
+                currentMember={currentMember}
+                onMemberChange={(nextMember) => {
+                  const nextMembers = members.map((member) =>
+                    member.id === nextMember.id ? { ...member, ...nextMember } : member
+                  );
+                  onMembersChange?.(nextMembers);
+                }}
+              />
+            )}
+
+            {activeTab === 'league-settings' && (
               <LeagueSettingsPanel
                 league={league}
                 memberCount={members.length}
@@ -671,6 +956,15 @@ const POSITION_LIMIT_LABELS: Record<PositionLimitKey, string> = {
 
 const CATEGORY_PRESET = [...REAL_DATA_NINE_CATEGORY_PRESET];
 const FANTASY_CATEGORY_KEYS = new Set(Object.keys(FANTASY_CATEGORIES));
+const TEAM_SYMBOL_UPLOAD_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const TEAM_SYMBOL_UPLOAD_MAX_BYTES = 2_000_000;
+const TEAM_SYMBOL_CANVAS_SIZE = 256;
+const DEFAULT_MEMBER_NOTIFICATION_SETTINGS: LeagueMemberNotificationSettings = {
+  tradePush: true,
+  waiverPush: true,
+  draftReminder: true,
+  scoringAlerts: true,
+};
 
 function normalizeFantasyCategoryList(
   value: unknown,
@@ -763,6 +1057,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
+function getMemberNotificationSettings(
+  member?: LeagueMember
+): LeagueMemberNotificationSettings {
+  return {
+    ...DEFAULT_MEMBER_NOTIFICATION_SETTINGS,
+    ...member?.notificationSettings,
+  };
+}
+
 function getLeagueMemberRoleLabel(member: LeagueMember, league: League): string {
   if (member.userId === league.ownerId || member.role?.toLowerCase() === 'owner') {
     return 'Owner';
@@ -801,6 +1104,95 @@ function getTeamInitials(teamName: string): string {
     .join('');
 
   return initials || 'T';
+}
+
+function getTeamLogoPositionValue(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(100, Math.round(value)))
+    : 50;
+}
+
+function getTeamLogoZoomValue(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(MIN_TEAM_SYMBOL_ZOOM, Math.min(MAX_TEAM_SYMBOL_ZOOM, Math.round(value * 20) / 20))
+    : DEFAULT_TEAM_SYMBOL_ZOOM;
+}
+
+function getTeamLogoObjectPosition(
+  member: Pick<LeagueMember, 'teamLogoPositionX' | 'teamLogoPositionY'>
+): string {
+  return `${getTeamLogoPositionValue(member.teamLogoPositionX)}% ${getTeamLogoPositionValue(
+    member.teamLogoPositionY
+  )}%`;
+}
+
+function getTeamLogoImageStyle(
+  member: Pick<LeagueMember, 'teamLogoPositionX' | 'teamLogoPositionY' | 'teamLogoZoom'>
+): CSSProperties {
+  const objectPosition = getTeamLogoObjectPosition(member);
+  const zoom = getTeamLogoZoomValue(member.teamLogoZoom);
+  return {
+    objectPosition,
+    transform: `scale(${zoom})`,
+    transformOrigin: objectPosition,
+  };
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('Could not read image file.'));
+    };
+    reader.onerror = () => reject(new Error('Could not read image file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function resizeTeamSymbolDataUrl(
+  dataUrl: string,
+  positionX = 50,
+  positionY = 50,
+  zoom = DEFAULT_TEAM_SYMBOL_ZOOM
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = TEAM_SYMBOL_CANVAS_SIZE;
+      canvas.height = TEAM_SYMBOL_CANVAS_SIZE;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Could not prepare image.'));
+        return;
+      }
+
+      const size = Math.min(image.naturalWidth, image.naturalHeight) / getTeamLogoZoomValue(zoom);
+      const maxSourceX = Math.max(0, image.naturalWidth - size);
+      const maxSourceY = Math.max(0, image.naturalHeight - size);
+      const sourceX = Math.round(maxSourceX * (getTeamLogoPositionValue(positionX) / 100));
+      const sourceY = Math.round(maxSourceY * (getTeamLogoPositionValue(positionY) / 100));
+      context.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        size,
+        size,
+        0,
+        0,
+        TEAM_SYMBOL_CANVAS_SIZE,
+        TEAM_SYMBOL_CANVAS_SIZE
+      );
+      resolve(canvas.toDataURL('image/webp', 0.82));
+    };
+    image.onerror = () => reject(new Error('Could not load image file.'));
+    image.src = dataUrl;
+  });
 }
 
 function asString(value: unknown, fallback: string): string {
@@ -858,6 +1250,463 @@ function toDateTimeLocalValue(value: string): string {
 function fromDateTimeLocalValue(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function TeamSettingsPanel({
+  league,
+  currentUserId,
+  currentMember,
+  onMemberChange,
+}: {
+  league: League;
+  currentUserId?: string;
+  currentMember?: LeagueMember;
+  onMemberChange?: (member: LeagueMember) => void;
+}) {
+  const [teamName, setTeamName] = useState(currentMember?.teamName ?? '');
+  const [notificationSettings, setNotificationSettings] = useState<LeagueMemberNotificationSettings>(
+    () => getMemberNotificationSettings(currentMember)
+  );
+  const [teamSettingsMessage, setTeamSettingsMessage] = useState<LeagueSettingsMessage | null>(
+    null
+  );
+  const [isSavingTeamSettings, setIsSavingTeamSettings] = useState(false);
+  const [teamSymbolUrl, setTeamSymbolUrl] = useState(currentMember?.teamLogoUrl ?? '');
+  const [teamSymbolPositionX, setTeamSymbolPositionX] = useState(
+    getTeamLogoPositionValue(currentMember?.teamLogoPositionX)
+  );
+  const [teamSymbolPositionY, setTeamSymbolPositionY] = useState(
+    getTeamLogoPositionValue(currentMember?.teamLogoPositionY)
+  );
+  const [teamSymbolZoom, setTeamSymbolZoom] = useState(
+    getTeamLogoZoomValue(currentMember?.teamLogoZoom)
+  );
+  const [pendingTeamSymbolUploadDataUrl, setPendingTeamSymbolUploadDataUrl] = useState<
+    string | null
+  >(null);
+  const [teamSymbolMessage, setTeamSymbolMessage] = useState<LeagueSettingsMessage | null>(null);
+  const [isSavingTeamSymbol, setIsSavingTeamSymbol] = useState(false);
+
+  useEffect(() => {
+    setTeamName(currentMember?.teamName ?? '');
+    setNotificationSettings(getMemberNotificationSettings(currentMember));
+    setTeamSymbolUrl(currentMember?.teamLogoUrl ?? '');
+    setTeamSymbolPositionX(getTeamLogoPositionValue(currentMember?.teamLogoPositionX));
+    setTeamSymbolPositionY(getTeamLogoPositionValue(currentMember?.teamLogoPositionY));
+    setTeamSymbolZoom(getTeamLogoZoomValue(currentMember?.teamLogoZoom));
+    setPendingTeamSymbolUploadDataUrl(null);
+  }, [
+    currentMember?.notificationSettings,
+    currentMember?.teamLogoPositionX,
+    currentMember?.teamLogoPositionY,
+    currentMember?.teamLogoUrl,
+    currentMember?.teamLogoZoom,
+    currentMember?.teamName,
+  ]);
+
+  const updateNotificationSetting = (
+    key: keyof LeagueMemberNotificationSettings,
+    value: boolean
+  ) => {
+    setNotificationSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const mergeMemberResponse = (payload: unknown, fallback: LeagueMember): LeagueMember => {
+    return isRecord(payload) && isRecord(payload.data) && isRecord(payload.data.member)
+      ? ({ ...fallback, ...payload.data.member } as LeagueMember)
+      : fallback;
+  };
+
+  const saveTeamSettings = async () => {
+    if (!currentUserId || !currentMember) return;
+
+    try {
+      setIsSavingTeamSettings(true);
+      setTeamSettingsMessage(null);
+      const response = await authenticatedFetch(
+        `/api/leagues/${league.id}/members/me`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teamName,
+            notificationSettings,
+          }),
+        },
+        currentUserId
+      );
+      const payload = await response.json();
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? `status ${response.status}`);
+      }
+
+      const nextMember = mergeMemberResponse(payload, {
+        ...currentMember,
+        teamName: teamName.trim(),
+        notificationSettings,
+      });
+      setTeamName(nextMember.teamName);
+      setNotificationSettings(getMemberNotificationSettings(nextMember));
+      onMemberChange?.(nextMember);
+      setTeamSettingsMessage({ type: 'success', text: 'Team settings saved.' });
+    } catch (error) {
+      setTeamSettingsMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to save team settings.',
+      });
+    } finally {
+      setIsSavingTeamSettings(false);
+    }
+  };
+
+  const saveTeamSymbol = async (
+    nextTeamSymbolUrl: string,
+    nextPositionX = teamSymbolPositionX,
+    nextPositionY = teamSymbolPositionY,
+    nextZoom = teamSymbolZoom
+  ) => {
+    if (!currentUserId || !currentMember) return;
+
+    const normalizedPositionX = getTeamLogoPositionValue(nextPositionX);
+    const normalizedPositionY = getTeamLogoPositionValue(nextPositionY);
+    const normalizedZoom = getTeamLogoZoomValue(nextZoom);
+
+    try {
+      setIsSavingTeamSymbol(true);
+      setTeamSymbolMessage(null);
+      const shouldResizePendingUpload =
+        pendingTeamSymbolUploadDataUrl && nextTeamSymbolUrl === pendingTeamSymbolUploadDataUrl;
+      const teamLogoUrlForSave = shouldResizePendingUpload
+        ? await resizeTeamSymbolDataUrl(
+            pendingTeamSymbolUploadDataUrl,
+            normalizedPositionX,
+            normalizedPositionY,
+            normalizedZoom
+          )
+        : nextTeamSymbolUrl;
+      const response = await authenticatedFetch(
+        `/api/leagues/${league.id}/members/me`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teamLogoUrl: teamLogoUrlForSave,
+            teamLogoPositionX: normalizedPositionX,
+            teamLogoPositionY: normalizedPositionY,
+            teamLogoZoom: normalizedZoom,
+          }),
+        },
+        currentUserId
+      );
+      const payload = await response.json();
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? `status ${response.status}`);
+      }
+
+      const nextMember = mergeMemberResponse(payload, {
+        ...currentMember,
+        teamLogoUrl: teamLogoUrlForSave || undefined,
+        teamLogoPositionX: normalizedPositionX,
+        teamLogoPositionY: normalizedPositionY,
+        teamLogoZoom: normalizedZoom,
+      });
+
+      setTeamSymbolUrl(nextMember.teamLogoUrl ?? '');
+      setTeamSymbolPositionX(getTeamLogoPositionValue(nextMember.teamLogoPositionX));
+      setTeamSymbolPositionY(getTeamLogoPositionValue(nextMember.teamLogoPositionY));
+      setTeamSymbolZoom(getTeamLogoZoomValue(nextMember.teamLogoZoom));
+      setPendingTeamSymbolUploadDataUrl(null);
+      onMemberChange?.(nextMember);
+      setTeamSymbolMessage({ type: 'success', text: 'Team symbol saved.' });
+    } catch (error) {
+      setTeamSymbolMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to save team symbol.',
+      });
+    } finally {
+      setIsSavingTeamSymbol(false);
+    }
+  };
+
+  const handleTeamSymbolUpload = async (file: File | undefined) => {
+    if (!file) return;
+    if (!TEAM_SYMBOL_UPLOAD_TYPES.has(file.type)) {
+      setTeamSymbolMessage({ type: 'error', text: 'Upload a PNG, JPEG, or WebP image.' });
+      return;
+    }
+    if (file.size > TEAM_SYMBOL_UPLOAD_MAX_BYTES) {
+      setTeamSymbolMessage({ type: 'error', text: 'Upload an image smaller than 2 MB.' });
+      return;
+    }
+
+    try {
+      setTeamSymbolMessage(null);
+      const dataUrl = await readFileAsDataUrl(file);
+      setPendingTeamSymbolUploadDataUrl(dataUrl);
+      setTeamSymbolUrl(dataUrl);
+    } catch (error) {
+      setTeamSymbolMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to upload team symbol.',
+      });
+    }
+  };
+
+  if (!currentMember) {
+    return (
+      <div className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 text-sm text-[color:var(--league-text-muted)]">
+        Join this league to manage team settings.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-xl font-semibold text-[color:var(--league-text)]">Team Settings</h2>
+        <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+          Manage your team name, identity, and league notifications.
+        </p>
+      </div>
+
+      {teamSettingsMessage && (
+        <div
+          role="status"
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            teamSettingsMessage.type === 'success'
+              ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
+              : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {teamSettingsMessage.text}
+        </div>
+      )}
+
+      <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
+          <div>
+            <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+              Team details
+            </h3>
+            <div className="mt-4 grid gap-4">
+              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                Team name
+                <input
+                  type="text"
+                  value={teamName}
+                  onChange={(event) => setTeamName(event.target.value)}
+                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  ['tradePush', 'Trade offers'],
+                  ['waiverPush', 'Waiver updates'],
+                  ['draftReminder', 'Draft reminders'],
+                  ['scoringAlerts', 'Scoring alerts'],
+                ].map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex min-h-10 items-center gap-3 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings[key as keyof LeagueMemberNotificationSettings]}
+                      onChange={(event) =>
+                        updateNotificationSetting(
+                          key as keyof LeagueMemberNotificationSettings,
+                          event.target.checked
+                        )
+                      }
+                      className="size-4 rounded border-[color:var(--league-border)] text-[color:var(--league-primary)] focus:ring-[color:var(--league-primary)]"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => void saveTeamSettings()}
+                  disabled={isSavingTeamSettings}
+                  className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                >
+                  {isSavingTeamSettings ? 'Saving...' : 'Save team settings'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="relative flex aspect-square w-full max-w-sm items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] shadow-sm">
+            {teamSymbolUrl ? (
+              <img
+                src={teamSymbolUrl}
+                alt={`${currentMember.teamName} symbol preview`}
+                referrerPolicy="no-referrer"
+                style={getTeamLogoImageStyle({
+                  teamLogoPositionX: teamSymbolPositionX,
+                  teamLogoPositionY: teamSymbolPositionY,
+                  teamLogoZoom: teamSymbolZoom,
+                })}
+                className="h-full w-full object-cover will-change-transform"
+              />
+            ) : (
+              <span className="text-5xl font-semibold text-[color:var(--league-text)]">
+                {getTeamInitials(currentMember.teamName)}
+              </span>
+            )}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,transparent_calc(50%-0.5px),rgba(255,255,255,0.72)_calc(50%-0.5px),rgba(255,255,255,0.72)_calc(50%+0.5px),transparent_calc(50%+0.5px)),linear-gradient(to_bottom,transparent_calc(50%-0.5px),rgba(255,255,255,0.72)_calc(50%-0.5px),rgba(255,255,255,0.72)_calc(50%+0.5px),transparent_calc(50%+0.5px))] mix-blend-difference"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-4 rounded-xl border border-white/45 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+        <div className="grid gap-6 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] lg:items-start">
+          <div>
+            <h3 className="text-base font-semibold text-[color:var(--league-text)]">
+              Team identity
+            </h3>
+            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+              Position the image used for your team across {league.name}.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-5">
+            {teamSymbolMessage && (
+              <div
+                role="status"
+                className={`rounded-lg border px-4 py-3 text-sm ${
+                  teamSymbolMessage.type === 'success'
+                    ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
+                    : 'border-red-200 bg-red-50 text-red-700'
+                }`}
+              >
+                {teamSymbolMessage.text}
+              </div>
+            )}
+
+            <div className="grid gap-4">
+              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                Team symbol URL
+                <input
+                  type="url"
+                  value={teamSymbolUrl.startsWith('data:') ? '' : teamSymbolUrl}
+                  placeholder="https://example.com/team-symbol.png"
+                  onChange={(event) => {
+                    setPendingTeamSymbolUploadDataUrl(null);
+                    setTeamSymbolUrl(event.target.value);
+                  }}
+                  className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                />
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                  Upload team symbol
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(event) => void handleTeamSymbolUpload(event.target.files?.[0])}
+                    className="block w-full text-sm text-[color:var(--league-text-muted)] file:mr-4 file:rounded-md file:border-0 file:bg-[color:var(--league-page)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[color:var(--league-text)]"
+                  />
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void saveTeamSymbol(teamSymbolUrl)}
+                    disabled={isSavingTeamSymbol}
+                    className="inline-flex h-10 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                  >
+                    {isSavingTeamSymbol ? 'Saving...' : 'Save team symbol'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveTeamSymbol('')}
+                    disabled={isSavingTeamSymbol}
+                    className="inline-flex h-10 items-center justify-center rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                Zoom
+                <div className="flex items-center gap-3">
+                  <span className="w-10 text-xs text-[color:var(--league-text-muted)]">1x</span>
+                  <input
+                    type="range"
+                    min={MIN_TEAM_SYMBOL_ZOOM}
+                    max={MAX_TEAM_SYMBOL_ZOOM}
+                    step="0.05"
+                    value={teamSymbolZoom}
+                    onChange={(event) =>
+                      setTeamSymbolZoom(getTeamLogoZoomValue(Number(event.target.value)))
+                    }
+                    className="w-full accent-[color:var(--league-primary)]"
+                  />
+                  <span className="w-12 text-right text-xs text-[color:var(--league-text-muted)]">
+                    {teamSymbolZoom.toFixed(2)}x
+                  </span>
+                </div>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                Horizontal centre
+                <div className="flex items-center gap-3">
+                  <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Left</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={teamSymbolPositionX}
+                    onChange={(event) =>
+                      setTeamSymbolPositionX(getTeamLogoPositionValue(Number(event.target.value)))
+                    }
+                    className="w-full accent-[color:var(--league-primary)]"
+                  />
+                  <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
+                    Right
+                  </span>
+                </div>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+                Vertical centre
+                <div className="flex items-center gap-3">
+                  <span className="w-10 text-xs text-[color:var(--league-text-muted)]">Top</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={teamSymbolPositionY}
+                    onChange={(event) =>
+                      setTeamSymbolPositionY(getTeamLogoPositionValue(Number(event.target.value)))
+                    }
+                    className="w-full accent-[color:var(--league-primary)]"
+                  />
+                  <span className="w-10 text-right text-xs text-[color:var(--league-text-muted)]">
+                    Bottom
+                  </span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function LeagueSettingsPanel({

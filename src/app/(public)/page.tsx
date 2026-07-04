@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowRight,
   BarChart3,
+  CalendarClock,
   GitPullRequestArrow,
   LayoutDashboard,
   ListChecks,
   Radio,
   ShieldCheck,
-  Users,
+  Trophy,
 } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -19,62 +21,112 @@ export const metadata: Metadata = {
     'Statly is an AFL fantasy workspace for managing leagues, rosters, trades, waivers, player research, and live scoring from one clean dashboard.',
 };
 
-const decisionMoments = [
+const commandMetrics = [
+  'Draft rooms',
+  'Waiver claims',
+  'Trade context',
+  'Live scoring',
+  'Statly Z',
+];
+
+const playerGhosts = [
   {
-    icon: ListChecks,
-    title: 'Before lockout',
-    description: 'Set your lineup with role, injury, form, and matchup context in view.',
+    src: '/Assets/player-ghost-bontempelli.png',
+    className:
+      'bottom-[-10%] right-[1%] hidden h-[64%] w-[31%] rotate-[-5deg] opacity-[0.15] md:block',
   },
   {
-    icon: Radio,
-    title: 'During the round',
-    description: 'Track live matchup swings, player score movement, and the moments that matter.',
+    src: '/Assets/player-ghost-smith.png',
+    className:
+      'bottom-[-10%] left-[4%] hidden h-[54%] w-[27%] rotate-[4deg] opacity-[0.12] lg:block',
+  },
+  {
+    src: '/Assets/player-ghost-daicos.png',
+    className:
+      'bottom-[-8%] right-[30%] hidden h-[52%] w-[23%] rotate-[3deg] opacity-[0.11] xl:block',
+  },
+  {
+    src: '/Assets/player-ghost-butters.png',
+    className:
+      'bottom-[-15%] left-[28%] hidden h-[64%] w-[28%] rotate-[-2deg] opacity-[0.1] xl:block',
+  },
+];
+
+const decisionMoments = [
+  {
+    icon: Trophy,
+    title: 'Draft night',
+    description:
+      'Build the queue, read category value, track pick timing, and keep the next best player in view.',
+  },
+  {
+    icon: CalendarClock,
+    title: 'Selection week',
+    description:
+      'Bring injury updates, role movement, roster coverage, and lockout pressure into one decision surface.',
   },
   {
     icon: GitPullRequestArrow,
-    title: 'After teams and news',
-    description: 'Compare waiver and trade options before the next fantasy decision closes.',
+    title: 'Market movement',
+    description:
+      'Compare waiver claims, trade offers, live scoring swings, and manager behaviour before the window closes.',
   },
 ];
 
 const leagueModules = [
   {
+    icon: Trophy,
+    title: 'Draft room',
+    description:
+      'Run snake drafts with queue, watchlist, live picks, timer context, and Statly Z sorting.',
+  },
+  {
     icon: ListChecks,
     title: 'Rosters',
-    description: 'See starters, bench risk, coverage gaps, and lineup pressure before lockout.',
+    description: 'See starters, bench risk, position coverage, and lineup pressure before lockout.',
   },
   {
     icon: ShieldCheck,
     title: 'Waivers',
-    description: 'Review claims, priority, and available player signals before the next run.',
+    description: 'Review claims, priority, and available player signals before each waiver run.',
   },
   {
     icon: GitPullRequestArrow,
     title: 'Trades',
-    description: 'Compare incoming and outgoing value with context managers can act on.',
+    description:
+      'Compare incoming and outgoing value with context commissioners and managers can trust.',
   },
   {
     icon: Radio,
     title: 'Live scoring',
-    description: 'Follow matchup movement and player score swings while the round is active.',
+    description:
+      'Follow matchup movement and player score swings without leaving your league workspace.',
   },
   {
     icon: BarChart3,
     title: 'Player research',
-    description: 'Compare role, form, injury context, ownership, rankings, and trends.',
+    description:
+      'Compare role, form, injury context, ownership, rankings, trends, and category value.',
   },
-  {
-    icon: Users,
-    title: 'League activity',
-    description: 'Keep roster moves, trade movement, and manager actions visible in one place.',
-  },
+];
+
+const categorySignals = [
+  'Goals',
+  'Tackles',
+  'Inside 50s',
+  'Intercepts',
+  'Contested marks',
+  'Rebound 50s',
+  'Contested possessions',
+  'Effective disposals',
+  'Score involvements',
 ];
 
 const products = [
   {
     icon: LayoutDashboard,
     title: 'Statly Fantasy',
-    description: 'Manage your league, team, trades, waivers, lineups, and live rounds.',
+    description: 'Manage your league, team, trades, waivers, lineups, drafts, and live rounds.',
     href: '/dashboard',
     action: 'View Fantasy Workspace',
   },
@@ -87,108 +139,75 @@ const products = [
   },
 ];
 
-const previewRows = [
-  { name: 'N. Daicos', role: 'DEF/MID', signal: 'Role up', action: 'Compare' },
-  { name: 'M. Bontempelli', role: 'MID', signal: 'Captain tier', action: 'Shortlist' },
-  { name: 'E. Gulden', role: 'MID', signal: 'Stable role', action: 'Track live' },
-];
-
 export default function HomePage(): ReactElement {
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <section className="border-b border-border bg-primary text-primary-foreground">
-        <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-end lg:px-10 lg:py-20">
-          <div className="max-w-3xl space-y-6">
-            <p className="inline-flex items-center rounded-full border border-primary-foreground/25 bg-primary-foreground/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.18em]">
-              AFL draft and custom fantasy leagues
-            </p>
+      <section className="relative isolate overflow-hidden border-b border-border bg-foreground text-primary-foreground">
+        <Image
+          src="/Assets/statly-stadium-hero.png"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="absolute inset-0 -z-20 object-cover object-center"
+        />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-foreground/88 via-foreground/68 to-foreground/24" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-foreground/88 via-transparent to-primary-foreground/12" />
+        <div
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+          aria-hidden="true"
+        >
+          {playerGhosts.map((player) => (
+            <Image
+              key={player.src}
+              src={player.src}
+              alt=""
+              width={560}
+              height={760}
+              sizes="32vw"
+              className={`${player.className} absolute object-cover object-top grayscale saturate-0 contrast-125 brightness-75 blur-[0.4px] mix-blend-screen [mask-image:radial-gradient(ellipse_at_center,black_32%,transparent_72%)]`}
+            />
+          ))}
+        </div>
 
-            <div className="space-y-4">
-              <h1 className="max-w-4xl text-balance text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">
-                AFL fantasy league management, without the clutter.
-              </h1>
-              <p className="max-w-2xl text-base leading-8 text-primary-foreground/80 sm:text-lg">
-                Run your league, manage your roster, compare players, review trades, submit waiver
-                claims, and track live scores from one AFL-first workspace.
-              </p>
-            </div>
+        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center px-6 pb-16 pt-16 text-center lg:px-10 lg:pb-20 lg:pt-20">
+          <div className="relative flex flex-1 flex-col items-center justify-center">
+            <h1 className="relative text-balance text-6xl font-black leading-none tracking-tight text-primary-foreground sm:text-8xl lg:text-9xl">
+              Statly
+            </h1>
+          </div>
 
-            <div className="flex flex-wrap gap-3">
+          <div className="flex translate-y-8 flex-col items-center gap-7 sm:translate-y-10 lg:translate-y-12">
+            <div className="flex flex-wrap justify-center gap-3">
               <Link
                 href="/dashboard"
-                className="inline-flex items-center gap-2 rounded-lg bg-background px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-background/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+                className="inline-flex items-center gap-2 rounded-md bg-primary-foreground px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-primary-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-foreground"
               >
-                View Fantasy Workspace
+                Open Fantasy Workspace
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
               <Link
-                href="#player-research-preview"
-                className="inline-flex items-center rounded-lg border border-primary-foreground/25 bg-primary-foreground/10 px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary-foreground/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+                href="/draft/trades"
+                className="inline-flex items-center rounded-md border border-primary-foreground/25 bg-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-foreground/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-foreground"
               >
-                Preview Player Research
+                Explore Draft &amp; Trade Hub
               </Link>
             </div>
 
-            <p className="text-sm leading-6 text-primary-foreground/75">
-              Built for draft, keeper, and custom AFL fantasy leagues.
-            </p>
+            <div
+              className="flex max-w-3xl flex-wrap justify-center gap-2 pt-1"
+              aria-label="Statly fantasy workspace capabilities"
+            >
+              {commandMetrics.map((item) => (
+                <span
+                  key={item}
+                  className="rounded-md border border-primary-foreground/18 bg-foreground/20 px-3 py-1.5 text-xs font-semibold text-primary-foreground/80 backdrop-blur"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
-
-          <aside
-            id="player-research-preview"
-            className="rounded-lg border border-primary-foreground/20 bg-background/10 p-5 shadow-sm backdrop-blur"
-            aria-label="Sample Statly player research panel"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold">Player research preview</p>
-                <p className="mt-1 text-xs leading-5 text-primary-foreground/75">
-                  Example AFL-first signals managers can compare before lockout.
-                </p>
-              </div>
-              <div className="rounded-md bg-primary-foreground/10 p-2">
-                <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-              </div>
-            </div>
-
-            <div className="mt-5 overflow-hidden rounded-md border border-primary-foreground/15">
-              <div className="grid grid-cols-[1.1fr_0.55fr_0.85fr_0.75fr] bg-foreground/25 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary-foreground/65">
-                <span>Player</span>
-                <span>Role</span>
-                <span>Signal</span>
-                <span>Action</span>
-              </div>
-              {previewRows.map((player) => (
-                <div
-                  key={player.name}
-                  className="grid grid-cols-[1.1fr_0.55fr_0.85fr_0.75fr] border-t border-primary-foreground/15 bg-background/10 px-3 py-3 text-xs sm:text-sm"
-                >
-                  <span className="font-semibold">{player.name}</span>
-                  <span className="text-primary-foreground/75">{player.role}</span>
-                  <span className="font-semibold">{player.signal}</span>
-                  <span className="text-primary-foreground/75">{player.action}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 grid grid-cols-3 gap-3">
-              {[
-                { label: 'Waiver options', value: '18' },
-                { label: 'Live swing', value: '+24' },
-                { label: 'Trade notes', value: '6' },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-md border border-primary-foreground/15 bg-foreground/20 p-3"
-                >
-                  <p className="text-lg font-black leading-none">{item.value}</p>
-                  <p className="mt-2 text-[11px] leading-4 text-primary-foreground/70">
-                    {item.label}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </aside>
         </div>
       </section>
 
@@ -196,14 +215,14 @@ export default function HomePage(): ReactElement {
         <div className="mx-auto max-w-6xl px-6 py-12 lg:px-10 lg:py-16">
           <div className="max-w-2xl space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Weekly Decisions
+              Pressure Points
             </p>
             <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
-              Built for weekly AFL fantasy decisions.
+              Built for the pressure points of an AFL fantasy season.
             </h2>
             <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-              Move from team news to lineup, live scoring, waiver, and trade decisions without
-              losing the league context around each call.
+              Draft night, selection week, and market movement all ask the same question: who has
+              the clearest read before everyone else reacts?
             </p>
           </div>
 
@@ -226,24 +245,41 @@ export default function HomePage(): ReactElement {
         </div>
       </section>
 
-      <section className="bg-muted/35">
-        <div className="mx-auto max-w-6xl px-6 py-14 lg:px-10">
-          <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              League Workspace
-            </p>
-            <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
-              Everything your league needs in one place.
-            </h2>
-            <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-              Keep the core fantasy modules close together so managers can see the next action
-              instead of hunting through disconnected tools.
-            </p>
+      <section id="league-workspace" className="bg-muted/35">
+        <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 lg:grid-cols-[0.8fr_1.2fr] lg:px-10">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                League Workspace
+              </p>
+              <h2 className="text-balance text-3xl font-black text-foreground sm:text-4xl">
+                Dense where managers need depth, calm where decisions need clarity.
+              </h2>
+              <p className="text-sm leading-7 text-muted-foreground sm:text-base">
+                The current product source of truth points to one coherent league flow: create a
+                league, configure scoring, enter the draft room, compare players, and carry that
+                same ownership model into rosters and waivers.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
+              <p className="text-sm font-semibold text-foreground">Real-data category preset</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {categorySignals.map((category) => (
+                  <span
+                    key={category}
+                    className="rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                  >
+                    {category}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {leagueModules.map(({ icon: Icon, title, description }) => (
-              <div
+              <article
                 key={title}
                 className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm"
               >
@@ -256,7 +292,7 @@ export default function HomePage(): ReactElement {
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         </div>
@@ -294,7 +330,7 @@ export default function HomePage(): ReactElement {
                 </p>
                 <Link
                   href={product.href}
-                  className="mt-6 inline-flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="mt-6 inline-flex items-center gap-2 rounded-md border border-border bg-muted px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   {product.action}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />

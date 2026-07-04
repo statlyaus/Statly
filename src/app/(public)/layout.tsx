@@ -14,24 +14,35 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
         <nav
           aria-label="Primary"
-          className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-10"
+          className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:flex-nowrap sm:px-6 lg:px-10"
         >
-          <Link href="/" className="shrink-0 text-base font-semibold tracking-tight text-foreground">
+          <Link
+            href="/"
+            className="shrink-0 rounded-md text-2xl font-black tracking-tight text-foreground transition hover:text-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-3xl"
+            aria-label="Statly home"
+          >
             Statly
           </Link>
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:flex-nowrap">
             {publicLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 className="whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
               >
-                {link.label}
+                {link.label === 'Draft & Trade Hub' ? (
+                  <>
+                    <span className="sm:hidden">Draft Hub</span>
+                    <span className="hidden sm:inline">{link.label}</span>
+                  </>
+                ) : (
+                  link.label
+                )}
               </Link>
             ))}
             <Link
               href="/login"
-              className="ml-1 shrink-0 whitespace-nowrap rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:ml-2"
+              className="ml-1 shrink-0 whitespace-nowrap rounded-md border border-border bg-foreground px-3 py-2 text-sm font-semibold text-background transition hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:ml-2"
             >
               Sign in
             </Link>

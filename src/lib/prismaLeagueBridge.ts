@@ -26,6 +26,10 @@ export interface PrismaLeagueMirrorMember {
   userId: string;
   role: string;
   teamName: string;
+  teamLogoUrl?: string;
+  teamLogoPositionX?: number;
+  teamLogoPositionY?: number;
+  teamLogoZoom?: number;
   draftSlot?: number;
   isActive: boolean;
 }
@@ -67,6 +71,10 @@ export interface SyncPrismaLeagueMemberInput {
   memberId?: string;
   role?: string;
   teamName?: string;
+  teamLogoUrl?: string | null;
+  teamLogoPositionX?: number | null;
+  teamLogoPositionY?: number | null;
+  teamLogoZoom?: number | null;
   draftSlot?: number;
   isActive?: boolean;
   timeZone?: string;
@@ -321,6 +329,10 @@ export async function syncPrismaLeagueMember(
         userId: input.userId,
         role: input.role ?? (input.userId === league.ownerId ? 'owner' : 'member'),
         teamName: input.teamName,
+        teamLogoUrl: input.teamLogoUrl,
+        teamLogoPositionX: input.teamLogoPositionX,
+        teamLogoPositionY: input.teamLogoPositionY,
+        teamLogoZoom: input.teamLogoZoom,
         draftSlot: input.draftSlot,
         isActive: true,
       }
@@ -424,6 +436,10 @@ async function upsertPrismaMember(
   const data = {
     role: normalizeLeagueRoleForPrisma(member.role, member.userId, ownerId),
     teamName: member.teamName,
+    teamLogoUrl: member.teamLogoUrl,
+    teamLogoPositionX: member.teamLogoPositionX,
+    teamLogoPositionY: member.teamLogoPositionY,
+    teamLogoZoom: member.teamLogoZoom,
     draftSlot: member.draftSlot,
   };
 
@@ -484,6 +500,10 @@ function toMirrorMember(
     userId,
     role: stringOrUndefined(data.role) ?? 'member',
     teamName: stringOrUndefined(data.teamName) ?? 'Team',
+    teamLogoUrl: stringOrUndefined(data.teamLogoUrl),
+    teamLogoPositionX: numberOrUndefined(data.teamLogoPositionX),
+    teamLogoPositionY: numberOrUndefined(data.teamLogoPositionY),
+    teamLogoZoom: numberOrUndefined(data.teamLogoZoom),
     draftSlot: numberOrUndefined(data.draftSlot),
     isActive: true,
   };
