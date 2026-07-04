@@ -2,6 +2,7 @@ import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
 import LegalLinks from '@/components/LegalLinks';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { Suspense } from 'react';
 
 export const revalidate = 0;
@@ -30,10 +31,16 @@ export default async function LoginPage({
           <div>
             <div className="flex items-center gap-4">
               <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-background text-sm font-bold text-foreground"
-                aria-hidden="true"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-background"
               >
-                S
+                <Image
+                  src="/logo-statly-shield.svg"
+                  alt="Statly logo"
+                  width={32}
+                  height={32}
+                  priority
+                  className="h-8 w-8 object-contain"
+                />
               </div>
               <div>
                 <p className="text-xl font-semibold leading-none text-foreground">Statly</p>
@@ -191,11 +198,15 @@ export default async function LoginPage({
             </div>
 
             <div className="mb-8">
-              <div
-                className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-sm font-bold text-primary-foreground"
-                aria-hidden="true"
-              >
-                S
+              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-background">
+                <Image
+                  src="/logo-statly-shield.svg"
+                  alt="Statly logo"
+                  width={36}
+                  height={36}
+                  priority
+                  className="h-9 w-9 object-contain"
+                />
               </div>
               <h2 className="text-3xl font-semibold tracking-normal text-foreground">
                 Sign in to Statly

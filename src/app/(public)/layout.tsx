@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import Image from 'next/image';
 import Link from 'next/link';
 
 const publicLinks = [
@@ -18,10 +19,17 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
         >
           <Link
             href="/"
-            className="shrink-0 rounded-md text-2xl font-black tracking-tight text-foreground transition hover:text-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-3xl"
+            className="shrink-0 rounded-md transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Statly home"
           >
-            Statly
+            <Image
+              src="/logo-statly-wordmark.svg"
+              alt="Statly"
+              width={144}
+              height={36}
+              priority
+              className="h-9 w-auto"
+            />
           </Link>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:flex-nowrap">
             {publicLinks.map((link) => (

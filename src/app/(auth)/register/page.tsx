@@ -2,6 +2,7 @@ import AuthForm from '@/components/AuthForm';
 import Button from '@/components/Button';
 import LegalLinks from '@/components/LegalLinks';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { Suspense } from 'react';
 
 export const revalidate = 0;
@@ -72,29 +73,29 @@ export default async function RegisterPage({
           <div className="w-full max-w-md">
             {/* Mobile branding */}
             <div className="lg:hidden text-center mb-8">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-700 bg-clip-text text-transparent mb-2">
-                Statly
-              </h2>
+              <Image
+                src="/logo-statly-wordmark.svg"
+                alt="Statly"
+                width={144}
+                height={36}
+                priority
+                className="mx-auto mb-2 h-9 w-auto"
+              />
               <p className="text-slate-600 dark:text-slate-400">Fantasy Sports Dashboard</p>
             </div>
 
             {/* Register Card */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8">
               <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl mb-4">
-                  <svg
-                    className="w-8 h-8 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-                    />
-                  </svg>
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 mb-4">
+                  <Image
+                    src="/logo-statly-shield.svg"
+                    alt="Statly logo"
+                    width={48}
+                    height={48}
+                    priority
+                    className="h-12 w-12 object-contain"
+                  />
                 </div>
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
                   Create Account

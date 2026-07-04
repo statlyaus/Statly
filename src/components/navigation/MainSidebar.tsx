@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -102,8 +103,15 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
       <div className="flex items-center justify-between px-4 py-6 border-b border-gray-200">
         <Link href="/dashboard" className="flex items-center" onClick={closeSidebar}>
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white">
+              <Image
+                src="/logo-statly-shield.svg"
+                alt="Statly logo"
+                width={24}
+                height={24}
+                priority
+                className="h-6 w-6 object-contain"
+              />
             </div>
           </div>
           <div className="ml-3">

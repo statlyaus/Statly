@@ -1,0 +1,8 @@
+<svg width="288" height="72" viewBox="0 0 288 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Statly">
+  <text x="4" y="50" fill="#0B132B" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="800" letter-spacing="0">Statly</text>
+  <circle cx="178" cy="48" r="5.5" fill="#0D2C8C"/>
+  <path d="M194 50C213 49.8 235 44.1 249 20" stroke="#0D2C8C" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M194 59C224 58.4 258 49.2 280 31" stroke="#0D2C8C" stroke-width="3.2" stroke-linecap="round"/>
+  <circle cx="249" cy="20" r="8" fill="#0D2C8C"/>
+  <circle cx="280" cy="31" r="7" fill="#0D2C8C"/>
+</svg>
