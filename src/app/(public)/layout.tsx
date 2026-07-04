@@ -23,12 +23,12 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
             aria-label="Statly home"
           >
             <Image
-              src="/logo-statly-wordmark.svg"
+              src="/brand/statly-wordmark-logo.png"
               alt="Statly"
-              width={144}
-              height={36}
+              width={182}
+              height={60}
               priority
-              className="h-9 w-auto"
+              className="h-auto w-36"
             />
           </Link>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:flex-nowrap">

@@ -29,26 +29,14 @@ export default async function LoginPage({
       <div className="mx-auto grid min-h-screen w-full max-w-[1440px] px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_32rem] lg:px-8 lg:py-8">
         <section className="hidden min-w-0 flex-col overflow-hidden rounded-l-[2rem] border border-border bg-card p-8 shadow-sm lg:flex xl:p-10">
           <div>
-            <div className="flex items-center gap-4">
-              <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-background"
-              >
-                <Image
-                  src="/logo-statly-shield.svg"
-                  alt="Statly logo"
-                  width={32}
-                  height={32}
-                  priority
-                  className="h-8 w-8 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-xl font-semibold leading-none text-foreground">Statly</p>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  Fantasy AFL workspace
-                </p>
-              </div>
-            </div>
+            <Image
+              src="/brand/statly-primary-logo.png"
+              alt="Statly"
+              width={312}
+              height={118}
+              priority
+              className="h-auto w-56"
+            />
             <h1 className="mt-10 max-w-2xl text-4xl font-semibold leading-tight tracking-normal text-foreground xl:text-5xl">
               Your fantasy AFL command center.
             </h1>
@@ -189,9 +177,14 @@ export default async function LoginPage({
         <section className="flex min-w-0 items-center justify-center rounded-[2rem] border border-border bg-card px-5 py-8 shadow-sm sm:px-8 lg:rounded-l-none lg:border-l-0">
           <div className="w-full max-w-[26rem]">
             <div className="mb-8 lg:hidden">
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-                Statly
-              </p>
+              <Image
+                src="/brand/statly-wordmark-logo.png"
+                alt="Statly"
+                width={182}
+                height={60}
+                priority
+                className="h-auto w-36"
+              />
               <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-normal text-foreground">
                 Fantasy AFL operations.
               </h1>
@@ -200,12 +193,12 @@ export default async function LoginPage({
             <div className="mb-8">
               <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-background">
                 <Image
-                  src="/logo-statly-shield.svg"
+                  src="/brand/statly-compact-logo.png"
                   alt="Statly logo"
                   width={36}
-                  height={36}
+                  height={24}
                   priority
-                  className="h-9 w-9 object-contain"
+                  className="h-7 w-10 object-contain"
                 />
               </div>
               <h2 className="text-3xl font-semibold tracking-normal text-foreground">

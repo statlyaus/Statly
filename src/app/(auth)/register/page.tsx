@@ -74,12 +74,12 @@ export default async function RegisterPage({
             {/* Mobile branding */}
             <div className="lg:hidden text-center mb-8">
               <Image
-                src="/logo-statly-wordmark.svg"
+                src="/brand/statly-wordmark-logo.png"
                 alt="Statly"
-                width={144}
-                height={36}
+                width={182}
+                height={60}
                 priority
-                className="mx-auto mb-2 h-9 w-auto"
+                className="mx-auto mb-2 h-auto w-36"
               />
               <p className="text-slate-600 dark:text-slate-400">Fantasy Sports Dashboard</p>
             </div>
@@ -89,12 +89,12 @@ export default async function RegisterPage({
               <div className="text-center mb-8">
                 <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 mb-4">
                   <Image
-                    src="/logo-statly-shield.svg"
+                    src="/brand/statly-compact-logo.png"
                     alt="Statly logo"
-                    width={48}
-                    height={48}
+                    width={58}
+                    height={39}
                     priority
-                    className="h-12 w-12 object-contain"
+                    className="h-10 w-14 object-contain"
                   />
                 </div>
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">

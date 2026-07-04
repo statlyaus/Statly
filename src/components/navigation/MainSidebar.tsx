@@ -102,22 +102,14 @@ export default function MainSidebar({ className = '' }: MainSidebarProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-6 border-b border-gray-200">
         <Link href="/dashboard" className="flex items-center" onClick={closeSidebar}>
-          <div className="flex-shrink-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white">
-              <Image
-                src="/logo-statly-shield.svg"
-                alt="Statly logo"
-                width={24}
-                height={24}
-                priority
-                className="h-6 w-6 object-contain"
-              />
-            </div>
-          </div>
-          <div className="ml-3">
-            <h1 className="text-lg font-bold text-gray-900">Statly</h1>
-            <p className="text-xs text-gray-500">Fantasy AFL</p>
-          </div>
+          <Image
+            src="/brand/statly-wordmark-logo.png"
+            alt="Statly"
+            width={122}
+            height={40}
+            priority
+            className="h-auto w-24"
+          />
         </Link>
 
         {/* Mobile close button */}

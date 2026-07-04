@@ -505,8 +505,6 @@ export default function MainNavigation(): ReactNode {
   const accountInitial = accountLabel.charAt(0).toUpperCase() || 'S';
   const showLeagueSwitcher = Boolean(user) && shouldShowLeagueSwitcher(pathname);
   const desktopNavigationItems = user ? primaryNavigationItems : publicNavigationItems;
-  const brandDescriptor = user ? 'Fantasy AFL workspace' : 'AFL fantasy platform';
-
   if (isDraftHubPath(pathname)) {
     return null;
   }
@@ -524,25 +522,15 @@ export default function MainNavigation(): ReactNode {
         >
           <div className="mx-auto grid h-16 w-full max-w-[var(--app-shell-max-width)] grid-cols-[minmax(0,max-content)_minmax(0,1fr)_minmax(0,max-content)] items-center gap-3 px-4 sm:px-6 lg:px-8">
             <div className="min-w-0">
-              <Link href={brandHref} className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] shadow-sm lg:h-11 lg:w-11">
-                  <Image
-                    src="/logo-statly-shield.svg"
-                    alt="Statly logo"
-                    width={28}
-                    height={28}
-                    priority
-                    className="object-contain"
-                  />
-                </div>
-                <div className="min-w-0 max-w-[12rem] xl:max-w-[14rem]">
-                  <div className="truncate text-sm font-semibold tracking-tight text-[color:var(--league-text)] xl:text-base">
-                    Statly
-                  </div>
-                  <div className="hidden truncate text-[11px] font-medium uppercase tracking-[0.18em] text-[color:var(--league-text-muted)] 2xl:block">
-                    {brandDescriptor}
-                  </div>
-                </div>
+              <Link href={brandHref} className="flex min-w-0 items-center">
+                <Image
+                  src="/brand/statly-wordmark-logo.png"
+                  alt="Statly"
+                  width={122}
+                  height={40}
+                  priority
+                  className="h-auto w-24 sm:w-28"
+                />
               </Link>
             </div>
 
