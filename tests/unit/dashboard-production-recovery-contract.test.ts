@@ -28,22 +28,29 @@ describe('dashboard production recovery route contract', () => {
     expect(appLayout).toContain('Skip to content');
   });
 
-  it('keeps public AFL trade history ownership on /tradecentre', () => {
+  it('keeps public AFL archive separate from fantasy Trade Centre', () => {
     const tradeCentreRoute = readRepoFile('src/app/tradecentre/page.tsx');
-    expect(tradeCentreRoute).toContain("redirect('/draft/trades')");
+    expect(tradeCentreRoute).not.toContain("redirect('/draft/trades')");
+    expect(tradeCentreRoute).toContain("redirect('/login?next=/tradecentre')");
+    expect(tradeCentreRoute).toContain('leagueMember.findFirst');
+    expect(tradeCentreRoute).toContain("redirect(`/leagues/${membership.leagueId}/trades`)");
+
+    const publicHome = readRepoFile('src/app/(public)/page.tsx');
+    expect(publicHome).toContain('AFL Draft & Trade Archive');
+    expect(publicHome).toContain("href: '/draft/trades'");
+    expect(publicHome).not.toContain('Draft & Trade Hub');
+
+    const publicLayout = readRepoFile('src/app/(public)/layout.tsx');
+    expect(publicLayout).toContain('AFL Archive');
+    expect(publicLayout).not.toContain('Draft & Trade Hub');
 
     const navigation = readRepoFile('src/components/navigation/MainNavigation.tsx');
     expect(navigation).not.toContain("href: '/tradecentre'");
-    expect(navigation).not.toContain('href="/tradecentre"');
-    expect(navigation).not.toContain("name: 'Trade Centre'");
+    expect(navigation).not.toContain('/tradecentre');
+    expect(navigation).toContain("name: 'Waivers & Trades'");
 
     const quickActionsModule = readRepoFile('src/components/dashboard/QuickActionsModule.tsx');
     expect(quickActionsModule).not.toContain('/tradecentre');
-    expect(quickActionsModule).not.toContain('Trade Centre');
-
-    const mainSidebar = readRepoFile('src/components/navigation/MainSidebar.tsx');
-    expect(mainSidebar).not.toContain('/tradecentre');
-    expect(mainSidebar).not.toContain('Trade Centre');
 
     const rostersPage = readRepoFile('src/app/(app)/rosters/page.tsx');
     expect(rostersPage).not.toContain('/tradecentre');

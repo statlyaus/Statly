@@ -51,15 +51,15 @@ type NextConfigWithRedirects = {
 };
 
 describe('public AFL draft trade routing', () => {
-  it('links the homepage Draft & Trade Hub product card to the canonical public hub', () => {
+  it('links the homepage public archive product card to the canonical AFL archive', () => {
     render(<HomePage />);
 
-    const tradeHubLink = screen.getByRole('link', { name: /open trade hub/i });
-    expect(tradeHubLink).toHaveAttribute('href', '/draft/trades');
-    expect(tradeHubLink).not.toHaveAttribute('href', '/tradecentre');
+    const archiveLink = screen.getByRole('link', { name: /open afl archive/i });
+    expect(archiveLink).toHaveAttribute('href', '/draft/trades');
+    expect(archiveLink).not.toHaveAttribute('href', '/tradecentre');
   });
 
-  it('keeps the legacy /tradecentre URL as a request-level redirect to /draft/trades', async () => {
+  it('does not keep a request-level redirect from /tradecentre to the public archive', async () => {
     const { default: nextConfig } = (await import(
       '../../next.config.mjs'
     )) as { default: NextConfigWithRedirects };
@@ -69,22 +69,13 @@ describe('public AFL draft trade routing', () => {
       'utf8'
     );
 
-    expect(redirects).toContainEqual({
+    expect(redirects).not.toContainEqual({
       source: '/tradecentre',
       destination: '/draft/trades',
       permanent: false,
     });
-    expect({
-      usesClientDirective: /['"]use client['"]/.test(tradeCentreRoute),
-      importsNextRedirect: /from\s+['"]next\/navigation['"]/.test(tradeCentreRoute),
-      redirectsToCanonicalHub: /redirect\(\s*['"]\/draft\/trades['"]\s*\)/.test(
-        tradeCentreRoute
-      ),
-    }).toEqual({
-      usesClientDirective: false,
-      importsNextRedirect: true,
-      redirectsToCanonicalHub: true,
-    });
+    expect(tradeCentreRoute).not.toContain("redirect('/draft/trades')");
+    expect(tradeCentreRoute).toContain("redirect('/login?next=/tradecentre')");
   });
 
   it('keeps AuthProvider out of the root layout and inside the app/auth route groups', () => {
