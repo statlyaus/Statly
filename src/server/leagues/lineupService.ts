@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 
 import { parseLineupSlotsJson } from './lineupSettings';
-import type { ActiveLineupSlot, LeagueLineupSlot, LineupSlotSettings } from './scoringTypes';
+import type { LeagueLineupSlot, LineupSlotSettings } from './scoringTypes';
 
 const LINEUP_SLOTS = new Set<LeagueLineupSlot>(['FWD', 'DEF', 'MID', 'RUC', 'UTIL', 'BENCH']);
 
@@ -34,21 +34,11 @@ export type SaveMemberLineupResult =
   | { ok: true; data: Awaited<ReturnType<typeof loadMemberLineup>> }
   | { ok: false; errors: string[] };
 
-function normalizePosition(position: string | null | undefined): ActiveLineupSlot | undefined {
-  const upper = position?.toUpperCase();
-  if (upper === 'DEF' || upper === 'D') return 'DEF';
-  if (upper === 'MID' || upper === 'M') return 'MID';
-  if (upper === 'RUC' || upper === 'RUCK' || upper === 'R') return 'RUC';
-  if (upper === 'FWD' || upper === 'F') return 'FWD';
-  return undefined;
-}
-
 export function canAssignPlayerToSlot(
-  playerPosition: string | null | undefined,
+  _playerPosition: string | null | undefined,
   slot: LeagueLineupSlot
 ): boolean {
-  if (slot === 'BENCH' || slot === 'UTIL') return true;
-  return normalizePosition(playerPosition) === slot;
+  return LINEUP_SLOTS.has(slot);
 }
 
 export function isLineupPlayerLocked(
@@ -94,10 +84,6 @@ export function validateLineupSubmission(
     if (!rosterPlayer) {
       errors.push(`Player ${player.playerId} is not on this member roster.`);
       continue;
-    }
-
-    if (!canAssignPlayerToSlot(rosterPlayer.position, player.slot)) {
-      errors.push(`Player ${player.playerId} is not eligible for ${player.slot}.`);
     }
 
     if (

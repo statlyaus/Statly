@@ -111,6 +111,10 @@ function normalizeLeagueScoringMode(
   return value === 'H2H_MOST_CATEGORIES' ? 'H2H_MOST_CATEGORIES' : fallback;
 }
 
+function normalizeFixtureGenerationMode(value: unknown): 'AUTOMATIC' | 'MANUAL' {
+  return value === 'MANUAL' ? 'MANUAL' : 'AUTOMATIC';
+}
+
 function normalizeDraftType(value: unknown, fallback: DraftTypeValue): DraftTypeValue {
   return String(value ?? fallback)
     .trim()
@@ -189,6 +193,7 @@ function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
       scoringFormat: 'nine-category',
       categories: normalizeLeagueCategories(scoringInput.categories),
       scoringMode: normalizeLeagueScoringMode(scoringInput.scoringMode, 'H2H_EACH_CATEGORY'),
+      fixtureGenerationMode: normalizeFixtureGenerationMode(scoringInput.fixtureGenerationMode),
       lineupSlots: normalizeLineupSlots(scoringInput.lineupSlots),
       categoryDirections: normalizeCategoryDirections(
         normalizeLeagueCategories(scoringInput.categories),
@@ -238,6 +243,7 @@ function toSettingsResponse(league: {
     timeZone: string;
     locked: boolean;
     scoringMode: string;
+    fixtureGenerationMode: string;
     lineupSlotsJson: string | null;
     categoryDirectionsJson: string | null;
     scoringSettingsLockedAt: Date | null;
@@ -259,6 +265,7 @@ function toSettingsResponse(league: {
       scoringFormat: 'nine-category',
       categories,
       scoringMode: normalizeLeagueScoringMode(league.settings.scoringMode, 'H2H_EACH_CATEGORY'),
+      fixtureGenerationMode: normalizeFixtureGenerationMode(league.settings.fixtureGenerationMode),
       lineupSlots: parseLineupSlotsJson(league.settings.lineupSlotsJson),
       categoryDirections: parseCategoryDirectionsJson(
         categories,
@@ -338,6 +345,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           scoringFormat: 'nine-category',
           categories: normalizeLeagueCategories(data.categories),
           scoringMode: normalizeLeagueScoringMode(data.scoringMode, 'H2H_EACH_CATEGORY'),
+          fixtureGenerationMode: normalizeFixtureGenerationMode(data.fixtureGenerationMode),
           lineupSlots: normalizeLineupSlots(data.lineupSlots),
           categoryDirections: normalizeCategoryDirections(
             normalizeLeagueCategories(data.categories),
@@ -446,6 +454,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         scoringInput.scoringMode ?? body.scoringMode,
         prismaLeague.settings.scoringMode as LeagueScoringMode
       );
+      const fixtureGenerationMode = normalizeFixtureGenerationMode(
+        scoringInput.fixtureGenerationMode ??
+          body.fixtureGenerationMode ??
+          prismaLeague.settings.fixtureGenerationMode
+      );
       const lineupSlots =
         scoringInput.lineupSlots === undefined && body.lineupSlots === undefined
           ? parseLineupSlotsJson(prismaLeague.settings.lineupSlotsJson)
@@ -459,6 +472,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const scoringSettingsChanged =
         scoringInput.scoringMode !== undefined ||
         body.scoringMode !== undefined ||
+        scoringInput.fixtureGenerationMode !== undefined ||
+        body.fixtureGenerationMode !== undefined ||
         scoringInput.lineupSlots !== undefined ||
         body.lineupSlots !== undefined ||
         scoringInput.categoryDirections !== undefined ||
@@ -556,6 +571,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             positionLimitsJson: JSON.stringify(positionLimits),
             autoPickRulesJson: JSON.stringify(autoPickRules),
             scoringMode,
+            fixtureGenerationMode,
             lineupSlotsJson: JSON.stringify(lineupSlots),
             categoryDirectionsJson: JSON.stringify(categoryDirections),
           },
@@ -613,6 +629,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       scoringInput.scoringMode ?? body.scoringMode,
       'H2H_EACH_CATEGORY'
     );
+    const firestoreFixtureGenerationMode = normalizeFixtureGenerationMode(
+      scoringInput.fixtureGenerationMode ?? body.fixtureGenerationMode
+    );
     const firestoreLineupSlots = normalizeLineupSlots(scoringInput.lineupSlots ?? body.lineupSlots);
     const firestoreCategoryDirections = normalizeCategoryDirections(
       categories,
@@ -631,6 +650,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ? { draftDate: body.draftDate ?? draftInput.draftDate }
         : {}),
       scoringMode: firestoreScoringMode,
+      fixtureGenerationMode: firestoreFixtureGenerationMode,
       lineupSlots: firestoreLineupSlots,
       categoryDirections: firestoreCategoryDirections,
       draftType: draftInput.draftType ?? body.draftType ?? 'snake',
@@ -661,6 +681,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           scoringFormat: 'nine-category',
           categories: normalizeLeagueCategories(data.categories),
           scoringMode: normalizeLeagueScoringMode(data.scoringMode, 'H2H_EACH_CATEGORY'),
+          fixtureGenerationMode: normalizeFixtureGenerationMode(data.fixtureGenerationMode),
           lineupSlots: normalizeLineupSlots(data.lineupSlots),
           categoryDirections: normalizeCategoryDirections(
             normalizeLeagueCategories(data.categories),

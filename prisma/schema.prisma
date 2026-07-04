@@ -100,21 +100,22 @@ enum LeagueRole {
 }
 
 model LeagueSettings {
-  id                      String            @id @default(cuid())
+  id                      String                      @id @default(cuid())
   rosterSize              Int
   benchSize               Int
   maxTeams                Int
   pickSeconds             Int
-  allowAutoPick           Boolean           @default(true)
+  allowAutoPick           Boolean                     @default(true)
   positionLimitsJson      String?
   autoPickRulesJson       String?
   draftType               DraftType
-  pickOrder               PickOrder         @default(RANDOM)
-  waiverRule              WaiverRule        @default(WEEKLY)
+  pickOrder               PickOrder                   @default(RANDOM)
+  waiverRule              WaiverRule                  @default(WEEKLY)
   startAt                 DateTime
-  timeZone                String            @default("UTC")
-  locked                  Boolean           @default(false)
-  scoringMode             LeagueScoringMode @default(H2H_EACH_CATEGORY)
+  timeZone                String                      @default("UTC")
+  locked                  Boolean                     @default(false)
+  scoringMode             LeagueScoringMode           @default(H2H_EACH_CATEGORY)
+  fixtureGenerationMode   LeagueFixtureGenerationMode @default(AUTOMATIC)
   lineupSlotsJson         String?
   categoryDirectionsJson  String?
   scoringSettingsLockedAt DateTime?
@@ -145,6 +146,11 @@ enum WaiverRule {
 enum LeagueScoringMode {
   H2H_EACH_CATEGORY
   H2H_MOST_CATEGORIES
+}
+
+enum LeagueFixtureGenerationMode {
+  AUTOMATIC
+  MANUAL
 }
 
 enum LeagueLineupSlot {

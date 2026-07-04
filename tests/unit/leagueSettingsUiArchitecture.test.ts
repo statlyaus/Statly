@@ -34,6 +34,9 @@ describe('league settings UI architecture', () => {
     expect(scoringSettingsSource).toContain('Scoring Settings');
     expect(scoringSettingsSource).toContain('H2H Each Category');
     expect(scoringSettingsSource).toContain('H2H Most Categories');
+    expect(scoringSettingsSource).toContain('Fixture generation');
+    expect(scoringSettingsSource).toContain('Automatic by league teams');
+    expect(scoringSettingsSource).toContain('Manual commissioner setup');
     expect(scoringSettingsSource).toContain('lineupSlots');
     expect(scoringSettingsSource).toContain('categoryDirections');
     expect(leagueTabsSource).toContain('Draft Settings');

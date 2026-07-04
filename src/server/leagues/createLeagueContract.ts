@@ -1,5 +1,9 @@
 import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
-import type { CategoryDirection, LeagueScoringMode } from '@/types/leagues';
+import type {
+  CategoryDirection,
+  LeagueFixtureGenerationMode,
+  LeagueScoringMode,
+} from '@/types/leagues';
 
 import { normalizeCategoryDirections } from './categoryDirections';
 import { DEFAULT_ACTIVE_LINEUP_SLOTS, normalizeLineupSlots } from './lineupSettings';
@@ -16,6 +20,7 @@ export interface CreateLeagueInput {
   visibility?: string;
   timeZone?: string;
   scoringMode?: LeagueScoringMode;
+  fixtureGenerationMode?: LeagueFixtureGenerationMode;
   lineupSlots?: Partial<LineupSlotSettings>;
   categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
 }
@@ -27,6 +32,7 @@ export interface NormalizedCreateLeagueInput {
   visibility: 'PUBLIC' | 'PRIVATE';
   timeZone: string;
   scoringMode: LeagueScoringMode;
+  fixtureGenerationMode: LeagueFixtureGenerationMode;
   lineupSlots: LineupSlotSettings;
   categoryDirections: Record<FantasyCategoryKey, CategoryDirection>;
 }
@@ -52,6 +58,7 @@ export function normalizeCreateLeagueInput(input: CreateLeagueInput): Normalized
     : [...REAL_DATA_NINE_CATEGORY_PRESET];
   const scoringMode =
     input.scoringMode === 'H2H_MOST_CATEGORIES' ? 'H2H_MOST_CATEGORIES' : 'H2H_EACH_CATEGORY';
+  const fixtureGenerationMode = input.fixtureGenerationMode === 'MANUAL' ? 'MANUAL' : 'AUTOMATIC';
   const visibility =
     (input.visibility ?? input.privacy ?? input.type ?? 'private').toLowerCase() === 'public'
       ? 'PUBLIC'
@@ -64,6 +71,7 @@ export function normalizeCreateLeagueInput(input: CreateLeagueInput): Normalized
     visibility,
     timeZone: normalizeTimeZone(input.timeZone),
     scoringMode,
+    fixtureGenerationMode,
     lineupSlots: input.lineupSlots
       ? normalizeLineupSlots(input.lineupSlots)
       : DEFAULT_ACTIVE_LINEUP_SLOTS,

@@ -11,6 +11,7 @@ export type MemberRole = 'owner' | 'manager' | 'member';
 export type DraftTypeOption = 'snake' | 'linear';
 export type DraftPickOrder = 'random' | 'manual';
 export type LeagueScoringMode = 'H2H_EACH_CATEGORY' | 'H2H_MOST_CATEGORIES';
+export type LeagueFixtureGenerationMode = 'AUTOMATIC' | 'MANUAL';
 export type ActiveLineupSlot = 'FWD' | 'DEF' | 'MID' | 'RUC' | 'UTIL';
 export type LeagueLineupSlot = ActiveLineupSlot | 'BENCH';
 export type CategoryDirection = 'HIGH_WINS' | 'LOW_WINS';
@@ -50,6 +51,7 @@ export interface League {
   pickOrder?: DraftPickOrder;
   waiverRule?: WaiverResetPolicy;
   scoringMode?: LeagueScoringMode;
+  fixtureGenerationMode?: LeagueFixtureGenerationMode;
   lineupSlots?: LeagueLineupSlotSettings;
   categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
   scoringSettingsLockedAt?: string;
@@ -113,6 +115,7 @@ export interface CreateLeagueRequest {
   pickOrder?: DraftPickOrder;
   waiverRule?: WaiverResetPolicy;
   scoringMode?: LeagueScoringMode;
+  fixtureGenerationMode?: LeagueFixtureGenerationMode;
   lineupSlots?: LeagueLineupSlotSettings;
   categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
 }

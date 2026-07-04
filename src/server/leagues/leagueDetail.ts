@@ -96,6 +96,7 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
       const categories = normalizeLeagueCategories(prismaLeague.categoriesJson);
       const waiverRule = prismaLeague.settings?.waiverRule?.toLowerCase() as League['waiverRule'];
       const scoringMode = prismaLeague.settings?.scoringMode ?? 'H2H_EACH_CATEGORY';
+      const fixtureGenerationMode = prismaLeague.settings?.fixtureGenerationMode ?? 'AUTOMATIC';
       const lineupSlots = parseLineupSlotsJson(prismaLeague.settings?.lineupSlotsJson);
       const categoryDirections = parseCategoryDirectionsJson(
         categories,
@@ -120,6 +121,7 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
           pickOrder: prismaLeague.settings?.pickOrder?.toLowerCase() as League['pickOrder'],
           waiverRule,
           scoringMode,
+          fixtureGenerationMode,
           lineupSlots,
           categoryDirections,
           scoringSettingsLockedAt: prismaLeague.settings?.scoringSettingsLockedAt?.toISOString(),
@@ -191,6 +193,7 @@ function createTestLeague(): League {
     ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
     categories: [...REAL_DATA_NINE_CATEGORY_PRESET],
     scoringMode: 'H2H_EACH_CATEGORY',
+    fixtureGenerationMode: 'AUTOMATIC',
     lineupSlots: DEFAULT_ACTIVE_LINEUP_SLOTS,
     categoryDirections: parseCategoryDirectionsJson([...REAL_DATA_NINE_CATEGORY_PRESET], null),
     status: 'active',

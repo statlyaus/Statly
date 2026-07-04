@@ -2,6 +2,7 @@ import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import { FANTASY_CATEGORIES } from '@/types/fantasyCategories';
 import type {
   CategoryDirection,
+  LeagueFixtureGenerationMode,
   LeagueLineupSlotSettings,
   LeagueScoringMode,
 } from '@/types/leagues';
@@ -10,6 +11,7 @@ interface ScoringSettingsValue {
   scoringFormat: 'nine-category';
   categories: FantasyCategoryKey[];
   scoringMode: LeagueScoringMode;
+  fixtureGenerationMode: LeagueFixtureGenerationMode;
   lineupSlots: LeagueLineupSlotSettings;
   categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
   scoringSettingsLockedAt: string | null;
@@ -63,6 +65,23 @@ export function ScoringSettingsPanel({ value, disabled, onChange }: ScoringSetti
           >
             <option value="H2H_EACH_CATEGORY">H2H Each Category</option>
             <option value="H2H_MOST_CATEGORIES">H2H Most Categories</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
+          Fixture generation
+          <select
+            value={value.fixtureGenerationMode}
+            disabled={disabled || isLocked}
+            onChange={(event) =>
+              onChange({
+                ...value,
+                fixtureGenerationMode: event.target.value as LeagueFixtureGenerationMode,
+              })
+            }
+            className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+          >
+            <option value="AUTOMATIC">Automatic by league teams</option>
+            <option value="MANUAL">Manual commissioner setup</option>
           </select>
         </label>
       </div>

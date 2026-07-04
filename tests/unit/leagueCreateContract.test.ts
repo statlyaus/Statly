@@ -22,6 +22,7 @@ describe('league creation contract', () => {
       visibility: 'PRIVATE',
       timeZone: 'UTC',
       scoringMode: 'H2H_EACH_CATEGORY',
+      fixtureGenerationMode: 'AUTOMATIC',
       lineupSlots: {
         FWD: 5,
         DEF: 5,
@@ -40,12 +41,14 @@ describe('league creation contract', () => {
       normalizeCreateLeagueInput({
         name: 'Test Lab Alpha',
         scoringMode: 'H2H_MOST_CATEGORIES',
+        fixtureGenerationMode: 'MANUAL',
         categories: ['goals', 'clangers'],
         lineupSlots: { FWD: 4, DEF: 4, MID: 5, RUC: 1, UTIL: 2 },
         categoryDirections: { clangers: 'LOW_WINS' },
       })
     ).toMatchObject({
       scoringMode: 'H2H_MOST_CATEGORIES',
+      fixtureGenerationMode: 'MANUAL',
       lineupSlots: {
         FWD: 4,
         DEF: 4,

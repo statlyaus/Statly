@@ -2,7 +2,9 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { getLeagueMembership } from '@/lib/leagueMembership';
+import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { parseLineupSlotsJson } from '@/server/leagues/lineupSettings';
 import { loadMemberLineup, saveMemberLineup } from '@/server/leagues/lineupService';
 
 export async function GET(
@@ -23,11 +25,35 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid round' }, { status: 400 });
   }
 
-  const data = await loadMemberLineup({
-    leagueId: id,
-    memberId: membership.memberDocId,
-    round: roundNumber,
-  });
+  const [lineup, league, rosterPlayers] = await Promise.all([
+    loadMemberLineup({
+      leagueId: id,
+      memberId: membership.memberDocId,
+      round: roundNumber,
+    }),
+    prisma.league.findUnique({
+      where: { id },
+      include: { settings: true },
+    }),
+    prisma.leagueRosterPlayer.findMany({
+      where: { leagueId: id, memberId: membership.memberDocId },
+      include: { player: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ]);
+  if (!league?.settings) return NextResponse.json({ error: 'League not found' }, { status: 404 });
+
+  const data = {
+    lineup,
+    players: lineup?.players ?? [],
+    rosterPlayers: rosterPlayers.map((row) => ({
+      playerId: row.playerId,
+      name: row.player.name,
+      position: row.player.position,
+      club: row.player.club,
+    })),
+    lineupSlots: parseLineupSlotsJson(league.settings.lineupSlotsJson),
+  };
   return NextResponse.json(
     { success: true, data },
     { headers: { 'Cache-Control': 'private, no-store' } }

@@ -1,0 +1,1 @@
+ALTER TABLE "LeagueSettings" ADD COLUMN "fixtureGenerationMode" TEXT NOT NULL DEFAULT 'AUTOMATIC';

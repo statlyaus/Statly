@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import type {
   CategoryDirection,
   League,
+  LeagueFixtureGenerationMode,
   LeagueLineupSlotSettings,
   LeagueMember,
   LeagueMemberNotificationSettings,
@@ -1044,6 +1045,7 @@ interface LeagueSettingsResponse {
     scoringFormat: 'nine-category';
     categories: FantasyCategoryKey[];
     scoringMode: LeagueScoringMode;
+    fixtureGenerationMode: LeagueFixtureGenerationMode;
     lineupSlots: LeagueLineupSlotSettings;
     categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
     scoringSettingsLockedAt: string | null;
@@ -1151,6 +1153,7 @@ function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
       scoringFormat: 'nine-category',
       categories: league.categories?.length ? league.categories : [...CATEGORY_PRESET],
       scoringMode: league.scoringMode ?? 'H2H_EACH_CATEGORY',
+      fixtureGenerationMode: league.fixtureGenerationMode ?? 'AUTOMATIC',
       lineupSlots: league.lineupSlots ?? DEFAULT_LINEUP_SLOTS,
       categoryDirections: normalizeCategoryDirectionSettings(
         league.categories?.length ? league.categories : CATEGORY_PRESET,
@@ -1204,6 +1207,8 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
         scoringSource.scoringMode === 'H2H_MOST_CATEGORIES'
           ? 'H2H_MOST_CATEGORIES'
           : fallback.scoring.scoringMode,
+      fixtureGenerationMode:
+        scoringSource.fixtureGenerationMode === 'MANUAL' ? 'MANUAL' : 'AUTOMATIC',
       lineupSlots: normalizeLineupSlotSettings(scoringSource.lineupSlots),
       categoryDirections: normalizeCategoryDirectionSettings(
         normalizeFantasyCategoryList(scoringSource.categories, fallback.scoring.categories),

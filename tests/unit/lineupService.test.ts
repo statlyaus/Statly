@@ -8,17 +8,20 @@ import {
 import { DEFAULT_ACTIVE_LINEUP_SLOTS } from '@/server/leagues/lineupSettings';
 
 describe('lineup service', () => {
-  it('allows utility and bench slots to accept any AFL position', () => {
+  it('allows every supported lineup slot regardless of AFL position', () => {
     expect(canAssignPlayerToSlot('DEF', 'UTIL')).toBe(true);
     expect(canAssignPlayerToSlot('MID', 'UTIL')).toBe(true);
     expect(canAssignPlayerToSlot('RUC', 'BENCH')).toBe(true);
     expect(canAssignPlayerToSlot('FWD', 'UTIL')).toBe(true);
+    expect(canAssignPlayerToSlot('DEF', 'DEF')).toBe(true);
+    expect(canAssignPlayerToSlot('DEF', 'MID')).toBe(true);
+    expect(canAssignPlayerToSlot('RUC', 'FWD')).toBe(true);
   });
 
-  it('requires matching position for fixed active slots', () => {
-    expect(canAssignPlayerToSlot('DEF', 'DEF')).toBe(true);
-    expect(canAssignPlayerToSlot('DEF', 'MID')).toBe(false);
-    expect(canAssignPlayerToSlot('RUC', 'FWD')).toBe(false);
+  it('allows missing positions while player position data is incomplete', () => {
+    expect(canAssignPlayerToSlot(null, 'MID')).toBe(true);
+    expect(canAssignPlayerToSlot(undefined, 'FWD')).toBe(true);
+    expect(canAssignPlayerToSlot('', 'RUC')).toBe(true);
   });
 
   it('locks a player once their AFL game has started', () => {
@@ -27,7 +30,7 @@ describe('lineup service', () => {
     expect(isLineupPlayerLocked(new Date('2026-07-04T10:30:00.000Z'), now)).toBe(false);
   });
 
-  it('rejects duplicate players, ineligible slots, and non-roster players', () => {
+  it('rejects duplicate players and non-roster players without enforcing position eligibility', () => {
     const result = validateLineupSubmission({
       now: new Date('2026-07-04T10:00:00.000Z'),
       lineupSlots: DEFAULT_ACTIVE_LINEUP_SLOTS,
@@ -47,9 +50,11 @@ describe('lineup service', () => {
     expect(result.errors).toEqual(
       expect.arrayContaining([
         expect.stringContaining('duplicate'),
-        expect.stringContaining('eligible'),
         expect.stringContaining('roster'),
       ])
+    );
+    expect(result.errors).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('eligible')])
     );
   });
 });
