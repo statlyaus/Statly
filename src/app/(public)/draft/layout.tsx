@@ -14,7 +14,7 @@ import {
 } from '@/components/draft/draftHubChrome';
 
 export const metadata: Metadata = {
-  title: 'AFL Draft & Trade Hub | Statly',
+  title: 'AFL Draft & Trade Archive | Statly',
   description: 'Public AFL draft and trade records, club movement, and pick analysis.',
 };
 
@@ -26,7 +26,7 @@ export default function DraftLayout({ children }: { children: ReactNode }) {
         <div className="flex flex-col gap-5 border-b border-info/20 pb-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <p className={draftHubHeaderKickerClass}>Statly Public Research Hub</p>
-            <h1 className={draftHubHeaderTitleClass}>AFL Draft &amp; Trade Hub</h1>
+            <h1 className={draftHubHeaderTitleClass}>AFL Draft &amp; Trade Archive</h1>
             <p className={draftHubHeaderDescriptionClass}>
               A public research workspace for historical AFL trade intelligence, club movement, and
               draft asset records. Use it to scan the market quickly, compare club patterns, and

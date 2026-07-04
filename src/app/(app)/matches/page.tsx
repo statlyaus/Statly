@@ -30,7 +30,7 @@ export default function MatchesPage() {
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-semibold">Live Match Center</h1>
+          <h1 className="text-2xl font-semibold">Match Centre</h1>
           <div className="flex items-center gap-2">
             <label htmlFor="league-select" className="text-sm text-gray-600">
               League

@@ -25,7 +25,7 @@ describe('match centre navigation ownership', () => {
     expect(dashboardQuickActions).toContain("href: '/matches'");
 
     expect(matchesPage).toContain('RealTimeMatchCenter');
-    expect(matchesPage).toContain('Live Match Center');
+    expect(matchesPage).toContain('Match Centre');
     expect(liveScoringPage).toContain('LiveScoringMatchup');
   });
 });
