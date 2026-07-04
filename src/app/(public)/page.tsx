@@ -172,8 +172,17 @@ export default function HomePage(): ReactElement {
 
         <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center px-6 pb-16 pt-16 text-center lg:px-10 lg:pb-20 lg:pt-20">
           <div className="relative flex flex-1 flex-col items-center justify-center">
-            <h1 className="relative text-balance text-6xl font-black leading-none tracking-tight text-primary-foreground sm:text-8xl lg:text-9xl">
-              Statly
+            <h1 className="relative">
+              <span className="sr-only">Statly</span>
+              <Image
+                src="/brand/statly-primary-logo-hero.svg"
+                alt=""
+                width={624}
+                height={236}
+                priority
+                className="h-auto w-[min(72vw,34rem)]"
+                aria-hidden="true"
+              />
             </h1>
           </div>
 

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 295" role="img" aria-label="Statly. See the game inside the score.">
+  <g fill="none">
+    <text
+      x="4"
+      y="154"
+      fill="#FFFFFF"
+      font-family="Inter, Arial, sans-serif"
+      font-size="150"
+      font-weight="900"
+      letter-spacing="-3"
+    >Statly</text>
+    <circle cx="520" cy="149" r="18" fill="#8FD3FF"/>
+    <path d="M570 142C630 121 667 70 684 16" stroke="#8FD3FF" stroke-width="11" stroke-linecap="round"/>
+    <path d="M572 184C645 177 707 145 746 105" stroke="#8FD3FF" stroke-width="11" stroke-linecap="round"/>
+    <circle cx="687" cy="15" r="23" fill="#8FD3FF"/>
+    <circle cx="746" cy="105" r="19" fill="#8FD3FF"/>
+    <text
+      x="10"
+      y="236"
+      fill="#FFFFFF"
+      font-family="Inter, Arial, sans-serif"
+      font-size="24"
+      font-weight="800"
+      letter-spacing="9"
+    >SEE THE GAME INSIDE THE SCORE.</text>
+  </g>
+</svg>
