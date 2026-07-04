@@ -45,13 +45,7 @@ const nextConfig = {
   },
 
   async redirects() {
-    return [
-      {
-        source: '/tradecentre',
-        destination: '/draft/trades',
-        permanent: false,
-      },
-    ];
+    return [];
   },
 
   // Production optimizations
