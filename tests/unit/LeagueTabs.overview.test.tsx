@@ -78,6 +78,30 @@ const members: LeagueMember[] = [
 
 describe('LeagueTabs overview snapshot', () => {
   it('shows teams, waiver priority, pending trades, and league context at a glance', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        claims: [
+          {
+            id: 'claim-1',
+            userId: 'user-2',
+            teamId: 'member-2',
+            playerId: 'player-1',
+            priority: 1,
+            status: 'PENDING',
+            createdAt: '2026-07-04T00:00:00.000Z',
+            bidAmount: 12,
+          },
+        ],
+        playersIndex: {
+          'player-1': {
+            id: 'player-1',
+            name: 'Caleb Serong',
+          },
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
     authenticatedFetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -101,7 +125,7 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByText('League overview')).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot League').length).toBeGreaterThan(0);
     expect(screen.getByText('3/4 teams')).toBeInTheDocument();
-    expect(screen.getByText('Trade offers')).toBeInTheDocument();
+    expect(screen.getAllByText('Trade offers').length).toBeGreaterThan(0);
     expect(screen.getByText('5 categories')).toBeInTheDocument();
     expect(screen.getAllByText('Priority 2').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Teams').length).toBeGreaterThan(1);
@@ -123,19 +147,28 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByText('ST')).toBeInTheDocument();
     expect(screen.getByText('Third Team')).toBeInTheDocument();
     expect(screen.getByText('TT')).toBeInTheDocument();
-    expect(screen.getByText('Offers needing review')).toBeInTheDocument();
+    expect(screen.queryByText('Offers needing review')).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('Midfield upgrade')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Player A, Player B')).toBeInTheDocument();
-    expect(screen.getByText('Your claim position')).toBeInTheDocument();
+    expect(screen.getAllByText('Waiver position').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Your claim position')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Caleb Serong')).toBeInTheDocument();
+    });
+    expect(screen.getByText('$12')).toBeInTheDocument();
     expect(screen.queryByText('Next action')).not.toBeInTheDocument();
     expect(authenticatedFetchMock).toHaveBeenCalledWith(
       '/api/trades/list?leagueId=league-1&status=PENDING&pageSize=3',
       {},
       'user-2'
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/leagues/league-1/waivers?playersLimit=0&activityLimit=0',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
   });
 });

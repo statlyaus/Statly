@@ -62,6 +62,13 @@ type OverviewTradeSummary = {
   lastUpdated?: number;
 };
 
+type OverviewWaiverClaim = {
+  id: string;
+  playerId: string;
+  playerName: string;
+  bidAmount?: number;
+};
+
 const TAB_IDS: readonly TabType[] = [
   'overview',
   'teams',
@@ -100,6 +107,10 @@ export default function LeagueTabs({
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [overviewTrades, setOverviewTrades] = useState<OverviewTradeSummary[]>([]);
   const [overviewTradesStatus, setOverviewTradesStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [overviewWaiverClaims, setOverviewWaiverClaims] = useState<OverviewWaiverClaim[]>([]);
+  const [overviewWaiversStatus, setOverviewWaiversStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
 
@@ -254,6 +265,73 @@ export default function LeagueTabs({
 
     return () => {
       cancelled = true;
+    };
+  }, [currentUserId, league.id]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const controller = new AbortController();
+
+    async function loadOverviewWaivers() {
+      setOverviewWaiversStatus('loading');
+
+      try {
+        const response = await fetch(
+          `/api/leagues/${encodeURIComponent(league.id)}/waivers?playersLimit=0&activityLimit=0`,
+          { signal: controller.signal }
+        );
+        const payload = (await response.json().catch(() => ({}))) as unknown;
+
+        if (!response.ok) {
+          throw new Error(`status ${response.status}`);
+        }
+
+        const claims = isRecord(payload) && Array.isArray(payload.claims) ? payload.claims : [];
+        const playersIndex = isRecord(payload) && isRecord(payload.playersIndex)
+          ? payload.playersIndex
+          : {};
+        const pendingClaims = claims
+          .map((claim): OverviewWaiverClaim | null => {
+            if (!isRecord(claim)) return null;
+            const id = typeof claim.id === 'string' ? claim.id : null;
+            const playerId = typeof claim.playerId === 'string' ? claim.playerId : null;
+            const status = typeof claim.status === 'string' ? claim.status : 'PENDING';
+
+            if (!id || !playerId || status !== 'PENDING') return null;
+
+            const player = playersIndex[playerId];
+            const playerName =
+              isRecord(player) && typeof player.name === 'string'
+                ? player.name
+                : `Player ${playerId}`;
+
+            return {
+              id,
+              playerId,
+              playerName,
+              bidAmount: typeof claim.bidAmount === 'number' ? claim.bidAmount : undefined,
+            };
+          })
+          .filter((claim): claim is OverviewWaiverClaim => claim !== null)
+          .slice(0, 3);
+
+        if (!controller.signal.aborted) {
+          setOverviewWaiverClaims(pendingClaims);
+          setOverviewWaiversStatus('ready');
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setOverviewWaiverClaims([]);
+          setOverviewWaiversStatus('error');
+        }
+      }
+    }
+
+    void loadOverviewWaivers();
+
+    return () => {
+      controller.abort();
     };
   }, [currentUserId, league.id]);
 
@@ -529,7 +607,7 @@ export default function LeagueTabs({
                           Trades
                         </p>
                         <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                          Offers needing review
+                          Trade offers
                         </h2>
                       </div>
                       <button
@@ -542,9 +620,7 @@ export default function LeagueTabs({
                     </div>
                     <div className="mt-4 space-y-3">
                       {overviewTradesStatus === 'loading' ? (
-                        <p className="text-sm text-slate-600">
-                          Checking pending offers...
-                        </p>
+                        <p className="text-sm text-slate-600">Checking offers...</p>
                       ) : overviewTrades.length > 0 ? (
                         overviewTrades.map((trade) => (
                           <div
@@ -576,7 +652,7 @@ export default function LeagueTabs({
                           Waivers
                         </p>
                         <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                          Your claim position
+                          Waiver position
                         </h2>
                       </div>
                       <button
@@ -594,11 +670,31 @@ export default function LeagueTabs({
                       <p className="mt-1 text-sm capitalize text-slate-600">
                         {waiverPolicyLabel} waiver order
                       </p>
-                      <p className="mt-3 text-sm text-slate-600">
-                        {waiverPriorityIndex >= 0
-                          ? 'Use the waiver tab to submit claims and check the queue before processing.'
-                          : 'Waiver order has not been set for your team yet.'}
-                      </p>
+                      {overviewWaiversStatus === 'loading' ? (
+                        <p className="mt-3 text-sm text-slate-600">Checking waiver bids...</p>
+                      ) : overviewWaiverClaims.length > 0 ? (
+                        <div className="mt-4 space-y-2">
+                          {overviewWaiverClaims.map((claim) => (
+                            <div
+                              key={claim.id}
+                              className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                            >
+                              <p className="min-w-0 truncate text-sm font-semibold text-slate-950">
+                                {claim.playerName}
+                              </p>
+                              <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                {typeof claim.bidAmount === 'number'
+                                  ? `$${claim.bidAmount}`
+                                  : 'Claim'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-600">
+                          {waiverPriorityIndex >= 0 ? 'No pending waiver bids.' : 'Not set.'}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </section>

@@ -421,6 +421,7 @@ describe('PrismaWaiverClaimStore', () => {
           { memberId: 'member-1', priority: 1, remainingFAAB: 100, pendingBidTotal: 7 },
         ])
         .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ memberId: 'member-1', finalPick: 1 }])
         .mockResolvedValueOnce([{ memberId: 'member-1', remainingFAAB: 100, pendingBidTotal: 0 }]),
       $executeRaw: vi.fn().mockResolvedValue(1),
       $transaction: vi.fn((work: (client: unknown) => Promise<unknown>) => work(db)),
@@ -468,6 +469,72 @@ describe('PrismaWaiverClaimStore', () => {
         claimId: 'action-1',
       })
     );
+  });
+
+  it('seeds missing canonical waiver priorities from reverse final draft pick order', async () => {
+    const joinedAt = new Date('2026-06-01T00:00:00.000Z');
+    const db = {
+      leagueMember: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'member-2', userId: 'user-2' }),
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'member-1', userId: 'user-1', draftSlot: 1, joinedAt },
+          { id: 'member-2', userId: 'user-2', draftSlot: 2, joinedAt },
+        ]),
+      },
+      teamAction: {
+        create: vi.fn().mockResolvedValue({ id: 'action-1' }),
+        update: vi.fn().mockResolvedValue({ id: 'action-1' }),
+      },
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { memberId: 'member-2', finalPick: 4 },
+          { memberId: 'member-1', finalPick: 3 },
+        ])
+        .mockResolvedValue([
+          { memberId: 'member-2', priority: 1, remainingFAAB: null, pendingBidTotal: 0 },
+          { memberId: 'member-1', priority: 2, remainingFAAB: null, pendingBidTotal: 0 },
+        ]),
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      $transaction: vi.fn((work: (client: unknown) => Promise<unknown>) => work(db)),
+    };
+    const { firestore, waiverDoc, activityDoc } = createCompatibilityProjectionMock();
+    const store = new PrismaWaiverClaimStore(db as never, firestore as never);
+
+    await store.submitClaim({
+      leagueId: 'league-1',
+      userId: 'user-2',
+      teamId: 'member-2',
+      playerId: 'free-player',
+      priority: 1,
+      waiverSettings: { system: 'PRIORITY' },
+    });
+
+    expect(db.$executeRaw).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.any(String),
+      'league-1',
+      'member-2',
+      1,
+      null,
+      expect.any(Date),
+      expect.any(Date)
+    );
+    expect(db.$executeRaw).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.any(String),
+      'league-1',
+      'member-1',
+      2,
+      null,
+      expect.any(Date),
+      expect.any(Date)
+    );
+    expect(waiverDoc.set).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'member-2' }));
+    expect(activityDoc.set).toHaveBeenCalledWith(expect.objectContaining({ claimId: 'action-1' }));
   });
 
   it('updates canonical status and mirrors successful processing to Firestore', async () => {
