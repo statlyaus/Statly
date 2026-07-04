@@ -22,6 +22,7 @@ describe('RosterProjectionService', () => {
             draftId: 'draft-1',
             playerId: 'player-1',
             memberId: 'member-1',
+            overall: 1,
           },
         ]),
       },
@@ -30,6 +31,9 @@ describe('RosterProjectionService', () => {
       },
       leagueRosterPlayer: {
         upsert: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
+      },
+      waiverPriority: {
+        upsert: vi.fn().mockResolvedValue({ id: 'waiver-priority-1' }),
       },
     };
     const waiverAvailabilityProjectionService = {
@@ -42,7 +46,7 @@ describe('RosterProjectionService', () => {
     expect(db.pick.findMany).toHaveBeenCalledWith({
       where: { draftId: 'draft-1' },
       orderBy: { overall: 'asc' },
-      select: { id: true, draftId: true, playerId: true, memberId: true },
+      select: { id: true, draftId: true, playerId: true, memberId: true, overall: true },
     });
     expect(db.leagueRoster.upsert).toHaveBeenCalledWith({
       where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-1' } },
@@ -75,6 +79,15 @@ describe('RosterProjectionService', () => {
     expect(waiverAvailabilityProjectionService.projectLeague).toHaveBeenCalledWith({
       leagueId: 'league-1',
     });
+    expect(db.waiverPriority.upsert).toHaveBeenCalledWith({
+      where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-1' } },
+      update: { priority: 1 },
+      create: {
+        leagueId: 'league-1',
+        memberId: 'member-1',
+        priority: 1,
+      },
+    });
     expect(result).toEqual({ projected: 1 });
   });
 
@@ -87,6 +100,7 @@ describe('RosterProjectionService', () => {
             draftId: 'draft-1',
             playerId: 'player-1',
             memberId: 'member-1',
+            overall: 1,
           },
         ]),
       },
@@ -95,6 +109,9 @@ describe('RosterProjectionService', () => {
       },
       leagueRosterPlayer: {
         upsert: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
+      },
+      waiverPriority: {
+        upsert: vi.fn().mockResolvedValue({ id: 'waiver-priority-1' }),
       },
     };
     const waiverAvailabilityProjectionService = {
@@ -113,6 +130,78 @@ describe('RosterProjectionService', () => {
       leagueId: 'league-1',
     });
     expect(result).toEqual({ projected: 1 });
+  });
+
+  it('seeds waiver priority from reverse final draft pick order', async () => {
+    const db = {
+      pick: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'pick-1',
+            draftId: 'draft-1',
+            playerId: 'player-1',
+            memberId: 'member-1',
+            overall: 1,
+          },
+          {
+            id: 'pick-2',
+            draftId: 'draft-1',
+            playerId: 'player-2',
+            memberId: 'member-2',
+            overall: 2,
+          },
+          {
+            id: 'pick-3',
+            draftId: 'draft-1',
+            playerId: 'player-3',
+            memberId: 'member-2',
+            overall: 3,
+          },
+          {
+            id: 'pick-4',
+            draftId: 'draft-1',
+            playerId: 'player-4',
+            memberId: 'member-1',
+            overall: 4,
+          },
+        ]),
+      },
+      leagueRoster: {
+        upsert: vi.fn().mockResolvedValue({ id: 'roster-1', playerIds: '[]' }),
+      },
+      leagueRosterPlayer: {
+        upsert: vi.fn().mockResolvedValue({ id: 'ownership-1' }),
+      },
+      waiverPriority: {
+        upsert: vi.fn().mockResolvedValue({ id: 'waiver-priority-1' }),
+      },
+    };
+    const waiverAvailabilityProjectionService = {
+      projectLeague: vi.fn().mockResolvedValue({ owned: 4, available: 0 }),
+    };
+
+    const service = new RosterProjectionService(db as never, waiverAvailabilityProjectionService);
+
+    await service.projectDraft({ leagueId: 'league-1', draftId: 'draft-1' });
+
+    expect(db.waiverPriority.upsert).toHaveBeenNthCalledWith(1, {
+      where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-1' } },
+      update: { priority: 1 },
+      create: {
+        leagueId: 'league-1',
+        memberId: 'member-1',
+        priority: 1,
+      },
+    });
+    expect(db.waiverPriority.upsert).toHaveBeenNthCalledWith(2, {
+      where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-2' } },
+      update: { priority: 2 },
+      create: {
+        leagueId: 'league-1',
+        memberId: 'member-2',
+        priority: 2,
+      },
+    });
   });
 
   it('projects rosters after completed draft command results', () => {

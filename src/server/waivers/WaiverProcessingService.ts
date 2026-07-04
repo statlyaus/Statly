@@ -548,6 +548,11 @@ interface WaiverPriorityEntry extends PriorityEntry {
   memberId: string;
 }
 
+interface DraftWaiverPrioritySeedRow {
+  memberId: string;
+  finalPick: number | bigint;
+}
+
 type PrismaWaiverStoreTransaction = Omit<PrismaWaiverStoreDb, '$transaction'>;
 
 export class PrismaWaiverClaimStore implements ClaimStore {
@@ -948,11 +953,22 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       }),
       this.loadPriorityRows(tx, leagueId),
     ]);
+    const draftPriorityMemberIds = await this.loadDraftPriorityMemberIds(tx, leagueId);
+    const memberIds = new Set(members.map((member) => member.id));
+    const orderedMembers =
+      draftPriorityMemberIds.length > 0
+        ? [
+            ...draftPriorityMemberIds
+              .filter((memberId) => memberIds.has(memberId))
+              .map((memberId) => ({ id: memberId })),
+            ...members.filter((member) => !draftPriorityMemberIds.includes(member.id)),
+          ]
+        : members;
     const existingMemberIds = new Set(existingRows.map((row) => row.memberId));
     const existingPriorities = existingRows.map((row) => row.priority);
     let nextPriority = existingPriorities.length > 0 ? Math.max(...existingPriorities) + 1 : 1;
 
-    for (const member of members) {
+    for (const member of orderedMembers) {
       if (existingMemberIds.has(member.id)) continue;
 
       await tx.$executeRaw`
@@ -1010,6 +1026,24 @@ export class PrismaWaiverClaimStore implements ClaimStore {
       updatedAt = ${new Date()}
       WHERE leagueId = ${claim.leagueId} AND memberId = ${claim.teamId}
     `;
+  }
+
+  private async loadDraftPriorityMemberIds(
+    db: Pick<PrismaWaiverStoreDb, '$queryRaw'>,
+    leagueId: string
+  ): Promise<string[]> {
+    const rows = (await db.$queryRaw`
+      SELECT p.memberId, MAX(p.overall) AS finalPick
+      FROM "Pick" p
+      INNER JOIN "Draft" d ON d.id = p.draftId
+      WHERE d.leagueId = ${leagueId}
+      GROUP BY p.memberId
+      ORDER BY finalPick DESC
+    `) as DraftWaiverPrioritySeedRow[];
+
+    return rows
+      .filter((row) => typeof row.memberId === 'string' && Number.isFinite(Number(row.finalPick)))
+      .map((row) => row.memberId);
   }
 
   private async loadPriorityRows(

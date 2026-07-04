@@ -63,7 +63,14 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
     });
 
     if (prismaLeague) {
-      const draftReadiness = await getLeagueDraftOperationalReadiness(prisma, { leagueId });
+      const [draftReadiness, waiverPriorityRows] = await Promise.all([
+        getLeagueDraftOperationalReadiness(prisma, { leagueId }),
+        prisma.waiverPriority.findMany({
+          where: { leagueId },
+          orderBy: { priority: 'asc' },
+          select: { memberId: true },
+        }),
+      ]);
       const members = prismaLeague.members.map((member) => ({
         id: member.id,
         leagueId: member.leagueId,
@@ -84,6 +91,7 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
       });
 
       const categories = normalizeLeagueCategories(prismaLeague.categoriesJson);
+      const waiverRule = prismaLeague.settings?.waiverRule?.toLowerCase() as League['waiverRule'];
 
       return {
         ok: true,
@@ -101,7 +109,7 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
           draftDate: prismaLeague.settings?.startAt?.toISOString(),
           draftType: prismaLeague.settings?.draftType?.toLowerCase() as League['draftType'],
           pickOrder: prismaLeague.settings?.pickOrder?.toLowerCase() as League['pickOrder'],
-          waiverRule: prismaLeague.settings?.waiverRule?.toLowerCase() as League['waiverRule'],
+          waiverRule,
           draftReadiness,
           createdAt: prismaLeague.createdAt.toISOString(),
           tradeSettings: {
@@ -109,9 +117,9 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
             tradeReview: 'none',
           },
           waiverWire: {
-            waiverOrder: [],
+            waiverOrder: waiverPriorityRows.map((row) => row.memberId),
             waiverPeriodHours: 24,
-            waiverResetPolicy: 'weekly',
+            waiverResetPolicy: waiverRule ?? 'weekly',
           },
         },
         members,

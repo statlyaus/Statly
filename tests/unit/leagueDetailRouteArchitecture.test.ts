@@ -64,6 +64,8 @@ describe('league detail route architecture', () => {
     expect(loaderSource).toContain('!access.isMember');
     expect(loaderSource).not.toContain('verifyLeagueMembership');
     expect(loaderSource).toContain('prisma.league.findUnique');
+    expect(loaderSource).toContain('prisma.waiverPriority.findMany');
+    expect(loaderSource).toContain('waiverOrder: waiverPriorityRows.map((row) => row.memberId)');
     expect(loaderSource).toContain("adminDb.collection('leagues').doc(leagueId)");
     expect(loaderSource).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
     expect(loaderSource).toContain('normalizeLeagueCategories(prismaLeague.categoriesJson)');

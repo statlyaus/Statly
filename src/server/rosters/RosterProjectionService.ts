@@ -2,7 +2,10 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
-type PrismaLike = Pick<typeof prisma, 'pick' | 'leagueRoster' | 'leagueRosterPlayer'>;
+type PrismaLike = Pick<
+  typeof prisma,
+  'pick' | 'leagueRoster' | 'leagueRosterPlayer' | 'waiverPriority'
+>;
 type WaiverAvailabilityProjectionLike = Pick<WaiverAvailabilityProjectionService, 'projectLeague'>;
 
 export interface RosterProjectionResult {
@@ -22,7 +25,7 @@ export class RosterProjectionService {
     const picks = await this.db.pick.findMany({
       where: { draftId: input.draftId },
       orderBy: { overall: 'asc' },
-      select: { id: true, draftId: true, playerId: true, memberId: true },
+      select: { id: true, draftId: true, playerId: true, memberId: true, overall: true },
     });
 
     const rosterShells = new Set<string>();
@@ -66,6 +69,34 @@ export class RosterProjectionService {
           pickId: pick.id,
           playerId: pick.playerId,
           acquiredBy: 'DRAFT',
+        },
+      });
+    }
+
+    const finalPickByMemberId = new Map<string, number>();
+    for (const pick of picks) {
+      finalPickByMemberId.set(pick.memberId, pick.overall);
+    }
+
+    const waiverPriorityEntries = [...finalPickByMemberId.entries()]
+      .map(([memberId, finalPick]) => ({ memberId, finalPick }))
+      .sort((a, b) => b.finalPick - a.finalPick);
+
+    for (const [index, entry] of waiverPriorityEntries.entries()) {
+      await this.db.waiverPriority.upsert({
+        where: {
+          leagueId_memberId: {
+            leagueId: input.leagueId,
+            memberId: entry.memberId,
+          },
+        },
+        update: {
+          priority: index + 1,
+        },
+        create: {
+          leagueId: input.leagueId,
+          memberId: entry.memberId,
+          priority: index + 1,
         },
       });
     }
