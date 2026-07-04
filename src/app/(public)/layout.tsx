@@ -5,7 +5,7 @@ import Link from 'next/link';
 const publicLinks = [
   { href: '/', label: 'Home' },
   { href: '/dashboard', label: 'Fantasy' },
-  { href: '/draft/trades', label: 'Draft & Trade Hub' },
+  { href: '/draft/trades', label: 'AFL Archive' },
 ];
 
 export default function PublicRouteLayout({ children }: { readonly children: ReactNode }) {
@@ -30,14 +30,7 @@ export default function PublicRouteLayout({ children }: { readonly children: Rea
                 href={link.href}
                 className="whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
               >
-                {link.label === 'Draft & Trade Hub' ? (
-                  <>
-                    <span className="sm:hidden">Draft Hub</span>
-                    <span className="hidden sm:inline">{link.label}</span>
-                  </>
-                ) : (
-                  link.label
-                )}
+                {link.label}
               </Link>
             ))}
             <Link

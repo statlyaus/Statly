@@ -132,10 +132,10 @@ const products = [
   },
   {
     icon: BarChart3,
-    title: 'Draft & Trade Hub',
-    description: 'Research historical AFL trades, draft picks, club movement, and player deals.',
+    title: 'AFL Draft & Trade Archive',
+    description: 'Explore public AFL draft picks, historical trades, club movement, and player deals.',
     href: '/draft/trades',
-    action: 'Open Trade Hub',
+    action: 'Open AFL Archive',
   },
 ];
 
@@ -190,7 +190,7 @@ export default function HomePage(): ReactElement {
                 href="/draft/trades"
                 className="inline-flex items-center rounded-md border border-primary-foreground/25 bg-foreground/25 px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-foreground/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-foreground"
               >
-                Explore Draft &amp; Trade Hub
+                Explore AFL Archive
               </Link>
             </div>
 
@@ -308,8 +308,8 @@ export default function HomePage(): ReactElement {
               Two workspaces, one AFL-first product family.
             </h2>
             <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-              Use Statly Fantasy for league management and fantasy gameplay. Use the Draft &amp;
-              Trade Hub for public AFL research and historical player movement.
+              Use Statly Fantasy for league management and fantasy gameplay. Use the AFL Draft
+              &amp; Trade Archive for public AFL research and historical player movement.
             </p>
           </div>
 
