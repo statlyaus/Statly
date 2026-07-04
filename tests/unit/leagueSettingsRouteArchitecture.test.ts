@@ -38,6 +38,10 @@ describe('league settings route architecture', () => {
     expect(source).toContain('normalizeLeagueCategories(prismaLeague.categoriesJson)');
     expect(source).toContain('selected.length === value.length');
     expect(source).toContain('categoriesJson: JSON.stringify(categories)');
+    expect(source).toContain('scoringMode');
+    expect(source).toContain('lineupSlotsJson');
+    expect(source).toContain('categoryDirectionsJson');
+    expect(source).toContain('scoringSettingsLockedAt');
   });
 
   it('persists the durable commissioner settings fields', () => {
@@ -51,6 +55,9 @@ describe('league settings route architecture', () => {
     expect(source).toContain('benchSize: getBenchSizeFromPositionLimits(positionLimits)');
     expect(source).toContain('waiverRule');
     expect(source).toContain('maxTeams: maxTeams ?? prismaLeague.settings.maxTeams');
+    expect(source).toContain('lineupSlotsJson: JSON.stringify(lineupSlots)');
+    expect(source).toContain('categoryDirectionsJson: JSON.stringify(categoryDirections)');
+    expect(source).toContain("error: 'Scoring settings are locked'");
   });
 
   it('converges the draft setup after Prisma settings updates', () => {

@@ -46,6 +46,10 @@ model League {
   drafts         Draft[]
   draftEvents    DraftEvent[]
   rosterPlayers  LeagueRosterPlayer[]
+  matchups       LeagueMatchup[]
+  lineups        LeagueLineup[]
+  matchupScores  LeagueMatchupScore[]
+  standings      LeagueStanding[]
   createdAt      DateTime             @default(now())
 
   @@index([ownerId])
@@ -54,23 +58,30 @@ model League {
 }
 
 model LeagueMember {
-  id            String               @id @default(cuid())
-  leagueId      String
-  userId        String
-  role          LeagueRole
-  teamName      String
-  teamLogoUrl   String?
-  teamLogoPositionX Int?
-  teamLogoPositionY Int?
-  teamLogoZoom  Float?
+  id                       String               @id @default(cuid())
+  leagueId                 String
+  userId                   String
+  role                     LeagueRole
+  teamName                 String
+  teamLogoUrl              String?
+  teamLogoPositionX        Int?
+  teamLogoPositionY        Int?
+  teamLogoZoom             Float?
   notificationSettingsJson String?
-  draftSlot     Int?
-  joinedAt      DateTime             @default(now())
-  league        League               @relation(fields: [leagueId], references: [id])
-  user          User                 @relation(fields: [userId], references: [id])
-  picks         Pick[]
-  orders        DraftOrder[]
-  rosterPlayers LeagueRosterPlayer[]
+  draftSlot                Int?
+  joinedAt                 DateTime             @default(now())
+  league                   League               @relation(fields: [leagueId], references: [id])
+  user                     User                 @relation(fields: [userId], references: [id])
+  picks                    Pick[]
+  orders                   DraftOrder[]
+  rosterPlayers            LeagueRosterPlayer[]
+  homeMatchups             LeagueMatchup[]      @relation("HomeMemberMatchups")
+  awayMatchups             LeagueMatchup[]      @relation("AwayMemberMatchups")
+  byeMatchups              LeagueMatchup[]      @relation("ByeMemberMatchups")
+  winnerMatchups           LeagueMatchup[]      @relation("WinnerMemberMatchups")
+  lineups                  LeagueLineup[]
+  matchupScores            LeagueMatchupScore[]
+  standings                LeagueStanding[]
 
   // Lobby relations
   watchlists      DraftWatchlist[]
@@ -89,20 +100,24 @@ enum LeagueRole {
 }
 
 model LeagueSettings {
-  id                 String     @id @default(cuid())
-  rosterSize         Int
-  benchSize          Int
-  maxTeams           Int
-  pickSeconds        Int
-  allowAutoPick      Boolean    @default(true)
-  positionLimitsJson String?
-  autoPickRulesJson  String?
-  draftType          DraftType
-  pickOrder          PickOrder  @default(RANDOM)
-  waiverRule         WaiverRule @default(WEEKLY)
-  startAt            DateTime
-  timeZone           String     @default("UTC")
-  locked             Boolean    @default(false)
+  id                      String            @id @default(cuid())
+  rosterSize              Int
+  benchSize               Int
+  maxTeams                Int
+  pickSeconds             Int
+  allowAutoPick           Boolean           @default(true)
+  positionLimitsJson      String?
+  autoPickRulesJson       String?
+  draftType               DraftType
+  pickOrder               PickOrder         @default(RANDOM)
+  waiverRule              WaiverRule        @default(WEEKLY)
+  startAt                 DateTime
+  timeZone                String            @default("UTC")
+  locked                  Boolean           @default(false)
+  scoringMode             LeagueScoringMode @default(H2H_EACH_CATEGORY)
+  lineupSlotsJson         String?
+  categoryDirectionsJson  String?
+  scoringSettingsLockedAt DateTime?
 
   // Captain/Vice-Captain system (admin configurable)
   enableCaptainSystem   Boolean @default(false)
@@ -125,6 +140,31 @@ enum PickOrder {
 enum WaiverRule {
   WEEKLY
   ROLLING
+}
+
+enum LeagueScoringMode {
+  H2H_EACH_CATEGORY
+  H2H_MOST_CATEGORIES
+}
+
+enum LeagueLineupSlot {
+  FWD
+  DEF
+  MID
+  RUC
+  UTIL
+  BENCH
+}
+
+enum CategoryDirection {
+  HIGH_WINS
+  LOW_WINS
+}
+
+enum LeagueMatchupStatus {
+  SCHEDULED
+  LIVE
+  FINAL
 }
 
 model Draft {
@@ -272,6 +312,7 @@ model Player {
   active        Boolean              @default(true)
   picks         Pick[]
   rosterPlayers LeagueRosterPlayer[]
+  lineupPlayers LeagueLineupPlayer[]
 
   // Lobby relations
   watchlists     DraftWatchlist[]
@@ -354,6 +395,125 @@ model LeagueRosterPlayer {
   @@unique([leagueId, memberId, playerId])
   @@index([leagueId, memberId])
   @@index([leagueId, acquiredBy])
+}
+
+model LeagueMatchup {
+  id               String              @id @default(cuid())
+  leagueId         String
+  round            Int
+  homeMemberId     String?
+  awayMemberId     String?
+  byeMemberId      String?
+  status           LeagueMatchupStatus @default(SCHEDULED)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  finalizedAt      DateTime?
+  winnerMemberId   String?
+  homeCategoryWins Int                 @default(0)
+  awayCategoryWins Int                 @default(0)
+  drawnCategories  Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  league       League               @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  homeMember   LeagueMember?        @relation("HomeMemberMatchups", fields: [homeMemberId], references: [id], onDelete: SetNull)
+  awayMember   LeagueMember?        @relation("AwayMemberMatchups", fields: [awayMemberId], references: [id], onDelete: SetNull)
+  byeMember    LeagueMember?        @relation("ByeMemberMatchups", fields: [byeMemberId], references: [id], onDelete: SetNull)
+  winnerMember LeagueMember?        @relation("WinnerMemberMatchups", fields: [winnerMemberId], references: [id], onDelete: SetNull)
+  scores       LeagueMatchupScore[]
+
+  @@unique([leagueId, round, homeMemberId, awayMemberId])
+  @@index([leagueId, round])
+  @@index([leagueId, status])
+  @@index([homeMemberId])
+  @@index([awayMemberId])
+  @@index([byeMemberId])
+}
+
+model LeagueLineup {
+  id        String    @id @default(cuid())
+  leagueId  String
+  memberId  String
+  round     Int
+  lockedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  league  League               @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member  LeagueMember         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  players LeagueLineupPlayer[]
+
+  @@unique([leagueId, memberId, round])
+  @@index([leagueId, round])
+  @@index([memberId])
+}
+
+model LeagueLineupPlayer {
+  id        String           @id @default(cuid())
+  lineupId  String
+  playerId  String
+  slot      LeagueLineupSlot
+  slotIndex Int
+  lockedAt  DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  lineup LeagueLineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+  player Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([lineupId, slot, slotIndex])
+  @@unique([lineupId, playerId])
+  @@index([playerId])
+}
+
+model LeagueMatchupScore {
+  id             String              @id @default(cuid())
+  leagueId       String
+  matchupId      String
+  memberId       String
+  round          Int
+  categoriesJson String
+  categoryWins   Int                 @default(0)
+  categoryLosses Int                 @default(0)
+  categoryDraws  Int                 @default(0)
+  pointsFor      Float               @default(0)
+  pointsAgainst  Float               @default(0)
+  matchupWin     Boolean             @default(false)
+  matchupLoss    Boolean             @default(false)
+  matchupDraw    Boolean             @default(false)
+  status         LeagueMatchupStatus @default(SCHEDULED)
+  calculatedAt   DateTime            @default(now())
+  finalizedAt    DateTime?
+
+  league  League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  matchup LeagueMatchup @relation(fields: [matchupId], references: [id], onDelete: Cascade)
+  member  LeagueMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([matchupId, memberId])
+  @@index([leagueId, round])
+  @@index([memberId])
+}
+
+model LeagueStanding {
+  id             String   @id @default(cuid())
+  leagueId       String
+  memberId       String
+  wins           Int      @default(0)
+  losses         Int      @default(0)
+  draws          Int      @default(0)
+  categoryWins   Int      @default(0)
+  categoryLosses Int      @default(0)
+  categoryDraws  Int      @default(0)
+  pointsFor      Float    @default(0)
+  pointsAgainst  Float    @default(0)
+  updatedAt      DateTime @updatedAt
+
+  league League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, memberId])
+  @@index([leagueId])
+  @@index([memberId])
 }
 
 // Team Actions (trades, waivers, etc.)

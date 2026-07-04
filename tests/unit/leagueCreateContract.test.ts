@@ -21,6 +21,42 @@ describe('league creation contract', () => {
       categories: [...REAL_DATA_NINE_CATEGORY_PRESET],
       visibility: 'PRIVATE',
       timeZone: 'UTC',
+      scoringMode: 'H2H_EACH_CATEGORY',
+      lineupSlots: {
+        FWD: 5,
+        DEF: 5,
+        MID: 5,
+        RUC: 1,
+        UTIL: 3,
+      },
+      categoryDirections: Object.fromEntries(
+        REAL_DATA_NINE_CATEGORY_PRESET.map((category) => [category, 'HIGH_WINS'])
+      ),
+    });
+  });
+
+  it('normalizes scoring mode, lineup slots, and category direction overrides', () => {
+    expect(
+      normalizeCreateLeagueInput({
+        name: 'Test Lab Alpha',
+        scoringMode: 'H2H_MOST_CATEGORIES',
+        categories: ['goals', 'clangers'],
+        lineupSlots: { FWD: 4, DEF: 4, MID: 5, RUC: 1, UTIL: 2 },
+        categoryDirections: { clangers: 'LOW_WINS' },
+      })
+    ).toMatchObject({
+      scoringMode: 'H2H_MOST_CATEGORIES',
+      lineupSlots: {
+        FWD: 4,
+        DEF: 4,
+        MID: 5,
+        RUC: 1,
+        UTIL: 2,
+      },
+      categoryDirections: {
+        goals: 'HIGH_WINS',
+        clangers: 'LOW_WINS',
+      },
     });
   });
 

@@ -3,7 +3,14 @@
 import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import type { League, LeagueMember, LeagueMemberNotificationSettings } from '@/types/leagues';
+import type {
+  CategoryDirection,
+  League,
+  LeagueLineupSlotSettings,
+  LeagueMember,
+  LeagueMemberNotificationSettings,
+  LeagueScoringMode,
+} from '@/types/leagues';
 import {
   FANTASY_CATEGORIES,
   REAL_DATA_NINE_CATEGORY_PRESET,
@@ -29,6 +36,10 @@ import MyTeamPanel from '@/components/MyTeamPanel';
 import LeagueWaiversContainer from '@/components/waivers/LeagueWaiversContainer';
 import type { Player, Team } from '@/types/players';
 import DraftManager from './DraftManager';
+import { LeagueLineupPanel } from './matchups/LeagueLineupPanel';
+import { LeagueMatchupsPanel } from './matchups/LeagueMatchupsPanel';
+import { LeagueStandingsPanel } from './matchups/LeagueStandingsPanel';
+import { ScoringSettingsPanel } from './settings/ScoringSettingsPanel';
 
 interface LeagueTabsProps {
   league: League;
@@ -41,6 +52,9 @@ type TabType =
   | 'overview'
   | 'teams'
   | 'roster'
+  | 'matchups'
+  | 'lineup'
+  | 'standings'
   | 'trades'
   | 'waivers'
   | 'draft'
@@ -73,6 +87,9 @@ const TAB_IDS: readonly TabType[] = [
   'overview',
   'teams',
   'roster',
+  'matchups',
+  'lineup',
+  'standings',
   'trades',
   'waivers',
   'draft',
@@ -128,8 +145,7 @@ export default function LeagueTabs({
     : -1;
   const waiverPriorityLabel =
     waiverPriorityIndex >= 0 ? `Priority ${waiverPriorityIndex + 1}` : 'Not set';
-  const waiverPolicyLabel =
-    league.waiverRule ?? league.waiverWire?.waiverResetPolicy ?? 'weekly';
+  const waiverPolicyLabel = league.waiverRule ?? league.waiverWire?.waiverResetPolicy ?? 'weekly';
   const overviewTeams = activeMembers.slice(0, league.maxTeams);
   const categorySummary = league.categories
     .slice(0, 4)
@@ -162,6 +178,9 @@ export default function LeagueTabs({
     { id: 'overview', name: 'Overview' },
     { id: 'teams', name: 'Teams' },
     { id: 'roster', name: 'My Roster' },
+    { id: 'matchups', name: 'Matchups' },
+    { id: 'lineup', name: 'My Lineup' },
+    { id: 'standings', name: 'Standings' },
     { id: 'trades', name: 'Trades' },
     { id: 'waivers', name: 'Waivers' },
     { id: 'draft', name: 'Draft' },
@@ -288,9 +307,8 @@ export default function LeagueTabs({
         }
 
         const claims = isRecord(payload) && Array.isArray(payload.claims) ? payload.claims : [];
-        const playersIndex = isRecord(payload) && isRecord(payload.playersIndex)
-          ? payload.playersIndex
-          : {};
+        const playersIndex =
+          isRecord(payload) && isRecord(payload.playersIndex) ? payload.playersIndex : {};
         const pendingClaims = claims
           .map((claim): OverviewWaiverClaim | null => {
             if (!isRecord(claim)) return null;
@@ -479,9 +497,8 @@ export default function LeagueTabs({
                         {league.name}
                       </h2>
                       <p className="mt-2 text-sm text-white/70">
-                        {league.type === 'private' ? 'Private' : 'Public'} ·{' '}
-                        {activeMembers.length}/{league.maxTeams} teams · Draft{' '}
-                        {draftReadiness?.status ?? league.status}
+                        {league.type === 'private' ? 'Private' : 'Public'} · {activeMembers.length}/
+                        {league.maxTeams} teams · Draft {draftReadiness?.status ?? league.status}
                       </p>
                       <p className="mt-1 text-sm text-white/55">
                         {openTeamSlots === 0
@@ -606,9 +623,7 @@ export default function LeagueTabs({
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                           Trades
                         </p>
-                        <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                          Trade offers
-                        </h2>
+                        <h2 className="mt-1 text-lg font-semibold text-slate-950">Trade offers</h2>
                       </div>
                       <button
                         type="button"
@@ -664,9 +679,7 @@ export default function LeagueTabs({
                       </button>
                     </div>
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-2xl font-semibold text-slate-950">
-                        {waiverPriorityLabel}
-                      </p>
+                      <p className="text-2xl font-semibold text-slate-950">{waiverPriorityLabel}</p>
                       <p className="mt-1 text-sm capitalize text-slate-600">
                         {waiverPolicyLabel} waiver order
                       </p>
@@ -888,6 +901,18 @@ export default function LeagueTabs({
               </div>
             )}
 
+            {activeTab === 'matchups' && (
+              <LeagueMatchupsPanel leagueId={league.id} currentUserId={currentUserId} />
+            )}
+
+            {activeTab === 'lineup' && (
+              <LeagueLineupPanel leagueId={league.id} currentUserId={currentUserId} />
+            )}
+
+            {activeTab === 'standings' && (
+              <LeagueStandingsPanel leagueId={league.id} currentUserId={currentUserId} />
+            )}
+
             {activeTab === 'trades' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -1018,6 +1043,10 @@ interface LeagueSettingsResponse {
   scoring: {
     scoringFormat: 'nine-category';
     categories: FantasyCategoryKey[];
+    scoringMode: LeagueScoringMode;
+    lineupSlots: LeagueLineupSlotSettings;
+    categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
+    scoringSettingsLockedAt: string | null;
   };
   roster: {
     rosterSize: number;
@@ -1052,6 +1081,13 @@ const POSITION_LIMIT_LABELS: Record<PositionLimitKey, string> = {
 
 const CATEGORY_PRESET = [...REAL_DATA_NINE_CATEGORY_PRESET];
 const FANTASY_CATEGORY_KEYS = new Set(Object.keys(FANTASY_CATEGORIES));
+const DEFAULT_LINEUP_SLOTS: LeagueLineupSlotSettings = {
+  FWD: 5,
+  DEF: 5,
+  MID: 5,
+  RUC: 1,
+  UTIL: 3,
+};
 const TEAM_SYMBOL_UPLOAD_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const TEAM_SYMBOL_UPLOAD_MAX_BYTES = 2_000_000;
 const TEAM_SYMBOL_CANVAS_SIZE = 256;
@@ -1075,6 +1111,30 @@ function normalizeFantasyCategoryList(
   return selectedCategories.length > 0 ? selectedCategories : [...fallback];
 }
 
+function normalizeLineupSlotSettings(value: unknown): LeagueLineupSlotSettings {
+  const source = isRecord(value) ? value : {};
+  return {
+    FWD: asNumber(source.FWD, DEFAULT_LINEUP_SLOTS.FWD),
+    DEF: asNumber(source.DEF, DEFAULT_LINEUP_SLOTS.DEF),
+    MID: asNumber(source.MID, DEFAULT_LINEUP_SLOTS.MID),
+    RUC: asNumber(source.RUC, DEFAULT_LINEUP_SLOTS.RUC),
+    UTIL: asNumber(source.UTIL, DEFAULT_LINEUP_SLOTS.UTIL),
+  };
+}
+
+function normalizeCategoryDirectionSettings(
+  categories: readonly FantasyCategoryKey[],
+  value: unknown
+): Partial<Record<FantasyCategoryKey, CategoryDirection>> {
+  const source = isRecord(value) ? value : {};
+  return Object.fromEntries(
+    categories.map((category) => [
+      category,
+      source[category] === 'LOW_WINS' ? 'LOW_WINS' : 'HIGH_WINS',
+    ])
+  ) as Partial<Record<FantasyCategoryKey, CategoryDirection>>;
+}
+
 function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
   const draftDate =
     league.draftDate ?? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
@@ -1089,7 +1149,14 @@ function createFallbackLeagueSettings(league: League): LeagueSettingsResponse {
     },
     scoring: {
       scoringFormat: 'nine-category',
-      categories: [...CATEGORY_PRESET],
+      categories: league.categories?.length ? league.categories : [...CATEGORY_PRESET],
+      scoringMode: league.scoringMode ?? 'H2H_EACH_CATEGORY',
+      lineupSlots: league.lineupSlots ?? DEFAULT_LINEUP_SLOTS,
+      categoryDirections: normalizeCategoryDirectionSettings(
+        league.categories?.length ? league.categories : CATEGORY_PRESET,
+        league.categoryDirections
+      ),
+      scoringSettingsLockedAt: league.scoringSettingsLockedAt ?? null,
     },
     roster: {
       rosterSize: 18,
@@ -1115,6 +1182,7 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
   const source = isRecord(value) ? value : {};
   const leagueSource = isRecord(source.league) ? source.league : {};
   const rosterSource = isRecord(source.roster) ? source.roster : {};
+  const scoringSource = isRecord(source.scoring) ? source.scoring : {};
   const draftSource = isRecord(source.draft) ? source.draft : {};
   const waiverSource = isRecord(source.waiver) ? source.waiver : {};
 
@@ -1128,7 +1196,23 @@ function normalizeLeagueSettingsPayload(value: unknown, league: League): LeagueS
     },
     scoring: {
       scoringFormat: 'nine-category',
-      categories: [...CATEGORY_PRESET],
+      categories: normalizeFantasyCategoryList(
+        scoringSource.categories,
+        fallback.scoring.categories
+      ),
+      scoringMode:
+        scoringSource.scoringMode === 'H2H_MOST_CATEGORIES'
+          ? 'H2H_MOST_CATEGORIES'
+          : fallback.scoring.scoringMode,
+      lineupSlots: normalizeLineupSlotSettings(scoringSource.lineupSlots),
+      categoryDirections: normalizeCategoryDirectionSettings(
+        normalizeFantasyCategoryList(scoringSource.categories, fallback.scoring.categories),
+        scoringSource.categoryDirections
+      ),
+      scoringSettingsLockedAt:
+        typeof scoringSource.scoringSettingsLockedAt === 'string'
+          ? scoringSource.scoringSettingsLockedAt
+          : null,
     },
     roster: {
       rosterSize: asNumber(rosterSource.rosterSize, fallback.roster.rosterSize),
@@ -1153,9 +1237,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
-function getMemberNotificationSettings(
-  member?: LeagueMember
-): LeagueMemberNotificationSettings {
+function getMemberNotificationSettings(member?: LeagueMember): LeagueMemberNotificationSettings {
   return {
     ...DEFAULT_MEMBER_NOTIFICATION_SETTINGS,
     ...member?.notificationSettings,
@@ -1360,9 +1442,8 @@ function TeamSettingsPanel({
   onMemberChange?: (member: LeagueMember) => void;
 }) {
   const [teamName, setTeamName] = useState(currentMember?.teamName ?? '');
-  const [notificationSettings, setNotificationSettings] = useState<LeagueMemberNotificationSettings>(
-    () => getMemberNotificationSettings(currentMember)
-  );
+  const [notificationSettings, setNotificationSettings] =
+    useState<LeagueMemberNotificationSettings>(() => getMemberNotificationSettings(currentMember));
   const [teamSettingsMessage, setTeamSettingsMessage] = useState<LeagueSettingsMessage | null>(
     null
   );
@@ -2025,36 +2106,11 @@ function LeagueSettingsPanel({
           </div>
         </section>
 
-        <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
-          <h3 className="text-base font-semibold text-[color:var(--league-text)]">
-            Scoring Categories
-          </h3>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {CATEGORY_PRESET.map((category) => {
-              const categoryData = FANTASY_CATEGORIES[category];
-              const isSelected = settings.scoring.categories.includes(category);
-
-              return (
-                <div
-                  key={category}
-                  className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-[color:var(--league-text)]">
-                      {categoryData?.label ?? category}
-                    </span>
-                    <span className="rounded-full bg-[color:var(--league-surface-muted)] px-2 py-0.5 text-xs font-semibold text-[color:var(--league-text-muted)]">
-                      {categoryData?.abbrev ?? category}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-[color:var(--league-text-muted)]">
-                    {isSelected ? 'Selected' : 'Available'}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+        <ScoringSettingsPanel
+          value={settings.scoring}
+          disabled={!isAdmin || isSaving}
+          onChange={(scoring) => setSettings((current) => ({ ...current, scoring }))}
+        />
 
         <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
           <h3 className="text-base font-semibold text-[color:var(--league-text)]">
@@ -2416,7 +2472,10 @@ function MyTeamRosterManager({ league, members, currentUserId }: MyTeamRosterMan
               );
               if (rosterResponse.ok) {
                 const rosterData = await rosterResponse.json();
-                const nextRoster = normalizeLeagueRosterResponse(rosterData, rosterCategoryFallback);
+                const nextRoster = normalizeLeagueRosterResponse(
+                  rosterData,
+                  rosterCategoryFallback
+                );
                 setRoster(nextRoster.roster);
                 setPlayers(nextRoster.players);
                 setSelectedCategories(nextRoster.selectedCategories);

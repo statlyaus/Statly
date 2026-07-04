@@ -75,9 +75,9 @@ export default function QuickActionsModule({
       badge: 'Scout',
     },
     {
-      title: 'Match Centre',
-      description: 'Track live AFL matches, top performers, and watched players',
-      href: '/matches',
+      title: 'Live Scoring',
+      description: 'Track current AFL scoring and player stat movement',
+      href: '/live-scoring',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path

@@ -10,6 +10,12 @@ export type WaiverResetPolicy = 'weekly' | 'rolling';
 export type MemberRole = 'owner' | 'manager' | 'member';
 export type DraftTypeOption = 'snake' | 'linear';
 export type DraftPickOrder = 'random' | 'manual';
+export type LeagueScoringMode = 'H2H_EACH_CATEGORY' | 'H2H_MOST_CATEGORIES';
+export type ActiveLineupSlot = 'FWD' | 'DEF' | 'MID' | 'RUC' | 'UTIL';
+export type LeagueLineupSlot = ActiveLineupSlot | 'BENCH';
+export type CategoryDirection = 'HIGH_WINS' | 'LOW_WINS';
+
+export type LeagueLineupSlotSettings = Record<ActiveLineupSlot, number>;
 
 // League Configuration Interfaces
 export interface TradeSettings {
@@ -43,6 +49,10 @@ export interface League {
   draftType?: DraftTypeOption;
   pickOrder?: DraftPickOrder;
   waiverRule?: WaiverResetPolicy;
+  scoringMode?: LeagueScoringMode;
+  lineupSlots?: LeagueLineupSlotSettings;
+  categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
+  scoringSettingsLockedAt?: string;
   currentTeams?: number; // Computed field for current member count
   draftReadiness?: DraftOperationalReadiness;
 }
@@ -102,6 +112,9 @@ export interface CreateLeagueRequest {
   draftType?: DraftTypeOption;
   pickOrder?: DraftPickOrder;
   waiverRule?: WaiverResetPolicy;
+  scoringMode?: LeagueScoringMode;
+  lineupSlots?: LeagueLineupSlotSettings;
+  categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
 }
 
 // League Join Request

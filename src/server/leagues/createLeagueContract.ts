@@ -1,4 +1,9 @@
 import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import type { CategoryDirection, LeagueScoringMode } from '@/types/leagues';
+
+import { normalizeCategoryDirections } from './categoryDirections';
+import { DEFAULT_ACTIVE_LINEUP_SLOTS, normalizeLineupSlots } from './lineupSettings';
+import type { LineupSlotSettings } from './scoringTypes';
 
 export interface CreateLeagueInput {
   name?: string;
@@ -10,6 +15,9 @@ export interface CreateLeagueInput {
   type?: string;
   visibility?: string;
   timeZone?: string;
+  scoringMode?: LeagueScoringMode;
+  lineupSlots?: Partial<LineupSlotSettings>;
+  categoryDirections?: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
 }
 
 export interface NormalizedCreateLeagueInput {
@@ -18,6 +26,9 @@ export interface NormalizedCreateLeagueInput {
   categories: FantasyCategoryKey[];
   visibility: 'PUBLIC' | 'PRIVATE';
   timeZone: string;
+  scoringMode: LeagueScoringMode;
+  lineupSlots: LineupSlotSettings;
+  categoryDirections: Record<FantasyCategoryKey, CategoryDirection>;
 }
 
 function normalizeTimeZone(timeZone: unknown): string {
@@ -39,6 +50,8 @@ export function normalizeCreateLeagueInput(input: CreateLeagueInput): Normalized
   const categories = input.categories?.length
     ? input.categories
     : [...REAL_DATA_NINE_CATEGORY_PRESET];
+  const scoringMode =
+    input.scoringMode === 'H2H_MOST_CATEGORIES' ? 'H2H_MOST_CATEGORIES' : 'H2H_EACH_CATEGORY';
   const visibility =
     (input.visibility ?? input.privacy ?? input.type ?? 'private').toLowerCase() === 'public'
       ? 'PUBLIC'
@@ -50,6 +63,11 @@ export function normalizeCreateLeagueInput(input: CreateLeagueInput): Normalized
     categories,
     visibility,
     timeZone: normalizeTimeZone(input.timeZone),
+    scoringMode,
+    lineupSlots: input.lineupSlots
+      ? normalizeLineupSlots(input.lineupSlots)
+      : DEFAULT_ACTIVE_LINEUP_SLOTS,
+    categoryDirections: normalizeCategoryDirections(categories, input.categoryDirections),
   };
 }
 

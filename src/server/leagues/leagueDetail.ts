@@ -9,6 +9,9 @@ import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
 
+import { parseCategoryDirectionsJson } from './categoryDirections';
+import { DEFAULT_ACTIVE_LINEUP_SLOTS, parseLineupSlotsJson } from './lineupSettings';
+
 const REAL_DATA_CATEGORY_KEYS = new Set<FantasyCategoryKey>(REAL_DATA_NINE_CATEGORY_PRESET);
 
 export type LeagueDetailSuccess = {
@@ -92,6 +95,12 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
 
       const categories = normalizeLeagueCategories(prismaLeague.categoriesJson);
       const waiverRule = prismaLeague.settings?.waiverRule?.toLowerCase() as League['waiverRule'];
+      const scoringMode = prismaLeague.settings?.scoringMode ?? 'H2H_EACH_CATEGORY';
+      const lineupSlots = parseLineupSlotsJson(prismaLeague.settings?.lineupSlotsJson);
+      const categoryDirections = parseCategoryDirectionsJson(
+        categories,
+        prismaLeague.settings?.categoryDirectionsJson
+      );
 
       return {
         ok: true,
@@ -110,6 +119,10 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
           draftType: prismaLeague.settings?.draftType?.toLowerCase() as League['draftType'],
           pickOrder: prismaLeague.settings?.pickOrder?.toLowerCase() as League['pickOrder'],
           waiverRule,
+          scoringMode,
+          lineupSlots,
+          categoryDirections,
+          scoringSettingsLockedAt: prismaLeague.settings?.scoringSettingsLockedAt?.toISOString(),
           draftReadiness,
           createdAt: prismaLeague.createdAt.toISOString(),
           tradeSettings: {
@@ -177,6 +190,9 @@ function createTestLeague(): League {
     currentTeams: 12,
     ownerId: '2qlfdHSCFTPlxoKFSUfNLSlCDRe2',
     categories: [...REAL_DATA_NINE_CATEGORY_PRESET],
+    scoringMode: 'H2H_EACH_CATEGORY',
+    lineupSlots: DEFAULT_ACTIVE_LINEUP_SLOTS,
+    categoryDirections: parseCategoryDirectionsJson([...REAL_DATA_NINE_CATEGORY_PRESET], null),
     status: 'active',
     draftDate: new Date(Date.now() + 86400000 * 3).toISOString(),
     draftType: 'snake',

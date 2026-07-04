@@ -23,6 +23,12 @@ import {
 } from '@/lib/draftSettings';
 import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import {
+  normalizeCategoryDirections,
+  parseCategoryDirectionsJson,
+} from '@/server/leagues/categoryDirections';
+import { normalizeLineupSlots, parseLineupSlotsJson } from '@/server/leagues/lineupSettings';
+import type { CategoryDirection, LeagueScoringMode } from '@/types/leagues';
+import {
   MAX_LEAGUE_TEAMS,
   MIN_LEAGUE_TEAMS,
   getMaxTeamsUpdateError,
@@ -96,6 +102,13 @@ function normalizeLeagueCategories(value: unknown): FantasyCategoryKey[] {
   return selected.length === value.length && selected.length
     ? selected
     : [...REAL_DATA_NINE_CATEGORY_PRESET];
+}
+
+function normalizeLeagueScoringMode(
+  value: unknown,
+  fallback: LeagueScoringMode
+): LeagueScoringMode {
+  return value === 'H2H_MOST_CATEGORIES' ? 'H2H_MOST_CATEGORIES' : fallback;
 }
 
 function normalizeDraftType(value: unknown, fallback: DraftTypeValue): DraftTypeValue {
@@ -175,6 +188,13 @@ function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
     scoring: {
       scoringFormat: 'nine-category',
       categories: normalizeLeagueCategories(scoringInput.categories),
+      scoringMode: normalizeLeagueScoringMode(scoringInput.scoringMode, 'H2H_EACH_CATEGORY'),
+      lineupSlots: normalizeLineupSlots(scoringInput.lineupSlots),
+      categoryDirections: normalizeCategoryDirections(
+        normalizeLeagueCategories(scoringInput.categories),
+        scoringInput.categoryDirections as Partial<Record<FantasyCategoryKey, CategoryDirection>>
+      ),
+      scoringSettingsLockedAt: null,
     },
     roster: {
       rosterSize: getRosterSizeFromPositionLimits(positionLimits),
@@ -217,6 +237,10 @@ function toSettingsResponse(league: {
     startAt: Date;
     timeZone: string;
     locked: boolean;
+    scoringMode: string;
+    lineupSlotsJson: string | null;
+    categoryDirectionsJson: string | null;
+    scoringSettingsLockedAt: Date | null;
   };
 }) {
   const positionLimits = normalizeDraftPositionLimits(league.settings.positionLimitsJson);
@@ -234,6 +258,13 @@ function toSettingsResponse(league: {
     scoring: {
       scoringFormat: 'nine-category',
       categories,
+      scoringMode: normalizeLeagueScoringMode(league.settings.scoringMode, 'H2H_EACH_CATEGORY'),
+      lineupSlots: parseLineupSlotsJson(league.settings.lineupSlotsJson),
+      categoryDirections: parseCategoryDirectionsJson(
+        categories,
+        league.settings.categoryDirectionsJson
+      ),
+      scoringSettingsLockedAt: league.settings.scoringSettingsLockedAt?.toISOString() ?? null,
     },
     roster: {
       rosterSize: league.settings.rosterSize,
@@ -306,6 +337,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         scoring: {
           scoringFormat: 'nine-category',
           categories: normalizeLeagueCategories(data.categories),
+          scoringMode: normalizeLeagueScoringMode(data.scoringMode, 'H2H_EACH_CATEGORY'),
+          lineupSlots: normalizeLineupSlots(data.lineupSlots),
+          categoryDirections: normalizeCategoryDirections(
+            normalizeLeagueCategories(data.categories),
+            data.categoryDirections as Partial<Record<FantasyCategoryKey, CategoryDirection>>
+          ),
+          scoringSettingsLockedAt:
+            typeof data.scoringSettingsLockedAt === 'string' ? data.scoringSettingsLockedAt : null,
         },
         roster: {
           rosterSize: 18,
@@ -403,6 +442,31 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         categoriesInput === undefined
           ? normalizeLeagueCategories(prismaLeague.categoriesJson)
           : normalizeLeagueCategories(categoriesInput);
+      const scoringMode = normalizeLeagueScoringMode(
+        scoringInput.scoringMode ?? body.scoringMode,
+        prismaLeague.settings.scoringMode as LeagueScoringMode
+      );
+      const lineupSlots =
+        scoringInput.lineupSlots === undefined && body.lineupSlots === undefined
+          ? parseLineupSlotsJson(prismaLeague.settings.lineupSlotsJson)
+          : normalizeLineupSlots(scoringInput.lineupSlots ?? body.lineupSlots);
+      const categoryDirections = normalizeCategoryDirections(
+        categories,
+        (scoringInput.categoryDirections ?? body.categoryDirections) as Partial<
+          Record<FantasyCategoryKey, CategoryDirection>
+        >
+      );
+      const scoringSettingsChanged =
+        scoringInput.scoringMode !== undefined ||
+        body.scoringMode !== undefined ||
+        scoringInput.lineupSlots !== undefined ||
+        body.lineupSlots !== undefined ||
+        scoringInput.categoryDirections !== undefined ||
+        body.categoryDirections !== undefined ||
+        categoriesInput !== undefined;
+      if (scoringSettingsChanged && prismaLeague.settings.scoringSettingsLockedAt) {
+        return NextResponse.json({ error: 'Scoring settings are locked' }, { status: 409 });
+      }
 
       const draftDate = parseOptionalDate(
         draftInput.draftDate ?? draftInput.scheduledTime ?? body.draftDate ?? body.startAt
@@ -491,6 +555,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             benchSize: getBenchSizeFromPositionLimits(positionLimits),
             positionLimitsJson: JSON.stringify(positionLimits),
             autoPickRulesJson: JSON.stringify(autoPickRules),
+            scoringMode,
+            lineupSlotsJson: JSON.stringify(lineupSlots),
+            categoryDirectionsJson: JSON.stringify(categoryDirections),
           },
         }),
       ]);
@@ -542,6 +609,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const categories = normalizeLeagueCategories(scoringInput.categories ?? body.categories);
+    const firestoreScoringMode = normalizeLeagueScoringMode(
+      scoringInput.scoringMode ?? body.scoringMode,
+      'H2H_EACH_CATEGORY'
+    );
+    const firestoreLineupSlots = normalizeLineupSlots(scoringInput.lineupSlots ?? body.lineupSlots);
+    const firestoreCategoryDirections = normalizeCategoryDirections(
+      categories,
+      (scoringInput.categoryDirections ?? body.categoryDirections) as Partial<
+        Record<FantasyCategoryKey, CategoryDirection>
+      >
+    );
     await leagueRef.update({
       ...(typeof (leagueInput.name ?? body.name) === 'string' &&
       String(leagueInput.name ?? body.name).trim()
@@ -552,6 +630,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ...(body.draftDate || draftInput.draftDate
         ? { draftDate: body.draftDate ?? draftInput.draftDate }
         : {}),
+      scoringMode: firestoreScoringMode,
+      lineupSlots: firestoreLineupSlots,
+      categoryDirections: firestoreCategoryDirections,
       draftType: draftInput.draftType ?? body.draftType ?? 'snake',
       timePerPick: draftInput.timePerPick ?? body.timePerPick ?? 120,
       pickOrder: normalizeDraftPickOrderMode(draftInput.pickOrder ?? body.pickOrder),
@@ -579,6 +660,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         scoring: {
           scoringFormat: 'nine-category',
           categories: normalizeLeagueCategories(data.categories),
+          scoringMode: normalizeLeagueScoringMode(data.scoringMode, 'H2H_EACH_CATEGORY'),
+          lineupSlots: normalizeLineupSlots(data.lineupSlots),
+          categoryDirections: normalizeCategoryDirections(
+            normalizeLeagueCategories(data.categories),
+            data.categoryDirections as Partial<Record<FantasyCategoryKey, CategoryDirection>>
+          ),
+          scoringSettingsLockedAt:
+            typeof data.scoringSettingsLockedAt === 'string' ? data.scoringSettingsLockedAt : null,
         },
         roster: {
           rosterSize: 18,

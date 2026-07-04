@@ -24,10 +24,18 @@ describe('league settings UI architecture', () => {
 
   it('renders the canonical fantasy settings groups instead of the old fake trade form', () => {
     const leagueTabsSource = source();
+    const scoringSettingsSource = readFileSync(
+      join(process.cwd(), 'src/components/league/settings/ScoringSettingsPanel.tsx'),
+      'utf8'
+    );
 
     expect(leagueTabsSource).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
-    expect(leagueTabsSource).toContain('CATEGORY_PRESET.map');
-    expect(leagueTabsSource).toContain('Scoring Categories');
+    expect(leagueTabsSource).toContain('<ScoringSettingsPanel');
+    expect(scoringSettingsSource).toContain('Scoring Settings');
+    expect(scoringSettingsSource).toContain('H2H Each Category');
+    expect(scoringSettingsSource).toContain('H2H Most Categories');
+    expect(scoringSettingsSource).toContain('lineupSlots');
+    expect(scoringSettingsSource).toContain('categoryDirections');
     expect(leagueTabsSource).toContain('Draft Settings');
     expect(leagueTabsSource).toContain('Roster Settings');
     expect(leagueTabsSource).toContain('Auto-Pick And Waivers');
