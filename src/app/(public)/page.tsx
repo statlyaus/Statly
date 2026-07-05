@@ -124,6 +124,7 @@ export default function HomePage(): ReactElement {
           src="/Assets/statly-stadium-hero.png?v=20260705"
           alt=""
           fill
+          unoptimized
           sizes="(max-width: 639px) 100vw, 0px"
           className="absolute inset-0 -z-30 scale-110 object-cover object-top blur-md sm:hidden"
         />
@@ -132,6 +133,7 @@ export default function HomePage(): ReactElement {
           alt=""
           fill
           priority
+          unoptimized
           sizes="100vw"
           className="absolute inset-0 -z-20 object-cover object-top max-sm:object-contain"
         />
