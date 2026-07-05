@@ -175,7 +175,7 @@ export default function HomePage(): ReactElement {
             <h1 className="relative">
               <span className="sr-only">Statly</span>
               <Image
-                src="/brand/statly-primary-logo-hero-sharp.png"
+                src="/brand/statly-primary-logo-hero-crisp.svg"
                 alt=""
                 width={624}
                 height={236}
