@@ -121,7 +121,7 @@ export default function HomePage(): ReactElement {
     <main className="min-h-screen bg-background text-foreground">
       <section className="relative isolate overflow-hidden border-b border-border bg-foreground text-primary-foreground">
         <Image
-          src="/Assets/statly-stadium-hero.png?v=20260705"
+          src="/Assets/statly-stadium-hero.png?v=20260705b"
           alt=""
           fill
           unoptimized
@@ -129,7 +129,7 @@ export default function HomePage(): ReactElement {
           className="absolute inset-0 -z-30 scale-110 object-cover object-top blur-md sm:hidden"
         />
         <Image
-          src="/Assets/statly-stadium-hero.png?v=20260705"
+          src="/Assets/statly-stadium-hero.png?v=20260705b"
           alt=""
           fill
           priority
@@ -138,6 +138,21 @@ export default function HomePage(): ReactElement {
           className="absolute inset-0 -z-20 object-cover object-top max-sm:object-contain"
         />
         <div className="absolute inset-0 -z-10 bg-gradient-to-t from-foreground/80 via-foreground/12 to-transparent" />
+        <div
+          className="pointer-events-none absolute inset-x-0 top-[7vh] z-0 flex justify-center px-6 max-sm:top-[4vh]"
+          aria-hidden="true"
+        >
+          <Image
+            src="/brand/statly-hero-logo-overlay.png?v=20260705"
+            alt=""
+            width={3020}
+            height={882}
+            priority
+            unoptimized
+            sizes="(max-width: 639px) 86vw, 46rem"
+            className="h-auto w-[min(66vw,46rem)] max-sm:w-[min(86vw,24rem)]"
+          />
+        </div>
 
         <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center justify-end px-6 pb-16 pt-16 text-center max-sm:justify-center lg:px-10 lg:pb-20 lg:pt-20">
           <h1 className="sr-only">Statly</h1>
