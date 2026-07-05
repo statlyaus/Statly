@@ -29,29 +29,6 @@ const commandMetrics = [
   'Statly Z',
 ];
 
-const playerGhosts = [
-  {
-    src: '/Assets/player-ghost-bontempelli.png',
-    className:
-      'bottom-[-10%] right-[1%] hidden h-[64%] w-[31%] rotate-[-5deg] opacity-[0.15] md:block',
-  },
-  {
-    src: '/Assets/player-ghost-smith.png',
-    className:
-      'bottom-[-10%] left-[4%] hidden h-[54%] w-[27%] rotate-[4deg] opacity-[0.12] lg:block',
-  },
-  {
-    src: '/Assets/player-ghost-daicos.png',
-    className:
-      'bottom-[-8%] right-[30%] hidden h-[52%] w-[23%] rotate-[3deg] opacity-[0.11] xl:block',
-  },
-  {
-    src: '/Assets/player-ghost-butters.png',
-    className:
-      'bottom-[-15%] left-[28%] hidden h-[64%] w-[28%] rotate-[-2deg] opacity-[0.1] xl:block',
-  },
-];
-
 const decisionMoments = [
   {
     icon: Trophy,
@@ -144,49 +121,26 @@ export default function HomePage(): ReactElement {
     <main className="min-h-screen bg-background text-foreground">
       <section className="relative isolate overflow-hidden border-b border-border bg-foreground text-primary-foreground">
         <Image
-          src="/Assets/statly-stadium-hero.png"
+          src="/Assets/statly-stadium-hero.png?v=20260705"
+          alt=""
+          fill
+          sizes="(max-width: 639px) 100vw, 0px"
+          className="absolute inset-0 -z-30 scale-110 object-cover object-top blur-md sm:hidden"
+        />
+        <Image
+          src="/Assets/statly-stadium-hero.png?v=20260705"
           alt=""
           fill
           priority
           sizes="100vw"
-          className="absolute inset-0 -z-20 object-cover object-center"
+          className="absolute inset-0 -z-20 object-cover object-top max-sm:object-contain"
         />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-foreground/88 via-foreground/68 to-foreground/24" />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-foreground/88 via-transparent to-primary-foreground/12" />
-        <div
-          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-          aria-hidden="true"
-        >
-          {playerGhosts.map((player) => (
-            <Image
-              key={player.src}
-              src={player.src}
-              alt=""
-              width={560}
-              height={760}
-              sizes="32vw"
-              className={`${player.className} absolute object-cover object-top grayscale saturate-0 contrast-125 brightness-75 blur-[0.4px] mix-blend-screen [mask-image:radial-gradient(ellipse_at_center,black_32%,transparent_72%)]`}
-            />
-          ))}
-        </div>
+        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-foreground/80 via-foreground/12 to-transparent" />
 
-        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center px-6 pb-16 pt-16 text-center lg:px-10 lg:pb-20 lg:pt-20">
-          <div className="relative flex flex-1 flex-col items-center justify-center">
-            <h1 className="relative">
-              <span className="sr-only">Statly</span>
-              <Image
-                src="/brand/statly-primary-logo-hero-crisp.svg"
-                alt=""
-                width={624}
-                height={236}
-                priority
-                className="h-auto w-[min(72vw,34rem)]"
-                aria-hidden="true"
-              />
-            </h1>
-          </div>
+        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center justify-end px-6 pb-16 pt-16 text-center max-sm:justify-center lg:px-10 lg:pb-20 lg:pt-20">
+          <h1 className="sr-only">Statly</h1>
 
-          <div className="flex translate-y-8 flex-col items-center gap-7 sm:translate-y-10 lg:translate-y-12">
+          <div className="flex flex-col items-center gap-7">
             <div className="flex flex-wrap justify-center gap-3">
               <Link
                 href="/dashboard"
