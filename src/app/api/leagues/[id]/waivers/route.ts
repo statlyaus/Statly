@@ -109,6 +109,17 @@ function parsePlayerIds(raw: unknown): string[] {
   }
 }
 
+function parseActionDetails(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
+
+  try {
+    const parsed = JSON.parse(String(raw ?? '{}'));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function toPlayerLite(player: {
   id: string;
   name: string;
@@ -181,11 +192,24 @@ async function loadAvailablePlayers(input: {
     where: { leagueId: input.leagueId },
     select: { playerId: true },
   });
+  const waiverHolds = await prisma.teamAction.findMany({
+    where: {
+      leagueId: input.leagueId,
+      actionType: 'DROP_PLAYER',
+      status: 'PENDING',
+      processingAt: { gt: new Date() },
+    },
+    select: { details: true },
+  });
   const ownedPlayerIds = ownerships.map((ownership) => ownership.playerId);
+  const heldPlayerIds = waiverHolds
+    .map((hold) => parseActionDetails(hold.details).playerId)
+    .filter((playerId): playerId is string => typeof playerId === 'string' && Boolean(playerId));
+  const unavailablePlayerIds = [...new Set([...ownedPlayerIds, ...heldPlayerIds])];
   const idFilter: { notIn?: string[]; gt?: string } = {};
 
-  if (ownedPlayerIds.length > 0) {
-    idFilter.notIn = ownedPlayerIds;
+  if (unavailablePlayerIds.length > 0) {
+    idFilter.notIn = unavailablePlayerIds;
   }
   if (input.cursor) {
     idFilter.gt = input.cursor;
@@ -197,7 +221,7 @@ async function loadAvailablePlayers(input: {
   };
   const statlyZWhere = {
     active: true,
-    ...(ownedPlayerIds.length > 0 ? { id: { notIn: ownedPlayerIds } } : {}),
+    ...(unavailablePlayerIds.length > 0 ? { id: { notIn: unavailablePlayerIds } } : {}),
   };
   const playerSelect = { id: true, name: true, club: true, position: true } as const;
 

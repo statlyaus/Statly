@@ -1,10 +1,13 @@
 import type { NextRequest } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
 export async function GET(
@@ -125,6 +128,9 @@ export async function POST(
       // Waivers process at next waiver period (typically daily)
       processingAt = new Date();
       processingAt.setHours(23, 59, 59, 999); // End of day
+    } else if (actionType === 'DROP_PLAYER') {
+      // Dropped players leave the roster now, then stay on waivers before free agency.
+      processingAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     } else if (actionType === 'TRADE_PROPOSAL') {
       // Trades can be processed immediately if no review period
       processingAt = new Date();
@@ -150,7 +156,9 @@ export async function POST(
     };
 
     // Process immediate actions
-    if (shouldProcessImmediately(actionType)) {
+    if (actionType === 'DROP_PLAYER') {
+      await processDropPlayerAction(action.id);
+    } else if (shouldProcessImmediately(actionType)) {
       await processTeamAction(action.id);
     }
 
@@ -277,6 +285,20 @@ async function validateTeamAction(
       if (!details.playerId) {
         return { valid: false, error: 'Player ID is required' };
       }
+
+      const ownership = await prisma.leagueRosterPlayer.findFirst({
+        where: {
+          leagueId,
+          memberId,
+          playerId: String(details.playerId),
+        },
+        select: { playerId: true },
+      });
+
+      if (!ownership) {
+        return { valid: false, error: 'Player is not in your roster' };
+      }
+
       return { valid: true };
     }
 
@@ -293,6 +315,83 @@ async function validateTeamAction(
 // Determine if action should be processed immediately
 function shouldProcessImmediately(actionType: string): boolean {
   return ['SET_CAPTAIN', 'SET_VICE_CAPTAIN', 'OPTIMIZE_LINEUP'].includes(actionType);
+}
+
+async function processDropPlayerAction(actionId: string): Promise<void> {
+  try {
+    const actionRows = (await prisma.$queryRaw`
+      SELECT * FROM TeamAction WHERE id = ${actionId} LIMIT 1
+    `) as Record<string, unknown>[];
+
+    const action = actionRows[0];
+    if (!action || action.status !== 'PENDING' || action.actionType !== 'DROP_PLAYER') {
+      return;
+    }
+
+    const details = JSON.parse(String(action.details || '{}'));
+    const playerId = typeof details.playerId === 'string' ? details.playerId : null;
+    if (!playerId) {
+      throw new Error('Drop action missing playerId');
+    }
+
+    const leagueId = String(action.leagueId);
+    const memberId = String(action.memberId);
+
+    await prisma.$transaction(async (tx) => {
+      const roster = await tx.leagueRoster.findUnique({
+        where: { leagueId_memberId: { leagueId, memberId } },
+        select: { playerIds: true },
+      });
+
+      const playerIds = parsePlayerIds(roster?.playerIds);
+      const nextPlayerIds = playerIds.filter((id) => id !== playerId);
+
+      await tx.leagueRosterPlayer.deleteMany({
+        where: { leagueId, memberId, playerId },
+      });
+
+      if (roster) {
+        await tx.leagueRoster.update({
+          where: { leagueId_memberId: { leagueId, memberId } },
+          data: { playerIds: JSON.stringify(nextPlayerIds) },
+        });
+      }
+    });
+
+    await new WaiverAvailabilityProjectionService().projectLeague({ leagueId });
+
+    await Promise.allSettled([
+      revalidateTag(tags.league(leagueId)),
+      revalidateTag(tags.waivers(leagueId)),
+    ]);
+
+    logger.info('Processed drop player action into pending waiver hold', {
+      actionId,
+      leagueId,
+      memberId,
+      playerId,
+    });
+  } catch (error) {
+    logger.error('Failed to process drop player action', {
+      actionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    await prisma.$executeRaw`
+      UPDATE TeamAction
+      SET status = 'REJECTED', processedAt = datetime('now')
+      WHERE id = ${actionId}
+    `;
+  }
+}
+
+function parsePlayerIds(raw: unknown): string[] {
+  try {
+    const parsed = JSON.parse(String(raw || '[]'));
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 // Process team action

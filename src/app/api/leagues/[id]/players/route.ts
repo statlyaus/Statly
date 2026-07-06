@@ -24,6 +24,17 @@ interface AvailableIndexDoc {
   team?: string;
 }
 
+function parseActionDetails(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
+
+  try {
+    const parsed = JSON.parse(String(raw ?? '{}'));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 async function getPrismaLeaguePlayers(input: {
   leagueId: string;
   owned: boolean;
@@ -36,7 +47,19 @@ async function getPrismaLeaguePlayers(input: {
     where: { leagueId: input.leagueId },
     select: { playerId: true, memberId: true },
   });
+  const waiverHolds = await prisma.teamAction.findMany({
+    where: {
+      leagueId: input.leagueId,
+      actionType: 'DROP_PLAYER',
+      status: 'PENDING',
+      processingAt: { gt: new Date() },
+    },
+    select: { details: true },
+  });
   const ownedPlayerIds = ownerships.map((ownership) => ownership.playerId);
+  const heldPlayerIds = waiverHolds
+    .map((hold) => parseActionDetails(hold.details).playerId)
+    .filter((playerId): playerId is string => typeof playerId === 'string' && Boolean(playerId));
 
   if (input.owned && ownedPlayerIds.length === 0) {
     return { items: [], nextCursor: null, total: 0 };
@@ -45,8 +68,9 @@ async function getPrismaLeaguePlayers(input: {
   const ownershipIdFilter: { in?: string[]; notIn?: string[] } = {};
   if (input.owned) {
     ownershipIdFilter.in = ownedPlayerIds;
-  } else if (ownedPlayerIds.length > 0) {
-    ownershipIdFilter.notIn = ownedPlayerIds;
+  } else {
+    const excludedPlayerIds = [...new Set([...ownedPlayerIds, ...heldPlayerIds])];
+    if (excludedPlayerIds.length > 0) ownershipIdFilter.notIn = excludedPlayerIds;
   }
   const playerFilters = {
     active: true,

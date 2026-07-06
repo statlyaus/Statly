@@ -257,6 +257,13 @@ async function loadFirestoreOwnership(input: {
 
   let earliestProcessingAt: Date | undefined;
   let pendingClaims = 0;
+  const availableProcessingAt = toDate(availableData?.processingAt);
+  if (availableData?.status === 'waiver') {
+    if (availableProcessingAt && availableProcessingAt.getTime() > Date.now()) {
+      earliestProcessingAt = availableProcessingAt;
+    }
+    pendingClaims = 0;
+  }
   for (const waiversSnap of waiverSnaps) {
     waiversSnap.forEach((doc) => {
       const data = doc.data();
@@ -272,7 +279,7 @@ async function loadFirestoreOwnership(input: {
 
   return {
     ...(owner ? { owner } : {}),
-    ...(pendingClaims > 0
+    ...(pendingClaims > 0 || earliestProcessingAt
       ? { waiver: { ...(earliestProcessingAt ? { processingAt: earliestProcessingAt } : {}), pendingClaims } }
       : {}),
   };
@@ -531,7 +538,7 @@ async function loadPrismaWaivers(input: {
     .findMany({
       where: {
         leagueId: { in: input.leagueIds },
-        actionType: 'WAIVER_CLAIM',
+        actionType: { in: ['WAIVER_CLAIM', 'DROP_PLAYER'] },
         status: 'PENDING',
         processingAt: { gt: new Date() },
       },

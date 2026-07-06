@@ -48,6 +48,9 @@ describe('WaiverAvailabilityProjectionService', () => {
       leagueRosterPlayer: {
         findMany: vi.fn().mockResolvedValue([{ playerId: 'owned-1', memberId: 'member-1' }]),
       },
+      teamAction: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
       player: {
         findMany: vi.fn().mockResolvedValue([{ id: 'owned-1' }, { id: 'free-1' }]),
       },
@@ -59,6 +62,15 @@ describe('WaiverAvailabilityProjectionService', () => {
     expect(db.leagueRosterPlayer.findMany).toHaveBeenCalledWith({
       where: { leagueId: 'league-1' },
       select: { playerId: true, memberId: true },
+    });
+    expect(db.teamAction.findMany).toHaveBeenCalledWith({
+      where: {
+        leagueId: 'league-1',
+        actionType: 'DROP_PLAYER',
+        status: 'PENDING',
+        processingAt: { gt: expect.any(Date) },
+      },
+      select: { details: true, processingAt: true },
     });
     expect(db.player.findMany).toHaveBeenCalledWith({ select: { id: true } });
 
@@ -99,11 +111,56 @@ describe('WaiverAvailabilityProjectionService', () => {
     expect(result).toEqual({ owned: 1, available: 1 });
   });
 
+  it('keeps dropped players on waivers until their hold clears', async () => {
+    const { batches, firestore } = createFirestoreMock();
+    const processingAt = new Date(Date.now() + 60 * 60 * 1000);
+    const db = {
+      leagueRosterPlayer: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      teamAction: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            details: JSON.stringify({ playerId: 'dropped-1', source: 'drop-to-waivers' }),
+            processingAt,
+          },
+        ]),
+      },
+      player: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'dropped-1' }, { id: 'free-1' }]),
+      },
+    };
+
+    const service = new WaiverAvailabilityProjectionService(db as never, firestore as never);
+    const result = await service.projectLeague({ leagueId: 'league-1' });
+
+    const setPayloads = batches.flatMap((batch) => batch.set.mock.calls.map(([, data]) => data));
+    expect(setPayloads).toContainEqual(
+      expect.objectContaining({
+        playerId: 'dropped-1',
+        status: 'waiver',
+        available: false,
+        processingAt,
+      })
+    );
+    expect(setPayloads).toContainEqual(
+      expect.objectContaining({
+        playerId: 'free-1',
+        status: 'available',
+        available: true,
+      })
+    );
+    expect(result).toEqual({ owned: 0, available: 1 });
+  });
+
   it('commits multiple Firestore batches when player projection exceeds one batch', async () => {
     const { batches, firestore } = createFirestoreMock();
     const players = Array.from({ length: 226 }, (_, index) => ({ id: `free-${index}` }));
     const db = {
       leagueRosterPlayer: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      teamAction: {
         findMany: vi.fn().mockResolvedValue([]),
       },
       player: {

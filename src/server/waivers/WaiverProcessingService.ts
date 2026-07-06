@@ -105,7 +105,7 @@ type PrismaTransactionClient = Omit<
 
 type PrismaLike = Pick<
   typeof prisma,
-  '$transaction' | 'league' | 'leagueMember' | 'leagueRoster' | 'leagueRosterPlayer'
+  '$transaction' | 'league' | 'leagueMember' | 'leagueRoster' | 'leagueRosterPlayer' | 'teamAction'
 >;
 
 type PrismaWaiverStoreDb = Pick<
@@ -357,7 +357,11 @@ export class WaiverProcessingService {
         }
       }
 
-      const result = await this.applyCanonicalRosterChange(input.leagueId, claim);
+      const result = await this.applyCanonicalRosterChange(
+        input.leagueId,
+        claim,
+        input.waiverSettings
+      );
 
       if (result.status === 'FAILED') {
         if (isFAAB) {
@@ -398,7 +402,8 @@ export class WaiverProcessingService {
 
   private async applyCanonicalRosterChange(
     leagueId: string,
-    claim: WaiverClaim
+    claim: WaiverClaim,
+    waiverSettings: WaiverSettings
   ): Promise<{ status: 'SUCCESSFUL' } | { status: 'FAILED'; reason: string }> {
     return this.db.$transaction(
       async (
@@ -411,6 +416,21 @@ export class WaiverProcessingService {
         if (claim.dropPlayerId) {
           await tx.leagueRosterPlayer.deleteMany({
             where: { leagueId, memberId: plan.memberId, playerId: claim.dropPlayerId },
+          });
+          await tx.teamAction.create({
+            data: {
+              leagueId,
+              memberId: plan.memberId,
+              actionType: 'DROP_PLAYER',
+              status: 'PENDING',
+              details: JSON.stringify({
+                playerId: claim.dropPlayerId,
+                source: 'drop-to-waivers',
+                waiverClaimId: claim.id,
+              }),
+              processingAt: calculateProcessingAt(waiverSettings),
+            },
+            select: { id: true },
           });
         }
 

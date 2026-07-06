@@ -1,7 +1,7 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
 
-type PrismaLike = Pick<typeof prisma, 'leagueRosterPlayer' | 'player'>;
+type PrismaLike = Pick<typeof prisma, 'leagueRosterPlayer' | 'player' | 'teamAction'>;
 type FirestoreLike = typeof adminDb;
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 
@@ -23,8 +23,23 @@ export class WaiverAvailabilityProjectionService {
       where: { leagueId: input.leagueId },
       select: { playerId: true, memberId: true },
     });
+    const waiverHolds = await this.db.teamAction.findMany({
+      where: {
+        leagueId: input.leagueId,
+        actionType: 'DROP_PLAYER',
+        status: 'PENDING',
+        processingAt: { gt: new Date() },
+      },
+      select: { details: true, processingAt: true },
+    });
     const allPlayers = await this.db.player.findMany({ select: { id: true } });
     const owned = new Map(ownerships.map((ownership) => [ownership.playerId, ownership.memberId]));
+    const held = new Map<string, Date | null>();
+    for (const hold of waiverHolds) {
+      const details = parseActionDetails(hold.details);
+      const playerId = typeof details.playerId === 'string' ? details.playerId : null;
+      if (playerId) held.set(playerId, hold.processingAt ?? null);
+    }
     const leagueRef = this.firestore.collection('leagues').doc(input.leagueId);
     let batch = this.firestore.batch();
     let writeCount = 0;
@@ -69,6 +84,19 @@ export class WaiverAvailabilityProjectionService {
           { merge: true }
         );
         await remove(availabilityRef);
+      } else if (held.has(player.id)) {
+        await set(
+          availabilityRef,
+          {
+            playerId: player.id,
+            status: 'waiver',
+            available: false,
+            processingAt: held.get(player.id),
+            updatedAt,
+          },
+          { merge: true }
+        );
+        await remove(ownershipRef);
       } else {
         await set(
           availabilityRef,
@@ -88,6 +116,21 @@ export class WaiverAvailabilityProjectionService {
       await batch.commit();
     }
 
-    return { owned: ownerships.length, available: allPlayers.length - ownerships.length };
+    return {
+      owned: ownerships.length,
+      available: allPlayers.filter((player) => !owned.has(player.id) && !held.has(player.id))
+        .length,
+    };
+  }
+}
+
+function parseActionDetails(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
+
+  try {
+    const parsed = JSON.parse(String(raw ?? '{}'));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
   }
 }

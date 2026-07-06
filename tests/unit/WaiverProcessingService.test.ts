@@ -71,6 +71,9 @@ function createDbMock() {
       }),
       upsert: vi.fn().mockResolvedValue({ id: 'roster-player-1' }),
     },
+    teamAction: {
+      create: vi.fn().mockResolvedValue({ id: 'drop-hold-1' }),
+    },
   };
 
   return {
@@ -132,6 +135,17 @@ describe('WaiverProcessingService', () => {
     expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
     expect(tx.leagueRosterPlayer.deleteMany).toHaveBeenCalledWith({
       where: { leagueId: 'league-1', memberId: 'member-1', playerId: 'old-player' },
+    });
+    expect(tx.teamAction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        leagueId: 'league-1',
+        memberId: 'member-1',
+        actionType: 'DROP_PLAYER',
+        status: 'PENDING',
+        details: expect.stringContaining('"playerId":"old-player"'),
+        processingAt: expect.any(Date),
+      }),
+      select: { id: true },
     });
     expect(tx.leagueRosterPlayer.upsert).toHaveBeenCalledWith({
       where: { leagueId_playerId: { leagueId: 'league-1', playerId: 'free-player' } },

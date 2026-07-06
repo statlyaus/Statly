@@ -291,6 +291,7 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     prismaMocks.player.count.mockResolvedValue(1);
     prismaMocks.teamAction.create.mockResolvedValue({ id: 'claim-1' });
     prismaMocks.teamAction.update.mockResolvedValue({ id: 'claim-1' });
+    prismaMocks.teamAction.findMany.mockResolvedValue([]);
     prismaMocks.$queryRaw.mockResolvedValue([]);
     prismaMocks.$executeRaw.mockResolvedValue(1);
     prismaMocks.$transaction.mockImplementation((work: (client: typeof prismaMocks) => unknown) =>

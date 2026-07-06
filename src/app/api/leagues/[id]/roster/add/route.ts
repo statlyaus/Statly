@@ -9,6 +9,7 @@ import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 function parsePlayerIds(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String);
@@ -32,18 +33,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const playerId = typeof body.playerId === 'string' ? body.playerId.trim() : '';
     if (!leagueId || !playerId) return errorResponse('League ID and player ID are required', 400);
 
-    const [member, player, existingOwnership] = await prisma.$transaction([
+    const [member, player, existingOwnership, activeWaiverHold] = await prisma.$transaction([
       prisma.leagueMember.findFirst({ where: { leagueId, userId }, select: { id: true } }),
       prisma.player.findUnique({ where: { id: playerId }, select: { id: true } }),
       prisma.leagueRosterPlayer.findFirst({
         where: { leagueId, playerId },
         select: { memberId: true },
       }),
+      prisma.teamAction.findFirst({
+        where: {
+          leagueId,
+          actionType: 'DROP_PLAYER',
+          status: 'PENDING',
+          processingAt: { gt: new Date() },
+          details: { contains: `"playerId":"${playerId}"` },
+        },
+        select: { id: true },
+      }),
     ]);
 
     if (!member) return errorResponse('User is not a member of this league', 404);
     if (!player) return errorResponse('Player not found', 404);
     if (existingOwnership) return errorResponse('Player already owned in this league', 409);
+    if (activeWaiverHold) return errorResponse('Player is on waivers', 409);
 
     const result = await prisma.$transaction(async (tx) => {
       const roster = await tx.leagueRoster.upsert({
@@ -71,7 +83,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return { rosterId: roster.id, playerIds: nextPlayerIds };
     });
 
-    await Promise.allSettled([revalidateTag(tags.league(leagueId)), revalidateTag(tags.waivers(leagueId))]);
+    await Promise.allSettled([
+      new WaiverAvailabilityProjectionService().projectLeague({ leagueId }),
+      revalidateTag(tags.league(leagueId)),
+      revalidateTag(tags.waivers(leagueId)),
+    ]);
 
     return successResponse({
       leagueId,
