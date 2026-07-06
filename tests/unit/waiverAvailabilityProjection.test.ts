@@ -22,7 +22,7 @@ function createFirestoreMock() {
   const doc = vi.fn();
 
   collection.mockReturnValue({ doc });
-  doc.mockImplementation(() => ({ collection }));
+  doc.mockImplementation((id: string) => ({ id, collection }));
 
   return {
     batches,
@@ -42,7 +42,7 @@ function createFirestoreMock() {
 }
 
 describe('WaiverAvailabilityProjectionService', () => {
-  it('marks owned players unavailable and undrafted players available in the compatibility projection', async () => {
+  it('removes owned players from waiver availability and keeps undrafted players available', async () => {
     const { batches, firestore } = createFirestoreMock();
     const db = {
       leagueRosterPlayer: {
@@ -62,15 +62,25 @@ describe('WaiverAvailabilityProjectionService', () => {
     });
     expect(db.player.findMany).toHaveBeenCalledWith({ select: { id: true } });
 
-    const setPayloads = batches.flatMap((batch) => batch.set.mock.calls.map(([, data]) => data));
-    expect(setPayloads).toContainEqual(
-      expect.objectContaining({
-        playerId: 'owned-1',
-        memberId: 'member-1',
-        status: 'owned',
-        available: false,
-      })
-    );
+    const setCalls = batches.flatMap((batch) => batch.set.mock.calls);
+    const setPayloads = setCalls.map(([, data]) => data);
+    const ownedPlayerSetCalls = setCalls.filter(([, data]) => {
+      const payload = data as { playerId?: string; status?: string };
+      return payload.playerId === 'owned-1' && payload.status === 'owned';
+    });
+
+    expect(ownedPlayerSetCalls).toEqual([
+      [
+        expect.objectContaining({ id: 'owned-1' }),
+        expect.objectContaining({
+          playerId: 'owned-1',
+          memberId: 'member-1',
+          status: 'owned',
+          available: false,
+        }),
+        { merge: true },
+      ],
+    ]);
     expect(setPayloads).toContainEqual(
       expect.objectContaining({
         playerId: 'free-1',
@@ -78,7 +88,13 @@ describe('WaiverAvailabilityProjectionService', () => {
         available: true,
       })
     );
-    expect(batches.reduce((total, batch) => total + batch.delete.mock.calls.length, 0)).toBe(1);
+    expect(batches.reduce((total, batch) => total + batch.delete.mock.calls.length, 0)).toBe(2);
+    expect(batches.flatMap((batch) => batch.delete.mock.calls.map(([ref]) => ref))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'owned-1' }),
+        expect.objectContaining({ id: 'free-1' }),
+      ])
+    );
     expect(batches.reduce((total, batch) => total + batch.commit.mock.calls.length, 0)).toBe(1);
     expect(result).toEqual({ owned: 1, available: 1 });
   });

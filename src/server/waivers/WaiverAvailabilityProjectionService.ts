@@ -68,17 +68,7 @@ export class WaiverAvailabilityProjectionService {
           },
           { merge: true }
         );
-        await set(
-          availabilityRef,
-          {
-            playerId: player.id,
-            memberId: ownerMemberId,
-            status: 'owned',
-            available: false,
-            updatedAt,
-          },
-          { merge: true }
-        );
+        await remove(availabilityRef);
       } else {
         await set(
           availabilityRef,
