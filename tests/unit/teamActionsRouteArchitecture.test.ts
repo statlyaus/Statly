@@ -59,6 +59,18 @@ vi.mock('../../src/lib/logger', () => ({
   },
 }));
 
+vi.mock('@/server/waivers/WaiverAvailabilityProjectionService', () => ({
+  WaiverAvailabilityProjectionService: vi.fn(() => ({
+    projectLeague: vi.fn().mockResolvedValue({ owned: 0, available: 0 }),
+  })),
+}));
+
+vi.mock('../../src/server/waivers/WaiverAvailabilityProjectionService', () => ({
+  WaiverAvailabilityProjectionService: vi.fn(() => ({
+    projectLeague: vi.fn().mockResolvedValue({ owned: 0, available: 0 }),
+  })),
+}));
+
 describe('team actions route architecture', () => {
   beforeEach(() => {
     vi.resetModules();
