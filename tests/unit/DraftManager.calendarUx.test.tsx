@@ -90,4 +90,63 @@ describe('DraftManager calendar UX', () => {
     expect(screen.getByText(/Draft starts/i)).toBeInTheDocument();
     expect(container.querySelector('input[type="datetime-local"]')).not.toBeInTheDocument();
   });
+
+  it('shows a completed draft summary instead of a join-room action', async () => {
+    apiMocks.fetchApi
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          draft: {
+            id: 'cmqz8kv270002uxud8xurmb0m',
+            status: 'COMPLETED',
+            startAt: '2026-06-29T13:20:00.000Z',
+            createdAt: '2026-06-29T13:20:00.000Z',
+            leagueId: league.id,
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          id: 'cmqz8kv270002uxud8xurmb0m',
+          leagueId: league.id,
+          completedAt: '2026-06-29T14:45:00.000Z',
+          totalPicks: 216,
+          picksMade: 216,
+          teamCount: 12,
+          totalRounds: 18,
+          autoPickCount: 12,
+          manualPickCount: 204,
+          completionPct: 100,
+          firstPick: {
+            player: { name: 'Nick Daicos', position: 'MID', club: 'COLL' },
+            member: { teamName: 'Owner Team' },
+          },
+          lastPick: null,
+        },
+      });
+
+    render(
+      <DraftManager league={league} members={buildMembers()} currentUserId={league.ownerId} />
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Draft Completed')).toBeInTheDocument();
+    expect(apiMocks.fetchApi).toHaveBeenCalledWith('drafts/history/cmqz8kv270002uxud8xurmb0m');
+    expect(screen.queryByRole('button', { name: 'Join Draft Room' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View Draft Summary' })).toBeInTheDocument();
+    expect(screen.getByText('216/216')).toBeInTheDocument();
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByText(/First pick: Nick Daicos, MID, COLL/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View Draft Summary' }));
+
+    expect(routerMocks.push).toHaveBeenCalledWith(
+      '/drafts/history/cmqz8kv270002uxud8xurmb0m?leagueId=league-1'
+    );
+  });
 });

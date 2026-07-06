@@ -70,6 +70,27 @@ interface ExistingDraft {
   createdAt: string;
 }
 
+interface CompletedDraftSummary {
+  id: string;
+  leagueId: string;
+  completedAt: string | null;
+  totalPicks: number;
+  picksMade: number;
+  teamCount: number;
+  totalRounds: number;
+  autoPickCount: number;
+  manualPickCount: number;
+  completionPct: number;
+  firstPick: {
+    player: { name: string; position: string; club: string };
+    member: { teamName: string };
+  } | null;
+  lastPick: {
+    player: { name: string; position: string; club: string };
+    member: { teamName: string };
+  } | null;
+}
+
 interface DraftResponseShape {
   id: string;
   status?: string | null;
@@ -202,7 +223,9 @@ function getOrderedDraftMembers(input: {
   draftOrderRandomized: boolean;
 }): LeagueMember[] {
   const orderedMembers =
-    input.draftOrderMembers.length === input.members.length ? input.draftOrderMembers : input.members;
+    input.draftOrderMembers.length === input.members.length
+      ? input.draftOrderMembers
+      : input.members;
 
   if (input.draftSettings.pickOrder === 'random' && !input.draftOrderRandomized) {
     return shuffleMembers(orderedMembers);
@@ -228,7 +251,9 @@ function buildDraftParticipants(input: {
     return participants;
   }
 
-  const alreadyIncluded = participants.some((participant) => participant.userId === input.currentUserId);
+  const alreadyIncluded = participants.some(
+    (participant) => participant.userId === input.currentUserId
+  );
   if (!alreadyIncluded) {
     const lastIndex = participants.length - 1;
     const replacement = {
@@ -305,6 +330,10 @@ export default function DraftManager({
   const [showDraftSettings, setShowDraftSettings] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [existingDraft, setExistingDraft] = useState<ExistingDraft | null>(null);
+  const [completedDraftSummary, setCompletedDraftSummary] = useState<CompletedDraftSummary | null>(
+    null
+  );
+  const [loadingCompletedDraftSummary, setLoadingCompletedDraftSummary] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftOrderMemberIds, setDraftOrderMemberIds] = useState<string[]>(() =>
     members.map((member) => member.id)
@@ -394,6 +423,44 @@ export default function DraftManager({
   }, [refreshDraftState]);
 
   useEffect(() => {
+    if (existingDraft?.status !== 'COMPLETED') {
+      setCompletedDraftSummary(null);
+      setLoadingCompletedDraftSummary(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchCompletedDraftSummary = async () => {
+      try {
+        setLoadingCompletedDraftSummary(true);
+        const response = await fetchApi(`drafts/history/${existingDraft.id}`);
+
+        if (!cancelled) {
+          setCompletedDraftSummary(
+            response.success ? (response.data as CompletedDraftSummary) : null
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Error fetching completed draft summary:', error);
+          setCompletedDraftSummary(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCompletedDraftSummary(false);
+        }
+      }
+    };
+
+    void fetchCompletedDraftSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [existingDraft?.id, existingDraft?.status]);
+
+  useEffect(() => {
     setDraftOrderMemberIds((current) => {
       const activeIds = new Set(members.map((member) => member.id));
       const retained = current.filter((memberId) => activeIds.has(memberId));
@@ -471,45 +538,45 @@ export default function DraftManager({
     }));
   };
 
-	  const createDraft = async () => {
-	    if (!canCreateDraft) return;
+  const createDraft = async () => {
+    if (!canCreateDraft) return;
 
-	    setSavingDraft(true);
-	    setError(null);
+    setSavingDraft(true);
+    setError(null);
 
-	    try {
-	      const validationError = validateDraftScheduledTime(draftSettings.scheduledTime);
-	      if (validationError) {
-	        setError(validationError);
-	        return;
-	      }
+    try {
+      const validationError = validateDraftScheduledTime(draftSettings.scheduledTime);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
 
-	      const orderedMembers = getOrderedDraftMembers({
-	        members,
-	        draftOrderMembers,
-	        draftSettings,
-	        draftOrderRandomized,
-	      });
-	      const participants = buildDraftParticipants({ orderedMembers, league, currentUserId });
-	      const draftPayload = buildDraftCreatePayload({
-	        league,
-	        members,
-	        draftSettings,
-	        participants,
-	        currentUserId,
-	      });
+      const orderedMembers = getOrderedDraftMembers({
+        members,
+        draftOrderMembers,
+        draftSettings,
+        draftOrderRandomized,
+      });
+      const participants = buildDraftParticipants({ orderedMembers, league, currentUserId });
+      const draftPayload = buildDraftCreatePayload({
+        league,
+        members,
+        draftSettings,
+        participants,
+        currentUserId,
+      });
 
-	      const response = await fetchApi('drafts', {
-	        method: 'POST',
-	        body: JSON.stringify(draftPayload),
-	      });
+      const response = await fetchApi('drafts', {
+        method: 'POST',
+        body: JSON.stringify(draftPayload),
+      });
 
-	      if (response.success) {
-	        const createdDraft = response.data as DraftResponseShape;
+      if (response.success) {
+        const createdDraft = response.data as DraftResponseShape;
 
-	        if (!isDraftLinkedToLeague(league, createdDraft)) {
-	          throw new Error('Draft was created without the expected league link');
-	        }
+        if (!isDraftLinkedToLeague(league, createdDraft)) {
+          throw new Error('Draft was created without the expected league link');
+        }
 
         setExistingDraft(toExistingDraft(createdDraft));
         await refreshDraftState();
@@ -552,6 +619,15 @@ export default function DraftManager({
     }
   };
 
+  const viewDraftSummary = () => {
+    if (!existingDraft) return;
+
+    const summaryLeagueId = completedDraftSummary?.leagueId ?? league.id;
+    router.push(
+      `/drafts/history/${existingDraft.id}?leagueId=${encodeURIComponent(summaryLeagueId)}`
+    );
+  };
+
   const getStatusBadge = (status: string) => {
     const statusColors = {
       SCHEDULED: 'bg-primary/10 text-primary',
@@ -571,8 +647,13 @@ export default function DraftManager({
     );
   };
 
-  const formatDateTime = (dateTime: string) => {
-    return new Date(dateTime).toLocaleString('en-AU', {
+  const formatDateTime = (dateTime: string | null) => {
+    if (!dateTime) return 'Not recorded';
+
+    const date = new Date(dateTime);
+    if (Number.isNaN(date.getTime())) return 'Not recorded';
+
+    return date.toLocaleString('en-AU', {
       timeZone: draftSettings.timeZone,
       dateStyle: 'medium',
       timeStyle: 'short',
@@ -606,6 +687,7 @@ export default function DraftManager({
   const rosterSize = getRosterSizeFromPositionLimits(draftSettings.positionLimits);
   const benchSize = getBenchSizeFromPositionLimits(draftSettings.positionLimits);
   const totalDraftPicks = members.length * rosterSize;
+  const isCompletedDraft = existingDraft?.status === 'COMPLETED';
   const readinessItems = [
     {
       label: 'League members',
@@ -676,27 +758,84 @@ export default function DraftManager({
           animate={{ opacity: 1, y: 0 }}
           className="m-6 rounded-lg border border-border bg-muted/50 p-4"
         >
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
               <div className="mb-2 flex items-center space-x-3">
                 <CheckCircleIcon className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold text-foreground">Draft Created</h3>
+                <h3 className="font-semibold text-foreground">
+                  {isCompletedDraft ? 'Draft Completed' : 'Draft Created'}
+                </h3>
                 {getStatusBadge(existingDraft.status)}
               </div>
               <p className="mb-1 text-sm text-muted-foreground">
                 Draft ID: <span className="font-mono text-xs">{existingDraft.id}</span>
               </p>
               <p className="text-sm text-muted-foreground">
-                Scheduled: {formatDateTime(existingDraft.startAt)}
+                {isCompletedDraft
+                  ? `Completed: ${formatDateTime(completedDraftSummary?.completedAt ?? existingDraft.startAt)}`
+                  : `Scheduled: ${formatDateTime(existingDraft.startAt)}`}
               </p>
+              {isCompletedDraft && (
+                <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Picks</p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {completedDraftSummary
+                        ? `${completedDraftSummary.picksMade}/${completedDraftSummary.totalPicks}`
+                        : loadingCompletedDraftSummary
+                          ? 'Loading'
+                          : 'Not recorded'}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Teams</p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {completedDraftSummary?.teamCount ?? members.length}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Rounds</p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {completedDraftSummary?.totalRounds ?? rosterSize}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Complete</p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {completedDraftSummary
+                        ? `${completedDraftSummary.completionPct}%`
+                        : loadingCompletedDraftSummary
+                          ? 'Loading'
+                          : '100%'}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {isCompletedDraft && completedDraftSummary?.firstPick && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  First pick: {completedDraftSummary.firstPick.player.name},{' '}
+                  {completedDraftSummary.firstPick.player.position},{' '}
+                  {completedDraftSummary.firstPick.player.club}
+                </p>
+              )}
             </div>
-            <button
-              onClick={joinDraftRoom}
-              className="flex items-center space-x-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <PlayIcon className="h-4 w-4" />
-              <span>Join Draft Room</span>
-            </button>
+            {isCompletedDraft ? (
+              <button
+                onClick={viewDraftSummary}
+                className="flex items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <CheckCircleIcon className="h-4 w-4" />
+                <span>View Draft Summary</span>
+              </button>
+            ) : (
+              <button
+                onClick={joinDraftRoom}
+                className="flex items-center justify-center space-x-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <PlayIcon className="h-4 w-4" />
+                <span>Join Draft Room</span>
+              </button>
+            )}
           </div>
         </motion.div>
       )}
