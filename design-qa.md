@@ -7,7 +7,7 @@
 
 **Implementation Checklist**
 - Source visual truth path: `/var/folders/5_/s6r1wh5x4tb1r37phv85sw0r0000gn/T/codex-clipboard-7ba63a66-2c8a-484f-88d8-c488c2c5e0bc.png`
-- Implementation screenshot path: `/tmp/statly-dashboard-reference-structure.png`
+- Implementation screenshot path: `/tmp/statly-dashboard-banner-header.png`
 - Full-view comparison evidence: `/tmp/statly-dashboard-reference-comparison.png`
 - Viewport: `2048x1120`
 - State: signed in as `Statly Dev Tester`, dashboard route, light theme, local dev data.
@@ -23,6 +23,7 @@
 **Patches Made Since Previous QA Pass**
 - Rebuilt `src/components/ModularDashboard.tsx` around the supplied dashboard reference.
 - Updated `tests/unit/dashboard-production-recovery-contract.test.ts` to assert the new dashboard structure.
+- Refined the header into a contained command-center banner, removed the welcome/filler copy, and showed the username in the banner instead of the display name.
 
 **Follow-up Polish**
 - P3: If tighter visual fidelity is desired, reduce the page top padding and constrain the seeded league list to four rows so the first viewport matches the source crop more closely.

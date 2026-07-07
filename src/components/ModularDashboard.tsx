@@ -406,7 +406,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   }, [refreshTrigger, user.uid, userLeagues]);
 
   const typedUserLeagues = userLeagues as UserLeague[];
-  const displayName = user.displayName || user.email || 'Manager';
+  const username = user.email?.split('@')[0] || user.uid || 'manager';
   const activeLeagueCount = typedUserLeagues.length;
   const draftPendingCount = typedUserLeagues.filter((league) => league.draftCompleted === false).length;
   const liveLeagueCount = leagueSnapshots.filter((league) => league.isLive).length;
@@ -478,41 +478,40 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_46%,var(--league-surface-muted)_100%)]">
       <section className="mx-auto flex max-w-[var(--app-shell-max-width)] flex-col gap-5 px-4 pb-8 pt-6 sm:px-6 lg:px-8 2xl:px-10">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <span className="inline-flex rounded-lg bg-warning/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-warning">
-              Welcome back
-            </span>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-[2.45rem]">
-              League command center
-            </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <p className="text-lg font-semibold text-foreground">{heroLeagueName}</p>
-              <span className="text-muted-foreground" aria-hidden="true">
-                /
-              </span>
-              <p className="text-sm text-muted-foreground">{displayName}</p>
+        <section className="rounded-2xl border border-border bg-background p-5 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.55)] ring-1 ring-foreground/[0.03]">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:justify-between">
+            <div className="min-w-0 rounded-xl bg-[color:var(--league-primary)] px-5 py-5 text-white shadow-[0_20px_44px_-34px_rgba(23,34,48,0.85)] lg:min-w-[28rem]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/68">
+                League command center
+              </p>
+              <h1 className="mt-3 truncate text-3xl font-semibold tracking-tight sm:text-[2.35rem]">
+                {heroLeagueName}
+              </h1>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-white/12 px-3 py-1 text-sm font-semibold text-white">
+                  @{username}
+                </span>
+                <span className="rounded-lg border border-white/18 px-3 py-1 text-sm text-white/78">
+                  {activeLeagueCount} active {activeLeagueCount === 1 ? 'league' : 'leagues'}
+                </span>
+              </div>
             </div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Track your leagues, manage waivers, monitor matchups, and stay ahead of every
-              deadline.
-            </p>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-            <StatusPill
-              label={leagueStateLoading || leaguesLoading ? 'Refreshing state' : 'Current state'}
-              tone="success"
-            />
-            {draftPendingCount > 0 ? (
+            <div className="flex flex-wrap items-start gap-3 lg:max-w-xl lg:justify-end lg:self-center">
               <StatusPill
-                label={`${draftPendingCount} draft${draftPendingCount === 1 ? '' : 's'} pending`}
-                tone="warning"
+                label={leagueStateLoading || leaguesLoading ? 'Refreshing state' : 'Current state'}
+                tone="success"
               />
-            ) : null}
-            <ActionButton href="/dashboard#leagues">Open League Hub</ActionButton>
+              {draftPendingCount > 0 ? (
+                <StatusPill
+                  label={`${draftPendingCount} draft${draftPendingCount === 1 ? '' : 's'} pending`}
+                  tone="warning"
+                />
+              ) : null}
+              <ActionButton href="/dashboard#leagues">Open League Hub</ActionButton>
+            </div>
           </div>
-        </div>
+        </section>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard
