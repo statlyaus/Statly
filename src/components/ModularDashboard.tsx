@@ -99,26 +99,87 @@ function CommandLink({
   href,
   title,
   description,
+  actionLabel = 'Open',
+  tone = 'neutral',
 }: {
   href: string;
   title: string;
   description: string;
+  actionLabel?: string;
+  tone?: 'primary' | 'warning' | 'neutral';
 }) {
+  const toneClasses = {
+    primary:
+      'border-[color:var(--league-primary)]/35 bg-[color:var(--league-primary)]/10 hover:border-[color:var(--league-primary)] hover:bg-[color:var(--league-primary)]/15',
+    warning:
+      'border-warning/35 bg-warning/10 hover:border-warning/60 hover:bg-warning/15',
+    neutral: 'border-border bg-background hover:border-foreground/25 hover:bg-muted',
+  }[tone];
+
   return (
     <Link
       href={href}
-      className="group rounded-2xl border border-border bg-background/80 px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] transition hover:border-foreground/20 hover:bg-muted hover:shadow-sm"
+      className={`group flex min-h-[5.5rem] items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left shadow-[0_14px_32px_-28px_rgba(15,23,42,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-28px_rgba(15,23,42,0.72)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${toneClasses}`}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-foreground">{title}</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
-        </div>
-        <span className="text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground">
-          →
-        </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
       </div>
+      <span className="inline-flex shrink-0 items-center rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition group-hover:translate-x-0.5">
+        {actionLabel} →
+      </span>
     </Link>
+  );
+}
+
+function HeroStatusPill({
+  label,
+  tone = 'neutral',
+}: {
+  label: string;
+  tone?: 'neutral' | 'warning' | 'success';
+}) {
+  const toneClasses = {
+    neutral: 'border-border bg-muted text-muted-foreground',
+    warning: 'border-warning/30 bg-warning/10 text-warning',
+    success: 'border-success/30 bg-success/10 text-success',
+  }[tone];
+
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${toneClasses}`}
+    >
+      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+function HeroStatusPanel({
+  eyebrow,
+  title,
+  description,
+  tone = 'neutral',
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  tone?: 'neutral' | 'warning' | 'success';
+}) {
+  const toneClasses = {
+    neutral: 'border-border bg-muted/70',
+    warning: 'border-warning/30 bg-warning/10',
+    success: 'border-success/30 bg-success/10',
+  }[tone];
+
+  return (
+    <div className={`rounded-[1.5rem] border px-5 py-5 ${toneClasses}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        {eyebrow}
+      </p>
+      <p className="mt-3 text-lg font-semibold text-foreground">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+    </div>
   );
 }
 
@@ -303,23 +364,25 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
               </div>
 
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                <span className="rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-foreground">
-                  {leagueStateLoading || leaguesLoading ? 'Refreshing…' : 'Current state'}
-                </span>
+                <HeroStatusPill
+                  label={leagueStateLoading || leaguesLoading ? 'Refreshing' : 'Current state'}
+                />
                 {liveLeagueCount > 0 ? (
-                  <span className="rounded-full border border-success/20 bg-success/10 px-3 py-1 text-sm font-medium text-success">
-                    {liveLeagueCount} live {liveLeagueCount === 1 ? 'league' : 'leagues'}
-                  </span>
+                  <HeroStatusPill
+                    label={`${liveLeagueCount} live ${liveLeagueCount === 1 ? 'league' : 'leagues'}`}
+                    tone="success"
+                  />
                 ) : null}
                 {draftPendingCount > 0 ? (
-                  <span className="rounded-full border border-warning/20 bg-warning/10 px-3 py-1 text-sm font-medium text-warning">
-                    {draftPendingCount} draft{draftPendingCount === 1 ? '' : 's'} pending
-                  </span>
+                  <HeroStatusPill
+                    label={`${draftPendingCount} draft${draftPendingCount === 1 ? '' : 's'} pending`}
+                    tone="warning"
+                  />
                 ) : null}
                 <button
                   type="button"
                   onClick={() => setRefreshTrigger((prev) => prev + 1)}
-                  className="inline-flex items-center justify-center rounded-full border border-border bg-foreground px-4 py-2 text-sm font-semibold text-white transition hover:bg-muted"
+                  className="inline-flex items-center justify-center rounded-full border border-foreground bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-[0_14px_30px_-22px_rgba(15,23,42,0.9)] transition hover:-translate-y-0.5 hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   Refresh dashboard
                 </button>
@@ -329,9 +392,9 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
             <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(2,minmax(0,0.9fr))]">
               <Link
                 href={primaryLeague ? `/leagues/${primaryLeague.id}` : '/dashboard#leagues'}
-                className="group rounded-[1.5rem] border border-foreground bg-foreground px-5 py-5 text-background shadow-[0_18px_44px_-32px_rgba(15,23,42,0.8)] transition hover:bg-foreground/95"
+                className="group rounded-[1.5rem] border border-[color:var(--league-primary)] bg-[color:var(--league-primary)] px-5 py-5 text-white shadow-[0_24px_50px_-32px_rgba(23,34,48,0.86)] transition hover:-translate-y-0.5 hover:bg-[color:var(--league-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
                   Primary focus
                 </p>
                 <div className="mt-3 flex items-start justify-between gap-4">
@@ -339,47 +402,43 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                     <p className="text-xl font-semibold">
                       {primaryLeague ? primaryLeague.name : 'Open your leagues'}
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    <p className="mt-2 text-sm leading-6 text-white/75">
                       {primaryLeague
                         ? `${primaryLeague.teamName} • ${primaryLeague.currentRoundLabel ?? 'Schedule pending'}`
                         : 'Jump into your active leagues, standings, and current matchups.'}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-muted-foreground transition group-hover:translate-x-0.5">
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[color:var(--league-primary)] transition group-hover:translate-x-0.5">
                     Open →
                   </span>
                 </div>
               </Link>
 
-              <div className="rounded-[1.5rem] border border-border bg-muted px-5 py-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Next waiver
-                </p>
-                <p className="mt-3 text-lg font-semibold text-foreground">
-                  {nextWaiverLeague ? nextWaiverLeague.name : 'No waiver queued'}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {nextWaiverLeague
+              <HeroStatusPanel
+                eyebrow="Next waiver"
+                title={nextWaiverLeague ? nextWaiverLeague.name : 'No waiver queued'}
+                description={
+                  nextWaiverLeague
                     ? formatDateLabel(nextWaiverLeague.nextWaiverIso)
-                    : 'No waiver window is currently materialized across tracked leagues.'}
-                </p>
-              </div>
+                    : 'No waiver window is currently materialized across tracked leagues.'
+                }
+                tone={nextWaiverLeague ? 'warning' : 'neutral'}
+              />
 
-              <div className="rounded-[1.5rem] border border-border bg-muted px-5 py-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Next checkpoint
-                </p>
-                <p className="mt-3 text-lg font-semibold text-foreground">
-                  {nextEventLeague
+              <HeroStatusPanel
+                eyebrow="Next checkpoint"
+                title={
+                  nextEventLeague
                     ? (nextEventLeague.nextEventLabel ?? 'League event')
-                    : 'No event queued'}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {nextEventLeague
+                    : 'No event queued'
+                }
+                description={
+                  nextEventLeague
                     ? `${nextEventLeague.name} • ${formatDateLabel(nextEventLeague.nextEventIso)}`
-                    : 'No upcoming league event is currently available.'}
-                </p>
-              </div>
+                    : 'No upcoming league event is currently available.'
+                }
+                tone={nextEventLeague ? 'success' : 'neutral'}
+              />
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -387,16 +446,21 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                 href="/dashboard#leagues"
                 title="Open league directory"
                 description="Jump into league workspaces and standings from this dashboard."
+                actionLabel="Open"
+                tone="primary"
               />
               <CommandLink
                 href="/waivers"
                 title="Review waivers"
                 description="Check claims, order, and the next run."
+                actionLabel="Review"
+                tone="warning"
               />
               <CommandLink
                 href="/players"
                 title="Player research"
                 description="Search the player pool with live market context."
+                actionLabel="Search"
               />
             </div>
           </section>
