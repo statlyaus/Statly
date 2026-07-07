@@ -70,15 +70,19 @@ function DashboardCard({
   eyebrow,
   title,
   description,
+  className = '',
   children,
 }: {
   eyebrow: string;
   title: string;
   description?: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[1.5rem] border border-border bg-white/94 p-5 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.38)] backdrop-blur-sm">
+    <section
+      className={`rounded-[1.5rem] border border-border bg-white/94 p-5 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.38)] backdrop-blur-sm ${className}`}
+    >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -435,6 +439,15 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
             <div className="space-y-6">
               <DashboardCard
+                eyebrow="League Hub"
+                title="Your leagues"
+                description="Start here to open league workspaces, switch contexts, and manage creation or invites."
+                className="scroll-mt-24 border-[color:var(--league-primary)]/20 bg-background shadow-[0_26px_70px_-44px_rgba(23,34,48,0.42)]"
+              >
+                <LeagueManagementModule user={user} refreshTrigger={refreshTrigger} />
+              </DashboardCard>
+
+              <DashboardCard
                 eyebrow="League Command Center"
                 title="Active leagues"
                 description="Open the right league first, with live state and the next decision visible in each row."
@@ -655,14 +668,6 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                       </p>
                     </div>
                   </div>
-                </DashboardCard>
-
-                <DashboardCard
-                  eyebrow="League Operations"
-                  title="Your leagues"
-                  description="Move between league contexts and light management tasks."
-                >
-                  <LeagueManagementModule user={user} refreshTrigger={refreshTrigger} />
                 </DashboardCard>
 
                 <DashboardCard

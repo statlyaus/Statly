@@ -80,6 +80,8 @@ describe('dashboard production recovery route contract', () => {
     expect(nextConfig).toContain("destination: '/dashboard'");
 
     expect(dashboard).toContain("href=\"/dashboard#leagues\"");
+    expect(dashboard).toContain('eyebrow="League Hub"');
+    expect(dashboard).toContain('title="Your leagues"');
     expect(leagueManagement).toContain('id="leagues"');
     expect(leagueManagement).toContain('leagues.map((league, index)');
     expect(leagueManagement).not.toContain('leagues.slice(0, 4)');
@@ -87,6 +89,7 @@ describe('dashboard production recovery route contract', () => {
 
     expect(quickActions).toContain("href: '/dashboard#leagues'");
     expect(recentActivity).toContain('href="/dashboard#leagues"');
-    expect(navigation).toContain("href: '/dashboard#leagues'");
+    expect(navigation).not.toContain("name: 'Leagues'");
+    expect(navigation).not.toContain("href: '/dashboard#leagues'");
   });
 });
