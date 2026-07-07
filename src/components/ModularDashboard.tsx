@@ -134,9 +134,9 @@ function StatusPill({
   tone?: 'neutral' | 'warning' | 'success';
 }) {
   const toneClasses = {
-    neutral: 'border-border bg-muted text-foreground',
-    warning: 'border-warning/30 bg-warning/10 text-warning',
-    success: 'border-success/30 bg-success/10 text-success',
+    neutral: 'border-white/20 bg-slate-950/35 text-white',
+    warning: 'border-warning/35 bg-warning/10 text-warning',
+    success: 'border-success/35 bg-success/10 text-success',
   }[tone];
 
   return (
@@ -153,7 +153,7 @@ function ActionButton({ href, children }: { href: string; children: React.ReactN
   return (
     <Link
       href={href}
-      className="inline-flex min-h-11 items-center justify-center gap-3 rounded-lg bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-white shadow-[0_18px_38px_-24px_rgba(23,34,48,0.9)] transition hover:-translate-y-0.5 hover:bg-[color:var(--league-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex min-h-12 items-center justify-center gap-3 rounded-lg bg-destructive px-6 text-sm font-semibold text-white shadow-[0_18px_38px_-24px_rgba(220,38,38,0.85)] transition hover:-translate-y-0.5 hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
     >
       {children}
       <ArrowRight className="size-4" aria-hidden="true" />
@@ -188,27 +188,27 @@ function KpiCard({
   tone: 'primary' | 'warning' | 'info' | 'success';
 }) {
   const toneClasses = {
-    primary: 'bg-[color:var(--league-primary)] text-white',
-    warning: 'bg-warning/14 text-warning',
-    info: 'bg-info/12 text-info',
-    success: 'bg-success/12 text-success',
+    primary: 'bg-info/20 text-white ring-1 ring-info/15',
+    warning: 'bg-warning/18 text-warning ring-1 ring-warning/15',
+    info: 'bg-success/18 text-white ring-1 ring-success/15',
+    success: 'bg-violet-500/20 text-white ring-1 ring-violet-300/15',
   }[tone];
 
   return (
     <Link
       href={href}
-      className="group flex min-h-[7rem] items-center gap-4 rounded-2xl border border-border bg-background p-4 shadow-[0_16px_40px_-36px_rgba(15,23,42,0.55)] transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_22px_48px_-36px_rgba(15,23,42,0.68)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="group flex min-h-[8rem] items-center gap-5 rounded-xl border border-white/15 bg-slate-950/35 p-5 text-white shadow-[0_16px_40px_-32px_rgba(0,0,0,0.8)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-slate-900/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
     >
-      <span className={`flex size-14 shrink-0 items-center justify-center rounded-full ${toneClasses}`}>
-        <Icon className="size-6" aria-hidden="true" />
+      <span className={`flex size-16 shrink-0 items-center justify-center rounded-full ${toneClasses}`}>
+        <Icon className="size-8" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-2xl font-semibold leading-none text-foreground">{value}</span>
-        <span className="mt-2 block text-sm font-semibold text-foreground">{label}</span>
-        <span className="mt-1 block text-xs text-muted-foreground">{description}</span>
+        <span className="block text-4xl font-semibold leading-none text-white">{value}</span>
+        <span className="mt-2 block text-base font-semibold text-white">{label}</span>
+        <span className="mt-1 block text-sm text-white/68">{description}</span>
       </span>
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition group-hover:border-foreground/25 group-hover:text-foreground">
-        <ArrowRight className="size-4" aria-hidden="true" />
+      <span className="flex size-10 shrink-0 items-center justify-center text-white transition group-hover:translate-x-1">
+        <ArrowRight className="size-7" aria-hidden="true" />
       </span>
     </Link>
   );
@@ -472,75 +472,83 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_46%,var(--league-surface-muted)_100%)]">
       <section className="mx-auto flex max-w-[var(--app-shell-max-width)] flex-col gap-5 px-4 pb-8 pt-6 sm:px-6 lg:px-8 2xl:px-10">
-        <section className="rounded-2xl border border-border bg-background p-5 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.55)] ring-1 ring-foreground/[0.03]">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:justify-between">
-            <div className="min-w-0 rounded-xl bg-[color:var(--league-primary)] px-5 py-5 text-white shadow-[0_20px_44px_-34px_rgba(23,34,48,0.85)] lg:min-w-[28rem]">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/68">
+        <section
+          className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950 bg-cover bg-center px-5 py-7 text-white shadow-[0_28px_70px_-36px_rgba(2,6,23,0.9)] sm:px-7 lg:px-9 lg:py-10"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgba(3, 10, 20, 0.82) 0%, rgba(4, 12, 22, 0.9) 50%, rgba(2, 8, 16, 0.97) 100%), linear-gradient(90deg, rgba(3, 10, 20, 0.98) 0%, rgba(3, 10, 20, 0.72) 42%, rgba(3, 10, 20, 0.92) 100%), url('/Assets/statly-stadium-hero.png')",
+          }}
+        >
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-destructive sm:text-base">
                 League command center
-              </p>
-              <h1 className="mt-3 truncate text-3xl font-semibold tracking-tight sm:text-[2.35rem]">
-                {heroLeagueName}
-              </h1>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="rounded-lg bg-white/12 px-3 py-1 text-sm font-semibold text-white">
-                  @{username}
-                </span>
-                <span className="rounded-lg border border-white/18 px-3 py-1 text-sm text-white/78">
-                  {activeLeagueCount} active {activeLeagueCount === 1 ? 'league' : 'leagues'}
-                </span>
+                </p>
+                <h1 className="mt-4 truncate text-4xl font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl">
+                  {heroLeagueName}
+                </h1>
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <span className="rounded-lg bg-white/12 px-4 py-2 text-base font-semibold text-white backdrop-blur-sm">
+                    @{username}
+                  </span>
+                  <span className="rounded-lg border border-white/18 bg-slate-950/20 px-4 py-2 text-base text-white/76 backdrop-blur-sm">
+                    {activeLeagueCount} active {activeLeagueCount === 1 ? 'league' : 'leagues'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+                <StatusPill
+                  label={leagueStateLoading || leaguesLoading ? 'Refreshing state' : 'Current state'}
+                  tone="neutral"
+                />
+                {draftPendingCount > 0 ? (
+                  <StatusPill
+                    label={`${draftPendingCount} draft${draftPendingCount === 1 ? '' : 's'} pending`}
+                    tone="warning"
+                  />
+                ) : null}
+                <ActionButton href="/dashboard#leagues">Open League Hub</ActionButton>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-start gap-3 lg:max-w-xl lg:justify-end lg:self-center">
-              <StatusPill
-                label={leagueStateLoading || leaguesLoading ? 'Refreshing state' : 'Current state'}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <KpiCard
+                icon={Trophy}
+                value={activeLeagueCount}
+                label="Active Leagues"
+                description="Across all contexts"
+                href="/dashboard#leagues"
+                tone="primary"
+              />
+              <KpiCard
+                icon={Activity}
+                value={liveLeagueCount}
+                label="Live Matchups"
+                description={liveLeagueCount > 0 ? 'Open active matchups' : 'No live matchups now'}
+                href={primaryLeague ? `/leagues/${primaryLeague.id}?tab=matchup` : '/live-scoring'}
+                tone="warning"
+              />
+              <KpiCard
+                icon={ClipboardList}
+                value={draftPendingCount}
+                label="Draft Queue"
+                description={draftPendingCount > 0 ? 'Attention required' : 'Nothing queued'}
+                href="/drafts"
+                tone="info"
+              />
+              <KpiCard
+                icon={UsersRound}
+                value={waiverSignalCount}
+                label="Waiver Claims"
+                description={waiverSignalCount > 0 ? 'Pending review' : 'No claims pending'}
+                href="/waivers"
                 tone="success"
               />
-              {draftPendingCount > 0 ? (
-                <StatusPill
-                  label={`${draftPendingCount} draft${draftPendingCount === 1 ? '' : 's'} pending`}
-                  tone="warning"
-                />
-              ) : null}
-              <ActionButton href="/dashboard#leagues">Open League Hub</ActionButton>
             </div>
           </div>
         </section>
-
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard
-            icon={Trophy}
-            value={activeLeagueCount}
-            label="Active Leagues"
-            description="Across all contexts"
-            href="/dashboard#leagues"
-            tone="primary"
-          />
-          <KpiCard
-            icon={Activity}
-            value={liveLeagueCount}
-            label="Live Matchups"
-            description={liveLeagueCount > 0 ? 'Open active matchups' : 'No live matchups now'}
-            href={primaryLeague ? `/leagues/${primaryLeague.id}?tab=matchup` : '/live-scoring'}
-            tone="warning"
-          />
-          <KpiCard
-            icon={ClipboardList}
-            value={draftPendingCount}
-            label="Draft Queue"
-            description={draftPendingCount > 0 ? 'Attention required' : 'Nothing queued'}
-            href="/drafts"
-            tone="info"
-          />
-          <KpiCard
-            icon={UsersRound}
-            value={waiverSignalCount}
-            label="Waiver Claims"
-            description={waiverSignalCount > 0 ? 'Pending review' : 'No claims pending'}
-            href="/waivers"
-            tone="success"
-          />
-        </div>
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
           <div className="flex flex-col gap-5">

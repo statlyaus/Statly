@@ -81,6 +81,7 @@ describe('dashboard production recovery route contract', () => {
 
     expect(dashboard).toContain("href=\"/dashboard#leagues\"");
     expect(dashboard).toContain('Open League Hub');
+    expect(dashboard).toContain("url('/Assets/statly-stadium-hero.png')");
     expect(dashboard).toContain('const username =');
     expect(dashboard).toContain('@{username}');
     expect(dashboard).toContain('title="My Leagues"');
