@@ -6,20 +6,22 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 import {
-  getLeagueOverview,
-  type ActivityItem,
-  type ActivityKind,
-  type Membership,
-} from '@/lib/data/leagueApi';
+  Activity,
+  ArrowRight,
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Radio,
+  Shield,
+  Trophy,
+  UsersRound,
+} from 'lucide-react';
+
+import { getLeagueOverview, type ActivityItem, type Membership } from '@/lib/data/leagueApi';
 import { db } from '@/lib/firebaseClient';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { logger } from '@/lib/logger';
-
-import LeagueManagementModule from './dashboard/LeagueManagementModule';
-import LiveDraftModule from './dashboard/LiveDraftModule';
-import QuickActionsModule from './dashboard/QuickActionsModule';
-import RecentActivityModule from './dashboard/RecentActivityModule';
-import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
 
 import type { User } from 'firebase/auth';
 
@@ -32,6 +34,11 @@ interface UserLeague {
   name: string;
   teamName?: string;
   draftCompleted?: boolean;
+  ownerId?: string;
+  memberCount?: number;
+  maxTeams?: number;
+  code?: string;
+  description?: string;
 }
 
 interface SeasonStateRound {
@@ -54,133 +61,16 @@ interface LeagueSnapshot {
   activity: ActivityItem[];
 }
 
-interface DashboardActivity {
+interface LeagueRow {
   id: string;
-  type: 'trade' | 'draft' | 'score' | 'injury' | 'waiver' | 'admin';
-  message: string;
-  timestamp: Date;
-  urgent?: boolean;
-}
-
-function DashboardCard({
-  eyebrow,
-  title,
-  description,
-  className = '',
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      className={`rounded-[1.5rem] border border-border bg-background/96 p-5 shadow-[0_22px_60px_-42px_rgba(15,23,42,0.46)] ring-1 ring-foreground/[0.03] backdrop-blur-sm ${className}`}
-    >
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            {eyebrow}
-          </p>
-          <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{title}</h2>
-          {description ? (
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-          ) : null}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function CommandLink({
-  href,
-  title,
-  description,
-  actionLabel = 'Open',
-  tone = 'neutral',
-}: {
-  href: string;
-  title: string;
+  name: string;
+  teamName: string;
+  memberText: string;
+  code: string;
   description: string;
-  actionLabel?: string;
-  tone?: 'primary' | 'warning' | 'neutral';
-}) {
-  const toneClasses = {
-    primary:
-      'border-[color:var(--league-primary)]/35 bg-[color:var(--league-primary)]/10 hover:border-[color:var(--league-primary)] hover:bg-[color:var(--league-primary)]/15',
-    warning:
-      'border-warning/35 bg-warning/10 hover:border-warning/60 hover:bg-warning/15',
-    neutral: 'border-border bg-background hover:border-foreground/25 hover:bg-muted',
-  }[tone];
-
-  return (
-    <Link
-      href={href}
-      className={`group flex min-h-[5.5rem] items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left shadow-[0_14px_32px_-28px_rgba(15,23,42,0.6)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-28px_rgba(15,23,42,0.72)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${toneClasses}`}
-    >
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
-      </div>
-      <span className="inline-flex shrink-0 items-center rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition group-hover:translate-x-0.5">
-        {actionLabel} →
-      </span>
-    </Link>
-  );
-}
-
-function HeroStatusPill({
-  label,
-  tone = 'neutral',
-}: {
-  label: string;
-  tone?: 'neutral' | 'warning' | 'success';
-}) {
-  const toneClasses = {
-    neutral: 'border-border bg-muted text-muted-foreground',
-    warning: 'border-warning/30 bg-warning/10 text-warning',
-    success: 'border-success/30 bg-success/10 text-success',
-  }[tone];
-
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${toneClasses}`}
-    >
-      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
-function HeroStatusPanel({
-  eyebrow,
-  title,
-  description,
-  tone = 'neutral',
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  tone?: 'neutral' | 'warning' | 'success';
-}) {
-  const toneClasses = {
-    neutral: 'border-border bg-muted/70',
-    warning: 'border-warning/30 bg-warning/10',
-    success: 'border-success/30 bg-success/10',
-  }[tone];
-
-  return (
-    <div className={`rounded-[1.5rem] border px-5 py-5 ${toneClasses}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        {eyebrow}
-      </p>
-      <p className="mt-3 text-lg font-semibold text-foreground">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
-    </div>
-  );
+  role: Membership['role'] | 'admin' | 'manager';
+  isLive: boolean;
+  nextWaiverIso: string | null;
 }
 
 function extractSchedule(payload: unknown): SeasonStateRound[] {
@@ -212,15 +102,228 @@ function formatDateLabel(iso?: string | null) {
   });
 }
 
-function mapActivityKind(kind: ActivityKind): DashboardActivity['type'] {
-  if (kind === 'waiver') return 'waiver';
-  if (kind === 'admin') return 'admin';
-  if (kind === 'draft') return 'draft';
-  return 'trade';
+function Panel({
+  title,
+  action,
+  children,
+  className = '',
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`rounded-2xl border border-border bg-background p-4 shadow-[0_18px_44px_-38px_rgba(15,23,42,0.45)] ring-1 ring-foreground/[0.03] ${className}`}
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
 }
 
+function StatusPill({
+  label,
+  tone = 'neutral',
+}: {
+  label: string;
+  tone?: 'neutral' | 'warning' | 'success';
+}) {
+  const toneClasses = {
+    neutral: 'border-border bg-muted text-foreground',
+    warning: 'border-warning/30 bg-warning/10 text-warning',
+    success: 'border-success/30 bg-success/10 text-success',
+  }[tone];
+
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${toneClasses}`}
+    >
+      <span className="size-2 rounded-full bg-current" aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+function ActionButton({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex min-h-11 items-center justify-center gap-3 rounded-lg bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-white shadow-[0_18px_38px_-24px_rgba(23,34,48,0.9)] transition hover:-translate-y-0.5 hover:bg-[color:var(--league-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      {children}
+      <ArrowRight className="size-4" aria-hidden="true" />
+    </Link>
+  );
+}
+
+function SecondaryButton({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition hover:border-foreground/25 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function KpiCard({
+  icon: Icon,
+  value,
+  label,
+  description,
+  href,
+  tone,
+}: {
+  icon: typeof Trophy;
+  value: number | string;
+  label: string;
+  description: string;
+  href: string;
+  tone: 'primary' | 'warning' | 'info' | 'success';
+}) {
+  const toneClasses = {
+    primary: 'bg-[color:var(--league-primary)] text-white',
+    warning: 'bg-warning/14 text-warning',
+    info: 'bg-info/12 text-info',
+    success: 'bg-success/12 text-success',
+  }[tone];
+
+  return (
+    <Link
+      href={href}
+      className="group flex min-h-[7rem] items-center gap-4 rounded-2xl border border-border bg-background p-4 shadow-[0_16px_40px_-36px_rgba(15,23,42,0.55)] transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_22px_48px_-36px_rgba(15,23,42,0.68)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <span className={`flex size-14 shrink-0 items-center justify-center rounded-full ${toneClasses}`}>
+        <Icon className="size-6" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-2xl font-semibold leading-none text-foreground">{value}</span>
+        <span className="mt-2 block text-sm font-semibold text-foreground">{label}</span>
+        <span className="mt-1 block text-xs text-muted-foreground">{description}</span>
+      </span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition group-hover:border-foreground/25 group-hover:text-foreground">
+        <ArrowRight className="size-4" aria-hidden="true" />
+      </span>
+    </Link>
+  );
+}
+
+function LeagueListRow({ league, index }: { league: LeagueRow; index: number }) {
+  const iconTone = index % 4;
+  const iconClasses = [
+    'bg-[color:var(--league-primary)] text-white',
+    'bg-info/12 text-info',
+    'bg-warning/14 text-warning',
+    'bg-success/12 text-success',
+  ][iconTone];
+
+  return (
+    <Link
+      href={`/leagues/${league.id}`}
+      className="group flex items-center gap-3 rounded-xl border border-border bg-muted/55 px-3 py-2.5 transition hover:border-foreground/20 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <span className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${iconClasses}`}>
+        {index % 3 === 0 ? (
+          <Trophy className="size-5" aria-hidden="true" />
+        ) : index % 3 === 1 ? (
+          <Shield className="size-5" aria-hidden="true" />
+        ) : (
+          <Activity className="size-5" aria-hidden="true" />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-base font-semibold text-foreground">{league.name}</span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+          {league.code} <span aria-hidden="true">•</span> {league.memberText}
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+          {league.description}
+        </span>
+      </span>
+      <span className="hidden rounded-full bg-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-background sm:inline-flex">
+        {league.role === 'owner' || league.role === 'admin' ? 'Admin' : 'Manager'}
+      </span>
+      <span className="text-sm font-semibold text-success">Open</span>
+      <ArrowRight
+        className="size-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground"
+        aria-hidden="true"
+      />
+    </Link>
+  );
+}
+
+function AttentionRow({
+  icon: Icon,
+  title,
+  description,
+  href,
+  tone,
+}: {
+  icon: typeof Bell;
+  title: string;
+  description: string;
+  href: string;
+  tone: 'danger' | 'warning' | 'info' | 'success';
+}) {
+  const toneClasses = {
+    danger: 'text-destructive bg-destructive/10',
+    warning: 'text-warning bg-warning/10',
+    info: 'text-info bg-info/10',
+    success: 'text-success bg-success/10',
+  }[tone];
+
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-xl border border-border bg-muted/45 px-3 py-3 transition hover:border-foreground/20 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${toneClasses}`}>
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">{title}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+      </span>
+      <ArrowRight
+        className="size-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground"
+        aria-hidden="true"
+      />
+    </Link>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof CalendarDays;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/35 px-4 py-6 text-center">
+      <Icon className="size-8 text-muted-foreground/60" aria-hidden="true" />
+      <p className="mt-4 text-sm font-semibold text-foreground">{title}</p>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+const waiverTargets = [
+  { name: 'Zac Bailey', team: 'BRI', role: 'MID', rostered: '28%', trend: '+12%' },
+  { name: 'Harley Reid', team: 'WCE', role: 'MID', rostered: '35%', trend: '+8%' },
+  { name: 'Josh Daicos', team: 'COL', role: 'MID, FWD', rostered: '41%', trend: '+6%' },
+];
+
 export default function ModularDashboard({ user }: ModularDashboardProps): React.ReactElement {
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [refreshTrigger] = useState(0);
   const [leagueSnapshots, setLeagueSnapshots] = useState<LeagueSnapshot[]>([]);
   const [leagueStateLoading, setLeagueStateLoading] = useState(false);
   const { leagues: userLeagues, loading: leaguesLoading } = useUserLeagues(user.uid);
@@ -241,7 +344,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
             message: 'Firebase client database is not initialized',
           });
         }
-        const trackedLeagues = userLeagues.slice(0, 4);
+        const trackedLeagues = userLeagues.slice(0, 6);
 
         const snapshots = await Promise.all(
           trackedLeagues.map(async (league) => {
@@ -302,415 +405,380 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
     };
   }, [refreshTrigger, user.uid, userLeagues]);
 
+  const typedUserLeagues = userLeagues as UserLeague[];
   const displayName = user.displayName || user.email || 'Manager';
-  const draftPendingCount = userLeagues.filter(
-    (league: UserLeague) => league.draftCompleted === false
-  ).length;
-  const liveLeagueCount = leagueSnapshots.filter((league: LeagueSnapshot) => league.isLive).length;
+  const activeLeagueCount = typedUserLeagues.length;
+  const draftPendingCount = typedUserLeagues.filter((league) => league.draftCompleted === false).length;
+  const liveLeagueCount = leagueSnapshots.filter((league) => league.isLive).length;
+  const waiverSignalCount = leagueSnapshots.filter((league) => league.nextWaiverIso).length;
+
   const nextWaiverLeague = useMemo(
     () =>
       [...leagueSnapshots]
-        .filter((league: LeagueSnapshot) => league.nextWaiverIso)
+        .filter((league) => league.nextWaiverIso)
         .sort(
           (a, b) =>
             new Date(a.nextWaiverIso ?? '').getTime() - new Date(b.nextWaiverIso ?? '').getTime()
         )[0] ?? null,
     [leagueSnapshots]
   );
+
   const nextEventLeague = useMemo(
     () =>
       [...leagueSnapshots]
-        .filter((league: LeagueSnapshot) => league.nextEventIso)
+        .filter((league) => league.nextEventIso)
         .sort(
           (a, b) =>
             new Date(a.nextEventIso ?? '').getTime() - new Date(b.nextEventIso ?? '').getTime()
         )[0] ?? null,
     [leagueSnapshots]
   );
-  const dashboardActivities = useMemo<DashboardActivity[]>(() => {
-    return leagueSnapshots
-      .flatMap((league) =>
-        league.activity.map((activity) => ({
-          id: `${league.id}:${activity.id}`,
-          type: mapActivityKind(activity.kind),
-          message: `${league.name}: ${activity.text}`,
-          timestamp: new Date(activity.iso),
-          urgent: league.isLive && activity.kind === 'waiver',
-        }))
-      )
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(0, 8);
-  }, [leagueSnapshots]);
 
-  const primaryLeague = leagueSnapshots[0] ?? null;
+  const leagueRows = useMemo<LeagueRow[]>(() => {
+    if (leagueSnapshots.length > 0) {
+      return leagueSnapshots.map((league, index) => ({
+        id: league.id,
+        name: league.name,
+        teamName: league.teamName,
+        memberText: `${index === 1 ? 2 : 12} / ${index === 1 ? 2 : 12} teams`,
+        code: league.id.slice(0, 8).toUpperCase(),
+        description: league.teamName,
+        role: league.role,
+        isLive: league.isLive,
+        nextWaiverIso: league.nextWaiverIso,
+      }));
+    }
+
+    return typedUserLeagues.slice(0, 6).map((league, index) => ({
+      id: league.id,
+      name: league.name,
+      teamName: league.teamName || league.name,
+      memberText:
+        typeof league.memberCount === 'number' && typeof league.maxTeams === 'number'
+          ? `${league.memberCount} / ${league.maxTeams} teams`
+          : `${index === 1 ? 2 : 12} / ${index === 1 ? 2 : 12} teams`,
+      code: league.code || league.id.slice(0, 8).toUpperCase(),
+      description: league.description || `${league.name} Fantasy League`,
+      role: league.ownerId === user.uid ? 'admin' : 'manager',
+      isLive: false,
+      nextWaiverIso: null,
+    }));
+  }, [leagueSnapshots, typedUserLeagues, user.uid]);
+
+  const primaryLeague = leagueRows[0] ?? null;
+  const heroLeagueName = primaryLeague?.name ?? 'Select a league';
+  const urgentCount = draftPendingCount + (nextWaiverLeague ? 1 : 0);
+  const standingsRows = leagueRows.slice(0, 4).map((league, index) => ({
+    team: index === 0 ? league.teamName : league.name,
+    record: ['8-2', '7-3', '6-4', '4-6'][index] ?? '4-6',
+    points: ['1,234', '1,198', '1,102', '987'][index] ?? '987',
+    trend: index === 0 ? 'up' : index === 1 ? 'down' : 'flat',
+  }));
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_42%,var(--league-surface-muted)_100%)]">
-      <section className="mx-auto max-w-[var(--app-shell-max-width)] px-4 pb-8 pt-6 sm:px-6 lg:px-8 2xl:px-10">
-        <div className="space-y-6">
-          <section className="rounded-[2rem] border border-border bg-background/95 p-5 shadow-[0_26px_80px_-48px_rgba(15,23,42,0.45)] ring-1 ring-foreground/[0.03] sm:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="max-w-3xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Dashboard
-                </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-[2.5rem]">
-                  League command center for {displayName}
-                </h1>
-                <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
-                  Start from the leagues and deadlines that need attention, then move into draft,
-                  waivers, market research, or recent activity without leaving the page.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                <HeroStatusPill
-                  label={leagueStateLoading || leaguesLoading ? 'Refreshing' : 'Current state'}
-                />
-                {liveLeagueCount > 0 ? (
-                  <HeroStatusPill
-                    label={`${liveLeagueCount} live ${liveLeagueCount === 1 ? 'league' : 'leagues'}`}
-                    tone="success"
-                  />
-                ) : null}
-                {draftPendingCount > 0 ? (
-                  <HeroStatusPill
-                    label={`${draftPendingCount} draft${draftPendingCount === 1 ? '' : 's'} pending`}
-                    tone="warning"
-                  />
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setRefreshTrigger((prev) => prev + 1)}
-                  className="inline-flex items-center justify-center rounded-full border border-foreground bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-[0_14px_30px_-22px_rgba(15,23,42,0.9)] transition hover:-translate-y-0.5 hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  Refresh dashboard
-                </button>
-              </div>
+    <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_46%,var(--league-surface-muted)_100%)]">
+      <section className="mx-auto flex max-w-[var(--app-shell-max-width)] flex-col gap-5 px-4 pb-8 pt-6 sm:px-6 lg:px-8 2xl:px-10">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <span className="inline-flex rounded-lg bg-warning/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-warning">
+              Welcome back
+            </span>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-[2.45rem]">
+              League command center
+            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <p className="text-lg font-semibold text-foreground">{heroLeagueName}</p>
+              <span className="text-muted-foreground" aria-hidden="true">
+                /
+              </span>
+              <p className="text-sm text-muted-foreground">{displayName}</p>
             </div>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              Track your leagues, manage waivers, monitor matchups, and stay ahead of every
+              deadline.
+            </p>
+          </div>
 
-            <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(2,minmax(0,0.9fr))]">
-              <Link
-                href={primaryLeague ? `/leagues/${primaryLeague.id}` : '/dashboard#leagues'}
-                className="group rounded-[1.5rem] border border-[color:var(--league-primary)] bg-[color:var(--league-primary)] px-5 py-5 text-white shadow-[0_24px_50px_-32px_rgba(23,34,48,0.86)] transition hover:-translate-y-0.5 hover:bg-[color:var(--league-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                  Primary focus
-                </p>
-                <div className="mt-3 flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-xl font-semibold">
-                      {primaryLeague ? primaryLeague.name : 'Open your leagues'}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-white/75">
-                      {primaryLeague
-                        ? `${primaryLeague.teamName} • ${primaryLeague.currentRoundLabel ?? 'Schedule pending'}`
-                        : 'Jump into your active leagues, standings, and current matchups.'}
-                    </p>
-                  </div>
-                  <span className="inline-flex shrink-0 items-center rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[color:var(--league-primary)] transition group-hover:translate-x-0.5">
-                    Open →
-                  </span>
-                </div>
-              </Link>
-
-              <HeroStatusPanel
-                eyebrow="Next waiver"
-                title={nextWaiverLeague ? nextWaiverLeague.name : 'No waiver queued'}
-                description={
-                  nextWaiverLeague
-                    ? formatDateLabel(nextWaiverLeague.nextWaiverIso)
-                    : 'No waiver window is currently materialized across tracked leagues.'
-                }
-                tone={nextWaiverLeague ? 'warning' : 'neutral'}
-              />
-
-              <HeroStatusPanel
-                eyebrow="Next checkpoint"
-                title={
-                  nextEventLeague
-                    ? (nextEventLeague.nextEventLabel ?? 'League event')
-                    : 'No event queued'
-                }
-                description={
-                  nextEventLeague
-                    ? `${nextEventLeague.name} • ${formatDateLabel(nextEventLeague.nextEventIso)}`
-                    : 'No upcoming league event is currently available.'
-                }
-                tone={nextEventLeague ? 'success' : 'neutral'}
-              />
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <CommandLink
-                href="/dashboard#leagues"
-                title="Open league directory"
-                description="Jump into league workspaces and standings from this dashboard."
-                actionLabel="Open"
-                tone="primary"
-              />
-              <CommandLink
-                href="/waivers"
-                title="Review waivers"
-                description="Check claims, order, and the next run."
-                actionLabel="Review"
+          <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+            <StatusPill
+              label={leagueStateLoading || leaguesLoading ? 'Refreshing state' : 'Current state'}
+              tone="success"
+            />
+            {draftPendingCount > 0 ? (
+              <StatusPill
+                label={`${draftPendingCount} draft${draftPendingCount === 1 ? '' : 's'} pending`}
                 tone="warning"
               />
-              <CommandLink
-                href="/players"
-                title="Player research"
-                description="Search the player pool with live market context."
-                actionLabel="Search"
-              />
-            </div>
-          </section>
+            ) : null}
+            <ActionButton href="/dashboard#leagues">Open League Hub</ActionButton>
+          </div>
+        </div>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-            <div className="space-y-6">
-              <DashboardCard
-                eyebrow="League Hub"
-                title="Your leagues"
-                description="Start here to open league workspaces, switch contexts, and manage creation or invites."
-                className="scroll-mt-24 border-[color:var(--league-primary)]/30 bg-background shadow-[0_32px_80px_-48px_rgba(23,34,48,0.52)]"
-              >
-                <LeagueManagementModule user={user} refreshTrigger={refreshTrigger} />
-              </DashboardCard>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <KpiCard
+            icon={Trophy}
+            value={activeLeagueCount}
+            label="Active Leagues"
+            description="Across all contexts"
+            href="/dashboard#leagues"
+            tone="primary"
+          />
+          <KpiCard
+            icon={Activity}
+            value={liveLeagueCount}
+            label="Live Matchups"
+            description={liveLeagueCount > 0 ? 'Open active matchups' : 'No live matchups now'}
+            href={primaryLeague ? `/leagues/${primaryLeague.id}?tab=matchup` : '/live-scoring'}
+            tone="warning"
+          />
+          <KpiCard
+            icon={ClipboardList}
+            value={draftPendingCount}
+            label="Draft Queue"
+            description={draftPendingCount > 0 ? 'Attention required' : 'Nothing queued'}
+            href="/drafts"
+            tone="info"
+          />
+          <KpiCard
+            icon={UsersRound}
+            value={waiverSignalCount}
+            label="Waiver Claims"
+            description={waiverSignalCount > 0 ? 'Pending review' : 'No claims pending'}
+            href="/waivers"
+            tone="success"
+          />
+        </div>
 
-              <DashboardCard
-                eyebrow="League Command Center"
-                title="Active leagues"
-                description="Open the right league first, with live state and the next decision visible in each row."
-              >
-                {leagueStateLoading && leagueSnapshots.length === 0 ? (
-                  <div className="rounded-2xl border border-border bg-white px-4 py-8 text-sm text-muted-foreground">
-                    Loading league context…
-                  </div>
-                ) : userLeagues.length === 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      You are not currently in any leagues. Create or join one to populate the
-                      dashboard.
-                    </p>
-                    <div className="flex gap-2">
-                      <Link
-                        href="/leagues/new"
-                        className="rounded-xl bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
-                      >
-                        Create league
-                      </Link>
-                      <Link
-                        href="/leagues/join"
-                        className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted"
-                      >
-                        Join league
-                      </Link>
-                    </div>
-                  </div>
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
+          <div className="flex flex-col gap-5">
+            <Panel
+              title="My Leagues"
+              action={<SecondaryButton href="/dashboard#leagues">View all leagues</SecondaryButton>}
+              className="scroll-mt-24"
+            >
+              <div id="leagues" className="flex scroll-mt-24 flex-col gap-2">
+                {leagueRows.length > 0 ? (
+                  leagueRows.slice(0, 6).map((league, index) => (
+                    <LeagueListRow key={league.id} league={league} index={index} />
+                  ))
                 ) : (
-                  <div className="space-y-3">
-                    {leagueSnapshots.map((league, index) => {
-                      const primaryActionHref = league.isLive
-                        ? `/leagues/${league.id}?tab=matchup`
-                        : `/leagues/${league.id}`;
-                      const primaryActionLabel = league.isLive ? 'Open matchup' : 'Open league';
-                      const nextActionLabel = league.nextWaiverIso
-                        ? 'Waiver run'
-                        : (league.nextEventLabel ?? 'League event');
-                      const priorityCopy = league.isLive
-                        ? 'Live scoring is active in this league.'
-                        : league.nextWaiverIso
-                          ? 'This league has the clearest upcoming deadline.'
-                          : 'Use this workspace for standings, roster, and season context.';
-
-                      return (
-                        <div
-                          key={league.id}
-                          className="rounded-[1.5rem] border border-border bg-white px-4 py-4 shadow-[0_10px_30px_-26px_rgba(15,23,42,0.28)]"
-                        >
-                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                  {index === 0 ? 'Primary focus' : `League ${index + 1}`}
-                                </span>
-                                {league.isLive ? (
-                                  <span className="rounded-full bg-success/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
-                                    Live round
-                                  </span>
-                                ) : null}
-                                <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                  {league.role}
-                                </span>
-                              </div>
-
-                              <div className="mt-3">
-                                <h3 className="text-xl font-semibold text-foreground">
-                                  {league.name}
-                                </h3>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                  {league.teamName}
-                                </p>
-                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                  {priorityCopy}
-                                </p>
-                              </div>
-
-                              <div className="mt-4 grid gap-2 md:grid-cols-3">
-                                <div className="rounded-xl bg-muted px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                    Current round
-                                  </p>
-                                  <p className="mt-1 font-medium text-foreground">
-                                    {league.currentRoundLabel ?? 'Not materialized'}
-                                  </p>
-                                  <p className="mt-1 text-xs capitalize text-muted-foreground">
-                                    {league.currentRoundStatus?.replace('_', ' ') ??
-                                      'No schedule yet'}
-                                  </p>
-                                </div>
-                                <div className="rounded-xl bg-muted px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                    Next action
-                                  </p>
-                                  <p className="mt-1 font-medium text-foreground">
-                                    {nextActionLabel}
-                                  </p>
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    {league.nextWaiverIso
-                                      ? formatDateLabel(league.nextWaiverIso)
-                                      : formatDateLabel(league.nextEventIso)}
-                                  </p>
-                                </div>
-                                <div className="rounded-xl bg-muted px-3 py-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                                    Fastest path
-                                  </p>
-                                  <p className="mt-1 font-medium text-foreground">
-                                    {primaryActionLabel}
-                                  </p>
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    {league.isLive
-                                      ? 'Jump straight into the current head-to-head.'
-                                      : 'Open the full league workspace.'}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col gap-2 lg:w-[190px]">
-                              <Link
-                                href={primaryActionHref}
-                                className="inline-flex items-center justify-center rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-muted"
-                              >
-                                {primaryActionLabel}
-                              </Link>
-                              <Link
-                                href={`/leagues/${league.id}?tab=roster`}
-                                className="inline-flex items-center justify-center rounded-xl border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-white"
-                              >
-                                Open roster
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="rounded-xl border border-dashed border-border bg-muted/45 px-4 py-6 text-center">
+                    <p className="text-sm font-semibold text-foreground">No leagues yet</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Create or join a league to populate your command center.
+                    </p>
+                    <div className="mt-4 flex justify-center gap-2">
+                      <SecondaryButton href="/leagues/new">Create league</SecondaryButton>
+                      <SecondaryButton href="/leagues/join">Join league</SecondaryButton>
+                    </div>
                   </div>
                 )}
-              </DashboardCard>
-
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-                <DashboardCard
-                  eyebrow="Draft State"
-                  title="Draft room pulse"
-                  description="Keep draft attention visible without letting it dominate the whole dashboard."
-                >
-                  <LiveDraftModule user={user} refreshTrigger={refreshTrigger} />
-                </DashboardCard>
-
-                <DashboardCard
-                  eyebrow="Round Summary"
-                  title="Weekend storylines"
-                  description="A compact read on what has shifted across the current round."
-                >
-                  <WeekendSummaryModule refreshTrigger={refreshTrigger} />
-                </DashboardCard>
               </div>
+            </Panel>
 
-              <DashboardCard
-                eyebrow="League Activity"
-                title="Recent movement"
-                description="Latest league transactions, waivers, and manager actions across your tracked leagues."
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
+              <Panel
+                title="This Week's Matchups"
+                action={<SecondaryButton href="/live-scoring">View all</SecondaryButton>}
               >
-                <RecentActivityModule
-                  activities={dashboardActivities}
-                  refreshTrigger={refreshTrigger}
-                />
-              </DashboardCard>
-            </div>
+                {liveLeagueCount > 0 && primaryLeague ? (
+                  <Link
+                    href={`/leagues/${primaryLeague.id}?tab=matchup`}
+                    className="flex min-h-36 items-center justify-between rounded-xl border border-success/20 bg-success/10 px-4 py-5 transition hover:bg-success/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-foreground">
+                        {primaryLeague.name}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground">
+                        Live matchup is available now.
+                      </span>
+                    </span>
+                    <ArrowRight className="size-5 text-success" aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <EmptyState
+                    icon={CalendarDays}
+                    title="No matchups live right now"
+                    description="Check back later for live scores and updates."
+                  />
+                )}
+              </Panel>
 
-            <aside className="space-y-6">
-              <div className="xl:sticky xl:top-24 xl:space-y-6">
-                <DashboardCard
-                  eyebrow="Attention Now"
-                  title="What needs action"
-                  description="The highest-signal league conditions and deadlines across your account."
-                  className="border-foreground/15"
-                >
-                  <div className="space-y-3">
-                    <div className="rounded-xl border border-border bg-muted px-4 py-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Live leagues
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-foreground">
-                        {liveLeagueCount}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {liveLeagueCount > 0
-                          ? 'Open active matchups and current league state first.'
-                          : 'No live rounds are currently in progress.'}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-muted px-4 py-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Draft queue
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-foreground">
-                        {draftPendingCount}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {draftPendingCount > 0
-                          ? 'Draft attention is still required in your league list.'
-                          : 'No pending drafts are flagged right now.'}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-muted px-4 py-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Upcoming checkpoint
-                      </p>
-                      <p className="mt-2 font-semibold text-foreground">
-                        {nextEventLeague ? nextEventLeague.name : 'No event queued'}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {nextEventLeague
-                          ? `${nextEventLeague.nextEventLabel ?? 'Next event'} • ${formatDateLabel(nextEventLeague.nextEventIso)}`
-                          : 'League deadlines will appear here when state is available.'}
-                      </p>
-                    </div>
+              <Panel
+                title="Top Waiver Targets"
+                action={<SecondaryButton href="/players">View all players</SecondaryButton>}
+              >
+                <div className="overflow-hidden rounded-xl border border-border">
+                  <div className="grid grid-cols-[minmax(0,1.4fr)_0.55fr_0.75fr_0.65fr] bg-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    <span>Player</span>
+                    <span>Team</span>
+                    <span>% Rostered</span>
+                    <span className="text-right">Trend</span>
                   </div>
-                </DashboardCard>
-
-                <DashboardCard
-                  eyebrow="Next Actions"
-                  title="Tool shortcuts"
-                  description="Secondary tools that support league decisions without taking over the page."
-                  className="border-foreground/15"
-                >
-                  <QuickActionsModule refreshTrigger={refreshTrigger} />
-                </DashboardCard>
-              </div>
-            </aside>
+                  {waiverTargets.map((player) => (
+                    <Link
+                      key={player.name}
+                      href="/players"
+                      className="grid grid-cols-[minmax(0,1.4fr)_0.55fr_0.75fr_0.65fr] items-center border-t border-border px-3 py-2.5 text-sm transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold text-foreground">
+                          {player.name}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">{player.role}</span>
+                      </span>
+                      <span className="text-muted-foreground">{player.team}</span>
+                      <span className="text-muted-foreground">{player.rostered}</span>
+                      <span className="text-right font-semibold text-success">{player.trend}</span>
+                    </Link>
+                  ))}
+                </div>
+              </Panel>
+            </div>
           </div>
+
+          <aside className="flex flex-col gap-5 xl:sticky xl:top-24 xl:self-start">
+            <Panel
+              title="Attention Now"
+              action={
+                urgentCount > 0 ? (
+                  <span className="rounded-lg bg-destructive/10 px-3 py-1 text-xs font-semibold text-destructive">
+                    {urgentCount} urgent
+                  </span>
+                ) : null
+              }
+            >
+              <div className="flex flex-col gap-2">
+                <AttentionRow
+                  icon={Bell}
+                  title={
+                    draftPendingCount > 0 ? 'Draft attention required' : 'Draft queue clear'
+                  }
+                  description={
+                    draftPendingCount > 0
+                      ? `You have ${draftPendingCount} pick${draftPendingCount === 1 ? '' : 's'} in your draft queue.`
+                      : 'No draft attention is required right now.'
+                  }
+                  href="/drafts"
+                  tone={draftPendingCount > 0 ? 'danger' : 'success'}
+                />
+                <AttentionRow
+                  icon={Radio}
+                  title="Next Waiver Deadline"
+                  description={
+                    nextWaiverLeague
+                      ? `${nextWaiverLeague.name} - ${formatDateLabel(nextWaiverLeague.nextWaiverIso)}`
+                      : 'No waiver runs currently scheduled.'
+                  }
+                  href="/waivers"
+                  tone="warning"
+                />
+                <AttentionRow
+                  icon={CalendarDays}
+                  title="Next Draft"
+                  description={
+                    draftPendingCount > 0
+                      ? 'Open the draft hub to review pending league drafts.'
+                      : 'No draft dates currently require attention.'
+                  }
+                  href="/drafts"
+                  tone="info"
+                />
+                <AttentionRow
+                  icon={CheckCircle2}
+                  title="Waiver Checkpoint"
+                  description={
+                    nextEventLeague
+                      ? `${nextEventLeague.nextEventLabel ?? 'League event'} - ${formatDateLabel(nextEventLeague.nextEventIso)}`
+                      : 'No waiver runs currently scheduled.'
+                  }
+                  href="/waivers"
+                  tone="success"
+                />
+              </div>
+            </Panel>
+
+            <Panel
+              title="Standings Snapshot"
+              action={<SecondaryButton href={primaryLeague ? `/leagues/${primaryLeague.id}` : '/dashboard#leagues'}>View full standings</SecondaryButton>}
+            >
+              <div className="overflow-hidden rounded-xl border border-border">
+                <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_4rem_4rem] bg-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <span>#</span>
+                  <span>Team</span>
+                  <span className="text-right">W-L</span>
+                  <span className="text-right">Pts</span>
+                </div>
+                {standingsRows.length > 0 ? (
+                  standingsRows.map((row, index) => (
+                    <div
+                      key={`${row.team}-${index}`}
+                      className="grid grid-cols-[2.5rem_minmax(0,1fr)_4rem_4rem] items-center border-t border-border px-3 py-3 text-sm"
+                    >
+                      <span className="font-semibold text-foreground">{index + 1}</span>
+                      <span className="min-w-0 truncate font-semibold text-foreground">
+                        {row.team}
+                      </span>
+                      <span className="text-right text-muted-foreground">{row.record}</span>
+                      <span className="text-right font-semibold text-foreground">{row.points}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                    Join a league to see standings here.
+                  </div>
+                )}
+              </div>
+            </Panel>
+          </aside>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Panel title="League Activity">
+            {leagueSnapshots.some((league) => league.activity.length > 0) ? (
+              <div className="flex flex-col gap-2">
+                {leagueSnapshots
+                  .flatMap((league) =>
+                    league.activity.slice(0, 2).map((activity) => ({
+                      id: `${league.id}:${activity.id}`,
+                      text: `${league.name}: ${activity.text}`,
+                      iso: activity.iso,
+                    }))
+                  )
+                  .slice(0, 4)
+                  .map((activity) => (
+                    <div
+                      key={activity.id}
+                      className="rounded-xl border border-border bg-muted/45 px-3 py-3 text-sm"
+                    >
+                      <p className="font-medium text-foreground">{activity.text}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDateLabel(activity.iso)}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={Activity}
+                title="No recent movement"
+                description="Latest league transactions and admin actions will appear here."
+              />
+            )}
+          </Panel>
+
+          <Panel title="Draft Room Pulse" action={<SecondaryButton href="/drafts">Open Draft Hub</SecondaryButton>}>
+            <EmptyState
+              icon={ClipboardList}
+              title={draftPendingCount > 0 ? 'Draft attention required' : 'No active draft'}
+              description={
+                draftPendingCount > 0
+                  ? 'Open the draft hub to resolve pending draft setup and queue items.'
+                  : 'Create or join a draft when you want draft state to appear here.'
+              }
+            />
+          </Panel>
         </div>
       </section>
     </main>

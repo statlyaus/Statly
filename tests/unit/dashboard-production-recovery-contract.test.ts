@@ -80,8 +80,10 @@ describe('dashboard production recovery route contract', () => {
     expect(nextConfig).toContain("destination: '/dashboard'");
 
     expect(dashboard).toContain("href=\"/dashboard#leagues\"");
-    expect(dashboard).toContain('eyebrow="League Hub"');
-    expect(dashboard).toContain('title="Your leagues"');
+    expect(dashboard).toContain('Open League Hub');
+    expect(dashboard).toContain('title="My Leagues"');
+    expect(dashboard).toContain('Active Leagues');
+    expect(dashboard).toContain('Attention Now');
     expect(dashboard).not.toContain('Performance Snapshot');
     expect(dashboard).not.toContain('Account overview');
     expect(dashboard).not.toContain('Market Intel');
