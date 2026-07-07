@@ -467,7 +467,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   ).length;
   const managerLeagueCount = Math.max(activeLeagueCount - adminLeagueCount, 0);
   const primaryLeague = leagueRows[0] ?? null;
-  const heroLeagueName = primaryLeague?.name ?? 'Select a league';
+  const heroTitle = `@${username}`;
   const urgentCount = draftPendingCount + (nextWaiverLeague ? 1 : 0);
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_46%,var(--league-surface-muted)_100%)]">
@@ -486,11 +486,11 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                 League command center
                 </p>
                 <h1 className="mt-4 truncate text-4xl font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl">
-                  {heroLeagueName}
+                  {heroTitle}
                 </h1>
                 <div className="mt-6 flex flex-wrap items-center gap-3">
                   <span className="rounded-lg bg-white/12 px-4 py-2 text-base font-semibold text-white backdrop-blur-sm">
-                    @{username}
+                    All leagues overview
                   </span>
                   <span className="rounded-lg border border-white/18 bg-slate-950/20 px-4 py-2 text-base text-white/76 backdrop-blur-sm">
                     {activeLeagueCount} active {activeLeagueCount === 1 ? 'league' : 'leagues'}
