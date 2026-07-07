@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 
 import Link from 'next/link';
 
-import { fetchApi } from '@/lib/api';
 import {
   getLeagueOverview,
   type ActivityItem,
@@ -15,14 +14,11 @@ import {
 import { db } from '@/lib/firebaseClient';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { logger } from '@/lib/logger';
-import type { Player } from '@/types/players';
 
-import LeaderboardModule from './dashboard/LeaderboardModule';
 import LeagueManagementModule from './dashboard/LeagueManagementModule';
 import LiveDraftModule from './dashboard/LiveDraftModule';
 import QuickActionsModule from './dashboard/QuickActionsModule';
 import RecentActivityModule from './dashboard/RecentActivityModule';
-import StatsOverviewModule from './dashboard/StatsOverviewModule';
 import WeekendSummaryModule from './dashboard/WeekendSummaryModule';
 
 import type { User } from 'firebase/auth';
@@ -81,7 +77,7 @@ function DashboardCard({
 }) {
   return (
     <section
-      className={`rounded-[1.5rem] border border-border bg-white/94 p-5 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.38)] backdrop-blur-sm ${className}`}
+      className={`rounded-[1.5rem] border border-border bg-background/96 p-5 shadow-[0_22px_60px_-42px_rgba(15,23,42,0.46)] ring-1 ring-foreground/[0.03] backdrop-blur-sm ${className}`}
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
@@ -111,7 +107,7 @@ function CommandLink({
   return (
     <Link
       href={href}
-      className="group rounded-2xl border border-border bg-muted px-4 py-3 text-left transition hover:border-border hover:bg-white hover:shadow-sm"
+      className="group rounded-2xl border border-border bg-background/80 px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] transition hover:border-foreground/20 hover:bg-muted hover:shadow-sm"
     >
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -163,29 +159,10 @@ function mapActivityKind(kind: ActivityKind): DashboardActivity['type'] {
 }
 
 export default function ModularDashboard({ user }: ModularDashboardProps): React.ReactElement {
-  const [players, setPlayers] = useState<Player[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [leagueSnapshots, setLeagueSnapshots] = useState<LeagueSnapshot[]>([]);
   const [leagueStateLoading, setLeagueStateLoading] = useState(false);
   const { leagues: userLeagues, loading: leaguesLoading } = useUserLeagues(user.uid);
-
-  useEffect(() => {
-    const fetchPlayers = async () => {
-      try {
-        const response = await fetchApi('players');
-        const playersData = Array.isArray(response?.data)
-          ? response.data
-          : Array.isArray(response)
-            ? response
-            : [];
-        setPlayers(playersData as Player[]);
-      } catch (error) {
-        logger.error('Error fetching players:', error);
-      }
-    };
-
-    void fetchPlayers();
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -304,25 +281,13 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
       .slice(0, 8);
   }, [leagueSnapshots]);
 
-  const overviewStats = [
-    { label: 'My Leagues', value: userLeagues.length, format: 'number' as const },
-    { label: 'Live Rounds', value: liveLeagueCount, format: 'number' as const },
-    { label: 'Drafts Pending', value: draftPendingCount, format: 'number' as const },
-    { label: 'Player Pool', value: players.length, format: 'number' as const },
-    {
-      label: 'Next Waiver',
-      value: nextWaiverLeague ? formatDateLabel(nextWaiverLeague.nextWaiverIso) : 'Not scheduled',
-    },
-    { label: 'Tracked Leagues', value: leagueSnapshots.length, format: 'number' as const },
-  ];
-
   const primaryLeague = leagueSnapshots[0] ?? null;
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_42%,var(--league-surface-muted)_100%)]">
       <section className="mx-auto max-w-[var(--app-shell-max-width)] px-4 pb-8 pt-6 sm:px-6 lg:px-8 2xl:px-10">
         <div className="space-y-6">
-          <section className="rounded-[2rem] border border-border bg-white/92 p-5 shadow-[0_22px_70px_-45px_rgba(15,23,42,0.35)] sm:p-6">
+          <section className="rounded-[2rem] border border-border bg-background/95 p-5 shadow-[0_26px_80px_-48px_rgba(15,23,42,0.45)] ring-1 ring-foreground/[0.03] sm:p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -364,7 +329,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
             <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(2,minmax(0,0.9fr))]">
               <Link
                 href={primaryLeague ? `/leagues/${primaryLeague.id}` : '/dashboard#leagues'}
-                className="group rounded-[1.5rem] border border-border bg-foreground px-5 py-5 text-white transition hover:bg-foreground"
+                className="group rounded-[1.5rem] border border-foreground bg-foreground px-5 py-5 text-background shadow-[0_18px_44px_-32px_rgba(15,23,42,0.8)] transition hover:bg-foreground/95"
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Primary focus
@@ -442,7 +407,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                 eyebrow="League Hub"
                 title="Your leagues"
                 description="Start here to open league workspaces, switch contexts, and manage creation or invites."
-                className="scroll-mt-24 border-[color:var(--league-primary)]/20 bg-background shadow-[0_26px_70px_-44px_rgba(23,34,48,0.42)]"
+                className="scroll-mt-24 border-[color:var(--league-primary)]/30 bg-background shadow-[0_32px_80px_-48px_rgba(23,34,48,0.52)]"
               >
                 <LeagueManagementModule user={user} refreshTrigger={refreshTrigger} />
               </DashboardCard>
@@ -626,9 +591,10 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                   eyebrow="Attention Now"
                   title="What needs action"
                   description="The highest-signal league conditions and deadlines across your account."
+                  className="border-foreground/15"
                 >
                   <div className="space-y-3">
-                    <div className="rounded-xl border border-border bg-white px-4 py-4">
+                    <div className="rounded-xl border border-border bg-muted px-4 py-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Live leagues
                       </p>
@@ -641,7 +607,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                           : 'No live rounds are currently in progress.'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-border bg-white px-4 py-4">
+                    <div className="rounded-xl border border-border bg-muted px-4 py-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Draft queue
                       </p>
@@ -654,7 +620,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                           : 'No pending drafts are flagged right now.'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-border bg-white px-4 py-4">
+                    <div className="rounded-xl border border-border bg-muted px-4 py-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Upcoming checkpoint
                       </p>
@@ -674,24 +640,9 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
                   eyebrow="Next Actions"
                   title="Tool shortcuts"
                   description="Secondary tools that support league decisions without taking over the page."
+                  className="border-foreground/15"
                 >
                   <QuickActionsModule refreshTrigger={refreshTrigger} />
-                </DashboardCard>
-
-                <DashboardCard
-                  eyebrow="Performance Snapshot"
-                  title="Account overview"
-                  description="Current counts and timing signals across your player pool and league footprint."
-                >
-                  <StatsOverviewModule stats={overviewStats} refreshTrigger={refreshTrigger} />
-                </DashboardCard>
-
-                <DashboardCard
-                  eyebrow="Market Intel"
-                  title="Season scoring leaders"
-                  description="Top season scorers from the live aggregate player feed."
-                >
-                  <LeaderboardModule refreshTrigger={refreshTrigger} />
                 </DashboardCard>
               </div>
             </aside>

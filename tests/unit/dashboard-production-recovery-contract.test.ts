@@ -82,6 +82,10 @@ describe('dashboard production recovery route contract', () => {
     expect(dashboard).toContain("href=\"/dashboard#leagues\"");
     expect(dashboard).toContain('eyebrow="League Hub"');
     expect(dashboard).toContain('title="Your leagues"');
+    expect(dashboard).not.toContain('Performance Snapshot');
+    expect(dashboard).not.toContain('Account overview');
+    expect(dashboard).not.toContain('Market Intel');
+    expect(dashboard).not.toContain('Season scoring leaders');
     expect(leagueManagement).toContain('id="leagues"');
     expect(leagueManagement).toContain('leagues.map((league, index)');
     expect(leagueManagement).not.toContain('leagues.slice(0, 4)');
