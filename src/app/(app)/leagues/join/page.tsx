@@ -182,11 +182,11 @@ export default function JoinLeaguePage() {
           <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
             <button
               type="button"
-              onClick={() => router.push('/leagues')}
+              onClick={() => router.push('/dashboard#leagues')}
               className="inline-flex h-9 items-center gap-2 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-              Leagues
+              Dashboard leagues
             </button>
 
             <header className="mt-6">

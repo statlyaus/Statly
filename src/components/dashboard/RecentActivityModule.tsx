@@ -178,10 +178,10 @@ export default function RecentActivityModule({
 
       {activities.length > 5 && (
         <Link
-          href="/leagues"
+          href="/dashboard#leagues"
           className="block rounded-xl border border-border bg-muted px-4 py-2 text-center text-sm font-medium text-foreground transition hover:bg-white hover:text-foreground"
         >
-          Open all leagues
+          Open league directory
         </Link>
       )}
     </div>

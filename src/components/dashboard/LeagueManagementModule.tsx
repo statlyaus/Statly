@@ -131,7 +131,7 @@ export default function LeagueManagementModule({
   const adminLeagueCount = leagues.filter((league) => league.ownerId === user.uid).length;
 
   return (
-    <div className="flex h-full flex-col gap-4">
+    <div id="leagues" className="flex h-full scroll-mt-24 flex-col gap-4">
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl border border-border bg-muted p-3 text-center">
           <div className="text-lg font-semibold text-foreground">{leagues.length}</div>
@@ -147,8 +147,8 @@ export default function LeagueManagementModule({
         </div>
       </div>
 
-      <div className="space-y-2">
-        {leagues.slice(0, 4).map((league, index) => {
+      <div className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+        {leagues.map((league, index) => {
           const isAdmin = league.ownerId === user.uid;
 
           return (
@@ -177,7 +177,7 @@ export default function LeagueManagementModule({
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                   <span className="truncate font-mono uppercase">{league.code}</span>
-                  <span className="font-medium text-foreground">Open →</span>
+                  <span className="font-medium text-foreground">Open</span>
                 </div>
                 {league.description ? (
                   <p className="mt-2 truncate text-xs text-muted-foreground">{league.description}</p>
@@ -196,23 +196,12 @@ export default function LeagueManagementModule({
           Create
         </Link>
         <Link
-          href="/leagues"
+          href="/leagues/join"
           className="inline-flex items-center justify-center rounded-xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white"
         >
-          Browse leagues
+          Join
         </Link>
       </div>
-
-      {leagues.length > 4 ? (
-        <div className="border-t border-border pt-3">
-          <Link
-            href="/leagues"
-            className="block text-center text-sm font-medium text-foreground transition hover:text-foreground"
-          >
-            View all {leagues.length} leagues
-          </Link>
-        </div>
-      ) : null}
     </div>
   );
 }

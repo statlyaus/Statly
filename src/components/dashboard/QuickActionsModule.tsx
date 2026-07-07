@@ -27,9 +27,9 @@ export default function QuickActionsModule({
       badge: 'Build',
     },
     {
-      title: 'Leagues',
-      description: 'Open league workspaces',
-      href: '/leagues',
+      title: 'League directory',
+      description: 'Open league workspaces from the dashboard',
+      href: '/dashboard#leagues',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
