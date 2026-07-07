@@ -316,12 +316,6 @@ function EmptyState({
   );
 }
 
-const waiverTargets = [
-  { name: 'Zac Bailey', team: 'BRI', role: 'MID', rostered: '28%', trend: '+12%' },
-  { name: 'Harley Reid', team: 'WCE', role: 'MID', rostered: '35%', trend: '+8%' },
-  { name: 'Josh Daicos', team: 'COL', role: 'MID, FWD', rostered: '41%', trend: '+6%' },
-];
-
 export default function ModularDashboard({ user }: ModularDashboardProps): React.ReactElement {
   const [refreshTrigger] = useState(0);
   const [leagueSnapshots, setLeagueSnapshots] = useState<LeagueSnapshot[]>([]);
@@ -411,6 +405,9 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   const draftPendingCount = typedUserLeagues.filter((league) => league.draftCompleted === false).length;
   const liveLeagueCount = leagueSnapshots.filter((league) => league.isLive).length;
   const waiverSignalCount = leagueSnapshots.filter((league) => league.nextWaiverIso).length;
+  const scheduledEventCount = leagueSnapshots.filter(
+    (league) => league.nextEventIso || league.nextWaiverIso
+  ).length;
 
   const nextWaiverLeague = useMemo(
     () =>
@@ -465,16 +462,13 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
     }));
   }, [leagueSnapshots, typedUserLeagues, user.uid]);
 
+  const adminLeagueCount = leagueRows.filter(
+    (league) => league.role === 'owner' || league.role === 'admin'
+  ).length;
+  const managerLeagueCount = Math.max(activeLeagueCount - adminLeagueCount, 0);
   const primaryLeague = leagueRows[0] ?? null;
   const heroLeagueName = primaryLeague?.name ?? 'Select a league';
   const urgentCount = draftPendingCount + (nextWaiverLeague ? 1 : 0);
-  const standingsRows = leagueRows.slice(0, 4).map((league, index) => ({
-    team: index === 0 ? league.teamName : league.name,
-    record: ['8-2', '7-3', '6-4', '4-6'][index] ?? '4-6',
-    points: ['1,234', '1,198', '1,102', '987'][index] ?? '987',
-    trend: index === 0 ? 'up' : index === 1 ? 'down' : 'flat',
-  }));
-
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_46%,var(--league-surface-muted)_100%)]">
       <section className="mx-auto flex max-w-[var(--app-shell-max-width)] flex-col gap-5 px-4 pb-8 pt-6 sm:px-6 lg:px-8 2xl:px-10">
@@ -575,63 +569,50 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
               </div>
             </Panel>
 
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
+            <div className="grid gap-5 lg:grid-cols-2">
               <Panel
-                title="This Week's Matchups"
-                action={<SecondaryButton href="/live-scoring">View all</SecondaryButton>}
+                title="League Coverage"
+                action={<SecondaryButton href="/dashboard#leagues">Manage leagues</SecondaryButton>}
               >
-                {liveLeagueCount > 0 && primaryLeague ? (
-                  <Link
-                    href={`/leagues/${primaryLeague.id}?tab=matchup`}
-                    className="flex min-h-36 items-center justify-between rounded-xl border border-success/20 bg-success/10 px-4 py-5 transition hover:bg-success/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <span>
-                      <span className="block text-sm font-semibold text-foreground">
-                        {primaryLeague.name}
-                      </span>
-                      <span className="mt-1 block text-sm text-muted-foreground">
-                        Live matchup is available now.
-                      </span>
-                    </span>
-                    <ArrowRight className="size-5 text-success" aria-hidden="true" />
-                  </Link>
-                ) : (
-                  <EmptyState
-                    icon={CalendarDays}
-                    title="No matchups live right now"
-                    description="Check back later for live scores and updates."
-                  />
-                )}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-border bg-muted/45 p-4">
+                    <p className="text-2xl font-semibold text-foreground">{activeLeagueCount}</p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Active leagues
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/45 p-4">
+                    <p className="text-2xl font-semibold text-foreground">{adminLeagueCount}</p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Admin contexts
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/45 p-4">
+                    <p className="text-2xl font-semibold text-foreground">{managerLeagueCount}</p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Manager contexts
+                    </p>
+                  </div>
+                </div>
               </Panel>
 
               <Panel
-                title="Top Waiver Targets"
-                action={<SecondaryButton href="/players">View all players</SecondaryButton>}
+                title="Operations Queue"
+                action={<SecondaryButton href="/drafts">Open Draft Hub</SecondaryButton>}
               >
-                <div className="overflow-hidden rounded-xl border border-border">
-                  <div className="grid grid-cols-[minmax(0,1.4fr)_0.55fr_0.75fr_0.65fr] bg-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    <span>Player</span>
-                    <span>Team</span>
-                    <span>% Rostered</span>
-                    <span className="text-right">Trend</span>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between rounded-xl border border-border bg-muted/45 px-3 py-3">
+                    <span className="text-sm font-semibold text-foreground">Drafts pending</span>
+                    <span className="text-sm font-semibold text-warning">{draftPendingCount}</span>
                   </div>
-                  {waiverTargets.map((player) => (
-                    <Link
-                      key={player.name}
-                      href="/players"
-                      className="grid grid-cols-[minmax(0,1.4fr)_0.55fr_0.75fr_0.65fr] items-center border-t border-border px-3 py-2.5 text-sm transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold text-foreground">
-                          {player.name}
-                        </span>
-                        <span className="block text-xs text-muted-foreground">{player.role}</span>
-                      </span>
-                      <span className="text-muted-foreground">{player.team}</span>
-                      <span className="text-muted-foreground">{player.rostered}</span>
-                      <span className="text-right font-semibold text-success">{player.trend}</span>
-                    </Link>
-                  ))}
+                  <div className="flex items-center justify-between rounded-xl border border-border bg-muted/45 px-3 py-3">
+                    <span className="text-sm font-semibold text-foreground">Waiver windows</span>
+                    <span className="text-sm font-semibold text-success">{waiverSignalCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-border bg-muted/45 px-3 py-3">
+                    <span className="text-sm font-semibold text-foreground">Scheduled events</span>
+                    <span className="text-sm font-semibold text-info">{scheduledEventCount}</span>
+                  </div>
                 </div>
               </Panel>
             </div>
@@ -698,85 +679,75 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
               </div>
             </Panel>
 
-            <Panel
-              title="Standings Snapshot"
-              action={<SecondaryButton href={primaryLeague ? `/leagues/${primaryLeague.id}` : '/dashboard#leagues'}>View full standings</SecondaryButton>}
-            >
-              <div className="overflow-hidden rounded-xl border border-border">
-                <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_4rem_4rem] bg-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  <span>#</span>
-                  <span>Team</span>
-                  <span className="text-right">W-L</span>
-                  <span className="text-right">Pts</span>
+            <Panel title="Overview Health">
+              <div className="flex flex-col gap-2">
+                <div className="rounded-xl border border-border bg-muted/45 px-3 py-3">
+                  <p className="text-sm font-semibold text-foreground">Live coverage</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {liveLeagueCount > 0
+                      ? `${liveLeagueCount} league${liveLeagueCount === 1 ? '' : 's'} currently active.`
+                      : 'No leagues are live right now.'}
+                  </p>
                 </div>
-                {standingsRows.length > 0 ? (
-                  standingsRows.map((row, index) => (
-                    <div
-                      key={`${row.team}-${index}`}
-                      className="grid grid-cols-[2.5rem_minmax(0,1fr)_4rem_4rem] items-center border-t border-border px-3 py-3 text-sm"
-                    >
-                      <span className="font-semibold text-foreground">{index + 1}</span>
-                      <span className="min-w-0 truncate font-semibold text-foreground">
-                        {row.team}
-                      </span>
-                      <span className="text-right text-muted-foreground">{row.record}</span>
-                      <span className="text-right font-semibold text-foreground">{row.points}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-                    Join a league to see standings here.
-                  </div>
-                )}
+                <div className="rounded-xl border border-border bg-muted/45 px-3 py-3">
+                  <p className="text-sm font-semibold text-foreground">Deadline coverage</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {scheduledEventCount > 0
+                      ? `${scheduledEventCount} upcoming checkpoint${scheduledEventCount === 1 ? '' : 's'} across your leagues.`
+                      : 'No scheduled checkpoints are currently materialized.'}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border bg-muted/45 px-3 py-3">
+                  <p className="text-sm font-semibold text-foreground">League directory</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {activeLeagueCount > 0
+                      ? 'Your league directory is available from this dashboard.'
+                      : 'Create or join a league to start building your overview.'}
+                  </p>
+                </div>
               </div>
             </Panel>
           </aside>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-2">
-          <Panel title="League Activity">
-            {leagueSnapshots.some((league) => league.activity.length > 0) ? (
-              <div className="flex flex-col gap-2">
-                {leagueSnapshots
-                  .flatMap((league) =>
-                    league.activity.slice(0, 2).map((activity) => ({
-                      id: `${league.id}:${activity.id}`,
-                      text: `${league.name}: ${activity.text}`,
-                      iso: activity.iso,
-                    }))
-                  )
-                  .slice(0, 4)
-                  .map((activity) => (
-                    <div
-                      key={activity.id}
-                      className="rounded-xl border border-border bg-muted/45 px-3 py-3 text-sm"
-                    >
-                      <p className="font-medium text-foreground">{activity.text}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDateLabel(activity.iso)}
-                      </p>
-                    </div>
-                  ))}
+          <Panel title="All-League Summary">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border bg-muted/45 p-4">
+                <p className="text-sm font-semibold text-foreground">Total footprint</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{activeLeagueCount}</p>
+                <p className="mt-1 text-xs text-muted-foreground">league workspaces</p>
+              </div>
+              <div className="rounded-xl border border-border bg-muted/45 p-4">
+                <p className="text-sm font-semibold text-foreground">Admin workload</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{urgentCount}</p>
+                <p className="mt-1 text-xs text-muted-foreground">items needing attention</p>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="Setup Health" action={<SecondaryButton href="/dashboard#leagues">Review leagues</SecondaryButton>}>
+            {activeLeagueCount > 0 ? (
+              <div className="flex min-h-36 flex-col justify-center rounded-xl border border-border bg-muted/45 px-4 py-5">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 items-center justify-center rounded-lg bg-success/10 text-success">
+                    <CheckCircle2 className="size-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Overview is ready</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      League counts, draft queues, waiver checkpoints, and attention signals are aggregated across all contexts.
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : (
               <EmptyState
-                icon={Activity}
-                title="No recent movement"
-                description="Latest league transactions and admin actions will appear here."
+                icon={UsersRound}
+                title="No leagues connected"
+                description="Create or join a league to populate the top-level command center."
               />
             )}
-          </Panel>
-
-          <Panel title="Draft Room Pulse" action={<SecondaryButton href="/drafts">Open Draft Hub</SecondaryButton>}>
-            <EmptyState
-              icon={ClipboardList}
-              title={draftPendingCount > 0 ? 'Draft attention required' : 'No active draft'}
-              description={
-                draftPendingCount > 0
-                  ? 'Open the draft hub to resolve pending draft setup and queue items.'
-                  : 'Create or join a draft when you want draft state to appear here.'
-              }
-            />
           </Panel>
         </div>
       </section>

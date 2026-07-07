@@ -86,6 +86,14 @@ describe('dashboard production recovery route contract', () => {
     expect(dashboard).toContain('title="My Leagues"');
     expect(dashboard).toContain('Active Leagues');
     expect(dashboard).toContain('Attention Now');
+    expect(dashboard).toContain('League Coverage');
+    expect(dashboard).toContain('Operations Queue');
+    expect(dashboard).toContain('Overview Health');
+    expect(dashboard).toContain('All-League Summary');
+    expect(dashboard).not.toContain("This Week's Matchups");
+    expect(dashboard).not.toContain('Top Waiver Targets');
+    expect(dashboard).not.toContain('Standings Snapshot');
+    expect(dashboard).not.toContain('Draft Room Pulse');
     expect(dashboard).not.toContain('Welcome back');
     expect(dashboard).not.toContain('Track your leagues');
     expect(dashboard).not.toContain('Performance Snapshot');
