@@ -64,4 +64,29 @@ describe('dashboard production recovery route contract', () => {
     expect(navigation).toContain("name: 'Dashboard'");
     expect(navigation).toContain("name: 'Draft Hub'");
   });
+
+  it('consolidates the league directory into the dashboard route', () => {
+    const leaguesPage = readRepoFile('src/app/(app)/leagues/page.tsx');
+    const dashboard = readRepoFile('src/components/ModularDashboard.tsx');
+    const leagueManagement = readRepoFile('src/components/dashboard/LeagueManagementModule.tsx');
+    const quickActions = readRepoFile('src/components/dashboard/QuickActionsModule.tsx');
+    const recentActivity = readRepoFile('src/components/dashboard/RecentActivityModule.tsx');
+    const navigation = readRepoFile('src/components/navigation/MainNavigation.tsx');
+    const nextConfig = readRepoFile('next.config.mjs');
+
+    expect(leaguesPage).toContain("import { redirect } from 'next/navigation'");
+    expect(leaguesPage).toContain("redirect('/dashboard')");
+    expect(nextConfig).toContain("source: '/leagues'");
+    expect(nextConfig).toContain("destination: '/dashboard'");
+
+    expect(dashboard).toContain("href=\"/dashboard#leagues\"");
+    expect(leagueManagement).toContain('id="leagues"');
+    expect(leagueManagement).toContain('leagues.map((league, index)');
+    expect(leagueManagement).not.toContain('leagues.slice(0, 4)');
+    expect(leagueManagement).not.toContain('href="/leagues"');
+
+    expect(quickActions).toContain("href: '/dashboard#leagues'");
+    expect(recentActivity).toContain('href="/dashboard#leagues"');
+    expect(navigation).toContain("href: '/dashboard#leagues'");
+  });
 });

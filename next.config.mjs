@@ -45,7 +45,13 @@ const nextConfig = {
   },
 
   async redirects() {
-    return [];
+    return [
+      {
+        source: '/leagues',
+        destination: '/dashboard',
+        permanent: false,
+      },
+    ];
   },
 
   // Production optimizations

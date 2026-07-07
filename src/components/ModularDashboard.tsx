@@ -359,7 +359,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
             <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(2,minmax(0,0.9fr))]">
               <Link
-                href={primaryLeague ? `/leagues/${primaryLeague.id}` : '/leagues'}
+                href={primaryLeague ? `/leagues/${primaryLeague.id}` : '/dashboard#leagues'}
                 className="group rounded-[1.5rem] border border-border bg-foreground px-5 py-5 text-white transition hover:bg-foreground"
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -415,9 +415,9 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <CommandLink
-                href="/leagues"
-                title="Open leagues"
-                description="Jump into league workspaces and standings."
+                href="/dashboard#leagues"
+                title="Open league directory"
+                description="Jump into league workspaces and standings from this dashboard."
               />
               <CommandLink
                 href="/waivers"

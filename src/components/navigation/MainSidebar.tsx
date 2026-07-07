@@ -40,8 +40,8 @@ const navigation: NavigationItem[] = [
     iconSolid: HomeSolid,
   },
   {
-    name: 'My Leagues',
-    href: '/leagues',
+    name: 'League Directory',
+    href: '/dashboard#leagues',
     icon: UserGroupIcon,
     iconSolid: UserGroupSolid,
   },

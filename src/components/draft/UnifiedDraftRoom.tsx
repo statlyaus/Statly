@@ -470,7 +470,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     : '';
   const leagueHubHref = activeDraft.leagueId
     ? `/leagues/${encodeURIComponent(activeDraft.leagueId)}`
-    : '/leagues';
+    : '/dashboard#leagues';
   const rosterHref = activeDraft.leagueId
     ? `/leagues/${encodeURIComponent(activeDraft.leagueId)}?tab=roster`
     : '/rosters';

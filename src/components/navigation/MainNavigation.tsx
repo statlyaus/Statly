@@ -110,8 +110,8 @@ const primaryNavigationItems: NavigationItem[] = [
   },
   {
     name: 'Leagues',
-    href: '/leagues',
-    description: 'League workspaces and history',
+    href: '/dashboard#leagues',
+    description: 'League directory on your dashboard',
     icon: (
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -288,6 +288,7 @@ function isNavActive(pathname: string | null | undefined, href: string): boolean
   const p = pathname ?? '';
   if (p === href) return true;
   if (href === '/dashboard') return p === '/' || p === '/dashboard';
+  if (href === '/dashboard#leagues') return p.startsWith('/leagues');
   if (href === '/leagues') return p.startsWith('/leagues');
   if (href === '/players') return p.startsWith('/players');
   if (href === '/drafts') return p.startsWith('/drafts');
