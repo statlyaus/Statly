@@ -229,50 +229,40 @@ function KpiCard({
 }
 
 function LeagueListRow({ league, index }: { league: LeagueRow; index: number }) {
-  const iconTone = index % 4;
-  const iconClasses = [
-    'border-[color:var(--league-success)]/20 bg-[color:var(--league-success)] text-white shadow-[0_16px_30px_-20px_rgba(47,107,88,0.75)]',
-    'border-border bg-background text-[color:var(--league-success)]',
-    'border-transparent bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]',
-    'border-border bg-background text-[color:var(--league-success)]',
-  ][iconTone];
-  const isFeatured = index === 0;
   const roleLabel = league.role === 'owner' || league.role === 'admin' ? 'Admin' : 'Manager';
 
   return (
     <Link
       href={`/leagues/${league.id}`}
-      className={`group relative flex min-h-[6.75rem] items-center gap-4 overflow-hidden rounded-xl border bg-background px-4 py-4 text-[color:var(--league-success)] transition hover:border-[color:var(--league-success)]/40 hover:bg-[color:var(--league-success-soft)]/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:gap-6 sm:px-6 ${
-        isFeatured
-          ? 'border-[color:var(--league-success)]/35 bg-[color:var(--league-success-soft)]/45 shadow-[0_18px_40px_-36px_rgba(47,107,88,0.7)] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[color:var(--league-success)]'
-          : 'border-border'
-      }`}
+      className="group flex min-h-[4.75rem] items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5 transition hover:border-[color:var(--league-success)]/40 hover:bg-[color:var(--league-success-soft)]/35 focus-visible:border-[color:var(--league-success)]/45 focus-visible:bg-[color:var(--league-success-soft)]/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:gap-4 sm:px-4"
     >
       <span
-        className={`relative flex size-16 shrink-0 items-center justify-center rounded-xl border ${iconClasses}`}
+        className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition group-hover:border-[color:var(--league-success)]/25 group-hover:bg-[color:var(--league-success)] group-hover:text-white group-focus-visible:border-[color:var(--league-success)]/25 group-focus-visible:bg-[color:var(--league-success)] group-focus-visible:text-white"
       >
         {index % 3 === 0 ? (
-          <Trophy className="size-8" aria-hidden="true" />
+          <Trophy className="size-5" aria-hidden="true" />
         ) : index % 3 === 1 ? (
-          <Shield className="size-8" aria-hidden="true" />
+          <Shield className="size-5" aria-hidden="true" />
         ) : (
-          <Activity className="size-8" aria-hidden="true" />
+          <Activity className="size-5" aria-hidden="true" />
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xl font-semibold tracking-tight text-foreground">
+        <span className="block truncate text-base font-semibold tracking-tight text-foreground">
           {league.name}
         </span>
-        <span className="mt-2 block truncate text-base text-muted-foreground">{league.memberText}</span>
+        <span className="mt-1 block truncate text-sm text-muted-foreground">{league.memberText}</span>
       </span>
-      <span className="hidden items-center gap-8 sm:flex">
-        <span className="rounded-full bg-[color:var(--league-success)] px-4 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white shadow-[0_10px_22px_-16px_rgba(47,107,88,0.95)]">
+      <span className="hidden items-center gap-5 sm:flex">
+        <span className="rounded-full bg-foreground px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-background transition group-hover:bg-[color:var(--league-success)] group-hover:text-white group-focus-visible:bg-[color:var(--league-success)] group-focus-visible:text-white">
           {roleLabel}
         </span>
-        <span className="text-base font-semibold text-[color:var(--league-success)]">Open</span>
+        <span className="text-sm font-semibold text-foreground transition group-hover:text-[color:var(--league-success)] group-focus-visible:text-[color:var(--league-success)]">
+          Open
+        </span>
       </span>
       <ArrowRight
-        className="size-6 shrink-0 text-[color:var(--league-success)] transition group-hover:translate-x-1"
+        className="size-5 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-[color:var(--league-success)] group-focus-visible:text-[color:var(--league-success)]"
         aria-hidden="true"
       />
     </Link>
@@ -573,19 +563,10 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
 
         <Panel
           title="My Leagues"
-          action={
-            <SecondaryButton
-              href="/dashboard#leagues"
-              className="min-h-12 px-7 text-base text-[color:var(--league-success)] hover:border-[color:var(--league-success)]/35 hover:bg-[color:var(--league-success-soft)]"
-            >
-              View all leagues
-            </SecondaryButton>
-          }
-          className="scroll-mt-24 rounded-3xl p-6 shadow-[0_24px_60px_-48px_rgba(15,23,42,0.55)] lg:p-8"
-          headerClassName="mb-7"
-          titleClassName="text-3xl lg:text-4xl"
+          action={<SecondaryButton href="/dashboard#leagues">View all leagues</SecondaryButton>}
+          className="scroll-mt-24"
         >
-          <div id="leagues" className="flex scroll-mt-24 flex-col gap-3">
+          <div id="leagues" className="flex scroll-mt-24 flex-col gap-2">
             {leagueRows.length > 0 ? (
               leagueRows.slice(0, 6).map((league, index) => (
                 <LeagueListRow key={league.id} league={league} index={index} />

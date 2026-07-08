@@ -88,8 +88,9 @@ describe('dashboard production recovery route contract', () => {
     expect(dashboard).toContain('All leagues overview');
     expect(dashboard).not.toContain('heroLeagueName');
     expect(dashboard).toContain('title="My Leagues"');
-    expect(dashboard).toContain('titleClassName="text-3xl lg:text-4xl"');
-    expect(dashboard).toContain('bg-[color:var(--league-success)]');
+    expect(dashboard).toContain('group-hover:bg-[color:var(--league-success)]');
+    expect(dashboard).toContain('hover:bg-[color:var(--league-success-soft)]/35');
+    expect(dashboard).not.toContain('isFeatured');
     expect(dashboard).toContain('View all leagues');
     expect(dashboard).toContain('Active Leagues');
     expect(dashboard).toContain('Attention Now');
