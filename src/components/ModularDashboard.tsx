@@ -107,18 +107,24 @@ function Panel({
   action,
   children,
   className = '',
+  headerClassName = '',
+  titleClassName = '',
 }: {
   title: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  headerClassName?: string;
+  titleClassName?: string;
 }) {
   return (
     <section
       className={`rounded-2xl border border-border bg-background p-4 shadow-[0_18px_44px_-38px_rgba(15,23,42,0.45)] ring-1 ring-foreground/[0.03] ${className}`}
     >
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+      <div className={`mb-4 flex items-center justify-between gap-3 ${headerClassName}`}>
+        <h2 className={`text-lg font-semibold tracking-tight text-foreground ${titleClassName}`}>
+          {title}
+        </h2>
         {action}
       </div>
       {children}
@@ -161,11 +167,19 @@ function ActionButton({ href, children }: { href: string; children: React.ReactN
   );
 }
 
-function SecondaryButton({ href, children }: { href: string; children: React.ReactNode }) {
+function SecondaryButton({
+  href,
+  children,
+  className = '',
+}: {
+  href: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <Link
       href={href}
-      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition hover:border-foreground/25 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className={`inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition hover:border-foreground/25 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${className}`}
     >
       {children}
     </Link>
@@ -217,41 +231,48 @@ function KpiCard({
 function LeagueListRow({ league, index }: { league: LeagueRow; index: number }) {
   const iconTone = index % 4;
   const iconClasses = [
-    'bg-[color:var(--league-primary)] text-white',
-    'bg-info/12 text-info',
-    'bg-warning/14 text-warning',
-    'bg-success/12 text-success',
+    'border-[color:var(--league-success)]/20 bg-[color:var(--league-success)] text-white shadow-[0_16px_30px_-20px_rgba(47,107,88,0.75)]',
+    'border-border bg-background text-[color:var(--league-success)]',
+    'border-transparent bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]',
+    'border-border bg-background text-[color:var(--league-success)]',
   ][iconTone];
+  const isFeatured = index === 0;
+  const roleLabel = league.role === 'owner' || league.role === 'admin' ? 'Admin' : 'Manager';
 
   return (
     <Link
       href={`/leagues/${league.id}`}
-      className="group flex items-center gap-3 rounded-xl border border-border bg-muted/55 px-3 py-2.5 transition hover:border-foreground/20 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className={`group relative flex min-h-[6.75rem] items-center gap-4 overflow-hidden rounded-xl border bg-background px-4 py-4 text-[color:var(--league-success)] transition hover:border-[color:var(--league-success)]/40 hover:bg-[color:var(--league-success-soft)]/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:gap-6 sm:px-6 ${
+        isFeatured
+          ? 'border-[color:var(--league-success)]/35 bg-[color:var(--league-success-soft)]/45 shadow-[0_18px_40px_-36px_rgba(47,107,88,0.7)] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[color:var(--league-success)]'
+          : 'border-border'
+      }`}
     >
-      <span className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${iconClasses}`}>
+      <span
+        className={`relative flex size-16 shrink-0 items-center justify-center rounded-xl border ${iconClasses}`}
+      >
         {index % 3 === 0 ? (
-          <Trophy className="size-5" aria-hidden="true" />
+          <Trophy className="size-8" aria-hidden="true" />
         ) : index % 3 === 1 ? (
-          <Shield className="size-5" aria-hidden="true" />
+          <Shield className="size-8" aria-hidden="true" />
         ) : (
-          <Activity className="size-5" aria-hidden="true" />
+          <Activity className="size-8" aria-hidden="true" />
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-semibold text-foreground">{league.name}</span>
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-          {league.code} <span aria-hidden="true">•</span> {league.memberText}
+        <span className="block truncate text-xl font-semibold tracking-tight text-foreground">
+          {league.name}
         </span>
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-          {league.description}
+        <span className="mt-2 block truncate text-base text-muted-foreground">{league.memberText}</span>
+      </span>
+      <span className="hidden items-center gap-8 sm:flex">
+        <span className="rounded-full bg-[color:var(--league-success)] px-4 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white shadow-[0_10px_22px_-16px_rgba(47,107,88,0.95)]">
+          {roleLabel}
         </span>
+        <span className="text-base font-semibold text-[color:var(--league-success)]">Open</span>
       </span>
-      <span className="hidden rounded-full bg-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-background sm:inline-flex">
-        {league.role === 'owner' || league.role === 'admin' ? 'Admin' : 'Manager'}
-      </span>
-      <span className="text-sm font-semibold text-success">Open</span>
       <ArrowRight
-        className="size-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground"
+        className="size-6 shrink-0 text-[color:var(--league-success)] transition group-hover:translate-x-1"
         aria-hidden="true"
       />
     </Link>
@@ -550,33 +571,42 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
           </div>
         </section>
 
+        <Panel
+          title="My Leagues"
+          action={
+            <SecondaryButton
+              href="/dashboard#leagues"
+              className="min-h-12 px-7 text-base text-[color:var(--league-success)] hover:border-[color:var(--league-success)]/35 hover:bg-[color:var(--league-success-soft)]"
+            >
+              View all leagues
+            </SecondaryButton>
+          }
+          className="scroll-mt-24 rounded-3xl p-6 shadow-[0_24px_60px_-48px_rgba(15,23,42,0.55)] lg:p-8"
+          headerClassName="mb-7"
+          titleClassName="text-3xl lg:text-4xl"
+        >
+          <div id="leagues" className="flex scroll-mt-24 flex-col gap-3">
+            {leagueRows.length > 0 ? (
+              leagueRows.slice(0, 6).map((league, index) => (
+                <LeagueListRow key={league.id} league={league} index={index} />
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-border bg-muted/45 px-4 py-6 text-center">
+                <p className="text-sm font-semibold text-foreground">No leagues yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create or join a league to populate your command center.
+                </p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <SecondaryButton href="/leagues/new">Create league</SecondaryButton>
+                  <SecondaryButton href="/leagues/join">Join league</SecondaryButton>
+                </div>
+              </div>
+            )}
+          </div>
+        </Panel>
+
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
           <div className="flex flex-col gap-5">
-            <Panel
-              title="My Leagues"
-              action={<SecondaryButton href="/dashboard#leagues">View all leagues</SecondaryButton>}
-              className="scroll-mt-24"
-            >
-              <div id="leagues" className="flex scroll-mt-24 flex-col gap-2">
-                {leagueRows.length > 0 ? (
-                  leagueRows.slice(0, 6).map((league, index) => (
-                    <LeagueListRow key={league.id} league={league} index={index} />
-                  ))
-                ) : (
-                  <div className="rounded-xl border border-dashed border-border bg-muted/45 px-4 py-6 text-center">
-                    <p className="text-sm font-semibold text-foreground">No leagues yet</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Create or join a league to populate your command center.
-                    </p>
-                    <div className="mt-4 flex justify-center gap-2">
-                      <SecondaryButton href="/leagues/new">Create league</SecondaryButton>
-                      <SecondaryButton href="/leagues/join">Join league</SecondaryButton>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Panel>
-
             <div className="grid gap-5 lg:grid-cols-2">
               <Panel
                 title="League Coverage"
