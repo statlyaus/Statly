@@ -1,11 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import {
-  getAuth,
-  setPersistence,
-  browserLocalPersistence,
-  connectAuthEmulator,
-} from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
@@ -34,6 +29,7 @@ if (process.env.NODE_ENV === 'development') {
 let db: ReturnType<typeof getFirestore> | null = null;
 let auth: ReturnType<typeof getAuth> | null = null;
 let analytics: ReturnType<typeof getAnalytics> | null = null;
+let authEmulatorReady: Promise<void> = Promise.resolve();
 
 if (firebaseConfig.apiKey && firebaseConfig.projectId) {
   try {
@@ -53,18 +49,23 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
     }
 
     // Optional: connect to local emulators when enabled (development only)
-    if (
-      useFirebaseEmulators && db && auth
-    ) {
+    if (useFirebaseEmulators && db && auth) {
       const fsHost = process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST ?? '127.0.0.1';
       const fsPort = Number(process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT ?? '8080');
       const authUrl = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL ?? 'http://127.0.0.1:9099';
 
-      try {
-        connectAuthEmulator(auth, authUrl, { disableWarnings: true });
-      } catch {
-        /* ignore already-connected/unsupported */
-      }
+      const emulatorAuth = auth;
+      authEmulatorReady = import('firebase/auth')
+        .then(({ connectAuthEmulator }) => {
+          try {
+            connectAuthEmulator(emulatorAuth, authUrl, { disableWarnings: true });
+          } catch {
+            /* ignore already-connected/unsupported */
+          }
+        })
+        .catch(() => {
+          /* ignore unavailable emulator connector during dev HMR */
+        });
 
       try {
         connectFirestoreEmulator(db, fsHost, fsPort);
@@ -72,11 +73,6 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
         /* ignore already-connected/unsupported */
       }
     }
-
-    // Ensure session persists across tabs/reloads for predictable UX
-    setPersistence(auth!, browserLocalPersistence).catch((e) => {
-      console.warn('Failed to set Firebase auth persistence:', e);
-    });
   } catch (error) {
     console.warn('Firebase initialization failed:', error);
     // Continue with null values for development
@@ -85,4 +81,4 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
   console.warn('Firebase config is missing. Running without Firebase integration.');
 }
 
-export { db, auth, analytics };
+export { db, auth, analytics, authEmulatorReady };
