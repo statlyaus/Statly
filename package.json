@@ -45,6 +45,7 @@
     "player-data:temp-db-apply-simulation": "tsx Scripts/player-data-convergence-temp-db-apply-simulation.ts",
     "player-data:runner": "tsx Scripts/player-data-convergence-runner.ts",
     "db:check": "tsx Scripts/check-database.ts",
+    "db:check-league-ownership": "tsx Scripts/check-league-ownership-invariants.ts",
     "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
     "test:unit": "vitest run --config vitest.config.unit.ts",
     "test:int": "vitest run --config vitest.config.int.ts",

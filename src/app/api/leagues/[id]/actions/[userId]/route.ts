@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { LeagueOwnershipService } from '@/server/rosters/LeagueOwnershipService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
@@ -337,25 +338,15 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
     const leagueId = String(action.leagueId);
     const memberId = String(action.memberId);
 
-    await prisma.$transaction(async (tx) => {
-      const roster = await tx.leagueRoster.findUnique({
-        where: { leagueId_memberId: { leagueId, memberId } },
-        select: { playerIds: true },
-      });
-
-      const playerIds = parsePlayerIds(roster?.playerIds);
-      const nextPlayerIds = playerIds.filter((id) => id !== playerId);
-
-      await tx.leagueRosterPlayer.deleteMany({
-        where: { leagueId, memberId, playerId },
-      });
-
-      if (roster) {
-        await tx.leagueRoster.update({
-          where: { leagueId_memberId: { leagueId, memberId } },
-          data: { playerIds: JSON.stringify(nextPlayerIds) },
-        });
-      }
+    const parsedProcessingAt = new Date(String(action.processingAt));
+    const availableAt = Number.isNaN(parsedProcessingAt.getTime())
+      ? new Date(Date.now() + 24 * 60 * 60 * 1000)
+      : parsedProcessingAt;
+    await new LeagueOwnershipService().dropToWaivers({
+      leagueId,
+      memberId,
+      playerId,
+      availableAt,
     });
 
     await new WaiverAvailabilityProjectionService().projectLeague({ leagueId });
@@ -382,15 +373,6 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
       SET status = 'REJECTED', processedAt = datetime('now')
       WHERE id = ${actionId}
     `;
-  }
-}
-
-function parsePlayerIds(raw: unknown): string[] {
-  try {
-    const parsed = JSON.parse(String(raw || '[]'));
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
-  } catch {
-    return [];
   }
 }
 

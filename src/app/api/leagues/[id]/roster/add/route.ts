@@ -9,19 +9,11 @@ import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import {
+  LeagueOwnershipService,
+  OwnershipMutationError,
+} from '@/server/rosters/LeagueOwnershipService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
-
-function parsePlayerIds(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String);
-  if (typeof value !== 'string') return [];
-
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -33,54 +25,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const playerId = typeof body.playerId === 'string' ? body.playerId.trim() : '';
     if (!leagueId || !playerId) return errorResponse('League ID and player ID are required', 400);
 
-    const [member, player, existingOwnership, activeWaiverHold] = await prisma.$transaction([
-      prisma.leagueMember.findFirst({ where: { leagueId, userId }, select: { id: true } }),
-      prisma.player.findUnique({ where: { id: playerId }, select: { id: true } }),
-      prisma.leagueRosterPlayer.findFirst({
-        where: { leagueId, playerId },
-        select: { memberId: true },
-      }),
-      prisma.teamAction.findFirst({
-        where: {
-          leagueId,
-          actionType: 'DROP_PLAYER',
-          status: 'PENDING',
-          processingAt: { gt: new Date() },
-          details: { contains: `"playerId":"${playerId}"` },
-        },
-        select: { id: true },
-      }),
-    ]);
-
+    const member = await prisma.leagueMember.findUnique({
+      where: { leagueId_userId: { leagueId, userId } },
+      select: { id: true },
+    });
     if (!member) return errorResponse('User is not a member of this league', 404);
-    if (!player) return errorResponse('Player not found', 404);
-    if (existingOwnership) return errorResponse('Player already owned in this league', 409);
-    if (activeWaiverHold) return errorResponse('Player is on waivers', 409);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const roster = await tx.leagueRoster.upsert({
-        where: { leagueId_memberId: { leagueId, memberId: member.id } },
-        create: { leagueId, memberId: member.id, playerIds: JSON.stringify([playerId]) },
-        update: {},
-      });
-
-      const nextPlayerIds = Array.from(new Set([...parsePlayerIds(roster.playerIds), playerId]));
-
-      await tx.leagueRoster.update({
-        where: { leagueId_memberId: { leagueId, memberId: member.id } },
-        data: { playerIds: JSON.stringify(nextPlayerIds) },
-      });
-
-      await tx.leagueRosterPlayer.create({
-        data: {
-          leagueId,
-          memberId: member.id,
-          playerId,
-          acquiredBy: 'FREE_AGENT',
-        },
-      });
-
-      return { rosterId: roster.id, playerIds: nextPlayerIds };
+    const result = await new LeagueOwnershipService().addFreeAgent({
+      leagueId,
+      memberId: member.id,
+      playerId,
     });
 
     await Promise.allSettled([
@@ -89,13 +43,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       revalidateTag(tags.waivers(leagueId)),
     ]);
 
-    return successResponse({
-      leagueId,
-      playerId,
-      rosterId: result.rosterId,
-      playerIds: result.playerIds,
-    });
+    return successResponse({ leagueId, playerId, playerIds: result.playerIds });
   } catch (error) {
+    if (error instanceof OwnershipMutationError) {
+      const status =
+        error.code === 'LEAGUE_NOT_FOUND' ||
+        error.code === 'TEAM_NOT_FOUND' ||
+        error.code === 'PLAYER_NOT_FOUND'
+          ? 404
+          : 409;
+      return errorResponse(error.message, status);
+    }
     logger.error('Failed to add player to roster', {
       error: error instanceof Error ? error.message : String(error),
     });

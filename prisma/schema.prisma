@@ -50,6 +50,8 @@ model League {
   lineups        LeagueLineup[]
   matchupScores  LeagueMatchupScore[]
   standings      LeagueStanding[]
+  waiverHolds    LeagueWaiverHold[]
+  trades         LeagueTrade[]
   createdAt      DateTime             @default(now())
 
   @@index([ownerId])
@@ -82,15 +84,20 @@ model LeagueMember {
   lineups                  LeagueLineup[]
   matchupScores            LeagueMatchupScore[]
   standings                LeagueStanding[]
+  releasedWaiverHolds      LeagueWaiverHold[]
+  proposedTrades           LeagueTrade[]        @relation("TradeProposer")
+  receivedTrades           LeagueTrade[]        @relation("TradeRecipient")
+  sentTradePlayers         LeagueTradePlayer[]  @relation("TradePlayerFrom")
+  receivedTradePlayers     LeagueTradePlayer[]  @relation("TradePlayerTo")
 
   // Lobby relations
   watchlists      DraftWatchlist[]
   preDraftQueues  PreDraftQueue[]
   lobbyActivities LobbyActivity[]
 
+  @@unique([leagueId, userId])
   @@index([leagueId])
   @@index([userId])
-  @@index([leagueId, userId])
   @@index([draftSlot])
 }
 
@@ -319,6 +326,8 @@ model Player {
   picks         Pick[]
   rosterPlayers LeagueRosterPlayer[]
   lineupPlayers LeagueLineupPlayer[]
+  waiverHolds   LeagueWaiverHold[]
+  tradePlayers  LeagueTradePlayer[]
 
   // Lobby relations
   watchlists     DraftWatchlist[]
@@ -401,6 +410,74 @@ model LeagueRosterPlayer {
   @@unique([leagueId, memberId, playerId])
   @@index([leagueId, memberId])
   @@index([leagueId, acquiredBy])
+}
+
+// An active record means the player cannot be added as a free agent until availableAt.
+// Ownership itself remains represented only by LeagueRosterPlayer.
+model LeagueWaiverHold {
+  id                 String   @id @default(cuid())
+  leagueId           String
+  playerId           String
+  releasedByMemberId String
+  availableAt        DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  league     League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  player     Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  releasedBy LeagueMember @relation(fields: [releasedByMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, playerId])
+  @@index([leagueId, availableAt])
+  @@index([releasedByMemberId])
+}
+
+enum LeagueTradeStatus {
+  PENDING
+  PROCESSED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+model LeagueTrade {
+  id                String            @id @default(cuid())
+  leagueId          String
+  proposerMemberId  String
+  recipientMemberId String
+  status            LeagueTradeStatus @default(PENDING)
+  message           String?
+  expiresAt         DateTime
+  processedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  league    League              @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  proposer  LeagueMember        @relation("TradeProposer", fields: [proposerMemberId], references: [id], onDelete: Cascade)
+  recipient LeagueMember        @relation("TradeRecipient", fields: [recipientMemberId], references: [id], onDelete: Cascade)
+  players   LeagueTradePlayer[]
+
+  @@index([leagueId, status])
+  @@index([proposerMemberId, status])
+  @@index([recipientMemberId, status])
+}
+
+model LeagueTradePlayer {
+  id           String   @id @default(cuid())
+  tradeId      String
+  playerId     String
+  fromMemberId String
+  toMemberId   String
+  createdAt    DateTime @default(now())
+
+  trade      LeagueTrade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  player     Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  fromMember LeagueMember @relation("TradePlayerFrom", fields: [fromMemberId], references: [id], onDelete: Cascade)
+  toMember   LeagueMember @relation("TradePlayerTo", fields: [toMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([tradeId, playerId])
+  @@index([fromMemberId])
+  @@index([toMemberId])
 }
 
 model LeagueMatchup {

@@ -49,23 +49,13 @@ export const onTradeUpdate = functions
 
     if (!tradeData) return;
 
-    functions.logger.info(`Processing league-specific trade update in league ${leagueId}`);
-
-    try {
-      switch (tradeData.status) {
-        case 'PROPOSED':
-          await handleLeagueTradeProposal(leagueId, tradeId);
-          break;
-        case 'ACCEPTED':
-          await processAcceptedLeagueTrade(leagueId, tradeId, tradeData);
-          break;
-        case 'REJECTED':
-          await notifyLeagueTradeRejection(leagueId);
-          break;
+    // SQL owns trade validation and roster transfer. Firestore mirrors that state for realtime reads.
+    functions.logger.info(
+      `Ignoring legacy Firestore trade mutation for ${tradeId} in league ${leagueId}`,
+      {
+        status: tradeData.status,
       }
-    } catch (error) {
-      functions.logger.error(`League-scoped trade processing failed for ${tradeId}:`, error);
-    }
+    );
   });
 
 /**
@@ -216,85 +206,6 @@ async function isPlayerAvailable(leagueId: string, playerId: string): Promise<bo
   return data?.leagueAvailability?.[leagueId] !== false;
 }
 
-// League-specific trade processing functions
-
-async function handleLeagueTradeProposal(leagueId: string, tradeId: string): Promise<void> {
-  // Validate trade within league context
-  const isValid = await validateTradeForLeague(leagueId);
-
-  if (!isValid) {
-    await db.collection('leagues').doc(leagueId).collection('trades').doc(tradeId).update({
-      status: 'REJECTED',
-      rejectionReason: 'Invalid trade configuration for this league',
-      updatedAt: Timestamp.now(),
-    });
-    return;
-  }
-
-  // Set expiration (72 hours default)
-  const tradeExpiresAt = Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-
-  await db.collection('leagues').doc(leagueId).collection('trades').doc(tradeId).update({
-    expiresAt: tradeExpiresAt,
-    updatedAt: Timestamp.now(),
-  });
-
-  // Notify trade partner within league
-  await notifyLeagueTradePartner(leagueId);
-}
-
-async function processAcceptedLeagueTrade(
-  leagueId: string,
-  tradeId: string,
-  tradeData: any
-): Promise<void> {
-  const batch = db.batch();
-
-  // Update rosters within league scope
-  const fromRosterRef = db
-    .collection('leagues')
-    .doc(leagueId)
-    .collection('rosters')
-    .doc(tradeData.fromTeamId);
-
-  const toRosterRef = db
-    .collection('leagues')
-    .doc(leagueId)
-    .collection('rosters')
-    .doc(tradeData.toTeamId);
-
-  // Remove players from sending team
-  batch.update(fromRosterRef, {
-    playerIds: FieldValue.arrayRemove(...tradeData.fromPlayerIds),
-    updatedAt: Timestamp.now(),
-  });
-
-  // Remove players from receiving team who are being sent away
-  batch.update(toRosterRef, {
-    playerIds: FieldValue.arrayRemove(...tradeData.toPlayerIds),
-    updatedAt: Timestamp.now(),
-  });
-
-  // Add players to receiving team
-  batch.update(toRosterRef, {
-    playerIds: FieldValue.arrayUnion(...tradeData.fromPlayerIds),
-    updatedAt: Timestamp.now(),
-  });
-
-  // Mark trade as processed within league
-  const tradeRef = db.collection('leagues').doc(leagueId).collection('trades').doc(tradeId);
-
-  batch.update(tradeRef, {
-    status: 'PROCESSED',
-    processedAt: Timestamp.now(),
-    updatedAt: Timestamp.now(),
-  });
-
-  await batch.commit();
-
-  functions.logger.info(`League trade ${tradeId} processed successfully in league ${leagueId}`);
-}
-
 // Waiver processing functions
 
 async function getLeaguesWithPendingWaivers(): Promise<string[]> {
@@ -405,18 +316,6 @@ async function processWaiverClaim(leagueId: string, waiver: any, batch: any): Pr
   return true;
 }
 
-// League-specific notification functions
-
-async function notifyLeagueTradePartner(leagueId: string): Promise<void> {
-  // Implement league-scoped trade proposal notification
-  functions.logger.info(`Notifying trade partner in league ${leagueId}`);
-}
-
-async function notifyLeagueTradeRejection(leagueId: string): Promise<void> {
-  // Implement league-scoped trade rejection notification
-  functions.logger.info(`Notifying trade rejection in league ${leagueId}`);
-}
-
 // Team-specific notification functions
 
 async function notifyTeamRosterChanges(
@@ -480,7 +379,9 @@ async function syncRosterOwnershipForLeague(
 
   await Promise.all([
     ...addedPlayers.map((playerId) => updatePlayerAvailabilityForLeague(leagueId, playerId, false)),
-    ...removedPlayers.map((playerId) => updatePlayerAvailabilityForLeague(leagueId, playerId, true)),
+    ...removedPlayers.map((playerId) =>
+      updatePlayerAvailabilityForLeague(leagueId, playerId, true)
+    ),
   ]);
 }
 
@@ -494,15 +395,6 @@ function getRosterPlayerIds(data: DocumentData): string[] {
 
 function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
-}
-
-// League-specific validation functions
-
-async function validateTradeForLeague(leagueId: string): Promise<boolean> {
-  // Implement league-specific trade validation logic
-  // Check league roster limits, position requirements, etc.
-  functions.logger.info(`Validating trade for league ${leagueId}`);
-  return true;
 }
 
 // League-specific player availability functions
