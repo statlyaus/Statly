@@ -2,23 +2,22 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { z } from 'zod';
+
 import { adminDb } from '@/lib/firebaseAdmin';
-import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { logLeagueActivity } from '@/lib/activity';
 import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { LeagueTradeService, TradeMutationError } from '@/server/trades/LeagueTradeService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const tradeSchema = z.object({
-  fromTeamId: z.string().trim().min(1),
-  toTeamId: z.string().trim().min(1),
-  fromUserId: z.string().trim().min(1),
-  toUserId: z.string().trim().min(1),
-  playersOffered: z.array(z.string()).default([]),
-  playersRequested: z.array(z.string()).default([]),
+  recipientMemberId: z.string().trim().min(1).optional(),
+  toTeamId: z.string().trim().min(1).optional(),
+  playersOffered: z.array(z.string().trim().min(1)).default([]),
+  playersRequested: z.array(z.string().trim().min(1)).default([]),
   picksOffered: z.array(z.unknown()).default([]),
   picksRequested: z.array(z.unknown()).default([]),
   message: z.string().trim().max(1000).optional(),
@@ -28,14 +27,10 @@ const tradeSchema = z.object({
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: leagueId } = await params;
-    if (!leagueId) {
-      return NextResponse.json({ error: 'Missing leagueId' }, { status: 400 });
-    }
+    if (!leagueId) return NextResponse.json({ error: 'Missing leagueId' }, { status: 400 });
 
     const userId = await getAuthenticatedUserId(req);
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const parsed = tradeSchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) {
@@ -45,77 +40,99 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    const trade = parsed.data;
-    if (trade.fromUserId !== userId) {
-      return NextResponse.json({ error: 'Trade proposer mismatch' }, { status: 403 });
-    }
-
-    const [proposerMembership, recipientMembership] = await Promise.all([
-      verifyLeagueMembership(leagueId, trade.fromUserId),
-      verifyLeagueMembership(leagueId, trade.toUserId),
-    ]);
-
-    if (!proposerMembership.isMember || !recipientMembership.isMember) {
+    const input = parsed.data;
+    if (input.picksOffered.length > 0 || input.picksRequested.length > 0) {
       return NextResponse.json(
-        { error: 'Trade participants must be league members' },
-        { status: 403 }
+        { error: 'Draft-pick assets are not supported by the canonical trade system yet' },
+        { status: 400 }
       );
     }
-
-    const expiresAt = toTradeExpiry(trade.expiresAt);
-    const tradeRef = adminDb.collection('leagues').doc(leagueId).collection('trades').doc();
-    const tradeDoc = {
-      leagueId,
-      fromTeamId: trade.fromTeamId,
-      toTeamId: trade.toTeamId,
-      fromUserId: trade.fromUserId,
-      toUserId: trade.toUserId,
-      playersOffered: trade.playersOffered,
-      playersRequested: trade.playersRequested,
-      picksOffered: trade.picksOffered,
-      picksRequested: trade.picksRequested,
-      status: 'PENDING',
-      ...(trade.message ? { message: trade.message } : {}),
-      expiresAt,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    await tradeRef.set(tradeDoc);
-
-    await logLeagueActivity(leagueId, 'trade-proposed', {
-      tradeId: tradeRef.id,
-      fromUserId: trade.fromUserId,
-      toUserId: trade.toUserId,
-      fromTeamId: trade.fromTeamId,
-      toTeamId: trade.toTeamId,
-      playersOffered: trade.playersOffered,
-      playersRequested: trade.playersRequested,
-    });
-
-    try {
-      await Promise.allSettled([
-        revalidateTag(tags.trades(leagueId)),
-        revalidateTag(tags.league(leagueId)),
-      ]);
-    } catch (error) {
-      logger.warn('Failed to revalidate tags after trade proposal', { leagueId, error });
+    const recipientMemberId = input.recipientMemberId ?? input.toTeamId;
+    if (!recipientMemberId) {
+      return NextResponse.json({ error: 'A receiving team is required' }, { status: 400 });
     }
 
-    return NextResponse.json({ id: tradeRef.id }, { status: 201 });
+    const trade = await new LeagueTradeService().createProposal({
+      leagueId,
+      proposerUserId: userId,
+      recipientMemberId,
+      playersOffered: input.playersOffered,
+      playersRequested: input.playersRequested,
+      message: input.message,
+      expiresAt: toTradeExpiry(input.expiresAt),
+    });
+
+    await Promise.allSettled([
+      projectTradeToFirestore(trade),
+      logLeagueActivity(leagueId, 'trade-proposed', {
+        tradeId: trade.id,
+        fromUserId: trade.proposer.userId,
+        toUserId: trade.recipient.userId,
+        fromTeamId: trade.proposerMemberId,
+        toTeamId: trade.recipientMemberId,
+        playersOffered: input.playersOffered,
+        playersRequested: input.playersRequested,
+      }),
+      revalidateTag(tags.trades(leagueId)),
+      revalidateTag(tags.league(leagueId)),
+    ]);
+
+    return NextResponse.json({ id: trade.id }, { status: 201 });
   } catch (error) {
+    if (error instanceof TradeMutationError) {
+      const status = error.code === 'TEAM_NOT_FOUND' ? 404 : error.code === 'FORBIDDEN' ? 403 : 409;
+      return NextResponse.json({ error: error.message }, { status });
+    }
     logger.apiError('POST', '/api/leagues/[id]/trades', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
+export async function projectTradeToFirestore(trade: {
+  id: string;
+  leagueId: string;
+  proposerMemberId: string;
+  recipientMemberId: string;
+  expiresAt: Date;
+  message: string | null;
+  players: Array<{ playerId: string; fromMemberId: string }>;
+  proposer: { userId: string };
+  recipient: { userId: string };
+}): Promise<void> {
+  const playersOffered = trade.players
+    .filter((player) => player.fromMemberId === trade.proposerMemberId)
+    .map((player) => player.playerId);
+  const playersRequested = trade.players
+    .filter((player) => player.fromMemberId === trade.recipientMemberId)
+    .map((player) => player.playerId);
+
+  await adminDb
+    .collection('leagues')
+    .doc(trade.leagueId)
+    .collection('trades')
+    .doc(trade.id)
+    .set(
+      {
+        canonicalTradeId: trade.id,
+        leagueId: trade.leagueId,
+        fromTeamId: trade.proposerMemberId,
+        toTeamId: trade.recipientMemberId,
+        fromUserId: trade.proposer.userId,
+        toUserId: trade.recipient.userId,
+        playersOffered,
+        playersRequested,
+        status: 'PENDING',
+        ...(trade.message ? { message: trade.message } : {}),
+        expiresAt: trade.expiresAt,
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+}
+
 function toTradeExpiry(value: unknown): Date {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-  if (typeof value === 'number') {
-    const date = new Date(value);
-    if (!Number.isNaN(date.getTime())) return date;
-  }
-  if (typeof value === 'string') {
+  if (typeof value === 'number' || typeof value === 'string') {
     const date = new Date(value);
     if (!Number.isNaN(date.getTime())) return date;
   }

@@ -51,6 +51,10 @@ function createDbMock() {
         id: 'member-1',
         userId: 'user-1',
       }),
+      findUnique: vi.fn().mockResolvedValue({ leagueId: 'league-1' }),
+    },
+    player: {
+      findUnique: vi.fn().mockResolvedValue({ id: 'free-player' }),
     },
     leagueRoster: {
       findUnique: vi.fn().mockResolvedValue({
@@ -62,6 +66,17 @@ function createDbMock() {
     leagueRosterPlayer: {
       count: vi.fn().mockResolvedValue(2),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      delete: vi.fn().mockResolvedValue({ id: 'old-player' }),
+      create: vi.fn().mockResolvedValue({ id: 'roster-player-1' }),
+      findUnique: vi.fn(
+        async ({ where }: { where: { leagueId_playerId: { playerId: string } } }) => {
+          if (where.leagueId_playerId.playerId === 'old-player') return { memberId: 'member-1' };
+          return null;
+        }
+      ),
+      findMany: vi
+        .fn()
+        .mockResolvedValue([{ playerId: 'keep-player' }, { playerId: 'free-player' }]),
       findFirst: vi.fn(async ({ where }: { where: { playerId?: string; memberId?: string } }) => {
         if (where.playerId === 'free-player') return null;
         if (where.playerId === 'old-player' && where.memberId === 'member-1') {
@@ -70,6 +85,11 @@ function createDbMock() {
         return null;
       }),
       upsert: vi.fn().mockResolvedValue({ id: 'roster-player-1' }),
+    },
+    leagueWaiverHold: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue({ id: 'hold-1' }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     teamAction: {
       create: vi.fn().mockResolvedValue({ id: 'drop-hold-1' }),
@@ -133,33 +153,22 @@ describe('WaiverProcessingService', () => {
     });
 
     expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
-    expect(tx.leagueRosterPlayer.deleteMany).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', memberId: 'member-1', playerId: 'old-player' },
+    expect(tx.leagueRosterPlayer.delete).toHaveBeenCalledWith({
+      where: { leagueId_playerId: { leagueId: 'league-1', playerId: 'old-player' } },
     });
-    expect(tx.teamAction.create).toHaveBeenCalledWith({
+    expect(tx.leagueRosterPlayer.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        leagueId: 'league-1',
-        memberId: 'member-1',
-        actionType: 'DROP_PLAYER',
-        status: 'PENDING',
-        details: expect.stringContaining('"playerId":"old-player"'),
-        processingAt: expect.any(Date),
-      }),
-      select: { id: true },
-    });
-    expect(tx.leagueRosterPlayer.upsert).toHaveBeenCalledWith({
-      where: { leagueId_playerId: { leagueId: 'league-1', playerId: 'free-player' } },
-      update: expect.objectContaining({
-        memberId: 'member-1',
-        acquiredBy: 'WAIVER',
-      }),
-      create: expect.objectContaining({
         leagueId: 'league-1',
         memberId: 'member-1',
         playerId: 'free-player',
         acquiredBy: 'WAIVER',
       }),
     });
+    expect(tx.leagueWaiverHold.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { leagueId_playerId: { leagueId: 'league-1', playerId: 'old-player' } },
+      })
+    );
     expect(tx.leagueRoster.upsert).toHaveBeenCalledWith({
       where: { leagueId_memberId: { leagueId: 'league-1', memberId: 'member-1' } },
       update: { playerIds: JSON.stringify(['keep-player', 'free-player']) },

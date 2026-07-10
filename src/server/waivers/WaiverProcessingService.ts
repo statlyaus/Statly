@@ -5,6 +5,10 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import {
+  LeagueOwnershipService,
+  OwnershipMutationError,
+} from '@/server/rosters/LeagueOwnershipService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 export interface WaiverSettings {
@@ -405,61 +409,24 @@ export class WaiverProcessingService {
     claim: WaiverClaim,
     waiverSettings: WaiverSettings
   ): Promise<{ status: 'SUCCESSFUL' } | { status: 'FAILED'; reason: string }> {
-    return this.db.$transaction(
-      async (
-        tx: PrismaTransactionClient
-      ): Promise<{ status: 'SUCCESSFUL' } | { status: 'FAILED'; reason: string }> => {
-        const plan = await this.buildCanonicalRosterPlan(tx, leagueId, claim);
-        if (plan.status === 'FAILED') {
-          return plan;
-        }
-        if (claim.dropPlayerId) {
-          await tx.leagueRosterPlayer.deleteMany({
-            where: { leagueId, memberId: plan.memberId, playerId: claim.dropPlayerId },
-          });
-          await tx.teamAction.create({
-            data: {
-              leagueId,
-              memberId: plan.memberId,
-              actionType: 'DROP_PLAYER',
-              status: 'PENDING',
-              details: JSON.stringify({
-                playerId: claim.dropPlayerId,
-                source: 'drop-to-waivers',
-                waiverClaimId: claim.id,
-              }),
-              processingAt: calculateProcessingAt(waiverSettings),
-            },
-            select: { id: true },
-          });
-        }
+    const plan = await this.validateCanonicalRosterChange(leagueId, claim);
+    if (plan.status === 'FAILED') return plan;
 
-        await tx.leagueRoster.upsert({
-          where: { leagueId_memberId: { leagueId, memberId: plan.memberId } },
-          update: { playerIds: plan.nextPlayerIds },
-          create: { leagueId, memberId: plan.memberId, playerIds: plan.nextPlayerIds },
-        });
-        await tx.leagueRosterPlayer.upsert({
-          where: { leagueId_playerId: { leagueId, playerId: claim.playerId } },
-          update: {
-            memberId: plan.memberId,
-            draftId: null,
-            pickId: null,
-            acquiredBy: 'WAIVER',
-            acquiredAt: new Date(),
-          },
-          create: {
-            leagueId,
-            memberId: plan.memberId,
-            playerId: claim.playerId,
-            acquiredBy: 'WAIVER',
-            acquiredAt: new Date(),
-          },
-        });
-
-        return { status: 'SUCCESSFUL' };
+    try {
+      await new LeagueOwnershipService(this.db).claimWaiver({
+        leagueId,
+        memberId: plan.memberId,
+        playerId: claim.playerId,
+        dropPlayerId: claim.dropPlayerId,
+        droppedPlayerAvailableAt: calculateProcessingAt(waiverSettings),
+      });
+      return { status: 'SUCCESSFUL' };
+    } catch (error) {
+      if (error instanceof OwnershipMutationError) {
+        return { status: 'FAILED', reason: error.message };
       }
-    );
+      throw error;
+    }
   }
 
   private async validateCanonicalRosterChange(
@@ -488,7 +455,8 @@ export class WaiverProcessingService {
     const member = await tx.leagueMember.findFirst({
       where: {
         leagueId,
-        OR: [{ id: claim.teamId }, { userId: claim.userId }],
+        id: claim.teamId,
+        userId: claim.userId,
       },
       select: { id: true },
     });
@@ -1212,19 +1180,19 @@ export class FirestoreWaiverClaimStore implements ClaimStore {
       let query: FirebaseFirestore.Query = pendingCol.orderBy('__name__').limit(pageSize);
       if (cursor) query = query.startAfter(cursor);
 
-	      const snap = await query.get();
-	      if (snap.empty) break;
+      const snap = await query.get();
+      if (snap.empty) break;
 
-	      for (const document of snap.docs) {
-	        pending.push(toFirestoreWaiverClaim(document, leagueId));
-	      }
+      for (const document of snap.docs) {
+        pending.push(toFirestoreWaiverClaim(document, leagueId));
+      }
 
-	      if (snap.size < pageSize) break;
-	      cursor = snap.docs[snap.docs.length - 1] ?? null;
-	    }
+      if (snap.size < pageSize) break;
+      cursor = snap.docs[snap.docs.length - 1] ?? null;
+    }
 
-	    return applyWaiverPriorities(pending, await loadWaiverPriorityByUserId(leagueId));
-	  }
+    return applyWaiverPriorities(pending, await loadWaiverPriorityByUserId(leagueId));
+  }
 
   async markSuccessful(input: {
     leagueId: string;

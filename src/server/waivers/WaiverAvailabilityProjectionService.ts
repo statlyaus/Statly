@@ -1,7 +1,7 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
 
-type PrismaLike = Pick<typeof prisma, 'leagueRosterPlayer' | 'player' | 'teamAction'>;
+type PrismaLike = Pick<typeof prisma, 'leagueRosterPlayer' | 'leagueWaiverHold' | 'player'>;
 type FirestoreLike = typeof adminDb;
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 
@@ -16,29 +16,23 @@ export class WaiverAvailabilityProjectionService {
     private readonly firestore: FirestoreLike = adminDb
   ) {}
 
-  async projectLeague(input: {
-    leagueId: string;
-  }): Promise<WaiverAvailabilityProjectionResult> {
+  async projectLeague(input: { leagueId: string }): Promise<WaiverAvailabilityProjectionResult> {
     const ownerships = await this.db.leagueRosterPlayer.findMany({
       where: { leagueId: input.leagueId },
       select: { playerId: true, memberId: true },
     });
-    const waiverHolds = await this.db.teamAction.findMany({
+    const waiverHolds = await this.db.leagueWaiverHold.findMany({
       where: {
         leagueId: input.leagueId,
-        actionType: 'DROP_PLAYER',
-        status: 'PENDING',
-        processingAt: { gt: new Date() },
+        availableAt: { gt: new Date() },
       },
-      select: { details: true, processingAt: true },
+      select: { playerId: true, availableAt: true },
     });
     const allPlayers = await this.db.player.findMany({ select: { id: true } });
     const owned = new Map(ownerships.map((ownership) => [ownership.playerId, ownership.memberId]));
     const held = new Map<string, Date | null>();
     for (const hold of waiverHolds) {
-      const details = parseActionDetails(hold.details);
-      const playerId = typeof details.playerId === 'string' ? details.playerId : null;
-      if (playerId) held.set(playerId, hold.processingAt ?? null);
+      held.set(hold.playerId, hold.availableAt);
     }
     const leagueRef = this.firestore.collection('leagues').doc(input.leagueId);
     let batch = this.firestore.batch();
@@ -121,16 +115,5 @@ export class WaiverAvailabilityProjectionService {
       available: allPlayers.filter((player) => !owned.has(player.id) && !held.has(player.id))
         .length,
     };
-  }
-}
-
-function parseActionDetails(raw: unknown): Record<string, unknown> {
-  if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
-
-  try {
-    const parsed = JSON.parse(String(raw ?? '{}'));
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
   }
 }

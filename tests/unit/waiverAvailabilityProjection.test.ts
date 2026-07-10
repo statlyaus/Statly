@@ -48,7 +48,7 @@ describe('WaiverAvailabilityProjectionService', () => {
       leagueRosterPlayer: {
         findMany: vi.fn().mockResolvedValue([{ playerId: 'owned-1', memberId: 'member-1' }]),
       },
-      teamAction: {
+      leagueWaiverHold: {
         findMany: vi.fn().mockResolvedValue([]),
       },
       player: {
@@ -63,14 +63,12 @@ describe('WaiverAvailabilityProjectionService', () => {
       where: { leagueId: 'league-1' },
       select: { playerId: true, memberId: true },
     });
-    expect(db.teamAction.findMany).toHaveBeenCalledWith({
+    expect(db.leagueWaiverHold.findMany).toHaveBeenCalledWith({
       where: {
         leagueId: 'league-1',
-        actionType: 'DROP_PLAYER',
-        status: 'PENDING',
-        processingAt: { gt: expect.any(Date) },
+        availableAt: { gt: expect.any(Date) },
       },
-      select: { details: true, processingAt: true },
+      select: { playerId: true, availableAt: true },
     });
     expect(db.player.findMany).toHaveBeenCalledWith({ select: { id: true } });
 
@@ -118,11 +116,11 @@ describe('WaiverAvailabilityProjectionService', () => {
       leagueRosterPlayer: {
         findMany: vi.fn().mockResolvedValue([]),
       },
-      teamAction: {
+      leagueWaiverHold: {
         findMany: vi.fn().mockResolvedValue([
           {
-            details: JSON.stringify({ playerId: 'dropped-1', source: 'drop-to-waivers' }),
-            processingAt,
+            playerId: 'dropped-1',
+            availableAt: processingAt,
           },
         ]),
       },
@@ -160,7 +158,7 @@ describe('WaiverAvailabilityProjectionService', () => {
       leagueRosterPlayer: {
         findMany: vi.fn().mockResolvedValue([]),
       },
-      teamAction: {
+      leagueWaiverHold: {
         findMany: vi.fn().mockResolvedValue([]),
       },
       player: {
