@@ -18,11 +18,7 @@ export default function DashboardClient() {
   }, [loading, router, user]);
 
   if (loading || !user) {
-    return (
-      <AppLayout>
-        <DashboardLoading />
-      </AppLayout>
-    );
+    return <DashboardLoading />;
   }
 
   return (
