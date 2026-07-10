@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -62,6 +62,7 @@ const AuthForm = ({
   } = useAuth();
   const router = useRouter();
   const { notification, showNotification } = useNotification();
+  const hasStartedRedirect = useRef(false);
 
   // Safe redirect helper to avoid open redirects
   const toSafeRedirect = (url?: string) =>
@@ -145,6 +146,17 @@ const AuthForm = ({
     return { label: 'Strong', color: 'text-success' };
   };
 
+  const redirectAfterAuthentication = () => {
+    const destination = toSafeRedirect(nextUrl);
+    if (destination) {
+      hasStartedRedirect.current = true;
+      router.replace(destination);
+      return;
+    }
+
+    onSuccess?.();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -175,16 +187,7 @@ const AuthForm = ({
         await login(email, password);
         showNotification('success', 'Welcome back! You are now signed in.');
       }
-      if (nextUrl) {
-        const dest = toSafeRedirect(nextUrl);
-        if (dest) {
-          router.replace(dest);
-        } else {
-          onSuccess?.();
-        }
-      } else {
-        onSuccess?.();
-      }
+      redirectAfterAuthentication();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Authentication error occurred';
       setError(message);
@@ -200,16 +203,7 @@ const AuthForm = ({
     try {
       await loginWithGoogle();
       showNotification('success', 'Successfully signed in with Google!');
-      if (nextUrl) {
-        const dest = toSafeRedirect(nextUrl);
-        if (dest) {
-          router.replace(dest);
-        } else {
-          onSuccess?.();
-        }
-      } else {
-        onSuccess?.();
-      }
+      redirectAfterAuthentication();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google sign-in failed';
       setError(message);
@@ -225,16 +219,7 @@ const AuthForm = ({
     try {
       await loginWithFacebook();
       showNotification('success', 'Successfully signed in with Facebook!');
-      if (nextUrl) {
-        const dest = toSafeRedirect(nextUrl);
-        if (dest) {
-          router.replace(dest);
-        } else {
-          onSuccess?.();
-        }
-      } else {
-        onSuccess?.();
-      }
+      redirectAfterAuthentication();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Facebook sign-in failed';
       setError(message);
@@ -250,16 +235,7 @@ const AuthForm = ({
     try {
       await loginWithApple();
       showNotification('success', 'Successfully signed in with Apple!');
-      if (nextUrl) {
-        const dest = toSafeRedirect(nextUrl);
-        if (dest) {
-          router.replace(dest);
-        } else {
-          onSuccess?.();
-        }
-      } else {
-        onSuccess?.();
-      }
+      redirectAfterAuthentication();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Apple sign-in failed';
       setError(message);
@@ -271,8 +247,9 @@ const AuthForm = ({
 
   // Optional: redirect immediately if already authenticated
   useEffect(() => {
-    if (autoRedirectIfAuthenticated && user) {
+    if (autoRedirectIfAuthenticated && user && !hasStartedRedirect.current) {
       const destination = toSafeRedirect(nextUrl) || '/dashboard';
+      hasStartedRedirect.current = true;
       router.replace(destination);
     }
   }, [autoRedirectIfAuthenticated, nextUrl, router, user]);
@@ -312,6 +289,10 @@ const AuthForm = ({
         </div>
       </div>
     );
+  }
+
+  if (user && autoRedirectIfAuthenticated) {
+    return null;
   }
 
   if (user) {
