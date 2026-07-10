@@ -1,8 +1,14 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import type { User } from 'firebase/auth';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AuthForm from '@/components/AuthForm';
 import { useAuth } from '@/AuthContext';
+
+const mocks = vi.hoisted(() => ({
+  replace: vi.fn(),
+}));
 
 vi.mock('@/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -11,7 +17,7 @@ vi.mock('@/AuthContext', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),
-    replace: vi.fn(),
+    replace: mocks.replace,
   }),
 }));
 
@@ -36,6 +42,7 @@ const mockAuthContext = {
 
 describe('AuthForm initial validation state', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue(mockAuthContext);
   });
 
@@ -45,5 +52,50 @@ describe('AuthForm initial validation state', () => {
     expect(screen.queryByText('Email is required')).not.toBeInTheDocument();
     expect(screen.queryByText('Password is required')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeEnabled();
+  });
+
+  it('does not redirect a second time when auth state updates after a successful login', async () => {
+    const user = userEvent.setup();
+    const mockLogin = vi.fn().mockResolvedValue(undefined);
+    let authState = {
+      ...mockAuthContext,
+      login: mockLogin,
+      user: null as User | null,
+    };
+
+    vi.mocked(useAuth).mockImplementation(() => authState as ReturnType<typeof useAuth>);
+    const { rerender } = render(
+      <AuthForm initialMode="login" nextUrl="/dashboard" autoRedirectIfAuthenticated />
+    );
+
+    await user.type(screen.getByLabelText('Email Address'), 'test@example.com');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.click(screen.getByRole('button', { name: 'Sign In' }));
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith('/dashboard');
+    });
+
+    authState = { ...authState, user: { uid: 'test-user-id' } as User };
+    rerender(<AuthForm initialMode="login" nextUrl="/dashboard" autoRedirectIfAuthenticated />);
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByText('Welcome back!')).not.toBeInTheDocument();
+  });
+
+  it('does not render the authenticated profile card while redirecting an existing session', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      ...mockAuthContext,
+      user: { uid: 'test-user-id' } as User,
+    } as ReturnType<typeof useAuth>);
+
+    render(<AuthForm initialMode="login" nextUrl="/dashboard" autoRedirectIfAuthenticated />);
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith('/dashboard');
+    });
+    expect(screen.queryByText('Welcome back!')).not.toBeInTheDocument();
   });
 });

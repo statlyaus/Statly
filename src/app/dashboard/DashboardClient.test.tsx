@@ -20,7 +20,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/components/navigation', () => ({
-  AppLayout: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  AppLayout: ({ children }: { children: ReactNode }) => (
+    <div>
+      <div>Legacy navigation</div>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('@/components/DashboardLoading', () => ({
@@ -45,6 +50,16 @@ describe('DashboardClient auth restore behavior', () => {
       expect(mocks.replace).toHaveBeenCalledWith('/login?next=%2Fdashboard');
     });
     expect(screen.getByText('Restoring dashboard session')).toBeInTheDocument();
+    expect(screen.queryByText('Legacy navigation')).not.toBeInTheDocument();
+  });
+
+  it('keeps the legacy navigation out of the auth-resolution state', () => {
+    mocks.useAuth.mockReturnValue({ user: null, loading: true });
+
+    render(<DashboardClient />);
+
+    expect(screen.getByText('Restoring dashboard session')).toBeInTheDocument();
+    expect(screen.queryByText('Legacy navigation')).not.toBeInTheDocument();
   });
 
   it('renders the dashboard once Firebase auth is available', () => {
@@ -56,5 +71,6 @@ describe('DashboardClient auth restore behavior', () => {
     render(<DashboardClient />);
 
     expect(screen.getByText('Dashboard for tester@statly.dev')).toBeInTheDocument();
+    expect(screen.getByText('Legacy navigation')).toBeInTheDocument();
   });
 });

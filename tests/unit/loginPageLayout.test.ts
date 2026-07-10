@@ -10,16 +10,20 @@ function readRepoFile(path: string): string {
 }
 
 describe('login page layout', () => {
-  it('uses the product-auth shell instead of the legacy split-gradient marketing panel', () => {
+  it('uses a focused auth shell without the promotional preview', () => {
     const loginPage = readRepoFile('src/app/(auth)/login/page.tsx');
 
-    expect(loginPage).toContain('Your fantasy AFL command center.');
     expect(loginPage).toContain('Sign in to Statly');
-    expect(loginPage).toContain('Live draft');
-    expect(loginPage).toContain('Draft order');
-    expect(loginPage).toContain('My roster');
+    expect(loginPage).toContain('/brand/statly-primary-logo.png');
+    expect(loginPage).toContain('sm:w-80');
     expect(loginPage).toContain('<AuthForm');
 
+    expect(loginPage).not.toContain('Your fantasy AFL command center.');
+    expect(loginPage).not.toContain('Live draft');
+    expect(loginPage).not.toContain('Draft order');
+    expect(loginPage).not.toContain('My roster');
+    expect(loginPage).not.toContain('/brand/statly-wordmark-logo.png');
+    expect(loginPage).not.toContain('/brand/statly-compact-logo.png');
     expect(loginPage).not.toContain('Welcome to Statly');
     expect(loginPage).not.toContain('Welcome Back');
     expect(loginPage).not.toContain('bg-gradient-to-br from-blue-600 to-purple-700');
