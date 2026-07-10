@@ -79,13 +79,13 @@ describe('dashboard production recovery route contract', () => {
     expect(nextConfig).toContain("source: '/leagues'");
     expect(nextConfig).toContain("destination: '/dashboard'");
 
-    expect(dashboard).toContain("href=\"/dashboard#leagues\"");
-    expect(dashboard).toContain('Open League Hub');
     expect(dashboard).toContain("url('/Assets/statly-stadium-hero.png')");
-    expect(dashboard).toContain('const username =');
-    expect(dashboard).toContain('const heroTitle = `@${username}`;');
+    expect(dashboard).toContain('const accountName =');
+    expect(dashboard).toContain('const heroTitle = accountName;');
     expect(dashboard).toContain('{heroTitle}');
-    expect(dashboard).toContain('All leagues overview');
+    expect(dashboard).toContain('League command center');
+    expect(dashboard).not.toContain('All leagues overview');
+    expect(dashboard).not.toContain('Open League Hub');
     expect(dashboard).not.toContain('heroLeagueName');
     expect(dashboard).toContain('title="My Leagues"');
     expect(dashboard).toContain('group-hover:bg-[color:var(--league-success)]');

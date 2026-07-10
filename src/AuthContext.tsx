@@ -13,7 +13,7 @@ import {
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import type { User, UserCredential } from 'firebase/auth';
-import { auth } from '@/lib/firebaseClient';
+import { auth, authEmulatorReady } from '@/lib/firebaseClient';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import {
   clearDevelopmentAuthUser,
@@ -87,11 +87,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
+    const currentAuth = auth;
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    void authEmulatorReady.finally(() => {
+      if (cancelled) return;
+      unsubscribe = onAuthStateChanged(currentAuth, (user) => {
+        setUser(user);
+        setLoading(false);
+      });
     });
-    return () => unsubscribe();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   // Create/clear server session cookie via API
@@ -143,30 +154,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         throw new Error('Use the documented local development credentials.');
       }
+      await authEmulatorReady;
       const cred = await signInWithEmailAndPassword(auth, email, pass);
       await createServerSession();
       return cred;
     },
     signup: async (email: string, pass: string) => {
       if (!auth) throw new Error('Firebase Auth not available');
+      await authEmulatorReady;
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       await createServerSession();
       return cred;
     },
     loginWithGoogle: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
+      await authEmulatorReady;
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       await createServerSession();
     },
     loginWithFacebook: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
+      await authEmulatorReady;
       const provider = new FacebookAuthProvider();
       await signInWithPopup(auth, provider);
       await createServerSession();
     },
     loginWithApple: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
+      await authEmulatorReady;
       const provider = new OAuthProvider('apple.com');
       provider.addScope('email');
       provider.addScope('name');

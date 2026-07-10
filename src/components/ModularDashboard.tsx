@@ -115,41 +115,6 @@ function Panel({
   );
 }
 
-function StatusPill({
-  label,
-  tone = 'neutral',
-}: {
-  label: string;
-  tone?: 'neutral' | 'warning' | 'success';
-}) {
-  const toneClasses = {
-    neutral: 'border-white/20 bg-slate-950/35 text-white',
-    warning: 'border-warning/35 bg-warning/10 text-warning',
-    success: 'border-success/35 bg-success/10 text-success',
-  }[tone];
-
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${toneClasses}`}
-    >
-      <span className="size-2 rounded-full bg-current" aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
-function ActionButton({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex min-h-12 items-center justify-center gap-3 rounded-lg bg-destructive px-6 text-sm font-semibold text-white shadow-[0_18px_38px_-24px_rgba(220,38,38,0.85)] transition hover:-translate-y-0.5 hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-    >
-      {children}
-      <ArrowRight className="size-4" aria-hidden="true" />
-    </Link>
-  );
-}
-
 function SecondaryButton({
   href,
   children,
@@ -255,8 +220,8 @@ function LeagueListRow({ league, index }: { league: LeagueRow; index: number }) 
 export default function ModularDashboard({ user }: ModularDashboardProps): React.ReactElement {
   const [refreshTrigger] = useState(0);
   const [leagueSnapshots, setLeagueSnapshots] = useState<LeagueSnapshot[]>([]);
-  const [leagueStateLoading, setLeagueStateLoading] = useState(false);
-  const { leagues: userLeagues, loading: leaguesLoading } = useUserLeagues(user.uid);
+  const [, setLeagueStateLoading] = useState(false);
+  const { leagues: userLeagues } = useUserLeagues(user.uid);
 
   useEffect(() => {
     let active = true;
@@ -336,7 +301,7 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   }, [refreshTrigger, user.uid, userLeagues]);
 
   const typedUserLeagues = userLeagues as UserLeague[];
-  const username = user.email?.split('@')[0] || user.uid || 'manager';
+  const accountName = user.displayName || user.email || user.uid || 'Manager';
   const activeLeagueCount = typedUserLeagues.length;
   const draftPendingCount = typedUserLeagues.filter((league) => league.draftCompleted === false).length;
   const liveLeagueCount = leagueSnapshots.filter((league) => league.isLive).length;
@@ -374,48 +339,27 @@ export default function ModularDashboard({ user }: ModularDashboardProps): React
   }, [leagueSnapshots, typedUserLeagues, user.uid]);
 
   const primaryLeague = leagueRows[0] ?? null;
-  const heroTitle = `@${username}`;
+  const heroTitle = accountName;
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_46%,var(--league-surface-muted)_100%)]">
       <section className="mx-auto flex max-w-[var(--app-shell-max-width)] flex-col gap-5 px-4 pb-8 pt-6 sm:px-6 lg:px-8 2xl:px-10">
         <section
-          className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950 bg-cover bg-center px-5 py-7 text-white shadow-[0_28px_70px_-36px_rgba(2,6,23,0.9)] sm:px-7 lg:px-9 lg:py-10"
+          className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950 bg-cover bg-center px-5 py-5 text-white shadow-[0_24px_56px_-34px_rgba(2,6,23,0.88)] sm:px-7 lg:px-9 lg:py-7"
           style={{
             backgroundImage:
               "linear-gradient(180deg, rgba(3, 10, 20, 0.82) 0%, rgba(4, 12, 22, 0.9) 50%, rgba(2, 8, 16, 0.97) 100%), linear-gradient(90deg, rgba(3, 10, 20, 0.98) 0%, rgba(3, 10, 20, 0.72) 42%, rgba(3, 10, 20, 0.92) 100%), url('/Assets/statly-stadium-hero.png')",
           }}
         >
-          <div className="flex flex-col gap-8">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex flex-col gap-7">
+            <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
+              <span className="mb-4 h-1 w-20 rounded-full bg-destructive shadow-[0_0_24px_rgba(239,68,68,0.55)]" />
               <div className="min-w-0">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-destructive sm:text-base">
-                League command center
-                </p>
-                <h1 className="mt-4 truncate text-4xl font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl">
-                  {heroTitle}
+                <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl">
+                  League command center
                 </h1>
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <span className="rounded-lg bg-white/12 px-4 py-2 text-base font-semibold text-white backdrop-blur-sm">
-                    All leagues overview
-                  </span>
-                  <span className="rounded-lg border border-white/18 bg-slate-950/20 px-4 py-2 text-base text-white/76 backdrop-blur-sm">
-                    {activeLeagueCount} active {activeLeagueCount === 1 ? 'league' : 'leagues'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 xl:justify-end">
-                <StatusPill
-                  label={leagueStateLoading || leaguesLoading ? 'Refreshing state' : 'Current state'}
-                  tone="neutral"
-                />
-                {draftPendingCount > 0 ? (
-                  <StatusPill
-                    label={`${draftPendingCount} draft${draftPendingCount === 1 ? '' : 's'} pending`}
-                    tone="warning"
-                  />
-                ) : null}
-                <ActionButton href="/dashboard#leagues">Open League Hub</ActionButton>
+                <p className="mt-6 truncate text-2xl font-semibold tracking-tight text-white/70 sm:text-3xl lg:text-4xl">
+                  {heroTitle}
+                </p>
               </div>
             </div>
 
