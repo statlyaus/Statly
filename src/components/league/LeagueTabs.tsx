@@ -40,6 +40,7 @@ import DraftManager from './DraftManager';
 import { LeagueLineupPanel } from './matchups/LeagueLineupPanel';
 import { LeagueMatchupsPanel } from './matchups/LeagueMatchupsPanel';
 import { LeagueStandingsPanel } from './matchups/LeagueStandingsPanel';
+import { CompetitionSettingsPanel } from './settings/CompetitionSettingsPanel';
 import { ScoringSettingsPanel } from './settings/ScoringSettingsPanel';
 
 interface LeagueTabsProps {
@@ -148,13 +149,9 @@ export default function LeagueTabs({
     waiverPriorityIndex >= 0 ? `Priority ${waiverPriorityIndex + 1}` : 'Not set';
   const waiverPolicyLabel = league.waiverRule ?? league.waiverWire?.waiverResetPolicy ?? 'weekly';
   const overviewTeams = activeMembers.slice(0, league.maxTeams);
-  const categorySummary = league.categories
-    .slice(0, 4)
-    .map(
-      (category) =>
-        FANTASY_CATEGORIES[category]?.abbrev ?? FANTASY_CATEGORIES[category]?.label ?? category
-    )
-    .join(', ');
+  const categoryLabels = league.categories.map(
+    (category) => FANTASY_CATEGORIES[category]?.label ?? category
+  );
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -213,15 +210,6 @@ export default function LeagueTabs({
     !isDraftComplete && draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
       ? `/drafts/${draftReadiness.draftId}`
       : null;
-  const draftDate = league.draftDate ? new Date(league.draftDate) : null;
-  const formattedDraftDate =
-    draftDate && !Number.isNaN(draftDate.getTime())
-      ? new Intl.DateTimeFormat('en-AU', {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        }).format(draftDate)
-      : 'Not scheduled';
-
   useEffect(() => {
     if (!currentUserId) return;
 
@@ -401,55 +389,6 @@ export default function LeagueTabs({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-              League command center
-            </p>
-            <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
-              {league.name}
-            </h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[color:var(--league-text-muted)]">
-              <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-1 font-semibold capitalize text-[color:var(--league-text)]">
-                {league.type}
-              </span>
-              <span>
-                {members.length}/{league.maxTeams} teams
-              </span>
-              <span>Draft: {formattedDraftDate}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {draftRoomPath ? (
-              <button
-                type="button"
-                onClick={() => router.push(draftRoomPath)}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-              >
-                Enter draft room
-              </button>
-            ) : !isDraftComplete ? (
-              <button
-                type="button"
-                onClick={() => handleTabChange('draft')}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-              >
-                Prepare draft
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => handleTabChange('teams')}
-              className="inline-flex h-11 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-            >
-              Manage teams
-            </button>
-          </div>
-        </div>
-      </section>
-
       <div className="overflow-hidden rounded-[22px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_18px_60px_-48px_rgba(23,34,48,0.38)]">
         <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)]/80">
           <nav className="flex gap-1 overflow-x-auto px-3 py-3" aria-label="League sections">
@@ -488,87 +427,69 @@ export default function LeagueTabs({
           >
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-[0_24px_70px_-52px_rgba(15,23,42,0.45)] sm:p-5">
-                  <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-                    <div className="rounded-[22px] bg-[color:var(--league-primary)] p-5 text-[color:var(--league-primary-foreground)] shadow-[0_24px_70px_-48px_rgba(15,23,42,0.7)] sm:p-6">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">
-                        League overview
-                      </p>
-                      <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                        {league.name}
-                      </h2>
-                      <p className="mt-2 text-sm text-white/70">
-                        {league.type === 'private' ? 'Private' : 'Public'} · {activeMembers.length}/
-                        {league.maxTeams} teams · Draft {draftReadiness?.status ?? league.status}
-                      </p>
-                      <p className="mt-1 text-sm text-white/55">
-                        {openTeamSlots === 0
-                          ? 'League is full'
-                          : `${openTeamSlots} team ${openTeamSlots === 1 ? 'slot' : 'slots'} open`}
-                        {' · '}
-                        {categorySummary}
-                        {league.categories.length > 4
-                          ? ` +${league.categories.length - 4} more`
-                          : ''}
-                      </p>
+                <div className="space-y-4">
+                  <section className="rounded-[22px] bg-[color:var(--league-primary)] p-5 text-[color:var(--league-primary-foreground)] shadow-[0_24px_70px_-48px_rgba(15,23,42,0.7)] sm:p-6">
+                    <div className="flex flex-col gap-6">
+                      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">
+                            League overview
+                          </p>
+                          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                            {league.name}
+                          </h2>
+                          <p className="mt-2 text-sm text-white/70">
+                            {league.type === 'private' ? 'Private' : 'Public'} · {activeMembers.length}/
+                            {league.maxTeams} teams · Draft {draftReadiness?.status ?? league.status}
+                          </p>
+                          <p className="mt-1 text-sm text-white/55">
+                            {openTeamSlots === 0
+                              ? 'League is full'
+                              : `${openTeamSlots} team ${openTeamSlots === 1 ? 'slot' : 'slots'} open`}
+                          </p>
+                        </div>
 
-                      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                        <div>
-                          <p className="text-3xl font-semibold text-white">
-                            {activeMembers.length}
-                          </p>
-                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
-                            teams
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-3xl font-semibold text-white">
-                            {overviewTrades.length}
-                          </p>
-                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
-                            Trade offers
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-3xl font-semibold text-white">
-                            {league.categories.length} categories
-                          </p>
-                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
-                            Scoring
-                          </p>
-                        </div>
+                        <dl className="grid gap-5 sm:grid-cols-2 lg:min-w-[22rem]">
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
+                              Your team
+                            </dt>
+                            <dd className="mt-2 text-lg font-semibold text-white">
+                              {currentMember?.teamName ?? 'Team not set'}
+                            </dd>
+                            <p className="mt-1 text-sm text-white/70">
+                              {currentMember?.role === 'owner' || currentMember?.role === 'manager'
+                                ? 'Commissioner access'
+                                : 'Member access'}
+                            </p>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
+                              Waiver position
+                            </dt>
+                            <dd className="mt-2 text-lg font-semibold text-white">
+                              {waiverPriorityLabel}
+                            </dd>
+                            <p className="mt-1 text-sm capitalize text-white/70">
+                              {waiverPolicyLabel} order
+                            </p>
+                          </div>
+                        </dl>
                       </div>
+
+                      <div className="border-t border-white/15 pt-5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
+                          Scoring categories
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-white/80">
+                          {categoryLabels.join(' · ')}
+                        </p>
+                      </div>
+
                     </div>
+                  </section>
 
-                    <div className="grid gap-3">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Your team
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {currentMember?.teamName ?? 'Team not set'}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-600">
-                          {currentMember?.role === 'owner' || currentMember?.role === 'manager'
-                            ? 'Commissioner access'
-                            : 'Member access'}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Waiver position
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {waiverPriorityLabel}
-                        </p>
-                        <p className="mt-1 text-sm capitalize text-slate-600">
-                          {waiverPolicyLabel} order
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -614,8 +535,8 @@ export default function LeagueTabs({
                         </div>
                       ))}
                     </div>
-                  </div>
-                </section>
+                  </section>
+                </div>
 
                 <section className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.35)]">
@@ -2116,6 +2037,8 @@ function LeagueSettingsPanel({
           disabled={!isAdmin || isSaving}
           onChange={(scoring) => setSettings((current) => ({ ...current, scoring }))}
         />
+
+        <CompetitionSettingsPanel leagueId={league.id} currentUserId={currentUserId} />
 
         <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
           <h3 className="text-base font-semibold text-[color:var(--league-text)]">

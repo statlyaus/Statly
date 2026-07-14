@@ -3,10 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import {
-  generateLeagueFixtures,
-  loadLeagueMatchupReadModel,
-} from '@/server/leagues/matchupReadModel';
+import { loadLeagueMatchupReadModel } from '@/server/leagues/matchupReadModel';
 
 function parseRound(request: NextRequest): number | undefined {
   const value = request.nextUrl.searchParams.get('round');
@@ -47,6 +44,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const data = await generateLeagueFixtures({ leagueId: id });
-  return NextResponse.json({ success: true, data });
+  return NextResponse.json(
+    {
+      error:
+        'Fixtures are published from Competition Rules. Save the configuration and publish a new fixture version from League Settings.',
+    },
+    { status: 409 }
+  );
 }

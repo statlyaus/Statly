@@ -8,6 +8,7 @@ import { LineupFieldBoard } from './LineupFieldBoard';
 import {
   assignPlayerToSpot,
   buildLineupFieldSpots,
+  buildInterchangeSpots,
   getAvailableRosterPlayers,
   normalizeLineupBuilderSlots,
   removeAssignmentFromSpot,
@@ -26,6 +27,16 @@ interface LineupApiPlayer {
   lockedAt?: string | null;
 }
 
+interface LineupRoundContext {
+  round: number;
+  aflRound: number | null;
+  phase: 'REGULAR' | 'FINALS';
+  lockState: 'OPEN' | 'LOCKED' | 'PUBLISHED_PENDING' | 'NO_MATCHUP';
+  lockAt: string | null;
+  fallbackLockAt: string | null;
+  opponent: { id: string; teamName: string } | null;
+}
+
 function isLineupAssignment(player: LineupApiPlayer): player is LineupAssignment {
   return (
     player.playerId.length > 0 &&
@@ -33,7 +44,8 @@ function isLineupAssignment(player: LineupApiPlayer): player is LineupAssignment
       player.slot === 'DEF' ||
       player.slot === 'MID' ||
       player.slot === 'RUC' ||
-      player.slot === 'UTIL') &&
+      player.slot === 'UTIL' ||
+      player.slot === 'INTERCHANGE') &&
     Number.isInteger(player.slotIndex) &&
     player.slotIndex >= 0
   );
@@ -43,14 +55,21 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
   const [assignments, setAssignments] = useState<LineupAssignment[]>([]);
   const [rosterPlayers, setRosterPlayers] = useState<LineupRosterPlayer[]>([]);
   const [lineupSlots, setLineupSlots] = useState(() => normalizeLineupBuilderSlots(null));
+  const [interchangeSlots, setInterchangeSlots] = useState(0);
+  const [context, setContext] = useState<LineupRoundContext | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const dragPlayerIdRef = useRef<string | null>(null);
-  const round = 1;
+  const persistedAssignmentsRef = useRef('');
+  const round = 'current';
 
   const fieldSpots = useMemo(() => buildLineupFieldSpots(lineupSlots), [lineupSlots]);
+  const interchangeFieldSpots = useMemo(
+    () => buildInterchangeSpots(interchangeSlots),
+    [interchangeSlots]
+  );
   const availableRosterPlayers = useMemo(
     () => getAvailableRosterPlayers(rosterPlayers, assignments),
     [rosterPlayers, assignments]
@@ -74,8 +93,18 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
         ? payload.data.rosterPlayers
         : [];
       const savedPlayers = Array.isArray(payload.data?.players) ? payload.data.players : [];
+      const nextAssignments = savedPlayers
+        .map((player: LineupApiPlayer) => ({
+          playerId: player.playerId,
+          slot: player.slot,
+          slotIndex: player.slotIndex,
+          lockedAt: player.lockedAt ?? null,
+        }))
+        .filter(isLineupAssignment);
 
       setLineupSlots(normalizeLineupBuilderSlots(payload.data?.lineupSlots));
+      setInterchangeSlots(Math.max(0, Number(payload.data?.interchangeSlots) || 0));
+      setContext((payload.data?.context as LineupRoundContext | null) ?? null);
       setRosterPlayers(
         nextRosterPlayers.map((player: LineupRosterPlayer) => ({
           playerId: player.playerId,
@@ -84,16 +113,8 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           club: player.club ?? null,
         }))
       );
-      setAssignments(
-        savedPlayers
-          .map((player: LineupApiPlayer) => ({
-            playerId: player.playerId,
-            slot: player.slot,
-            slotIndex: player.slotIndex,
-            lockedAt: player.lockedAt ?? null,
-          }))
-          .filter(isLineupAssignment)
-      );
+      persistedAssignmentsRef.current = JSON.stringify(nextAssignments);
+      setAssignments(nextAssignments);
       setSelectedPlayerId(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to load lineup.');
@@ -121,7 +142,7 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
     setMessage(null);
   }
 
-  async function saveLineup() {
+  async function saveLineup({ silent = false }: { silent?: boolean } = {}) {
     setMessage(null);
     setIsSaving(true);
     try {
@@ -131,9 +152,7 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            players: assignments
-              .filter((player) => !player.lockedAt)
-              .map((player) => ({
+            players: assignments.map((player) => ({
                 playerId: player.playerId,
                 slot: player.slot,
                 slotIndex: player.slotIndex,
@@ -147,13 +166,37 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
         throw new Error(payload.details?.join(', ') ?? payload.error ?? 'Failed to save lineup.');
       }
       await loadLineup();
-      setMessage('Lineup saved.');
+      if (!silent) setMessage('Lineup saved.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to save lineup.');
     } finally {
       setIsSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (isLoading || isSaving) return;
+    const serializedAssignments = JSON.stringify(assignments);
+    if (serializedAssignments === persistedAssignmentsRef.current) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void saveLineup({ silent: true });
+    }, 500);
+    return () => window.clearTimeout(timeoutId);
+  }, [assignments, isLoading, isSaving]);
+
+  const deadline = context?.lockAt ?? context?.fallbackLockAt;
+  const deadlineText = deadline
+    ? new Intl.DateTimeFormat(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(new Date(deadline))
+    : context?.lockState === 'PUBLISHED_PENDING'
+      ? 'Official fixture timing pending'
+      : 'Each player locks at official AFL game start';
 
   return (
     <section className="space-y-4" aria-labelledby="league-lineup-heading">
@@ -166,7 +209,14 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
             My Lineup
           </h2>
           <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
-            Round 1 on-field roster
+            {context
+              ? `Round ${context.round}${context.aflRound ? ` · AFL Round ${context.aflRound}` : ''} · ${
+                  context.opponent ? `vs ${context.opponent.teamName}` : 'No matchup'
+                }`
+              : 'Published round unavailable'}
+          </p>
+          <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
+            {deadlineText}
           </p>
         </div>
         <button
@@ -175,7 +225,7 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           disabled={isSaving || isLoading}
           className="rounded-md bg-[color:var(--league-primary)] px-3 py-2 text-sm font-semibold text-[color:var(--league-primary-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSaving ? 'Saving' : 'Save'}
+          {isSaving ? 'Saving' : context?.lockState === 'LOCKED' ? 'Locked' : 'Saved'}
         </button>
       </div>
 
@@ -193,6 +243,7 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
         <div>
           <LineupFieldBoard
             spots={fieldSpots}
+            interchangeSpots={interchangeFieldSpots}
             assignments={assignments}
             rosterPlayers={rosterPlayers}
             availablePlayers={availableRosterPlayers}

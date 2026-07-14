@@ -2,7 +2,7 @@ import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export type LeagueScoringMode = 'H2H_EACH_CATEGORY' | 'H2H_MOST_CATEGORIES';
 export type ActiveLineupSlot = 'FWD' | 'DEF' | 'MID' | 'RUC' | 'UTIL';
-export type LeagueLineupSlot = ActiveLineupSlot | 'BENCH';
+export type LeagueLineupSlot = ActiveLineupSlot | 'INTERCHANGE' | 'BENCH';
 export type CategoryDirection = 'HIGH_WINS' | 'LOW_WINS';
 
 export type LineupSlotSettings = Record<ActiveLineupSlot, number>;

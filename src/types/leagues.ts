@@ -13,7 +13,7 @@ export type DraftPickOrder = 'random' | 'manual';
 export type LeagueScoringMode = 'H2H_EACH_CATEGORY' | 'H2H_MOST_CATEGORIES';
 export type LeagueFixtureGenerationMode = 'AUTOMATIC' | 'MANUAL';
 export type ActiveLineupSlot = 'FWD' | 'DEF' | 'MID' | 'RUC' | 'UTIL';
-export type LeagueLineupSlot = ActiveLineupSlot | 'BENCH';
+export type LeagueLineupSlot = ActiveLineupSlot | 'INTERCHANGE' | 'BENCH';
 export type CategoryDirection = 'HIGH_WINS' | 'LOW_WINS';
 
 export type LeagueLineupSlotSettings = Record<ActiveLineupSlot, number>;
@@ -71,6 +71,7 @@ export interface LeagueMemberDoc {
   teamLogoPositionY?: number;
   teamLogoZoom?: number;
   notificationSettings?: LeagueMemberNotificationSettings;
+  isCoCommissioner?: boolean;
   joinedAt: Timestamp; // Firestore Timestamp
   leftAt?: Timestamp; // Firestore Timestamp
   isActive?: boolean;
@@ -95,6 +96,7 @@ export interface LeagueMember {
   teamLogoPositionY?: number;
   teamLogoZoom?: number;
   notificationSettings?: LeagueMemberNotificationSettings;
+  isCoCommissioner?: boolean;
   joinedAt: string; // ISO timestamp
   leftAt?: string; // ISO timestamp
   isActive?: boolean;

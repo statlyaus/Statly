@@ -9,7 +9,7 @@ import {
 } from '@/types/fantasyCategories';
 
 import { parseCategoryDirectionsJson } from './categoryDirections';
-import { generateRoundRobinFixtures } from './fixtureGenerator';
+import { parseCompetitionRulesJson } from './competitionRules';
 import {
   normalizeLiveStatRows,
   normalizeRoundMatchStatus,
@@ -24,6 +24,7 @@ import {
   type CategoryTotals,
 } from './matchupScoringEngine';
 import { calculateStandingsRows } from './standingsService';
+import { buildLeagueStandings, type LeagueStandingReadRow } from './standingsReadModel';
 import { parseLineupSlotsJson } from './lineupSettings';
 import type { LeagueScoringMode } from './scoringTypes';
 
@@ -92,14 +93,24 @@ export interface LeagueMatchupCard {
 export interface LeagueMatchupReadModel {
   leagueId: string;
   round: number;
+  competitionStatus: 'SETUP' | 'PUBLISHED' | 'PENDING' | 'ACTIVE' | 'COMPLETE';
   scoringMode: LeagueScoringMode;
   fixtureGenerationMode: 'AUTOMATIC' | 'MANUAL';
   categories: FantasyCategoryKey[];
   lineupSlots: ReturnType<typeof parseLineupSlotsJson>;
   categoryDirections: ReturnType<typeof parseCategoryDirectionsJson>;
   availableRounds: number[];
+  roundContext: {
+    round: number;
+    aflRound: number | null;
+    phase: 'REGULAR' | 'FINALS';
+    status: 'SCHEDULED' | 'NO_MATCHUP' | 'PENDING' | 'LOCKED' | 'FINAL';
+    startsAt: string | null;
+    endsAt: string | null;
+    fallbackLockAt: string | null;
+  } | null;
   matchups: LeagueMatchupCard[];
-  standings: unknown[];
+  standings: LeagueStandingReadRow[];
   permissions: {
     canManage: boolean;
   };
@@ -146,6 +157,15 @@ function parseStoredCategoryRows(categoriesJson: string | null | undefined): Arr
   } catch {
     return [];
   }
+}
+
+function countTieBreakCategoryWins(
+  categoriesJson: string | null | undefined,
+  category: FantasyCategoryKey
+) {
+  return parseStoredCategoryRows(categoriesJson).filter(
+    (row) => row.category === category && row.winner === 'home'
+  ).length;
 }
 
 function buildCategoryRows({
@@ -417,7 +437,36 @@ async function loadLeagueCompetitionSettings(leagueId: string) {
       categories,
       league.settings.categoryDirectionsJson
     ),
+    competitionStatus: league.settings.competitionStatus,
+    competitionRules: parseCompetitionRulesJson(
+      league.settings.competitionRulesJson,
+      categories[0] ?? 'goals'
+    ),
   };
+}
+
+function resolveCurrentCompetitionRound<TRound extends {
+  round: number;
+  status: string;
+  startsAt: Date | null;
+  endsAt: Date | null;
+}>(rounds: readonly TRound[], now = new Date()): TRound | null {
+  const playableRounds = rounds.filter((competitionRound) => competitionRound.status !== 'NO_MATCHUP');
+  if (!playableRounds.length) return rounds[0] ?? null;
+
+  return (
+    playableRounds.find(
+      (competitionRound) =>
+        competitionRound.startsAt &&
+        competitionRound.startsAt <= now &&
+        (!competitionRound.endsAt || competitionRound.endsAt >= now)
+    ) ??
+    playableRounds.find(
+      (competitionRound) => !competitionRound.startsAt || competitionRound.startsAt > now
+    ) ??
+    playableRounds.at(-1) ??
+    null
+  );
 }
 
 export async function loadLeagueMatchupReadModel({
@@ -434,13 +483,6 @@ export async function loadLeagueMatchupReadModel({
   const settings = await loadLeagueCompetitionSettings(leagueId);
   if (!settings) return null;
 
-  if (settings.fixtureGenerationMode === 'AUTOMATIC') {
-    const fixtureCount = await prisma.leagueMatchup.count({ where: { leagueId } });
-    if (fixtureCount === 0) {
-      await generateLeagueFixtures({ leagueId });
-    }
-  }
-
   const viewerMember = await prisma.leagueMember.findFirst({
     where: { leagueId, userId },
     select: { id: true },
@@ -450,21 +492,29 @@ export async function loadLeagueMatchupReadModel({
 
   const viewerMatchupWhere = {
     leagueId,
+    fixtureVersion: settings.league.settings.competitionRulesVersion,
     OR: [
       { homeMemberId: viewerMember.id },
       { awayMemberId: viewerMember.id },
       { byeMemberId: viewerMember.id },
     ],
   };
-  const availableRoundRows = await prisma.leagueMatchup.findMany({
-    where: viewerMatchupWhere,
-    distinct: ['round'],
-    orderBy: [{ round: 'asc' }],
-    select: { round: true },
-  });
-  const availableRounds = availableRoundRows.map((row) => row.round);
-  const activeRound = round ?? availableRounds[0] ?? 1;
-  const [matchups, standings, liveTotals] = await Promise.all([
+  const competitionRounds =
+    settings.competitionStatus === 'SETUP'
+      ? []
+      : await prisma.leagueCompetitionRound.findMany({
+          where: {
+            leagueId,
+            fixtureVersion: settings.league.settings.competitionRulesVersion,
+          },
+          orderBy: { round: 'asc' },
+        });
+  const availableRounds = competitionRounds.map((competitionRound) => competitionRound.round);
+  const resolvedRound = resolveCurrentCompetitionRound(competitionRounds);
+  const activeRound = round && availableRounds.includes(round) ? round : resolvedRound?.round ?? 1;
+  const activeCompetitionRound =
+    competitionRounds.find((competitionRound) => competitionRound.round === activeRound) ?? null;
+  const [matchups, persistedStandings, finalizedScores, members] = await Promise.all([
     prisma.leagueMatchup.findMany({
       where: { ...viewerMatchupWhere, round: activeRound },
       orderBy: [{ createdAt: 'asc' }],
@@ -479,8 +529,32 @@ export async function loadLeagueMatchupReadModel({
       where: { leagueId },
       orderBy: [{ wins: 'desc' }, { categoryWins: 'desc' }],
     }),
-    loadLivePlayerTotalsForRound(new Date().getFullYear(), activeRound),
+    prisma.leagueMatchupScore.findMany({
+      where: {
+        leagueId,
+        status: 'FINAL',
+        matchup: { fixtureVersion: settings.league.settings.competitionRulesVersion },
+      },
+      select: { memberId: true, categoriesJson: true },
+    }),
+    prisma.leagueMember.findMany({
+      where: { leagueId },
+      select: { id: true, teamName: true, teamLogoUrl: true, draftSlot: true },
+    }),
   ]);
+  const liveTotals = activeCompetitionRound?.aflRound
+    ? await loadLivePlayerTotalsForRound(new Date().getFullYear(), activeCompetitionRound.aflRound)
+    : {
+        totalsByPlayerId: new Map<string, CategoryTotals>(),
+        roundStatus: {
+          earliestStartAt: null,
+          latestEndAt: null,
+          anyLive: false,
+          allFinal: false,
+          hasUnavailableStatus: true,
+          matches: [],
+        },
+      };
   const visibleMemberIds = [
     ...new Set(
       matchups.flatMap((matchup) =>
@@ -503,16 +577,39 @@ export async function loadLeagueMatchupReadModel({
         })
       : [];
   const lineupsByMemberId = new Map(lineups.map((lineup) => [lineup.memberId, lineup]));
+  const tieBreakCategoryWinsByMemberId = new Map<string, number>();
+  for (const score of finalizedScores) {
+    tieBreakCategoryWinsByMemberId.set(
+      score.memberId,
+      (tieBreakCategoryWinsByMemberId.get(score.memberId) ?? 0) +
+        countTieBreakCategoryWins(
+          score.categoriesJson,
+          settings.competitionRules.standingsTieBreakCategory
+        )
+    );
+  }
 
   return {
     leagueId,
     round: activeRound,
+    competitionStatus: settings.competitionStatus,
     scoringMode: settings.scoringMode,
     fixtureGenerationMode: settings.fixtureGenerationMode,
     categories: settings.categories,
     lineupSlots: settings.lineupSlots,
     categoryDirections: settings.categoryDirections,
     availableRounds,
+    roundContext: activeCompetitionRound
+      ? {
+          round: activeCompetitionRound.round,
+          aflRound: activeCompetitionRound.aflRound,
+          phase: activeCompetitionRound.phase,
+          status: activeCompetitionRound.status,
+          startsAt: toIsoString(activeCompetitionRound.startsAt),
+          endsAt: toIsoString(activeCompetitionRound.endsAt),
+          fallbackLockAt: toIsoString(activeCompetitionRound.fallbackLockAt),
+        }
+      : null,
     matchups: matchups.map((matchup) =>
       buildMatchupCard({
         matchup,
@@ -522,45 +619,13 @@ export async function loadLeagueMatchupReadModel({
         totalsByPlayerId: liveTotals.totalsByPlayerId,
       })
     ),
-    standings,
+    standings: buildLeagueStandings({
+      members,
+      standings: persistedStandings,
+      tieBreakCategoryWinsByMemberId,
+    }),
     permissions: { canManage },
   };
-}
-
-export async function generateLeagueFixtures({ leagueId }: { leagueId: string }) {
-  const members = await prisma.leagueMember.findMany({
-    where: { leagueId },
-    orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
-    select: { id: true },
-  });
-  const fixtures = generateRoundRobinFixtures(members.map((member) => member.id));
-  if (fixtures.length === 0) return { created: 0 };
-
-  const year = new Date().getFullYear();
-  const startsByRound = new Map<number, Date | null>();
-  for (const fixture of fixtures) {
-    if (startsByRound.has(fixture.round)) continue;
-    const roundStatus = normalizeRoundMatchStatus(
-      (await getRoundMatches(year, fixture.round)) as unknown as RawRoundMatch[]
-    );
-    startsByRound.set(fixture.round, roundStatus.earliestStartAt);
-  }
-
-  await prisma.$transaction([
-    prisma.leagueMatchup.deleteMany({ where: { leagueId } }),
-    prisma.leagueMatchup.createMany({
-      data: fixtures.map((fixture) => ({
-        leagueId,
-        round: fixture.round,
-        homeMemberId: fixture.homeMemberId,
-        awayMemberId: fixture.awayMemberId,
-        byeMemberId: fixture.byeMemberId,
-        startsAt: startsByRound.get(fixture.round) ?? undefined,
-      })),
-    }),
-  ]);
-
-  return { created: fixtures.length };
 }
 
 export async function recalculateLeagueRoundMatchups({

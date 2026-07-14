@@ -37,6 +37,15 @@ export function buildLineupFieldSpots(lineupSlots: LineupSlotSettings): LineupFi
   );
 }
 
+export function buildInterchangeSpots(interchangeSlots: number): LineupFieldSpot[] {
+  return Array.from({ length: Math.max(0, interchangeSlots) }, (_, index) => ({
+    id: `INTERCHANGE:${index}`,
+    slot: 'INTERCHANGE',
+    slotIndex: index,
+    label: `Interchange ${index + 1}`,
+  }));
+}
+
 export function getAssignedPlayerIds(assignments: readonly LineupAssignment[]): Set<string> {
   return new Set(assignments.map((assignment) => assignment.playerId));
 }
