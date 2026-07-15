@@ -98,11 +98,11 @@ export function LineupFieldBoard({
             />
             <div
               aria-hidden="true"
-              className="absolute left-1/2 top-[6%] h-[12%] w-[28%] -translate-x-1/2 border-x-2 border-b-2 border-white/78 bg-white/5 lg:left-[7.7%] lg:top-1/2 lg:h-[24%] lg:w-[8%] lg:translate-x-0 lg:-translate-y-1/2 lg:border-y-2 lg:border-l-0 lg:border-r-2"
+              className="absolute left-1/2 top-[6%] h-[8%] w-[20%] -translate-x-1/2 border-x-2 border-b-2 border-white/78 bg-white/5 lg:left-[6%] lg:top-1/2 lg:h-[10%] lg:w-[5%] lg:translate-x-0 lg:-translate-y-1/2 lg:border-y-2 lg:border-l-0 lg:border-r-2"
             />
             <div
               aria-hidden="true"
-              className="absolute bottom-[6%] left-1/2 h-[12%] w-[28%] -translate-x-1/2 border-x-2 border-t-2 border-white/78 bg-white/5 lg:bottom-auto lg:left-auto lg:right-[7.7%] lg:top-1/2 lg:h-[24%] lg:w-[8%] lg:translate-x-0 lg:-translate-y-1/2 lg:border-y-2 lg:border-l-2 lg:border-r-0"
+              className="absolute bottom-[6%] left-1/2 h-[8%] w-[20%] -translate-x-1/2 border-x-2 border-t-2 border-white/78 bg-white/5 lg:bottom-auto lg:left-auto lg:right-[6%] lg:top-1/2 lg:h-[10%] lg:w-[5%] lg:translate-x-0 lg:-translate-y-1/2 lg:border-y-2 lg:border-l-2 lg:border-r-0"
             />
             <div
               aria-hidden="true"
