@@ -29,10 +29,10 @@ const SLOT_GROUP_LABELS: Record<ActiveLineupSlot, string> = {
 };
 
 const SLOT_FIELD_BANDS: Record<ActiveLineupSlot, string> = {
-  FWD: 'left-[3%] right-[3%] top-[8%] lg:left-[70%] lg:right-auto lg:top-[34%] lg:w-[24%]',
-  MID: 'left-[3%] right-[3%] top-[30%] lg:left-[31%] lg:right-auto lg:top-[30%] lg:w-[38%]',
+  FWD: 'left-[3%] right-[3%] top-[8%] lg:left-[67.5%] lg:right-auto lg:top-[32%] lg:w-[21.5%]',
+  MID: 'left-[3%] right-[3%] top-[30%] lg:left-[34%] lg:right-auto lg:top-[29%] lg:w-[32%]',
   RUC: 'left-[7%] right-[7%] top-[52%] lg:left-[40%] lg:right-auto lg:top-[64%] lg:w-[20%]',
-  DEF: 'left-[3%] right-[3%] top-[66%] lg:left-[6%] lg:right-auto lg:top-[34%] lg:w-[24%]',
+  DEF: 'left-[3%] right-[3%] top-[66%] lg:left-[11%] lg:right-auto lg:top-[32%] lg:w-[21.5%]',
   UTIL: '',
 };
 
@@ -86,18 +86,8 @@ export function LineupFieldBoard({
           Field builder
         </div>
 
-        <div className="relative mx-auto max-w-[1800px] lg:pt-20">
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-[11%] top-0 hidden h-28 overflow-hidden rounded-t-[50%] border border-[color:var(--league-border)] bg-[color:var(--league-text)] shadow-[0_18px_42px_rgba(40,42,45,0.28)] lg:block"
-          >
-            <div className="absolute inset-x-[3%] top-3 h-4 rounded-t-[50%] border-t-4 border-white/75 bg-black/20" />
-            <div className="absolute inset-x-[5%] top-8 h-14 rounded-t-[46%] bg-[radial-gradient(circle,rgba(255,255,255,0.7)_0_1.5px,transparent_1.8px)] opacity-75 [background-size:11px_9px]" />
-            <div className="absolute inset-x-[8%] bottom-3 h-7 border-y border-white/20 bg-white/10 shadow-[inset_0_1px_rgba(255,255,255,0.18)]" />
-            <div className="absolute inset-x-[14%] bottom-0 h-3 bg-black/30" />
-          </div>
-
-          <div className="relative z-10 min-h-[1120px] overflow-hidden rounded-[999px] bg-[linear-gradient(115deg,rgba(20,94,47,0.28),rgba(45,128,58,0.1)_48%,rgba(6,47,26,0.42)),url('/Assets/afl-turf-texture.png')] bg-center bg-cover bg-blend-multiply shadow-[inset_0_34px_70px_rgba(255,255,255,0.12),inset_0_-42px_90px_rgba(18,66,35,0.24),0_26px_72px_rgba(88,76,55,0.28)] lg:aspect-[2.5/1] lg:min-h-0">
+        <div className="relative mx-auto w-full max-w-[2000px]">
+          <div className="relative min-h-[1120px] overflow-hidden rounded-[999px] bg-[linear-gradient(115deg,rgba(20,94,47,0.28),rgba(45,128,58,0.1)_48%,rgba(6,47,26,0.42)),url('/Assets/afl-turf-texture.png')] bg-center bg-cover bg-blend-multiply shadow-[inset_0_34px_70px_rgba(255,255,255,0.12),inset_0_-42px_90px_rgba(18,66,35,0.24),0_26px_72px_rgba(88,76,55,0.28)] lg:aspect-[2.3/1] lg:min-h-[620px] xl:min-h-0">
             <div
               aria-hidden="true"
               className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,transparent_0,transparent_58%,rgba(12,56,31,0.3)_100%),linear-gradient(115deg,rgba(255,255,255,0.12),transparent_34%,rgba(10,50,28,0.18)_86%)]"
@@ -203,7 +193,7 @@ export function LineupFieldBoard({
                     <div className="mb-2 text-center text-[11px] font-semibold uppercase text-white drop-shadow">
                       {SLOT_GROUP_LABELS[typedSlot]}
                     </div>
-                    <div className={`grid ${SLOT_BAND_GRIDS[typedSlot]} gap-2`}>
+                    <div className={`grid ${SLOT_BAND_GRIDS[typedSlot]} gap-2 lg:gap-x-3`}>
                       {slotSpots.map((spot, index) => (
                         <div
                           key={spot.id}
