@@ -173,7 +173,8 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
       if (!response.ok || !payload.success) {
         throw new Error(payload.details?.join(', ') ?? payload.error ?? 'Failed to save lineup.');
       }
-      await loadLineup();
+      persistedAssignmentsRef.current = JSON.stringify(assignments);
+      setHasSavedLineup(true);
       if (!silent) setMessage('Lineup saved.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to save lineup.');
