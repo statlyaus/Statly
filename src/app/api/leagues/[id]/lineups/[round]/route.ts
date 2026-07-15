@@ -7,9 +7,11 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { parseCompetitionRulesJson } from '@/server/leagues/competitionRules';
 import { parseLineupSlotsJson } from '@/server/leagues/lineupSettings';
 import {
+  createSetupLineupRoundContext,
   loadMemberLineup,
   loadMemberLineupRoundContext,
   loadRoundPlayerGameStarts,
+  resolveRequestedLineupRound,
   resolveCurrentCompetitionRoundNumber,
   saveMemberLineup,
 } from '@/server/leagues/lineupService';
@@ -27,12 +29,13 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const requestedRound =
-    round === 'current' ? await resolveCurrentCompetitionRoundNumber(id) : Number.parseInt(round, 10);
-  if (requestedRound === null || !Number.isFinite(requestedRound) || requestedRound < 1) {
-    return NextResponse.json({ error: 'No published playable round is available.' }, { status: 400 });
-  }
-  const roundNumber = requestedRound;
+  const publishedCurrentRound =
+    round === 'current' ? await resolveCurrentCompetitionRoundNumber(id) : null;
+  const roundNumber = resolveRequestedLineupRound({
+    requestedRound: round,
+    publishedCurrentRound,
+  });
+  if (roundNumber === null) return NextResponse.json({ error: 'Invalid round' }, { status: 400 });
 
   const [lineup, league, rosterPlayers, context] = await Promise.all([
     loadMemberLineup({
@@ -42,7 +45,10 @@ export async function GET(
     }),
     prisma.league.findUnique({
       where: { id },
-      include: { settings: true },
+      include: {
+        settings: true,
+        members: { where: { userId }, select: { isCoCommissioner: true }, take: 1 },
+      },
     }),
     prisma.leagueRosterPlayer.findMany({
       where: { leagueId: id, memberId: membership.memberDocId },
@@ -56,6 +62,8 @@ export async function GET(
     }),
   ]);
   if (!league?.settings) return NextResponse.json({ error: 'League not found' }, { status: 404 });
+  const setupRequired = league.settings.competitionStatus === 'SETUP';
+  const effectiveContext = context ?? (setupRequired ? createSetupLineupRoundContext(roundNumber) : null);
   const carriedLineup = lineup
     ? null
     : await prisma.leagueLineup.findFirst({
@@ -70,7 +78,7 @@ export async function GET(
     });
   const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
   const gameStartsByPlayerId = await loadRoundPlayerGameStarts({
-    aflRound: context?.aflRound ?? null,
+    aflRound: effectiveContext?.aflRound ?? null,
     playerIds: (lineup?.players ?? carriedLineup?.players ?? []).map((player) => player.playerId),
   });
 
@@ -95,12 +103,15 @@ export async function GET(
     })),
     lineupSlots: parseLineupSlotsJson(league.settings.lineupSlotsJson),
     interchangeSlots: rules.interchangeSlots,
-    context: context
+    setupRequired,
+    canManageCompetition:
+      league.ownerId === userId || league.members[0]?.isCoCommissioner === true,
+    context: effectiveContext
       ? {
-          ...context,
-          startsAt: context.startsAt?.toISOString() ?? null,
-          fallbackLockAt: context.fallbackLockAt?.toISOString() ?? null,
-          lockAt: context.lockAt?.toISOString() ?? null,
+          ...effectiveContext,
+          startsAt: effectiveContext.startsAt?.toISOString() ?? null,
+          fallbackLockAt: effectiveContext.fallbackLockAt?.toISOString() ?? null,
+          lockAt: effectiveContext.lockAt?.toISOString() ?? null,
         }
       : null,
   };
@@ -123,12 +134,13 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const requestedRound =
-    round === 'current' ? await resolveCurrentCompetitionRoundNumber(id) : Number.parseInt(round, 10);
-  if (requestedRound === null || !Number.isFinite(requestedRound) || requestedRound < 1) {
-    return NextResponse.json({ error: 'No published playable round is available.' }, { status: 400 });
-  }
-  const roundNumber = requestedRound;
+  const publishedCurrentRound =
+    round === 'current' ? await resolveCurrentCompetitionRoundNumber(id) : null;
+  const roundNumber = resolveRequestedLineupRound({
+    requestedRound: round,
+    publishedCurrentRound,
+  });
+  if (roundNumber === null) return NextResponse.json({ error: 'Invalid round' }, { status: 400 });
 
   const body = (await request.json()) as { players?: unknown };
   const result = await saveMemberLineup({

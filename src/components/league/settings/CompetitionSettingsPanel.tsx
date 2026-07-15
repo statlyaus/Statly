@@ -220,7 +220,10 @@ export function CompetitionSettingsPanel({
   }
 
   return (
-    <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
+    <section
+      id="competition-rules"
+      className="scroll-mt-6 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-[color:var(--league-text)]">

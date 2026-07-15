@@ -43,6 +43,7 @@ export interface LineupValidationResult {
 }
 
 export interface MemberLineupRoundContext {
+  source: 'PUBLISHED' | 'SETUP_FALLBACK';
   round: number;
   aflRound: number | null;
   phase: 'REGULAR' | 'FINALS';
@@ -52,6 +53,34 @@ export interface MemberLineupRoundContext {
   lockAt: Date | null;
   lockState: 'OPEN' | 'LOCKED' | 'PUBLISHED_PENDING' | 'NO_MATCHUP';
   opponent: { id: string; teamName: string } | null;
+}
+
+export function resolveRequestedLineupRound({
+  requestedRound,
+  publishedCurrentRound,
+}: {
+  requestedRound: string;
+  publishedCurrentRound: number | null;
+}): number | null {
+  if (requestedRound === 'current') return publishedCurrentRound ?? 1;
+
+  const parsedRound = Number.parseInt(requestedRound, 10);
+  return Number.isInteger(parsedRound) && parsedRound > 0 ? parsedRound : null;
+}
+
+export function createSetupLineupRoundContext(round: number): MemberLineupRoundContext {
+  return {
+    source: 'SETUP_FALLBACK',
+    round,
+    aflRound: null,
+    phase: 'REGULAR',
+    roundStatus: 'PENDING',
+    startsAt: null,
+    fallbackLockAt: null,
+    lockAt: null,
+    lockState: 'PUBLISHED_PENDING',
+    opponent: null,
+  };
 }
 
 export type SaveMemberLineupResult =
@@ -155,6 +184,7 @@ export async function loadMemberLineupRoundContext({
           : 'OPEN';
 
   return {
+    source: 'PUBLISHED',
     round: competitionRound.round,
     aflRound: competitionRound.aflRound,
     phase: competitionRound.phase,
@@ -392,16 +422,19 @@ export async function saveMemberLineup({
   if (!league?.settings) {
     return { ok: false, errors: ['League not found.'] };
   }
-  if (!roundContext) {
+  const isSetupFallback =
+    league.settings.competitionStatus === 'SETUP' &&
+    league.settings.competitionRulesVersion === 0;
+  if (!roundContext && !isSetupFallback) {
     return { ok: false, errors: ['Publish the competition before saving lineups.'] };
   }
-  if (roundContext.lockState === 'LOCKED') {
+  if (roundContext?.lockState === 'LOCKED') {
     return { ok: false, errors: ['This round is locked.'] };
   }
 
   const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
   const gameStartsByPlayerId = await loadRoundPlayerGameStarts({
-    aflRound: roundContext.aflRound,
+    aflRound: roundContext?.aflRound ?? null,
     playerIds: rosterPlayers.map((row) => row.playerId),
   });
   const existingLockedPlayers =

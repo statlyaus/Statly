@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
@@ -28,6 +29,7 @@ interface LineupApiPlayer {
 }
 
 interface LineupRoundContext {
+  source: 'PUBLISHED' | 'SETUP_FALLBACK';
   round: number;
   aflRound: number | null;
   phase: 'REGULAR' | 'FINALS';
@@ -61,6 +63,9 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [setupRequired, setSetupRequired] = useState(false);
+  const [canManageCompetition, setCanManageCompetition] = useState(false);
+  const [hasSavedLineup, setHasSavedLineup] = useState(false);
   const dragPlayerIdRef = useRef<string | null>(null);
   const persistedAssignmentsRef = useRef('');
   const round = 'current';
@@ -105,6 +110,9 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
       setLineupSlots(normalizeLineupBuilderSlots(payload.data?.lineupSlots));
       setInterchangeSlots(Math.max(0, Number(payload.data?.interchangeSlots) || 0));
       setContext((payload.data?.context as LineupRoundContext | null) ?? null);
+      setSetupRequired(Boolean(payload.data?.setupRequired));
+      setCanManageCompetition(Boolean(payload.data?.canManageCompetition));
+      setHasSavedLineup(Boolean(payload.data?.savedRound));
       setRosterPlayers(
         nextRosterPlayers.map((player: LineupRosterPlayer) => ({
           playerId: player.playerId,
@@ -153,10 +161,10 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             players: assignments.map((player) => ({
-                playerId: player.playerId,
-                slot: player.slot,
-                slotIndex: player.slotIndex,
-              })),
+              playerId: player.playerId,
+              slot: player.slot,
+              slotIndex: player.slotIndex,
+            })),
           }),
         },
         currentUserId
@@ -195,7 +203,9 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
         minute: '2-digit',
       }).format(new Date(deadline))
     : context?.lockState === 'PUBLISHED_PENDING'
-      ? 'Official fixture timing pending'
+      ? setupRequired
+        ? 'Competition dates pending'
+        : 'Official fixture timing pending'
       : 'Each player locks at official AFL game start';
 
   return (
@@ -210,9 +220,11 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           </h2>
           <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
             {context
-              ? `Round ${context.round}${context.aflRound ? ` · AFL Round ${context.aflRound}` : ''} · ${
-                  context.opponent ? `vs ${context.opponent.teamName}` : 'No matchup'
-                }`
+              ? setupRequired
+                ? `Round ${context.round} lineup · Schedule pending`
+                : `Round ${context.round}${context.aflRound ? ` · AFL Round ${context.aflRound}` : ''} · ${
+                    context.opponent ? `vs ${context.opponent.teamName}` : 'No matchup'
+                  }`
               : 'Published round unavailable'}
           </p>
           <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
@@ -222,12 +234,41 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
         <button
           type="button"
           onClick={() => void saveLineup()}
-          disabled={isSaving || isLoading}
+          disabled={isSaving || isLoading || context?.lockState === 'LOCKED'}
           className="rounded-md bg-[color:var(--league-primary)] px-3 py-2 text-sm font-semibold text-[color:var(--league-primary-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSaving ? 'Saving' : context?.lockState === 'LOCKED' ? 'Locked' : 'Saved'}
+          {isSaving
+            ? 'Saving'
+            : context?.lockState === 'LOCKED'
+              ? 'Locked'
+              : hasSavedLineup
+                ? 'Saved'
+                : 'Draft'}
         </button>
       </div>
+
+      {setupRequired ? (
+        <aside className="flex flex-col gap-3 border-l-4 border-[color:var(--league-primary)] bg-[color:var(--league-surface-muted)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-[color:var(--league-text)]">
+              {canManageCompetition ? 'Finish competition setup' : 'Competition schedule pending'}
+            </h3>
+            <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
+              {canManageCompetition
+                ? 'You can prepare this lineup now. Publish the competition to add opponents, dates, and lock times.'
+                : 'You can prepare this lineup now. Opponents, dates, and lock times will appear after a commissioner publishes the competition.'}
+            </p>
+          </div>
+          {canManageCompetition ? (
+            <Link
+              href={`/leagues/${encodeURIComponent(leagueId)}?tab=league-settings#competition-rules`}
+              className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md bg-[color:var(--league-primary)] px-4 text-sm font-semibold text-[color:var(--league-primary-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
+            >
+              Set competition rules
+            </Link>
+          ) : null}
+        </aside>
+      ) : null}
 
       {message ? (
         <div className="rounded-md border border-[color:var(--league-border)] p-3 text-sm text-[color:var(--league-text)]">
@@ -256,8 +297,14 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           />
         </div>
       ) : (
-        <div className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm text-[color:var(--league-text-muted)]">
-          No roster players are available to set a lineup yet.
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4 text-sm text-[color:var(--league-text-muted)]">
+          <span>No roster players are available to set a lineup yet.</span>
+          <Link
+            href={`/leagues/${encodeURIComponent(leagueId)}?tab=roster`}
+            className="font-semibold text-[color:var(--league-primary)] underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+          >
+            View my roster
+          </Link>
         </div>
       )}
     </section>
