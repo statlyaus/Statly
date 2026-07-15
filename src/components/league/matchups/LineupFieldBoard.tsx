@@ -29,10 +29,10 @@ const SLOT_GROUP_LABELS: Record<ActiveLineupSlot, string> = {
 };
 
 const SLOT_FIELD_BANDS: Record<ActiveLineupSlot, string> = {
-  FWD: 'left-[8%] right-[8%] top-[8%] lg:left-[68%] lg:right-auto lg:top-[35%] lg:w-[24%]',
-  MID: 'left-[7%] right-[7%] top-[31%] lg:left-[34%] lg:right-auto lg:top-[35%] lg:w-[32%]',
-  RUC: 'left-[14%] right-[14%] top-[50%] lg:left-[41%] lg:right-auto lg:top-[60%] lg:w-[20%]',
-  DEF: 'left-[8%] right-[8%] top-[64%] lg:left-[6%] lg:right-auto lg:top-[35%] lg:w-[26%]',
+  FWD: 'left-[3%] right-[3%] top-[8%] lg:left-[70%] lg:right-auto lg:top-[34%] lg:w-[24%]',
+  MID: 'left-[3%] right-[3%] top-[30%] lg:left-[31%] lg:right-auto lg:top-[30%] lg:w-[38%]',
+  RUC: 'left-[7%] right-[7%] top-[52%] lg:left-[40%] lg:right-auto lg:top-[64%] lg:w-[20%]',
+  DEF: 'left-[3%] right-[3%] top-[66%] lg:left-[6%] lg:right-auto lg:top-[34%] lg:w-[24%]',
   UTIL: '',
 };
 
@@ -46,7 +46,7 @@ const SLOT_BAND_WIDTHS: Record<ActiveLineupSlot, string> = {
 
 const SLOT_BAND_GRIDS: Record<ActiveLineupSlot, string> = {
   FWD: 'grid-cols-2',
-  MID: 'grid-cols-[repeat(auto-fit,minmax(92px,1fr))]',
+  MID: 'grid-cols-2 lg:grid-cols-6',
   RUC: 'grid-cols-1',
   DEF: 'grid-cols-2',
   UTIL: 'grid-cols-[repeat(auto-fit,minmax(156px,1fr))]',
@@ -86,8 +86,18 @@ export function LineupFieldBoard({
           Field builder
         </div>
 
-        <div className="relative mx-auto max-w-[1800px]">
-          <div className="relative min-h-[1120px] overflow-hidden rounded-[999px] bg-[linear-gradient(115deg,rgba(20,94,47,0.28),rgba(45,128,58,0.1)_48%,rgba(6,47,26,0.42)),url('/Assets/afl-turf-texture.png')] bg-center bg-cover bg-blend-multiply shadow-[inset_0_34px_70px_rgba(255,255,255,0.12),inset_0_-42px_90px_rgba(18,66,35,0.24),0_26px_72px_rgba(88,76,55,0.28)] lg:aspect-[2.5/1] lg:min-h-0">
+        <div className="relative mx-auto max-w-[1800px] lg:pt-20">
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-[11%] top-0 hidden h-28 overflow-hidden rounded-t-[50%] border border-[color:var(--league-border)] bg-[color:var(--league-text)] shadow-[0_18px_42px_rgba(40,42,45,0.28)] lg:block"
+          >
+            <div className="absolute inset-x-[3%] top-3 h-4 rounded-t-[50%] border-t-4 border-white/75 bg-black/20" />
+            <div className="absolute inset-x-[5%] top-8 h-14 rounded-t-[46%] bg-[radial-gradient(circle,rgba(255,255,255,0.7)_0_1.5px,transparent_1.8px)] opacity-75 [background-size:11px_9px]" />
+            <div className="absolute inset-x-[8%] bottom-3 h-7 border-y border-white/20 bg-white/10 shadow-[inset_0_1px_rgba(255,255,255,0.18)]" />
+            <div className="absolute inset-x-[14%] bottom-0 h-3 bg-black/30" />
+          </div>
+
+          <div className="relative z-10 min-h-[1120px] overflow-hidden rounded-[999px] bg-[linear-gradient(115deg,rgba(20,94,47,0.28),rgba(45,128,58,0.1)_48%,rgba(6,47,26,0.42)),url('/Assets/afl-turf-texture.png')] bg-center bg-cover bg-blend-multiply shadow-[inset_0_34px_70px_rgba(255,255,255,0.12),inset_0_-42px_90px_rgba(18,66,35,0.24),0_26px_72px_rgba(88,76,55,0.28)] lg:aspect-[2.5/1] lg:min-h-0">
             <div
               aria-hidden="true"
               className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,transparent_0,transparent_58%,rgba(12,56,31,0.3)_100%),linear-gradient(115deg,rgba(255,255,255,0.12),transparent_34%,rgba(10,50,28,0.18)_86%)]"
@@ -194,17 +204,29 @@ export function LineupFieldBoard({
                       {SLOT_GROUP_LABELS[typedSlot]}
                     </div>
                     <div className={`grid ${SLOT_BAND_GRIDS[typedSlot]} gap-2`}>
-                      {slotSpots.map((spot) => (
-                        <LineupFieldSpotButton
+                      {slotSpots.map((spot, index) => (
+                        <div
                           key={spot.id}
-                          spot={spot}
-                          assignment={getAssignmentForSpot(assignments, spot)}
-                          rosterPlayers={rosterPlayers}
-                          selectedPlayerId={selectedPlayerId}
-                          getDragPlayerId={getDragPlayerId}
-                          onAssignPlayer={onAssignPlayer}
-                          onClearSpot={onClearSpot}
-                        />
+                          className={`min-w-0 ${
+                            typedSlot === 'MID'
+                              ? `lg:col-span-2 ${index === 3 ? 'lg:col-start-2' : ''} ${
+                                  index === slotSpots.length - 1
+                                    ? 'col-span-2 mx-auto w-full max-w-60 lg:mx-0 lg:max-w-none'
+                                    : ''
+                                }`
+                              : ''
+                          }`}
+                        >
+                          <LineupFieldSpotButton
+                            spot={spot}
+                            assignment={getAssignmentForSpot(assignments, spot)}
+                            rosterPlayers={rosterPlayers}
+                            selectedPlayerId={selectedPlayerId}
+                            getDragPlayerId={getDragPlayerId}
+                            onAssignPlayer={onAssignPlayer}
+                            onClearSpot={onClearSpot}
+                          />
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -216,33 +238,34 @@ export function LineupFieldBoard({
           <div className="pointer-events-none absolute -bottom-10 left-[6%] right-[6%] h-24 rounded-[50%] bg-white/44 blur-2xl" />
         </div>
 
-        <div className="relative mx-auto mt-8 grid max-w-[1260px] items-start gap-5 lg:grid-cols-[220px_220px_minmax(0,1fr)] lg:gap-7">
-          <div className="min-w-0 space-y-3">
-            <div className="px-2 text-center text-[11px] font-semibold uppercase text-[color:var(--league-text)] lg:text-left">
-              {SLOT_GROUP_LABELS.UTIL}
-            </div>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(156px,1fr))] gap-3 lg:grid-cols-1">
-              {groupedSpots.UTIL.map((spot) => (
-                <LineupFieldSpotButton
-                  key={spot.id}
-                  spot={spot}
-                  assignment={getAssignmentForSpot(assignments, spot)}
-                  rosterPlayers={rosterPlayers}
-                  selectedPlayerId={selectedPlayerId}
-                  getDragPlayerId={getDragPlayerId}
-                  onAssignPlayer={onAssignPlayer}
-                  onClearSpot={onClearSpot}
-                />
-              ))}
-            </div>
+        <section
+          aria-label="Lineup sideline"
+          className="relative mx-auto mt-7 max-w-[1500px] overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)]/72 shadow-[0_20px_46px_rgba(80,65,45,0.16)] backdrop-blur"
+        >
+          <div className="flex items-center justify-between gap-4 border-b border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)]/80 px-5 py-3">
+            <h2 className="text-sm font-semibold uppercase text-[color:var(--league-text)]">
+              Sideline
+            </h2>
+            <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-2.5 py-1 text-[10px] font-semibold uppercase text-[color:var(--league-text-muted)]">
+              Match day
+            </span>
           </div>
-          <div className="min-w-0 space-y-3">
-            <div className="px-2 text-center text-[11px] font-semibold uppercase text-[color:var(--league-text)] lg:text-left">
-              Interchange
-            </div>
-            {interchangeSpots.length ? (
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(156px,1fr))] gap-3 lg:grid-cols-1">
-                {interchangeSpots.map((spot) => (
+
+          <div className="grid items-start gap-5 p-4 lg:grid-cols-[minmax(240px,0.8fr)_minmax(260px,0.9fr)_minmax(420px,2fr)] lg:gap-0 lg:p-5">
+            <section aria-labelledby="utility-heading" className="min-w-0 space-y-3 lg:pr-5">
+              <div className="flex items-center justify-between gap-3 px-1">
+                <h3
+                  id="utility-heading"
+                  className="text-xs font-semibold uppercase text-[color:var(--league-text)]"
+                >
+                  {SLOT_GROUP_LABELS.UTIL}
+                </h3>
+                <span className="text-[10px] font-semibold uppercase text-[color:var(--league-text-muted)]">
+                  Scoring
+                </span>
+              </div>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3 lg:grid-cols-1">
+                {groupedSpots.UTIL.map((spot) => (
                   <LineupFieldSpotButton
                     key={spot.id}
                     spot={spot}
@@ -252,27 +275,61 @@ export function LineupFieldBoard({
                     getDragPlayerId={getDragPlayerId}
                     onAssignPlayer={onAssignPlayer}
                     onClearSpot={onClearSpot}
-                    variant="interchange"
                   />
                 ))}
               </div>
-            ) : (
-              <p className="px-2 text-sm text-[color:var(--league-text-muted)]">
-                No interchange slots configured.
-              </p>
-            )}
+            </section>
+
+            <section
+              aria-labelledby="interchange-heading"
+              className="min-w-0 space-y-3 border-t border-[color:var(--league-border)] pt-5 lg:border-l lg:border-t-0 lg:px-5 lg:pt-0"
+            >
+              <div className="flex items-center justify-between gap-3 px-1">
+                <h3
+                  id="interchange-heading"
+                  className="text-xs font-semibold uppercase text-[color:var(--league-text)]"
+                >
+                  Interchange
+                </h3>
+                <span className="text-[10px] font-semibold uppercase text-[color:var(--league-text-muted)]">
+                  Bench
+                </span>
+              </div>
+              {interchangeSpots.length ? (
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3 lg:grid-cols-1">
+                  {interchangeSpots.map((spot) => (
+                    <LineupFieldSpotButton
+                      key={spot.id}
+                      spot={spot}
+                      assignment={getAssignmentForSpot(assignments, spot)}
+                      rosterPlayers={rosterPlayers}
+                      selectedPlayerId={selectedPlayerId}
+                      getDragPlayerId={getDragPlayerId}
+                      onAssignPlayer={onAssignPlayer}
+                      onClearSpot={onClearSpot}
+                      variant="interchange"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="px-1 text-sm text-[color:var(--league-text-muted)]">
+                  No interchange slots configured.
+                </p>
+              )}
+            </section>
+
+            <div className="min-w-0 border-t border-[color:var(--league-border)] pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+              <LineupRosterPool
+                players={availablePlayers}
+                selectedPlayerId={selectedPlayerId}
+                onSelectPlayer={onSelectPlayer}
+                setDragPlayer={setDragPlayer}
+                variant="stadium"
+                embedded
+              />
+            </div>
           </div>
-          <div className="min-w-0">
-            <LineupRosterPool
-              players={availablePlayers}
-              selectedPlayerId={selectedPlayerId}
-              onSelectPlayer={onSelectPlayer}
-              setDragPlayer={setDragPlayer}
-              variant="stadium"
-              embedded
-            />
-          </div>
-        </div>
+        </section>
       </div>
     </section>
   );
@@ -329,7 +386,7 @@ function LineupFieldSpotButton({
         const playerId = event.dataTransfer.getData('text/plain') || getDragPlayerId();
         if (playerId) onAssignPlayer(playerId, spot);
       }}
-      className={`group relative min-h-14 rounded-full border px-3 py-2 shadow-[0_10px_24px_rgba(54,64,40,0.22)] backdrop-blur transition ${
+      className={`group relative min-h-14 rounded-full border px-2.5 py-2 shadow-[0_10px_24px_rgba(54,64,40,0.22)] backdrop-blur transition sm:min-h-16 sm:px-3.5 sm:py-2.5 ${
         assignedPlayer
           ? 'border-white/85 bg-[color:var(--league-surface)]/96 hover:-translate-y-0.5'
           : isInterchange
@@ -343,10 +400,14 @@ function LineupFieldSpotButton({
         disabled={isLocked}
         aria-disabled={!canPlaceSelectedPlayer || isLocked}
         aria-label={`${spot.label}, ${spotStatus}. Assign selected player to this slot.`}
-        className="flex min-h-10 w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:cursor-not-allowed"
+        className="flex min-h-10 w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:cursor-not-allowed sm:min-h-11 sm:gap-2.5"
       >
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold uppercase ${
+          className={`flex shrink-0 items-center justify-center font-bold uppercase ${
+            isInterchange
+              ? 'h-9 min-w-16 rounded-md px-2 text-[9px]'
+              : 'h-8 w-8 rounded-full text-[10px] sm:h-9 sm:w-9'
+          } ${
             assignedPlayer
               ? 'bg-[color:var(--league-primary)] text-[color:var(--league-primary-foreground)]'
               : isInterchange
@@ -354,11 +415,11 @@ function LineupFieldSpotButton({
                 : 'bg-white/28 text-white'
           }`}
         >
-          {spot.slot}
+          {isInterchange ? `Bench ${spot.slotIndex + 1}` : spot.slot}
         </span>
         <span className="min-w-0 flex-1">
           <span
-            className={`block truncate text-xs font-semibold ${
+            className={`block whitespace-normal break-normal text-xs font-semibold leading-tight sm:text-sm ${
               assignedPlayer ? 'text-[color:var(--league-text)]' : 'text-white'
             }`}
           >
