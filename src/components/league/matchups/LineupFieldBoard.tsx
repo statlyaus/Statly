@@ -164,19 +164,19 @@ export function LineupFieldBoard({
               aria-hidden="true"
               className="absolute left-1/2 top-[2.1%] h-[7%] w-[32%] -translate-x-1/2 lg:left-0 lg:top-1/2 lg:h-[32%] lg:w-[8%] lg:translate-x-0 lg:-translate-y-1/2"
             >
-              <span className="absolute left-[18%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:left-auto lg:right-0 lg:top-[10%] lg:h-[3px] lg:w-[62%]" />
-              <span className="absolute left-[39%] top-0 h-full w-[3px] bg-white shadow-[0_0_10px_rgba(255,255,255,0.46)] lg:left-auto lg:right-[22%] lg:top-[36%] lg:h-[4px] lg:w-[78%]" />
-              <span className="absolute right-[39%] top-0 h-full w-[3px] bg-white shadow-[0_0_10px_rgba(255,255,255,0.46)] lg:bottom-[36%] lg:left-auto lg:right-[22%] lg:top-auto lg:h-[4px] lg:w-[78%]" />
-              <span className="absolute right-[18%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:bottom-[10%] lg:left-auto lg:right-0 lg:top-auto lg:h-[3px] lg:w-[62%]" />
+              <span className="absolute left-[18%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:left-auto lg:right-0 lg:top-[10%] lg:h-[2px] lg:w-[58%]" />
+              <span className="absolute left-[39%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:left-auto lg:right-[22%] lg:top-[36%] lg:h-[2px] lg:w-[58%]" />
+              <span className="absolute right-[39%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:bottom-[36%] lg:left-auto lg:right-[22%] lg:top-auto lg:h-[2px] lg:w-[58%]" />
+              <span className="absolute right-[18%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:bottom-[10%] lg:left-auto lg:right-0 lg:top-auto lg:h-[2px] lg:w-[58%]" />
             </div>
             <div
               aria-hidden="true"
               className="absolute bottom-[2.1%] left-1/2 h-[7%] w-[32%] -translate-x-1/2 lg:bottom-auto lg:left-auto lg:right-0 lg:top-1/2 lg:h-[32%] lg:w-[8%] lg:translate-x-0 lg:-translate-y-1/2"
             >
-              <span className="absolute left-[18%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:left-0 lg:right-auto lg:top-[10%] lg:h-[3px] lg:w-[62%]" />
-              <span className="absolute left-[39%] top-0 h-full w-[3px] bg-white shadow-[0_0_10px_rgba(255,255,255,0.46)] lg:left-[22%] lg:right-auto lg:top-[36%] lg:h-[4px] lg:w-[78%]" />
-              <span className="absolute right-[39%] top-0 h-full w-[3px] bg-white shadow-[0_0_10px_rgba(255,255,255,0.46)] lg:bottom-[36%] lg:left-[22%] lg:right-auto lg:top-auto lg:h-[4px] lg:w-[78%]" />
-              <span className="absolute right-[18%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:bottom-[10%] lg:left-0 lg:right-auto lg:top-auto lg:h-[3px] lg:w-[62%]" />
+              <span className="absolute left-[18%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:left-0 lg:right-auto lg:top-[10%] lg:h-[2px] lg:w-[58%]" />
+              <span className="absolute left-[39%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:left-[22%] lg:right-auto lg:top-[36%] lg:h-[2px] lg:w-[58%]" />
+              <span className="absolute right-[39%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:bottom-[36%] lg:left-[22%] lg:right-auto lg:top-auto lg:h-[2px] lg:w-[58%]" />
+              <span className="absolute right-[18%] top-0 h-full w-[2px] bg-white/88 shadow-[0_0_8px_rgba(255,255,255,0.36)] lg:bottom-[10%] lg:left-0 lg:right-auto lg:top-auto lg:h-[2px] lg:w-[58%]" />
             </div>
 
             {Object.entries(groupedSpots).map(([slot, slotSpots]) => {
