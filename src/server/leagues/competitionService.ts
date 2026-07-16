@@ -22,8 +22,20 @@ async function hydrateOfficialRoundTimings(
   const aflRounds = [...new Set(schedule.map((competitionRound) => competitionRound.aflRound))];
   const results = await Promise.all(
     aflRounds.map(async (aflRound) => {
-      const matches = await getRoundMatches(season, aflRound);
-      return [aflRound, normalizeRoundMatchStatus(matches as unknown as RawRoundMatch[])] as const;
+      try {
+        const matches = await getRoundMatches(season, aflRound);
+        return [
+          aflRound,
+          normalizeRoundMatchStatus(matches as unknown as RawRoundMatch[]),
+        ] as const;
+      } catch (error) {
+        logger.warn('Failed to hydrate official competition round timing', {
+          season,
+          aflRound,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return [aflRound, normalizeRoundMatchStatus([])] as const;
+      }
     })
   );
   const timingsByAflRound = new Map(results);

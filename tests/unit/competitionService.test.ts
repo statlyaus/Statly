@@ -10,6 +10,10 @@ const etlMocks = vi.hoisted(() => ({
   getRoundMatches: vi.fn().mockResolvedValue([]),
 }));
 
+const loggerMocks = vi.hoisted(() => ({
+  warn: vi.fn(),
+}));
+
 const txMocks = vi.hoisted(() => ({
   leagueSettings: {
     updateMany: vi.fn(),
@@ -38,6 +42,7 @@ const prismaMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/activity', () => activityMocks);
 vi.mock('@/lib/etlIntegration', () => etlMocks);
+vi.mock('@/lib/logger', () => ({ logger: loggerMocks }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
 
 import {
@@ -144,6 +149,25 @@ describe('publishCompetition', () => {
     expect(txMocks.leagueMatchup.createMany).not.toHaveBeenCalled();
     expect(txMocks.leagueSettings.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ competitionStatus: 'PENDING' }) })
+    );
+  });
+
+  it('keeps publication available when one AFL timing lookup fails', async () => {
+    etlMocks.getRoundMatches.mockRejectedValueOnce(new Error('provider unavailable'));
+
+    const result = await publishCompetition({
+      leagueId: 'league-1',
+      actorMemberId: 'member-owner',
+      rules,
+    });
+
+    expect(result).toEqual({ ok: true, fixtureVersion: 5, roundCount: 1 });
+    expect(txMocks.leagueCompetitionRound.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ status: 'PENDING', startsAt: null, endsAt: null }),
+    });
+    expect(loggerMocks.warn).toHaveBeenCalledWith(
+      'Failed to hydrate official competition round timing',
+      expect.objectContaining({ season: expect.any(Number), aflRound: 1 })
     );
   });
 });

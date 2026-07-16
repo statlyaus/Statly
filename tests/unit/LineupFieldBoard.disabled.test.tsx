@@ -25,6 +25,27 @@ const assignments: LineupAssignment[] = [
 ];
 
 describe('LineupFieldBoard disabled state', () => {
+  it('removes an assignment target from focus until a player is selected', () => {
+    render(
+      <LineupFieldBoard
+        spots={[forwardSpot]}
+        interchangeSpots={[]}
+        assignments={assignments}
+        rosterPlayers={rosterPlayers}
+        availablePlayers={[rosterPlayers[1]]}
+        selectedPlayerId={null}
+        getDragPlayerId={() => null}
+        onSelectPlayer={vi.fn()}
+        setDragPlayer={vi.fn()}
+        onAssignPlayer={vi.fn()}
+        onClearSpot={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /Forward 1, FWD · AAA/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Clear Assigned Player/ })).toBeEnabled();
+  });
+
   it('removes lineup actions from focus and suppresses drag, drop, selection, and clear', () => {
     const onSelectPlayer = vi.fn();
     const setDragPlayer = vi.fn();

@@ -428,7 +428,7 @@ function LineupFieldSpotButton({
       <button
         type="button"
         onClick={assignSelectedPlayer}
-        disabled={isDisabled}
+        disabled={isDisabled || !canPlaceSelectedPlayer}
         aria-disabled={!canPlaceSelectedPlayer || isDisabled}
         aria-label={
           isDisabled
