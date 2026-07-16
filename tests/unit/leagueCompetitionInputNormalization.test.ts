@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/server/leagues/membership', () => ({}));
 
 import { isValidLeagueMaxTeams } from '@/server/leagues/leagueCapacity';
 import { parseLegacyPlayerIds } from '@/server/leagues/teamRosterReadModel';
