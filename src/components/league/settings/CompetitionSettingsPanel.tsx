@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import type { LeagueFixtureGenerationMode } from '@/types/leagues';
 
 type CompetitionRules = {
   seasonStartAflRound: number;
@@ -48,6 +49,8 @@ type CompetitionSnapshot = {
 interface CompetitionSettingsPanelProps {
   leagueId: string;
   currentUserId?: string;
+  fixtureGenerationMode: LeagueFixtureGenerationMode;
+  onFixtureGenerationModeChange: (mode: LeagueFixtureGenerationMode) => void;
 }
 
 function parseExcludedRounds(value: string) {
@@ -67,9 +70,15 @@ function formatDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? 'Pending official AFL fixture data' : date.toLocaleString();
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 export function CompetitionSettingsPanel({
   leagueId,
   currentUserId,
+  fixtureGenerationMode,
+  onFixtureGenerationModeChange,
 }: CompetitionSettingsPanelProps) {
   const [snapshot, setSnapshot] = useState<CompetitionSnapshot | null>(null);
   const [rules, setRules] = useState<CompetitionRules | null>(null);
@@ -79,54 +88,99 @@ export function CompetitionSettingsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [fallbackRound, setFallbackRound] = useState('');
   const [fallbackLockAt, setFallbackLockAt] = useState('');
+  const loadGenerationRef = useRef(0);
+  const loadAbortControllerRef = useRef<AbortController | null>(null);
+  const mutationGenerationRef = useRef(0);
+  const mutationAbortControllerRef = useRef<AbortController | null>(null);
 
   const isPublished = snapshot?.status !== 'SETUP';
   const canManage = Boolean(snapshot?.canManage);
   const editable = canManage && !isPublished && !isSaving;
+  const effectiveRules = useMemo(
+    () => (rules ? { ...rules, fixtureGenerationMode } : null),
+    [fixtureGenerationMode, rules]
+  );
   const preflightSummary = useMemo(() => {
-    if (!snapshot || !rules) return null;
-    return `${snapshot.teamCount} teams, ${rules.regularSeasonRounds} regular rounds, ${rules.finalsTeams || 'no'} finals teams, ${rules.interchangeSlots} interchange slots`;
-  }, [rules, snapshot]);
+    if (!snapshot || !effectiveRules) return null;
+    return `${snapshot.teamCount} teams, ${effectiveRules.regularSeasonRounds} regular rounds, ${effectiveRules.finalsTeams || 'no'} finals teams, ${effectiveRules.interchangeSlots} interchange slots`;
+  }, [effectiveRules, snapshot]);
 
   async function loadSnapshot() {
+    const controller = new AbortController();
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    loadAbortControllerRef.current?.abort();
+    loadAbortControllerRef.current = controller;
     setIsLoading(true);
     try {
       const response = await authenticatedFetch(
         `/api/leagues/${leagueId}/competition`,
-        {},
+        { signal: controller.signal },
         currentUserId
       );
       const payload = await response.json();
       if (!response.ok || !payload.success)
         throw new Error(payload.error ?? 'Failed to load competition.');
+      if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
 
       const nextSnapshot = payload.data as CompetitionSnapshot;
       setSnapshot(nextSnapshot);
       setRules(nextSnapshot.rules);
+      onFixtureGenerationModeChange(nextSnapshot.rules.fixtureGenerationMode);
       setExcludedRounds(nextSnapshot.rules.excludedAflRounds.join(', '));
       setMessage(null);
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== loadGenerationRef.current ||
+        isAbortError(error)
+      ) {
+        return;
+      }
       setMessage(error instanceof Error ? error.message : 'Failed to load competition.');
     } finally {
-      setIsLoading(false);
+      if (generation === loadGenerationRef.current) {
+        if (loadAbortControllerRef.current === controller) loadAbortControllerRef.current = null;
+        setIsLoading(false);
+      }
     }
   }
 
   useEffect(() => {
+    mutationAbortControllerRef.current?.abort();
+    mutationAbortControllerRef.current = null;
+    mutationGenerationRef.current += 1;
+    setIsSaving(false);
     void loadSnapshot();
+    return () => {
+      loadAbortControllerRef.current?.abort();
+      loadGenerationRef.current += 1;
+      mutationAbortControllerRef.current?.abort();
+      mutationGenerationRef.current += 1;
+    };
   }, [currentUserId, leagueId]);
 
   async function saveRules() {
-    if (!rules) return;
+    if (!effectiveRules) return;
+    const controller = new AbortController();
+    const generation = mutationGenerationRef.current + 1;
+    mutationGenerationRef.current = generation;
+    mutationAbortControllerRef.current?.abort();
+    mutationAbortControllerRef.current = controller;
+    setMessage(null);
     setIsSaving(true);
     try {
       const response = await authenticatedFetch(
         `/api/leagues/${leagueId}/competition`,
         {
           method: 'PUT',
+          signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            rules: { ...rules, excludedAflRounds: parseExcludedRounds(excludedRounds) },
+            rules: {
+              ...effectiveRules,
+              excludedAflRounds: parseExcludedRounds(excludedRounds),
+            },
           }),
         },
         currentUserId
@@ -134,26 +188,51 @@ export function CompetitionSettingsPanel({
       const payload = await response.json();
       if (!response.ok || !payload.success)
         throw new Error(payload.error ?? 'Failed to save competition rules.');
-      setRules(payload.data.rules as CompetitionRules);
+      if (controller.signal.aborted || generation !== mutationGenerationRef.current) return;
+      const nextRules = payload.data.rules as CompetitionRules;
+      setRules(nextRules);
+      onFixtureGenerationModeChange(nextRules.fixtureGenerationMode);
       setMessage('Competition rules saved. Publish when the preflight is complete.');
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== mutationGenerationRef.current ||
+        isAbortError(error)
+      ) {
+        return;
+      }
       setMessage(error instanceof Error ? error.message : 'Failed to save competition rules.');
     } finally {
-      setIsSaving(false);
+      if (generation === mutationGenerationRef.current) {
+        if (mutationAbortControllerRef.current === controller) {
+          mutationAbortControllerRef.current = null;
+        }
+        setIsSaving(false);
+      }
     }
   }
 
   async function publish() {
-    if (!rules) return;
+    if (!effectiveRules) return;
+    const controller = new AbortController();
+    const generation = mutationGenerationRef.current + 1;
+    mutationGenerationRef.current = generation;
+    mutationAbortControllerRef.current?.abort();
+    mutationAbortControllerRef.current = controller;
+    setMessage(null);
     setIsSaving(true);
     try {
       const response = await authenticatedFetch(
         `/api/leagues/${leagueId}/competition`,
         {
           method: 'POST',
+          signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            rules: { ...rules, excludedAflRounds: parseExcludedRounds(excludedRounds) },
+            rules: {
+              ...effectiveRules,
+              excludedAflRounds: parseExcludedRounds(excludedRounds),
+            },
           }),
         },
         currentUserId
@@ -164,23 +243,43 @@ export function CompetitionSettingsPanel({
           payload.details?.join(' ') ?? payload.error ?? 'Competition cannot be published.'
         );
       }
+      if (controller.signal.aborted || generation !== mutationGenerationRef.current) return;
       setMessage(`Competition published as fixture version ${payload.data.fixtureVersion}.`);
       await loadSnapshot();
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== mutationGenerationRef.current ||
+        isAbortError(error)
+      ) {
+        return;
+      }
       setMessage(error instanceof Error ? error.message : 'Competition cannot be published.');
     } finally {
-      setIsSaving(false);
+      if (generation === mutationGenerationRef.current) {
+        if (mutationAbortControllerRef.current === controller) {
+          mutationAbortControllerRef.current = null;
+        }
+        setIsSaving(false);
+      }
     }
   }
 
   async function saveFallbackDeadline() {
     if (!fallbackRound || !fallbackLockAt) return;
+    const controller = new AbortController();
+    const generation = mutationGenerationRef.current + 1;
+    mutationGenerationRef.current = generation;
+    mutationAbortControllerRef.current?.abort();
+    mutationAbortControllerRef.current = controller;
+    setMessage(null);
     setIsSaving(true);
     try {
       const response = await authenticatedFetch(
         `/api/leagues/${leagueId}/competition`,
         {
           method: 'PATCH',
+          signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             round: Number(fallbackRound),
@@ -193,13 +292,26 @@ export function CompetitionSettingsPanel({
       if (!response.ok || !payload.success) {
         throw new Error(payload.error ?? 'Failed to set the fallback deadline.');
       }
+      if (controller.signal.aborted || generation !== mutationGenerationRef.current) return;
       setMessage('Round-wide fallback deadline saved.');
       setFallbackLockAt('');
       await loadSnapshot();
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== mutationGenerationRef.current ||
+        isAbortError(error)
+      ) {
+        return;
+      }
       setMessage(error instanceof Error ? error.message : 'Failed to set the fallback deadline.');
     } finally {
-      setIsSaving(false);
+      if (generation === mutationGenerationRef.current) {
+        if (mutationAbortControllerRef.current === controller) {
+          mutationAbortControllerRef.current = null;
+        }
+        setIsSaving(false);
+      }
     }
   }
 
@@ -213,7 +325,7 @@ export function CompetitionSettingsPanel({
 
   if (!snapshot || !rules) {
     return (
-      <div role="status" className="text-sm text-red-700">
+      <div role="status" aria-live="polite" className="text-sm text-destructive">
         {message ?? 'Competition settings are unavailable.'}
       </div>
     );
@@ -231,13 +343,20 @@ export function CompetitionSettingsPanel({
           </h3>
           <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">{preflightSummary}</p>
         </div>
-        <span className="rounded-full border border-[color:var(--league-border)] px-3 py-1 text-xs font-semibold text-[color:var(--league-text-muted)]">
+        <span
+          aria-label={`Competition status: ${snapshot.status}`}
+          className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-1 text-xs font-semibold text-[color:var(--league-text-muted)]"
+        >
           {snapshot.status === 'PENDING' ? 'Published but pending' : snapshot.status}
         </span>
       </div>
 
       {message ? (
-        <p role="status" className="mt-4 text-sm text-[color:var(--league-text)]">
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-4 text-sm text-[color:var(--league-text)]"
+        >
           {message}
         </p>
       ) : null}
@@ -269,6 +388,19 @@ export function CompetitionSettingsPanel({
             }
             className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
           />
+        </label>
+        <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
+          Fixture generation
+          <select
+            value={fixtureGenerationMode}
+            onChange={(event) =>
+              onFixtureGenerationModeChange(event.target.value as LeagueFixtureGenerationMode)
+            }
+            className="h-10 rounded-md border border-input bg-background px-3 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="AUTOMATIC">Automatic by league teams</option>
+            <option value="MANUAL">Manual commissioner setup</option>
+          </select>
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
           Finals teams
@@ -360,7 +492,7 @@ export function CompetitionSettingsPanel({
             type="button"
             onClick={() => void saveRules()}
             disabled={isSaving}
-            className="rounded-md border border-[color:var(--league-border)] px-4 py-2 text-sm font-semibold disabled:opacity-60"
+            className="rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 py-2 text-sm font-semibold text-[color:var(--league-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
           >
             Save rules
           </button>
@@ -370,7 +502,7 @@ export function CompetitionSettingsPanel({
             type="button"
             onClick={() => void publish()}
             disabled={isSaving}
-            className="rounded-md bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-[color:var(--league-primary-foreground)] disabled:opacity-60"
+            className="rounded-md bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-[color:var(--league-primary-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 disabled:opacity-60"
           >
             Publish competition
           </button>
@@ -380,8 +512,8 @@ export function CompetitionSettingsPanel({
       {isPublished ? (
         <div className="mt-6 space-y-4 border-t border-[color:var(--league-border)] pt-4 text-sm text-[color:var(--league-text-muted)]">
           <p>
-            Fixture version {snapshot.fixtureVersion} was published {formatDate(snapshot.publishedAt)}.
-            Rules are read-only after publication.
+            Fixture version {snapshot.fixtureVersion} was published{' '}
+            {formatDate(snapshot.publishedAt)}. Rules are read-only after publication.
           </p>
           {canManage ? (
             <div className="grid gap-3 rounded-md border border-[color:var(--league-border)] p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
@@ -416,7 +548,7 @@ export function CompetitionSettingsPanel({
                 type="button"
                 onClick={() => void saveFallbackDeadline()}
                 disabled={isSaving || !fallbackRound || !fallbackLockAt}
-                className="h-10 rounded-md border border-[color:var(--league-border)] px-4 text-sm font-semibold text-[color:var(--league-text)] disabled:opacity-60"
+                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 text-sm font-semibold text-[color:var(--league-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
               >
                 Set deadline
               </button>

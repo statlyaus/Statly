@@ -15,6 +15,7 @@ import { createDraftReminders } from '@/lib/reminders';
 import { ensurePrismaLeagueMirror } from '@/lib/prismaLeagueBridge';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { canManageLeague } from '@/server/leagues/membership';
+import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
 import {
   FANTASY_CATEGORIES,
@@ -175,8 +176,15 @@ export async function POST(request: NextRequest) {
       return errorResponse('Draft name is required', 400);
     }
 
-    if (!body.leagueSize || body.leagueSize < 4 || body.leagueSize > 20) {
-      return errorResponse('League size must be between 4 and 20', 400);
+    if (
+      !body.leagueSize ||
+      body.leagueSize < MIN_LEAGUE_TEAMS ||
+      body.leagueSize > MAX_LEAGUE_TEAMS
+    ) {
+      return errorResponse(
+        `League size must be between ${MIN_LEAGUE_TEAMS} and ${MAX_LEAGUE_TEAMS}`,
+        400
+      );
     }
 
     if (!['snake', 'linear'].includes(body.draftType)) {

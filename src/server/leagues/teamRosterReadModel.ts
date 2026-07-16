@@ -69,7 +69,7 @@ export async function loadAuthorizedLeagueTeamRoster({
     where: { leagueId_memberId: { leagueId, memberId } },
     select: { playerIds: true },
   });
-  const legacyPlayerIds = parsePlayerIds(legacyRoster?.playerIds);
+  const legacyPlayerIds = parseLegacyPlayerIds(legacyRoster?.playerIds);
   const legacyPlayers = await loadPlayersByIds(legacyPlayerIds);
 
   return {
@@ -83,12 +83,22 @@ export async function loadAuthorizedLeagueTeamRoster({
   };
 }
 
-function parsePlayerIds(playerIdsJson: string | undefined): string[] {
+export function parseLegacyPlayerIds(playerIdsJson: string | undefined): string[] {
   if (!playerIdsJson) return [];
 
   try {
     const parsed = JSON.parse(playerIdsJson);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
+    return Array.isArray(parsed)
+      ? [
+          ...new Set(
+            parsed.flatMap((playerId) => {
+              if (typeof playerId !== 'string') return [];
+              const normalizedPlayerId = playerId.trim();
+              return normalizedPlayerId ? [normalizedPlayerId] : [];
+            })
+          ),
+        ]
+      : [];
   } catch {
     return [];
   }

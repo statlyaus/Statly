@@ -11,9 +11,11 @@ import {
   loadMemberLineup,
   loadMemberLineupRoundContext,
   loadRoundPlayerGameStarts,
+  normalizeLegacyBenchAssignments,
   resolveRequestedLineupRound,
   resolveCurrentCompetitionRoundNumber,
   saveMemberLineup,
+  synchronizeLineupPlayerLocks,
 } from '@/server/leagues/lineupService';
 
 export async function GET(
@@ -63,38 +65,70 @@ export async function GET(
   ]);
   if (!league?.settings) return NextResponse.json({ error: 'League not found' }, { status: 404 });
   const setupRequired = league.settings.competitionStatus === 'SETUP';
-  const effectiveContext = context ?? (setupRequired ? createSetupLineupRoundContext(roundNumber) : null);
+  const effectiveContext =
+    context ?? (setupRequired ? createSetupLineupRoundContext(roundNumber) : null);
   const carriedLineup = lineup
     ? null
     : await prisma.leagueLineup.findFirst({
-      where: { leagueId: id, memberId: membership.memberDocId, round: { lt: roundNumber } },
-      include: {
-        players: {
-          include: { player: true },
-          orderBy: [{ slot: 'asc' }, { slotIndex: 'asc' }],
+        where: { leagueId: id, memberId: membership.memberDocId, round: { lt: roundNumber } },
+        include: {
+          players: {
+            include: { player: true },
+            orderBy: [{ slot: 'asc' }, { slotIndex: 'asc' }],
+          },
         },
-      },
-      orderBy: { round: 'desc' },
-    });
+        orderBy: { round: 'desc' },
+      });
   const rules = parseCompetitionRulesJson(league.settings.competitionRulesJson, 'goals');
-  const gameStartsByPlayerId = await loadRoundPlayerGameStarts({
-    aflRound: effectiveContext?.aflRound ?? null,
-    playerIds: (lineup?.players ?? carriedLineup?.players ?? []).map((player) => player.playerId),
-  });
+  const selectedLineup = lineup ?? carriedLineup;
+  const normalizedPlayers = normalizeLegacyBenchAssignments(selectedLineup?.players ?? []);
+  const timingResult =
+    rules.lockPolicy === 'INDIVIDUAL_GAME_START'
+      ? await loadRoundPlayerGameStarts({
+          aflRound: effectiveContext?.aflRound ?? null,
+          players: normalizedPlayers.map((player) => ({
+            playerId: player.playerId,
+            club: player.player.club,
+          })),
+        })
+      : {
+          ok: true as const,
+          gameStartsByPlayerId: new Map<string, Date>(),
+          timingStatus: 'AVAILABLE' as const,
+        };
+  if (!timingResult.ok) {
+    return NextResponse.json(
+      { error: 'Lineup timing unavailable', details: [timingResult.error] },
+      { status: 503, headers: { 'Cache-Control': 'private, no-store' } }
+    );
+  }
+
+  const effectiveLocksByPlayerId = lineup
+    ? await synchronizeLineupPlayerLocks({
+        players: normalizedPlayers,
+        gameStartsByPlayerId: timingResult.gameStartsByPlayerId,
+      })
+    : new Map<string, Date>();
+  const responsePlayers = normalizedPlayers.map((player) => ({
+    ...player,
+    lockedAt: lineup
+      ? (effectiveLocksByPlayerId.get(player.playerId)?.toISOString() ?? null)
+      : null,
+  }));
+  const responseLineup = selectedLineup
+    ? {
+        ...selectedLineup,
+        lockedAt: lineup ? selectedLineup.lockedAt : null,
+        players: responsePlayers,
+      }
+    : null;
 
   const data = {
-    lineup: lineup ?? carriedLineup,
-    players: (lineup?.players ?? carriedLineup?.players ?? []).map((player) => ({
-      ...player,
-      lockedAt:
-        player.lockedAt ??
-        (gameStartsByPlayerId.get(player.playerId) &&
-        gameStartsByPlayerId.get(player.playerId)! <= new Date()
-          ? gameStartsByPlayerId.get(player.playerId)!.toISOString()
-          : null),
-    })),
+    lineup: responseLineup,
+    players: responsePlayers,
     savedRound: lineup?.round ?? null,
     carriedFromRound: carriedLineup?.round ?? null,
+    timingStatus: timingResult.timingStatus,
     rosterPlayers: rosterPlayers.map((row) => ({
       playerId: row.playerId,
       name: row.player.name,
@@ -104,8 +138,7 @@ export async function GET(
     lineupSlots: parseLineupSlotsJson(league.settings.lineupSlotsJson),
     interchangeSlots: rules.interchangeSlots,
     setupRequired,
-    canManageCompetition:
-      league.ownerId === userId || league.members[0]?.isCoCommissioner === true,
+    canManageCompetition: league.ownerId === userId || league.members[0]?.isCoCommissioner === true,
     context: effectiveContext
       ? {
           ...effectiveContext,
@@ -151,7 +184,16 @@ export async function PATCH(
   });
 
   if (!result.ok) {
-    return NextResponse.json({ error: 'Invalid lineup', details: result.errors }, { status: 400 });
+    const status =
+      result.code === 'TIMING_UNAVAILABLE' ? 503 : result.code === 'RETRY_REQUIRED' ? 409 : 400;
+    return NextResponse.json(
+      {
+        error:
+          result.code === 'TIMING_UNAVAILABLE' ? 'Lineup timing unavailable' : 'Invalid lineup',
+        details: result.errors,
+      },
+      { status }
+    );
   }
 
   return NextResponse.json({ success: true, data: result.data });

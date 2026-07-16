@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getLivePlayerStats, getRoundMatches } from '@/lib/etlIntegration';
+import { getRoundMatchesResult, getRoundPlayerStatsResult } from '@/lib/etlIntegration';
 import { prisma } from '@/lib/prisma';
 import {
   FANTASY_CATEGORIES,
@@ -381,6 +381,18 @@ export function toMatchupStatusFromRoundStatus(
   return 'SCHEDULED' as const;
 }
 
+export function resolveAflRoundForScoring({
+  fixtureVersion,
+  fantasyRound,
+  competitionRoundAflRound,
+}: {
+  fixtureVersion: number;
+  fantasyRound: number;
+  competitionRoundAflRound: number | null;
+}): number | null {
+  return fixtureVersion === 0 ? fantasyRound : competitionRoundAflRound;
+}
+
 function normalizeLeagueCategories(value: string | null | undefined): FantasyCategoryKey[] {
   const realDataCategoryKeys = new Set<FantasyCategoryKey>(REAL_DATA_NINE_CATEGORY_PRESET);
   if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
@@ -397,13 +409,14 @@ function normalizeLeagueCategories(value: string | null | undefined): FantasyCat
 }
 
 async function loadLivePlayerTotalsForRound(season: number, round: number) {
-  const [statsRows, roundMatches] = await Promise.all([
-    getLivePlayerStats(season),
-    getRoundMatches(season, round),
+  const [statsResult, matchesResult] = await Promise.all([
+    getRoundPlayerStatsResult(season, round),
+    getRoundMatchesResult(season, round),
   ]);
-  const normalizedStats = normalizeLiveStatRows(statsRows as unknown as RawLiveStatRow[]).filter(
-    (row) => row.round === round
-  );
+  const available = statsResult.ok && matchesResult.ok;
+  const normalizedStats = normalizeLiveStatRows(
+    (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[]
+  ).filter((row) => row.round === round);
   const totalsByPlayerId = new Map<string, CategoryTotals>();
 
   for (const stat of normalizedStats) {
@@ -411,8 +424,11 @@ async function loadLivePlayerTotalsForRound(season: number, round: number) {
   }
 
   return {
+    available,
     totalsByPlayerId,
-    roundStatus: normalizeRoundMatchStatus(roundMatches as unknown as RawRoundMatch[]),
+    roundStatus: normalizeRoundMatchStatus(
+      (matchesResult.ok ? matchesResult.matches : []) as unknown as RawRoundMatch[]
+    ),
   };
 }
 
@@ -445,13 +461,17 @@ async function loadLeagueCompetitionSettings(leagueId: string) {
   };
 }
 
-function resolveCurrentCompetitionRound<TRound extends {
-  round: number;
-  status: string;
-  startsAt: Date | null;
-  endsAt: Date | null;
-}>(rounds: readonly TRound[], now = new Date()): TRound | null {
-  const playableRounds = rounds.filter((competitionRound) => competitionRound.status !== 'NO_MATCHUP');
+function resolveCurrentCompetitionRound<
+  TRound extends {
+    round: number;
+    status: string;
+    startsAt: Date | null;
+    endsAt: Date | null;
+  },
+>(rounds: readonly TRound[], now = new Date()): TRound | null {
+  const playableRounds = rounds.filter(
+    (competitionRound) => competitionRound.status !== 'NO_MATCHUP'
+  );
   if (!playableRounds.length) return rounds[0] ?? null;
 
   return (
@@ -511,7 +531,8 @@ export async function loadLeagueMatchupReadModel({
         });
   const availableRounds = competitionRounds.map((competitionRound) => competitionRound.round);
   const resolvedRound = resolveCurrentCompetitionRound(competitionRounds);
-  const activeRound = round && availableRounds.includes(round) ? round : resolvedRound?.round ?? 1;
+  const activeRound =
+    round && availableRounds.includes(round) ? round : (resolvedRound?.round ?? 1);
   const activeCompetitionRound =
     competitionRounds.find((competitionRound) => competitionRound.round === activeRound) ?? null;
   const [matchups, persistedStandings, finalizedScores, members] = await Promise.all([
@@ -545,6 +566,7 @@ export async function loadLeagueMatchupReadModel({
   const liveTotals = activeCompetitionRound?.aflRound
     ? await loadLivePlayerTotalsForRound(new Date().getFullYear(), activeCompetitionRound.aflRound)
     : {
+        available: false,
         totalsByPlayerId: new Map<string, CategoryTotals>(),
         roundStatus: {
           earliestStartAt: null,
@@ -640,15 +662,52 @@ export async function recalculateLeagueRoundMatchups({
   const settings = await loadLeagueCompetitionSettings(leagueId);
   if (!settings) return null;
 
-  const [matchups, lineups, members] = await Promise.all([
-    prisma.leagueMatchup.findMany({ where: { leagueId, round } }),
+  const fixtureVersion = settings.league.settings.competitionRulesVersion;
+  const [competitionRound, matchups, lineups, members] = await Promise.all([
+    fixtureVersion > 0
+      ? prisma.leagueCompetitionRound.findUnique({
+          where: { leagueId_fixtureVersion_round: { leagueId, fixtureVersion, round } },
+          select: { aflRound: true },
+        })
+      : Promise.resolve(null),
+    prisma.leagueMatchup.findMany({ where: { leagueId, round, fixtureVersion } }),
     prisma.leagueLineup.findMany({ where: { leagueId, round }, include: { players: true } }),
     prisma.leagueMember.findMany({ where: { leagueId }, select: { id: true } }),
   ]);
-  const { totalsByPlayerId, roundStatus } = await loadLivePlayerTotalsForRound(
+  const aflRound = resolveAflRoundForScoring({
+    fixtureVersion,
+    fantasyRound: round,
+    competitionRoundAflRound: competitionRound?.aflRound ?? null,
+  });
+  if (aflRound === null) {
+    return {
+      round,
+      status: 'SCHEDULED' as const,
+      recalculated: 0,
+      scores: [],
+      roundStatus: {
+        earliestStartAt: null,
+        latestEndAt: null,
+        anyLive: false,
+        allFinal: false,
+        hasUnavailableStatus: true,
+        matches: [],
+      },
+    };
+  }
+  const { available, totalsByPlayerId, roundStatus } = await loadLivePlayerTotalsForRound(
     new Date().getFullYear(),
-    round
+    aflRound
   );
+  if (!available) {
+    return {
+      round,
+      status: 'SCHEDULED' as const,
+      recalculated: 0,
+      scores: [],
+      roundStatus: { ...roundStatus, hasUnavailableStatus: true },
+    };
+  }
   const status =
     finalize || roundStatus.allFinal ? 'FINAL' : toMatchupStatusFromRoundStatus(roundStatus);
   const lineupsByMemberId = new Map(lineups.map((lineup) => [lineup.memberId, lineup]));

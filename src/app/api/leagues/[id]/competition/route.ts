@@ -13,19 +13,34 @@ import {
   publishCompetition,
   setCompetitionRoundFallbackDeadline,
 } from '@/server/leagues/competitionService';
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+import { normalizeFantasyCategoryKeys, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 function parseCategories(value: string | null): FantasyCategoryKey[] {
   if (!value) return ['goals'];
 
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.filter((category): category is FantasyCategoryKey => typeof category === 'string')
-      : ['goals'];
+    return normalizeFantasyCategoryKeys(JSON.parse(value));
   } catch {
     return ['goals'];
   }
+}
+
+function missingActorMemberResponse() {
+  return NextResponse.json(
+    {
+      error:
+        'The commissioner account is not linked to a league team. Restore the owner membership before publishing or overriding competition rounds.',
+    },
+    { status: 409 }
+  );
+}
+
+function parsePositiveRound(value: unknown): number | null {
+  const normalized = typeof value === 'number' ? String(value) : String(value ?? '').trim();
+  if (!/^[1-9]\d*$/.test(normalized)) return null;
+
+  const round = Number(normalized);
+  return Number.isSafeInteger(round) ? round : null;
 }
 
 async function authorizeCompetitionRequest(request: NextRequest, leagueId: string) {
@@ -44,7 +59,8 @@ async function authorizeCompetitionRequest(request: NextRequest, leagueId: strin
       members: { where: { userId }, take: 1 },
     },
   });
-  if (!league?.settings) return { error: NextResponse.json({ error: 'League not found' }, { status: 404 }) };
+  if (!league?.settings)
+    return { error: NextResponse.json({ error: 'League not found' }, { status: 404 }) };
 
   const member = league.members[0];
   const canManage = league.ownerId === userId || member?.isCoCommissioner === true;
@@ -52,10 +68,7 @@ async function authorizeCompetitionRequest(request: NextRequest, leagueId: strin
   return { userId, league, member, canManage };
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authorization = await authorizeCompetitionRequest(request, id);
   if ('error' in authorization) return authorization.error;
@@ -67,7 +80,10 @@ export async function GET(
   );
   const [rounds, audits, commissioners] = await Promise.all([
     prisma.leagueCompetitionRound.findMany({
-      where: { leagueId: id, fixtureVersion: authorization.league.settings.competitionRulesVersion },
+      where: {
+        leagueId: id,
+        fixtureVersion: authorization.league.settings.competitionRulesVersion,
+      },
       orderBy: { round: 'asc' },
       include: {
         matchups: {
@@ -83,7 +99,10 @@ export async function GET(
       include: { actorMember: { select: { teamName: true } } },
     }),
     prisma.leagueMember.findMany({
-      where: { leagueId: id, OR: [{ userId: authorization.league.ownerId }, { isCoCommissioner: true }] },
+      where: {
+        leagueId: id,
+        OR: [{ userId: authorization.league.ownerId }, { isCoCommissioner: true }],
+      },
       select: { id: true, teamName: true, isCoCommissioner: true, userId: true },
       orderBy: { joinedAt: 'asc' },
     }),
@@ -130,17 +149,17 @@ export async function GET(
   });
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authorization = await authorizeCompetitionRequest(request, id);
   if ('error' in authorization) return authorization.error;
   if (!authorization.canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (authorization.league.settings.competitionStatus !== 'SETUP') {
     return NextResponse.json(
-      { error: 'Published competition rules cannot be changed. Use a commissioner override instead.' },
+      {
+        error:
+          'Published competition rules cannot be changed. Use a commissioner override instead.',
+      },
       { status: 409 }
     );
   }
@@ -157,16 +176,12 @@ export async function PUT(
   return NextResponse.json({ success: true, data: { rules } });
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authorization = await authorizeCompetitionRequest(request, id);
   if ('error' in authorization) return authorization.error;
-  if (!authorization.canManage || !authorization.member) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  if (!authorization.canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!authorization.member) return missingActorMemberResponse();
 
   const body = (await request.json().catch(() => ({}))) as { rules?: unknown };
   const categories = parseCategories(authorization.league.categoriesJson);
@@ -177,28 +192,35 @@ export async function POST(
           categories[0] ?? 'goals'
         )
       : normalizeCompetitionRules(body.rules, categories[0] ?? 'goals');
-  const result = await publishCompetition({ leagueId: id, actorMemberId: authorization.member.id, rules });
-  if (!result.ok) return NextResponse.json({ error: 'Competition cannot be published', details: result.errors }, { status: 400 });
+  const result = await publishCompetition({
+    leagueId: id,
+    actorMemberId: authorization.member.id,
+    rules,
+  });
+  if (!result.ok)
+    return NextResponse.json(
+      { error: 'Competition cannot be published', details: result.errors },
+      { status: 400 }
+    );
 
   return NextResponse.json({ success: true, data: result });
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authorization = await authorizeCompetitionRequest(request, id);
   if ('error' in authorization) return authorization.error;
-  if (!authorization.canManage || !authorization.member) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  if (!authorization.canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!authorization.member) return missingActorMemberResponse();
 
   const body = (await request.json()) as { round?: unknown; fallbackLockAt?: unknown };
-  const round = Number.parseInt(String(body.round), 10);
+  const round = parsePositiveRound(body.round);
   const fallbackLockAt = new Date(String(body.fallbackLockAt));
-  if (!Number.isInteger(round) || round < 1 || Number.isNaN(fallbackLockAt.getTime())) {
-    return NextResponse.json({ error: 'A valid round and fallback deadline are required.' }, { status: 400 });
+  if (round === null || Number.isNaN(fallbackLockAt.getTime())) {
+    return NextResponse.json(
+      { error: 'A valid round and fallback deadline are required.' },
+      { status: 400 }
+    );
   }
 
   const result = await setCompetitionRoundFallbackDeadline({

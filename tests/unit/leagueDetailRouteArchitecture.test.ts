@@ -91,7 +91,7 @@ describe('league detail route architecture', () => {
     expect(tabsSource).not.toContain('823.1');
     expect(tabsSource).not.toContain('badge: 2');
     expect(existsSync(join(process.cwd(), 'src/components/league/LeagueOverview.tsx'))).toBe(false);
-    expect(tabsSource).toContain('League command center');
-    expect(tabsSource).toContain('Draft setup status');
+    expect(tabsSource).toContain('League overview');
+    expect(tabsSource).toContain('Scoring categories');
   });
 });

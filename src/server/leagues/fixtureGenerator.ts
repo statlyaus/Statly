@@ -77,16 +77,9 @@ export function generateRoundRobinFixtures(memberIds: readonly string[]): League
 function finalsBracketKeys(finalsTeams: GenerateCompetitionScheduleInput['finalsTeams']) {
   switch (finalsTeams) {
     case 4:
-      return [
-        ['SF_1_V_4', 'SF_2_V_3'],
-        ['GF'],
-      ];
+      return [['SF_1_V_4', 'SF_2_V_3'], ['GF']];
     case 6:
-      return [
-        ['EF_3_V_6', 'EF_4_V_5'],
-        ['SF_1_V_EF_4_V_5', 'SF_2_V_EF_3_V_6'],
-        ['GF'],
-      ];
+      return [['EF_3_V_6', 'EF_4_V_5'], ['SF_1_V_EF_4_V_5', 'SF_2_V_EF_3_V_6'], ['GF']];
     case 8:
       return [
         ['QF_1_V_4', 'QF_2_V_3', 'EF_5_V_8', 'EF_6_V_7'],
@@ -160,6 +153,18 @@ export function generateCompetitionSchedule({
   }
 
   for (const bracketRound of finalsBracketKeys(finalsTeams)) {
+    while (excludedRounds.has(aflRound)) {
+      fantasyRound += 1;
+      generatedRounds.push({
+        round: fantasyRound,
+        aflRound,
+        phase: 'FINALS',
+        status: 'NO_MATCHUP',
+        fixtures: [],
+      });
+      aflRound += 1;
+    }
+
     fantasyRound += 1;
     const fixtures = bracketRound.map((bracketKey) => ({
       round: fantasyRound,

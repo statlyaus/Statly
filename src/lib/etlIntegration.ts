@@ -69,6 +69,14 @@ export interface ETLMatch {
   provider_ids?: Record<string, unknown>;
 }
 
+export type ETLRoundMatchesResult =
+  | { ok: true; matches: ETLMatch[] }
+  | { ok: false; error: unknown };
+
+export type ETLRoundPlayerStatsResult =
+  | { ok: true; stats: ETLPlayerStats[] }
+  | { ok: false; error: unknown };
+
 export interface ETLPlayer {
   full_name: string;
   current_team: string;
@@ -154,6 +162,28 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
   }
 }
 
+export async function getRoundPlayerStatsResult(
+  season: number,
+  round: number
+): Promise<ETLRoundPlayerStatsResult> {
+  try {
+    const firestore = getFirestore();
+    const statsQuery = query(
+      collection(firestore, 'player_match_stats'),
+      where('season', '==', season),
+      where('round_number', '==', round)
+    );
+    const snapshot = await getDocs(statsQuery);
+    return {
+      ok: true,
+      stats: snapshot.docs.map((document) => document.data() as ETLPlayerStats),
+    };
+  } catch (error) {
+    console.error(`Error fetching player statistics for ${season} R${round}:`, error);
+    return { ok: false, error };
+  }
+}
+
 /**
  * Get statistics for a specific match
  */
@@ -202,7 +232,10 @@ export async function getLiveMatches(): Promise<ETLMatch[]> {
 /**
  * Get all matches for a specific round
  */
-export async function getRoundMatches(season: number, round: number): Promise<ETLMatch[]> {
+export async function getRoundMatchesResult(
+  season: number,
+  round: number
+): Promise<ETLRoundMatchesResult> {
   try {
     const firestore = getFirestore();
     const matchesQuery = query(
@@ -212,11 +245,16 @@ export async function getRoundMatches(season: number, round: number): Promise<ET
     );
 
     const snapshot = await getDocs(matchesQuery);
-    return snapshot.docs.map((doc) => doc.data() as ETLMatch);
+    return { ok: true, matches: snapshot.docs.map((doc) => doc.data() as ETLMatch) };
   } catch (error) {
     console.error(`Error fetching matches for ${season} R${round}:`, error);
-    return [];
+    return { ok: false, error };
   }
+}
+
+export async function getRoundMatches(season: number, round: number): Promise<ETLMatch[]> {
+  const result = await getRoundMatchesResult(season, round);
+  return result.ok ? result.matches : [];
 }
 
 /**

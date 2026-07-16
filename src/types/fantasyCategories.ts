@@ -306,6 +306,24 @@ export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
   },
 };
 
+const FANTASY_CATEGORY_KEYS = new Set<FantasyCategoryKey>(
+  Object.keys(FANTASY_CATEGORIES) as FantasyCategoryKey[]
+);
+
+export function isFantasyCategoryKey(value: unknown): value is FantasyCategoryKey {
+  return typeof value === 'string' && FANTASY_CATEGORY_KEYS.has(value as FantasyCategoryKey);
+}
+
+export function normalizeFantasyCategoryKeys(
+  value: unknown,
+  fallback: readonly FantasyCategoryKey[] = ['goals']
+): FantasyCategoryKey[] {
+  if (!Array.isArray(value)) return [...fallback];
+
+  const categories = [...new Set(value.filter(isFantasyCategoryKey))];
+  return categories.length > 0 ? categories : [...fallback];
+}
+
 // Weights for all statistical categories (excluding games, timeOnGroundPct, disposalEffPct)
 const WEIGHTS: Record<
   keyof Omit<

@@ -31,8 +31,8 @@ describe('matchupReadModel helpers', () => {
     expect(readModel).toContain('viewerMember');
     expect(readModel).toContain('viewerMatchupWhere');
     expect(readModel).toContain("lineupPlayer.slot !== 'BENCH'");
-    expect(readModel).toContain("settings.fixtureGenerationMode === 'AUTOMATIC'");
-    expect(readModel).toContain('await generateLeagueFixtures({ leagueId })');
+    expect(readModel).not.toContain('generateLeagueFixtures');
+    expect(readModel).toContain('resolveAflRoundForScoring');
     expect(readModel).toContain('categoryRows: buildCategoryRows');
   });
 });

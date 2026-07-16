@@ -1,5 +1,5 @@
 export const MIN_LEAGUE_TEAMS = 4;
-export const MAX_LEAGUE_TEAMS = 20;
+export const MAX_LEAGUE_TEAMS = 18;
 
 export function isValidLeagueMaxTeams(value: number): boolean {
   return Number.isInteger(value) && value >= MIN_LEAGUE_TEAMS && value <= MAX_LEAGUE_TEAMS;

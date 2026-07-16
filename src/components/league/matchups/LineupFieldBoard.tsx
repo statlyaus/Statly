@@ -1,5 +1,7 @@
 'use client';
 
+import { useId } from 'react';
+
 import type { ActiveLineupSlot } from '@/server/leagues/scoringTypes';
 
 import { LineupRosterPool } from './LineupRosterPool';
@@ -18,6 +20,8 @@ interface LineupFieldBoardProps {
   setDragPlayer: (playerId: string | null) => void;
   onAssignPlayer: (playerId: string, spot: LineupFieldSpot) => void;
   onClearSpot: (spot: LineupFieldSpot) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 const SLOT_GROUP_LABELS: Record<ActiveLineupSlot, string> = {
@@ -64,7 +68,10 @@ export function LineupFieldBoard({
   setDragPlayer,
   onAssignPlayer,
   onClearSpot,
+  disabled = false,
+  disabledReason,
 }: LineupFieldBoardProps) {
+  const disabledDescriptionId = useId();
   const groupedSpots = spots.reduce<Record<ActiveLineupSlot, LineupFieldSpot[]>>(
     (groups, spot) => {
       if (spot.slot === 'INTERCHANGE' || spot.slot === 'BENCH') return groups;
@@ -76,13 +83,20 @@ export function LineupFieldBoard({
 
   return (
     <section
-      className="relative overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[linear-gradient(180deg,#fff7e7_0%,#efe5d1_44%,#d9dfd0_100%)] p-4 shadow-[0_28px_70px_rgba(80,65,45,0.18)]"
+      role="group"
+      className="relative overflow-hidden rounded-md border border-border bg-background p-4 shadow-sm"
       aria-label="AFL field lineup builder"
+      aria-disabled={disabled || undefined}
+      aria-describedby={disabled && disabledReason ? disabledDescriptionId : undefined}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.78),transparent_34%),radial-gradient(circle_at_82%_12%,rgba(255,247,222,0.8),transparent_34%),radial-gradient(circle_at_50%_96%,rgba(255,255,255,0.72),transparent_30%)]" />
+      {disabled && disabledReason ? (
+        <span id={disabledDescriptionId} className="sr-only">
+          {disabledReason}
+        </span>
+      ) : null}
 
       <div className="relative z-10">
-        <div className="mb-3 inline-flex rounded-full border border-white/70 bg-white/54 px-3 py-1 text-xs font-semibold uppercase text-[color:var(--league-text)] shadow-sm backdrop-blur">
+        <div className="mb-3 inline-flex rounded-md border border-border bg-muted px-3 py-1 text-xs font-semibold uppercase text-muted-foreground">
           Field builder
         </div>
 
@@ -215,6 +229,8 @@ export function LineupFieldBoard({
                             getDragPlayerId={getDragPlayerId}
                             onAssignPlayer={onAssignPlayer}
                             onClearSpot={onClearSpot}
+                            disabled={disabled}
+                            disabledReason={disabledReason}
                           />
                         </div>
                       ))}
@@ -224,13 +240,11 @@ export function LineupFieldBoard({
               );
             })}
           </div>
-
-          <div className="pointer-events-none absolute -bottom-10 left-[6%] right-[6%] h-24 rounded-[50%] bg-white/44 blur-2xl" />
         </div>
 
         <section
           aria-label="Lineup sideline"
-          className="relative mx-auto mt-7 max-w-[1500px] overflow-hidden rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-surface)]/72 shadow-[0_20px_46px_rgba(80,65,45,0.16)] backdrop-blur"
+          className="relative mx-auto mt-7 max-w-[1500px] overflow-hidden rounded-md border border-border bg-background shadow-sm"
         >
           <div className="flex items-center justify-between gap-4 border-b border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)]/80 px-5 py-3">
             <h2 className="text-sm font-semibold uppercase text-[color:var(--league-text)]">
@@ -265,6 +279,8 @@ export function LineupFieldBoard({
                     getDragPlayerId={getDragPlayerId}
                     onAssignPlayer={onAssignPlayer}
                     onClearSpot={onClearSpot}
+                    disabled={disabled}
+                    disabledReason={disabledReason}
                   />
                 ))}
               </div>
@@ -298,6 +314,8 @@ export function LineupFieldBoard({
                       onAssignPlayer={onAssignPlayer}
                       onClearSpot={onClearSpot}
                       variant="interchange"
+                      disabled={disabled}
+                      disabledReason={disabledReason}
                     />
                   ))}
                 </div>
@@ -309,14 +327,28 @@ export function LineupFieldBoard({
             </section>
 
             <div className="min-w-0 border-t border-[color:var(--league-border)] pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-              <LineupRosterPool
-                players={availablePlayers}
-                selectedPlayerId={selectedPlayerId}
-                onSelectPlayer={onSelectPlayer}
-                setDragPlayer={setDragPlayer}
-                variant="stadium"
-                embedded
-              />
+              <fieldset
+                disabled={disabled}
+                className="m-0 min-w-0 border-0 p-0 disabled:cursor-not-allowed disabled:opacity-70"
+                onClickCapture={(event) => {
+                  if (disabled) event.stopPropagation();
+                }}
+                onDragStartCapture={(event) => {
+                  if (!disabled) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
+                <legend className="sr-only">Available lineup players</legend>
+                <LineupRosterPool
+                  players={availablePlayers}
+                  selectedPlayerId={selectedPlayerId}
+                  onSelectPlayer={disabled ? () => undefined : onSelectPlayer}
+                  setDragPlayer={disabled ? () => undefined : setDragPlayer}
+                  variant="stadium"
+                  embedded
+                />
+              </fieldset>
             </div>
           </div>
         </section>
@@ -334,6 +366,8 @@ interface LineupFieldSpotButtonProps {
   onAssignPlayer: (playerId: string, spot: LineupFieldSpot) => void;
   onClearSpot: (spot: LineupFieldSpot) => void;
   variant?: 'field' | 'interchange';
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 function LineupFieldSpotButton({
@@ -345,34 +379,39 @@ function LineupFieldSpotButton({
   onAssignPlayer,
   onClearSpot,
   variant = 'field',
+  disabled = false,
+  disabledReason,
 }: LineupFieldSpotButtonProps) {
   const assignedPlayer = findRosterPlayer(rosterPlayers, assignment?.playerId);
   const isLocked = Boolean(assignment?.lockedAt);
+  const isDisabled = disabled || isLocked;
   const canPlaceSelectedPlayer = Boolean(selectedPlayerId);
   const isInterchange = variant === 'interchange';
-  const spotStatus = assignedPlayer
-    ? [assignedPlayer.position || 'AFL', assignedPlayer.club].filter(Boolean).join(' · ')
-    : selectedPlayerId
-      ? 'Ready'
-      : isLocked
-        ? 'Locked'
+  const spotStatus = isDisabled
+    ? isLocked
+      ? 'Locked'
+      : 'Unavailable'
+    : assignedPlayer
+      ? [assignedPlayer.position || 'AFL', assignedPlayer.club].filter(Boolean).join(' · ')
+      : selectedPlayerId
+        ? 'Ready'
         : 'Available';
 
   function assignSelectedPlayer() {
-    if (!selectedPlayerId) return;
+    if (!selectedPlayerId || isDisabled) return;
     onAssignPlayer(selectedPlayerId, spot);
   }
 
   return (
     <div
       onDragOver={(event) => {
-        if (isLocked) return;
+        if (isDisabled) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
       }}
       onDrop={(event) => {
         event.preventDefault();
-        if (isLocked) return;
+        if (isDisabled) return;
         const playerId = event.dataTransfer.getData('text/plain') || getDragPlayerId();
         if (playerId) onAssignPlayer(playerId, spot);
       }}
@@ -382,14 +421,20 @@ function LineupFieldSpotButton({
           : isInterchange
             ? 'border-[color:var(--league-border)] bg-[color:var(--league-text)]/88 hover:-translate-y-0.5 hover:bg-[color:var(--league-text)]'
             : 'border-dashed border-white/76 bg-white/24 hover:bg-white/34'
-      } ${selectedPlayerId && !isLocked ? 'ring-2 ring-white/80' : ''}`}
+      } ${selectedPlayerId && !isDisabled ? 'ring-2 ring-white/80' : ''} ${
+        disabled ? 'cursor-not-allowed opacity-75' : ''
+      }`}
     >
       <button
         type="button"
         onClick={assignSelectedPlayer}
-        disabled={isLocked}
-        aria-disabled={!canPlaceSelectedPlayer || isLocked}
-        aria-label={`${spot.label}, ${spotStatus}. Assign selected player to this slot.`}
+        disabled={isDisabled}
+        aria-disabled={!canPlaceSelectedPlayer || isDisabled}
+        aria-label={
+          isDisabled
+            ? `${spot.label}, ${spotStatus}. ${disabledReason ?? 'Lineup editing is disabled.'}`
+            : `${spot.label}, ${spotStatus}. Assign selected player to this slot.`
+        }
         className="flex min-h-10 w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:cursor-not-allowed sm:min-h-11 sm:gap-2.5"
       >
         <span
@@ -428,7 +473,7 @@ function LineupFieldSpotButton({
           </span>
         </span>
       </button>
-      {assignedPlayer && !isLocked ? (
+      {assignedPlayer && !isDisabled ? (
         <button
           type="button"
           onClick={() => onClearSpot(spot)}

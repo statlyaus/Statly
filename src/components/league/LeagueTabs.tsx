@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type {
@@ -28,6 +28,7 @@ import {
   type PositionLimitKey,
 } from '@/lib/draftSettings';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import {
   DEFAULT_TEAM_SYMBOL_ZOOM,
   MAX_TEAM_SYMBOL_ZOOM,
@@ -103,9 +104,12 @@ function isLeagueTab(value: unknown): value is TabType {
   return typeof value === 'string' && TAB_IDS.includes(value as TabType);
 }
 
-function getLeagueTabFromSearch(value: string | null, isAdmin = false): TabType | null {
+function getLeagueTabFromSearch(
+  value: string | null,
+  canAccessCompetitionRules = false
+): TabType | null {
   if (value === 'settings') {
-    return isAdmin ? 'league-settings' : 'team-settings';
+    return canAccessCompetitionRules ? 'league-settings' : 'team-settings';
   }
 
   return isLeagueTab(value) ? value : null;
@@ -136,6 +140,8 @@ export default function LeagueTabs({
   const currentMember = members.find((member) => member.userId === currentUserId);
   const selectedPlayerId = searchParams?.get('playerId') ?? null;
   const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
+  const isCoCommissioner = currentMember?.isCoCommissioner === true;
+  const canAccessCompetitionRules = isAdmin || isCoCommissioner;
   const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;
   const activeMembers = members.filter((member) => member.isActive !== false);
   const openTeamSlots = Math.max(league.maxTeams - activeMembers.length, 0);
@@ -155,16 +161,19 @@ export default function LeagueTabs({
 
   // Handle URL tab parameter
   useEffect(() => {
-    const tabParam = getLeagueTabFromSearch(searchParams?.get('tab') ?? null, isAdmin);
+    const tabParam = getLeagueTabFromSearch(
+      searchParams?.get('tab') ?? null,
+      canAccessCompetitionRules
+    );
     if (tabParam && tabParam !== activeTab) {
       setActiveTab(tabParam);
       return;
     }
 
-    if (activeTab === 'league-settings' && !isAdmin) {
+    if (activeTab === 'league-settings' && !canAccessCompetitionRules) {
       setActiveTab('team-settings');
     }
-  }, [activeTab, isAdmin, searchParams]);
+  }, [activeTab, canAccessCompetitionRules, searchParams]);
 
   const handleTabChange = (tabId: TabType) => {
     setActiveTab(tabId);
@@ -184,8 +193,11 @@ export default function LeagueTabs({
     { id: 'draft', name: 'Draft' },
     { id: 'team-settings', name: 'Team Settings' },
   ];
-  const tabs: Tab[] = isAdmin
-    ? [...baseTabs, { id: 'league-settings', name: 'League Settings' }]
+  const tabs: Tab[] = canAccessCompetitionRules
+    ? [
+        ...baseTabs,
+        { id: 'league-settings', name: isAdmin ? 'League Settings' : 'Competition Rules' },
+      ]
     : baseTabs;
   const waiverMembersIndex = useMemo(
     () =>
@@ -439,8 +451,9 @@ export default function LeagueTabs({
                             {league.name}
                           </h2>
                           <p className="mt-2 text-sm text-white/70">
-                            {league.type === 'private' ? 'Private' : 'Public'} · {activeMembers.length}/
-                            {league.maxTeams} teams · Draft {draftReadiness?.status ?? league.status}
+                            {league.type === 'private' ? 'Private' : 'Public'} ·{' '}
+                            {activeMembers.length}/{league.maxTeams} teams · Draft{' '}
+                            {draftReadiness?.status ?? league.status}
                           </p>
                           <p className="mt-1 text-sm text-white/55">
                             {openTeamSlots === 0
@@ -485,7 +498,6 @@ export default function LeagueTabs({
                           {categoryLabels.join(' · ')}
                         </p>
                       </div>
-
                     </div>
                   </section>
 
@@ -940,6 +952,7 @@ export default function LeagueTabs({
                 league={league}
                 memberCount={members.length}
                 isAdmin={isAdmin}
+                canAccessCompetitionRules={canAccessCompetitionRules}
                 isActive
                 currentUserId={currentUserId}
               />
@@ -1816,12 +1829,14 @@ function LeagueSettingsPanel({
   league,
   memberCount,
   isAdmin,
+  canAccessCompetitionRules,
   isActive,
   currentUserId,
 }: {
   league: League;
   memberCount: number;
   isAdmin: boolean;
+  canAccessCompetitionRules: boolean;
   isActive: boolean;
   currentUserId?: string;
 }) {
@@ -1831,22 +1846,31 @@ function LeagueSettingsPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<LeagueSettingsMessage | null>(null);
+  const loadGenerationRef = useRef(0);
+  const saveGenerationRef = useRef(0);
+  const saveAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setSettings(createFallbackLeagueSettings(league));
   }, [league]);
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || !isAdmin) return;
 
-    let mounted = true;
+    const controller = new AbortController();
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    saveAbortControllerRef.current?.abort();
+    saveAbortControllerRef.current = null;
+    saveGenerationRef.current += 1;
+    setIsSaving(false);
     async function loadLeagueSettings() {
       try {
         setIsLoading(true);
         setMessage(null);
         const response = await authenticatedFetch(
           `/api/leagues/${league.id}/settings`,
-          {},
+          { signal: controller.signal },
           currentUserId
         );
         const payload = await response.json();
@@ -1855,26 +1879,35 @@ function LeagueSettingsPanel({
           throw new Error(payload.error ?? `status ${response.status}`);
         }
 
-        if (mounted) {
-          setSettings(normalizeLeagueSettingsPayload(payload.data, league));
-        }
+        if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
+        setSettings(normalizeLeagueSettingsPayload(payload.data, league));
       } catch (error) {
-        if (mounted) {
-          setMessage({
-            type: 'error',
-            text: error instanceof Error ? error.message : 'Failed to load league settings.',
-          });
+        if (
+          controller.signal.aborted ||
+          generation !== loadGenerationRef.current ||
+          (error instanceof Error && error.name === 'AbortError')
+        ) {
+          return;
         }
+        setMessage({
+          type: 'error',
+          text: error instanceof Error ? error.message : 'Failed to load league settings.',
+        });
       } finally {
-        if (mounted) setIsLoading(false);
+        if (!controller.signal.aborted && generation === loadGenerationRef.current) {
+          setIsLoading(false);
+        }
       }
     }
 
     void loadLeagueSettings();
     return () => {
-      mounted = false;
+      controller.abort();
+      if (generation === loadGenerationRef.current) loadGenerationRef.current += 1;
+      saveAbortControllerRef.current?.abort();
+      saveGenerationRef.current += 1;
     };
-  }, [currentUserId, isActive, league]);
+  }, [currentUserId, isActive, isAdmin, league]);
 
   const updateLeagueSettings = (updates: Partial<LeagueSettingsResponse['league']>) => {
     setSettings((current) => ({
@@ -1916,6 +1949,11 @@ function LeagueSettingsPanel({
   const handleSaveSettings = async () => {
     if (!isAdmin) return;
 
+    const controller = new AbortController();
+    const generation = saveGenerationRef.current + 1;
+    saveGenerationRef.current = generation;
+    saveAbortControllerRef.current?.abort();
+    saveAbortControllerRef.current = controller;
     try {
       setIsSaving(true);
       setMessage(null);
@@ -1923,6 +1961,7 @@ function LeagueSettingsPanel({
         `/api/leagues/${league.id}/settings`,
         {
           method: 'PUT',
+          signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(settings),
         },
@@ -1934,19 +1973,54 @@ function LeagueSettingsPanel({
         throw new Error(payload.error ?? `status ${response.status}`);
       }
 
+      if (controller.signal.aborted || generation !== saveGenerationRef.current) return;
       setSettings(normalizeLeagueSettingsPayload(payload.data, league));
       setMessage({ type: 'success', text: 'League settings saved.' });
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== saveGenerationRef.current ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        return;
+      }
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to save league settings.',
       });
     } finally {
-      setIsSaving(false);
+      if (generation === saveGenerationRef.current) {
+        if (saveAbortControllerRef.current === controller) saveAbortControllerRef.current = null;
+        setIsSaving(false);
+      }
     }
   };
 
   const teamFillPercent = Math.min(100, Math.round((memberCount / settings.league.maxTeams) * 100));
+
+  const updateFixtureGenerationMode = (fixtureGenerationMode: LeagueFixtureGenerationMode) => {
+    setSettings((current) => ({
+      ...current,
+      scoring: { ...current.scoring, fixtureGenerationMode },
+    }));
+  };
+
+  if (!isAdmin && canAccessCompetitionRules) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Competition Rules</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Co-commissioner controls</p>
+        </div>
+        <CompetitionSettingsPanel
+          leagueId={league.id}
+          currentUserId={currentUserId}
+          fixtureGenerationMode={settings.scoring.fixtureGenerationMode}
+          onFixtureGenerationModeChange={updateFixtureGenerationMode}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -1970,7 +2044,7 @@ function LeagueSettingsPanel({
           className={`rounded-lg border px-4 py-3 text-sm ${
             message.type === 'success'
               ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
-              : 'border-red-200 bg-red-50 text-red-700'
+              : 'border-destructive/20 bg-destructive/10 text-destructive'
           }`}
         >
           {message.text}
@@ -2005,11 +2079,13 @@ function LeagueSettingsPanel({
               Max Teams
               <input
                 type="number"
-                min={4}
-                max={20}
+                min={MIN_LEAGUE_TEAMS}
+                max={MAX_LEAGUE_TEAMS}
                 value={settings.league.maxTeams}
                 onChange={(event) =>
-                  updateLeagueSettings({ maxTeams: Number.parseInt(event.target.value, 10) || 4 })
+                  updateLeagueSettings({
+                    maxTeams: Number.parseInt(event.target.value, 10) || MIN_LEAGUE_TEAMS,
+                  })
                 }
                 className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               />
@@ -2038,7 +2114,12 @@ function LeagueSettingsPanel({
           onChange={(scoring) => setSettings((current) => ({ ...current, scoring }))}
         />
 
-        <CompetitionSettingsPanel leagueId={league.id} currentUserId={currentUserId} />
+        <CompetitionSettingsPanel
+          leagueId={league.id}
+          currentUserId={currentUserId}
+          fixtureGenerationMode={settings.scoring.fixtureGenerationMode}
+          onFixtureGenerationModeChange={updateFixtureGenerationMode}
+        />
 
         <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">
           <h3 className="text-base font-semibold text-[color:var(--league-text)]">

@@ -1,4 +1,4 @@
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
+import { isFantasyCategoryKey, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 import type { LeagueFixtureGenerationMode } from '@/types/leagues';
 
@@ -8,6 +8,7 @@ import type { LineupSlotSettings } from './scoringTypes';
 export const MIN_COMPETITION_TEAMS = 4;
 export const MAX_COMPETITION_TEAMS = 18;
 export const MAX_CO_COMMISSIONERS = 3;
+export const MAX_AFL_SEASON_ROUND = 24;
 export const SUPPORTED_FINALS_TEAM_COUNTS = [0, 4, 6, 8] as const;
 
 export type CompetitionLockPolicy = 'INDIVIDUAL_GAME_START' | 'THURSDAY_7PM_AEST';
@@ -63,13 +64,19 @@ export const DEFAULT_COMPETITION_RULES: CompetitionRules = {
 };
 
 function asPositiveInteger(value: unknown, fallback: number) {
-  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  const normalized = typeof value === 'number' ? String(value) : String(value ?? '').trim();
+  if (!/^[1-9]\d*$/.test(normalized)) return fallback;
+
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : fallback;
 }
 
 function asNonNegativeInteger(value: unknown, fallback: number) {
-  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+  const normalized = typeof value === 'number' ? String(value) : String(value ?? '').trim();
+  if (!/^(0|[1-9]\d*)$/.test(normalized)) return fallback;
+
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : fallback;
 }
 
 function isFinalsTeamCount(value: unknown): value is CompetitionRules['finalsTeams'] {
@@ -83,7 +90,7 @@ function normalizeExcludedAflRounds(value: unknown): number[] {
     ...new Set(
       value
         .map((round) => asPositiveInteger(round, 0))
-        .filter((round): round is number => round > 0)
+        .filter((round): round is number => round > 0 && round <= MAX_AFL_SEASON_ROUND)
     ),
   ].sort((left, right) => left - right);
 }
@@ -113,7 +120,9 @@ export function normalizeCompetitionRules(
       ? source.finalsTeams
       : DEFAULT_COMPETITION_RULES.finalsTeams,
     fixtureGenerationMode:
-      source.fixtureGenerationMode === 'MANUAL' ? 'MANUAL' : DEFAULT_COMPETITION_RULES.fixtureGenerationMode,
+      source.fixtureGenerationMode === 'MANUAL'
+        ? 'MANUAL'
+        : DEFAULT_COMPETITION_RULES.fixtureGenerationMode,
     lockPolicy:
       source.lockPolicy === 'THURSDAY_7PM_AEST'
         ? 'THURSDAY_7PM_AEST'
@@ -123,10 +132,9 @@ export function normalizeCompetitionRules(
         ? source.leagueTimeZone.trim()
         : DEFAULT_COMPETITION_RULES.leagueTimeZone,
     interchangeSlots,
-    standingsTieBreakCategory:
-      typeof source.standingsTieBreakCategory === 'string'
-        ? (source.standingsTieBreakCategory as FantasyCategoryKey)
-        : fallbackCategory,
+    standingsTieBreakCategory: isFantasyCategoryKey(source.standingsTieBreakCategory)
+      ? source.standingsTieBreakCategory
+      : fallbackCategory,
     excludedAflRounds: normalizeExcludedAflRounds(source.excludedAflRounds),
   };
 }
@@ -168,10 +176,14 @@ export function validateCompetitionRules({
     });
   }
 
-  if (!Number.isInteger(rules.seasonStartAflRound) || rules.seasonStartAflRound < 1) {
+  if (
+    !Number.isInteger(rules.seasonStartAflRound) ||
+    rules.seasonStartAflRound < 1 ||
+    rules.seasonStartAflRound > MAX_AFL_SEASON_ROUND
+  ) {
     issues.push({
       code: 'AFL_START_ROUND',
-      message: 'Choose a valid AFL round for the start of the fantasy season.',
+      message: `Choose an AFL round between 1 and ${MAX_AFL_SEASON_ROUND} for the start of the fantasy season.`,
     });
   }
 
@@ -179,6 +191,21 @@ export function validateCompetitionRules({
     issues.push({
       code: 'REGULAR_SEASON_ROUNDS',
       message: 'Choose at least one regular-season round.',
+    });
+  }
+
+  const finalsRoundCount =
+    rules.finalsTeams === 4 ? 2 : rules.finalsTeams === 6 ? 3 : rules.finalsTeams === 8 ? 4 : 0;
+  const requiredPlayableRounds = rules.regularSeasonRounds + finalsRoundCount;
+  const excludedRounds = new Set(rules.excludedAflRounds);
+  let availablePlayableRounds = 0;
+  for (let aflRound = rules.seasonStartAflRound; aflRound <= MAX_AFL_SEASON_ROUND; aflRound += 1) {
+    if (!excludedRounds.has(aflRound)) availablePlayableRounds += 1;
+  }
+  if (requiredPlayableRounds > availablePlayableRounds) {
+    issues.push({
+      code: 'REGULAR_SEASON_ROUNDS',
+      message: `The regular season, finals, and excluded weeks must fit by AFL Round ${MAX_AFL_SEASON_ROUND}.`,
     });
   }
 
@@ -238,9 +265,6 @@ export function validateCompetitionRules({
   return issues;
 }
 
-export function isCommissioner(input: {
-  role?: string | null;
-  isCoCommissioner?: boolean | null;
-}) {
+export function isCommissioner(input: { role?: string | null; isCoCommissioner?: boolean | null }) {
   return input.role === 'OWNER' || input.isCoCommissioner === true;
 }

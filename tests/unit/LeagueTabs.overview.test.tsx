@@ -124,9 +124,11 @@ describe('LeagueTabs overview snapshot', () => {
 
     expect(screen.getByText('League overview')).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot League').length).toBeGreaterThan(0);
-    expect(screen.getByText('3/4 teams')).toBeInTheDocument();
+    expect(screen.getByText(/3\/4 teams/)).toBeInTheDocument();
     expect(screen.getAllByText('Trade offers').length).toBeGreaterThan(0);
-    expect(screen.getByText('5 categories')).toBeInTheDocument();
+    expect(
+      screen.getByText('Goals · Tackles · Inside 50s · Intercepts · Rebound 50s')
+    ).toBeInTheDocument();
     expect(screen.getAllByText('Priority 2').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Teams').length).toBeGreaterThan(1);
     expect(screen.getByText('4-team league')).toBeInTheDocument();
