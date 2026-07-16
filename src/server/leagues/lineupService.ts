@@ -432,7 +432,9 @@ function normalizeSubmittedPlayers(players: readonly unknown[]): SubmittedLineup
     const slotIndex =
       typeof source.slotIndex === 'number'
         ? source.slotIndex
-        : Number(String(source.slotIndex ?? ''));
+        : typeof source.slotIndex === 'string' && source.slotIndex.trim() !== ''
+          ? Number(source.slotIndex)
+          : Number.NaN;
 
     if (typeof source.playerId !== 'string' || !isLeagueLineupSlot(source.slot)) {
       return [];
@@ -445,7 +447,16 @@ function normalizeSubmittedPlayers(players: readonly unknown[]): SubmittedLineup
     };
   });
 
-  return normalizeLegacyBenchAssignments(parsedPlayers);
+  return normalizeLegacyBenchAssignments(parsedPlayers).map((player, index) => {
+    const submittedSlotIndex = parsedPlayers[index]?.slotIndex;
+    const hasValidSlotIndex =
+      Number.isSafeInteger(submittedSlotIndex) && (submittedSlotIndex ?? -1) >= 0;
+
+    return {
+      ...player,
+      slotIndex: hasValidSlotIndex ? player.slotIndex : (submittedSlotIndex ?? Number.NaN),
+    };
+  });
 }
 
 type PersistedLineupPlayer = {
@@ -597,6 +608,7 @@ export async function saveMemberLineup({
       resolveRoundLockAt(initialRules, initialCompetitionRound))
     : null;
   if (
+    initialCompetitionRound?.status === 'NO_MATCHUP' ||
     initialCompetitionRound?.status === 'LOCKED' ||
     initialCompetitionRound?.status === 'FINAL' ||
     (initialRoundLockAt && initialRoundLockAt <= new Date())
@@ -695,6 +707,7 @@ export async function saveMemberLineup({
       : null;
     const saveNow = new Date();
     if (
+      currentCompetitionRound?.status === 'NO_MATCHUP' ||
       currentCompetitionRound?.status === 'LOCKED' ||
       currentCompetitionRound?.status === 'FINAL' ||
       (currentRoundLockAt && currentRoundLockAt <= saveNow)

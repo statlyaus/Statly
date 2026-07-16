@@ -479,7 +479,7 @@ model LeagueMatchup {
   winnerMember     LeagueMember?           @relation("WinnerMemberMatchups", fields: [winnerMemberId], references: [id], onDelete: SetNull)
   scores           LeagueMatchupScore[]
 
-  @@unique([leagueId, round, homeMemberId, awayMemberId])
+  @@unique([leagueId, fixtureVersion, round, homeMemberId, awayMemberId])
   @@index([leagueId, round])
   @@index([leagueId, status])
   @@index([competitionRoundId])

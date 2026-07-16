@@ -7,13 +7,14 @@ import type { League, LeagueMember } from '@/types/leagues';
 const mocks = vi.hoisted(() => ({
   authenticatedFetch: vi.fn(),
   push: vi.fn(),
+  tab: 'league-settings',
 }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/leagues/league-1',
   useRouter: () => ({ push: mocks.push, refresh: vi.fn() }),
   useSearchParams: () => ({
-    get: (key: string) => (key === 'tab' ? 'league-settings' : null),
+    get: (key: string) => (key === 'tab' ? mocks.tab : null),
   }),
 }));
 
@@ -52,10 +53,19 @@ const coCommissioner: LeagueMember = {
   isActive: true,
 };
 
+const ordinaryMember: LeagueMember = {
+  ...coCommissioner,
+  id: 'member-2',
+  userId: 'member-user',
+  isCoCommissioner: false,
+  teamName: 'Member Team',
+};
+
 describe('LeagueTabs co-commissioner competition access', () => {
   beforeEach(() => {
     mocks.authenticatedFetch.mockReset();
     mocks.push.mockReset();
+    mocks.tab = 'league-settings';
     mocks.authenticatedFetch.mockResolvedValue({
       ok: true,
       status: 200,
@@ -94,5 +104,16 @@ describe('LeagueTabs co-commissioner competition access', () => {
         expect.anything()
       );
     });
+  });
+
+  it('maps a direct protected league-settings URL to team settings for ordinary members', async () => {
+    render(<LeagueTabs league={league} members={[ordinaryMember]} currentUserId="member-user" />);
+
+    expect(await screen.findByRole('button', { name: 'Team Settings' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.queryByRole('button', { name: 'League Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('competition-settings-panel')).not.toBeInTheDocument();
   });
 });

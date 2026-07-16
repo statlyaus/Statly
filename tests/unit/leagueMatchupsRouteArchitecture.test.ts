@@ -14,6 +14,7 @@ describe('league matchup API route architecture', () => {
       'src/app/api/leagues/[id]/matchups/[round]/recalculate/route.ts'
     );
     const lineupRoute = readRepoFile('src/app/api/leagues/[id]/lineups/[round]/route.ts');
+    const competitionRoute = readRepoFile('src/app/api/leagues/[id]/competition/route.ts');
 
     expect(matchupsRoute).toContain('getAuthenticatedUserId');
     expect(matchupsRoute).toContain('getLeagueMembership');
@@ -37,5 +38,8 @@ describe('league matchup API route architecture', () => {
     expect(lineupRoute).not.toContain('requestedPlayers');
     expect(lineupRoute).toContain('export async function GET');
     expect(lineupRoute).toContain('export async function PATCH');
+
+    expect(competitionRoute).toContain('request.json().catch(() => null)');
+    expect(competitionRoute).toContain('A valid round and fallback deadline are required.');
   });
 });

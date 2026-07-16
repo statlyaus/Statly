@@ -13,12 +13,22 @@ describe('competition governance migration', () => {
     const governanceMigration = readMigration('20260714090000_add_league_competition_governance');
     const legacyIndexNames = [
       ...originalMigration.matchAll(/CREATE (?:UNIQUE )?INDEX "(LeagueMatchup_[^"]+)"/g),
-    ].map((match) => match[1]);
+    ]
+      .map((match) => match[1])
+      .filter(
+        (indexName) => indexName !== 'LeagueMatchup_leagueId_round_homeMemberId_awayMemberId_key'
+      );
 
     expect(governanceMigration).toContain('INSERT INTO "new_LeagueMatchup"');
     expect(governanceMigration).toContain('FROM "LeagueMatchup";');
     expect(governanceMigration).toContain(
       'FOREIGN KEY ("competitionRoundId") REFERENCES "LeagueCompetitionRound" ("id") ON DELETE SET NULL'
+    );
+    expect(governanceMigration).toContain(
+      'CREATE UNIQUE INDEX "LeagueMatchup_leagueId_fixtureVersion_round_homeMemberId_awayMemberId_key" ON "LeagueMatchup"("leagueId", "fixtureVersion", "round", "homeMemberId", "awayMemberId")'
+    );
+    expect(governanceMigration).not.toContain(
+      'CREATE UNIQUE INDEX "LeagueMatchup_leagueId_round_homeMemberId_awayMemberId_key"'
     );
     expect(legacyIndexNames).not.toHaveLength(0);
     for (const indexName of legacyIndexNames) {

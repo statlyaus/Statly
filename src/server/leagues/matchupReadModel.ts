@@ -408,12 +408,15 @@ function normalizeLeagueCategories(value: string | null | undefined): FantasyCat
   }
 }
 
-async function loadLivePlayerTotalsForRound(season: number, round: number) {
+async function loadLivePlayerTotalsForRound(
+  season: number,
+  round: number,
+  expectedPlayerIds: readonly string[] = []
+) {
   const [statsResult, matchesResult] = await Promise.all([
     getRoundPlayerStatsResult(season, round),
     getRoundMatchesResult(season, round),
   ]);
-  const available = statsResult.ok && matchesResult.ok;
   const normalizedStats = normalizeLiveStatRows(
     (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[]
   ).filter((row) => row.round === round);
@@ -422,6 +425,11 @@ async function loadLivePlayerTotalsForRound(season: number, round: number) {
   for (const stat of normalizedStats) {
     totalsByPlayerId.set(stat.playerId, stat.totals);
   }
+
+  const available =
+    statsResult.ok &&
+    matchesResult.ok &&
+    [...new Set(expectedPlayerIds)].every((playerId) => totalsByPlayerId.has(playerId));
 
   return {
     available,
@@ -461,7 +469,7 @@ async function loadLeagueCompetitionSettings(leagueId: string) {
   };
 }
 
-function resolveCurrentCompetitionRound<
+export function resolveCurrentCompetitionRound<
   TRound extends {
     round: number;
     status: string;
@@ -474,13 +482,20 @@ function resolveCurrentCompetitionRound<
   );
   if (!playableRounds.length) return rounds[0] ?? null;
 
+  const startedRounds = playableRounds.filter(
+    (competitionRound) =>
+      competitionRound.startsAt &&
+      competitionRound.startsAt <= now &&
+      (!competitionRound.endsAt || competitionRound.endsAt >= now)
+  );
+  const latestStartedRound = startedRounds.reduce<TRound | null>(
+    (latest, competitionRound) =>
+      !latest || competitionRound.round > latest.round ? competitionRound : latest,
+    null
+  );
+
   return (
-    playableRounds.find(
-      (competitionRound) =>
-        competitionRound.startsAt &&
-        competitionRound.startsAt <= now &&
-        (!competitionRound.endsAt || competitionRound.endsAt >= now)
-    ) ??
+    latestStartedRound ??
     playableRounds.find(
       (competitionRound) => !competitionRound.startsAt || competitionRound.startsAt > now
     ) ??
@@ -697,7 +712,8 @@ export async function recalculateLeagueRoundMatchups({
   }
   const { available, totalsByPlayerId, roundStatus } = await loadLivePlayerTotalsForRound(
     new Date().getFullYear(),
-    aflRound
+    aflRound,
+    lineups.flatMap((lineup) => lineup.players.map((player) => player.playerId))
   );
   if (!available) {
     return {

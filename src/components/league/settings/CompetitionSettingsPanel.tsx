@@ -105,7 +105,7 @@ export function CompetitionSettingsPanel({
     return `${snapshot.teamCount} teams, ${effectiveRules.regularSeasonRounds} regular rounds, ${effectiveRules.finalsTeams || 'no'} finals teams, ${effectiveRules.interchangeSlots} interchange slots`;
   }, [effectiveRules, snapshot]);
 
-  async function loadSnapshot() {
+  async function loadSnapshot({ preserveMessage = false }: { preserveMessage?: boolean } = {}) {
     const controller = new AbortController();
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
@@ -128,7 +128,7 @@ export function CompetitionSettingsPanel({
       setRules(nextSnapshot.rules);
       onFixtureGenerationModeChange(nextSnapshot.rules.fixtureGenerationMode);
       setExcludedRounds(nextSnapshot.rules.excludedAflRounds.join(', '));
-      setMessage(null);
+      if (!preserveMessage) setMessage(null);
     } catch (error) {
       if (
         controller.signal.aborted ||
@@ -245,7 +245,7 @@ export function CompetitionSettingsPanel({
       }
       if (controller.signal.aborted || generation !== mutationGenerationRef.current) return;
       setMessage(`Competition published as fixture version ${payload.data.fixtureVersion}.`);
-      await loadSnapshot();
+      await loadSnapshot({ preserveMessage: true });
     } catch (error) {
       if (
         controller.signal.aborted ||
@@ -295,7 +295,7 @@ export function CompetitionSettingsPanel({
       if (controller.signal.aborted || generation !== mutationGenerationRef.current) return;
       setMessage('Round-wide fallback deadline saved.');
       setFallbackLockAt('');
-      await loadSnapshot();
+      await loadSnapshot({ preserveMessage: true });
     } catch (error) {
       if (
         controller.signal.aborted ||

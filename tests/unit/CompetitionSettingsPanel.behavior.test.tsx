@@ -117,4 +117,30 @@ describe('CompetitionSettingsPanel fixture generation', () => {
 
     expect(screen.getByLabelText('Fixture generation')).toHaveValue('MANUAL');
   });
+
+  it('preserves publication feedback while refreshing the published snapshot', async () => {
+    let published = false;
+    authenticatedFetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        published = true;
+        return Promise.resolve(response({ success: true, data: { fixtureVersion: 1 } }));
+      }
+
+      const payload = competitionPayload('AUTOMATIC');
+      if (published) {
+        payload.data.status = 'PUBLISHED';
+        payload.data.fixtureVersion = 1;
+      }
+      return Promise.resolve(response(payload));
+    });
+
+    render(<Harness leagueId="league-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish competition' }));
+
+    expect(
+      await screen.findByText('Competition published as fixture version 1.')
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Fixture version 1 was published/)).toBeInTheDocument();
+  });
 });

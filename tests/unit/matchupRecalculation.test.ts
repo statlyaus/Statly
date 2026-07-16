@@ -6,6 +6,7 @@ const etlMocks = vi.hoisted(() => ({
 }));
 
 const prismaMocks = vi.hoisted(() => ({
+  $transaction: vi.fn(),
   league: { findUnique: vi.fn() },
   leagueCompetitionRound: { findUnique: vi.fn() },
   leagueMatchup: { findMany: vi.fn() },
@@ -104,5 +105,51 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
       scores: [],
       roundStatus: { hasUnavailableStatus: true },
     });
+  });
+
+  it('does not score or finalize when provider stats omit a lineup player', async () => {
+    prismaMocks.league.findUnique.mockResolvedValue(leagueWithFixtureVersion(7));
+    prismaMocks.leagueCompetitionRound.findUnique.mockResolvedValue({ aflRound: 12 });
+    prismaMocks.leagueMatchup.findMany.mockResolvedValue([
+      {
+        id: 'matchup-1',
+        homeMemberId: 'member-1',
+        awayMemberId: 'member-2',
+      },
+    ]);
+    prismaMocks.leagueLineup.findMany.mockResolvedValue([
+      { memberId: 'member-1', players: [{ playerId: 'player-1', slot: 'MID' }] },
+      { memberId: 'member-2', players: [{ playerId: 'player-2', slot: 'MID' }] },
+    ]);
+    etlMocks.getRoundPlayerStatsResult.mockResolvedValue({
+      ok: true,
+      stats: [
+        {
+          player_uid: 'player-1',
+          round_number: 12,
+          status: 'final',
+          stats: { goals: 1 },
+        },
+      ],
+    });
+    etlMocks.getRoundMatchesResult.mockResolvedValue({
+      ok: true,
+      matches: [{ match_uid: 'afl-match-1', status: 'final' }],
+    });
+
+    const result = await recalculateLeagueRoundMatchups({
+      leagueId: 'league-1',
+      round: 4,
+      finalize: true,
+    });
+
+    expect(result).toMatchObject({
+      round: 4,
+      status: 'SCHEDULED',
+      recalculated: 0,
+      scores: [],
+      roundStatus: { hasUnavailableStatus: true },
+    });
+    expect(prismaMocks.$transaction).not.toHaveBeenCalled();
   });
 });

@@ -7,6 +7,8 @@ describe('draft create route architecture', () => {
     const source = readFileSync(join(process.cwd(), 'src/app/api/drafts/route.ts'), 'utf8');
 
     expect(source).toContain('isValidPickSeconds(body.timePerPick)');
+    expect(source).toContain("typeof body.leagueSize !== 'number'");
+    expect(source).toContain('!Number.isInteger(body.leagueSize)');
     expect(source).toContain('normalizeDraftPositionLimits(body.positionLimits)');
     expect(source).toContain('normalizeDraftAutoPickRules(body.autoPickRules)');
     expect(source).toContain('calculateDraftCapacity');

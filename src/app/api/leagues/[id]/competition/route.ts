@@ -213,7 +213,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!authorization.canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!authorization.member) return missingActorMemberResponse();
 
-  const body = (await request.json()) as { round?: unknown; fallbackLockAt?: unknown };
+  const body = (await request.json().catch(() => null)) as {
+    round?: unknown;
+    fallbackLockAt?: unknown;
+  } | null;
+  if (!body) {
+    return NextResponse.json(
+      { error: 'A valid round and fallback deadline are required.' },
+      { status: 400 }
+    );
+  }
   const round = parsePositiveRound(body.round);
   const fallbackLockAt = new Date(String(body.fallbackLockAt));
   if (round === null || Number.isNaN(fallbackLockAt.getTime())) {

@@ -105,7 +105,7 @@ CREATE TABLE "LeagueCompetitionAudit" (
 CREATE UNIQUE INDEX "LeagueCompetitionRound_leagueId_fixtureVersion_round_key" ON "LeagueCompetitionRound"("leagueId", "fixtureVersion", "round");
 CREATE INDEX "LeagueCompetitionRound_leagueId_fixtureVersion_phase_idx" ON "LeagueCompetitionRound"("leagueId", "fixtureVersion", "phase");
 CREATE INDEX "LeagueCompetitionRound_leagueId_status_idx" ON "LeagueCompetitionRound"("leagueId", "status");
-CREATE UNIQUE INDEX "LeagueMatchup_leagueId_round_homeMemberId_awayMemberId_key" ON "LeagueMatchup"("leagueId", "round", "homeMemberId", "awayMemberId");
+CREATE UNIQUE INDEX "LeagueMatchup_leagueId_fixtureVersion_round_homeMemberId_awayMemberId_key" ON "LeagueMatchup"("leagueId", "fixtureVersion", "round", "homeMemberId", "awayMemberId");
 CREATE INDEX "LeagueMatchup_leagueId_round_idx" ON "LeagueMatchup"("leagueId", "round");
 CREATE INDEX "LeagueMatchup_leagueId_status_idx" ON "LeagueMatchup"("leagueId", "status");
 CREATE INDEX "LeagueMatchup_homeMemberId_idx" ON "LeagueMatchup"("homeMemberId");

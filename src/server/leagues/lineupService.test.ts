@@ -235,48 +235,151 @@ describe('legacy lineup normalization and locks', () => {
 });
 
 describe('save boundary invariants', () => {
-  it.each(['LOCKED', 'FINAL'])('rejects an initially %s competition round', async (status) => {
-    mocks.prisma.league.findUnique.mockResolvedValue({ settings });
+  it.each(['NO_MATCHUP', 'LOCKED', 'FINAL'])(
+    'rejects an initially %s competition round',
+    async (status) => {
+      mocks.prisma.league.findUnique.mockResolvedValue({ settings });
+      mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
+      mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+        ...scheduledRound,
+        status,
+      });
+
+      const result = await saveMemberLineup({
+        leagueId: 'league-1',
+        memberId: 'member-1',
+        round: 1,
+        players: [],
+      });
+
+      expect(result).toMatchObject({ ok: false, errors: ['This round is locked.'] });
+      expect(mocks.getRoundMatchesResult).not.toHaveBeenCalled();
+      expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['NO_MATCHUP', 'FINAL'])(
+    'rejects when the round becomes %s at the transactional save boundary',
+    async (status) => {
+      mocks.prisma.league.findUnique
+        .mockResolvedValueOnce({ settings })
+        .mockResolvedValueOnce({ settings });
+      mocks.prisma.leagueRosterPlayer.findMany
+        .mockResolvedValueOnce([rosterPlayer()])
+        .mockResolvedValueOnce([rosterPlayer()]);
+      mocks.prisma.leagueCompetitionRound.findUnique
+        .mockResolvedValueOnce(scheduledRound)
+        .mockResolvedValueOnce({ ...scheduledRound, status });
+      mocks.getRoundMatchesResult.mockResolvedValue({ ok: true, matches: [] });
+
+      const result = await saveMemberLineup({
+        leagueId: 'league-1',
+        memberId: 'member-1',
+        round: 1,
+        players: [],
+      });
+
+      expect(result).toMatchObject({ ok: false, errors: ['This round is locked.'] });
+      expect(mocks.prisma.leagueLineup.upsert).not.toHaveBeenCalled();
+      expect(mocks.prisma.leagueLineupPlayer.deleteMany).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ['missing', undefined],
+    ['null', null],
+    ['empty', ''],
+    ['whitespace', '   '],
+  ])('rejects a %s slot index instead of coercing it to zero', async (_label, slotIndex) => {
+    const thursdaySettings = {
+      ...settings,
+      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+    };
+    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
     mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
     mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
       ...scheduledRound,
-      status,
+      startsAt: new Date('2027-07-18T09:00:00.000Z'),
     });
 
     const result = await saveMemberLineup({
       leagueId: 'league-1',
       memberId: 'member-1',
       round: 1,
-      players: [],
+      players: [{ playerId: 'player-1', slot: 'MID', slotIndex }],
     });
 
-    expect(result).toMatchObject({ ok: false, errors: ['This round is locked.'] });
-    expect(mocks.getRoundMatchesResult).not.toHaveBeenCalled();
-    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'INVALID_LINEUP',
+      errors: ['Slot index for player-1 must be a non-negative integer.'],
+    });
+    expect(mocks.prisma.leagueLineup.upsert).not.toHaveBeenCalled();
+    expect(mocks.prisma.leagueLineupPlayer.createMany).not.toHaveBeenCalled();
   });
 
-  it('rejects when the round becomes FINAL at the transactional save boundary', async () => {
-    mocks.prisma.league.findUnique
-      .mockResolvedValueOnce({ settings })
-      .mockResolvedValueOnce({ settings });
-    mocks.prisma.leagueRosterPlayer.findMany
-      .mockResolvedValueOnce([rosterPlayer()])
-      .mockResolvedValueOnce([rosterPlayer()]);
-    mocks.prisma.leagueCompetitionRound.findUnique
-      .mockResolvedValueOnce(scheduledRound)
-      .mockResolvedValueOnce({ ...scheduledRound, status: 'FINAL' });
-    mocks.getRoundMatchesResult.mockResolvedValue({ ok: true, matches: [] });
+  it('keeps an empty legacy BENCH slot index invalid during normalization', async () => {
+    const thursdaySettings = {
+      ...settings,
+      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+    };
+    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
+    mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+      ...scheduledRound,
+      startsAt: new Date('2027-07-18T09:00:00.000Z'),
+    });
 
     const result = await saveMemberLineup({
       leagueId: 'league-1',
       memberId: 'member-1',
       round: 1,
-      players: [],
+      players: [{ playerId: 'player-1', slot: 'BENCH', slotIndex: '' }],
     });
 
-    expect(result).toMatchObject({ ok: false, errors: ['This round is locked.'] });
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'INVALID_LINEUP',
+      errors: ['Slot index for player-1 must be a non-negative integer.'],
+    });
     expect(mocks.prisma.leagueLineup.upsert).not.toHaveBeenCalled();
-    expect(mocks.prisma.leagueLineupPlayer.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['number', 1],
+    ['numeric string', '1'],
+  ])('preserves a valid %s slot index', async (_label, slotIndex) => {
+    const thursdaySettings = {
+      ...settings,
+      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+    };
+    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
+    mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+      ...scheduledRound,
+      startsAt: new Date('2027-07-18T09:00:00.000Z'),
+    });
+    mocks.prisma.leagueLineup.findUnique.mockResolvedValue(null);
+    mocks.prisma.leagueLineup.upsert.mockResolvedValue({ id: 'lineup-1' });
+
+    const result = await saveMemberLineup({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      players: [{ playerId: 'player-1', slot: 'MID', slotIndex }],
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mocks.prisma.leagueLineupPlayer.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          lineupId: 'lineup-1',
+          playerId: 'player-1',
+          slot: 'MID',
+          slotIndex: 1,
+        },
+      ],
+    });
   });
 
   it('fails explicitly before mutation when official timing cannot be loaded', async () => {

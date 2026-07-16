@@ -108,7 +108,7 @@ function getLeagueTabFromSearch(
   value: string | null,
   canAccessCompetitionRules = false
 ): TabType | null {
-  if (value === 'settings') {
+  if (value === 'settings' || value === 'league-settings') {
     return canAccessCompetitionRules ? 'league-settings' : 'team-settings';
   }
 
@@ -501,20 +501,20 @@ export default function LeagueTabs({
                     </div>
                   </section>
 
-                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <section className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
                           Teams
                         </p>
-                        <h3 className="mt-1 text-lg font-semibold text-slate-950">
+                        <h3 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
                           {league.maxTeams}-team league
                         </h3>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleTabChange('teams')}
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                       >
                         View teams
                       </button>
@@ -524,9 +524,9 @@ export default function LeagueTabs({
                       {overviewTeams.map((member) => (
                         <div
                           key={member.id}
-                          className="group flex min-h-32 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-center transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_18px_35px_-28px_rgba(15,23,42,0.45)]"
+                          className="group flex min-h-32 flex-col items-center justify-center rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-3 text-center transition hover:-translate-y-0.5 hover:border-[color:var(--league-primary)] hover:bg-[color:var(--league-surface)] hover:shadow-md"
                         >
-                          <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:size-28">
+                          <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-sm sm:size-28">
                             {member.teamLogoUrl ? (
                               <img
                                 src={member.teamLogoUrl}
@@ -536,12 +536,12 @@ export default function LeagueTabs({
                                 className="h-full w-full object-cover will-change-transform"
                               />
                             ) : (
-                              <span className="text-lg font-semibold text-slate-700">
+                              <span className="text-lg font-semibold text-[color:var(--league-text-muted)]">
                                 {getTeamInitials(member.teamName || 'Team')}
                               </span>
                             )}
                           </div>
-                          <p className="mt-3 text-sm font-semibold leading-5 text-slate-950">
+                          <p className="mt-3 text-sm font-semibold leading-5 text-[color:var(--league-text)]">
                             {member.teamName || 'Unnamed team'}
                           </p>
                         </div>

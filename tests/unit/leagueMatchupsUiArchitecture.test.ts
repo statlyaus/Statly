@@ -85,7 +85,9 @@ describe('league matchups UI architecture', () => {
     expect(lineupFieldBoard).toContain("url('/Assets/afl-turf-texture.png')");
     expect(lineupFieldBoard).toContain('rounded-[999px]');
     expect(lineupFieldBoard).toContain('overflow-hidden');
-    expect(lineupFieldBoard).toContain('lg:grid-cols-[minmax(240px,0.8fr)');
+    expect(lineupFieldBoard).toContain(
+      'lg:grid-cols-[minmax(240px,0.8fr)_minmax(260px,0.9fr)_minmax(420px,2fr)]'
+    );
     expect(lineupFieldBoard).toContain('grid-cols-[repeat(auto-fit,minmax(156px,1fr))]');
     expect(lineupRosterPool).toContain('px-0 pb-3 pt-0');
     expect(lineupRosterPool).toContain("isEmbeddedStadium ? 'px-0 py-3' : 'p-2'");

@@ -177,7 +177,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (
-      !body.leagueSize ||
+      typeof body.leagueSize !== 'number' ||
+      !Number.isInteger(body.leagueSize) ||
       body.leagueSize < MIN_LEAGUE_TEAMS ||
       body.leagueSize > MAX_LEAGUE_TEAMS
     ) {

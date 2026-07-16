@@ -150,6 +150,9 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByText('Third Team')).toBeInTheDocument();
     expect(screen.getByText('TT')).toBeInTheDocument();
     expect(screen.queryByText('Offers needing review')).not.toBeInTheDocument();
+    expect(screen.getByText('4-team league').closest('section')).toHaveClass(
+      'bg-[color:var(--league-surface)]'
+    );
 
     await waitFor(() => {
       expect(screen.getByText('Midfield upgrade')).toBeInTheDocument();

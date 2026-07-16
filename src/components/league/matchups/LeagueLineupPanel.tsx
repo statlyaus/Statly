@@ -96,9 +96,20 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
     saveAbortControllerRef.current = null;
     saveGenerationRef.current += 1;
     setIsSaving(false);
+    setIsLoading(true);
+    setAssignments([]);
+    setRosterPlayers([]);
+    setLineupSlots(normalizeLineupBuilderSlots(null));
+    setInterchangeSlots(0);
+    setContext(null);
+    setSelectedPlayerId(null);
+    setSetupRequired(false);
+    setCanManageCompetition(false);
+    setHasSavedLineup(false);
+    persistedAssignmentsRef.current = '';
+    failedSaveAssignmentsRef.current = null;
 
     async function loadLineup() {
-      setIsLoading(true);
       setMessage(null);
       try {
         const response = await authenticatedFetch(

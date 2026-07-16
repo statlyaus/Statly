@@ -105,6 +105,29 @@ describe('LeagueLineupPanel reliability', () => {
     expect(screen.queryByText('Stale Player')).not.toBeInTheDocument();
   });
 
+  it('clears the previous league before a replacement league load fails', async () => {
+    authenticatedFetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') return Promise.resolve(response({ success: true }));
+      if (url.includes('league-2')) {
+        return Promise.resolve(
+          response({ success: false, error: 'Second league unavailable.' }, false)
+        );
+      }
+      return Promise.resolve(response(lineupPayload('OPEN', 'First League Player')));
+    });
+
+    const { rerender } = render(<LeagueLineupPanel leagueId="league-1" currentUserId="user-1" />);
+    expect(await screen.findByText('First League Player')).toBeInTheDocument();
+
+    rerender(<LeagueLineupPanel leagueId="league-2" currentUserId="user-1" />);
+
+    expect(await screen.findByText('Second league unavailable.')).toBeInTheDocument();
+    expect(screen.queryByText('First League Player')).not.toBeInTheDocument();
+    expect(
+      authenticatedFetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')
+    ).toHaveLength(0);
+  });
+
   it.each(['LOCKED', 'NO_MATCHUP'] as const)(
     'does not mutate or autosave a %s lineup',
     async (lockState) => {

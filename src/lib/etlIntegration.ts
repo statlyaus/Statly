@@ -2,6 +2,7 @@
 // Place this in src/lib/etlIntegration.ts
 
 import { db } from '@/lib/firebaseClient';
+import { logger } from '@/lib/logger';
 import {
   collection,
   query,
@@ -157,7 +158,7 @@ export async function getLivePlayerStats(season?: number): Promise<ETLPlayerStat
       } as ETLPlayerStats;
     });
   } catch (error) {
-    console.error('Error fetching live player stats:', error);
+    logger.error('Failed to fetch live player stats', error, { season: currentSeason });
     return [];
   }
 }
@@ -179,7 +180,7 @@ export async function getRoundPlayerStatsResult(
       stats: snapshot.docs.map((document) => document.data() as ETLPlayerStats),
     };
   } catch (error) {
-    console.error(`Error fetching player statistics for ${season} R${round}:`, error);
+    logger.error('Failed to fetch round player statistics', error, { season, round });
     return { ok: false, error };
   }
 }
