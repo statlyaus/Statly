@@ -139,7 +139,9 @@ export default function LeagueTabs({
 
   const currentMember = members.find((member) => member.userId === currentUserId);
   const selectedPlayerId = searchParams?.get('playerId') ?? null;
-  const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
+  const isLeagueOwner = Boolean(currentUserId) && currentUserId === league.ownerId;
+  const isAdmin =
+    isLeagueOwner || currentMember?.role === 'owner' || currentMember?.role === 'manager';
   const isCoCommissioner = currentMember?.isCoCommissioner === true;
   const canAccessCompetitionRules = isAdmin || isCoCommissioner;
   const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;

@@ -106,6 +106,16 @@ describe('LeagueTabs co-commissioner competition access', () => {
     });
   });
 
+  it('keeps the league owner authorized when no membership row is loaded', async () => {
+    render(<LeagueTabs league={league} members={[]} currentUserId="owner-user" />);
+
+    expect(await screen.findByTestId('competition-settings-panel')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'League Settings' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+  });
+
   it('maps a direct protected league-settings URL to team settings for ordinary members', async () => {
     render(<LeagueTabs league={league} members={[ordinaryMember]} currentUserId="member-user" />);
 

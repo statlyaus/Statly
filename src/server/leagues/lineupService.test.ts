@@ -258,7 +258,7 @@ describe('save boundary invariants', () => {
     }
   );
 
-  it.each(['NO_MATCHUP', 'FINAL'])(
+  it.each(['NO_MATCHUP', 'LOCKED', 'FINAL'])(
     'rejects when the round becomes %s at the transactional save boundary',
     async (status) => {
       mocks.prisma.league.findUnique

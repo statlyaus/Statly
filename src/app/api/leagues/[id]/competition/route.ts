@@ -43,6 +43,17 @@ function parsePositiveRound(value: unknown): number | null {
   return Number.isSafeInteger(round) ? round : null;
 }
 
+async function parseRequestObject(request: NextRequest): Promise<Record<string, unknown> | null> {
+  const body: unknown = await request.json().catch(() => null);
+  return body !== null && typeof body === 'object' && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : null;
+}
+
+function invalidMutationBodyResponse() {
+  return NextResponse.json({ error: 'A valid JSON object is required.' }, { status: 400 });
+}
+
 async function authorizeCompetitionRequest(request: NextRequest, leagueId: string) {
   const userId = await getAuthenticatedUserId(request);
   if (!userId) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
@@ -164,7 +175,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     );
   }
 
-  const body = (await request.json()) as { rules?: unknown };
+  const body = await parseRequestObject(request);
+  if (!body) return invalidMutationBodyResponse();
   const categories = parseCategories(authorization.league.categoriesJson);
   const rules = normalizeCompetitionRules(body.rules, categories[0] ?? 'goals');
 
@@ -183,7 +195,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!authorization.canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!authorization.member) return missingActorMemberResponse();
 
-  const body = (await request.json().catch(() => ({}))) as { rules?: unknown };
+  const body = await parseRequestObject(request);
+  if (!body) return invalidMutationBodyResponse();
   const categories = parseCategories(authorization.league.categoriesJson);
   const rules: CompetitionRules =
     body.rules === undefined
