@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
@@ -12,6 +13,7 @@ interface LeagueStandingsPanelProps {
 interface StandingRow {
   id?: string;
   memberId: string;
+  teamName: string;
   wins: number;
   losses: number;
   draws: number;
@@ -78,19 +80,26 @@ export function LeagueStandingsPanel({ leagueId, currentUserId }: LeagueStanding
                 <th className="px-3 py-2">Team</th>
                 <th className="px-3 py-2">Record</th>
                 <th className="px-3 py-2">Category record</th>
-                <th className="px-3 py-2">PF</th>
-                <th className="px-3 py-2">PA</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[color:var(--league-border)]">
               {rows.map((row, index) => (
-                <tr key={row.id ?? row.memberId}>
+                <tr
+                  key={row.id ?? row.memberId}
+                  className="transition-colors hover:bg-[color:var(--league-surface-muted)]"
+                >
                   <td className="px-3 py-2">{index + 1}</td>
-                  <td className="px-3 py-2">{row.memberId}</td>
+                  <td className="px-3 py-2 font-medium">
+                    <Link
+                      href={`/leagues/${encodeURIComponent(leagueId)}/teams/${encodeURIComponent(row.memberId)}`}
+                      aria-label={`View ${row.teamName} roster`}
+                      className="text-[color:var(--league-primary)] underline decoration-transparent underline-offset-4 transition-colors hover:decoration-current focus:outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                    >
+                      {row.teamName}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2">{`${row.wins}-${row.losses}-${row.draws}`}</td>
                   <td className="px-3 py-2">{`${row.categoryWins}-${row.categoryLosses}-${row.categoryDraws}`}</td>
-                  <td className="px-3 py-2">{row.pointsFor.toFixed(1)}</td>
-                  <td className="px-3 py-2">{row.pointsAgainst.toFixed(1)}</td>
                 </tr>
               ))}
             </tbody>

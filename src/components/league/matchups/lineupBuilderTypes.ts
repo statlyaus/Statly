@@ -36,7 +36,7 @@ export interface LineupAssignment {
 
 export interface LineupFieldSpot {
   id: string;
-  slot: ActiveLineupSlot;
+  slot: LeagueLineupSlot;
   slotIndex: number;
   label: string;
 }

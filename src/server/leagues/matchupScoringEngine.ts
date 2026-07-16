@@ -44,7 +44,7 @@ export function aggregateLineupCategoryTotals(
   }
 
   for (const player of input.players) {
-    if (player.slot === 'BENCH') continue;
+    if (player.slot === 'BENCH' || player.slot === 'INTERCHANGE') continue;
 
     for (const category of input.categories) {
       totals[category] = readTotal(totals, category) + readTotal(player.totals, category);
