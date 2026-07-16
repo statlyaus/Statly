@@ -56,7 +56,10 @@ describe('league settings UI architecture', () => {
     const leagueTabsSource = source();
 
     expect(leagueTabsSource).toContain(
-      "const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager'"
+      'const isLeagueOwner = Boolean(currentUserId) && currentUserId === league.ownerId;'
+    );
+    expect(leagueTabsSource).toContain(
+      "isLeagueOwner || currentMember?.role === 'owner' || currentMember?.role === 'manager';"
     );
     expect(leagueTabsSource).toContain('<fieldset disabled={!isAdmin || isSaving}');
     expect(leagueTabsSource).toContain('if (!isAdmin) return;');

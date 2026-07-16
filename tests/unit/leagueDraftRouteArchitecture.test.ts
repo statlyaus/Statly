@@ -25,7 +25,10 @@ describe('league draft route architecture', () => {
   });
 
   it('keeps draft creation league-scoped without hidden link reconciliation', () => {
-    const draftRouteSource = readFileSync(join(process.cwd(), 'src/app/api/drafts/route.ts'), 'utf8');
+    const draftRouteSource = readFileSync(
+      join(process.cwd(), 'src/app/api/drafts/route.ts'),
+      'utf8'
+    );
     const draftManagerSource = readFileSync(
       join(process.cwd(), 'src/components/league/DraftManager.tsx'),
       'utf8'
@@ -46,7 +49,10 @@ describe('league draft route architecture', () => {
     );
 
     expect(leagueTabsSource).toContain(
-      "const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';"
+      'const isLeagueOwner = Boolean(currentUserId) && currentUserId === league.ownerId;'
+    );
+    expect(leagueTabsSource).toContain(
+      "isLeagueOwner || currentMember?.role === 'owner' || currentMember?.role === 'manager';"
     );
     expect(leagueTabsSource).not.toContain(
       "members.find((m) => m.userId === currentUserId)?.role === 'owner'"
