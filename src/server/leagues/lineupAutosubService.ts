@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { logLeagueActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -100,12 +99,16 @@ export async function resolveAndPersistLineupAutosubs({
     });
   });
 
-  void logLeagueActivity(leagueId, 'lineup-autosubs-resolved', {
-    lineupId,
-    decisions: resolution.decisions,
-  }).catch((error: unknown) => {
-    logger.warn('Failed to record lineup autosub activity', { leagueId, lineupId, error });
-  });
+  void import('@/lib/activity')
+    .then(({ logLeagueActivity }) =>
+      logLeagueActivity(leagueId, 'lineup-autosubs-resolved', {
+        lineupId,
+        decisions: resolution.decisions,
+      })
+    )
+    .catch((error: unknown) => {
+      logger.warn('Failed to record lineup autosub activity', { leagueId, lineupId, error });
+    });
 
   const slotByPlayerId = new Map<string, Pick<LineupPlayerAssignment, 'slot' | 'slotIndex'>>();
   for (const assignment of resolution.activeAssignments) {

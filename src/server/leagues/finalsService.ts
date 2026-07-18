@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { logLeagueActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -89,16 +88,20 @@ export async function synchronizeFinalsFixtures({
   });
 
   if (updated > 0) {
-    void logLeagueActivity(leagueId, 'competition-finals-updated', {
-      fixtureVersion,
-      updated,
-    }).catch((error: unknown) => {
-      logger.warn('Failed to record finals progression activity', {
-        leagueId,
-        fixtureVersion,
-        error,
+    void import('@/lib/activity')
+      .then(({ logLeagueActivity }) =>
+        logLeagueActivity(leagueId, 'competition-finals-updated', {
+          fixtureVersion,
+          updated,
+        })
+      )
+      .catch((error: unknown) => {
+        logger.warn('Failed to record finals progression activity', {
+          leagueId,
+          fixtureVersion,
+          error,
+        });
       });
-    });
   }
 
   return { updated };
