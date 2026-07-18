@@ -1,5 +1,6 @@
 'use client';
 
+import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
@@ -27,6 +28,7 @@ type CompetitionSnapshot = {
   fixtureVersion: number;
   publishedAt: string | null;
   rules: CompetitionRules;
+  teams: Array<{ id: string; teamName: string; draftSlot: number | null }>;
   rounds: Array<{
     id: string;
     round: number;
@@ -38,12 +40,22 @@ type CompetitionSnapshot = {
     matchups: Array<{
       id: string;
       bracketKey: string | null;
+      homeMemberId: string | null;
+      awayMemberId: string | null;
+      byeMemberId: string | null;
       homeTeam: string | null;
       awayTeam: string | null;
       byeTeam: string | null;
     }>;
   }>;
   audit: Array<{ id: string; eventType: string; actorTeamName: string | null; createdAt: string }>;
+};
+
+type FixtureDraft = {
+  matchupId: string | null;
+  homeMemberId: string;
+  awayMemberId: string;
+  byeMemberId: string;
 };
 
 interface CompetitionSettingsPanelProps {
@@ -88,6 +100,7 @@ export function CompetitionSettingsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [fallbackRound, setFallbackRound] = useState('');
   const [fallbackLockAt, setFallbackLockAt] = useState('');
+  const [fixtureDrafts, setFixtureDrafts] = useState<Record<string, FixtureDraft>>({});
   const loadGenerationRef = useRef(0);
   const loadAbortControllerRef = useRef<AbortController | null>(null);
   const mutationGenerationRef = useRef(0);
@@ -128,6 +141,25 @@ export function CompetitionSettingsPanel({
       setRules(nextSnapshot.rules);
       onFixtureGenerationModeChange(nextSnapshot.rules.fixtureGenerationMode);
       setExcludedRounds(nextSnapshot.rules.excludedAflRounds.join(', '));
+      setFixtureDrafts(
+        Object.fromEntries(
+          nextSnapshot.rounds.flatMap((competitionRound) => [
+            ...competitionRound.matchups.map((matchup) => [
+              matchup.id,
+              {
+                matchupId: matchup.id,
+                homeMemberId: matchup.homeMemberId ?? '',
+                awayMemberId: matchup.awayMemberId ?? '',
+                byeMemberId: matchup.byeMemberId ?? '',
+              },
+            ]),
+            [
+              `new-${competitionRound.round}`,
+              { matchupId: null, homeMemberId: '', awayMemberId: '', byeMemberId: '' },
+            ],
+          ])
+        )
+      );
       if (!preserveMessage) setMessage(null);
     } catch (error) {
       if (
@@ -282,6 +314,7 @@ export function CompetitionSettingsPanel({
           signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            action: 'SET_DEADLINE',
             round: Number(fallbackRound),
             fallbackLockAt: new Date(fallbackLockAt).toISOString(),
           }),
@@ -305,6 +338,111 @@ export function CompetitionSettingsPanel({
         return;
       }
       setMessage(error instanceof Error ? error.message : 'Failed to set the fallback deadline.');
+    } finally {
+      if (generation === mutationGenerationRef.current) {
+        if (mutationAbortControllerRef.current === controller) {
+          mutationAbortControllerRef.current = null;
+        }
+        setIsSaving(false);
+      }
+    }
+  }
+
+  async function saveFixture(round: number, draftKey: string) {
+    const draft = fixtureDrafts[draftKey];
+    if (!draft) return;
+    const controller = new AbortController();
+    const generation = mutationGenerationRef.current + 1;
+    mutationGenerationRef.current = generation;
+    mutationAbortControllerRef.current?.abort();
+    mutationAbortControllerRef.current = controller;
+    setMessage(null);
+    setIsSaving(true);
+    try {
+      const response = await authenticatedFetch(
+        `/api/leagues/${leagueId}/competition`,
+        {
+          method: 'PATCH',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'SAVE_FIXTURE',
+            round,
+            fixture: {
+              matchupId: draft.matchupId,
+              homeMemberId: draft.homeMemberId || null,
+              awayMemberId: draft.awayMemberId || null,
+              byeMemberId: draft.byeMemberId || null,
+            },
+          }),
+        },
+        currentUserId
+      );
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? 'Failed to save the fixture.');
+      }
+      if (controller.signal.aborted || generation !== mutationGenerationRef.current) return;
+      setMessage(`Round ${round} fixture saved. Affected lineups and standings were reset.`);
+      await loadSnapshot({ preserveMessage: true });
+    } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== mutationGenerationRef.current ||
+        isAbortError(error)
+      ) {
+        return;
+      }
+      setMessage(error instanceof Error ? error.message : 'Failed to save the fixture.');
+    } finally {
+      if (generation === mutationGenerationRef.current) {
+        if (mutationAbortControllerRef.current === controller) {
+          mutationAbortControllerRef.current = null;
+        }
+        setIsSaving(false);
+      }
+    }
+  }
+
+  async function deleteFixture(round: number, matchupId: string) {
+    const controller = new AbortController();
+    const generation = mutationGenerationRef.current + 1;
+    mutationGenerationRef.current = generation;
+    mutationAbortControllerRef.current?.abort();
+    mutationAbortControllerRef.current = controller;
+    setMessage(null);
+    setIsSaving(true);
+    try {
+      const response = await authenticatedFetch(
+        `/api/leagues/${leagueId}/competition`,
+        {
+          method: 'PATCH',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'DELETE_FIXTURE',
+            round,
+            matchupId,
+          }),
+        },
+        currentUserId
+      );
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? 'Failed to delete the fixture.');
+      }
+      if (controller.signal.aborted || generation !== mutationGenerationRef.current) return;
+      setMessage(`Round ${round} fixture deleted.`);
+      await loadSnapshot({ preserveMessage: true });
+    } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== mutationGenerationRef.current ||
+        isAbortError(error)
+      ) {
+        return;
+      }
+      setMessage(error instanceof Error ? error.message : 'Failed to delete the fixture.');
     } finally {
       if (generation === mutationGenerationRef.current) {
         if (mutationAbortControllerRef.current === controller) {
@@ -433,7 +571,7 @@ export function CompetitionSettingsPanel({
             className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
           >
             <option value="INDIVIDUAL_GAME_START">Each player at AFL game start</option>
-            <option value="THURSDAY_7PM_AEST">Thursday 7:00 pm AEST</option>
+            <option value="THURSDAY_7PM_AEST">Thursday 7:00 pm in league timezone</option>
           </select>
         </label>
         <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
@@ -516,7 +654,7 @@ export function CompetitionSettingsPanel({
             {formatDate(snapshot.publishedAt)}. Rules are read-only after publication.
           </p>
           {canManage ? (
-            <div className="grid gap-3 rounded-md border border-[color:var(--league-border)] p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <div className="grid gap-3 border border-[color:var(--league-border)] p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
               <label className="flex flex-col gap-2 text-sm font-medium text-[color:var(--league-text)]">
                 Round-wide fallback deadline
                 <select
@@ -554,6 +692,188 @@ export function CompetitionSettingsPanel({
               </button>
             </div>
           ) : null}
+          <div className="border-t border-[color:var(--league-border)] pt-4">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h4 className="font-semibold text-[color:var(--league-text)]">Fixtures</h4>
+                <p className="mt-1">
+                  Inspect every published round. Commissioners can add, replace, and remove
+                  regular-season fixtures before finalization. Finals participants advance
+                  automatically from results.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 divide-y divide-[color:var(--league-border)] border-y border-[color:var(--league-border)]">
+              {snapshot.rounds.map((competitionRound) => {
+                if (competitionRound.status === 'NO_MATCHUP') {
+                  return (
+                    <div key={competitionRound.id} className="px-3 py-4">
+                      <p className="font-semibold text-[color:var(--league-text)]">
+                        Round {competitionRound.round}: no matchup week
+                      </p>
+                    </div>
+                  );
+                }
+
+                const rows = [
+                  ...competitionRound.matchups.map((matchup) => ({
+                    key: matchup.id,
+                    matchup,
+                  })),
+                  ...(canManage && competitionRound.phase === 'REGULAR'
+                    ? [
+                        {
+                          key: `new-${competitionRound.round}`,
+                          matchup: null,
+                        },
+                      ]
+                    : []),
+                ];
+
+                return (
+                  <section key={competitionRound.id} className="px-3 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h5 className="font-semibold text-[color:var(--league-text)]">
+                        Round {competitionRound.round}
+                        {competitionRound.aflRound
+                          ? ` · AFL Round ${competitionRound.aflRound}`
+                          : ''}
+                      </h5>
+                      <span className="text-xs font-semibold uppercase">
+                        {competitionRound.phase}
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      {rows.map(({ key, matchup }) => {
+                        const draft = fixtureDrafts[key];
+                        if (!draft) return null;
+                        const label = matchup?.bracketKey
+                          ? matchup.bracketKey.replaceAll('_', ' ')
+                          : matchup
+                            ? 'Fixture'
+                            : 'New fixture';
+
+                        return (
+                          <div
+                            key={key}
+                            className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
+                          >
+                            <label className="flex flex-col gap-1 font-medium text-[color:var(--league-text)]">
+                              {label} home
+                              <select
+                                value={draft.homeMemberId}
+                                disabled={!canManage || isSaving || Boolean(matchup?.bracketKey)}
+                                onChange={(event) =>
+                                  setFixtureDrafts((current) => ({
+                                    ...current,
+                                    [key]: {
+                                      ...draft,
+                                      homeMemberId: event.target.value,
+                                      byeMemberId: event.target.value ? '' : draft.byeMemberId,
+                                    },
+                                  }))
+                                }
+                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+                              >
+                                <option value="">Unassigned</option>
+                                {snapshot.teams.map((team) => (
+                                  <option key={team.id} value={team.id}>
+                                    {team.teamName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 font-medium text-[color:var(--league-text)]">
+                              Away
+                              <select
+                                value={draft.awayMemberId}
+                                disabled={!canManage || isSaving || Boolean(matchup?.bracketKey)}
+                                onChange={(event) =>
+                                  setFixtureDrafts((current) => ({
+                                    ...current,
+                                    [key]: {
+                                      ...draft,
+                                      awayMemberId: event.target.value,
+                                      byeMemberId: event.target.value ? '' : draft.byeMemberId,
+                                    },
+                                  }))
+                                }
+                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+                              >
+                                <option value="">Unassigned</option>
+                                {snapshot.teams.map((team) => (
+                                  <option key={team.id} value={team.id}>
+                                    {team.teamName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 font-medium text-[color:var(--league-text)]">
+                              Bye team
+                              <select
+                                value={draft.byeMemberId}
+                                disabled={!canManage || isSaving || Boolean(matchup?.bracketKey)}
+                                onChange={(event) =>
+                                  setFixtureDrafts((current) => ({
+                                    ...current,
+                                    [key]: {
+                                      ...draft,
+                                      byeMemberId: event.target.value,
+                                      homeMemberId: event.target.value ? '' : draft.homeMemberId,
+                                      awayMemberId: event.target.value ? '' : draft.awayMemberId,
+                                    },
+                                  }))
+                                }
+                                className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3"
+                              >
+                                <option value="">Not a bye</option>
+                                {snapshot.teams.map((team) => (
+                                  <option key={team.id} value={team.id}>
+                                    {team.teamName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            {canManage && !matchup?.bracketKey ? (
+                              <div className="flex h-10 items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void saveFixture(competitionRound.round, key)}
+                                  disabled={
+                                    isSaving ||
+                                    (!draft.byeMemberId &&
+                                      (!draft.homeMemberId || !draft.awayMemberId))
+                                  }
+                                  className="inline-flex h-10 items-center gap-2 rounded-md bg-[color:var(--league-primary)] px-3 font-semibold text-[color:var(--league-primary-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] disabled:opacity-60"
+                                >
+                                  {matchup ? null : <Plus aria-hidden="true" className="h-4 w-4" />}
+                                  {matchup ? 'Save' : 'Add'}
+                                </button>
+                                {matchup && !matchup.bracketKey ? (
+                                  <button
+                                    type="button"
+                                    aria-label={`Delete ${label} from round ${competitionRound.round}`}
+                                    title="Delete fixture"
+                                    onClick={() =>
+                                      void deleteFixture(competitionRound.round, matchup.id)
+                                    }
+                                    disabled={isSaving}
+                                    className="inline-flex size-10 items-center justify-center rounded-md border border-[color:var(--league-border)] text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                                  >
+                                    <Trash2 aria-hidden="true" className="h-4 w-4" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </div>
         </div>
       ) : null}
     </section>

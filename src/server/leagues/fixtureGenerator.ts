@@ -74,7 +74,7 @@ export function generateRoundRobinFixtures(memberIds: readonly string[]): League
   return fixtures;
 }
 
-function finalsBracketKeys(finalsTeams: GenerateCompetitionScheduleInput['finalsTeams']) {
+export function finalsBracketKeys(finalsTeams: GenerateCompetitionScheduleInput['finalsTeams']) {
   switch (finalsTeams) {
     case 4:
       return [['SF_1_V_4', 'SF_2_V_3'], ['GF']];
@@ -90,6 +90,69 @@ function finalsBracketKeys(finalsTeams: GenerateCompetitionScheduleInput['finals
     default:
       return [];
   }
+}
+
+export function generateManualCompetitionSchedule({
+  fixtureVersion,
+  seasonStartAflRound,
+  regularSeasonRounds,
+  excludedAflRounds,
+  finalsTeams,
+}: Omit<GenerateCompetitionScheduleInput, 'memberIds'>): GeneratedCompetitionRound[] {
+  const excludedRounds = new Set(excludedAflRounds);
+  const generatedRounds: GeneratedCompetitionRound[] = [];
+  let fantasyRound = 0;
+  let playableRoundCount = 0;
+  let aflRound = seasonStartAflRound;
+
+  while (playableRoundCount < regularSeasonRounds) {
+    fantasyRound += 1;
+    const isExcluded = excludedRounds.has(aflRound);
+    generatedRounds.push({
+      round: fantasyRound,
+      aflRound,
+      phase: 'REGULAR',
+      status: isExcluded ? 'NO_MATCHUP' : 'SCHEDULED',
+      fixtures: [],
+    });
+    if (!isExcluded) playableRoundCount += 1;
+    aflRound += 1;
+  }
+
+  for (const bracketRound of finalsBracketKeys(finalsTeams)) {
+    while (excludedRounds.has(aflRound)) {
+      fantasyRound += 1;
+      generatedRounds.push({
+        round: fantasyRound,
+        aflRound,
+        phase: 'FINALS',
+        status: 'NO_MATCHUP',
+        fixtures: [],
+      });
+      aflRound += 1;
+    }
+
+    fantasyRound += 1;
+    generatedRounds.push({
+      round: fantasyRound,
+      aflRound,
+      phase: 'FINALS',
+      status: 'SCHEDULED',
+      fixtures: bracketRound.map((bracketKey) => ({
+        round: fantasyRound,
+        homeMemberId: null,
+        awayMemberId: null,
+        byeMemberId: null,
+        fixtureVersion,
+        aflRound,
+        phase: 'FINALS',
+        bracketKey,
+      })),
+    });
+    aflRound += 1;
+  }
+
+  return generatedRounds;
 }
 
 export function generateCompetitionSchedule({

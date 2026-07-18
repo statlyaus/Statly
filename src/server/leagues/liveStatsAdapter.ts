@@ -20,6 +20,7 @@ export interface NormalizedLiveStatRow {
   gameStartsAt: Date | null;
   gameStatus: NormalizedGameStatus;
   statusUnavailable: boolean;
+  confirmedDidNotPlay: boolean;
   totals: CategoryTotals;
   lastSeenAt: Date | null;
 }
@@ -83,6 +84,16 @@ function readNumber(source: RawValueRecord, keys: readonly string[]): number {
   return 0;
 }
 
+function readOptionalNumber(source: RawValueRecord, keys: readonly string[]): number | null {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value)))
+      return Number(value);
+  }
+  return null;
+}
+
 function readDate(source: RawValueRecord, keys: readonly string[]): Date | null {
   for (const key of keys) {
     const value = source[key];
@@ -128,6 +139,10 @@ export function normalizeLiveStatRows(rows: readonly RawLiveStatRow[]): Normaliz
     const gameStartsAt = readDate(row, ['start_time_utc', 'startsAt', 'matchDate', 'match_date']);
     const gameStatus = normalizeStatus(row.status);
     const matchId = readString(row, ['match_uid', 'match_id', 'matchUid', 'matchId']);
+    const nestedStats =
+      row.stats && typeof row.stats === 'object' ? (row.stats as RawValueRecord) : {};
+    const minutes =
+      readOptionalNumber(nestedStats, ['minutes']) ?? readOptionalNumber(row, ['minutes']);
 
     return {
       playerId,
@@ -137,6 +152,7 @@ export function normalizeLiveStatRows(rows: readonly RawLiveStatRow[]): Normaliz
       gameStartsAt,
       gameStatus,
       statusUnavailable: !gameStartsAt && gameStatus === 'unknown',
+      confirmedDidNotPlay: minutes === 0,
       totals: readCategoryTotals(row),
       lastSeenAt: readDate(row, ['last_seen_at', 'lastSeenAt']),
     };

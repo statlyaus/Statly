@@ -67,6 +67,7 @@ export interface ETLMatch {
   away_team: string;
   start_time_utc: string;
   status: 'scheduled' | 'in_progress' | 'final';
+  confirmed_bye_teams?: string[];
   provider_ids?: Record<string, unknown>;
 }
 

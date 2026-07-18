@@ -136,16 +136,22 @@ describe('publishCompetition', () => {
     expect(txMocks.leagueCompetitionRound.deleteMany).not.toHaveBeenCalled();
   });
 
-  it('publishes manual fixture rules without silently generating round-robin matchups', async () => {
+  it('publishes editable manual round shells without generating round-robin matchups', async () => {
     const result = await publishCompetition({
       leagueId: 'league-1',
       actorMemberId: 'member-owner',
       rules: { ...rules, fixtureGenerationMode: 'MANUAL' },
     });
 
-    expect(result).toEqual({ ok: true, fixtureVersion: 5, roundCount: 0 });
-    expect(etlMocks.getRoundMatches).not.toHaveBeenCalled();
-    expect(txMocks.leagueCompetitionRound.create).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true, fixtureVersion: 5, roundCount: 1 });
+    expect(etlMocks.getRoundMatches).toHaveBeenCalledWith(expect.any(Number), 1);
+    expect(txMocks.leagueCompetitionRound.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        fixtureVersion: 5,
+        round: 1,
+        phase: 'REGULAR',
+      }),
+    });
     expect(txMocks.leagueMatchup.createMany).not.toHaveBeenCalled();
     expect(txMocks.leagueSettings.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ competitionStatus: 'PENDING' }) })

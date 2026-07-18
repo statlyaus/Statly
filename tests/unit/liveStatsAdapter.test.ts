@@ -70,6 +70,20 @@ describe('liveStatsAdapter', () => {
     expect(rows[0].gameStatus).toBe('unknown');
   });
 
+  it('confirms a player did not play only when the feed reports zero minutes', () => {
+    const rows = normalizeLiveStatRows([
+      { player_uid: 'did-not-play', stats: { minutes: 0, goals: 0 } },
+      { player_uid: 'played', stats: { minutes: 1, goals: 0 } },
+      { player_uid: 'unknown', stats: { goals: 0 } },
+    ]);
+
+    expect(rows.map((row) => [row.playerId, row.confirmedDidNotPlay])).toEqual([
+      ['did-not-play', true],
+      ['played', false],
+      ['unknown', false],
+    ]);
+  });
+
   it('normalizes round match final and live status variants', () => {
     const status = normalizeRoundMatchStatus([
       { match_uid: 'm1', status: 'completed', start_time_utc: '2026-07-04T08:00:00.000Z' },

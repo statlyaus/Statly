@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   updateLeagueSettings: vi.fn(),
   publishCompetition: vi.fn(),
   setCompetitionRoundFallbackDeadline: vi.fn(),
+  saveCompetitionFixture: vi.fn(),
+  deleteCompetitionFixture: vi.fn(),
 }));
 
 vi.mock('@/lib/serverAuth', () => ({
@@ -31,6 +33,8 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/server/leagues/competitionService', () => ({
   publishCompetition: mocks.publishCompetition,
   setCompetitionRoundFallbackDeadline: mocks.setCompetitionRoundFallbackDeadline,
+  saveCompetitionFixture: mocks.saveCompetitionFixture,
+  deleteCompetitionFixture: mocks.deleteCompetitionFixture,
 }));
 
 import { PATCH, POST, PUT } from '@/app/api/leagues/[id]/competition/route';
@@ -62,6 +66,8 @@ describe('league matchup API route architecture', () => {
     mocks.updateLeagueSettings.mockReset();
     mocks.publishCompetition.mockReset();
     mocks.setCompetitionRoundFallbackDeadline.mockReset();
+    mocks.saveCompetitionFixture.mockReset();
+    mocks.deleteCompetitionFixture.mockReset();
   });
 
   it('keeps routes league-scoped, authorization-gated, and service-backed', () => {
@@ -98,7 +104,7 @@ describe('league matchup API route architecture', () => {
     expect(competitionRoute).toContain('export async function PATCH');
   });
 
-  it('returns 400 for malformed fallback-deadline JSON without invoking the service', async () => {
+  it('returns 400 for malformed competition mutation JSON without invoking a service', async () => {
     const request = new NextRequest('http://localhost/api/leagues/league-1/competition', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -111,9 +117,48 @@ describe('league matchup API route architecture', () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: 'A valid round and fallback deadline are required.',
+      error: 'A valid JSON object is required.',
     });
     expect(mocks.setCompetitionRoundFallbackDeadline).not.toHaveBeenCalled();
+  });
+
+  it('dispatches the current save-fixture action contract', async () => {
+    mocks.saveCompetitionFixture.mockResolvedValue({
+      ok: true,
+      fixture: {
+        id: 'fixture-1',
+        round: 2,
+        homeMemberId: 'member-1',
+        awayMemberId: 'member-2',
+        byeMemberId: null,
+      },
+    });
+    const request = new NextRequest('http://localhost/api/leagues/league-1/competition', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'SAVE_FIXTURE',
+        round: 2,
+        fixture: { homeMemberId: 'member-1', awayMemberId: 'member-2' },
+      }),
+    });
+
+    const response = requireResponse(
+      await PATCH(request, { params: Promise.resolve({ id: 'league-1' }) })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.saveCompetitionFixture).toHaveBeenCalledWith({
+      leagueId: 'league-1',
+      round: 2,
+      actorMemberId: 'member-1',
+      fixture: {
+        matchupId: null,
+        homeMemberId: 'member-1',
+        awayMemberId: 'member-2',
+        byeMemberId: null,
+      },
+    });
   });
 
   it('returns 400 for a non-object rules payload without saving competition settings', async () => {

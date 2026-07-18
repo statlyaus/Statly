@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   generateCompetitionSchedule,
+  generateManualCompetitionSchedule,
   generateRoundRobinFixtures,
 } from '@/server/leagues/fixtureGenerator';
 
@@ -44,6 +45,44 @@ describe('generateCompetitionSchedule', () => {
     });
     expect(schedule[2]).toMatchObject({ round: 3, aflRound: 3, phase: 'FINALS' });
     expect(schedule[2]?.fixtures.map((fixture) => fixture.bracketKey)).toEqual([
+      'SF_1_V_4',
+      'SF_2_V_3',
+    ]);
+  });
+
+  it('creates editable round shells for manual competitions', () => {
+    const schedule = generateManualCompetitionSchedule({
+      fixtureVersion: 4,
+      seasonStartAflRound: 3,
+      regularSeasonRounds: 2,
+      excludedAflRounds: [4],
+      finalsTeams: 4,
+    });
+
+    expect(schedule.slice(0, 3)).toEqual([
+      expect.objectContaining({
+        round: 1,
+        aflRound: 3,
+        phase: 'REGULAR',
+        status: 'SCHEDULED',
+        fixtures: [],
+      }),
+      expect.objectContaining({
+        round: 2,
+        aflRound: 4,
+        phase: 'REGULAR',
+        status: 'NO_MATCHUP',
+        fixtures: [],
+      }),
+      expect.objectContaining({
+        round: 3,
+        aflRound: 5,
+        phase: 'REGULAR',
+        status: 'SCHEDULED',
+        fixtures: [],
+      }),
+    ]);
+    expect(schedule[3]?.fixtures.map((fixture) => fixture.bracketKey)).toEqual([
       'SF_1_V_4',
       'SF_2_V_3',
     ]);

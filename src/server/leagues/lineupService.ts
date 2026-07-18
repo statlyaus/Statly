@@ -122,17 +122,87 @@ export function isLineupPlayerLocked(
   return Boolean(gameStartsAt && gameStartsAt.getTime() <= now.getTime());
 }
 
-function resolveThursdayAestLock(startsAt: Date | null): Date | null {
+interface ZonedDateTimeParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function getZonedDateTimeParts(date: Date, timeZone: string): ZonedDateTimeParts {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    calendar: 'iso8601',
+    numberingSystem: 'latn',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const values = new Map(parts.map((part) => [part.type, Number(part.value)]));
+
+  return {
+    year: values.get('year')!,
+    month: values.get('month')!,
+    day: values.get('day')!,
+    hour: values.get('hour')!,
+    minute: values.get('minute')!,
+    second: values.get('second')!,
+  };
+}
+
+function zonedDateTimeToUtc(parts: ZonedDateTimeParts, timeZone: string): Date {
+  const intendedWallTime = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+  let candidateTime = intendedWallTime;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const observed = getZonedDateTimeParts(new Date(candidateTime), timeZone);
+    const observedWallTime = Date.UTC(
+      observed.year,
+      observed.month - 1,
+      observed.day,
+      observed.hour,
+      observed.minute,
+      observed.second
+    );
+    const adjustment = intendedWallTime - observedWallTime;
+    if (adjustment === 0) return new Date(candidateTime);
+    candidateTime += adjustment;
+  }
+
+  throw new RangeError(`Unable to resolve lineup lock time in ${timeZone}.`);
+}
+
+function resolveThursdayLock(startsAt: Date | null, timeZone: string): Date | null {
   if (!startsAt) return null;
 
-  const anchor = new Date(
-    Date.UTC(startsAt.getUTCFullYear(), startsAt.getUTCMonth(), startsAt.getUTCDate())
-  );
+  const localStart = getZonedDateTimeParts(startsAt, timeZone);
+  const anchor = new Date(Date.UTC(localStart.year, localStart.month - 1, localStart.day));
   const daysSinceThursday = (anchor.getUTCDay() + 3) % 7;
   anchor.setUTCDate(anchor.getUTCDate() - daysSinceThursday);
-  // Thursday 7 pm AEST is 09:00 UTC. This intentionally stays AEST year-round.
-  return new Date(
-    Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate(), 9, 0, 0)
+
+  return zonedDateTimeToUtc(
+    {
+      year: anchor.getUTCFullYear(),
+      month: anchor.getUTCMonth() + 1,
+      day: anchor.getUTCDate(),
+      hour: 19,
+      minute: 0,
+      second: 0,
+    },
+    timeZone
   );
 }
 
@@ -142,7 +212,7 @@ function resolveRoundLockAt(
 ) {
   if (competitionRound.fallbackLockAt) return competitionRound.fallbackLockAt;
   if (rules.lockPolicy === 'THURSDAY_7PM_AEST') {
-    return resolveThursdayAestLock(competitionRound.startsAt);
+    return resolveThursdayLock(competitionRound.startsAt, rules.leagueTimeZone);
   }
   return null;
 }

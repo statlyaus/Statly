@@ -118,8 +118,32 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
       },
     ]);
     prismaMocks.leagueLineup.findMany.mockResolvedValue([
-      { memberId: 'member-1', players: [{ playerId: 'player-1', slot: 'MID' }] },
-      { memberId: 'member-2', players: [{ playerId: 'player-2', slot: 'MID' }] },
+      {
+        id: 'lineup-1',
+        memberId: 'member-1',
+        players: [
+          {
+            id: 'assignment-1',
+            playerId: 'player-1',
+            slot: 'MID',
+            slotIndex: 0,
+            player: { club: 'GWS' },
+          },
+        ],
+      },
+      {
+        id: 'lineup-2',
+        memberId: 'member-2',
+        players: [
+          {
+            id: 'assignment-2',
+            playerId: 'player-2',
+            slot: 'MID',
+            slotIndex: 0,
+            player: { club: 'GWS' },
+          },
+        ],
+      },
     ]);
     etlMocks.getRoundPlayerStatsResult.mockResolvedValue({
       ok: true,
@@ -134,7 +158,14 @@ describe('recalculateLeagueRoundMatchups AFL round mapping', () => {
     });
     etlMocks.getRoundMatchesResult.mockResolvedValue({
       ok: true,
-      matches: [{ match_uid: 'afl-match-1', status: 'final' }],
+      matches: [
+        {
+          match_uid: 'afl-match-1',
+          status: 'final',
+          home_team: 'GWS Giants',
+          away_team: 'Collingwood',
+        },
+      ],
     });
 
     const result = await recalculateLeagueRoundMatchups({

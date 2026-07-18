@@ -21,18 +21,20 @@ export interface PersistedLeagueStanding {
 export interface LeagueStandingReadRow extends PersistedLeagueStanding {
   teamName: string;
   teamLogoUrl: string | null;
-  tieBreakCategoryWins: number;
+  tieBreakCategoryTotal: number;
   draftSlot: number | null;
 }
 
 export function buildLeagueStandings({
   members,
   standings,
-  tieBreakCategoryWinsByMemberId = new Map<string, number>(),
+  tieBreakCategoryTotalByMemberId = new Map<string, number>(),
+  tieBreakDirection = 'HIGH_WINS',
 }: {
   members: readonly CurrentLeagueMember[];
   standings: readonly PersistedLeagueStanding[];
-  tieBreakCategoryWinsByMemberId?: ReadonlyMap<string, number>;
+  tieBreakCategoryTotalByMemberId?: ReadonlyMap<string, number>;
+  tieBreakDirection?: 'HIGH_WINS' | 'LOW_WINS';
 }): LeagueStandingReadRow[] {
   const membersById = new Map(members.map((member) => [member.id, member]));
   const standingMemberIds = new Set(standings.map((standing) => standing.memberId));
@@ -46,7 +48,7 @@ export function buildLeagueStandings({
         ...standing,
         teamName: member.teamName,
         teamLogoUrl: member.teamLogoUrl,
-        tieBreakCategoryWins: tieBreakCategoryWinsByMemberId.get(member.id) ?? 0,
+        tieBreakCategoryTotal: tieBreakCategoryTotalByMemberId.get(member.id) ?? 0,
         draftSlot: member.draftSlot ?? null,
       },
     ];
@@ -67,16 +69,21 @@ export function buildLeagueStandings({
       categoryDraws: 0,
       pointsFor: 0,
       pointsAgainst: 0,
-      tieBreakCategoryWins: tieBreakCategoryWinsByMemberId.get(member.id) ?? 0,
+      tieBreakCategoryTotal: tieBreakCategoryTotalByMemberId.get(member.id) ?? 0,
       draftSlot: member.draftSlot ?? null,
     }));
+
+  const compareTieBreakTotal = (left: LeagueStandingReadRow, right: LeagueStandingReadRow) =>
+    tieBreakDirection === 'LOW_WINS'
+      ? left.tieBreakCategoryTotal - right.tieBreakCategoryTotal
+      : right.tieBreakCategoryTotal - left.tieBreakCategoryTotal;
 
   return [...resolvedStandings, ...missingMemberRows].sort(
     (left, right) =>
       right.wins - left.wins ||
       left.losses - right.losses ||
       right.draws - left.draws ||
-      right.tieBreakCategoryWins - left.tieBreakCategoryWins ||
+      compareTieBreakTotal(left, right) ||
       (left.draftSlot ?? Number.MAX_SAFE_INTEGER) - (right.draftSlot ?? Number.MAX_SAFE_INTEGER) ||
       left.teamName.localeCompare(right.teamName)
   );

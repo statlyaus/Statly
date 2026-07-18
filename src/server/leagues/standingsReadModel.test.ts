@@ -75,13 +75,13 @@ describe('buildLeagueStandings', () => {
         categoryDraws: 0,
         pointsFor: 0,
         pointsAgainst: 0,
-        tieBreakCategoryWins: 0,
+        tieBreakCategoryTotal: 0,
         draftSlot: null,
       },
     ]);
   });
 
-  it('breaks an otherwise equal record by the selected category and then original draft seed', () => {
+  it('breaks an otherwise equal record by the selected HIGH_WINS category total and then draft seed', () => {
     const standings = buildLeagueStandings({
       members: [
         { id: 'member-1', teamName: 'Second seed', teamLogoUrl: null, draftSlot: 2 },
@@ -100,10 +100,10 @@ describe('buildLeagueStandings', () => {
         pointsFor: 0,
         pointsAgainst: 0,
       })),
-      tieBreakCategoryWinsByMemberId: new Map([
-        ['member-1', 3],
-        ['member-2', 3],
-        ['member-3', 4],
+      tieBreakCategoryTotalByMemberId: new Map([
+        ['member-1', 40],
+        ['member-2', 40],
+        ['member-3', 52],
       ]),
     });
 
@@ -112,5 +112,33 @@ describe('buildLeagueStandings', () => {
       'member-2',
       'member-1',
     ]);
+  });
+
+  it('orders lower selected category totals first for LOW_WINS categories', () => {
+    const standings = buildLeagueStandings({
+      members: [
+        { id: 'member-1', teamName: 'Higher total', teamLogoUrl: null, draftSlot: 1 },
+        { id: 'member-2', teamName: 'Lower total', teamLogoUrl: null, draftSlot: 2 },
+      ],
+      standings: ['member-1', 'member-2'].map((memberId) => ({
+        id: `standing-${memberId}`,
+        memberId,
+        wins: 4,
+        losses: 2,
+        draws: 0,
+        categoryWins: 20,
+        categoryLosses: 10,
+        categoryDraws: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+      })),
+      tieBreakCategoryTotalByMemberId: new Map([
+        ['member-1', 18],
+        ['member-2', 11],
+      ]),
+      tieBreakDirection: 'LOW_WINS',
+    });
+
+    expect(standings.map((standing) => standing.memberId)).toEqual(['member-2', 'member-1']);
   });
 });

@@ -10,7 +10,9 @@ import {
   type CompetitionRules,
 } from '@/server/leagues/competitionRules';
 import {
+  deleteCompetitionFixture,
   publishCompetition,
+  saveCompetitionFixture,
   setCompetitionRoundFallbackDeadline,
 } from '@/server/leagues/competitionService';
 import { normalizeFantasyCategoryKeys, type FantasyCategoryKey } from '@/types/fantasyCategories';
@@ -89,7 +91,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     authorization.league.settings.competitionRulesJson,
     categories[0] ?? 'goals'
   );
-  const [rounds, audits, commissioners] = await Promise.all([
+  const [rounds, audits, commissioners, teams] = await Promise.all([
     prisma.leagueCompetitionRound.findMany({
       where: {
         leagueId: id,
@@ -117,13 +119,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       select: { id: true, teamName: true, isCoCommissioner: true, userId: true },
       orderBy: { joinedAt: 'asc' },
     }),
+    prisma.leagueMember.findMany({
+      where: { leagueId: id },
+      select: { id: true, teamName: true, draftSlot: true },
+      orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
+    }),
   ]);
 
   return NextResponse.json({
     success: true,
     data: {
       canManage: authorization.canManage,
-      teamCount: await prisma.leagueMember.count({ where: { leagueId: id } }),
+      teamCount: teams.length,
       rosterSize: authorization.league.settings.rosterSize,
       categories,
       lineupSlots: authorization.league.settings.lineupSlotsJson,
@@ -132,6 +139,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       publishedAt: authorization.league.settings.competitionPublishedAt?.toISOString() ?? null,
       rules,
       commissioners,
+      teams,
       rounds: rounds.map((round) => ({
         id: round.id,
         round: round.round,
@@ -144,6 +152,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         matchups: round.matchups.map((matchup) => ({
           id: matchup.id,
           bracketKey: matchup.bracketKey,
+          homeMemberId: matchup.homeMemberId,
+          awayMemberId: matchup.awayMemberId,
+          byeMemberId: matchup.byeMemberId,
           homeTeam: matchup.homeMember?.teamName ?? null,
           awayTeam: matchup.awayMember?.teamName ?? null,
           byeTeam: matchup.byeMember?.teamName ?? null,
@@ -226,32 +237,65 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!authorization.canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!authorization.member) return missingActorMemberResponse();
 
-  const body = (await request.json().catch(() => null)) as {
-    round?: unknown;
-    fallbackLockAt?: unknown;
-  } | null;
-  if (!body) {
-    return NextResponse.json(
-      { error: 'A valid round and fallback deadline are required.' },
-      { status: 400 }
-    );
-  }
+  const body = await parseRequestObject(request);
+  if (!body) return invalidMutationBodyResponse();
+  const action = body.action;
   const round = parsePositiveRound(body.round);
-  const fallbackLockAt = new Date(String(body.fallbackLockAt));
-  if (round === null || Number.isNaN(fallbackLockAt.getTime())) {
-    return NextResponse.json(
-      { error: 'A valid round and fallback deadline are required.' },
-      { status: 400 }
-    );
+  if (round === null) {
+    return NextResponse.json({ error: 'Choose a valid competition round.' }, { status: 400 });
   }
 
-  const result = await setCompetitionRoundFallbackDeadline({
-    leagueId: id,
-    round,
-    actorMemberId: authorization.member.id,
-    fallbackLockAt,
-  });
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+  if (action === 'SET_DEADLINE') {
+    const fallbackLockAt = new Date(String(body.fallbackLockAt));
+    if (Number.isNaN(fallbackLockAt.getTime())) {
+      return NextResponse.json({ error: 'Choose a valid fallback deadline.' }, { status: 400 });
+    }
+    const result = await setCompetitionRoundFallbackDeadline({
+      leagueId: id,
+      round,
+      actorMemberId: authorization.member.id,
+      fallbackLockAt,
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ success: true });
+  }
 
-  return NextResponse.json({ success: true });
+  if (action === 'SAVE_FIXTURE') {
+    const fixture =
+      body.fixture && typeof body.fixture === 'object' && !Array.isArray(body.fixture)
+        ? (body.fixture as Record<string, unknown>)
+        : null;
+    if (!fixture) {
+      return NextResponse.json({ error: 'A valid fixture is required.' }, { status: 400 });
+    }
+    const result = await saveCompetitionFixture({
+      leagueId: id,
+      round,
+      actorMemberId: authorization.member.id,
+      fixture: {
+        matchupId: typeof fixture.matchupId === 'string' ? fixture.matchupId : null,
+        homeMemberId: typeof fixture.homeMemberId === 'string' ? fixture.homeMemberId : null,
+        awayMemberId: typeof fixture.awayMemberId === 'string' ? fixture.awayMemberId : null,
+        byeMemberId: typeof fixture.byeMemberId === 'string' ? fixture.byeMemberId : null,
+      },
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ success: true, data: result.fixture });
+  }
+
+  if (action === 'DELETE_FIXTURE') {
+    if (typeof body.matchupId !== 'string' || !body.matchupId) {
+      return NextResponse.json({ error: 'Choose a fixture to delete.' }, { status: 400 });
+    }
+    const result = await deleteCompetitionFixture({
+      leagueId: id,
+      round,
+      actorMemberId: authorization.member.id,
+      matchupId: body.matchupId,
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ success: true });
+  }
+
+  return NextResponse.json({ error: 'Choose a valid competition action.' }, { status: 400 });
 }

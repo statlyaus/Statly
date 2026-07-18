@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
     league: { findUnique: vi.fn() },
     leagueRosterPlayer: { findMany: vi.fn() },
     leagueCompetitionRound: { findUnique: vi.fn() },
+    leagueMatchup: { findFirst: vi.fn() },
     leagueLineup: { findUnique: vi.fn(), upsert: vi.fn() },
     leagueLineupPlayer: {
       createMany: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }));
 
 import {
   createSetupLineupRoundContext,
+  loadMemberLineupRoundContext,
   loadRoundPlayerGameStarts,
   normalizeLegacyBenchAssignments,
   resolveRequestedLineupRound,
@@ -117,6 +119,55 @@ describe('lineup setup compatibility', () => {
 });
 
 describe('authoritative lineup timing', () => {
+  it.each([
+    {
+      label: 'Sydney standard time',
+      leagueTimeZone: 'Australia/Sydney',
+      roundStartsAt: '2026-07-18T09:00:00.000Z',
+      expectedLockAt: '2026-07-16T09:00:00.000Z',
+    },
+    {
+      label: 'Sydney daylight time',
+      leagueTimeZone: 'Australia/Sydney',
+      roundStartsAt: '2026-12-19T08:00:00.000Z',
+      expectedLockAt: '2026-12-17T08:00:00.000Z',
+    },
+    {
+      label: 'New York daylight time',
+      leagueTimeZone: 'America/New_York',
+      roundStartsAt: '2026-07-18T23:00:00.000Z',
+      expectedLockAt: '2026-07-16T23:00:00.000Z',
+    },
+  ])(
+    'locks at Thursday 7:00 pm in $label',
+    async ({ leagueTimeZone, roundStartsAt, expectedLockAt }) => {
+      mocks.prisma.league.findUnique.mockResolvedValue({
+        settings: {
+          ...settings,
+          competitionRulesJson: JSON.stringify({
+            lockPolicy: 'THURSDAY_7PM_AEST',
+            leagueTimeZone,
+          }),
+        },
+      });
+      mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+        ...scheduledRound,
+        startsAt: new Date(roundStartsAt),
+      });
+      mocks.prisma.leagueMatchup.findFirst.mockResolvedValue(null);
+
+      const context = await loadMemberLineupRoundContext({
+        leagueId: 'league-1',
+        memberId: 'member-1',
+        round: 1,
+        now: new Date('2026-01-01T00:00:00.000Z'),
+      });
+
+      expect(context?.lockAt?.toISOString()).toBe(expectedLockAt);
+      expect(context?.lockState).toBe('OPEN');
+    }
+  );
+
   it('maps official round match starts to players by canonical club aliases', async () => {
     mocks.getRoundMatchesResult.mockResolvedValue({
       ok: true,

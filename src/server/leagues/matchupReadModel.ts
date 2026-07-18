@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getRoundMatchesResult, getRoundPlayerStatsResult } from '@/lib/etlIntegration';
 import { prisma } from '@/lib/prisma';
+import { getTeamName } from '@/lib/teamLogos';
 import {
   FANTASY_CATEGORIES,
   REAL_DATA_NINE_CATEGORY_PRESET,
@@ -10,9 +11,13 @@ import {
 
 import { parseCategoryDirectionsJson } from './categoryDirections';
 import { parseCompetitionRulesJson } from './competitionRules';
+import { synchronizeFinalsFixtures } from './finalsService';
+import type { FinalsTeamCount } from './finalsProgression';
+import { resolveAndPersistLineupAutosubs } from './lineupAutosubService';
 import {
   normalizeLiveStatRows,
   normalizeRoundMatchStatus,
+  type NormalizedLiveStatRow,
   type NormalizedRoundMatchStatus,
   type RawLiveStatRow,
   type RawRoundMatch,
@@ -159,13 +164,24 @@ function parseStoredCategoryRows(categoriesJson: string | null | undefined): Arr
   }
 }
 
-function countTieBreakCategoryWins(
-  categoriesJson: string | null | undefined,
+export function aggregateFinalizedCategoryTotals(
+  scores: ReadonlyArray<{ memberId: string; categoriesJson: string | null }>,
   category: FantasyCategoryKey
-) {
-  return parseStoredCategoryRows(categoriesJson).filter(
-    (row) => row.category === category && row.winner === 'home'
-  ).length;
+): Map<string, number> {
+  const totalsByMemberId = new Map<string, number>();
+
+  for (const score of scores) {
+    // Finalized score rows are normalized so the owning member is the home side.
+    const selectedCategory = parseStoredCategoryRows(score.categoriesJson).find(
+      (row) => row.category === category
+    );
+    totalsByMemberId.set(
+      score.memberId,
+      (totalsByMemberId.get(score.memberId) ?? 0) + (selectedCategory?.homeValue ?? 0)
+    );
+  }
+
+  return totalsByMemberId;
 }
 
 function buildCategoryRows({
@@ -408,10 +424,52 @@ function normalizeLeagueCategories(value: string | null | undefined): FantasyCat
   }
 }
 
+export function resolveRoundPlayerAvailability({
+  stats,
+  matches,
+  expectedPlayers,
+}: {
+  stats: readonly NormalizedLiveStatRow[];
+  matches: readonly RawRoundMatch[];
+  expectedPlayers: readonly { playerId: string; club: string | null }[];
+}) {
+  const totalsByPlayerId = new Map<string, CategoryTotals>();
+  const nonPlayingReasonByPlayerId = new Map<string, 'DID_NOT_PLAY' | 'CLUB_BYE'>();
+
+  for (const stat of stats) {
+    totalsByPlayerId.set(stat.playerId, stat.totals);
+    if (stat.confirmedDidNotPlay) {
+      nonPlayingReasonByPlayerId.set(stat.playerId, 'DID_NOT_PLAY');
+    }
+  }
+
+  const confirmedByeClubs = new Set(
+    matches.flatMap((match) =>
+      Array.isArray(match.confirmed_bye_teams)
+        ? match.confirmed_bye_teams.flatMap((club) =>
+            typeof club === 'string' && club.trim() ? [getTeamName(club)] : []
+          )
+        : []
+    )
+  );
+  for (const player of expectedPlayers) {
+    if (
+      !totalsByPlayerId.has(player.playerId) &&
+      player.club &&
+      confirmedByeClubs.has(getTeamName(player.club))
+    ) {
+      totalsByPlayerId.set(player.playerId, {});
+      nonPlayingReasonByPlayerId.set(player.playerId, 'CLUB_BYE');
+    }
+  }
+
+  return { totalsByPlayerId, nonPlayingReasonByPlayerId };
+}
+
 async function loadLivePlayerTotalsForRound(
   season: number,
   round: number,
-  expectedPlayerIds: readonly string[] = []
+  expectedPlayers: readonly { playerId: string; club: string | null }[] = []
 ) {
   const [statsResult, matchesResult] = await Promise.all([
     getRoundPlayerStatsResult(season, round),
@@ -420,23 +478,25 @@ async function loadLivePlayerTotalsForRound(
   const normalizedStats = normalizeLiveStatRows(
     (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[]
   ).filter((row) => row.round === round);
-  const totalsByPlayerId = new Map<string, CategoryTotals>();
-
-  for (const stat of normalizedStats) {
-    totalsByPlayerId.set(stat.playerId, stat.totals);
-  }
+  const rawMatches = (matchesResult.ok ? matchesResult.matches : []) as unknown as RawRoundMatch[];
+  const { totalsByPlayerId, nonPlayingReasonByPlayerId } = resolveRoundPlayerAvailability({
+    stats: normalizedStats,
+    matches: rawMatches,
+    expectedPlayers,
+  });
 
   const available =
     statsResult.ok &&
     matchesResult.ok &&
-    [...new Set(expectedPlayerIds)].every((playerId) => totalsByPlayerId.has(playerId));
+    [...new Set(expectedPlayers.map((player) => player.playerId))].every((playerId) =>
+      totalsByPlayerId.has(playerId)
+    );
 
   return {
     available,
     totalsByPlayerId,
-    roundStatus: normalizeRoundMatchStatus(
-      (matchesResult.ok ? matchesResult.matches : []) as unknown as RawRoundMatch[]
-    ),
+    nonPlayingReasonByPlayerId,
+    roundStatus: normalizeRoundMatchStatus(rawMatches),
   };
 }
 
@@ -569,7 +629,10 @@ export async function loadLeagueMatchupReadModel({
       where: {
         leagueId,
         status: 'FINAL',
-        matchup: { fixtureVersion: settings.league.settings.competitionRulesVersion },
+        matchup: {
+          fixtureVersion: settings.league.settings.competitionRulesVersion,
+          phase: 'REGULAR',
+        },
       },
       select: { memberId: true, categoriesJson: true },
     }),
@@ -614,17 +677,10 @@ export async function loadLeagueMatchupReadModel({
         })
       : [];
   const lineupsByMemberId = new Map(lineups.map((lineup) => [lineup.memberId, lineup]));
-  const tieBreakCategoryWinsByMemberId = new Map<string, number>();
-  for (const score of finalizedScores) {
-    tieBreakCategoryWinsByMemberId.set(
-      score.memberId,
-      (tieBreakCategoryWinsByMemberId.get(score.memberId) ?? 0) +
-        countTieBreakCategoryWins(
-          score.categoriesJson,
-          settings.competitionRules.standingsTieBreakCategory
-        )
-    );
-  }
+  const tieBreakCategoryTotalByMemberId = aggregateFinalizedCategoryTotals(
+    finalizedScores,
+    settings.competitionRules.standingsTieBreakCategory
+  );
 
   return {
     leagueId,
@@ -659,7 +715,9 @@ export async function loadLeagueMatchupReadModel({
     standings: buildLeagueStandings({
       members,
       standings: persistedStandings,
-      tieBreakCategoryWinsByMemberId,
+      tieBreakCategoryTotalByMemberId,
+      tieBreakDirection:
+        settings.categoryDirections[settings.competitionRules.standingsTieBreakCategory],
     }),
     permissions: { canManage },
   };
@@ -686,8 +744,14 @@ export async function recalculateLeagueRoundMatchups({
         })
       : Promise.resolve(null),
     prisma.leagueMatchup.findMany({ where: { leagueId, round, fixtureVersion } }),
-    prisma.leagueLineup.findMany({ where: { leagueId, round }, include: { players: true } }),
-    prisma.leagueMember.findMany({ where: { leagueId }, select: { id: true } }),
+    prisma.leagueLineup.findMany({
+      where: { leagueId, round },
+      include: { players: { include: { player: true } } },
+    }),
+    prisma.leagueMember.findMany({
+      where: { leagueId },
+      select: { id: true, teamName: true, teamLogoUrl: true, draftSlot: true },
+    }),
   ]);
   const aflRound = resolveAflRoundForScoring({
     fixtureVersion,
@@ -710,11 +774,17 @@ export async function recalculateLeagueRoundMatchups({
       },
     };
   }
-  const { available, totalsByPlayerId, roundStatus } = await loadLivePlayerTotalsForRound(
-    new Date().getFullYear(),
-    aflRound,
-    lineups.flatMap((lineup) => lineup.players.map((player) => player.playerId))
-  );
+  const { available, totalsByPlayerId, nonPlayingReasonByPlayerId, roundStatus } =
+    await loadLivePlayerTotalsForRound(
+      new Date().getFullYear(),
+      aflRound,
+      lineups.flatMap((lineup) =>
+        lineup.players.map((assignment) => ({
+          playerId: assignment.playerId,
+          club: assignment.player.club,
+        }))
+      )
+    );
   if (!available) {
     return {
       round,
@@ -726,7 +796,21 @@ export async function recalculateLeagueRoundMatchups({
   }
   const status =
     finalize || roundStatus.allFinal ? 'FINAL' : toMatchupStatusFromRoundStatus(roundStatus);
-  const lineupsByMemberId = new Map(lineups.map((lineup) => [lineup.memberId, lineup]));
+  const resolvedLineups =
+    roundStatus.allFinal && nonPlayingReasonByPlayerId.size > 0
+      ? await Promise.all(
+          lineups.map(async (lineup) => ({
+            ...lineup,
+            players: await resolveAndPersistLineupAutosubs({
+              leagueId,
+              lineupId: lineup.id,
+              players: lineup.players,
+              nonPlayingReasonByPlayerId,
+            }),
+          }))
+        )
+      : lineups;
+  const lineupsByMemberId = new Map(resolvedLineups.map((lineup) => [lineup.memberId, lineup]));
   const calculatedScores = [];
 
   for (const matchup of matchups) {
@@ -869,8 +953,19 @@ export async function recalculateLeagueRoundMatchups({
   }
 
   if (status === 'FINAL') {
+    if (fixtureVersion > 0) {
+      await prisma.leagueCompetitionRound.update({
+        where: { leagueId_fixtureVersion_round: { leagueId, fixtureVersion, round } },
+        data: { status: 'FINAL', lockedAt: new Date() },
+      });
+    }
+
     const finalizedScores = await prisma.leagueMatchupScore.findMany({
-      where: { leagueId, status: 'FINAL' },
+      where: {
+        leagueId,
+        status: 'FINAL',
+        matchup: { fixtureVersion, phase: 'REGULAR' },
+      },
     });
     const standings = calculateStandingsRows({
       scoringMode: settings.scoringMode,
@@ -884,6 +979,48 @@ export async function recalculateLeagueRoundMatchups({
         create: { leagueId, ...standing },
         update: standing,
       });
+    }
+
+    const finalsTeams = settings.competitionRules.finalsTeams;
+    const isSupportedFinalsTeamCount = (value: number): value is FinalsTeamCount =>
+      value === 4 || value === 6 || value === 8;
+    if (fixtureVersion > 0 && isSupportedFinalsTeamCount(finalsTeams)) {
+      const incompleteRegularRounds = await prisma.leagueCompetitionRound.count({
+        where: {
+          leagueId,
+          fixtureVersion,
+          phase: 'REGULAR',
+          status: { notIn: ['FINAL', 'NO_MATCHUP'] },
+        },
+      });
+
+      if (incompleteRegularRounds === 0) {
+        const tieBreakCategoryTotalByMemberId = aggregateFinalizedCategoryTotals(
+          finalizedScores,
+          settings.competitionRules.standingsTieBreakCategory
+        );
+        const orderedRegularSeasonMemberIds = buildLeagueStandings({
+          members,
+          standings: standings.map((standing) => ({
+            id: `calculated-${standing.memberId}`,
+            ...standing,
+          })),
+          tieBreakCategoryTotalByMemberId,
+          tieBreakDirection:
+            settings.categoryDirections[settings.competitionRules.standingsTieBreakCategory],
+        })
+          .slice(0, finalsTeams)
+          .map((standing) => standing.memberId);
+
+        if (orderedRegularSeasonMemberIds.length === finalsTeams) {
+          await synchronizeFinalsFixtures({
+            leagueId,
+            fixtureVersion,
+            finalsTeams,
+            orderedRegularSeasonMemberIds,
+          });
+        }
+      }
     }
   }
 
