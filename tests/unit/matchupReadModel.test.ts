@@ -113,28 +113,35 @@ describe('matchupReadModel helpers', () => {
   });
 
   it('distinguishes confirmed zero-minute players from players on a club bye', () => {
-    const stats = normalizeLiveStatRows([
+    const matches = [
       {
-        player_uid: 'did-not-play',
-        round_number: 8,
-        stats: { minutes: 0, goals: 0 },
+        match_uid: 'match-1',
+        home_team: 'GWS Giants',
+        away_team: 'Collingwood',
+        status: 'final',
+        confirmed_bye_teams: ['Richmond Tigers'],
       },
-      {
-        player_uid: 'played',
-        round_number: 8,
-        stats: { minutes: 80, goals: 1 },
-      },
-    ]);
-    const availability = resolveRoundPlayerAvailability({
-      stats,
-      matches: [
+    ];
+    const stats = normalizeLiveStatRows(
+      [
         {
-          home_team: 'GWS Giants',
-          away_team: 'Collingwood',
-          status: 'final',
-          confirmed_bye_teams: ['Richmond Tigers'],
+          match_uid: 'match-1',
+          player_uid: 'did-not-play',
+          round_number: 8,
+          stats: { minutes: 0, goals: 0 },
+        },
+        {
+          match_uid: 'match-1',
+          player_uid: 'played',
+          round_number: 8,
+          stats: { minutes: 80, goals: 1 },
         },
       ],
+      matches
+    );
+    const availability = resolveRoundPlayerAvailability({
+      stats,
+      matches,
       expectedPlayers: [
         { playerId: 'did-not-play', club: 'GWS' },
         { playerId: 'played', club: 'Collingwood' },

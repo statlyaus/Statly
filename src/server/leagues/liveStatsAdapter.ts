@@ -131,14 +131,24 @@ function readCategoryTotals(source: RawValueRecord): CategoryTotals {
   return totals;
 }
 
-export function normalizeLiveStatRows(rows: readonly RawLiveStatRow[]): NormalizedLiveStatRow[] {
+export function normalizeLiveStatRows(
+  rows: readonly RawLiveStatRow[],
+  matches: readonly RawRoundMatch[] = []
+): NormalizedLiveStatRow[] {
+  const matchStatusById = new Map(
+    matches.flatMap((match) => {
+      const matchId = readString(match, ['match_uid', 'match_id', 'matchUid', 'matchId']);
+      return matchId ? [[matchId, normalizeStatus(match.status)] as const] : [];
+    })
+  );
+
   return rows.flatMap((row) => {
     const playerId = readString(row, ['player_uid', 'player_id', 'playerUid', 'playerId']);
     if (!playerId) return [];
 
     const gameStartsAt = readDate(row, ['start_time_utc', 'startsAt', 'matchDate', 'match_date']);
-    const gameStatus = normalizeStatus(row.status);
     const matchId = readString(row, ['match_uid', 'match_id', 'matchUid', 'matchId']);
+    const gameStatus = matchId ? (matchStatusById.get(matchId) ?? 'unknown') : 'unknown';
     const nestedStats =
       row.stats && typeof row.stats === 'object' ? (row.stats as RawValueRecord) : {};
     const minutes =
@@ -152,7 +162,7 @@ export function normalizeLiveStatRows(rows: readonly RawLiveStatRow[]): Normaliz
       gameStartsAt,
       gameStatus,
       statusUnavailable: !gameStartsAt && gameStatus === 'unknown',
-      confirmedDidNotPlay: minutes === 0,
+      confirmedDidNotPlay: gameStatus === 'final' && minutes === 0,
       totals: readCategoryTotals(row),
       lastSeenAt: readDate(row, ['last_seen_at', 'lastSeenAt']),
     };

@@ -70,16 +70,27 @@ describe('liveStatsAdapter', () => {
     expect(rows[0].gameStatus).toBe('unknown');
   });
 
-  it('confirms a player did not play only when the feed reports zero minutes', () => {
-    const rows = normalizeLiveStatRows([
-      { player_uid: 'did-not-play', stats: { minutes: 0, goals: 0 } },
-      { player_uid: 'played', stats: { minutes: 1, goals: 0 } },
-      { player_uid: 'unknown', stats: { goals: 0 } },
-    ]);
+  it('confirms zero minutes as did not play only after the authoritative match is final', () => {
+    const rows = normalizeLiveStatRows(
+      [
+        { player_uid: 'scheduled', match_uid: 'scheduled-match', stats: { minutes: 0 } },
+        { player_uid: 'live', match_uid: 'live-match', stats: { minutes: 0 } },
+        { player_uid: 'final-dnp', match_uid: 'final-match', stats: { minutes: 0 } },
+        { player_uid: 'final-played', match_uid: 'final-match', stats: { minutes: 1 } },
+        { player_uid: 'unknown', match_uid: 'unknown-match', stats: { minutes: 0 } },
+      ],
+      [
+        { match_uid: 'scheduled-match', status: 'scheduled' },
+        { match_uid: 'live-match', status: 'in_progress' },
+        { match_uid: 'final-match', status: 'final' },
+      ]
+    );
 
     expect(rows.map((row) => [row.playerId, row.confirmedDidNotPlay])).toEqual([
-      ['did-not-play', true],
-      ['played', false],
+      ['scheduled', false],
+      ['live', false],
+      ['final-dnp', true],
+      ['final-played', false],
       ['unknown', false],
     ]);
   });

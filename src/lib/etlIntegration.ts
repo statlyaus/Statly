@@ -61,6 +61,7 @@ export interface ETLPlayerStats {
 }
 
 export interface ETLMatch {
+  match_uid: string;
   season: number;
   round_number: number;
   home_team: string;

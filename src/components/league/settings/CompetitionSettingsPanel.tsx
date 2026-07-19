@@ -383,7 +383,9 @@ export function CompetitionSettingsPanel({
         throw new Error(payload.error ?? 'Failed to save the fixture.');
       }
       if (controller.signal.aborted || generation !== mutationGenerationRef.current) return;
-      setMessage(`Round ${round} fixture saved. Affected lineups and standings were reset.`);
+      setMessage(
+        `Round ${round} fixture saved. Any affected matchup score was cleared, and standings were recalculated when required.`
+      );
       await loadSnapshot({ preserveMessage: true });
     } catch (error) {
       if (
@@ -715,12 +717,13 @@ export function CompetitionSettingsPanel({
                   );
                 }
 
+                const isRoundReadOnly = competitionRound.status === 'FINAL';
                 const rows = [
                   ...competitionRound.matchups.map((matchup) => ({
                     key: matchup.id,
                     matchup,
                   })),
-                  ...(canManage && competitionRound.phase === 'REGULAR'
+                  ...(canManage && !isRoundReadOnly && competitionRound.phase === 'REGULAR'
                     ? [
                         {
                           key: `new-${competitionRound.round}`,
@@ -762,7 +765,12 @@ export function CompetitionSettingsPanel({
                               {label} home
                               <select
                                 value={draft.homeMemberId}
-                                disabled={!canManage || isSaving || Boolean(matchup?.bracketKey)}
+                                disabled={
+                                  !canManage ||
+                                  isSaving ||
+                                  isRoundReadOnly ||
+                                  Boolean(matchup?.bracketKey)
+                                }
                                 onChange={(event) =>
                                   setFixtureDrafts((current) => ({
                                     ...current,
@@ -787,7 +795,12 @@ export function CompetitionSettingsPanel({
                               Away
                               <select
                                 value={draft.awayMemberId}
-                                disabled={!canManage || isSaving || Boolean(matchup?.bracketKey)}
+                                disabled={
+                                  !canManage ||
+                                  isSaving ||
+                                  isRoundReadOnly ||
+                                  Boolean(matchup?.bracketKey)
+                                }
                                 onChange={(event) =>
                                   setFixtureDrafts((current) => ({
                                     ...current,
@@ -812,7 +825,12 @@ export function CompetitionSettingsPanel({
                               Bye team
                               <select
                                 value={draft.byeMemberId}
-                                disabled={!canManage || isSaving || Boolean(matchup?.bracketKey)}
+                                disabled={
+                                  !canManage ||
+                                  isSaving ||
+                                  isRoundReadOnly ||
+                                  Boolean(matchup?.bracketKey)
+                                }
                                 onChange={(event) =>
                                   setFixtureDrafts((current) => ({
                                     ...current,
@@ -841,6 +859,7 @@ export function CompetitionSettingsPanel({
                                   onClick={() => void saveFixture(competitionRound.round, key)}
                                   disabled={
                                     isSaving ||
+                                    isRoundReadOnly ||
                                     (!draft.byeMemberId &&
                                       (!draft.homeMemberId || !draft.awayMemberId))
                                   }
@@ -857,7 +876,7 @@ export function CompetitionSettingsPanel({
                                     onClick={() =>
                                       void deleteFixture(competitionRound.round, matchup.id)
                                     }
-                                    disabled={isSaving}
+                                    disabled={isSaving || isRoundReadOnly}
                                     className="inline-flex size-10 items-center justify-center rounded-md border border-[color:var(--league-border)] text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                                   >
                                     <Trash2 aria-hidden="true" className="h-4 w-4" />

@@ -475,10 +475,11 @@ async function loadLivePlayerTotalsForRound(
     getRoundPlayerStatsResult(season, round),
     getRoundMatchesResult(season, round),
   ]);
-  const normalizedStats = normalizeLiveStatRows(
-    (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[]
-  ).filter((row) => row.round === round);
   const rawMatches = (matchesResult.ok ? matchesResult.matches : []) as unknown as RawRoundMatch[];
+  const normalizedStats = normalizeLiveStatRows(
+    (statsResult.ok ? statsResult.stats : []) as unknown as RawLiveStatRow[],
+    rawMatches
+  ).filter((row) => row.round === round);
   const { totalsByPlayerId, nonPlayingReasonByPlayerId } = resolveRoundPlayerAvailability({
     stats: normalizedStats,
     matches: rawMatches,
@@ -774,6 +775,30 @@ export async function recalculateLeagueRoundMatchups({
       },
     };
   }
+  const lineupsByMemberId = new Map(lineups.map((lineup) => [lineup.memberId, lineup]));
+  const hasAllParticipantLineups = matchups.every((matchup) => {
+    if (!matchup.homeMemberId || !matchup.awayMemberId) return true;
+    return (
+      (lineupsByMemberId.get(matchup.homeMemberId)?.players.length ?? 0) > 0 &&
+      (lineupsByMemberId.get(matchup.awayMemberId)?.players.length ?? 0) > 0
+    );
+  });
+  if (!hasAllParticipantLineups) {
+    return {
+      round,
+      status: 'SCHEDULED' as const,
+      recalculated: 0,
+      scores: [],
+      roundStatus: {
+        earliestStartAt: null,
+        latestEndAt: null,
+        anyLive: false,
+        allFinal: false,
+        hasUnavailableStatus: true,
+        matches: [],
+      },
+    };
+  }
   const { available, totalsByPlayerId, nonPlayingReasonByPlayerId, roundStatus } =
     await loadLivePlayerTotalsForRound(
       new Date().getFullYear(),
@@ -810,7 +835,9 @@ export async function recalculateLeagueRoundMatchups({
           }))
         )
       : lineups;
-  const lineupsByMemberId = new Map(resolvedLineups.map((lineup) => [lineup.memberId, lineup]));
+  const resolvedLineupsByMemberId = new Map(
+    resolvedLineups.map((lineup) => [lineup.memberId, lineup])
+  );
   const calculatedScores = [];
 
   for (const matchup of matchups) {
@@ -818,8 +845,8 @@ export async function recalculateLeagueRoundMatchups({
       continue;
     }
 
-    const homeLineup = lineupsByMemberId.get(matchup.homeMemberId);
-    const awayLineup = lineupsByMemberId.get(matchup.awayMemberId);
+    const homeLineup = resolvedLineupsByMemberId.get(matchup.homeMemberId);
+    const awayLineup = resolvedLineupsByMemberId.get(matchup.awayMemberId);
     const homeTotals = aggregateLineupCategoryTotals({
       categories: settings.categories,
       players:
