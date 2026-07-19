@@ -5,6 +5,7 @@ const {
   draftRealtimeDispatcher,
   draftProjectionService,
   revalidateTags,
+  publishLeagueSystemMessage,
 } = vi.hoisted(() => ({
   draftRepository: {
     transaction: vi.fn(),
@@ -23,6 +24,7 @@ const {
     buildAuthoritativeDraftState: vi.fn(),
   },
   revalidateTags: vi.fn(),
+  publishLeagueSystemMessage: vi.fn(),
 }));
 
 vi.mock('@/lib/cache', () => ({
@@ -56,6 +58,10 @@ vi.mock('@/server/draft/services/DraftProjectionService', () => ({
   draftProjectionService,
 }));
 
+vi.mock('@/server/leagues/social/socialSystemEvents', () => ({
+  publishLeagueSystemMessage,
+}));
+
 import { DraftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 
 describe('DraftRealtimePublisher', () => {
@@ -63,6 +69,7 @@ describe('DraftRealtimePublisher', () => {
     vi.clearAllMocks();
     draftRepository.transaction.mockImplementation((work) => work({}));
     revalidateTags.mockResolvedValue(undefined);
+    publishLeagueSystemMessage.mockResolvedValue({});
   });
 
   it('drains the events claimed by batch flush instead of re-querying unlocked draft events', async () => {
@@ -113,7 +120,47 @@ describe('DraftRealtimePublisher', () => {
       'draft-2',
       'draft:completed'
     );
-    expect(draftRepository.markDraftEventsPublished).toHaveBeenCalledWith({}, ['event-1', 'event-2']);
+    expect(draftRepository.markDraftEventsPublished).toHaveBeenCalledWith({}, [
+      'event-1',
+      'event-2',
+    ]);
     expect(draftRepository.markDraftEventsFailed).not.toHaveBeenCalled();
+  });
+
+  it('keeps a draft event retryable until its social activity is durably created', async () => {
+    const event = {
+      id: 'event-pick',
+      draftId: 'draft-1',
+      leagueId: 'league-1',
+      event: 'draft:pick-made',
+      payload: {
+        id: 'pick-1',
+        member: { displayName: 'Alex' },
+        player: { name: 'Taylor' },
+      },
+      publishState: false,
+      attempts: 0,
+      lastError: null,
+      lockedAt: null,
+      lockedBy: null,
+      publishedAt: null,
+      createdAt: new Date('2026-06-05T00:00:00.000Z'),
+    } as any;
+    draftRepository.listPendingDraftEventsBatch.mockResolvedValue([event]);
+    draftRepository.claimDraftEvents.mockResolvedValue(1);
+    draftRepository.listClaimedDraftEvents.mockResolvedValue([event]);
+    publishLeagueSystemMessage.mockRejectedValueOnce(new Error('social write unavailable'));
+
+    const publisher = new DraftRealtimePublisher();
+    await expect(publisher.flushPendingDraftEventsBatch(50)).rejects.toThrow(
+      'social write unavailable'
+    );
+
+    expect(draftRepository.markDraftEventsPublished).not.toHaveBeenCalled();
+    expect(draftRepository.markDraftEventsFailed).toHaveBeenCalledWith(
+      {},
+      ['event-pick'],
+      'social write unavailable'
+    );
   });
 });

@@ -61,6 +61,7 @@ type TabType =
   | 'trades'
   | 'waivers'
   | 'draft'
+  | 'social'
   | 'team-settings'
   | 'league-settings';
 
@@ -85,6 +86,8 @@ type OverviewWaiverClaim = {
   playerName: string;
   bidAmount?: number;
 };
+
+type TeamNotificationToggleKey = 'tradePush' | 'waiverPush' | 'draftReminder' | 'scoringAlerts';
 
 const TAB_IDS: readonly TabType[] = [
   'overview',
@@ -136,6 +139,7 @@ export default function LeagueTabs({
   const [overviewWaiversStatus, setOverviewWaiversStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
+  const [socialUnread, setSocialUnread] = useState({ chat: 0, board: 0 });
 
   const currentMember = members.find((member) => member.userId === currentUserId);
   const selectedPlayerId = searchParams?.get('playerId') ?? null;
@@ -161,6 +165,31 @@ export default function LeagueTabs({
     (category) => FANTASY_CATEGORIES[category]?.label ?? category
   );
 
+  useEffect(() => {
+    if (!currentUserId) return;
+    let cancelled = false;
+    void authenticatedFetch(`/api/leagues/${league.id}/social/summary`, {}, currentUserId)
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as {
+          data?: { unread?: { chat?: number; board?: number } };
+        };
+      })
+      .then((body) => {
+        if (cancelled || !body?.data?.unread) return;
+        setSocialUnread({
+          chat: body.data.unread.chat ?? 0,
+          board: body.data.unread.board ?? 0,
+        });
+      })
+      .catch(() => {
+        // Social has its own retry state; league navigation remains available.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, league.id]);
+
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = getLeagueTabFromSearch(
@@ -178,6 +207,10 @@ export default function LeagueTabs({
   }, [activeTab, canAccessCompetitionRules, searchParams]);
 
   const handleTabChange = (tabId: TabType) => {
+    if (tabId === 'social') {
+      router.push(`/leagues/${league.id}/social`);
+      return;
+    }
     setActiveTab(tabId);
     const newUrl = `${pathname}?tab=${tabId}`;
     router.push(newUrl, { scroll: false });
@@ -193,6 +226,11 @@ export default function LeagueTabs({
     { id: 'trades', name: 'Trades' },
     { id: 'waivers', name: 'Waivers' },
     { id: 'draft', name: 'Draft' },
+    {
+      id: 'social',
+      name: 'Social',
+      badge: socialUnread.chat + socialUnread.board || undefined,
+    },
     { id: 'team-settings', name: 'Team Settings' },
   ];
   const tabs: Tab[] = canAccessCompetitionRules
@@ -1422,10 +1460,7 @@ function TeamSettingsPanel({
     currentMember?.teamName,
   ]);
 
-  const updateNotificationSetting = (
-    key: keyof LeagueMemberNotificationSettings,
-    value: boolean
-  ) => {
+  const updateNotificationSetting = (key: TeamNotificationToggleKey, value: boolean) => {
     setNotificationSettings((current) => ({ ...current, [key]: value }));
   };
 
@@ -1619,25 +1654,22 @@ function TeamSettingsPanel({
                 />
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  ['tradePush', 'Trade offers'],
-                  ['waiverPush', 'Waiver updates'],
-                  ['draftReminder', 'Draft reminders'],
-                  ['scoringAlerts', 'Scoring alerts'],
-                ].map(([key, label]) => (
+                {(
+                  [
+                    ['tradePush', 'Trade offers'],
+                    ['waiverPush', 'Waiver updates'],
+                    ['draftReminder', 'Draft reminders'],
+                    ['scoringAlerts', 'Scoring alerts'],
+                  ] satisfies Array<[TeamNotificationToggleKey, string]>
+                ).map(([key, label]) => (
                   <label
                     key={key}
                     className="flex min-h-10 items-center gap-3 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)]"
                   >
                     <input
                       type="checkbox"
-                      checked={notificationSettings[key as keyof LeagueMemberNotificationSettings]}
-                      onChange={(event) =>
-                        updateNotificationSetting(
-                          key as keyof LeagueMemberNotificationSettings,
-                          event.target.checked
-                        )
-                      }
+                      checked={notificationSettings[key]}
+                      onChange={(event) => updateNotificationSetting(key, event.target.checked)}
                       className="size-4 rounded border-[color:var(--league-border)] text-[color:var(--league-primary)] focus:ring-[color:var(--league-primary)]"
                     />
                     {label}

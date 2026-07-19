@@ -3,10 +3,12 @@
 import { useMemo, useCallback, useState, useDeferredValue, useRef, useEffect } from 'react';
 
 import Link from 'next/link';
+import { MessagesSquare } from 'lucide-react';
 
 import DraftWatchlist from '@/components/DraftWatchlist';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
+import { SocialDrawer } from '@/components/league/social';
 import { useConfirmation } from '@/components/ui';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useDraft } from '@/contexts/DraftContext';
@@ -204,6 +206,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<PlayerSortKey>('statlyZ');
   const [isPickFeedOpen, setIsPickFeedOpen] = useState(false);
+  const [isSocialOpen, setIsSocialOpen] = useState(false);
 
   // Desktop FAB ref + modal focus mgmt refs
   const openFeedBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -643,6 +646,16 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+                  {activeDraft.leagueId ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsSocialOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <MessagesSquare className="size-4" aria-hidden="true" />
+                      League chat
+                    </button>
+                  ) : null}
                   <Link
                     href="/drafts"
                     className="inline-flex items-center rounded-full bg-[color:var(--draft-broadcast-red)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -790,6 +803,14 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           </div>
         )}
       </div>
+      {activeDraft.leagueId ? (
+        <SocialDrawer
+          open={isSocialOpen}
+          onClose={() => setIsSocialOpen(false)}
+          leagueId={activeDraft.leagueId}
+          currentUserId={userId}
+        />
+      ) : null}
       {ConfirmationModal}
     </DraftErrorBoundary>
   );

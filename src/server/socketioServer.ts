@@ -28,6 +28,11 @@ import { draftRepository } from '@/server/draft/repository/DraftRepository';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
+import { flushSocialOutboxBatch } from '@/server/leagues/social/socialPublisher';
+import {
+  attachLeagueSocialSocketHandlers,
+  startLeagueSocialRealtime,
+} from '@/server/leagues/social/socialSocket';
 import { draftRoomStore } from '@/server/roomStore';
 
 // Validate configuration before starting
@@ -167,7 +172,9 @@ async function getDeltasSince(draftId: string, since: number): Promise<DraftDelt
 }
 
 async function runAutoPickForExpiredTimer(draftId: string): Promise<void> {
-  const draft = await draftRepository.transaction((tx) => draftRepository.getDraftAggregate(tx, draftId));
+  const draft = await draftRepository.transaction((tx) =>
+    draftRepository.getDraftAggregate(tx, draftId)
+  );
   if (!draft) {
     logger.warn('Skipping timer auto-pick for missing draft', { draftId });
     return;
@@ -194,7 +201,10 @@ async function runAutoPickForExpiredTimer(draftId: string): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.startsWith('conflict:')) {
-      logger.info('Skipping stale timer auto-pick after draft state changed', { draftId, error: message });
+      logger.info('Skipping stale timer auto-pick after draft state changed', {
+        draftId,
+        error: message,
+      });
       return;
     }
     logger.error('Failed to auto-pick after timer expiry', { draftId, error: message });
@@ -492,6 +502,8 @@ io.use((socket, next) => {
   void authenticateSocketConnection(socket, next);
 });
 
+attachLeagueSocialSocketHandlers(io);
+
 draftRealtimeDispatcher.attachSocketServer(io);
 
 void (async () => {
@@ -508,6 +520,25 @@ void (async () => {
     logger.error('❌ Failed to start draft realtime dispatcher', { error: (e as Error).message });
   }
 })();
+
+const socialRealtimeReady = startLeagueSocialRealtime(io);
+const drainSocialOutbox = async (): Promise<void> => {
+  try {
+    await socialRealtimeReady;
+    await flushSocialOutboxBatch(io);
+  } catch (error) {
+    logger.error('Failed to drain league social outbox', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+void drainSocialOutbox();
+setInterval(
+  () => {
+    void drainSocialOutbox();
+  },
+  Number(process.env.SOCIAL_OUTBOX_DRAIN_INTERVAL_MS || 1_000)
+);
 
 // Handle draft connections with enhanced error handling
 io.on('connection', (socket) => {

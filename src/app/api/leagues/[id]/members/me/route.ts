@@ -12,6 +12,10 @@ import {
   normalizeTeamSymbolZoom,
 } from '@/lib/teamSymbol';
 import type { LeagueMemberNotificationSettings } from '@/types/leagues';
+import {
+  DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES,
+  type SocialNotificationPreferences,
+} from '@/types/social';
 
 const DEFAULT_NOTIFICATION_SETTINGS: LeagueMemberNotificationSettings = {
   tradePush: true,
@@ -64,6 +68,7 @@ function parseNotificationSettings(value: unknown): LeagueMemberNotificationSett
   }
 
   const settings = value as Record<string, unknown>;
+  const social = parseSocialNotificationSettings(settings.social);
   return {
     tradePush:
       typeof settings.tradePush === 'boolean'
@@ -81,6 +86,45 @@ function parseNotificationSettings(value: unknown): LeagueMemberNotificationSett
       typeof settings.scoringAlerts === 'boolean'
         ? settings.scoringAlerts
         : DEFAULT_NOTIFICATION_SETTINGS.scoringAlerts,
+    social,
+  };
+}
+
+function parseSocialNotificationSettings(value: unknown): SocialNotificationPreferences {
+  const settings =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  return {
+    chatInApp:
+      typeof settings.chatInApp === 'boolean'
+        ? settings.chatInApp
+        : DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.chatInApp,
+    boardPosts:
+      typeof settings.boardPosts === 'boolean'
+        ? settings.boardPosts
+        : DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.boardPosts,
+    ownPostReplies:
+      typeof settings.ownPostReplies === 'boolean'
+        ? settings.ownPostReplies
+        : DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.ownPostReplies,
+    announcements:
+      typeof settings.announcements === 'boolean'
+        ? settings.announcements
+        : DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.announcements,
+    tradeDiscussions:
+      typeof settings.tradeDiscussions === 'boolean'
+        ? settings.tradeDiscussions
+        : DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.tradeDiscussions,
+    mentions:
+      typeof settings.mentions === 'boolean'
+        ? settings.mentions
+        : DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.mentions,
+    systemActivityInApp:
+      typeof settings.systemActivityInApp === 'boolean'
+        ? settings.systemActivityInApp
+        : DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.systemActivityInApp,
   };
 }
 
@@ -108,10 +152,7 @@ function getMembershipNotificationSettings(
   }
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     if (!id) {
@@ -167,7 +208,24 @@ export async function PATCH(
       }
 
       if (hasBodyField(body, 'notificationSettings')) {
-        const notificationSettings = parseNotificationSettings(body.notificationSettings);
+        const rawSettings = body.notificationSettings as Record<string, unknown>;
+        const notificationSettings = parseNotificationSettings(rawSettings);
+        if (!hasBodyField(rawSettings, 'social')) {
+          const existingSettings =
+            membership.source === 'prisma' && membership.memberDocId
+              ? parseStoredNotificationSettings(
+                  (
+                    await prisma.leagueMember.findUnique({
+                      where: { id: membership.memberDocId },
+                      select: { notificationSettingsJson: true },
+                    })
+                  )?.notificationSettingsJson
+                )
+              : getMembershipNotificationSettings(membership.data?.notificationSettings);
+          if (existingSettings?.social) {
+            notificationSettings.social = existingSettings.social;
+          }
+        }
         prismaData.notificationSettingsJson = JSON.stringify(notificationSettings);
         firestorePatch.notificationSettings = notificationSettings;
       }

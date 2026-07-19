@@ -21,7 +21,13 @@ export async function getLeagueMembershipAccess(
       ownerId: true,
       members: {
         where: { userId },
-        select: { id: true, role: true },
+        select: {
+          id: true,
+          role: true,
+          isActive: true,
+          status: true,
+          isCoCommissioner: true,
+        },
         take: 1,
       },
     },
@@ -29,28 +35,18 @@ export async function getLeagueMembershipAccess(
 
   if (prismaLeague) {
     const member = prismaLeague.members[0];
-    const isOwner = prismaLeague.ownerId === userId;
-    const role = member?.role ?? (isOwner ? 'OWNER' : undefined);
-    const canManage = isOwner || isLeagueManagerRole(role);
-
-    if (canManage) {
+    if (!member || !isActivePrismaMembership(member)) {
       return {
         leagueId,
         userId,
-        ...(member?.id ? { memberId: member.id } : {}),
-        ...(role ? { role } : {}),
-        isMember: true,
-        canManage,
+        isMember: false,
+        canManage: false,
       };
     }
-  }
 
-  const membership = await getLeagueMembership(leagueId, userId);
-  const firestoreOwner = await isFirestoreLeagueOwner(leagueId, userId);
-
-  if (prismaLeague?.members[0]) {
-    const member = prismaLeague.members[0];
-    const role = String(member.role);
+    const isOwner = prismaLeague.ownerId === userId;
+    const role = member.role;
+    const canManage = isOwner || member.isCoCommissioner;
 
     return {
       leagueId,
@@ -58,9 +54,12 @@ export async function getLeagueMembershipAccess(
       memberId: member.id,
       role,
       isMember: true,
-      canManage: firestoreOwner,
+      canManage,
     };
   }
+
+  const membership = await getLeagueMembership(leagueId, userId);
+  const firestoreOwner = await isFirestoreLeagueOwner(leagueId, userId);
 
   if (!membership.isMember) {
     return {
@@ -83,6 +82,14 @@ export async function getLeagueMembershipAccess(
     isMember: true,
     canManage,
   };
+}
+
+function isActivePrismaMembership(member: { isActive: boolean; status: string }): boolean {
+  if (!member.isActive) {
+    return false;
+  }
+
+  return !['declined', 'inactive', 'removed'].includes(member.status.trim().toLowerCase());
 }
 
 export async function canManageLeague(leagueId: string, userId: string): Promise<boolean> {

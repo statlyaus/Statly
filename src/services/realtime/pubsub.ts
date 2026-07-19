@@ -102,6 +102,7 @@ export class DraftPubSub {
       }
 
       const handler = (_pattern: unknown, _channel: unknown, message: unknown) => {
+        if (_pattern !== `${prefix}:*`) return;
         if (typeof message !== 'string') {
           logger.warn('Received non-string message from Redis', { messageType: typeof message });
           return;
