@@ -70,6 +70,31 @@ describe('liveStatsAdapter', () => {
     expect(rows[0].gameStatus).toBe('unknown');
   });
 
+  it('confirms zero minutes as did not play only after the authoritative match is final', () => {
+    const rows = normalizeLiveStatRows(
+      [
+        { player_uid: 'scheduled', match_uid: 'scheduled-match', stats: { minutes: 0 } },
+        { player_uid: 'live', match_uid: 'live-match', stats: { minutes: 0 } },
+        { player_uid: 'final-dnp', match_uid: 'final-match', stats: { minutes: 0 } },
+        { player_uid: 'final-played', match_uid: 'final-match', stats: { minutes: 1 } },
+        { player_uid: 'unknown', match_uid: 'unknown-match', stats: { minutes: 0 } },
+      ],
+      [
+        { match_uid: 'scheduled-match', status: 'scheduled' },
+        { match_uid: 'live-match', status: 'in_progress' },
+        { match_uid: 'final-match', status: 'final' },
+      ]
+    );
+
+    expect(rows.map((row) => [row.playerId, row.confirmedDidNotPlay])).toEqual([
+      ['scheduled', false],
+      ['live', false],
+      ['final-dnp', true],
+      ['final-played', false],
+      ['unknown', false],
+    ]);
+  });
+
   it('normalizes round match final and live status variants', () => {
     const status = normalizeRoundMatchStatus([
       { match_uid: 'm1', status: 'completed', start_time_utc: '2026-07-04T08:00:00.000Z' },

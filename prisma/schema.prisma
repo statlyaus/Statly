@@ -35,22 +35,24 @@ model Session {
 }
 
 model League {
-  id             String               @id @default(cuid())
-  name           String
-  inviteCode     String               @unique
-  ownerId        String
-  settingsId     String               @unique
-  categoriesJson String?
-  members        LeagueMember[]
-  settings       LeagueSettings       @relation(fields: [settingsId], references: [id])
-  drafts         Draft[]
-  draftEvents    DraftEvent[]
-  rosterPlayers  LeagueRosterPlayer[]
-  matchups       LeagueMatchup[]
-  lineups        LeagueLineup[]
-  matchupScores  LeagueMatchupScore[]
-  standings      LeagueStanding[]
-  createdAt      DateTime             @default(now())
+  id                String                   @id @default(cuid())
+  name              String
+  inviteCode        String                   @unique
+  ownerId           String
+  settingsId        String                   @unique
+  categoriesJson    String?
+  members           LeagueMember[]
+  settings          LeagueSettings           @relation(fields: [settingsId], references: [id])
+  drafts            Draft[]
+  draftEvents       DraftEvent[]
+  rosterPlayers     LeagueRosterPlayer[]
+  matchups          LeagueMatchup[]
+  lineups           LeagueLineup[]
+  matchupScores     LeagueMatchupScore[]
+  standings         LeagueStanding[]
+  competitionRounds LeagueCompetitionRound[]
+  competitionAudits LeagueCompetitionAudit[]
+  createdAt         DateTime                 @default(now())
 
   @@index([ownerId])
   @@index([createdAt])
@@ -58,7 +60,7 @@ model League {
 }
 
 model LeagueMember {
-  id                       String               @id @default(cuid())
+  id                       String                   @id @default(cuid())
   leagueId                 String
   userId                   String
   role                     LeagueRole
@@ -69,19 +71,21 @@ model LeagueMember {
   teamLogoZoom             Float?
   notificationSettingsJson String?
   draftSlot                Int?
-  joinedAt                 DateTime             @default(now())
-  league                   League               @relation(fields: [leagueId], references: [id])
-  user                     User                 @relation(fields: [userId], references: [id])
+  joinedAt                 DateTime                 @default(now())
+  league                   League                   @relation(fields: [leagueId], references: [id])
+  user                     User                     @relation(fields: [userId], references: [id])
   picks                    Pick[]
   orders                   DraftOrder[]
   rosterPlayers            LeagueRosterPlayer[]
-  homeMatchups             LeagueMatchup[]      @relation("HomeMemberMatchups")
-  awayMatchups             LeagueMatchup[]      @relation("AwayMemberMatchups")
-  byeMatchups              LeagueMatchup[]      @relation("ByeMemberMatchups")
-  winnerMatchups           LeagueMatchup[]      @relation("WinnerMemberMatchups")
+  homeMatchups             LeagueMatchup[]          @relation("HomeMemberMatchups")
+  awayMatchups             LeagueMatchup[]          @relation("AwayMemberMatchups")
+  byeMatchups              LeagueMatchup[]          @relation("ByeMemberMatchups")
+  winnerMatchups           LeagueMatchup[]          @relation("WinnerMemberMatchups")
   lineups                  LeagueLineup[]
   matchupScores            LeagueMatchupScore[]
   standings                LeagueStanding[]
+  competitionAuditEvents   LeagueCompetitionAudit[] @relation("CompetitionAuditActor")
+  isCoCommissioner         Boolean                  @default(false)
 
   // Lobby relations
   watchlists      DraftWatchlist[]
@@ -119,6 +123,10 @@ model LeagueSettings {
   lineupSlotsJson         String?
   categoryDirectionsJson  String?
   scoringSettingsLockedAt DateTime?
+  competitionStatus       LeagueCompetitionStatus     @default(SETUP)
+  competitionRulesJson    String?
+  competitionRulesVersion Int                         @default(0)
+  competitionPublishedAt  DateTime?
 
   // Captain/Vice-Captain system (admin configurable)
   enableCaptainSystem   Boolean @default(false)
@@ -159,6 +167,7 @@ enum LeagueLineupSlot {
   MID
   RUC
   UTIL
+  INTERCHANGE
   BENCH
 }
 
@@ -171,6 +180,43 @@ enum LeagueMatchupStatus {
   SCHEDULED
   LIVE
   FINAL
+}
+
+enum LeagueCompetitionStatus {
+  SETUP
+  PUBLISHED
+  PENDING
+  ACTIVE
+  COMPLETE
+}
+
+enum LeagueCompetitionPhase {
+  REGULAR
+  FINALS
+}
+
+enum LeagueCompetitionRoundStatus {
+  SCHEDULED
+  NO_MATCHUP
+  PENDING
+  LOCKED
+  FINAL
+}
+
+enum LeagueCompetitionAuditEventType {
+  RULES_PUBLISHED
+  FIXTURE_EDITED
+  DEADLINE_OVERRIDDEN
+  STANDINGS_RESET
+  FINALS_RESEEDED
+  LINEUP_INVALIDATED
+  AUTOSUB_RESOLVED
+  FIXTURE_DATA_PENDING
+}
+
+enum LeagueAutosubReason {
+  DID_NOT_PLAY
+  CLUB_BYE
 }
 
 model Draft {
@@ -404,33 +450,40 @@ model LeagueRosterPlayer {
 }
 
 model LeagueMatchup {
-  id               String              @id @default(cuid())
-  leagueId         String
-  round            Int
-  homeMemberId     String?
-  awayMemberId     String?
-  byeMemberId      String?
-  status           LeagueMatchupStatus @default(SCHEDULED)
-  startsAt         DateTime?
-  endsAt           DateTime?
-  finalizedAt      DateTime?
-  winnerMemberId   String?
-  homeCategoryWins Int                 @default(0)
-  awayCategoryWins Int                 @default(0)
-  drawnCategories  Int                 @default(0)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                 String                 @id @default(cuid())
+  leagueId           String
+  round              Int
+  fixtureVersion     Int                    @default(0)
+  competitionRoundId String?
+  phase              LeagueCompetitionPhase @default(REGULAR)
+  bracketKey         String?
+  homeMemberId       String?
+  awayMemberId       String?
+  byeMemberId        String?
+  status             LeagueMatchupStatus    @default(SCHEDULED)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  finalizedAt        DateTime?
+  winnerMemberId     String?
+  homeCategoryWins   Int                    @default(0)
+  awayCategoryWins   Int                    @default(0)
+  drawnCategories    Int                    @default(0)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 
-  league       League               @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  homeMember   LeagueMember?        @relation("HomeMemberMatchups", fields: [homeMemberId], references: [id], onDelete: SetNull)
-  awayMember   LeagueMember?        @relation("AwayMemberMatchups", fields: [awayMemberId], references: [id], onDelete: SetNull)
-  byeMember    LeagueMember?        @relation("ByeMemberMatchups", fields: [byeMemberId], references: [id], onDelete: SetNull)
-  winnerMember LeagueMember?        @relation("WinnerMemberMatchups", fields: [winnerMemberId], references: [id], onDelete: SetNull)
-  scores       LeagueMatchupScore[]
+  league           League                  @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  competitionRound LeagueCompetitionRound? @relation(fields: [competitionRoundId], references: [id], onDelete: SetNull)
+  homeMember       LeagueMember?           @relation("HomeMemberMatchups", fields: [homeMemberId], references: [id], onDelete: SetNull)
+  awayMember       LeagueMember?           @relation("AwayMemberMatchups", fields: [awayMemberId], references: [id], onDelete: SetNull)
+  byeMember        LeagueMember?           @relation("ByeMemberMatchups", fields: [byeMemberId], references: [id], onDelete: SetNull)
+  winnerMember     LeagueMember?           @relation("WinnerMemberMatchups", fields: [winnerMemberId], references: [id], onDelete: SetNull)
+  scores           LeagueMatchupScore[]
 
-  @@unique([leagueId, round, homeMemberId, awayMemberId])
+  @@unique([leagueId, fixtureVersion, round, homeMemberId, awayMemberId])
   @@index([leagueId, round])
   @@index([leagueId, status])
+  @@index([competitionRoundId])
+  @@index([leagueId, fixtureVersion, phase])
   @@index([homeMemberId])
   @@index([awayMemberId])
   @@index([byeMemberId])
@@ -445,9 +498,10 @@ model LeagueLineup {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  league  League               @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  member  LeagueMember         @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  players LeagueLineupPlayer[]
+  league   League                @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  member   LeagueMember          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  players  LeagueLineupPlayer[]
+  autosubs LeagueLineupAutosub[]
 
   @@unique([leagueId, memberId, round])
   @@index([leagueId, round])
@@ -470,6 +524,63 @@ model LeagueLineupPlayer {
   @@unique([lineupId, slot, slotIndex])
   @@unique([lineupId, playerId])
   @@index([playerId])
+}
+
+model LeagueCompetitionRound {
+  id                       String                       @id @default(cuid())
+  leagueId                 String
+  fixtureVersion           Int
+  round                    Int
+  aflRound                 Int?
+  phase                    LeagueCompetitionPhase       @default(REGULAR)
+  status                   LeagueCompetitionRoundStatus @default(SCHEDULED)
+  startsAt                 DateTime?
+  endsAt                   DateTime?
+  fallbackLockAt           DateTime?
+  fixtureDataLastCheckedAt DateTime?
+  publishedAt              DateTime?
+  lockedAt                 DateTime?
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+
+  league   League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  matchups LeagueMatchup[]
+
+  @@unique([leagueId, fixtureVersion, round])
+  @@index([leagueId, fixtureVersion, phase])
+  @@index([leagueId, status])
+}
+
+model LeagueLineupAutosub {
+  id                   String              @id @default(cuid())
+  lineupId             String
+  outgoingPlayerId     String
+  replacementPlayerId  String
+  outgoingSlot         LeagueLineupSlot
+  outgoingSlotIndex    Int
+  interchangeSlotIndex Int
+  reason               LeagueAutosubReason
+  resolvedAt           DateTime            @default(now())
+
+  lineup LeagueLineup @relation(fields: [lineupId], references: [id], onDelete: Cascade)
+
+  @@unique([lineupId, outgoingSlot, outgoingSlotIndex])
+  @@index([lineupId, resolvedAt])
+}
+
+model LeagueCompetitionAudit {
+  id            String                          @id @default(cuid())
+  leagueId      String
+  actorMemberId String?
+  eventType     LeagueCompetitionAuditEventType
+  payloadJson   String
+  createdAt     DateTime                        @default(now())
+
+  league      League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  actorMember LeagueMember? @relation("CompetitionAuditActor", fields: [actorMemberId], references: [id], onDelete: SetNull)
+
+  @@index([leagueId, createdAt])
+  @@index([actorMemberId, createdAt])
 }
 
 model LeagueMatchupScore {

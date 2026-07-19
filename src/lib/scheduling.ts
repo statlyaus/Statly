@@ -57,7 +57,7 @@ export type ScheduleResult =
 
 // Validation constants
 const MIN_TEAMS = 4;
-const MAX_TEAMS = 20;
+const MAX_TEAMS = 18;
 const MIN_SEASON_WEEKS = 6;
 const MAX_SEASON_WEEKS = 30;
 const MIN_LEG_LENGTH = 1;

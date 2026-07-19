@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import type {
@@ -28,6 +28,7 @@ import {
   type PositionLimitKey,
 } from '@/lib/draftSettings';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
+import { MAX_LEAGUE_TEAMS, MIN_LEAGUE_TEAMS } from '@/server/leagues/leagueCapacity';
 import {
   DEFAULT_TEAM_SYMBOL_ZOOM,
   MAX_TEAM_SYMBOL_ZOOM,
@@ -40,6 +41,7 @@ import DraftManager from './DraftManager';
 import { LeagueLineupPanel } from './matchups/LeagueLineupPanel';
 import { LeagueMatchupsPanel } from './matchups/LeagueMatchupsPanel';
 import { LeagueStandingsPanel } from './matchups/LeagueStandingsPanel';
+import { CompetitionSettingsPanel } from './settings/CompetitionSettingsPanel';
 import { ScoringSettingsPanel } from './settings/ScoringSettingsPanel';
 
 interface LeagueTabsProps {
@@ -102,9 +104,12 @@ function isLeagueTab(value: unknown): value is TabType {
   return typeof value === 'string' && TAB_IDS.includes(value as TabType);
 }
 
-function getLeagueTabFromSearch(value: string | null, isAdmin = false): TabType | null {
-  if (value === 'settings') {
-    return isAdmin ? 'league-settings' : 'team-settings';
+function getLeagueTabFromSearch(
+  value: string | null,
+  canAccessCompetitionRules = false
+): TabType | null {
+  if (value === 'settings' || value === 'league-settings') {
+    return canAccessCompetitionRules ? 'league-settings' : 'team-settings';
   }
 
   return isLeagueTab(value) ? value : null;
@@ -134,7 +139,11 @@ export default function LeagueTabs({
 
   const currentMember = members.find((member) => member.userId === currentUserId);
   const selectedPlayerId = searchParams?.get('playerId') ?? null;
-  const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager';
+  const isLeagueOwner = Boolean(currentUserId) && currentUserId === league.ownerId;
+  const isAdmin =
+    isLeagueOwner || currentMember?.role === 'owner' || currentMember?.role === 'manager';
+  const isCoCommissioner = currentMember?.isCoCommissioner === true;
+  const canAccessCompetitionRules = isAdmin || isCoCommissioner;
   const canRemoveTeams = Boolean(currentUserId) && currentUserId === league.ownerId;
   const activeMembers = members.filter((member) => member.isActive !== false);
   const openTeamSlots = Math.max(league.maxTeams - activeMembers.length, 0);
@@ -148,26 +157,25 @@ export default function LeagueTabs({
     waiverPriorityIndex >= 0 ? `Priority ${waiverPriorityIndex + 1}` : 'Not set';
   const waiverPolicyLabel = league.waiverRule ?? league.waiverWire?.waiverResetPolicy ?? 'weekly';
   const overviewTeams = activeMembers.slice(0, league.maxTeams);
-  const categorySummary = league.categories
-    .slice(0, 4)
-    .map(
-      (category) =>
-        FANTASY_CATEGORIES[category]?.abbrev ?? FANTASY_CATEGORIES[category]?.label ?? category
-    )
-    .join(', ');
+  const categoryLabels = league.categories.map(
+    (category) => FANTASY_CATEGORIES[category]?.label ?? category
+  );
 
   // Handle URL tab parameter
   useEffect(() => {
-    const tabParam = getLeagueTabFromSearch(searchParams?.get('tab') ?? null, isAdmin);
+    const tabParam = getLeagueTabFromSearch(
+      searchParams?.get('tab') ?? null,
+      canAccessCompetitionRules
+    );
     if (tabParam && tabParam !== activeTab) {
       setActiveTab(tabParam);
       return;
     }
 
-    if (activeTab === 'league-settings' && !isAdmin) {
+    if (activeTab === 'league-settings' && !canAccessCompetitionRules) {
       setActiveTab('team-settings');
     }
-  }, [activeTab, isAdmin, searchParams]);
+  }, [activeTab, canAccessCompetitionRules, searchParams]);
 
   const handleTabChange = (tabId: TabType) => {
     setActiveTab(tabId);
@@ -187,8 +195,11 @@ export default function LeagueTabs({
     { id: 'draft', name: 'Draft' },
     { id: 'team-settings', name: 'Team Settings' },
   ];
-  const tabs: Tab[] = isAdmin
-    ? [...baseTabs, { id: 'league-settings', name: 'League Settings' }]
+  const tabs: Tab[] = canAccessCompetitionRules
+    ? [
+        ...baseTabs,
+        { id: 'league-settings', name: isAdmin ? 'League Settings' : 'Competition Rules' },
+      ]
     : baseTabs;
   const waiverMembersIndex = useMemo(
     () =>
@@ -213,15 +224,6 @@ export default function LeagueTabs({
     !isDraftComplete && draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
       ? `/drafts/${draftReadiness.draftId}`
       : null;
-  const draftDate = league.draftDate ? new Date(league.draftDate) : null;
-  const formattedDraftDate =
-    draftDate && !Number.isNaN(draftDate.getTime())
-      ? new Intl.DateTimeFormat('en-AU', {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        }).format(draftDate)
-      : 'Not scheduled';
-
   useEffect(() => {
     if (!currentUserId) return;
 
@@ -401,55 +403,6 @@ export default function LeagueTabs({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-              League command center
-            </p>
-            <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight text-[color:var(--league-text)] sm:text-4xl">
-              {league.name}
-            </h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-[color:var(--league-text-muted)]">
-              <span className="rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 py-1 font-semibold capitalize text-[color:var(--league-text)]">
-                {league.type}
-              </span>
-              <span>
-                {members.length}/{league.maxTeams} teams
-              </span>
-              <span>Draft: {formattedDraftDate}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {draftRoomPath ? (
-              <button
-                type="button"
-                onClick={() => router.push(draftRoomPath)}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-              >
-                Enter draft room
-              </button>
-            ) : !isDraftComplete ? (
-              <button
-                type="button"
-                onClick={() => handleTabChange('draft')}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-              >
-                Prepare draft
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => handleTabChange('teams')}
-              className="inline-flex h-11 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-5 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-            >
-              Manage teams
-            </button>
-          </div>
-        </div>
-      </section>
-
       <div className="overflow-hidden rounded-[22px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_18px_60px_-48px_rgba(23,34,48,0.38)]">
         <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)]/80">
           <nav className="flex gap-1 overflow-x-auto px-3 py-3" aria-label="League sections">
@@ -488,100 +441,82 @@ export default function LeagueTabs({
           >
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-[0_24px_70px_-52px_rgba(15,23,42,0.45)] sm:p-5">
-                  <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-                    <div className="rounded-[22px] bg-[color:var(--league-primary)] p-5 text-[color:var(--league-primary-foreground)] shadow-[0_24px_70px_-48px_rgba(15,23,42,0.7)] sm:p-6">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">
-                        League overview
-                      </p>
-                      <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                        {league.name}
-                      </h2>
-                      <p className="mt-2 text-sm text-white/70">
-                        {league.type === 'private' ? 'Private' : 'Public'} · {activeMembers.length}/
-                        {league.maxTeams} teams · Draft {draftReadiness?.status ?? league.status}
-                      </p>
-                      <p className="mt-1 text-sm text-white/55">
-                        {openTeamSlots === 0
-                          ? 'League is full'
-                          : `${openTeamSlots} team ${openTeamSlots === 1 ? 'slot' : 'slots'} open`}
-                        {' · '}
-                        {categorySummary}
-                        {league.categories.length > 4
-                          ? ` +${league.categories.length - 4} more`
-                          : ''}
-                      </p>
+                <div className="space-y-4">
+                  <section className="rounded-[22px] bg-[color:var(--league-primary)] p-5 text-[color:var(--league-primary-foreground)] shadow-[0_24px_70px_-48px_rgba(15,23,42,0.7)] sm:p-6">
+                    <div className="flex flex-col gap-6">
+                      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">
+                            League overview
+                          </p>
+                          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                            {league.name}
+                          </h2>
+                          <p className="mt-2 text-sm text-white/70">
+                            {league.type === 'private' ? 'Private' : 'Public'} ·{' '}
+                            {activeMembers.length}/{league.maxTeams} teams · Draft{' '}
+                            {draftReadiness?.status ?? league.status}
+                          </p>
+                          <p className="mt-1 text-sm text-white/55">
+                            {openTeamSlots === 0
+                              ? 'League is full'
+                              : `${openTeamSlots} team ${openTeamSlots === 1 ? 'slot' : 'slots'} open`}
+                          </p>
+                        </div>
 
-                      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                        <div>
-                          <p className="text-3xl font-semibold text-white">
-                            {activeMembers.length}
-                          </p>
-                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
-                            teams
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-3xl font-semibold text-white">
-                            {overviewTrades.length}
-                          </p>
-                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
-                            Trade offers
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-3xl font-semibold text-white">
-                            {league.categories.length} categories
-                          </p>
-                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-white/60">
-                            Scoring
-                          </p>
-                        </div>
+                        <dl className="grid gap-5 sm:grid-cols-2 lg:min-w-[22rem]">
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
+                              Your team
+                            </dt>
+                            <dd className="mt-2 text-lg font-semibold text-white">
+                              {currentMember?.teamName ?? 'Team not set'}
+                            </dd>
+                            <p className="mt-1 text-sm text-white/70">
+                              {currentMember?.role === 'owner' || currentMember?.role === 'manager'
+                                ? 'Commissioner access'
+                                : 'Member access'}
+                            </p>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
+                              Waiver position
+                            </dt>
+                            <dd className="mt-2 text-lg font-semibold text-white">
+                              {waiverPriorityLabel}
+                            </dd>
+                            <p className="mt-1 text-sm capitalize text-white/70">
+                              {waiverPolicyLabel} order
+                            </p>
+                          </div>
+                        </dl>
                       </div>
-                    </div>
 
-                    <div className="grid gap-3">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Your team
+                      <div className="border-t border-white/15 pt-5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
+                          Scoring categories
                         </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {currentMember?.teamName ?? 'Team not set'}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-600">
-                          {currentMember?.role === 'owner' || currentMember?.role === 'manager'
-                            ? 'Commissioner access'
-                            : 'Member access'}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Waiver position
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {waiverPriorityLabel}
-                        </p>
-                        <p className="mt-1 text-sm capitalize text-slate-600">
-                          {waiverPolicyLabel} order
+                        <p className="mt-2 text-sm leading-6 text-white/80">
+                          {categoryLabels.join(' · ')}
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </section>
 
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                  <section className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
                           Teams
                         </p>
-                        <h3 className="mt-1 text-lg font-semibold text-slate-950">
+                        <h3 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
                           {league.maxTeams}-team league
                         </h3>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleTabChange('teams')}
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                       >
                         View teams
                       </button>
@@ -591,9 +526,9 @@ export default function LeagueTabs({
                       {overviewTeams.map((member) => (
                         <div
                           key={member.id}
-                          className="group flex min-h-32 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-center transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_18px_35px_-28px_rgba(15,23,42,0.45)]"
+                          className="group flex min-h-32 flex-col items-center justify-center rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-3 text-center transition hover:-translate-y-0.5 hover:border-[color:var(--league-primary)] hover:bg-[color:var(--league-surface)] hover:shadow-md"
                         >
-                          <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:size-28">
+                          <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-sm sm:size-28">
                             {member.teamLogoUrl ? (
                               <img
                                 src={member.teamLogoUrl}
@@ -603,19 +538,19 @@ export default function LeagueTabs({
                                 className="h-full w-full object-cover will-change-transform"
                               />
                             ) : (
-                              <span className="text-lg font-semibold text-slate-700">
+                              <span className="text-lg font-semibold text-[color:var(--league-text-muted)]">
                                 {getTeamInitials(member.teamName || 'Team')}
                               </span>
                             )}
                           </div>
-                          <p className="mt-3 text-sm font-semibold leading-5 text-slate-950">
+                          <p className="mt-3 text-sm font-semibold leading-5 text-[color:var(--league-text)]">
                             {member.teamName || 'Unnamed team'}
                           </p>
                         </div>
                       ))}
                     </div>
-                  </div>
-                </section>
+                  </section>
+                </div>
 
                 <section className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.35)]">
@@ -1019,6 +954,7 @@ export default function LeagueTabs({
                 league={league}
                 memberCount={members.length}
                 isAdmin={isAdmin}
+                canAccessCompetitionRules={canAccessCompetitionRules}
                 isActive
                 currentUserId={currentUserId}
               />
@@ -1895,12 +1831,14 @@ function LeagueSettingsPanel({
   league,
   memberCount,
   isAdmin,
+  canAccessCompetitionRules,
   isActive,
   currentUserId,
 }: {
   league: League;
   memberCount: number;
   isAdmin: boolean;
+  canAccessCompetitionRules: boolean;
   isActive: boolean;
   currentUserId?: string;
 }) {
@@ -1910,22 +1848,31 @@ function LeagueSettingsPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<LeagueSettingsMessage | null>(null);
+  const loadGenerationRef = useRef(0);
+  const saveGenerationRef = useRef(0);
+  const saveAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setSettings(createFallbackLeagueSettings(league));
   }, [league]);
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || !isAdmin) return;
 
-    let mounted = true;
+    const controller = new AbortController();
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    saveAbortControllerRef.current?.abort();
+    saveAbortControllerRef.current = null;
+    saveGenerationRef.current += 1;
+    setIsSaving(false);
     async function loadLeagueSettings() {
       try {
         setIsLoading(true);
         setMessage(null);
         const response = await authenticatedFetch(
           `/api/leagues/${league.id}/settings`,
-          {},
+          { signal: controller.signal },
           currentUserId
         );
         const payload = await response.json();
@@ -1934,26 +1881,35 @@ function LeagueSettingsPanel({
           throw new Error(payload.error ?? `status ${response.status}`);
         }
 
-        if (mounted) {
-          setSettings(normalizeLeagueSettingsPayload(payload.data, league));
-        }
+        if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
+        setSettings(normalizeLeagueSettingsPayload(payload.data, league));
       } catch (error) {
-        if (mounted) {
-          setMessage({
-            type: 'error',
-            text: error instanceof Error ? error.message : 'Failed to load league settings.',
-          });
+        if (
+          controller.signal.aborted ||
+          generation !== loadGenerationRef.current ||
+          (error instanceof Error && error.name === 'AbortError')
+        ) {
+          return;
         }
+        setMessage({
+          type: 'error',
+          text: error instanceof Error ? error.message : 'Failed to load league settings.',
+        });
       } finally {
-        if (mounted) setIsLoading(false);
+        if (!controller.signal.aborted && generation === loadGenerationRef.current) {
+          setIsLoading(false);
+        }
       }
     }
 
     void loadLeagueSettings();
     return () => {
-      mounted = false;
+      controller.abort();
+      if (generation === loadGenerationRef.current) loadGenerationRef.current += 1;
+      saveAbortControllerRef.current?.abort();
+      saveGenerationRef.current += 1;
     };
-  }, [currentUserId, isActive, league]);
+  }, [currentUserId, isActive, isAdmin, league]);
 
   const updateLeagueSettings = (updates: Partial<LeagueSettingsResponse['league']>) => {
     setSettings((current) => ({
@@ -1995,6 +1951,11 @@ function LeagueSettingsPanel({
   const handleSaveSettings = async () => {
     if (!isAdmin) return;
 
+    const controller = new AbortController();
+    const generation = saveGenerationRef.current + 1;
+    saveGenerationRef.current = generation;
+    saveAbortControllerRef.current?.abort();
+    saveAbortControllerRef.current = controller;
     try {
       setIsSaving(true);
       setMessage(null);
@@ -2002,6 +1963,7 @@ function LeagueSettingsPanel({
         `/api/leagues/${league.id}/settings`,
         {
           method: 'PUT',
+          signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(settings),
         },
@@ -2013,19 +1975,54 @@ function LeagueSettingsPanel({
         throw new Error(payload.error ?? `status ${response.status}`);
       }
 
+      if (controller.signal.aborted || generation !== saveGenerationRef.current) return;
       setSettings(normalizeLeagueSettingsPayload(payload.data, league));
       setMessage({ type: 'success', text: 'League settings saved.' });
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== saveGenerationRef.current ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        return;
+      }
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to save league settings.',
       });
     } finally {
-      setIsSaving(false);
+      if (generation === saveGenerationRef.current) {
+        if (saveAbortControllerRef.current === controller) saveAbortControllerRef.current = null;
+        setIsSaving(false);
+      }
     }
   };
 
   const teamFillPercent = Math.min(100, Math.round((memberCount / settings.league.maxTeams) * 100));
+
+  const updateFixtureGenerationMode = (fixtureGenerationMode: LeagueFixtureGenerationMode) => {
+    setSettings((current) => ({
+      ...current,
+      scoring: { ...current.scoring, fixtureGenerationMode },
+    }));
+  };
+
+  if (!isAdmin && canAccessCompetitionRules) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Competition Rules</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Co-commissioner controls</p>
+        </div>
+        <CompetitionSettingsPanel
+          leagueId={league.id}
+          currentUserId={currentUserId}
+          fixtureGenerationMode={settings.scoring.fixtureGenerationMode}
+          onFixtureGenerationModeChange={updateFixtureGenerationMode}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -2049,7 +2046,7 @@ function LeagueSettingsPanel({
           className={`rounded-lg border px-4 py-3 text-sm ${
             message.type === 'success'
               ? 'border-[color:var(--league-border)] bg-[color:var(--league-page)] text-[color:var(--league-text)]'
-              : 'border-red-200 bg-red-50 text-red-700'
+              : 'border-destructive/20 bg-destructive/10 text-destructive'
           }`}
         >
           {message.text}
@@ -2084,11 +2081,13 @@ function LeagueSettingsPanel({
               Max Teams
               <input
                 type="number"
-                min={4}
-                max={20}
+                min={MIN_LEAGUE_TEAMS}
+                max={MAX_LEAGUE_TEAMS}
                 value={settings.league.maxTeams}
                 onChange={(event) =>
-                  updateLeagueSettings({ maxTeams: Number.parseInt(event.target.value, 10) || 4 })
+                  updateLeagueSettings({
+                    maxTeams: Number.parseInt(event.target.value, 10) || MIN_LEAGUE_TEAMS,
+                  })
                 }
                 className="h-10 rounded-md border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-[color:var(--league-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
               />
@@ -2115,6 +2114,13 @@ function LeagueSettingsPanel({
           value={settings.scoring}
           disabled={!isAdmin || isSaving}
           onChange={(scoring) => setSettings((current) => ({ ...current, scoring }))}
+        />
+
+        <CompetitionSettingsPanel
+          leagueId={league.id}
+          currentUserId={currentUserId}
+          fixtureGenerationMode={settings.scoring.fixtureGenerationMode}
+          onFixtureGenerationModeChange={updateFixtureGenerationMode}
         />
 
         <section className="rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5">

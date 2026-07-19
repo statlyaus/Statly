@@ -10,7 +10,8 @@ describe('league settings UI architecture', () => {
     const leagueTabsSource = source();
 
     expect(leagueTabsSource).toContain('<LeagueSettingsPanel');
-    expect(leagueTabsSource).toContain("{ id: 'league-settings', name: 'League Settings' }");
+    expect(leagueTabsSource).toContain("id: 'league-settings'");
+    expect(leagueTabsSource).toContain("isAdmin ? 'League Settings' : 'Competition Rules'");
     expect(leagueTabsSource).toContain('memberCount={members.length}');
     expect(leagueTabsSource).toContain('currentUserId={currentUserId}');
     expect(leagueTabsSource).toContain(
@@ -28,15 +29,20 @@ describe('league settings UI architecture', () => {
       join(process.cwd(), 'src/components/league/settings/ScoringSettingsPanel.tsx'),
       'utf8'
     );
+    const competitionSettingsSource = readFileSync(
+      join(process.cwd(), 'src/components/league/settings/CompetitionSettingsPanel.tsx'),
+      'utf8'
+    );
 
     expect(leagueTabsSource).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
     expect(leagueTabsSource).toContain('<ScoringSettingsPanel');
     expect(scoringSettingsSource).toContain('Scoring Settings');
     expect(scoringSettingsSource).toContain('H2H Each Category');
     expect(scoringSettingsSource).toContain('H2H Most Categories');
-    expect(scoringSettingsSource).toContain('Fixture generation');
-    expect(scoringSettingsSource).toContain('Automatic by league teams');
-    expect(scoringSettingsSource).toContain('Manual commissioner setup');
+    expect(scoringSettingsSource).not.toContain('Fixture generation');
+    expect(competitionSettingsSource).toContain('Fixture generation');
+    expect(competitionSettingsSource).toContain('Automatic by league teams');
+    expect(competitionSettingsSource).toContain('Manual commissioner setup');
     expect(scoringSettingsSource).toContain('lineupSlots');
     expect(scoringSettingsSource).toContain('categoryDirections');
     expect(leagueTabsSource).toContain('Draft Settings');
@@ -50,7 +56,10 @@ describe('league settings UI architecture', () => {
     const leagueTabsSource = source();
 
     expect(leagueTabsSource).toContain(
-      "const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'manager'"
+      'const isLeagueOwner = Boolean(currentUserId) && currentUserId === league.ownerId;'
+    );
+    expect(leagueTabsSource).toContain(
+      "isLeagueOwner || currentMember?.role === 'owner' || currentMember?.role === 'manager';"
     );
     expect(leagueTabsSource).toContain('<fieldset disabled={!isAdmin || isSaving}');
     expect(leagueTabsSource).toContain('if (!isAdmin) return;');
@@ -63,7 +72,9 @@ describe('league settings UI architecture', () => {
     expect(leagueTabsSource).toContain('<TeamSettingsPanel');
     expect(leagueTabsSource).toContain("{ id: 'team-settings', name: 'Team Settings' }");
     expect(leagueTabsSource).toContain("value === 'settings'");
-    expect(leagueTabsSource).toContain("return isAdmin ? 'league-settings' : 'team-settings'");
+    expect(leagueTabsSource).toContain(
+      "return canAccessCompetitionRules ? 'league-settings' : 'team-settings'"
+    );
     expect(leagueTabsSource).toContain('Team Settings');
     expect(leagueTabsSource).toContain('Team details');
     expect(leagueTabsSource).toContain('Team name');
