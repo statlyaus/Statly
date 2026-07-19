@@ -38,49 +38,59 @@ export async function getLeagueSocialSummary(
   userId: string
 ): Promise<LeagueSocialSummary> {
   const access = await requireLeagueSocialAccess(leagueId, userId);
-  const [categories, readStates, latestChat, latestBoard, member] = await Promise.all([
-    prisma.socialBoardCategory.findMany({
-      where: {
-        leagueId,
-        seasonId: access.seasonId,
-        archivedAt: null,
-      },
-      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
-    }),
-    prisma.socialReadState.findMany({
-      where: {
-        leagueId,
-        seasonId: access.seasonId,
-        userId,
-      },
-      select: { channel: true, lastReadSequence: true },
-    }),
-    prisma.socialOutboxEvent.aggregate({
-      where: {
-        leagueId,
-        seasonId: access.seasonId,
-        channel: 'CHAT',
-        eventType: { not: 'social:read-state' },
-      },
-      _max: { sequence: true },
-    }),
-    prisma.socialOutboxEvent.aggregate({
-      where: {
-        leagueId,
-        seasonId: access.seasonId,
-        channel: 'BOARD',
-        eventType: { not: 'social:read-state' },
-      },
-      _max: { sequence: true },
-    }),
-    prisma.leagueMember.findFirst({
-      where: { id: access.memberId, leagueId, isActive: true },
-      select: { notificationSettingsJson: true },
-    }),
-  ]);
+  const [categories, readStates, latestChat, latestBoard, latestActivity, member] =
+    await Promise.all([
+      prisma.socialBoardCategory.findMany({
+        where: {
+          leagueId,
+          seasonId: access.seasonId,
+          archivedAt: null,
+        },
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+      }),
+      prisma.socialReadState.findMany({
+        where: {
+          leagueId,
+          seasonId: access.seasonId,
+          userId,
+        },
+        select: { channel: true, lastReadSequence: true },
+      }),
+      prisma.socialOutboxEvent.aggregate({
+        where: {
+          leagueId,
+          seasonId: access.seasonId,
+          channel: 'CHAT',
+          eventType: { not: 'social:read-state' },
+        },
+        _max: { sequence: true },
+      }),
+      prisma.socialOutboxEvent.aggregate({
+        where: {
+          leagueId,
+          seasonId: access.seasonId,
+          channel: 'BOARD',
+          eventType: { not: 'social:read-state' },
+        },
+        _max: { sequence: true },
+      }),
+      prisma.socialOutboxEvent.aggregate({
+        where: {
+          leagueId,
+          seasonId: access.seasonId,
+          channel: 'ACTIVITY',
+          eventType: { not: 'social:read-state' },
+        },
+        _max: { sequence: true },
+      }),
+      prisma.leagueMember.findFirst({
+        where: { id: access.memberId, leagueId, isActive: true },
+        select: { notificationSettingsJson: true },
+      }),
+    ]);
 
   const readSequence = new Map(readStates.map((state) => [state.channel, state.lastReadSequence]));
-  const [unreadChat, unreadBoard] = await Promise.all([
+  const [unreadChat, unreadBoard, unreadActivity] = await Promise.all([
     countUnreadEvents({
       leagueId,
       seasonId: access.seasonId,
@@ -95,6 +105,13 @@ export async function getLeagueSocialSummary(
       channel: 'BOARD',
       lastReadSequence: readSequence.get('BOARD') ?? 0,
     }),
+    countUnreadEvents({
+      leagueId,
+      seasonId: access.seasonId,
+      userId,
+      channel: 'ACTIVITY',
+      lastReadSequence: readSequence.get('ACTIVITY') ?? 0,
+    }),
   ]);
 
   return {
@@ -107,10 +124,12 @@ export async function getLeagueSocialSummary(
     unread: {
       chat: unreadChat,
       board: unreadBoard,
+      activity: unreadActivity,
     },
     latestSequence: {
       chat: latestChat._max.sequence ?? 0,
       board: latestBoard._max.sequence ?? 0,
+      activity: latestActivity._max.sequence ?? 0,
     },
     preferences: parseSocialPreferences(member?.notificationSettingsJson),
     categories: categories.map(toSocialCategory),
@@ -146,7 +165,7 @@ async function countUnreadEvents({
   leagueId: string;
   seasonId: string;
   userId: string;
-  channel: 'CHAT' | 'BOARD';
+  channel: 'CHAT' | 'BOARD' | 'ACTIVITY';
   lastReadSequence: number;
 }): Promise<number> {
   return prisma.socialOutboxEvent.count({
@@ -176,6 +195,7 @@ export async function listSocialMessages(
     where: {
       leagueId,
       seasonId: access.seasonId,
+      type: 'MEMBER',
       ...(cursor
         ? {
             OR: [
@@ -196,6 +216,52 @@ export async function listSocialMessages(
 
   return {
     items: records.reverse().map((record) => toSocialMessage(record, userId)),
+    nextCursor:
+      hasMore && oldest
+        ? encodeSocialCursor({
+            createdAt: oldest.createdAt.toISOString(),
+            id: oldest.id,
+          })
+        : null,
+  };
+}
+
+export async function listSocialActivity(
+  leagueId: string,
+  userId: string,
+  options: ListSocialOptions
+): Promise<SocialCursorPage<SocialMessage>> {
+  const access = await requireLeagueSocialAccess(leagueId, userId);
+  const cursor = decodeSocialCursor(options.cursor ?? null);
+  if (options.cursor && !cursor) {
+    throw new SocialError('VALIDATION', 'Invalid activity cursor');
+  }
+
+  const records = await prisma.socialMessage.findMany({
+    where: {
+      leagueId,
+      seasonId: access.seasonId,
+      type: 'SYSTEM',
+      ...(cursor
+        ? {
+            OR: [
+              { createdAt: { lt: new Date(cursor.createdAt) } },
+              { createdAt: new Date(cursor.createdAt), id: { lt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
+    include: socialMessageInclude,
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: options.limit + 1,
+  });
+
+  const hasMore = records.length > options.limit;
+  if (hasMore) records.pop();
+  const oldest = records.at(-1);
+
+  return {
+    items: records.map((record) => toSocialMessage(record, '')),
     nextCursor:
       hasMore && oldest
         ? encodeSocialCursor({

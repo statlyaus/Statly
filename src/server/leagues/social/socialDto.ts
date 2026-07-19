@@ -3,10 +3,13 @@ import type { Prisma } from '@prisma/client';
 import type {
   SocialAuthor,
   SocialBoardCategory,
+  SocialDiscussionContext,
   SocialMessage,
   SocialPost,
   SocialReply,
 } from '@/types/social';
+
+import { socialDiscussionContextSchema } from './socialValidation';
 
 export const socialAuthorMemberSelect = {
   id: true,
@@ -77,12 +80,14 @@ export function toSocialCategory(
 
 export function toSocialMessage(record: MessageRecord, currentUserId: string): SocialMessage {
   const isRemoved = record.deletedAt !== null || record.moderationStatus === 'REMOVED';
+  const context = isRemoved ? null : parseSocialDiscussionContext(record.contextJson);
   return {
     id: record.id,
     leagueId: record.leagueId,
     seasonId: record.seasonId,
     type: record.type === 'SYSTEM' ? 'system' : 'member',
     content: isRemoved ? 'Message removed' : record.content,
+    ...(context ? { context } : {}),
     author: toSocialAuthor(record.authorMember, record.authorUserId),
     ...(record.relatedEntityId ? { relatedEntityId: record.relatedEntityId } : {}),
     createdAt: record.createdAt.toISOString(),
@@ -133,4 +138,14 @@ export function toSocialReply(record: ReplyRecord, currentUserId: string): Socia
     moderationStatus: isRemoved ? 'removed' : 'active',
     isOwn: record.authorUserId === currentUserId,
   };
+}
+
+function parseSocialDiscussionContext(value: string | null): SocialDiscussionContext | null {
+  if (!value) return null;
+  try {
+    const parsed = socialDiscussionContextSchema.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }

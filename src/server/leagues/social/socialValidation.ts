@@ -23,8 +23,31 @@ const nonEmptyText = (maxLength: number) =>
     .refine((value) => value.trim().length > 0, 'Content cannot be empty')
     .transform((value) => value.trim());
 
+const socialContextMetadataSchema = z
+  .record(
+    z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(/^[A-Za-z0-9_-]+$/),
+    z.string().trim().min(1).max(200)
+  )
+  .refine((value) => Object.keys(value).length <= 6, 'Context metadata is limited to 6 fields');
+
+export const socialDiscussionContextSchema = z
+  .object({
+    type: z.enum(['player', 'trade', 'activity']),
+    id: z.string().trim().min(1).max(128),
+    title: nonEmptyText(150),
+    subtitle: nonEmptyText(300).optional(),
+    metadata: socialContextMetadataSchema.optional(),
+  })
+  .strict();
+
 export const createMessageSchema = z.object({
   content: nonEmptyText(SOCIAL_MESSAGE_MAX_LENGTH),
+  context: socialDiscussionContextSchema.optional(),
   idempotencyKey: idempotencyKeySchema,
 });
 
@@ -57,7 +80,7 @@ export const editReplySchema = z.object({
 });
 
 export const markReadSchema = z.object({
-  channel: z.enum(['chat', 'board']),
+  channel: z.enum(['chat', 'board', 'activity']),
   sequence: z.number().int().nonnegative().optional(),
 });
 

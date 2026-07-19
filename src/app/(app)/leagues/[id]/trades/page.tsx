@@ -1,4 +1,5 @@
 import { AppLayout } from '@/components/navigation';
+import { LeagueSocialDiscussButton } from '@/components/league/LeagueSocialDiscussButton';
 import { LeagueTradeProposalForm } from '@/components/league/LeagueTradeProposalForm';
 import { tags } from '@/lib/cacheTags';
 import { cookies, headers } from 'next/headers';
@@ -121,6 +122,9 @@ export default async function LeagueTradesPage({
                   <th scope="col" className="p-3 border">
                     Updated
                   </th>
+                  <th scope="col" className="p-3 border">
+                    Discuss
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -143,6 +147,21 @@ export default async function LeagueTradesPage({
                     </td>
                     <td className="p-3 border whitespace-nowrap">
                       {formatTimestamp(t.summary.lastUpdated)}
+                    </td>
+                    <td className="p-3 border">
+                      <LeagueSocialDiscussButton
+                        leagueId={id}
+                        context={{
+                          type: 'trade',
+                          id: t.tradeId,
+                          title: t.summary.tradeName || `Trade ${t.tradeId.slice(0, 8)}`,
+                          subtitle: t.summary.playerNames.join(', ').slice(0, 300) || undefined,
+                          metadata: {
+                            status: t.summary.status,
+                            teams: String(t.summary.teamCount),
+                          },
+                        }}
+                      />
                     </td>
                   </tr>
                 ))}

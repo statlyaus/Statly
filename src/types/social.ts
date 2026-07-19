@@ -1,5 +1,5 @@
 export type SocialMessageType = 'member' | 'system';
-export type SocialChannel = 'chat' | 'board';
+export type SocialChannel = 'chat' | 'board' | 'activity';
 export type SocialModerationStatus = 'active' | 'removed';
 export type SocialReportReason =
   | 'harassment'
@@ -18,12 +18,21 @@ export interface SocialAuthor {
   avatarUrl?: string;
 }
 
+export interface SocialDiscussionContext {
+  type: 'player' | 'trade' | 'activity';
+  id: string;
+  title: string;
+  subtitle?: string;
+  metadata?: Record<string, string>;
+}
+
 export interface SocialMessage {
   id: string;
   leagueId: string;
   seasonId: string;
   type: SocialMessageType;
   content: string;
+  context?: SocialDiscussionContext;
   author: SocialAuthor | null;
   relatedEntityId?: string;
   createdAt: string;
@@ -91,10 +100,12 @@ export interface LeagueSocialSummary {
   unread: {
     chat: number;
     board: number;
+    activity: number;
   };
   latestSequence: {
     chat: number;
     board: number;
+    activity: number;
   };
   preferences: SocialNotificationPreferences;
   categories: SocialBoardCategory[];
@@ -127,6 +138,7 @@ export const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES: SocialNotificationPreferen
 
 export interface CreateSocialMessageInput {
   content: string;
+  context?: SocialDiscussionContext;
   idempotencyKey: string;
 }
 
@@ -151,6 +163,7 @@ export interface SocialRealtimeEnvelope {
   channel: SocialChannel;
   event:
     | 'social:message'
+    | 'social:activity'
     | 'social:post'
     | 'social:reply'
     | 'social:moderation'

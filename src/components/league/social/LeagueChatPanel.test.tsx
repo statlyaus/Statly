@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SocialMessage } from '@/types/social';
@@ -60,14 +61,55 @@ describe('LeagueChatPanel', () => {
     );
   });
 
-  it('renders safe external links and distinguishes system activity', () => {
+  it('renders safe external links and keeps system activity out of member chat', () => {
     renderPanel([memberMessage, systemMessage]);
     expect(screen.getByRole('link', { name: 'https://statly.dev/trade' })).toHaveAttribute(
       'rel',
       'noopener noreferrer'
     );
-    expect(screen.getByText('League activity')).toBeInTheDocument();
+    expect(screen.queryByText('Player drafted')).not.toBeInTheDocument();
     expect(screen.getByText('Alex Smith')).toBeInTheDocument();
     expect(screen.getByText('Smith Squad')).toBeInTheDocument();
+  });
+
+  it('sends and clears structured discussion context only after a successful message', async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    const onClearComposerContext = vi.fn();
+    render(
+      <LeagueChatPanel
+        messages={[]}
+        hasEarlierMessages={false}
+        loading={false}
+        loadingEarlier={false}
+        sending={false}
+        canPublish
+        canManage={false}
+        composerContext={{
+          type: 'player',
+          id: 'player-1',
+          title: 'Jordan Example',
+          subtitle: 'MID · Statly United',
+          metadata: { status: 'Available' },
+        }}
+        onClearComposerContext={onClearComposerContext}
+        onRetry={vi.fn()}
+        onLoadEarlier={vi.fn()}
+        onSend={onSend}
+        onReport={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+
+    const user = userEvent.setup();
+    await user.type(screen.getByRole('textbox', { name: 'Message league chat' }), 'Worth a look');
+    await user.keyboard('{Enter}');
+
+    expect(onSend).toHaveBeenCalledWith(
+      'Worth a look',
+      expect.objectContaining({ type: 'player', id: 'player-1' })
+    );
+    expect(onClearComposerContext).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Jordan Example')).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
   });
 });

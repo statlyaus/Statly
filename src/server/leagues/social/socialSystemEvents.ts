@@ -3,7 +3,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 
 import { prisma } from '@/lib/prisma';
-import type { SocialMessage, SocialRealtimeEnvelope } from '@/types/social';
+import type { SocialMessage } from '@/types/social';
 
 import { ensureActiveLeagueSeason } from './socialAccess';
 import { socialMessageInclude, toSocialMessage } from './socialDto';
@@ -47,29 +47,11 @@ export async function publishLeagueSystemMessage({
       if (existingMessage) return toSocialMessage(existingMessage, '');
     }
 
-    const league = await tx.league.findUnique({
-      where: { id: leagueId },
-      select: {
-        ownerId: true,
-        members: {
-          where: { isActive: true, status: 'ACTIVE' },
-          orderBy: { joinedAt: 'asc' },
-          take: 1,
-          select: { id: true },
-        },
-      },
-    });
-    const actorMemberId = league?.members[0]?.id;
-    if (!actorMemberId) {
-      throw new SocialError('CONFLICT', 'League has no active member for system event retention');
-    }
-
     const command = await tx.socialCommand.create({
       data: {
         leagueId,
         seasonId,
         actorUserId: '__system__',
-        actorMemberId,
         idempotencyKey: commandKey,
         commandType: 'PUBLISH_SYSTEM_MESSAGE',
         requestHash: createHash('sha256')
@@ -89,43 +71,26 @@ export async function publishLeagueSystemMessage({
       include: socialMessageInclude,
     });
     const message = toSocialMessage(record, '');
-    const outbox = await tx.socialOutboxEvent.create({
+    await tx.socialOutboxEvent.create({
       data: {
         leagueId,
         seasonId,
-        channel: 'CHAT',
+        channel: 'ACTIVITY',
         actorUserId: null,
-        eventType: 'social:message',
-        aggregateType: 'message',
+        eventType: 'social:activity',
+        aggregateType: 'activity',
         aggregateId: record.id,
-        payloadJson: '{}',
+        payloadJson: JSON.stringify(message),
       },
-      select: { id: true, sequence: true, createdAt: true },
     });
-    const envelope: SocialRealtimeEnvelope = {
-      id: outbox.id,
-      sequence: outbox.sequence,
-      leagueId,
-      seasonId,
-      channel: 'chat',
-      event: 'social:message',
-      payload: message,
-      occurredAt: outbox.createdAt.toISOString(),
-    };
-    await Promise.all([
-      tx.socialOutboxEvent.update({
-        where: { sequence: outbox.sequence },
-        data: { payloadJson: JSON.stringify(envelope) },
-      }),
-      tx.socialCommand.update({
-        where: { id: command.id },
-        data: {
-          resultType: 'message',
-          resultId: record.id,
-          responseJson: JSON.stringify(message),
-        },
-      }),
-    ]);
+    await tx.socialCommand.update({
+      where: { id: command.id },
+      data: {
+        resultType: 'message',
+        resultId: record.id,
+        responseJson: JSON.stringify(message),
+      },
+    });
     return message;
   });
 }

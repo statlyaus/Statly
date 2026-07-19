@@ -39,6 +39,53 @@ describe('league social validation', () => {
     ).toBe(true);
   });
 
+  it('accepts narrow structured discussion context and rejects unbounded metadata or markup fields', () => {
+    expect(
+      createMessageSchema.safeParse({
+        content: 'What do we think?',
+        context: {
+          type: 'player',
+          id: 'player-1',
+          title: 'Jordan Example',
+          subtitle: 'MID · Melbourne',
+          metadata: {
+            status: 'Available',
+            round: '12',
+          },
+        },
+        idempotencyKey: 'message:context-1',
+      }).success
+    ).toBe(true);
+
+    expect(
+      createMessageSchema.safeParse({
+        content: 'Unsafe extra field',
+        context: {
+          type: 'trade',
+          id: 'trade-1',
+          title: 'Trade proposal',
+          html: '<strong>unsafe</strong>',
+        },
+        idempotencyKey: 'message:context-2',
+      }).success
+    ).toBe(false);
+
+    expect(
+      createMessageSchema.safeParse({
+        content: 'Too much metadata',
+        context: {
+          type: 'activity',
+          id: 'activity-1',
+          title: 'Draft result',
+          metadata: Object.fromEntries(
+            Array.from({ length: 7 }, (_, index) => [`field_${index}`, String(index)])
+          ),
+        },
+        idempotencyKey: 'message:context-3',
+      }).success
+    ).toBe(false);
+  });
+
   it('round-trips stable pagination cursors and rejects malformed cursors', () => {
     const cursor = {
       createdAt: '2026-07-19T12:00:00.000Z',
@@ -50,6 +97,7 @@ describe('league social validation', () => {
 
   it('allows read-state updates to derive the latest sequence server-side', () => {
     expect(markReadSchema.parse({ channel: 'chat' })).toEqual({ channel: 'chat' });
+    expect(markReadSchema.parse({ channel: 'activity' })).toEqual({ channel: 'activity' });
     expect(markReadSchema.safeParse({ channel: 'chat', sequence: -1 }).success).toBe(false);
   });
 

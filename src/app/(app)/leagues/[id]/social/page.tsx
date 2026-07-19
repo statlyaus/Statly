@@ -52,7 +52,9 @@ export default async function LeagueSocialPage({
       leagueId={id}
       leagueName={result.league.name}
       userId={userId}
-      initialView={query.view === 'board' ? 'board' : 'chat'}
+      initialView={
+        query.view === 'board' || query.view === 'activity' ? query.view : 'chat'
+      }
       initialPostId={query.post}
     />
   );

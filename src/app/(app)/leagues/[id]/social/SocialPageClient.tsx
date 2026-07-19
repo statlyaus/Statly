@@ -5,7 +5,6 @@ import Link from 'next/link';
 
 import { AppLayout } from '@/components/navigation';
 import { LeagueSocialShell, type LeagueSocialView } from '@/components/league/social';
-import { SocketProvider } from '@/providers/SocketProvider';
 
 export default function SocialPageClient({
   leagueId,
@@ -31,15 +30,13 @@ export default function SocialPageClient({
             <ArrowLeft className="size-4" aria-hidden="true" />
             Back to {leagueName}
           </Link>
-          <SocketProvider uid={userId}>
-            <LeagueSocialShell
-              leagueId={leagueId}
-              currentUserId={userId}
-              initialView={initialView}
-              initialPostId={initialPostId}
-              title={`${leagueName} social`}
-            />
-          </SocketProvider>
+          <LeagueSocialShell
+            leagueId={leagueId}
+            currentUserId={userId}
+            initialView={initialView}
+            initialPostId={initialPostId}
+            title={`${leagueName} social`}
+          />
         </div>
       </main>
     </AppLayout>

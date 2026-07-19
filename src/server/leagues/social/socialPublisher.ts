@@ -2,6 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
+import type { SocialOutboxEvent } from '@prisma/client';
 import type { Server as SocketIOServer } from 'socket.io';
 
 import { logger } from '@/lib/logger';
@@ -12,6 +13,14 @@ import { publishLeagueSocialRealtimeEvent } from './socialSocket';
 
 const MAX_ATTEMPTS = 8;
 const STALE_LOCK_MS = 60_000;
+const SOCIAL_REALTIME_EVENTS = new Set<SocialRealtimeEnvelope['event']>([
+  'social:message',
+  'social:activity',
+  'social:post',
+  'social:reply',
+  'social:moderation',
+  'social:read-state',
+]);
 
 export async function flushSocialOutboxBatch(io: SocketIOServer, batchSize = 50): Promise<number> {
   const now = new Date();
@@ -68,7 +77,7 @@ export async function flushSocialOutboxBatch(io: SocketIOServer, batchSize = 50)
   let published = 0;
   for (const event of claimed) {
     try {
-      const envelope = parseEnvelope(event.payloadJson);
+      const envelope = buildEnvelope(event);
       await publishLeagueSocialRealtimeEvent(io, envelope);
       await prisma.socialOutboxEvent.update({
         where: { sequence: event.sequence },
@@ -106,19 +115,40 @@ export async function flushSocialOutboxBatch(io: SocketIOServer, batchSize = 50)
   return published;
 }
 
-function parseEnvelope(value: string): SocialRealtimeEnvelope {
-  const parsed = JSON.parse(value) as Partial<SocialRealtimeEnvelope>;
-  if (
-    typeof parsed.id !== 'string' ||
-    typeof parsed.sequence !== 'number' ||
-    typeof parsed.leagueId !== 'string' ||
-    typeof parsed.seasonId !== 'string' ||
-    (parsed.channel !== 'chat' && parsed.channel !== 'board') ||
-    typeof parsed.event !== 'string' ||
-    typeof parsed.occurredAt !== 'string' ||
-    !parsed.payload
-  ) {
-    throw new Error('Invalid league social realtime envelope');
+function buildEnvelope(event: SocialOutboxEvent): SocialRealtimeEnvelope {
+  if (!SOCIAL_REALTIME_EVENTS.has(event.eventType as SocialRealtimeEnvelope['event'])) {
+    throw new Error('Invalid league social realtime event type');
   }
-  return parsed as SocialRealtimeEnvelope;
+
+  return {
+    id: event.id,
+    sequence: event.sequence,
+    leagueId: event.leagueId,
+    seasonId: event.seasonId,
+    channel: event.channel === 'CHAT' ? 'chat' : event.channel === 'BOARD' ? 'board' : 'activity',
+    event: event.eventType as SocialRealtimeEnvelope['event'],
+    payload: parseStoredPayload(event.payloadJson),
+    occurredAt: event.createdAt.toISOString(),
+  };
+}
+
+function parseStoredPayload(value: string): SocialRealtimeEnvelope['payload'] {
+  const parsed = JSON.parse(value) as unknown;
+  if (
+    parsed &&
+    typeof parsed === 'object' &&
+    'payload' in parsed &&
+    'event' in parsed &&
+    'channel' in parsed &&
+    'sequence' in parsed
+  ) {
+    const legacyPayload = (parsed as { payload?: unknown }).payload;
+    if (legacyPayload !== null && legacyPayload !== undefined) {
+      return legacyPayload as SocialRealtimeEnvelope['payload'];
+    }
+  }
+  if (parsed === null || parsed === undefined) {
+    throw new Error('Invalid league social realtime payload');
+  }
+  return parsed as SocialRealtimeEnvelope['payload'];
 }

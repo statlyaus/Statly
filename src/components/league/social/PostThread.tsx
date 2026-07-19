@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Link as LinkIcon, Lock, Megaphone, MessageSquare, Pin } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import type { SocialPost, SocialReply, SocialReportReason } from '@/types/social';
 
@@ -22,6 +22,7 @@ interface PostThreadProps {
   canPublish: boolean;
   error?: string | null;
   submitError?: string | null;
+  visible?: boolean;
   onBack: () => void;
   onRetry: () => Promise<void> | void;
   onLoadMore: () => Promise<void> | void;
@@ -35,6 +36,13 @@ interface PostThreadProps {
     reason: SocialReportReason,
     details?: string
   ) => Promise<void>;
+  onLatestVisibleChange?: (visible: boolean) => void;
+}
+
+const BOTTOM_THRESHOLD_PX = 72;
+
+function isNearBottom(element: HTMLElement): boolean {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= BOTTOM_THRESHOLD_PX;
 }
 
 export default function PostThread({
@@ -47,6 +55,7 @@ export default function PostThread({
   canPublish,
   error,
   submitError,
+  visible = true,
   onBack,
   onRetry,
   onLoadMore,
@@ -55,10 +64,21 @@ export default function PostThread({
   onRemovePost,
   onRemoveReply,
   onReport,
+  onLatestVisibleChange,
 }: PostThreadProps): React.JSX.Element {
   const [replying, setReplying] = useState(false);
   const [moderating, setModerating] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const muted = Boolean(mutedUntil && new Date(mutedUntil).getTime() > Date.now());
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!visible || !element) {
+      onLatestVisibleChange?.(false);
+      return;
+    }
+    onLatestVisibleChange?.(isNearBottom(element));
+  }, [onLatestVisibleChange, post.latestActivityAt, replies.at(-1)?.id, visible]);
 
   async function handleReply(body: string): Promise<void> {
     setReplying(true);
@@ -101,7 +121,11 @@ export default function PostThread({
         </Link>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto"
+        onScroll={(event) => onLatestVisibleChange?.(isNearBottom(event.currentTarget))}
+      >
         <article
           className={`border-b border-border p-4 sm:p-5 ${
             post.isAnnouncement ? 'bg-primary/10' : 'bg-background'

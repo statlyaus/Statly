@@ -68,6 +68,7 @@ export async function createSocialMessage(
           authorUserId: userId,
           authorMemberId: access.memberId,
           content: parsed.data.content,
+          contextJson: parsed.data.context ? JSON.stringify(parsed.data.context) : null,
         },
         include: socialMessageInclude,
       });
@@ -485,13 +486,18 @@ export async function markSocialChannelRead(
   leagueId: string,
   userId: string,
   input: unknown
-): Promise<{ channel: 'chat' | 'board'; sequence: number }> {
+): Promise<{ channel: 'chat' | 'board' | 'activity'; sequence: number }> {
   const parsed = markReadSchema.safeParse(input);
   if (!parsed.success) {
     throw new SocialError('VALIDATION', 'Read state is invalid', parsed.error.flatten());
   }
   const access = await requireLeagueSocialAccess(leagueId, userId);
-  const channel: SocialChannel = parsed.data.channel === 'chat' ? 'CHAT' : 'BOARD';
+  const channel: SocialChannel =
+    parsed.data.channel === 'chat'
+      ? 'CHAT'
+      : parsed.data.channel === 'board'
+        ? 'BOARD'
+        : 'ACTIVITY';
 
   return prisma.$transaction(async (tx) => {
     const requestedSequence =
@@ -896,7 +902,7 @@ async function enqueueSocialEvent(
   aggregateId: string,
   payload: SocialRealtimeEnvelope['payload']
 ): Promise<void> {
-  const outbox = await tx.socialOutboxEvent.create({
+  await tx.socialOutboxEvent.create({
     data: {
       leagueId: access.leagueId,
       seasonId: access.seasonId,
@@ -907,21 +913,6 @@ async function enqueueSocialEvent(
       aggregateId,
       payloadJson: JSON.stringify(payload),
     },
-    select: { id: true, sequence: true, createdAt: true },
-  });
-  const envelope: SocialRealtimeEnvelope = {
-    id: outbox.id,
-    sequence: outbox.sequence,
-    leagueId: access.leagueId,
-    seasonId: access.seasonId,
-    channel: channel === 'CHAT' ? 'chat' : 'board',
-    event,
-    payload,
-    occurredAt: outbox.createdAt.toISOString(),
-  };
-  await tx.socialOutboxEvent.update({
-    where: { sequence: outbox.sequence },
-    data: { payloadJson: JSON.stringify(envelope) },
   });
 }
 

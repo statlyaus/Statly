@@ -8,7 +8,7 @@ import { MessagesSquare } from 'lucide-react';
 import DraftWatchlist from '@/components/DraftWatchlist';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
-import { SocialDrawer } from '@/components/league/social';
+import { useLeagueSocialWidget } from '@/components/league/social';
 import { useConfirmation } from '@/components/ui';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useDraft } from '@/contexts/DraftContext';
@@ -200,13 +200,13 @@ function buildRosterSlots({
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
+  const { open: openLeagueSocial, setLeagueContext } = useLeagueSocialWidget();
 
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<PlayerSortKey>('statlyZ');
   const [isPickFeedOpen, setIsPickFeedOpen] = useState(false);
-  const [isSocialOpen, setIsSocialOpen] = useState(false);
 
   // Desktop FAB ref + modal focus mgmt refs
   const openFeedBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -374,6 +374,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       });
     }
   }, [isPickFeedOpen]);
+
+  useEffect(() => {
+    const leagueId = draft.draft?.leagueId;
+    setLeagueContext(leagueId ?? null, draft.draft?.name);
+    return () => setLeagueContext(null);
+  }, [draft.draft?.leagueId, draft.draft?.name, setLeagueContext]);
 
   // Loading
   if (draft.isLoading) {
@@ -649,7 +655,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                   {activeDraft.leagueId ? (
                     <button
                       type="button"
-                      onClick={() => setIsSocialOpen(true)}
+                      onClick={() => openLeagueSocial({ view: 'chat' })}
                       className="inline-flex items-center gap-2 rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <MessagesSquare className="size-4" aria-hidden="true" />
@@ -803,14 +809,6 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           </div>
         )}
       </div>
-      {activeDraft.leagueId ? (
-        <SocialDrawer
-          open={isSocialOpen}
-          onClose={() => setIsSocialOpen(false)}
-          leagueId={activeDraft.leagueId}
-          currentUserId={userId}
-        />
-      ) : null}
       {ConfirmationModal}
     </DraftErrorBoundary>
   );

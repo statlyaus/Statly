@@ -1,30 +1,43 @@
 'use client';
 
-import { MessageCircle, MessagesSquare, Settings } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { Activity, MessageCircle, MessagesSquare, Settings } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
-import type { SocialChannel, SocialPost } from '@/types/social';
+import type {
+  SocialChannel,
+  SocialDiscussionContext,
+  SocialMessage,
+  SocialPost,
+} from '@/types/social';
 
+import ActivityPanel from './ActivityPanel';
 import LeagueChatPanel from './LeagueChatPanel';
 import MessageBoardPanel from './MessageBoardPanel';
 import PostThread from './PostThread';
 import SocialPreferencesPanel from './SocialPreferencesPanel';
 import { useLeagueSocial } from './useLeagueSocial';
 
-export type LeagueSocialView = 'chat' | 'board';
+export type LeagueSocialView = SocialChannel;
 
-interface LeagueSocialShellProps {
+export interface LeagueSocialShellProps {
   leagueId: string;
   currentUserId?: string;
   initialView?: LeagueSocialView;
   initialPostId?: string;
   className?: string;
   title?: string;
+  showHeader?: boolean;
+  compact?: boolean;
+  visible?: boolean;
+  composerContext?: SocialDiscussionContext | null;
+  onClearComposerContext?: () => void;
+  onDiscussActivity?: (activity: SocialMessage) => void;
 }
 
 const tabs: Array<{ id: LeagueSocialView; label: string; icon: typeof MessageCircle }> = [
   { id: 'chat', label: 'Chat', icon: MessageCircle },
   { id: 'board', label: 'Message board', icon: MessagesSquare },
+  { id: 'activity', label: 'Activity', icon: Activity },
 ];
 
 export default function LeagueSocialShell({
@@ -34,12 +47,19 @@ export default function LeagueSocialShell({
   initialPostId,
   className = '',
   title = 'League social',
+  showHeader = true,
+  compact = false,
+  visible = true,
+  composerContext,
+  onClearComposerContext,
+  onDiscussActivity,
 }: LeagueSocialShellProps): React.JSX.Element {
   const controller = useLeagueSocial(leagueId, currentUserId);
   const tabSetId = useId();
   const tabRefs = useRef<Record<LeagueSocialView, HTMLButtonElement | null>>({
     chat: null,
     board: null,
+    activity: null,
   });
   const loadedInitialPostRef = useRef<string | null>(null);
   const [activeView, setActiveView] = useState<LeagueSocialView>(initialView);
@@ -47,6 +67,14 @@ export default function LeagueSocialShell({
   const [showPreferences, setShowPreferences] = useState(false);
   const [acceptingStandards, setAcceptingStandards] = useState(false);
   const [standardsError, setStandardsError] = useState<string | null>(null);
+  const [documentVisible, setDocumentVisible] = useState(
+    () => typeof document === 'undefined' || document.visibilityState === 'visible'
+  );
+  const [latestVisible, setLatestVisible] = useState<Record<SocialChannel, boolean>>({
+    chat: false,
+    board: false,
+    activity: false,
+  });
   const selectedPost = controller.posts.find((post) => post.id === selectedPostId) ?? null;
   const selectedThread = selectedPostId ? controller.threads[selectedPostId] : undefined;
 
@@ -63,18 +91,26 @@ export default function LeagueSocialShell({
   }, [controller.loadReplies, initialPostId]);
 
   useEffect(() => {
-    if (controller.loading) return;
-    void controller.markRead(activeView as SocialChannel);
-  }, [
-    activeView,
-    controller.loading,
-    controller.markRead,
-    controller.summary?.latestSequence[activeView],
-  ]);
+    const handleVisibilityChange = () => {
+      setDocumentVisible(document.visibilityState === 'visible');
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    if (!visible || !documentVisible || controller.loading || !latestVisible[activeView]) return;
+    void controller.markRead(activeView);
+  }, [activeView, controller, documentVisible, latestVisible, visible]);
+
+  const handleLatestVisibleChange = useCallback((channel: SocialChannel, isVisible: boolean) => {
+    setLatestVisible((current) =>
+      current[channel] === isVisible ? current : { ...current, [channel]: isVisible }
+    );
+  }, []);
 
   function selectView(view: LeagueSocialView): void {
     setActiveView(view);
-    if (view === 'chat') setSelectedPostId(null);
   }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
@@ -93,33 +129,42 @@ export default function LeagueSocialShell({
   }
 
   function handleSelectPost(post: SocialPost): void {
+    handleLatestVisibleChange('board', false);
     setSelectedPostId(post.id);
     void controller.loadReplies(post.id);
   }
 
+  const settingsButton = (
+    <button
+      type="button"
+      onClick={() => setShowPreferences((preferencesVisible) => !preferencesVisible)}
+      aria-expanded={showPreferences}
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Settings className="size-4" aria-hidden="true" />
+      <span className="sr-only">Social notification preferences</span>
+    </button>
+  );
+
   return (
     <section
-      className={`flex min-h-[36rem] min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-background text-foreground shadow-sm ${className}`}
+      className={`flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-background text-foreground shadow-sm ${
+        compact ? 'min-h-0' : 'min-h-[36rem]'
+      } ${className}`}
       aria-label={title}
     >
       <div className="border-b border-border bg-card px-3 pt-3">
-        <div className="flex items-start justify-between gap-3 px-1 pb-3">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Chat live or revisit persistent league discussions.
-            </p>
+        {showHeader ? (
+          <div className="flex items-start justify-between gap-3 px-1 pb-3">
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Chat live or revisit persistent league discussions.
+              </p>
+            </div>
+            {settingsButton}
           </div>
-          <button
-            type="button"
-            onClick={() => setShowPreferences((visible) => !visible)}
-            aria-expanded={showPreferences}
-            className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Settings className="size-4" aria-hidden="true" />
-            <span className="sr-only">Social notification preferences</span>
-          </button>
-        </div>
+        ) : null}
         {showPreferences && controller.summary ? (
           <SocialPreferencesPanel
             preferences={controller.summary.preferences}
@@ -163,78 +208,97 @@ export default function LeagueSocialShell({
             ) : null}
           </div>
         ) : null}
-        <div
-          role="tablist"
-          aria-label="League social views"
-          className="grid max-w-md grid-cols-2 gap-1 rounded-xl bg-muted p-1"
-        >
-          {tabs.map((tab) => {
-            const active = activeView === tab.id;
-            const unread = controller.summary?.unread[tab.id] ?? 0;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                ref={(element) => {
-                  tabRefs.current[tab.id] = element;
-                }}
-                id={`${tabSetId}-${tab.id}-tab`}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                aria-controls={`${tabSetId}-${tab.id}-panel`}
-                tabIndex={active ? 0 : -1}
-                onClick={() => selectView(tab.id)}
-                onKeyDown={handleTabKeyDown}
-                className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  active
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                <span>{tab.label}</span>
-                {unread > 0 ? (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-xs font-semibold text-destructive-foreground">
-                    <span className="sr-only">{unread} unread</span>
-                    <span aria-hidden="true">{unread > 99 ? '99+' : unread}</span>
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 pb-3">
+          <div
+            role="tablist"
+            aria-label="League social views"
+            className="grid min-w-0 max-w-xl flex-1 grid-cols-3 gap-1 rounded-xl bg-muted p-1"
+          >
+            {tabs.map((tab) => {
+              const active = activeView === tab.id;
+              const unread = controller.summary?.unread[tab.id] ?? 0;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  ref={(element) => {
+                    tabRefs.current[tab.id] = element;
+                  }}
+                  id={`${tabSetId}-${tab.id}-tab`}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls={`${tabSetId}-${tab.id}-panel`}
+                  tabIndex={active ? 0 : -1}
+                  onClick={() => selectView(tab.id)}
+                  onKeyDown={handleTabKeyDown}
+                  className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    active
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  <span>{tab.label}</span>
+                  {unread > 0 ? (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-xs font-semibold text-destructive-foreground">
+                      <span className="sr-only">{unread} unread</span>
+                      <span aria-hidden="true">{unread > 99 ? '99+' : unread}</span>
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+          {!showHeader ? settingsButton : null}
         </div>
       </div>
 
       <div
-        id={`${tabSetId}-${activeView}-panel`}
+        id={`${tabSetId}-chat-panel`}
         role="tabpanel"
-        aria-labelledby={`${tabSetId}-${activeView}-tab`}
-        className="flex min-h-0 flex-1 p-3"
+        aria-labelledby={`${tabSetId}-chat-tab`}
+        hidden={activeView !== 'chat'}
+        aria-hidden={activeView !== 'chat'}
+        className={`${activeView === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 p-3`}
       >
-        {activeView === 'chat' ? (
-          <LeagueChatPanel
-            messages={controller.messages}
-            hasEarlierMessages={Boolean(controller.messagesCursor)}
-            loading={controller.loading}
-            loadingEarlier={controller.loadingEarlierMessages}
-            sending={controller.sendingMessage}
-            canPublish={controller.summary?.canPublish ?? false}
-            canManage={controller.summary?.canManage ?? false}
-            mutedUntil={controller.summary?.mutedUntil}
-            error={controller.error}
-            submitError={controller.submitError}
-            onRetry={controller.retry}
-            onLoadEarlier={controller.loadEarlierMessages}
-            onSend={controller.sendMessage}
-            onReport={(messageId, reason, details) =>
-              controller.reportContent('message', messageId, reason, details)
-            }
-            onRemove={(messageId, reason) =>
-              controller.moderateContent('message', messageId, reason)
-            }
-          />
-        ) : selectedPost ? (
+        <LeagueChatPanel
+          messages={controller.messages}
+          hasEarlierMessages={Boolean(controller.messagesCursor)}
+          loading={controller.loading}
+          loadingEarlier={controller.loadingEarlierMessages}
+          sending={controller.sendingMessage}
+          canPublish={controller.summary?.canPublish ?? false}
+          canManage={controller.summary?.canManage ?? false}
+          mutedUntil={controller.summary?.mutedUntil}
+          error={controller.error}
+          submitError={controller.submitError}
+          visible={visible && activeView === 'chat'}
+          compact={compact}
+          composerContext={composerContext}
+          onClearComposerContext={onClearComposerContext}
+          onLatestVisibleChange={(isLatestVisible) =>
+            handleLatestVisibleChange('chat', isLatestVisible)
+          }
+          onRetry={controller.retry}
+          onLoadEarlier={controller.loadEarlierMessages}
+          onSend={controller.sendMessage}
+          onReport={(messageId, reason, details) =>
+            controller.reportContent('message', messageId, reason, details)
+          }
+          onRemove={(messageId, reason) => controller.moderateContent('message', messageId, reason)}
+        />
+      </div>
+
+      <div
+        id={`${tabSetId}-board-panel`}
+        role="tabpanel"
+        aria-labelledby={`${tabSetId}-board-tab`}
+        hidden={activeView !== 'board'}
+        aria-hidden={activeView !== 'board'}
+        className={`${activeView === 'board' ? 'flex' : 'hidden'} min-h-0 flex-1 p-3`}
+      >
+        {selectedPost ? (
           <PostThread
             post={selectedPost}
             replies={selectedThread?.items ?? []}
@@ -245,7 +309,11 @@ export default function LeagueSocialShell({
             canPublish={controller.summary?.canPublish ?? false}
             error={selectedThread?.error}
             submitError={controller.submitError}
-            onBack={() => setSelectedPostId(null)}
+            visible={visible && activeView === 'board'}
+            onBack={() => {
+              handleLatestVisibleChange('board', false);
+              setSelectedPostId(null);
+            }}
             onRetry={() => controller.loadReplies(selectedPost.id)}
             onLoadMore={() => controller.loadReplies(selectedPost.id, true)}
             onReply={(body) => controller.createReply(selectedPost.id, body)}
@@ -273,14 +341,51 @@ export default function LeagueSocialShell({
             mutedUntil={controller.summary?.mutedUntil}
             error={controller.error}
             submitError={controller.submitError}
+            visible={visible && activeView === 'board'}
             onRetry={controller.retry}
             onLoadMore={controller.loadMorePosts}
             onSelectPost={handleSelectPost}
             onCreatePost={controller.createPost}
             sort={controller.postSort}
             onSortChange={controller.setPostSort}
+            onLatestVisibleChange={(isLatestVisible) =>
+              handleLatestVisibleChange('board', isLatestVisible)
+            }
           />
         )}
+      </div>
+
+      <div
+        id={`${tabSetId}-activity-panel`}
+        role="tabpanel"
+        aria-labelledby={`${tabSetId}-activity-tab`}
+        hidden={activeView !== 'activity'}
+        aria-hidden={activeView !== 'activity'}
+        className={`${activeView === 'activity' ? 'flex' : 'hidden'} min-h-0 flex-1 p-3`}
+      >
+        <ActivityPanel
+          activity={controller.activity}
+          hasEarlierActivity={Boolean(controller.activityCursor)}
+          loading={controller.loading}
+          loadingEarlier={controller.loadingEarlierActivity}
+          error={controller.error}
+          visible={visible && activeView === 'activity'}
+          compact={compact}
+          onRetry={controller.retry}
+          onLoadEarlier={controller.loadEarlierActivity}
+          onLatestVisibleChange={(isLatestVisible) =>
+            handleLatestVisibleChange('activity', isLatestVisible)
+          }
+          onDiscuss={
+            onDiscussActivity
+              ? (activity) => {
+                  onDiscussActivity(activity);
+                  selectView('chat');
+                  window.requestAnimationFrame(() => tabRefs.current.chat?.focus());
+                }
+              : undefined
+          }
+        />
       </div>
     </section>
   );

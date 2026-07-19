@@ -1,7 +1,7 @@
 'use client';
 
 import { Lock, Megaphone, MessageSquare, Pin } from 'lucide-react';
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 
 import type { CreateSocialPostInput, SocialBoardCategory, SocialPost } from '@/types/social';
 
@@ -20,12 +20,14 @@ interface MessageBoardPanelProps {
   mutedUntil?: string | null;
   error?: string | null;
   submitError?: string | null;
+  visible?: boolean;
   onRetry: () => Promise<void> | void;
   onLoadMore: () => Promise<void> | void;
   onSelectPost: (post: SocialPost) => void;
   onCreatePost: (input: Omit<CreateSocialPostInput, 'idempotencyKey'>) => Promise<SocialPost>;
   sort: SocialPostSort;
   onSortChange: (sort: SocialPostSort) => void;
+  onLatestVisibleChange?: (visible: boolean) => void;
 }
 
 export default function MessageBoardPanel({
@@ -40,12 +42,14 @@ export default function MessageBoardPanel({
   mutedUntil,
   error,
   submitError,
+  visible = true,
   onRetry,
   onLoadMore,
   onSelectPost,
   onCreatePost,
   sort,
   onSortChange,
+  onLatestVisibleChange,
 }: MessageBoardPanelProps): React.JSX.Element {
   const titleId = useId();
   const bodyId = useId();
@@ -55,6 +59,7 @@ export default function MessageBoardPanel({
   const [body, setBody] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(categories[0]?.id ?? '');
   const [isAnnouncement, setIsAnnouncement] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const muted = Boolean(mutedUntil && new Date(mutedUntil).getTime() > Date.now());
   const sortedPosts = [...posts].sort((left, right) => {
     if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
@@ -75,6 +80,15 @@ export default function MessageBoardPanel({
       setSelectedCategoryId(categories[0].id);
     }
   }, [categories, selectedCategoryId]);
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!visible || !element) {
+      onLatestVisibleChange?.(false);
+      return;
+    }
+    onLatestVisibleChange?.(element.scrollTop <= 72);
+  }, [onLatestVisibleChange, sortedPosts[0]?.id, visible]);
 
   async function handleCreate(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -229,7 +243,11 @@ export default function MessageBoardPanel({
         </form>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto p-4"
+        onScroll={(event) => onLatestVisibleChange?.(event.currentTarget.scrollTop <= 72)}
+      >
         <div className="mb-3 flex justify-end">
           <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-foreground">
             Sort discussions

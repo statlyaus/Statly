@@ -139,7 +139,7 @@ export default function LeagueTabs({
   const [overviewWaiversStatus, setOverviewWaiversStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
-  const [socialUnread, setSocialUnread] = useState({ chat: 0, board: 0 });
+  const [socialUnread, setSocialUnread] = useState({ chat: 0, board: 0, activity: 0 });
 
   const currentMember = members.find((member) => member.userId === currentUserId);
   const selectedPlayerId = searchParams?.get('playerId') ?? null;
@@ -172,7 +172,7 @@ export default function LeagueTabs({
       .then(async (response) => {
         if (!response.ok) return null;
         return (await response.json()) as {
-          data?: { unread?: { chat?: number; board?: number } };
+          data?: { unread?: { chat?: number; board?: number; activity?: number } };
         };
       })
       .then((body) => {
@@ -180,6 +180,7 @@ export default function LeagueTabs({
         setSocialUnread({
           chat: body.data.unread.chat ?? 0,
           board: body.data.unread.board ?? 0,
+          activity: body.data.unread.activity ?? 0,
         });
       })
       .catch(() => {
@@ -229,7 +230,7 @@ export default function LeagueTabs({
     {
       id: 'social',
       name: 'Social',
-      badge: socialUnread.chat + socialUnread.board || undefined,
+      badge: socialUnread.chat + socialUnread.board + socialUnread.activity || undefined,
     },
     { id: 'team-settings', name: 'Team Settings' },
   ];

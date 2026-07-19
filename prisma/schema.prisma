@@ -702,6 +702,7 @@ enum SocialModerationStatus {
 enum SocialChannel {
   CHAT
   BOARD
+  ACTIVITY
 }
 
 enum SocialOutboxStatus {
@@ -719,6 +720,7 @@ model SocialMessage {
   authorMemberId    String?
   type              SocialMessageType      @default(MEMBER)
   content           String
+  contextJson       String?
   relatedEntityType String?
   relatedEntityId   String?
   moderationStatus  SocialModerationStatus @default(ACTIVE)
@@ -906,22 +908,22 @@ model SocialMute {
 }
 
 model SocialCommand {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   leagueId       String
   seasonId       String
   actorUserId    String
-  actorMemberId  String
+  actorMemberId  String?
   idempotencyKey String
   commandType    String
   requestHash    String
   resultType     String?
   resultId       String?
   responseJson   String?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime      @default(now())
   expiresAt      DateTime?
-  league         League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  season         LeagueSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  actorMember    LeagueMember @relation(fields: [actorMemberId], references: [id], onDelete: Cascade)
+  league         League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season         LeagueSeason  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  actorMember    LeagueMember? @relation(fields: [actorMemberId], references: [id], onDelete: SetNull)
 
   @@unique([leagueId, actorUserId, idempotencyKey])
   @@index([seasonId, createdAt])

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useSocket } from '@/contexts/SocketContext';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
@@ -11,6 +11,7 @@ import type {
   LeagueSocialSummary,
   SocialChannel,
   SocialCursorPage,
+  SocialDiscussionContext,
   SocialMessage,
   SocialNotificationPreferences,
   SocialPost,
@@ -30,12 +31,15 @@ export type SocialPostSort = 'latestActivity' | 'createdAt';
 interface LeagueSocialState {
   summary: LeagueSocialSummary | null;
   messages: SocialMessage[];
+  activity: SocialMessage[];
   posts: SocialPost[];
   threads: Record<string, ThreadState>;
   messagesCursor: string | null;
+  activityCursor: string | null;
   postsCursor: string | null;
   loading: boolean;
   loadingEarlierMessages: boolean;
+  loadingEarlierActivity: boolean;
   loadingMorePosts: boolean;
   sendingMessage: boolean;
   creatingPost: boolean;
@@ -46,12 +50,15 @@ interface LeagueSocialState {
 const initialState: LeagueSocialState = {
   summary: null,
   messages: [],
+  activity: [],
   posts: [],
   threads: {},
   messagesCursor: null,
+  activityCursor: null,
   postsCursor: null,
   loading: true,
   loadingEarlierMessages: false,
+  loadingEarlierActivity: false,
   loadingMorePosts: false,
   sendingMessage: false,
   creatingPost: false,
@@ -91,6 +98,14 @@ function sortMessages(messages: SocialMessage[]): SocialMessage[] {
   );
 }
 
+function memberMessagesOnly(messages: SocialMessage[]): SocialMessage[] {
+  return messages.filter((message) => message.type !== 'system');
+}
+
+function activityMessagesOnly(messages: SocialMessage[]): SocialMessage[] {
+  return messages.filter((message) => message.type === 'system');
+}
+
 function sortPosts(posts: SocialPost[]): SocialPost[] {
   return [...posts].sort((left, right) => {
     if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
@@ -100,6 +115,48 @@ function sortPosts(posts: SocialPost[]): SocialPost[] {
 
 function upsertById<T extends { id: string }>(items: T[], item: T): T[] {
   return [...items.filter((candidate) => candidate.id !== item.id), item];
+}
+
+function reconcileById<T extends { id: string }>(
+  current: T[],
+  snapshot: T[],
+  preferCurrent: boolean
+): T[] {
+  const reconciled = new Map<string, T>();
+  const first = preferCurrent ? snapshot : current;
+  const second = preferCurrent ? current : snapshot;
+  first.forEach((item) => reconciled.set(item.id, item));
+  second.forEach((item) => reconciled.set(item.id, item));
+  return [...reconciled.values()];
+}
+
+function reconcileSummary(
+  current: LeagueSocialSummary | null,
+  snapshot: LeagueSocialSummary
+): LeagueSocialSummary {
+  if (
+    !current ||
+    current.leagueId !== snapshot.leagueId ||
+    current.seasonId !== snapshot.seasonId
+  ) {
+    return snapshot;
+  }
+
+  const channels: SocialChannel[] = ['chat', 'board', 'activity'];
+  return channels.reduce<LeagueSocialSummary>((result, channel) => {
+    if (current.latestSequence[channel] <= snapshot.latestSequence[channel]) return result;
+    return {
+      ...result,
+      latestSequence: {
+        ...result.latestSequence,
+        [channel]: current.latestSequence[channel],
+      },
+      unread: {
+        ...result.unread,
+        [channel]: current.unread[channel],
+      },
+    };
+  }, snapshot);
 }
 
 function getRealtimePayload<T>(value: T | SocialRealtimeEnvelope, leagueId: string): T | null {
@@ -141,8 +198,9 @@ function updateRealtimeSummary(
 export interface LeagueSocialController extends LeagueSocialState {
   retry: () => Promise<void>;
   loadEarlierMessages: () => Promise<void>;
+  loadEarlierActivity: () => Promise<void>;
   loadMorePosts: () => Promise<void>;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, context?: SocialDiscussionContext | null) => Promise<void>;
   createPost: (input: Omit<CreateSocialPostInput, 'idempotencyKey'>) => Promise<SocialPost>;
   updatePost: (
     postId: string,
@@ -175,6 +233,8 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
   const socket = useSocket();
   const [state, setState] = useState<LeagueSocialState>(initialState);
   const [postSort, setPostSort] = useState<SocialPostSort>('latestActivity');
+  const inFlightReadSequences = useRef<Partial<Record<SocialChannel, number>>>({});
+  const resyncPromiseRef = useRef<Promise<void> | null>(null);
   const basePath = useMemo(() => `/api/leagues/${encodeURIComponent(leagueId)}/social`, [leagueId]);
 
   const apiRequest = useCallback(
@@ -185,24 +245,65 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     [basePath, currentUserId]
   );
 
+  const loadSummary = useCallback(async (): Promise<void> => {
+    const summary = await apiRequest<LeagueSocialSummary>('/summary');
+    setState((current) => ({ ...current, summary }));
+  }, [apiRequest]);
+
   const loadInitial = useCallback(async (): Promise<void> => {
     setState((current) => ({ ...current, loading: true, error: null }));
     try {
-      const [summary, messagePage, postPage] = await Promise.all([
+      const [summary, messagePage, activityPage, postPage] = await Promise.all([
         apiRequest<LeagueSocialSummary>('/summary'),
         apiRequest<SocialCursorPage<SocialMessage>>('/messages?limit=50'),
+        apiRequest<SocialCursorPage<SocialMessage>>('/activity?limit=50'),
         apiRequest<SocialCursorPage<SocialPost>>(`/posts?limit=30&sort=${postSort}`),
       ]);
-      setState((current) => ({
-        ...current,
-        summary,
-        messages: sortMessages(messagePage.items),
-        posts: sortPosts(postPage.items),
-        messagesCursor: messagePage.nextCursor,
-        postsCursor: postPage.nextCursor,
-        loading: false,
-        error: null,
-      }));
+      setState((current) => {
+        const reconciledSummary = reconcileSummary(current.summary, summary);
+        const sameScope =
+          current.summary?.leagueId === summary.leagueId &&
+          current.summary.seasonId === summary.seasonId;
+        const chatAdvanced =
+          sameScope &&
+          current.summary !== null &&
+          current.summary.latestSequence.chat > summary.latestSequence.chat;
+        const activityAdvanced =
+          sameScope &&
+          current.summary !== null &&
+          current.summary.latestSequence.activity > summary.latestSequence.activity;
+        const boardAdvanced =
+          sameScope &&
+          current.summary !== null &&
+          current.summary.latestSequence.board > summary.latestSequence.board;
+
+        return {
+          ...current,
+          summary: reconciledSummary,
+          messages: sortMessages(
+            reconcileById(
+              sameScope ? current.messages : [],
+              memberMessagesOnly(messagePage.items),
+              chatAdvanced
+            )
+          ),
+          activity: sortMessages(
+            reconcileById(
+              sameScope ? current.activity : [],
+              activityMessagesOnly(activityPage.items),
+              activityAdvanced
+            )
+          ),
+          posts: sortPosts(
+            reconcileById(sameScope ? current.posts : [], postPage.items, boardAdvanced)
+          ),
+          messagesCursor: messagePage.nextCursor,
+          activityCursor: activityPage.nextCursor,
+          postsCursor: postPage.nextCursor,
+          loading: false,
+          error: null,
+        };
+      });
     } catch (error) {
       setState((current) => ({
         ...current,
@@ -212,22 +313,87 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     }
   }, [apiRequest, postSort]);
 
-  useEffect(() => {
-    void loadInitial();
+  const resync = useCallback((): Promise<void> => {
+    if (resyncPromiseRef.current) return resyncPromiseRef.current;
+
+    const request = loadInitial().finally(() => {
+      if (resyncPromiseRef.current === request) {
+        resyncPromiseRef.current = null;
+      }
+    });
+    resyncPromiseRef.current = request;
+    return request;
   }, [loadInitial]);
+
+  useEffect(() => {
+    void resync();
+  }, [resync]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && (!socket || socket.connected)) {
+        void resync();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [resync, socket]);
 
   useEffect(() => {
     if (!socket || !leagueId) return;
 
-    const joinLeagueSocial = () => {
-      socket.emit('social:join', { leagueId });
+    let cancelled = false;
+    let joinPromise: Promise<boolean> | null = null;
+    let joinTimeoutId: number | null = null;
+
+    const joinLeagueSocial = (): Promise<boolean> => {
+      if (joinPromise) return joinPromise;
+
+      const request = new Promise<boolean>((resolve) => {
+        joinTimeoutId = window.setTimeout(() => {
+          joinTimeoutId = null;
+          resolve(false);
+        }, 5_000);
+        socket.emit(
+          'social:join',
+          { leagueId },
+          (acknowledgement: { ok?: boolean } | undefined) => {
+            if (joinTimeoutId !== null) {
+              window.clearTimeout(joinTimeoutId);
+              joinTimeoutId = null;
+            }
+            resolve(acknowledgement?.ok === true);
+          }
+        );
+      }).finally(() => {
+        if (joinPromise === request) joinPromise = null;
+      });
+      joinPromise = request;
+      return request;
     };
-    joinLeagueSocial();
-    socket.on('connect', joinLeagueSocial);
+    const rejoinAndResync = async () => {
+      const authorized = await joinLeagueSocial();
+      if (cancelled) return;
+      if (!authorized) {
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: 'League social realtime authorization failed.',
+        }));
+        return;
+      }
+
+      const preAuthorizationResync = resyncPromiseRef.current;
+      if (preAuthorizationResync) {
+        await preAuthorizationResync;
+      }
+      if (cancelled) return;
+      await resync();
+    };
 
     const handleMessage = (value: SocialMessage | SocialRealtimeEnvelope) => {
       const payload = getRealtimePayload<SocialMessage>(value, leagueId);
-      if (!payload?.id || !payload.createdAt) return;
+      if (!payload?.id || !payload.createdAt || payload.type === 'system') return;
       const sequence = getRealtimeSequence(value);
       const isOwn = Boolean(currentUserId && payload.author?.userId === currentUserId);
       const message = { ...payload, isOwn };
@@ -235,6 +401,16 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
         ...current,
         summary: updateRealtimeSummary(current.summary, 'chat', sequence, isOwn),
         messages: sortMessages(upsertById(current.messages, message)),
+      }));
+    };
+    const handleActivity = (value: SocialMessage | SocialRealtimeEnvelope) => {
+      const payload = getRealtimePayload<SocialMessage>(value, leagueId);
+      if (!payload?.id || !payload.createdAt || payload.type !== 'system') return;
+      const sequence = getRealtimeSequence(value);
+      setState((current) => ({
+        ...current,
+        summary: updateRealtimeSummary(current.summary, 'activity', sequence, false),
+        activity: sortMessages(upsertById(current.activity, { ...payload, isOwn: false })),
       }));
     };
     const handlePost = (value: SocialPost | SocialRealtimeEnvelope) => {
@@ -301,7 +477,10 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
               ...current.summary,
               unread: {
                 ...current.summary.unread,
-                [readState.channel]: 0,
+                [readState.channel]:
+                  readState.sequence >= current.summary.latestSequence[readState.channel]
+                    ? 0
+                    : current.summary.unread[readState.channel],
               },
             }
           : current.summary,
@@ -309,21 +488,30 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     };
 
     socket.on('social:message', handleMessage);
+    socket.on('social:activity', handleActivity);
     socket.on('social:post', handlePost);
     socket.on('social:reply', handleReply);
     socket.on('social:moderation', handleModeration);
     socket.on('social:read-state', handleReadState);
+    socket.on('connect', rejoinAndResync);
+    void rejoinAndResync();
 
     return () => {
-      socket.off('connect', joinLeagueSocial);
+      cancelled = true;
+      if (joinTimeoutId !== null) {
+        window.clearTimeout(joinTimeoutId);
+        joinTimeoutId = null;
+      }
+      socket.off('connect', rejoinAndResync);
       socket.off('social:message', handleMessage);
+      socket.off('social:activity', handleActivity);
       socket.off('social:post', handlePost);
       socket.off('social:reply', handleReply);
       socket.off('social:moderation', handleModeration);
       socket.off('social:read-state', handleReadState);
       socket.emit('social:leave', { leagueId });
     };
-  }, [currentUserId, leagueId, loadInitial, socket]);
+  }, [currentUserId, leagueId, loadInitial, resync, socket]);
 
   const loadEarlierMessages = useCallback(async (): Promise<void> => {
     if (!state.messagesCursor || state.loadingEarlierMessages) return;
@@ -351,6 +539,33 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
       }));
     }
   }, [apiRequest, state.loadingEarlierMessages, state.messagesCursor]);
+
+  const loadEarlierActivity = useCallback(async (): Promise<void> => {
+    if (!state.activityCursor || state.loadingEarlierActivity) return;
+    setState((current) => ({ ...current, loadingEarlierActivity: true }));
+    try {
+      const page = await apiRequest<SocialCursorPage<SocialMessage>>(
+        `/activity?limit=50&cursor=${encodeURIComponent(state.activityCursor)}`
+      );
+      setState((current) => ({
+        ...current,
+        activity: sortMessages([
+          ...activityMessagesOnly(page.items),
+          ...current.activity.filter(
+            (message) => !page.items.some((candidate) => candidate.id === message.id)
+          ),
+        ]),
+        activityCursor: page.nextCursor,
+        loadingEarlierActivity: false,
+      }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        loadingEarlierActivity: false,
+        error: error instanceof Error ? error.message : 'Failed to load earlier league activity.',
+      }));
+    }
+  }, [apiRequest, state.activityCursor, state.loadingEarlierActivity]);
 
   const loadMorePosts = useCallback(async (): Promise<void> => {
     if (!state.postsCursor || state.loadingMorePosts) return;
@@ -380,12 +595,13 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
   }, [apiRequest, postSort, state.loadingMorePosts, state.postsCursor]);
 
   const sendMessage = useCallback(
-    async (content: string): Promise<void> => {
+    async (content: string, context?: SocialDiscussionContext | null): Promise<void> => {
       setState((current) => ({ ...current, sendingMessage: true, submitError: null }));
       try {
         const input: CreateSocialMessageInput = {
           content,
           idempotencyKey: createIdempotencyKey('chat'),
+          ...(context ? { context } : {}),
         };
         const message = await apiRequest<SocialMessage>('/messages', {
           method: 'POST',
@@ -669,43 +885,66 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     [apiRequest]
   );
 
-  const chatLatestSequence = state.summary?.latestSequence.chat;
-  const boardLatestSequence = state.summary?.latestSequence.board;
-
   const markRead = useCallback(
     async (channel: SocialChannel): Promise<void> => {
-      setState((current) =>
-        current.summary
-          ? {
-              ...current,
-              summary: {
-                ...current.summary,
-                unread: { ...current.summary.unread, [channel]: 0 },
-              },
-            }
-          : current
-      );
+      const summary = state.summary;
+      if (!summary || summary.unread[channel] === 0) return;
+
+      const sequence = summary.latestSequence[channel];
+      if ((inFlightReadSequences.current[channel] ?? -1) >= sequence) return;
+      inFlightReadSequences.current[channel] = sequence;
+
+      setState((current) => {
+        if (!current.summary || current.summary.latestSequence[channel] > sequence) return current;
+        return {
+          ...current,
+          summary: {
+            ...current.summary,
+            unread: { ...current.summary.unread, [channel]: 0 },
+          },
+        };
+      });
+
       try {
-        const sequence = channel === 'chat' ? chatLatestSequence : boardLatestSequence;
-        await apiRequest<{ channel: SocialChannel; sequence: number }>('/read-state', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            channel,
-            ...(sequence === undefined ? {} : { sequence }),
-          }),
+        const readState = await apiRequest<{ channel: SocialChannel; sequence: number }>(
+          '/read-state',
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel, sequence }),
+          }
+        );
+        setState((current) => {
+          if (
+            !current.summary ||
+            readState.sequence < current.summary.latestSequence[readState.channel]
+          ) {
+            return current;
+          }
+          return {
+            ...current,
+            summary: {
+              ...current.summary,
+              unread: { ...current.summary.unread, [readState.channel]: 0 },
+            },
+          };
         });
       } catch {
-        void loadInitial();
+        void loadSummary();
+      } finally {
+        if (inFlightReadSequences.current[channel] === sequence) {
+          delete inFlightReadSequences.current[channel];
+        }
       }
     },
-    [apiRequest, boardLatestSequence, chatLatestSequence, loadInitial]
+    [apiRequest, loadSummary, state.summary]
   );
 
   return {
     ...state,
     retry: loadInitial,
     loadEarlierMessages,
+    loadEarlierActivity,
     loadMorePosts,
     sendMessage,
     createPost,

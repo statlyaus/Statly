@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowDownAZ, ArrowUpAZ, Search, SlidersHorizontal, Users } from 'lucide-react';
 
+import { LeagueSocialDiscussButton } from '@/components/league/LeagueSocialDiscussButton';
 import type { Player } from '@/types/players';
 
 interface PlayersPageClientProps {
@@ -273,12 +274,27 @@ export default function PlayersPageClient({ players }: PlayersPageClientProps) {
                           getPlayerValue(player, sortKey),
                         )}`}
                   </div>
-                  <Link
-                    href={`/players/${player.id}`}
-                    className="rounded-full bg-[color:var(--league-primary)] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
-                  >
-                    View profile
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <LeagueSocialDiscussButton
+                      context={{
+                        type: 'player',
+                        id: String(player.id),
+                        title: player.name,
+                        subtitle:
+                          [player.team, player.position].filter(Boolean).join(' · ') || undefined,
+                        metadata: {
+                          ...(player.team ? { club: player.team } : {}),
+                          ...(player.position ? { position: player.position } : {}),
+                        },
+                      }}
+                    />
+                    <Link
+                      href={`/players/${player.id}`}
+                      className="rounded-full bg-[color:var(--league-primary)] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2"
+                    >
+                      View profile
+                    </Link>
+                  </div>
                 </div>
               </article>
             ))}
