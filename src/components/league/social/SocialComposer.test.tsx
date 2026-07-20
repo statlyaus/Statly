@@ -46,4 +46,23 @@ describe('SocialComposer', () => {
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
   });
+
+  it('renders a one-row compact composer with an integrated leading action', () => {
+    render(
+      <SocialComposer
+        label="League message"
+        placeholder="Message"
+        submitLabel="Send"
+        maxLength={1000}
+        submitOnEnter
+        compact
+        leadingAction={<button type="button">GIF action</button>}
+        onSubmit={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('textbox', { name: 'League message' })).toHaveAttribute('rows', '1');
+    expect(screen.getByRole('button', { name: 'GIF action' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveClass('rounded-full');
+  });
 });

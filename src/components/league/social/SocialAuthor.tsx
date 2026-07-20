@@ -5,6 +5,7 @@ interface SocialAuthorProps {
   timestamp: string;
   editedAt?: string;
   compact?: boolean;
+  timestampStyle?: 'date-and-time' | 'time';
 }
 
 function getInitials(value: string): string {
@@ -17,9 +18,14 @@ function getInitials(value: string): string {
   return initials || 'S';
 }
 
-function formatTimestamp(value: string): string {
+function formatTimestamp(value: string, style: 'date-and-time' | 'time'): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return 'Unknown time';
+  if (style === 'time') {
+    return new Intl.DateTimeFormat('en-AU', {
+      timeStyle: 'short',
+    }).format(parsed);
+  }
   return new Intl.DateTimeFormat('en-AU', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -31,10 +37,11 @@ export default function SocialAuthor({
   timestamp,
   editedAt,
   compact = false,
+  timestampStyle = 'date-and-time',
 }: SocialAuthorProps): React.JSX.Element {
   const displayName = author?.displayName || 'Former member';
   const teamName = author?.teamName || 'Team unavailable';
-  const formattedTimestamp = formatTimestamp(timestamp);
+  const formattedTimestamp = formatTimestamp(timestamp, timestampStyle);
 
   return (
     <div className="flex min-w-0 items-center gap-3">

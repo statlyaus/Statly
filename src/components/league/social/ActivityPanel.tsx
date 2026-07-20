@@ -104,9 +104,13 @@ export default function ActivityPanel({
   return (
     <section
       aria-labelledby="league-activity-heading"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground"
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
+        compact
+          ? 'bg-background text-foreground'
+          : 'rounded-2xl border border-border bg-card text-card-foreground'
+      }`}
     >
-      <header className="border-b border-border px-4 py-3">
+      <header className={compact ? 'sr-only' : 'border-b border-border px-4 py-3'}>
         <h2 id="league-activity-heading" className="text-base font-semibold text-foreground">
           League activity
         </h2>
@@ -118,7 +122,7 @@ export default function ActivityPanel({
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
-          className={`h-full overflow-y-auto px-4 py-3 ${compact ? 'min-h-0' : 'min-h-64'}`}
+          className={`h-full overflow-y-auto ${compact ? 'min-h-0 px-3 py-2' : 'min-h-64 px-4 py-3'}`}
           aria-busy={loading || loadingEarlier}
           onScroll={(event) => {
             const latestIsVisible = isNearBottom(event.currentTarget);
@@ -166,10 +170,19 @@ export default function ActivityPanel({
               </p>
             </div>
           ) : (
-            <ol className="space-y-3" aria-label="League activity">
+            <ol
+              className={compact ? 'divide-y divide-border' : 'space-y-3'}
+              aria-label="League activity"
+            >
               {activity.map((item) => (
                 <li key={item.id}>
-                  <article className="rounded-xl border border-primary/25 bg-primary/10 px-3 py-3">
+                  <article
+                    className={
+                      compact
+                        ? 'px-1 py-3'
+                        : 'rounded-xl border border-primary/25 bg-primary/10 px-3 py-3'
+                    }
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <SafeSocialText value={item.content} />

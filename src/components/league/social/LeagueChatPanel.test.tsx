@@ -79,6 +79,21 @@ describe('LeagueChatPanel', () => {
     expect(screen.getByText('Smith Squad')).toBeInTheDocument();
   });
 
+  it('groups consecutive messages from the same author into one identity block', () => {
+    renderPanel([
+      memberMessage,
+      {
+        ...memberMessage,
+        id: 'message-follow-up',
+        content: 'One more detail.',
+        createdAt: '2026-07-19T10:02:00.000Z',
+      },
+    ]);
+
+    expect(screen.getAllByText('Alex Smith')).toHaveLength(1);
+    expect(screen.getByText('One more detail.')).toBeInTheDocument();
+  });
+
   it('renders a durable GIPHY fallback when the Web SDK key is not configured', async () => {
     renderPanel([gifMessage]);
 

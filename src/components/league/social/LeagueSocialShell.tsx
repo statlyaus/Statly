@@ -36,7 +36,7 @@ export interface LeagueSocialShellProps {
 
 const tabs: Array<{ id: LeagueSocialView; label: string; icon: typeof MessageCircle }> = [
   { id: 'chat', label: 'Chat', icon: MessageCircle },
-  { id: 'board', label: 'Message board', icon: MessagesSquare },
+  { id: 'board', label: 'Board', icon: MessagesSquare },
   { id: 'activity', label: 'Activity', icon: Activity },
 ];
 
@@ -139,7 +139,7 @@ export default function LeagueSocialShell({
       type="button"
       onClick={() => setShowPreferences((preferencesVisible) => !preferencesVisible)}
       aria-expanded={showPreferences}
-      className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Settings className="size-4" aria-hidden="true" />
       <span className="sr-only">Social notification preferences</span>
@@ -153,7 +153,11 @@ export default function LeagueSocialShell({
       } ${className}`}
       aria-label={title}
     >
-      <div className="border-b border-border bg-card px-3 pt-3">
+      <div
+        className={
+          compact ? 'border-b border-border bg-card' : 'border-b border-border bg-card px-3 pt-3'
+        }
+      >
         {showHeader ? (
           <div className="flex items-start justify-between gap-3 px-1 pb-3">
             <div>
@@ -166,16 +170,22 @@ export default function LeagueSocialShell({
           </div>
         ) : null}
         {showPreferences && controller.summary ? (
-          <SocialPreferencesPanel
-            preferences={controller.summary.preferences}
-            onSave={async (preferences) => {
-              await controller.updatePreferences(preferences);
-            }}
-            onClose={() => setShowPreferences(false)}
-          />
+          <div className={compact ? 'px-3 pt-3' : undefined}>
+            <SocialPreferencesPanel
+              preferences={controller.summary.preferences}
+              onSave={async (preferences) => {
+                await controller.updatePreferences(preferences);
+              }}
+              onClose={() => setShowPreferences(false)}
+            />
+          </div>
         ) : null}
         {controller.summary && !controller.summary.standardsAccepted ? (
-          <div className="mb-3 rounded-xl border border-primary/30 bg-primary/10 p-3">
+          <div
+            className={`rounded-xl border border-primary/30 bg-primary/10 p-3 ${
+              compact ? 'm-3' : 'mb-3'
+            }`}
+          >
             <p className="text-sm font-semibold text-foreground">Community standards</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Keep league discussion respectful, safe, and relevant. You can read league social
@@ -208,11 +218,15 @@ export default function LeagueSocialShell({
             ) : null}
           </div>
         ) : null}
-        <div className="flex items-center gap-2 pb-3">
+        <div className={compact ? 'flex h-12 items-center px-2' : 'flex items-center gap-2 pb-3'}>
           <div
             role="tablist"
             aria-label="League social views"
-            className="grid min-w-0 max-w-xl flex-1 grid-cols-3 gap-1 rounded-xl bg-muted p-1"
+            className={
+              compact
+                ? 'flex h-full min-w-0 flex-1 items-stretch'
+                : 'grid min-w-0 max-w-xl flex-1 grid-cols-3 gap-1 rounded-xl bg-muted p-1'
+            }
           >
             {tabs.map((tab) => {
               const active = activeView === tab.id;
@@ -232,10 +246,18 @@ export default function LeagueSocialShell({
                   tabIndex={active ? 0 : -1}
                   onClick={() => selectView(tab.id)}
                   onKeyDown={handleTabKeyDown}
-                  className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    active
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
+                  className={`relative inline-flex min-h-10 items-center justify-center gap-1.5 px-2 text-sm transition focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+                    compact
+                      ? `flex-1 border-b-2 ${
+                          active
+                            ? 'border-primary font-semibold text-foreground'
+                            : 'border-transparent font-medium text-muted-foreground hover:text-foreground'
+                        }`
+                      : `rounded-lg font-semibold ${
+                          active
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`
                   }`}
                 >
                   <Icon className="size-4" aria-hidden="true" />
@@ -260,7 +282,9 @@ export default function LeagueSocialShell({
         aria-labelledby={`${tabSetId}-chat-tab`}
         hidden={activeView !== 'chat'}
         aria-hidden={activeView !== 'chat'}
-        className={`${activeView === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 p-3`}
+        className={`${activeView === 'chat' ? 'flex' : 'hidden'} min-h-0 flex-1 ${
+          compact ? 'p-0' : 'p-3'
+        }`}
       >
         <LeagueChatPanel
           messages={controller.messages}
@@ -296,7 +320,9 @@ export default function LeagueSocialShell({
         aria-labelledby={`${tabSetId}-board-tab`}
         hidden={activeView !== 'board'}
         aria-hidden={activeView !== 'board'}
-        className={`${activeView === 'board' ? 'flex' : 'hidden'} min-h-0 flex-1 p-3`}
+        className={`${activeView === 'board' ? 'flex' : 'hidden'} min-h-0 flex-1 ${
+          compact ? 'p-0' : 'p-3'
+        }`}
       >
         {selectedPost ? (
           <PostThread
@@ -310,6 +336,7 @@ export default function LeagueSocialShell({
             error={selectedThread?.error}
             submitError={controller.submitError}
             visible={visible && activeView === 'board'}
+            compact={compact}
             onBack={() => {
               handleLatestVisibleChange('board', false);
               setSelectedPostId(null);
@@ -342,6 +369,7 @@ export default function LeagueSocialShell({
             error={controller.error}
             submitError={controller.submitError}
             visible={visible && activeView === 'board'}
+            compact={compact}
             onRetry={controller.retry}
             onLoadMore={controller.loadMorePosts}
             onSelectPost={handleSelectPost}
@@ -361,7 +389,9 @@ export default function LeagueSocialShell({
         aria-labelledby={`${tabSetId}-activity-tab`}
         hidden={activeView !== 'activity'}
         aria-hidden={activeView !== 'activity'}
-        className={`${activeView === 'activity' ? 'flex' : 'hidden'} min-h-0 flex-1 p-3`}
+        className={`${activeView === 'activity' ? 'flex' : 'hidden'} min-h-0 flex-1 ${
+          compact ? 'p-0' : 'p-3'
+        }`}
       >
         <ActivityPanel
           activity={controller.activity}

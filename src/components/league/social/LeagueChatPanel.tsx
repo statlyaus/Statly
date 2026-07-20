@@ -42,6 +42,7 @@ interface LeagueChatPanelProps {
 }
 
 const BOTTOM_THRESHOLD_PX = 72;
+const MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 function isNearBottom(element: HTMLElement): boolean {
   return element.scrollHeight - element.scrollTop - element.clientHeight <= BOTTOM_THRESHOLD_PX;
@@ -51,6 +52,26 @@ function messageDay(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return 'Unknown date';
   return new Intl.DateTimeFormat('en-AU', { dateStyle: 'full' }).format(parsed);
+}
+
+function messageAuthorKey(message: SocialMessage): string {
+  return (
+    message.author?.userId ??
+    `${message.author?.displayName ?? 'former-member'}:${message.author?.teamName ?? ''}`
+  );
+}
+
+function isMessageContinuation(message: SocialMessage, previous?: SocialMessage): boolean {
+  if (!previous || messageDay(message.createdAt) !== messageDay(previous.createdAt)) return false;
+  if (messageAuthorKey(message) !== messageAuthorKey(previous)) return false;
+  const currentTime = new Date(message.createdAt).getTime();
+  const previousTime = new Date(previous.createdAt).getTime();
+  return (
+    Number.isFinite(currentTime) &&
+    Number.isFinite(previousTime) &&
+    currentTime >= previousTime &&
+    currentTime - previousTime <= MESSAGE_GROUP_WINDOW_MS
+  );
 }
 
 export default function LeagueChatPanel({
@@ -151,22 +172,13 @@ export default function LeagueChatPanel({
 
   return (
     <section
-      aria-labelledby="league-chat-heading"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground"
+      aria-label="League chat"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background text-foreground"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div>
-          <h2 id="league-chat-heading" className="text-base font-semibold text-foreground">
-            League chat
-          </h2>
-          <p className="text-xs text-muted-foreground">Private to current league members</p>
-        </div>
-      </header>
-
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
-          className={`h-full overflow-y-auto px-4 py-3 ${compact ? 'min-h-0' : 'min-h-64'}`}
+          className={`h-full overflow-y-auto px-3 py-2 ${compact ? 'min-h-0' : 'min-h-64'}`}
           aria-busy={loading || loadingEarlier}
           onScroll={(event) => {
             const latestIsVisible = isNearBottom(event.currentTarget);
@@ -214,60 +226,80 @@ export default function LeagueChatPanel({
               </p>
             </div>
           ) : (
-            <ol className="space-y-3" aria-label="League chat messages">
+            <ol className="space-y-1" aria-label="League chat messages">
               {visibleMessages.map((message, index) => {
                 const day = messageDay(message.createdAt);
                 const previousDay =
                   index > 0 ? messageDay(visibleMessages[index - 1].createdAt) : null;
+                const continuation = isMessageContinuation(message, visibleMessages[index - 1]);
                 return (
                   <li key={message.id}>
                     {day !== previousDay ? (
-                      <div className="my-4 flex items-center gap-3" aria-label={day}>
+                      <div className="my-3 flex items-center gap-3" aria-label={day}>
                         <span className="h-px flex-1 bg-border" />
                         <time className="text-xs font-medium text-muted-foreground">{day}</time>
                         <span className="h-px flex-1 bg-border" />
                       </div>
                     ) : null}
                     <article
-                      className={`rounded-xl border p-3 ${
-                        message.isOwn
-                          ? 'border-primary/30 bg-primary/10'
-                          : 'border-border bg-background'
-                      }`}
+                      aria-label={`Message from ${message.author?.displayName ?? 'former member'}`}
+                      className={`rounded-lg px-2 py-1.5 ${
+                        continuation ? 'pl-12' : ''
+                      } ${message.isOwn ? 'bg-muted/50' : 'bg-transparent'}`}
                     >
-                      <SocialAuthor
-                        author={message.author}
-                        timestamp={message.createdAt}
-                        editedAt={message.editedAt}
-                        compact
-                      />
+                      {!continuation ? (
+                        <SocialAuthor
+                          author={message.author}
+                          timestamp={message.createdAt}
+                          editedAt={message.editedAt}
+                          compact
+                          timestampStyle="time"
+                        />
+                      ) : (
+                        <time dateTime={message.createdAt} className="sr-only">
+                          {new Date(message.createdAt).toLocaleTimeString()}
+                        </time>
+                      )}
                       {message.moderationStatus === 'removed' || message.deletedAt ? (
-                        <p className="mt-2 text-sm italic text-muted-foreground">Message removed</p>
+                        <p
+                          className={`text-sm italic text-muted-foreground ${
+                            continuation ? '' : 'mt-1.5 pl-11'
+                          }`}
+                        >
+                          Message removed
+                        </p>
                       ) : (
                         <>
                           {message.context ? (
                             <DiscussionContextCard context={message.context} />
                           ) : null}
                           {message.content ? (
-                            <SafeSocialText value={message.content} className="mt-2" />
+                            <SafeSocialText
+                              value={message.content}
+                              className={continuation ? '' : 'mt-1.5 pl-11'}
+                            />
                           ) : null}
-                          {message.gif ? <GiphyMessageMedia gif={message.gif} /> : null}
-                          {!message.isOwn ? (
-                            <div className="mt-2 flex justify-end">
-                              <SocialReportButton
-                                label="message"
-                                onReport={(reason, details) =>
-                                  onReport(message.id, reason, details)
-                                }
-                              />
+                          {message.gif ? (
+                            <div className={continuation ? '' : 'pl-11'}>
+                              <GiphyMessageMedia gif={message.gif} />
                             </div>
                           ) : null}
-                          {canManage ? (
-                            <div className="mt-2 flex justify-end">
-                              <SocialRemoveButton
-                                label="message"
-                                onRemove={(reason) => onRemove(message.id, reason)}
-                              />
+                          {!message.isOwn || canManage ? (
+                            <div className="mt-1 flex justify-end gap-1">
+                              {!message.isOwn ? (
+                                <SocialReportButton
+                                  label="message"
+                                  onReport={(reason, details) =>
+                                    onReport(message.id, reason, details)
+                                  }
+                                />
+                              ) : null}
+                              {canManage ? (
+                                <SocialRemoveButton
+                                  label="message"
+                                  onRemove={(reason) => onRemove(message.id, reason)}
+                                />
+                              ) : null}
                             </div>
                           ) : null}
                         </>
@@ -291,7 +323,7 @@ export default function LeagueChatPanel({
         ) : null}
       </div>
 
-      <footer className="border-t border-border bg-background p-3">
+      <footer className="border-t border-border bg-background p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {!canPublish && !muted ? (
           <p role="status" className="mb-2 text-sm text-muted-foreground">
             Accept the community standards above before sending messages.
@@ -312,10 +344,6 @@ export default function LeagueChatPanel({
             label="Discussing"
           />
         ) : null}
-        <GiphyPicker
-          disabled={!canPublish || muted || sending}
-          onSelect={(gif) => sendWithContext({ content: '', gif })}
-        />
         <SocialComposer
           label="Message league chat"
           placeholder="Message your league…"
@@ -325,6 +353,14 @@ export default function LeagueChatPanel({
           disabled={!canPublish || muted}
           pending={sending}
           error={submitError}
+          compact
+          leadingAction={
+            <GiphyPicker
+              compact
+              disabled={!canPublish || muted || sending}
+              onSelect={(gif) => sendWithContext({ content: '', gif })}
+            />
+          }
           onSubmit={(content) => sendWithContext({ content })}
         />
       </footer>

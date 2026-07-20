@@ -33,6 +33,13 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof ActivityPane
 }
 
 describe('ActivityPanel', () => {
+  it('uses a flat feed presentation in compact mode', () => {
+    renderPanel({ compact: true });
+
+    const region = screen.getByRole('region', { name: 'League activity' });
+    expect(region).not.toHaveClass('rounded-2xl', 'border');
+  });
+
   it('renders an empty state and earlier-activity pagination', async () => {
     const user = userEvent.setup();
     const onLoadEarlier = vi.fn();

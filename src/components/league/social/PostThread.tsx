@@ -23,6 +23,7 @@ interface PostThreadProps {
   error?: string | null;
   submitError?: string | null;
   visible?: boolean;
+  compact?: boolean;
   onBack: () => void;
   onRetry: () => Promise<void> | void;
   onLoadMore: () => Promise<void> | void;
@@ -56,6 +57,7 @@ export default function PostThread({
   error,
   submitError,
   visible = true,
+  compact = false,
   onBack,
   onRetry,
   onLoadMore,
@@ -101,7 +103,11 @@ export default function PostThread({
   return (
     <section
       aria-labelledby="social-thread-heading"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground"
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
+        compact
+          ? 'bg-background text-foreground'
+          : 'rounded-2xl border border-border bg-card text-card-foreground'
+      }`}
     >
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <button
@@ -127,7 +133,7 @@ export default function PostThread({
         onScroll={(event) => onLatestVisibleChange?.(isNearBottom(event.currentTarget))}
       >
         <article
-          className={`border-b border-border p-4 sm:p-5 ${
+          className={`border-b border-border ${compact ? 'p-3' : 'p-4 sm:p-5'} ${
             post.isAnnouncement ? 'bg-primary/10' : 'bg-background'
           }`}
         >
@@ -215,7 +221,7 @@ export default function PostThread({
           ) : null}
         </article>
 
-        <div className="p-4 sm:p-5">
+        <div className={compact ? 'p-3' : 'p-4 sm:p-5'}>
           <h3 className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
             <MessageSquare className="size-4" aria-hidden="true" />
             {post.replyCount} {post.replyCount === 1 ? 'reply' : 'replies'}
@@ -243,10 +249,17 @@ export default function PostThread({
               No replies yet.
             </p>
           ) : (
-            <ol className="mt-4 space-y-3" aria-label="Discussion replies">
+            <ol
+              className={compact ? 'mt-3 divide-y divide-border' : 'mt-4 space-y-3'}
+              aria-label="Discussion replies"
+            >
               {replies.map((reply) => (
                 <li key={reply.id}>
-                  <article className="rounded-xl border border-border bg-background p-3">
+                  <article
+                    className={
+                      compact ? 'py-3' : 'rounded-xl border border-border bg-background p-3'
+                    }
+                  >
                     <SocialAuthor
                       author={reply.author}
                       timestamp={reply.createdAt}
@@ -325,6 +338,7 @@ export default function PostThread({
             maxLength={10000}
             pending={replying}
             error={submitError}
+            compact={compact}
             onSubmit={handleReply}
           />
         )}

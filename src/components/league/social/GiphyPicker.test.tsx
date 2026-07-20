@@ -95,4 +95,13 @@ describe('GiphyPicker', () => {
     const { container } = render(<GiphyPicker apiKey="" onSelect={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('uses an icon-sized trigger in a compact composer', () => {
+    render(<GiphyPicker apiKey="test-web-key" compact onSelect={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Add a GIF' })).toHaveClass(
+      'size-10',
+      'rounded-full'
+    );
+  });
 });

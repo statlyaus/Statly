@@ -21,6 +21,7 @@ interface MessageBoardPanelProps {
   error?: string | null;
   submitError?: string | null;
   visible?: boolean;
+  compact?: boolean;
   onRetry: () => Promise<void> | void;
   onLoadMore: () => Promise<void> | void;
   onSelectPost: (post: SocialPost) => void;
@@ -43,6 +44,7 @@ export default function MessageBoardPanel({
   error,
   submitError,
   visible = true,
+  compact = false,
   onRetry,
   onLoadMore,
   onSelectPost,
@@ -112,16 +114,26 @@ export default function MessageBoardPanel({
   return (
     <section
       aria-labelledby="message-board-heading"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground"
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
+        compact
+          ? 'bg-background text-foreground'
+          : 'rounded-2xl border border-border bg-card text-card-foreground'
+      }`}
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <header
+        className={`flex flex-wrap items-center justify-between gap-3 border-b border-border ${
+          compact ? 'px-3 py-2.5' : 'px-4 py-3'
+        }`}
+      >
         <div>
           <h2 id="message-board-heading" className="text-base font-semibold text-foreground">
-            Message board
+            {compact ? 'Discussions' : 'Message board'}
           </h2>
-          <p className="text-xs text-muted-foreground">
-            Announcements and persistent league discussions
-          </p>
+          {!compact ? (
+            <p className="text-xs text-muted-foreground">
+              Announcements and persistent league discussions
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -129,7 +141,9 @@ export default function MessageBoardPanel({
           disabled={!canPublish || muted}
           aria-expanded={showForm}
           aria-controls="create-social-post"
-          className="inline-flex min-h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`inline-flex items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+            compact ? 'min-h-9 px-3' : 'min-h-10 px-4'
+          }`}
         >
           New post
         </button>
@@ -154,7 +168,7 @@ export default function MessageBoardPanel({
           onSubmit={(event) => void handleCreate(event)}
           className="space-y-4 border-b border-border bg-muted/30 p-4"
         >
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_14rem]">
+          <div className={compact ? 'grid gap-4' : 'grid gap-4 sm:grid-cols-[minmax(0,1fr)_14rem]'}>
             <div>
               <label htmlFor={titleId} className="text-sm font-medium text-foreground">
                 Post title
@@ -199,7 +213,7 @@ export default function MessageBoardPanel({
               value={body}
               onChange={(event) => setBody(event.target.value)}
               maxLength={10000}
-              rows={7}
+              rows={compact ? 5 : 7}
               required
               className="mt-1 block w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="Add the details league members will need…"
@@ -245,12 +259,12 @@ export default function MessageBoardPanel({
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto p-4"
+        className={`min-h-0 flex-1 overflow-y-auto ${compact ? 'p-3' : 'p-4'}`}
         onScroll={(event) => onLatestVisibleChange?.(event.currentTarget.scrollTop <= 72)}
       >
         <div className="mb-3 flex justify-end">
           <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-foreground">
-            Sort discussions
+            {compact ? 'Sort' : 'Sort discussions'}
             <select
               value={sort}
               onChange={(event) => onSortChange(event.target.value as SocialPostSort)}
@@ -286,16 +300,23 @@ export default function MessageBoardPanel({
             </p>
           </div>
         ) : (
-          <ol className="space-y-3" aria-label="League message board posts">
+          <ol
+            className={compact ? 'divide-y divide-border' : 'space-y-3'}
+            aria-label="League message board posts"
+          >
             {sortedPosts.map((post) => (
               <li key={post.id}>
                 <button
                   type="button"
                   onClick={() => onSelectPost(post)}
-                  className={`block w-full rounded-xl border p-4 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    post.isAnnouncement
-                      ? 'border-primary/35 bg-primary/10'
-                      : 'border-border bg-background'
+                  className={`block w-full text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    compact
+                      ? `px-1 py-3 ${post.isAnnouncement ? 'bg-muted/40' : 'bg-background'}`
+                      : `rounded-xl border p-4 ${
+                          post.isAnnouncement
+                            ? 'border-primary/35 bg-primary/10'
+                            : 'border-border bg-background'
+                        }`
                   }`}
                   aria-label={`Open discussion: ${post.title}`}
                 >

@@ -87,7 +87,7 @@ describe('LeagueSocialWidget', () => {
 
     const launcher = await screen.findByRole('button', { name: /open league social/i });
     expect(launcher).toHaveAttribute('title', 'League Social');
-    expect(launcher).toHaveClass('size-14', 'rounded-2xl');
+    expect(launcher).toHaveClass('size-14', 'rounded-full', 'bottom-6', 'right-6');
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /5 unread/i })).toBeInTheDocument()
     );
@@ -98,9 +98,13 @@ describe('LeagueSocialWidget', () => {
     expect(await screen.findByText('League Social')).toBeInTheDocument();
     expect(screen.getByText('Premier League')).toBeInTheDocument();
     expect(panel).toHaveClass(
-      'sm:w-[25rem]',
-      'lg:w-[clamp(24rem,29vw,27rem)]',
-      'lg:h-[min(42rem,calc(100dvh-6rem))]'
+      'inset-0',
+      'h-[100dvh]',
+      'w-full',
+      'sm:w-[clamp(26.25rem,32vw,30rem)]',
+      'sm:h-[clamp(36.25rem,76dvh,45rem)]',
+      'sm:max-w-[calc(100vw-3rem)]',
+      'sm:max-h-[calc(100dvh-3rem)]'
     );
     expect(shellControl).toHaveAttribute('data-visible', 'true');
     expect(shellControl).toHaveAttribute('data-show-header', 'false');

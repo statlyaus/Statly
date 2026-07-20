@@ -13,6 +13,7 @@ interface GiphyPickerProps {
   disabled?: boolean;
   onSelect: (gif: SocialGif) => Promise<void>;
   apiKey?: string;
+  compact?: boolean;
 }
 
 const PICKER_RESULT_LIMIT = 20;
@@ -21,6 +22,7 @@ export default function GiphyPicker({
   disabled = false,
   onSelect,
   apiKey = GIPHY_WEB_SDK_KEY,
+  compact = false,
 }: GiphyPickerProps): React.JSX.Element | null {
   const client = useMemo(() => getGiphyClient(apiKey), [apiKey]);
   const searchId = useId();
@@ -132,16 +134,21 @@ export default function GiphyPicker({
   }
 
   return (
-    <div ref={rootRef} className="relative mb-2">
+    <div ref={rootRef} className={compact ? 'relative' : 'relative mb-2'}>
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger
+          type="button"
           data-giphy-trigger
           disabled={disabled}
           aria-label="Add a GIF"
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className={
+            compact
+              ? 'inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40'
+              : 'inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
+          }
         >
           <ImagePlus className="size-4" aria-hidden="true" />
-          GIF
+          {compact ? <span className="sr-only">GIF</span> : 'GIF'}
         </PopoverTrigger>
         <PopoverContent
           align="start"
