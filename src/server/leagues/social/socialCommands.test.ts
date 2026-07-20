@@ -51,6 +51,7 @@ vi.mock('./socialDto', () => ({
     type: 'member',
     content: record.content,
     context: record.contextJson ? JSON.parse(record.contextJson) : undefined,
+    gif: record.giphyId ? { provider: 'giphy', id: record.giphyId } : undefined,
     author: null,
     createdAt: record.createdAt.toISOString(),
     moderationStatus: 'active',
@@ -113,6 +114,31 @@ describe('league social Activity commands', () => {
         contextJson: JSON.stringify(context),
       }),
       include: {},
+    });
+  });
+
+  it('persists a GIF-only message and includes its identity in the realtime outbox', async () => {
+    await createSocialMessage('league-1', 'user-1', {
+      content: '',
+      gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+      idempotencyKey: 'message:giphy-1',
+    });
+
+    expect(mocks.tx.socialMessage.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        content: '',
+        giphyId: 'xT9IgG50Fb7Mi0prBC',
+      }),
+      include: {},
+    });
+    expect(mocks.tx.socialOutboxEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        channel: 'CHAT',
+        eventType: 'social:message',
+        payloadJson: expect.stringContaining(
+          '"gif":{"provider":"giphy","id":"xT9IgG50Fb7Mi0prBC"}'
+        ),
+      }),
     });
   });
 

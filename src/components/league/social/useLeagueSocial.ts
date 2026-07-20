@@ -11,7 +11,6 @@ import type {
   LeagueSocialSummary,
   SocialChannel,
   SocialCursorPage,
-  SocialDiscussionContext,
   SocialMessage,
   SocialNotificationPreferences,
   SocialPost,
@@ -200,7 +199,7 @@ export interface LeagueSocialController extends LeagueSocialState {
   loadEarlierMessages: () => Promise<void>;
   loadEarlierActivity: () => Promise<void>;
   loadMorePosts: () => Promise<void>;
-  sendMessage: (content: string, context?: SocialDiscussionContext | null) => Promise<void>;
+  sendMessage: (input: Omit<CreateSocialMessageInput, 'idempotencyKey'>) => Promise<void>;
   createPost: (input: Omit<CreateSocialPostInput, 'idempotencyKey'>) => Promise<SocialPost>;
   updatePost: (
     postId: string,
@@ -595,13 +594,12 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
   }, [apiRequest, postSort, state.loadingMorePosts, state.postsCursor]);
 
   const sendMessage = useCallback(
-    async (content: string, context?: SocialDiscussionContext | null): Promise<void> => {
+    async (messageInput: Omit<CreateSocialMessageInput, 'idempotencyKey'>): Promise<void> => {
       setState((current) => ({ ...current, sendingMessage: true, submitError: null }));
       try {
         const input: CreateSocialMessageInput = {
-          content,
+          ...messageInput,
           idempotencyKey: createIdempotencyKey('chat'),
-          ...(context ? { context } : {}),
         };
         const message = await apiRequest<SocialMessage>('/messages', {
           method: 'POST',

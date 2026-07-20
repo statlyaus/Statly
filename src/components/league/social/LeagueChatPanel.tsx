@@ -3,8 +3,15 @@
 import { X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import type { SocialDiscussionContext, SocialMessage, SocialReportReason } from '@/types/social';
+import type {
+  CreateSocialMessageInput,
+  SocialDiscussionContext,
+  SocialMessage,
+  SocialReportReason,
+} from '@/types/social';
 
+import GiphyMessageMedia from './GiphyMessageMedia';
+import GiphyPicker from './GiphyPicker';
 import SafeSocialText from './SafeSocialText';
 import SocialAuthor from './SocialAuthor';
 import SocialComposer from './SocialComposer';
@@ -29,7 +36,7 @@ interface LeagueChatPanelProps {
   onLatestVisibleChange?: (visible: boolean) => void;
   onRetry: () => Promise<void> | void;
   onLoadEarlier: () => Promise<void> | void;
-  onSend: (content: string, context?: SocialDiscussionContext | null) => Promise<void>;
+  onSend: (input: Omit<CreateSocialMessageInput, 'idempotencyKey'>) => Promise<void>;
   onReport: (messageId: string, reason: SocialReportReason, details?: string) => Promise<void>;
   onRemove: (messageId: string, reason: string) => Promise<void>;
 }
@@ -132,6 +139,16 @@ export default function LeagueChatPanel({
     onLatestVisibleChange?.(true);
   }
 
+  async function sendWithContext(
+    input: Omit<CreateSocialMessageInput, 'idempotencyKey' | 'context'>
+  ): Promise<void> {
+    await onSend({
+      ...input,
+      ...(composerContext ? { context: composerContext } : {}),
+    });
+    onClearComposerContext?.();
+  }
+
   return (
     <section
       aria-labelledby="league-chat-heading"
@@ -231,7 +248,10 @@ export default function LeagueChatPanel({
                           {message.context ? (
                             <DiscussionContextCard context={message.context} />
                           ) : null}
-                          <SafeSocialText value={message.content} className="mt-2" />
+                          {message.content ? (
+                            <SafeSocialText value={message.content} className="mt-2" />
+                          ) : null}
+                          {message.gif ? <GiphyMessageMedia gif={message.gif} /> : null}
                           {!message.isOwn ? (
                             <div className="mt-2 flex justify-end">
                               <SocialReportButton
@@ -292,6 +312,10 @@ export default function LeagueChatPanel({
             label="Discussing"
           />
         ) : null}
+        <GiphyPicker
+          disabled={!canPublish || muted || sending}
+          onSelect={(gif) => sendWithContext({ content: '', gif })}
+        />
         <SocialComposer
           label="Message league chat"
           placeholder="Message your league…"
@@ -301,10 +325,7 @@ export default function LeagueChatPanel({
           disabled={!canPublish || muted}
           pending={sending}
           error={submitError}
-          onSubmit={async (content) => {
-            await onSend(content, composerContext);
-            onClearComposerContext?.();
-          }}
+          onSubmit={(content) => sendWithContext({ content })}
         />
       </footer>
     </section>

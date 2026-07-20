@@ -23,6 +23,23 @@ const nonEmptyText = (maxLength: number) =>
     .refine((value) => value.trim().length > 0, 'Content cannot be empty')
     .transform((value) => value.trim());
 
+const socialMessageText = z
+  .string()
+  .max(SOCIAL_MESSAGE_MAX_LENGTH)
+  .transform((value) => value.trim());
+
+export const socialGifSchema = z
+  .object({
+    provider: z.literal('giphy'),
+    id: z
+      .string()
+      .trim()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Za-z0-9]+$/),
+  })
+  .strict();
+
 const socialContextMetadataSchema = z
   .record(
     z
@@ -45,11 +62,23 @@ export const socialDiscussionContextSchema = z
   })
   .strict();
 
-export const createMessageSchema = z.object({
-  content: nonEmptyText(SOCIAL_MESSAGE_MAX_LENGTH),
-  context: socialDiscussionContextSchema.optional(),
-  idempotencyKey: idempotencyKeySchema,
-});
+export const createMessageSchema = z
+  .object({
+    content: socialMessageText,
+    context: socialDiscussionContextSchema.optional(),
+    gif: socialGifSchema.optional(),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.content && !value.gif) {
+      context.addIssue({
+        code: 'custom',
+        path: ['content'],
+        message: 'A message or GIF is required',
+      });
+    }
+  });
 
 export const editMessageSchema = z.object({
   content: nonEmptyText(SOCIAL_MESSAGE_MAX_LENGTH),

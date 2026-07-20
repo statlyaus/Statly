@@ -69,6 +69,7 @@ export async function createSocialMessage(
           authorMemberId: access.memberId,
           content: parsed.data.content,
           contextJson: parsed.data.context ? JSON.stringify(parsed.data.context) : null,
+          giphyId: parsed.data.gif?.id ?? null,
         },
         include: socialMessageInclude,
       });
@@ -160,7 +161,7 @@ export async function deleteSocialMessage(
       reason: moderationReason,
       targetUserId: existing.authorUserId,
       targetMemberId: existing.authorMemberId,
-      retainedContent: { content: existing.content },
+      retainedContent: { content: existing.content, giphyId: existing.giphyId },
     });
     const message = toSocialMessage(record, userId);
     await enqueueSocialEvent(

@@ -88,6 +88,9 @@ export function toSocialMessage(record: MessageRecord, currentUserId: string): S
     type: record.type === 'SYSTEM' ? 'system' : 'member',
     content: isRemoved ? 'Message removed' : record.content,
     ...(context ? { context } : {}),
+    ...(!isRemoved && record.giphyId
+      ? { gif: { provider: 'giphy' as const, id: record.giphyId } }
+      : {}),
     author: toSocialAuthor(record.authorMember, record.authorUserId),
     ...(record.relatedEntityId ? { relatedEntityId: record.relatedEntityId } : {}),
     createdAt: record.createdAt.toISOString(),

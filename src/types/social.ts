@@ -26,6 +26,11 @@ export interface SocialDiscussionContext {
   metadata?: Record<string, string>;
 }
 
+export interface SocialGif {
+  provider: 'giphy';
+  id: string;
+}
+
 export interface SocialMessage {
   id: string;
   leagueId: string;
@@ -33,6 +38,7 @@ export interface SocialMessage {
   type: SocialMessageType;
   content: string;
   context?: SocialDiscussionContext;
+  gif?: SocialGif;
   author: SocialAuthor | null;
   relatedEntityId?: string;
   createdAt: string;
@@ -139,6 +145,7 @@ export const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES: SocialNotificationPreferen
 export interface CreateSocialMessageInput {
   content: string;
   context?: SocialDiscussionContext;
+  gif?: SocialGif;
   idempotencyKey: string;
 }
 

@@ -169,6 +169,44 @@ describe('useLeagueSocial', () => {
     expect(mocks.socket.emit).toHaveBeenCalledWith('social:leave', { leagueId: 'league-1' });
   });
 
+  it('posts and reconciles a structured GIF-only chat message', async () => {
+    const sentMessage: SocialMessage = {
+      ...memberMessage,
+      id: 'message-giphy',
+      content: '',
+      gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+      author: { ...memberMessage.author!, userId: 'user-1' },
+      isOwn: true,
+    };
+    mocks.authenticatedFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith('/messages') && init?.method === 'POST') {
+        return Promise.resolve(response(sentMessage));
+      }
+      return Promise.resolve(initialResponse(url));
+    });
+
+    const { result } = renderHook(() => useLeagueSocial('league-1', 'user-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.sendMessage({
+        content: '',
+        gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+      });
+    });
+
+    const sendRequest = mocks.authenticatedFetch.mock.calls.find(
+      ([url, init]) => String(url).endsWith('/messages') && init?.method === 'POST'
+    );
+    expect(sendRequest).toBeDefined();
+    expect(JSON.parse(String(sendRequest?.[1]?.body))).toEqual({
+      content: '',
+      gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+      idempotencyKey: expect.stringMatching(/^chat:/),
+    });
+    expect(result.current.messages.at(-1)).toEqual(sentMessage);
+  });
+
   it('does not let a stale cross-device read event clear newer unread content', async () => {
     const { result } = renderHook(() => useLeagueSocial('league-1', 'user-1'));
     await waitFor(() => expect(result.current.loading).toBe(false));

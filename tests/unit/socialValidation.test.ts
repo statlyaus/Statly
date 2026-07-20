@@ -39,6 +39,35 @@ describe('league social validation', () => {
     ).toBe(true);
   });
 
+  it('accepts strict GIPHY attachments and allows GIF-only chat messages', () => {
+    expect(
+      createMessageSchema.parse({
+        content: '   ',
+        gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+        idempotencyKey: 'message:giphy-1',
+      })
+    ).toEqual({
+      content: '',
+      gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+      idempotencyKey: 'message:giphy-1',
+    });
+
+    expect(
+      createMessageSchema.safeParse({
+        content: '',
+        gif: { provider: 'tenor', id: 'gif-1' },
+        idempotencyKey: 'message:giphy-2',
+      }).success
+    ).toBe(false);
+    expect(
+      createMessageSchema.safeParse({
+        content: '',
+        gif: { provider: 'giphy', id: 'gif1', url: 'https://media.giphy.com/example.gif' },
+        idempotencyKey: 'message:giphy-3',
+      }).success
+    ).toBe(false);
+  });
+
   it('accepts narrow structured discussion context and rejects unbounded metadata or markup fields', () => {
     expect(
       createMessageSchema.safeParse({

@@ -32,6 +32,13 @@ const systemMessage: SocialMessage = {
   createdAt: '2026-07-19T10:01:00.000Z',
 };
 
+const gifMessage: SocialMessage = {
+  ...memberMessage,
+  id: 'message-giphy',
+  content: '',
+  gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+};
+
 function renderPanel(messages: SocialMessage[] = []) {
   return render(
     <LeagueChatPanel
@@ -72,6 +79,28 @@ describe('LeagueChatPanel', () => {
     expect(screen.getByText('Smith Squad')).toBeInTheDocument();
   });
 
+  it('renders a durable GIPHY fallback when the Web SDK key is not configured', async () => {
+    renderPanel([gifMessage]);
+
+    expect(await screen.findByRole('link', { name: 'View GIF on GIPHY' })).toHaveAttribute(
+      'href',
+      'https://giphy.com/gifs/xT9IgG50Fb7Mi0prBC'
+    );
+  });
+
+  it('does not resolve or render GIF media after a message is removed', () => {
+    renderPanel([
+      {
+        ...gifMessage,
+        deletedAt: '2026-07-19T10:05:00.000Z',
+        moderationStatus: 'removed',
+      },
+    ]);
+
+    expect(screen.getByText('Message removed')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /GIF/i })).not.toBeInTheDocument();
+  });
+
   it('sends and clears structured discussion context only after a successful message', async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     const onClearComposerContext = vi.fn();
@@ -104,10 +133,10 @@ describe('LeagueChatPanel', () => {
     await user.type(screen.getByRole('textbox', { name: 'Message league chat' }), 'Worth a look');
     await user.keyboard('{Enter}');
 
-    expect(onSend).toHaveBeenCalledWith(
-      'Worth a look',
-      expect.objectContaining({ type: 'player', id: 'player-1' })
-    );
+    expect(onSend).toHaveBeenCalledWith({
+      content: 'Worth a look',
+      context: expect.objectContaining({ type: 'player', id: 'player-1' }),
+    });
     expect(onClearComposerContext).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Jordan Example')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
