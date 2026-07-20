@@ -151,9 +151,91 @@ describe('LeagueChatPanel', () => {
     expect(onSend).toHaveBeenCalledWith({
       content: 'Worth a look',
       context: expect.objectContaining({ type: 'player', id: 'player-1' }),
+      idempotencyKey: expect.stringMatching(/^chat:/),
     });
     expect(onClearComposerContext).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Jordan Example')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
+  });
+
+  it('shows a read-only explanation without composer affordances before standards acceptance', () => {
+    render(
+      <LeagueChatPanel
+        messages={[]}
+        hasEarlierMessages={false}
+        loading={false}
+        loadingEarlier={false}
+        sending={false}
+        canPublish={false}
+        canManage={false}
+        onRetry={vi.fn()}
+        onLoadEarlier={vi.fn()}
+        onSend={vi.fn()}
+        onReport={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Accept the community standards above before sending messages.'
+    );
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add a GIF' })).not.toBeInTheDocument();
+  });
+
+  it('shows a read-only mute explanation without a disabled composer', () => {
+    const mutedUntil = '2099-01-01T00:00:00.000Z';
+    render(
+      <LeagueChatPanel
+        messages={[]}
+        hasEarlierMessages={false}
+        loading={false}
+        loadingEarlier={false}
+        sending={false}
+        canPublish
+        canManage={false}
+        mutedUntil={mutedUntil}
+        onRetry={vi.fn()}
+        onLoadEarlier={vi.fn()}
+        onSend={vi.fn()}
+        onReport={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'You can read chat, but cannot send until'
+    );
+    expect(screen.getByRole('time')).toHaveAttribute('datetime', mutedUntil);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('lets a member dismiss a send error and returns focus to the composer', async () => {
+    const user = userEvent.setup();
+    const onDismissSubmitError = vi.fn();
+    render(
+      <LeagueChatPanel
+        messages={[]}
+        hasEarlierMessages={false}
+        loading={false}
+        loadingEarlier={false}
+        sending={false}
+        canPublish
+        canManage={false}
+        submitError="Connection interrupted"
+        onDismissSubmitError={onDismissSubmitError}
+        onRetry={vi.fn()}
+        onLoadEarlier={vi.fn()}
+        onSend={vi.fn()}
+        onReport={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss send error' }));
+
+    expect(onDismissSubmitError).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Message league chat' })).toHaveFocus();
   });
 });

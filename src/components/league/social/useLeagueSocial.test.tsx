@@ -192,6 +192,7 @@ describe('useLeagueSocial', () => {
       await result.current.sendMessage({
         content: '',
         gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
+        idempotencyKey: 'chat:stable-attempt',
       });
     });
 
@@ -202,9 +203,64 @@ describe('useLeagueSocial', () => {
     expect(JSON.parse(String(sendRequest?.[1]?.body))).toEqual({
       content: '',
       gif: { provider: 'giphy', id: 'xT9IgG50Fb7Mi0prBC' },
-      idempotencyKey: expect.stringMatching(/^chat:/),
+      idempotencyKey: 'chat:stable-attempt',
     });
     expect(result.current.messages.at(-1)).toEqual(sentMessage);
+  });
+
+  it('retries the same logical message with one idempotency key and reconciles one result', async () => {
+    const sentMessage: SocialMessage = {
+      ...memberMessage,
+      id: 'message-retry',
+      content: 'Retry this once',
+      author: { ...memberMessage.author!, userId: 'user-1' },
+      isOwn: true,
+    };
+    let sendAttempts = 0;
+    mocks.authenticatedFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith('/messages') && init?.method === 'POST') {
+        sendAttempts += 1;
+        if (sendAttempts === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            json: vi.fn().mockResolvedValue({
+              success: false,
+              error: 'Connection interrupted',
+            }),
+          } as unknown as Response);
+        }
+        return Promise.resolve(response(sentMessage));
+      }
+      return Promise.resolve(initialResponse(url));
+    });
+
+    const { result } = renderHook(() => useLeagueSocial('league-1', 'user-1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const input = {
+      content: 'Retry this once',
+      idempotencyKey: 'chat:one-logical-attempt',
+    };
+
+    await act(async () => {
+      await expect(result.current.sendMessage(input)).rejects.toThrow('Connection interrupted');
+    });
+    expect(result.current.submitError).toBe('Connection interrupted');
+
+    act(() => result.current.clearSubmitError());
+    expect(result.current.submitError).toBeNull();
+
+    await act(async () => {
+      await result.current.sendMessage(input);
+    });
+
+    const sendBodies = mocks.authenticatedFetch.mock.calls
+      .filter(([url, init]) => String(url).endsWith('/messages') && init?.method === 'POST')
+      .map(([, init]) => JSON.parse(String(init?.body)));
+    expect(sendBodies).toEqual([input, input]);
+    expect(result.current.messages.filter((message) => message.id === sentMessage.id)).toHaveLength(
+      1
+    );
   });
 
   it('does not let a stale cross-device read event clear newer unread content', async () => {

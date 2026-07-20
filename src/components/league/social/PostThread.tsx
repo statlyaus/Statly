@@ -24,10 +24,11 @@ interface PostThreadProps {
   submitError?: string | null;
   visible?: boolean;
   compact?: boolean;
+  onDismissSubmitError?: () => void;
   onBack: () => void;
   onRetry: () => Promise<void> | void;
   onLoadMore: () => Promise<void> | void;
-  onReply: (body: string) => Promise<void>;
+  onReply: (body: string, idempotencyKey: string) => Promise<void>;
   onUpdatePost: (input: { isPinned?: boolean; isLocked?: boolean }) => Promise<void>;
   onRemovePost: (reason: string) => Promise<void>;
   onRemoveReply: (replyId: string, reason: string) => Promise<void>;
@@ -58,6 +59,7 @@ export default function PostThread({
   submitError,
   visible = true,
   compact = false,
+  onDismissSubmitError,
   onBack,
   onRetry,
   onLoadMore,
@@ -82,10 +84,10 @@ export default function PostThread({
     onLatestVisibleChange?.(isNearBottom(element));
   }, [onLatestVisibleChange, post.latestActivityAt, replies.at(-1)?.id, visible]);
 
-  async function handleReply(body: string): Promise<void> {
+  async function handleReply(body: string, idempotencyKey: string): Promise<void> {
     setReplying(true);
     try {
-      await onReply(body);
+      await onReply(body, idempotencyKey);
     } finally {
       setReplying(false);
     }
@@ -338,6 +340,7 @@ export default function PostThread({
             maxLength={10000}
             pending={replying}
             error={submitError}
+            onDismissError={onDismissSubmitError}
             compact={compact}
             onSubmit={handleReply}
           />

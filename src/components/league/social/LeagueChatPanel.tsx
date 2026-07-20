@@ -15,6 +15,7 @@ import GiphyPicker from './GiphyPicker';
 import SafeSocialText from './SafeSocialText';
 import SocialAuthor from './SocialAuthor';
 import SocialComposer from './SocialComposer';
+import type { SocialComposerDraftScope } from './socialComposerDraft';
 import SocialReportButton from './SocialReportButton';
 import SocialRemoveButton from './SocialRemoveButton';
 
@@ -31,12 +32,15 @@ interface LeagueChatPanelProps {
   submitError?: string | null;
   visible?: boolean;
   compact?: boolean;
+  composerLabel?: string;
+  draftScope?: SocialComposerDraftScope;
   composerContext?: SocialDiscussionContext | null;
   onClearComposerContext?: () => void;
+  onDismissSubmitError?: () => void;
   onLatestVisibleChange?: (visible: boolean) => void;
   onRetry: () => Promise<void> | void;
   onLoadEarlier: () => Promise<void> | void;
-  onSend: (input: Omit<CreateSocialMessageInput, 'idempotencyKey'>) => Promise<void>;
+  onSend: (input: CreateSocialMessageInput) => Promise<void>;
   onReport: (messageId: string, reason: SocialReportReason, details?: string) => Promise<void>;
   onRemove: (messageId: string, reason: string) => Promise<void>;
 }
@@ -87,8 +91,11 @@ export default function LeagueChatPanel({
   submitError,
   visible = true,
   compact = false,
+  composerLabel = 'Message league chat',
+  draftScope,
   composerContext,
   onClearComposerContext,
+  onDismissSubmitError,
   onLatestVisibleChange,
   onRetry,
   onLoadEarlier,
@@ -160,9 +167,7 @@ export default function LeagueChatPanel({
     onLatestVisibleChange?.(true);
   }
 
-  async function sendWithContext(
-    input: Omit<CreateSocialMessageInput, 'idempotencyKey' | 'context'>
-  ): Promise<void> {
+  async function sendWithContext(input: Omit<CreateSocialMessageInput, 'context'>): Promise<void> {
     await onSend({
       ...input,
       ...(composerContext ? { context: composerContext } : {}),
@@ -325,11 +330,11 @@ export default function LeagueChatPanel({
 
       <footer className="border-t border-border bg-background p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {!canPublish && !muted ? (
-          <p role="status" className="mb-2 text-sm text-muted-foreground">
+          <p role="status" className="py-2 text-center text-sm text-muted-foreground">
             Accept the community standards above before sending messages.
           </p>
         ) : muted ? (
-          <p role="status" className="mb-2 text-sm text-muted-foreground">
+          <p role="status" className="py-2 text-center text-sm text-muted-foreground">
             You can read chat, but cannot send until{' '}
             <time dateTime={mutedUntil ?? undefined}>
               {mutedUntil ? new Date(mutedUntil).toLocaleString() : 'the mute ends'}
@@ -337,32 +342,39 @@ export default function LeagueChatPanel({
             .
           </p>
         ) : null}
-        {composerContext ? (
-          <DiscussionContextCard
-            context={composerContext}
-            onRemove={onClearComposerContext}
-            label="Discussing"
-          />
-        ) : null}
-        <SocialComposer
-          label="Message league chat"
-          placeholder="Message your league…"
-          submitLabel="Send"
-          maxLength={1000}
-          submitOnEnter
-          disabled={!canPublish || muted}
-          pending={sending}
-          error={submitError}
-          compact
-          leadingAction={
-            <GiphyPicker
+        {canPublish && !muted ? (
+          <>
+            {composerContext ? (
+              <DiscussionContextCard
+                context={composerContext}
+                onRemove={onClearComposerContext}
+                label="Discussing"
+              />
+            ) : null}
+            <SocialComposer
+              label={composerLabel}
+              placeholder="Message your league…"
+              submitLabel="Send"
+              maxLength={1000}
+              submitOnEnter
+              pending={sending}
+              error={submitError}
+              onDismissError={onDismissSubmitError}
+              draftScope={draftScope}
               compact
-              disabled={!canPublish || muted || sending}
-              onSelect={(gif) => sendWithContext({ content: '', gif })}
+              leadingAction={
+                <GiphyPicker
+                  compact
+                  disabled={sending}
+                  onSelect={(gif, idempotencyKey) =>
+                    sendWithContext({ content: '', gif, idempotencyKey })
+                  }
+                />
+              }
+              onSubmit={(content, idempotencyKey) => sendWithContext({ content, idempotencyKey })}
             />
-          }
-          onSubmit={(content) => sendWithContext({ content })}
-        />
+          </>
+        ) : null}
       </footer>
     </section>
   );

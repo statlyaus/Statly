@@ -17,6 +17,16 @@ type UnreadCounts = { chat: number; board: number; activity: number };
 const leagueNameCache = new Map<string, string>();
 const EMPTY_UNREAD: UnreadCounts = { chat: 0, board: 0, activity: 0 };
 
+export function getDraftIdFromPathname(pathname: string | null): string | null {
+  const match = pathname?.match(/^\/drafts\/([^/]+)\/?$/);
+  if (!match || ['create', 'history', 'settings'].includes(match[1])) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
 function isLeagueEvent(value: unknown, leagueId: string): boolean {
   if (!value || typeof value !== 'object' || !('leagueId' in value)) return false;
   return (value as Pick<SocialRealtimeEnvelope, 'leagueId'>).leagueId === leagueId;
@@ -61,6 +71,7 @@ export default function LeagueSocialWidget({
   const displayLeagueName = leagueName ?? resolvedLeagueName;
   const isOpen = mode === 'open';
   const isDedicatedSocialPage = /^\/leagues\/[^/]+\/social(?:\/|$)/.test(pathname ?? '');
+  const draftId = getDraftIdFromPathname(pathname);
   const discussActivity = useCallback(
     (activity: SocialMessage) => {
       open({
@@ -334,6 +345,8 @@ export default function LeagueSocialWidget({
             showHeader={false}
             compact
             visible={isOpen}
+            composerLabel={`Message the members of ${displayLeagueName ?? 'this league'}`}
+            composerSurface={draftId ? { type: 'draft-chat', draftId } : { type: 'league-chat' }}
             composerContext={composerContext}
             onClearComposerContext={clearComposerContext}
             onDiscussActivity={discussActivity}

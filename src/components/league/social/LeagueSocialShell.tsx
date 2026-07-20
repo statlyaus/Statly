@@ -15,6 +15,7 @@ import LeagueChatPanel from './LeagueChatPanel';
 import MessageBoardPanel from './MessageBoardPanel';
 import PostThread from './PostThread';
 import SocialPreferencesPanel from './SocialPreferencesPanel';
+import type { SocialComposerSurface } from './socialComposerDraft';
 import { useLeagueSocial } from './useLeagueSocial';
 
 export type LeagueSocialView = SocialChannel;
@@ -29,6 +30,8 @@ export interface LeagueSocialShellProps {
   showHeader?: boolean;
   compact?: boolean;
   visible?: boolean;
+  composerLabel?: string;
+  composerSurface?: SocialComposerSurface;
   composerContext?: SocialDiscussionContext | null;
   onClearComposerContext?: () => void;
   onDiscussActivity?: (activity: SocialMessage) => void;
@@ -50,6 +53,8 @@ export default function LeagueSocialShell({
   showHeader = true,
   compact = false,
   visible = true,
+  composerLabel = 'Message league chat',
+  composerSurface = { type: 'league-chat' },
   composerContext,
   onClearComposerContext,
   onDiscussActivity,
@@ -299,8 +304,28 @@ export default function LeagueSocialShell({
           submitError={controller.submitError}
           visible={visible && activeView === 'chat'}
           compact={compact}
+          composerLabel={composerLabel}
+          draftScope={
+            currentUserId && controller.summary
+              ? {
+                  userId: currentUserId,
+                  leagueId,
+                  leagueSeasonId: controller.summary.seasonId,
+                  surface: composerSurface,
+                  ...(composerContext
+                    ? {
+                        discussion: {
+                          type: composerContext.type,
+                          id: composerContext.id,
+                        },
+                      }
+                    : {}),
+                }
+              : undefined
+          }
           composerContext={composerContext}
           onClearComposerContext={onClearComposerContext}
+          onDismissSubmitError={controller.clearSubmitError}
           onLatestVisibleChange={(isLatestVisible) =>
             handleLatestVisibleChange('chat', isLatestVisible)
           }
@@ -335,6 +360,7 @@ export default function LeagueSocialShell({
             canPublish={controller.summary?.canPublish ?? false}
             error={selectedThread?.error}
             submitError={controller.submitError}
+            onDismissSubmitError={controller.clearSubmitError}
             visible={visible && activeView === 'board'}
             compact={compact}
             onBack={() => {
@@ -343,7 +369,9 @@ export default function LeagueSocialShell({
             }}
             onRetry={() => controller.loadReplies(selectedPost.id)}
             onLoadMore={() => controller.loadReplies(selectedPost.id, true)}
-            onReply={(body) => controller.createReply(selectedPost.id, body)}
+            onReply={(body, idempotencyKey) =>
+              controller.createReply(selectedPost.id, body, idempotencyKey)
+            }
             onUpdatePost={async (input) => {
               await controller.updatePost(selectedPost.id, input);
             }}

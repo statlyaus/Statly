@@ -195,11 +195,12 @@ function updateRealtimeSummary(
 }
 
 export interface LeagueSocialController extends LeagueSocialState {
+  clearSubmitError: () => void;
   retry: () => Promise<void>;
   loadEarlierMessages: () => Promise<void>;
   loadEarlierActivity: () => Promise<void>;
   loadMorePosts: () => Promise<void>;
-  sendMessage: (input: Omit<CreateSocialMessageInput, 'idempotencyKey'>) => Promise<void>;
+  sendMessage: (input: CreateSocialMessageInput) => Promise<void>;
   createPost: (input: Omit<CreateSocialPostInput, 'idempotencyKey'>) => Promise<SocialPost>;
   updatePost: (
     postId: string,
@@ -222,7 +223,7 @@ export interface LeagueSocialController extends LeagueSocialState {
     reason: string
   ) => Promise<void>;
   loadReplies: (postId: string, loadMore?: boolean) => Promise<void>;
-  createReply: (postId: string, body: string) => Promise<void>;
+  createReply: (postId: string, body: string, idempotencyKey: string) => Promise<void>;
   markRead: (channel: SocialChannel) => Promise<void>;
   postSort: SocialPostSort;
   setPostSort: (sort: SocialPostSort) => void;
@@ -243,6 +244,12 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
     },
     [basePath, currentUserId]
   );
+
+  const clearSubmitError = useCallback((): void => {
+    setState((current) =>
+      current.submitError === null ? current : { ...current, submitError: null }
+    );
+  }, []);
 
   const loadSummary = useCallback(async (): Promise<void> => {
     const summary = await apiRequest<LeagueSocialSummary>('/summary');
@@ -594,13 +601,9 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
   }, [apiRequest, postSort, state.loadingMorePosts, state.postsCursor]);
 
   const sendMessage = useCallback(
-    async (messageInput: Omit<CreateSocialMessageInput, 'idempotencyKey'>): Promise<void> => {
+    async (input: CreateSocialMessageInput): Promise<void> => {
       setState((current) => ({ ...current, sendingMessage: true, submitError: null }));
       try {
-        const input: CreateSocialMessageInput = {
-          ...messageInput,
-          idempotencyKey: createIdempotencyKey('chat'),
-        };
         const message = await apiRequest<SocialMessage>('/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -842,12 +845,12 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
   );
 
   const createReply = useCallback(
-    async (postId: string, body: string): Promise<void> => {
+    async (postId: string, body: string, idempotencyKey: string): Promise<void> => {
       setState((current) => ({ ...current, submitError: null }));
       try {
         const input: CreateSocialReplyInput = {
           body,
-          idempotencyKey: createIdempotencyKey('reply'),
+          idempotencyKey,
         };
         const reply = await apiRequest<SocialReply>(
           `/posts/${encodeURIComponent(postId)}/replies`,
@@ -940,6 +943,7 @@ export function useLeagueSocial(leagueId: string, currentUserId?: string): Leagu
 
   return {
     ...state,
+    clearSubmitError,
     retry: loadInitial,
     loadEarlierMessages,
     loadEarlierActivity,

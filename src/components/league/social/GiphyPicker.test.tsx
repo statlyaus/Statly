@@ -78,10 +78,13 @@ describe('GiphyPicker', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Choose celebration' }));
     await waitFor(() =>
-      expect(onSelect).toHaveBeenCalledWith({
-        provider: 'giphy',
-        id: 'xT9IgG50Fb7Mi0prBC',
-      })
+      expect(onSelect).toHaveBeenCalledWith(
+        {
+          provider: 'giphy',
+          id: 'xT9IgG50Fb7Mi0prBC',
+        },
+        expect.stringMatching(/^chat-gif:/)
+      )
     );
     expect(mocks.pingback).toHaveBeenCalledWith({
       analyticsResponsePayload: 'analytics-payload',
@@ -99,9 +102,31 @@ describe('GiphyPicker', () => {
   it('uses an icon-sized trigger in a compact composer', () => {
     render(<GiphyPicker apiKey="test-web-key" compact onSelect={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: 'Add a GIF' })).toHaveClass(
-      'size-10',
-      'rounded-full'
+    expect(screen.getByRole('button', { name: 'Add a GIF' })).toHaveClass('size-11', 'rounded-lg');
+  });
+
+  it('reuses the same idempotency key when a failed GIF selection is retried', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Temporary failure'))
+      .mockResolvedValueOnce(undefined);
+    render(<GiphyPicker apiKey="test-web-key" onSelect={onSelect} />);
+
+    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
+    const choice = await screen.findByRole('button', { name: 'Choose celebration' });
+    await user.click(choice);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to send that GIF. Please try again.'
     );
+
+    await user.click(choice);
+    await waitFor(() => expect(onSelect).toHaveBeenCalledTimes(2));
+
+    const firstAttemptKey = onSelect.mock.calls[0]?.[1];
+    const retryAttemptKey = onSelect.mock.calls[1]?.[1];
+    expect(firstAttemptKey).toMatch(/^chat-gif:/);
+    expect(retryAttemptKey).toBe(firstAttemptKey);
   });
 });

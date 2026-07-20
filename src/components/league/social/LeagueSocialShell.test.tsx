@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SocialMessage, SocialPost } from '@/types/social';
 
 import LeagueSocialShell from './LeagueSocialShell';
+import { getSocialComposerDraftKey } from './socialComposerDraft';
 
 const controller = {
   summary: {
@@ -216,5 +217,39 @@ describe('LeagueSocialShell', () => {
       ?.querySelector('.overflow-y-auto');
     expect(chatScroller).toHaveClass('min-h-0');
     expect(chatScroller).not.toHaveClass('min-h-64');
+  });
+
+  it('persists the shared composer under its Draft Room surface and accessible label', async () => {
+    const user = userEvent.setup();
+    const draftScope = {
+      userId: 'draft-user',
+      leagueId: 'draft-league',
+      leagueSeasonId: 'season-1',
+      surface: { type: 'draft-chat' as const, draftId: 'draft-42' },
+    };
+    const leagueScope = {
+      ...draftScope,
+      surface: { type: 'league-chat' as const },
+    };
+    render(
+      <LeagueSocialShell
+        leagueId="draft-league"
+        currentUserId="draft-user"
+        composerLabel="Message the members of Draft League"
+        composerSurface={draftScope.surface}
+      />
+    );
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Message the members of Draft League' }),
+      'Draft-room thought'
+    );
+
+    await waitFor(() =>
+      expect(localStorage.getItem(getSocialComposerDraftKey(draftScope))).toContain(
+        'Draft-room thought'
+      )
+    );
+    expect(localStorage.getItem(getSocialComposerDraftKey(leagueScope))).toBeNull();
   });
 });

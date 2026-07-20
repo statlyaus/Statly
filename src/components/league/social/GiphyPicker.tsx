@@ -8,10 +8,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { SocialGif } from '@/types/social';
 
 import { GIPHY_WEB_SDK_KEY, getGiphyClient, type GiphyGif, registerGiphySent } from './giphyClient';
+import { createSocialComposerAttemptKey } from './socialComposerDraft';
 
 interface GiphyPickerProps {
   disabled?: boolean;
-  onSelect: (gif: SocialGif) => Promise<void>;
+  onSelect: (gif: SocialGif, idempotencyKey: string) => Promise<void>;
   apiKey?: string;
   compact?: boolean;
 }
@@ -29,6 +30,7 @@ export default function GiphyPicker({
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const selectionAttemptRef = useRef<{ gifId: string; idempotencyKey: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -110,11 +112,21 @@ export default function GiphyPicker({
   const selectGif = useCallback(
     async (gif: GiphyGif) => {
       if (selectionPending) return;
+      const gifId = String(gif.id);
+      const attempt =
+        selectionAttemptRef.current?.gifId === gifId
+          ? selectionAttemptRef.current
+          : {
+              gifId,
+              idempotencyKey: createSocialComposerAttemptKey('chat-gif'),
+            };
+      selectionAttemptRef.current = attempt;
       setSelectionPending(true);
       setError(null);
       try {
-        await onSelect({ provider: 'giphy', id: String(gif.id) });
+        await onSelect({ provider: 'giphy', id: gifId }, attempt.idempotencyKey);
         registerGiphySent(gif);
+        selectionAttemptRef.current = null;
         handleOpenChange(false);
       } catch {
         setError('Unable to send that GIF. Please try again.');
@@ -143,7 +155,7 @@ export default function GiphyPicker({
           aria-label="Add a GIF"
           className={
             compact
-              ? 'inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40'
+              ? 'inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40'
               : 'inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
           }
         >

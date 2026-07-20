@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import LeagueSocialWidget from './LeagueSocialWidget';
+import LeagueSocialWidget, { getDraftIdFromPathname } from './LeagueSocialWidget';
 import { LeagueSocialWidgetProvider } from './LeagueSocialWidgetProvider';
 
 const mocks = vi.hoisted(() => ({
@@ -29,12 +29,16 @@ vi.mock('./LeagueSocialShell', () => ({
     showHeader,
     compact,
     className,
+    composerLabel,
+    composerSurface,
   }: {
     visible?: boolean;
     composerContext?: { title: string } | null;
     showHeader?: boolean;
     compact?: boolean;
     className?: string;
+    composerLabel?: string;
+    composerSurface?: { type: 'league-chat' } | { type: 'draft-chat'; draftId: string };
   }) => (
     <button
       type="button"
@@ -43,6 +47,9 @@ vi.mock('./LeagueSocialShell', () => ({
       data-show-header={showHeader ? 'true' : 'false'}
       data-compact={compact ? 'true' : 'false'}
       data-class-name={className}
+      data-composer-label={composerLabel}
+      data-composer-surface={composerSurface?.type}
+      data-draft-id={composerSurface?.type === 'draft-chat' ? composerSurface.draftId : undefined}
     >
       {composerContext?.title ?? 'Composer control'}
     </button>
@@ -109,6 +116,11 @@ describe('LeagueSocialWidget', () => {
     expect(shellControl).toHaveAttribute('data-visible', 'true');
     expect(shellControl).toHaveAttribute('data-show-header', 'false');
     expect(shellControl).toHaveAttribute('data-compact', 'true');
+    expect(shellControl).toHaveAttribute(
+      'data-composer-label',
+      'Message the members of Premier League'
+    );
+    expect(shellControl).toHaveAttribute('data-composer-surface', 'league-chat');
     expect(shellControl).toHaveAttribute(
       'data-class-name',
       expect.stringContaining('h-full !min-h-0')
@@ -203,5 +215,30 @@ describe('LeagueSocialWidget', () => {
       ([url]) => url === '/api/leagues/league-a/social/summary'
     );
     expect((leagueASummaryCall?.[1] as RequestInit).signal).toMatchObject({ aborted: true });
+  });
+
+  it('scopes the shared composer to the active draft-room route', async () => {
+    navigation.pathname = '/drafts/draft%2042';
+    const user = userEvent.setup();
+    render(
+      <LeagueSocialWidgetProvider>
+        <LeagueSocialWidget currentUserId="user-1" />
+      </LeagueSocialWidgetProvider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: /open league social/i }));
+    const shellControl = screen.getByTestId('social-shell-control');
+
+    expect(shellControl).toHaveAttribute('data-composer-surface', 'draft-chat');
+    expect(shellControl).toHaveAttribute('data-draft-id', 'draft 42');
+  });
+
+  it('recognizes only live draft-room routes as draft composer surfaces', () => {
+    expect(getDraftIdFromPathname('/drafts/draft-42')).toBe('draft-42');
+    expect(getDraftIdFromPathname('/drafts/draft-42/')).toBe('draft-42');
+    expect(getDraftIdFromPathname('/drafts/create')).toBeNull();
+    expect(getDraftIdFromPathname('/drafts/history')).toBeNull();
+    expect(getDraftIdFromPathname('/drafts/settings')).toBeNull();
+    expect(getDraftIdFromPathname('/drafts/draft-42/settings')).toBeNull();
   });
 });
