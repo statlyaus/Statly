@@ -83,10 +83,10 @@ export default function SocialComposer({
   const showCounter = value.length >= Math.min(800, maxLength);
   const counterTone =
     value.length >= maxLength
-      ? 'font-semibold text-destructive'
+      ? 'font-semibold text-social-error'
       : value.length >= Math.min(950, maxLength)
-        ? 'font-semibold text-warning'
-        : 'text-muted-foreground';
+        ? 'font-semibold text-social-warning-text'
+        : 'text-social-text-muted';
   const sendLabel = isSubmitting
     ? 'Sending message'
     : hasFailure
@@ -94,6 +94,11 @@ export default function SocialComposer({
       : !online
         ? 'Sending unavailable while offline'
         : submitLabel;
+  const submitButtonTone = isSubmitting
+    ? 'cursor-wait border-social-action bg-social-action text-social-action-foreground'
+    : hasFailure
+      ? 'border-social-error bg-social-surface text-social-error hover:bg-social-error-soft active:bg-social-error-soft'
+      : 'border-social-action bg-social-action text-social-action-foreground hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed disabled:border-social-border disabled:bg-social-disabled-bg disabled:text-social-disabled-text';
 
   useEffect(() => {
     if (!draftKey || typeof window === 'undefined') return;
@@ -243,7 +248,11 @@ export default function SocialComposer({
       <div
         className={
           compact
-            ? 'flex min-h-14 items-end gap-0.5 rounded-xl border border-border bg-background p-1.5 shadow-sm transition focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30'
+            ? `flex min-h-14 items-end gap-0.5 rounded-xl border bg-social-surface p-1.5 shadow-sm transition-colors focus-within:ring-2 focus-within:ring-social-focus/30 ${
+                visibleError
+                  ? 'border-social-error focus-within:border-social-error'
+                  : 'border-social-border focus-within:border-social-action'
+              }`
             : undefined
         }
       >
@@ -265,19 +274,17 @@ export default function SocialComposer({
           aria-describedby={`${helpId} ${statusId}${visibleError ? ` ${errorId}` : ''}`}
           className={
             compact
-              ? 'block min-h-11 max-h-24 min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-2 py-3 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60'
-              : 'block w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60'
+              ? 'block min-h-11 max-h-24 min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-2 py-3 text-sm leading-5 text-social-text outline-none placeholder:text-social-text-muted disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text'
+              : 'block w-full resize-y rounded-xl border border-social-border bg-social-surface px-3 py-2 text-sm text-social-text outline-none placeholder:text-social-text-muted focus-visible:border-social-action focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text'
           }
         />
         <button
           type="submit"
           disabled={!canSubmit}
           aria-label={compact ? sendLabel : undefined}
-          className={
-            compact
-              ? 'inline-flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40'
-              : 'inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
-          }
+          className={`inline-flex shrink-0 items-center justify-center rounded-lg border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface disabled:cursor-not-allowed ${
+            compact ? 'size-11' : 'min-h-11 px-4 text-sm'
+          } ${submitButtonTone}`}
         >
           {compact ? (
             isSubmitting ? (
@@ -318,7 +325,7 @@ export default function SocialComposer({
       ) : null}
 
       {!online ? (
-        <p role="status" className="px-1 text-xs font-medium text-muted-foreground">
+        <p role="status" className="px-1 text-xs font-medium text-social-text-muted">
           You’re offline. Your draft is saved and sending is unavailable.
         </p>
       ) : null}
@@ -327,13 +334,13 @@ export default function SocialComposer({
         <div
           id={errorId}
           role="alert"
-          className="flex items-start justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2"
+          className="flex items-start justify-between gap-2 rounded-lg border border-social-error bg-social-error-soft px-3 py-2"
         >
-          <p className="text-sm font-medium text-destructive">{visibleError}</p>
+          <p className="text-sm font-medium text-social-error">{visibleError}</p>
           <button
             type="button"
             onClick={dismissError}
-            className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-destructive transition hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-social-error transition-colors hover:bg-social-surface active:bg-social-error-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
             aria-label="Dismiss send error"
           >
             <X className="size-4" aria-hidden="true" />

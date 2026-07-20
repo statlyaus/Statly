@@ -155,8 +155,8 @@ export default function GiphyPicker({
           aria-label="Add a GIF"
           className={
             compact
-              ? 'inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40'
-              : 'inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
+              ? 'inline-flex size-11 items-center justify-center rounded-lg text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text'
+              : 'inline-flex min-h-10 items-center gap-2 rounded-lg border border-social-border bg-social-surface px-3 text-sm font-semibold text-social-text transition-colors hover:border-social-action hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text'
           }
         >
           <ImagePlus className="size-4" aria-hidden="true" />
@@ -166,7 +166,7 @@ export default function GiphyPicker({
           align="start"
           aria-label="Choose a GIF"
           aria-busy={selectionPending}
-          className="bottom-full top-auto mb-2 mt-0 w-[min(24rem,calc(100vw-2rem))] p-3"
+          className="bottom-full top-auto mb-2 mt-0 w-[min(24rem,calc(100vw-2rem))] border-social-border bg-social-surface p-3 text-social-text"
         >
           <form className="flex items-center gap-2" onSubmit={handleSearch} role="search">
             <label htmlFor={searchId} className="sr-only">
@@ -180,12 +180,12 @@ export default function GiphyPicker({
               onChange={(event) => setSearchDraft(event.target.value)}
               maxLength={50}
               placeholder="Search GIPHY"
-              className="min-h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-h-10 min-w-0 flex-1 rounded-lg border border-social-border bg-social-surface px-3 text-sm text-social-text outline-none placeholder:text-social-text-muted focus-visible:border-social-action focus-visible:ring-2 focus-visible:ring-social-focus"
             />
             <button
               type="submit"
               aria-label="Search GIFs"
-              className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-social-action bg-social-action text-social-action-foreground transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface"
             >
               <Search className="size-4" aria-hidden="true" />
             </button>
@@ -199,27 +199,27 @@ export default function GiphyPicker({
                   setError(null);
                   searchRef.current?.focus();
                 }}
-                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-social-border text-social-text-muted transition-colors hover:border-social-border-strong hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>
             ) : null}
           </form>
 
-          <p className="mt-2 text-xs font-medium text-muted-foreground">
+          <p className="mt-2 text-xs font-medium text-social-text-muted">
             {searchTerm ? `Results for “${searchTerm}”` : 'Trending GIFs'}
           </p>
 
           <div
             ref={gridRef}
-            className="mt-2 max-h-80 min-h-48 overflow-y-auto rounded-lg bg-muted/30"
+            className="mt-2 max-h-80 min-h-48 overflow-y-auto rounded-lg bg-social-surface-subtle"
           >
             {loading ? (
-              <p role="status" className="py-16 text-center text-sm text-muted-foreground">
+              <p role="status" className="py-16 text-center text-sm text-social-text-muted">
                 Loading GIFs…
               </p>
             ) : initialGifs.length === 0 ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">No GIFs found</p>
+              <p className="py-16 text-center text-sm text-social-text-muted">No GIFs found</p>
             ) : (
               <Grid
                 key={searchTerm || 'trending'}
@@ -247,7 +247,7 @@ export default function GiphyPicker({
           </div>
 
           {error ? (
-            <p role="alert" className="mt-2 text-sm font-medium text-destructive">
+            <p role="alert" className="mt-2 text-sm font-medium text-social-error">
               {error}
             </p>
           ) : null}
@@ -256,7 +256,7 @@ export default function GiphyPicker({
             href="https://giphy.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 block text-right text-xs font-bold tracking-wide text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-3 block rounded-sm text-right text-xs font-bold tracking-wide text-social-text underline-offset-4 hover:text-social-action hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
           >
             Powered by GIPHY
           </a>

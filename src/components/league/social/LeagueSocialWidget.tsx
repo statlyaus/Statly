@@ -282,11 +282,11 @@ export default function LeagueSocialWidget({
           }
           aria-expanded="false"
           title="League Social"
-          className="fixed bottom-6 right-6 z-[55] inline-flex size-14 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground shadow-lg transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="league-social fixed bottom-6 right-6 z-[55] inline-flex size-14 items-center justify-center rounded-full border border-social-brand-strong bg-social-brand-strong text-social-brand-foreground shadow-lg transition-colors hover:bg-social-action-hover active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface"
         >
           <MessageCircle className="size-5" aria-hidden="true" />
           {totalUnread > 0 ? (
-            <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-bold text-destructive-foreground ring-2 ring-background">
+            <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-social-action px-1.5 text-xs font-bold text-social-action-foreground ring-2 ring-social-surface">
               <span className="sr-only">{totalUnread} unread</span>
               <span aria-hidden="true">{formatUnread(totalUnread)}</span>
             </span>
@@ -300,16 +300,18 @@ export default function LeagueSocialWidget({
           aria-label="League social panel"
           aria-hidden={!isOpen}
           inert={!isOpen}
-          className={`fixed inset-0 z-[60] flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden border-0 bg-background shadow-2xl transition-[transform,opacity] duration-200 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[clamp(36.25rem,76dvh,45rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[clamp(26.25rem,32vw,30rem)] sm:max-w-[calc(100vw-3rem)] sm:rounded-2xl sm:border sm:border-border ${
+          className={`league-social fixed inset-0 z-[60] flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden border-0 bg-social-canvas text-social-text shadow-2xl transition-[transform,opacity] duration-200 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[clamp(36.25rem,76dvh,45rem)] sm:max-h-[calc(100dvh-3rem)] sm:w-[clamp(26.25rem,32vw,30rem)] sm:max-w-[calc(100vw-3rem)] sm:rounded-2xl sm:border sm:border-social-border ${
             isOpen
               ? 'translate-y-0 opacity-100 sm:translate-x-0'
               : 'pointer-events-none translate-y-full opacity-0 sm:translate-x-[calc(100%+2rem)] sm:translate-y-0'
           }`}
         >
-          <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)]">
+          <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-social-brand-strong bg-social-brand-strong px-4 pt-[env(safe-area-inset-top)] text-social-brand-foreground">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">League Social</p>
-              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <p className="truncate text-sm font-semibold text-social-brand-foreground">
+                League Social
+              </p>
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-social-header-muted">
                 <span className="truncate">{displayLeagueName ?? 'Current league'}</span>
                 {connectionNotice !== 'hidden' ? (
                   <span
@@ -328,7 +330,7 @@ export default function LeagueSocialWidget({
                 ref={minimizeButtonRef}
                 type="button"
                 onClick={handleMinimize}
-                className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex size-10 items-center justify-center rounded-full text-social-brand-foreground transition-colors hover:bg-social-header-control-hover active:bg-social-header-control-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-social-brand-strong"
                 aria-label="Minimize league social"
                 title="Minimize"
               >

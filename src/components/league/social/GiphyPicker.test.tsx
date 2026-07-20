@@ -102,7 +102,12 @@ describe('GiphyPicker', () => {
   it('uses an icon-sized trigger in a compact composer', () => {
     render(<GiphyPicker apiKey="test-web-key" compact onSelect={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: 'Add a GIF' })).toHaveClass('size-11', 'rounded-lg');
+    expect(screen.getByRole('button', { name: 'Add a GIF' })).toHaveClass(
+      'size-11',
+      'rounded-lg',
+      'text-social-text-muted',
+      'hover:bg-social-brand-soft'
+    );
   });
 
   it('reuses the same idempotency key when a failed GIF selection is retried', async () => {

@@ -74,6 +74,38 @@ describe('SocialComposer', () => {
     expect(input).toHaveFocus();
   });
 
+  it('distinguishes empty, enabled, loading, and error controls without opacity alone', async () => {
+    const user = userEvent.setup();
+    let rejectSubmission: ((error: Error) => void) | undefined;
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSubmission = reject;
+        })
+    );
+    renderComposer({ onSubmit });
+
+    const send = screen.getByRole('button', { name: 'Send message' });
+    expect(send).toBeDisabled();
+    expect(send).toHaveClass(
+      'disabled:bg-social-disabled-bg',
+      'disabled:text-social-disabled-text'
+    );
+
+    await user.type(screen.getByRole('textbox', { name: 'League message' }), 'State check');
+    expect(send).toBeEnabled();
+    expect(send).toHaveClass('bg-social-action', 'text-social-action-foreground');
+
+    await user.click(send);
+    const loading = screen.getByRole('button', { name: 'Sending message' });
+    expect(loading).toBeDisabled();
+    expect(loading).toHaveClass('cursor-wait', 'bg-social-action');
+
+    await act(async () => rejectSubmission?.(new Error('Connection interrupted')));
+    const retry = await screen.findByRole('button', { name: 'Retry sending message' });
+    expect(retry).toHaveClass('border-social-error', 'bg-social-surface', 'text-social-error');
+  });
+
   it('does not submit empty, touch-return, or active IME composition events', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
@@ -110,7 +142,7 @@ describe('SocialComposer', () => {
     expect(input).toHaveStyle({ height: '96px' });
 
     fireEvent.change(input, { target: { value: 'a'.repeat(1000) } });
-    expect(screen.getByText('1,000 / 1,000 · Limit reached')).toHaveClass('text-destructive');
+    expect(screen.getByText('1,000 / 1,000 · Limit reached')).toHaveClass('text-social-error');
   });
 
   it('preserves scoped drafts across unmounts and isolates Draft Room drafts', async () => {

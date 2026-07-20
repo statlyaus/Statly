@@ -94,6 +94,29 @@ describe('LeagueChatPanel', () => {
     expect(screen.getByText('One more detail.')).toBeInTheDocument();
   });
 
+  it('uses restrained semantic surfaces for mentions and the current member', () => {
+    renderPanel([
+      { ...memberMessage, content: '@Alex please review this.' },
+      {
+        ...memberMessage,
+        id: 'message-own',
+        content: 'I will take a look.',
+        createdAt: '2026-07-19T10:02:00.000Z',
+        isOwn: true,
+      },
+    ]);
+
+    const [mention, ownMessage] = screen.getAllByRole('article');
+    expect(mention).toHaveAccessibleName('Message containing a mention from Alex Smith');
+    expect(mention).toHaveClass(
+      'border-social-warning',
+      'bg-social-mention-bg',
+      'text-social-mention-text'
+    );
+    expect(screen.getByText('Mention')).toBeInTheDocument();
+    expect(ownMessage).toHaveClass('border-social-action', 'bg-social-brand-soft');
+  });
+
   it('renders a durable GIPHY fallback when the Web SDK key is not configured', async () => {
     renderPanel([gifMessage]);
 

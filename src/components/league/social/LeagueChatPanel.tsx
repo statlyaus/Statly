@@ -1,6 +1,6 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { AtSign, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type {
@@ -76,6 +76,10 @@ function isMessageContinuation(message: SocialMessage, previous?: SocialMessage)
     currentTime >= previousTime &&
     currentTime - previousTime <= MESSAGE_GROUP_WINDOW_MS
   );
+}
+
+export function containsSocialMention(value: string): boolean {
+  return /(^|\s)@[a-z0-9][a-z0-9._-]*/i.test(value);
 }
 
 export default function LeagueChatPanel({
@@ -178,7 +182,7 @@ export default function LeagueChatPanel({
   return (
     <section
       aria-label="League chat"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background text-foreground"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-social-canvas text-social-text"
     >
       <div className="relative min-h-0 flex-1">
         <div
@@ -199,7 +203,7 @@ export default function LeagueChatPanel({
                 type="button"
                 onClick={handleLoadEarlier}
                 disabled={loadingEarlier}
-                className="inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="inline-flex min-h-9 items-center justify-center rounded-lg border border-social-border bg-social-surface px-3 text-xs font-semibold text-social-text transition-colors hover:border-social-border-strong hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
               >
                 {loadingEarlier ? 'Loading…' : 'Load earlier messages'}
               </button>
@@ -207,26 +211,26 @@ export default function LeagueChatPanel({
           ) : null}
 
           {loading && messages.length === 0 ? (
-            <p role="status" className="py-10 text-center text-sm text-muted-foreground">
+            <p role="status" className="py-10 text-center text-sm text-social-text-muted">
               Loading league chat…
             </p>
           ) : error && messages.length === 0 ? (
-            <div className="mx-auto max-w-sm rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-center">
-              <p role="alert" className="text-sm font-medium text-destructive">
+            <div className="mx-auto max-w-sm rounded-xl border border-social-error bg-social-error-soft p-4 text-center">
+              <p role="alert" className="text-sm font-medium text-social-error">
                 {error}
               </p>
               <button
                 type="button"
                 onClick={() => void onRetry()}
-                className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-social-border bg-social-surface px-3 text-sm font-semibold text-social-text transition-colors hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
               >
                 Retry
               </button>
             </div>
           ) : visibleMessages.length === 0 ? (
             <div className="py-10 text-center">
-              <p className="text-sm font-semibold text-foreground">No messages yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="text-sm font-semibold text-social-text">No messages yet</p>
+              <p className="mt-1 text-sm text-social-text-muted">
                 Start the conversation with your league.
               </p>
             </div>
@@ -237,20 +241,25 @@ export default function LeagueChatPanel({
                 const previousDay =
                   index > 0 ? messageDay(visibleMessages[index - 1].createdAt) : null;
                 const continuation = isMessageContinuation(message, visibleMessages[index - 1]);
+                const containsMention = containsSocialMention(message.content);
                 return (
                   <li key={message.id}>
                     {day !== previousDay ? (
                       <div className="my-3 flex items-center gap-3" aria-label={day}>
-                        <span className="h-px flex-1 bg-border" />
-                        <time className="text-xs font-medium text-muted-foreground">{day}</time>
-                        <span className="h-px flex-1 bg-border" />
+                        <span className="h-px flex-1 bg-social-border" />
+                        <time className="text-xs font-medium text-social-text-muted">{day}</time>
+                        <span className="h-px flex-1 bg-social-border" />
                       </div>
                     ) : null}
                     <article
-                      aria-label={`Message from ${message.author?.displayName ?? 'former member'}`}
-                      className={`rounded-lg px-2 py-1.5 ${
-                        continuation ? 'pl-12' : ''
-                      } ${message.isOwn ? 'bg-muted/50' : 'bg-transparent'}`}
+                      aria-label={`${containsMention ? 'Message containing a mention' : 'Message'} from ${message.author?.displayName ?? 'former member'}`}
+                      className={`rounded-lg border px-2 py-1.5 ${continuation ? 'pl-12' : ''} ${
+                        containsMention
+                          ? 'border-social-warning bg-social-mention-bg text-social-mention-text'
+                          : message.isOwn
+                            ? 'border-social-action bg-social-brand-soft'
+                            : 'border-transparent bg-social-surface'
+                      }`}
                     >
                       {!continuation ? (
                         <SocialAuthor
@@ -267,7 +276,7 @@ export default function LeagueChatPanel({
                       )}
                       {message.moderationStatus === 'removed' || message.deletedAt ? (
                         <p
-                          className={`text-sm italic text-muted-foreground ${
+                          className={`text-sm italic text-social-text-muted ${
                             continuation ? '' : 'mt-1.5 pl-11'
                           }`}
                         >
@@ -275,6 +284,12 @@ export default function LeagueChatPanel({
                         </p>
                       ) : (
                         <>
+                          {containsMention ? (
+                            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-social-warning bg-social-warning-soft px-2 py-0.5 text-xs font-semibold text-social-mention-text">
+                              <AtSign className="size-3" aria-hidden="true" />
+                              Mention
+                            </span>
+                          ) : null}
                           {message.context ? (
                             <DiscussionContextCard context={message.context} />
                           ) : null}
@@ -321,20 +336,20 @@ export default function LeagueChatPanel({
           <button
             type="button"
             onClick={jumpToLatest}
-            className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-social-action bg-social-action px-4 py-2 text-sm font-semibold text-social-action-foreground shadow-lg transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-canvas"
           >
             {newMessageCount === 1 ? '1 new message' : `${newMessageCount} new messages`}
           </button>
         ) : null}
       </div>
 
-      <footer className="border-t border-border bg-background p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <footer className="border-t border-social-border bg-social-surface p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {!canPublish && !muted ? (
-          <p role="status" className="py-2 text-center text-sm text-muted-foreground">
+          <p role="status" className="py-2 text-center text-sm text-social-text-muted">
             Accept the community standards above before sending messages.
           </p>
         ) : muted ? (
-          <p role="status" className="py-2 text-center text-sm text-muted-foreground">
+          <p role="status" className="py-2 text-center text-sm text-social-text-muted">
             You can read chat, but cannot send until{' '}
             <time dateTime={mutedUntil ?? undefined}>
               {mutedUntil ? new Date(mutedUntil).toLocaleString() : 'the mute ends'}
@@ -392,25 +407,25 @@ function DiscussionContextCard({
   const metadata = Object.values(context.metadata ?? {}).filter(Boolean);
 
   return (
-    <div className="mt-2 rounded-xl border border-border bg-muted/40 p-3">
+    <div className="mt-2 rounded-xl border border-social-border bg-social-surface-subtle p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wide text-social-text-muted">
             {label}
           </p>
-          <p className="mt-1 truncate text-sm font-semibold text-foreground">{context.title}</p>
+          <p className="mt-1 truncate text-sm font-semibold text-social-text">{context.title}</p>
           {context.subtitle ? (
-            <p className="mt-1 text-xs text-muted-foreground">{context.subtitle}</p>
+            <p className="mt-1 text-xs text-social-text-muted">{context.subtitle}</p>
           ) : null}
           {metadata.length > 0 ? (
-            <p className="mt-1 truncate text-xs text-muted-foreground">{metadata.join(' · ')}</p>
+            <p className="mt-1 truncate text-xs text-social-text-muted">{metadata.join(' · ')}</p>
           ) : null}
         </div>
         {onRemove ? (
           <button
             type="button"
             onClick={onRemove}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-social-text-muted transition-colors hover:bg-social-brand-soft hover:text-social-text active:bg-social-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus"
             aria-label="Remove discussion context"
           >
             <X className="size-4" aria-hidden="true" />

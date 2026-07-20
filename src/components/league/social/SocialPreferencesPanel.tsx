@@ -76,19 +76,19 @@ export default function SocialPreferencesPanel({
   return (
     <section
       aria-labelledby="social-preferences-heading"
-      className="border-b border-border bg-background p-4"
+      className="border-b border-social-border bg-social-surface p-4 text-social-text"
     >
-      <h2 id="social-preferences-heading" className="text-base font-semibold text-foreground">
+      <h2 id="social-preferences-heading" className="text-base font-semibold text-social-text">
         Social notifications
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="mt-1 text-sm text-social-text-muted">
         Choose which league conversations contribute to your notifications.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {preferenceLabels.map((preference) => (
           <div
             key={preference.key}
-            className="flex min-h-16 items-start gap-3 rounded-xl border border-border bg-card p-3"
+            className="flex min-h-16 items-start gap-3 rounded-xl border border-social-border bg-social-surface p-3"
           >
             <input
               id={`${fieldPrefix}-${preference.key}`}
@@ -101,13 +101,13 @@ export default function SocialPreferencesPanel({
                   [preference.key]: event.target.checked,
                 }))
               }
-              className="mt-1 size-4 rounded border-border text-primary focus:ring-ring"
+              className="mt-1 size-4 rounded border-social-border text-social-action focus:ring-social-focus"
             />
             <span>
-              <span className="block text-sm font-semibold text-foreground">
+              <span className="block text-sm font-semibold text-social-text">
                 {preference.label}
               </span>
-              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+              <span className="mt-0.5 block text-xs leading-5 text-social-text-muted">
                 {preference.description}
               </span>
             </span>
@@ -115,7 +115,7 @@ export default function SocialPreferencesPanel({
         ))}
       </div>
       {error ? (
-        <p role="alert" className="mt-3 text-sm font-medium text-destructive">
+        <p role="alert" className="mt-3 text-sm font-medium text-social-error">
           {error}
         </p>
       ) : null}
@@ -124,7 +124,7 @@ export default function SocialPreferencesPanel({
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="inline-flex min-h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-social-action bg-social-action px-4 text-sm font-semibold text-social-action-foreground transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:border-social-border disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
         >
           {saving ? 'Saving…' : 'Save preferences'}
         </button>
@@ -132,7 +132,7 @@ export default function SocialPreferencesPanel({
           type="button"
           onClick={onClose}
           disabled={saving}
-          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-social-border bg-social-surface px-4 text-sm font-semibold text-social-text transition-colors hover:border-social-border-strong hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-not-allowed disabled:bg-social-disabled-bg disabled:text-social-disabled-text"
         >
           Cancel
         </button>

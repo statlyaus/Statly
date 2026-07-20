@@ -46,7 +46,7 @@ export default function SocialAuthor({
   return (
     <div className="flex min-w-0 items-center gap-3">
       <span
-        className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold text-muted-foreground`}
+        className={`${compact ? 'size-8' : 'size-10'} flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-social-border bg-social-surface-subtle text-xs font-semibold text-social-text-muted`}
         aria-hidden="true"
       >
         {author?.avatarUrl ? (
@@ -62,10 +62,10 @@ export default function SocialAuthor({
       </span>
       <span className="min-w-0">
         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
-          <span className="truncate text-xs text-muted-foreground">{teamName}</span>
+          <span className="truncate text-sm font-semibold text-social-text">{displayName}</span>
+          <span className="truncate text-xs text-social-text-muted">{teamName}</span>
         </span>
-        <span className="block text-xs text-muted-foreground">
+        <span className="block text-xs text-social-text-muted">
           <time dateTime={timestamp}>{formattedTimestamp}</time>
           {editedAt ? <span aria-label="Edited"> · Edited</span> : null}
         </span>

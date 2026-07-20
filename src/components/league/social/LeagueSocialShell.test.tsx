@@ -204,8 +204,9 @@ describe('LeagueSocialShell', () => {
     expect(shell).not.toHaveClass('min-h-[36rem]');
     const chatTab = screen.getByRole('tab', { name: /chat 2 unread/i });
     const boardTab = screen.getByRole('tab', { name: /board 3 unread/i });
-    expect(chatTab).toHaveClass('border-primary');
+    expect(chatTab).toHaveClass('border-social-action', 'text-social-text');
     expect(boardTab).toHaveClass('border-transparent');
+    expect(boardTab).toHaveClass('text-social-text-muted');
     expect(screen.getByRole('button', { name: 'Social notification preferences' })).toHaveClass(
       'rounded-full'
     );

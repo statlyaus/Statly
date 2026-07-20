@@ -42,9 +42,41 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-social-brand-strong: var(--social-brand-strong);
+  --color-social-brand-foreground: var(--social-brand-foreground);
+  --color-social-header-muted: var(--social-header-muted);
+  --color-social-header-control-hover: var(--social-header-control-hover);
+  --color-social-header-control-pressed: var(--social-header-control-pressed);
+  --color-social-action: var(--social-action);
+  --color-social-action-hover: var(--social-action-hover);
+  --color-social-action-pressed: var(--social-action-pressed);
+  --color-social-action-foreground: var(--social-action-foreground);
+  --color-social-focus: var(--social-focus);
+  --color-social-brand-soft: var(--social-brand-soft);
+  --color-social-canvas: var(--social-canvas);
+  --color-social-surface: var(--social-surface);
+  --color-social-surface-subtle: var(--social-surface-subtle);
+  --color-social-border: var(--social-border);
+  --color-social-border-strong: var(--social-border-strong);
+  --color-social-text: var(--social-text);
+  --color-social-text-muted: var(--social-text-muted);
+  --color-social-disabled-bg: var(--social-disabled-bg);
+  --color-social-disabled-text: var(--social-disabled-text);
+  --color-social-success: var(--social-success);
+  --color-social-success-soft: var(--social-success-soft);
+  --color-social-warning: var(--social-warning);
+  --color-social-warning-text: var(--social-warning-text);
+  --color-social-warning-soft: var(--social-warning-soft);
+  --color-social-error: var(--social-error);
+  --color-social-error-foreground: var(--social-error-foreground);
+  --color-social-error-soft: var(--social-error-soft);
+  --color-social-mention-bg: var(--social-mention-bg);
+  --color-social-mention-text: var(--social-mention-text);
 }
 
 :root {
+  --statly-navy: #18324a;
+  --statly-blue: #3772df;
   --radius: 4px; /* From --border-radius-default */
   --background: #fff; /* From --base-background-content */
   --foreground: #2b2c2d; /* From --base-text-primary */
@@ -52,7 +84,7 @@
   --card-foreground: #2b2c2d;
   --popover: #fff;
   --popover-foreground: #2b2c2d;
-  --primary: #3772df; /* From --color-interaction-resting */
+  --primary: var(--statly-blue); /* From --color-interaction-resting */
   --primary-foreground: #fff;
   --secondary: #dee8fa; /* From --color-combo-blue10-blue100 */
   --secondary-foreground: #1a49a0; /* From --color-combo-blue20-blue80 */
@@ -90,7 +122,7 @@
   --league-border: #d9d0c3;
   --league-text: #171611;
   --league-text-muted: #6d665d;
-  --league-primary: #18324a;
+  --league-primary: var(--statly-navy);
   --league-primary-foreground: #fff;
   --league-primary-hover: #23445f;
   --league-primary-soft: #e6edf3;
@@ -133,6 +165,39 @@
   --draft-broadcast-shadow-deep: rgba(1, 6, 15, 0.92);
 }
 
+.league-social {
+  --social-brand-strong: var(--statly-navy);
+  --social-brand-foreground: var(--league-primary-foreground);
+  --social-header-muted: #c5d4e5;
+  --social-header-control-hover: rgb(255 255 255 / 12%);
+  --social-header-control-pressed: rgb(255 255 255 / 20%);
+  --social-action: var(--statly-blue);
+  --social-action-hover: #1d4ed8;
+  --social-action-pressed: #1e40af;
+  --social-action-foreground: var(--league-primary-foreground);
+  --social-focus: var(--statly-blue);
+  --social-brand-soft: var(--secondary);
+  --social-canvas: var(--muted);
+  --social-surface: var(--background);
+  --social-surface-subtle: var(--league-primary-soft);
+  --social-border: var(--border);
+  --social-border-strong: #aeb7c7;
+  --social-text: var(--foreground);
+  --social-text-muted: var(--muted-foreground);
+  --social-disabled-bg: var(--muted);
+  --social-disabled-text: var(--muted-foreground);
+  --social-success: var(--league-success);
+  --social-success-soft: var(--league-success-soft);
+  --social-warning: var(--league-warning);
+  --social-warning-text: #684100;
+  --social-warning-soft: var(--league-warning-soft);
+  --social-error: var(--league-danger);
+  --social-error-foreground: var(--league-primary-foreground);
+  --social-error-soft: var(--league-danger-soft);
+  --social-mention-bg: #fff3c4;
+  --social-mention-text: #684100;
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -168,6 +233,28 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+.dark .league-social {
+  --social-brand-soft: var(--secondary);
+  --social-canvas: var(--background);
+  --social-surface: var(--card);
+  --social-surface-subtle: var(--muted);
+  --social-border: var(--border);
+  --social-border-strong: oklch(0.556 0 0);
+  --social-text: var(--foreground);
+  --social-text-muted: var(--muted-foreground);
+  --social-disabled-bg: var(--muted);
+  --social-disabled-text: var(--muted-foreground);
+  --social-success: #7dd3b0;
+  --social-success-soft: rgb(47 107 88 / 24%);
+  --social-warning: #f0b65a;
+  --social-warning-text: #ffe39a;
+  --social-warning-soft: rgb(157 114 52 / 24%);
+  --social-error: #f28b82;
+  --social-error-soft: rgb(168 79 68 / 24%);
+  --social-mention-bg: #3f3212;
+  --social-mention-text: #ffe39a;
 }
 
 @layer base {

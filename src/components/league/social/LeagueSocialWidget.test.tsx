@@ -94,7 +94,14 @@ describe('LeagueSocialWidget', () => {
 
     const launcher = await screen.findByRole('button', { name: /open league social/i });
     expect(launcher).toHaveAttribute('title', 'League Social');
-    expect(launcher).toHaveClass('size-14', 'rounded-full', 'bottom-6', 'right-6');
+    expect(launcher).toHaveClass(
+      'league-social',
+      'size-14',
+      'rounded-full',
+      'bottom-6',
+      'right-6',
+      'bg-social-brand-strong'
+    );
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /5 unread/i })).toBeInTheDocument()
     );
@@ -103,8 +110,14 @@ describe('LeagueSocialWidget', () => {
     const panel = screen.getByLabelText('League social panel');
     const shellControl = screen.getByTestId('social-shell-control');
     expect(await screen.findByText('League Social')).toBeInTheDocument();
+    expect(screen.getByText('League Social').parentElement?.parentElement).toHaveClass(
+      'bg-social-brand-strong',
+      'text-social-brand-foreground'
+    );
     expect(screen.getByText('Premier League')).toBeInTheDocument();
     expect(panel).toHaveClass(
+      'league-social',
+      'bg-social-canvas',
       'inset-0',
       'h-[100dvh]',
       'w-full',

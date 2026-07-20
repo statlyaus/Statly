@@ -37,9 +37,17 @@ describe('GiphyMessageMedia', () => {
 
     const expand = await screen.findByRole('button', { name: 'Expand GIF' });
     expect(container.querySelector('.max-h-60')).toBeInTheDocument();
+    expect(expand).toHaveClass(
+      'bg-social-surface',
+      'hover:bg-social-brand-soft',
+      'active:bg-social-surface-subtle'
+    );
 
     await user.click(expand);
-    expect(screen.getByRole('dialog', { name: 'GIF preview' })).toHaveAttribute('open');
+    expect(screen.getByRole('dialog', { name: 'GIF preview' })).toHaveClass(
+      'bg-social-surface',
+      'border-social-border'
+    );
 
     await user.click(screen.getByRole('button', { name: 'Close GIF preview' }));
     await waitFor(() => expect(expand).toHaveFocus());

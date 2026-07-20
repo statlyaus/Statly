@@ -69,4 +69,35 @@ describe('ActivityPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Discuss' }));
     expect(onDiscuss).toHaveBeenCalledWith(activity);
   });
+
+  it('uses restrained semantic accents with an icon and visible event label', () => {
+    const events: SocialMessage[] = [
+      activity,
+      { ...activity, id: 'activity-2', content: 'Taylor was added to the roster.' },
+      { ...activity, id: 'activity-3', content: 'Morgan was dropped from the roster.' },
+      { ...activity, id: 'activity-4', content: 'A trade completed between two teams.' },
+      { ...activity, id: 'activity-5', content: 'Waiver claim submitted and pending.' },
+      { ...activity, id: 'activity-6', content: 'Transaction failed and was reversed.' },
+      { ...activity, id: 'activity-7', content: 'Commissioner changed league settings.' },
+    ];
+
+    renderPanel({ activity: events });
+
+    const expectations = [
+      ['Draft selection', 'draft', 'border-l-social-action'],
+      ['Player added', 'addition', 'border-l-social-success'],
+      ['Player removed', 'removal', 'border-l-social-border-strong'],
+      ['Trade completed', 'trade', 'border-l-social-brand-strong'],
+      ['Waiver pending', 'waiver', 'border-l-social-warning'],
+      ['Transaction issue', 'error', 'border-l-social-error'],
+      ['Commissioner change', 'commissioner', 'border-l-social-action'],
+    ] as const;
+
+    for (const [label, kind, accent] of expectations) {
+      const labelElement = screen.getByText(label);
+      expect(labelElement.parentElement?.querySelector('svg')).toBeInTheDocument();
+      expect(labelElement.closest('article')).toHaveAttribute('data-activity-kind', kind);
+      expect(labelElement.closest('article')).toHaveClass(accent, 'bg-social-surface');
+    }
+  });
 });
