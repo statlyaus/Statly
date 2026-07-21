@@ -118,6 +118,10 @@ function getLeagueTabFromSearch(
   return isLeagueTab(value) ? value : null;
 }
 
+function getDraftStatusLabel(status: string | null | undefined): string {
+  return `Draft ${(status ?? 'not started').replace(/_/g, ' ')}`;
+}
+
 export default function LeagueTabs({
   league,
   members,
@@ -444,14 +448,20 @@ export default function LeagueTabs({
     <div className="space-y-6">
       <div className="overflow-hidden rounded-[22px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_18px_60px_-48px_rgba(23,34,48,0.38)]">
         <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)]/80">
-          <nav className="flex gap-1 overflow-x-auto px-3 py-3" aria-label="League sections">
+          <nav
+            className="flex max-w-full scroll-px-3 gap-1 overflow-x-auto overscroll-x-contain px-3 py-3 [scrollbar-width:thin]"
+            aria-label="League sections"
+          >
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => handleTabChange(tab.id)}
+                onFocus={(event) =>
+                  event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                }
                 aria-current={activeTab === tab.id ? 'page' : undefined}
-                className={`inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] ${
+                className={`scroll-mx-3 inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--league-page)] ${
                   activeTab === tab.id
                     ? 'bg-[color:var(--league-primary)] text-[color:var(--league-primary-foreground)] shadow-sm'
                     : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
@@ -460,7 +470,10 @@ export default function LeagueTabs({
                 <div className="flex items-center gap-2">
                   <span>{tab.name}</span>
                   {tab.badge && (
-                    <span className="rounded-full bg-[color:var(--league-danger-soft)] px-2 py-0.5 text-xs font-semibold text-[color:var(--league-danger)]">
+                    <span
+                      aria-label={`${tab.badge} unread`}
+                      className="rounded-full bg-[color:var(--league-danger-soft)] px-2 py-0.5 text-xs font-semibold text-[color:var(--league-danger)]"
+                    >
                       {tab.badge}
                     </span>
                   )}
@@ -481,22 +494,30 @@ export default function LeagueTabs({
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 <div className="space-y-4">
-                  <section className="rounded-[22px] bg-[color:var(--league-primary)] p-5 text-[color:var(--league-primary-foreground)] shadow-[0_24px_70px_-48px_rgba(15,23,42,0.7)] sm:p-6">
+                  <section
+                    aria-labelledby="league-overview-heading"
+                    className="rounded-[22px] bg-[color:var(--league-primary)] p-5 text-[color:var(--league-primary-foreground)] shadow-[0_24px_70px_-48px_rgba(15,23,42,0.7)] sm:p-6"
+                  >
                     <div className="flex flex-col gap-6">
                       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                         <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/65">
-                            League overview
-                          </p>
-                          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                          <p className="text-sm font-medium text-white/85">League overview</p>
+                          <h1
+                            id="league-overview-heading"
+                            className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl"
+                          >
                             {league.name}
-                          </h2>
-                          <p className="mt-2 text-sm text-white/70">
-                            {league.type === 'private' ? 'Private' : 'Public'} ·{' '}
-                            {activeMembers.length}/{league.maxTeams} teams · Draft{' '}
-                            {draftReadiness?.status ?? league.status}
-                          </p>
-                          <p className="mt-1 text-sm text-white/55">
+                          </h1>
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/85">
+                            <span>
+                              {league.type === 'private' ? 'Private' : 'Public'} ·{' '}
+                              {activeMembers.length}/{league.maxTeams} teams
+                            </span>
+                            <span className="inline-flex min-h-7 items-center rounded-full border border-white/35 bg-white/10 px-3 text-xs font-semibold text-white">
+                              {getDraftStatusLabel(draftReadiness?.status ?? league.status)}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm text-white/75">
                             {openTeamSlots === 0
                               ? 'League is full'
                               : `${openTeamSlots} team ${openTeamSlots === 1 ? 'slot' : 'slots'} open`}
@@ -505,52 +526,54 @@ export default function LeagueTabs({
 
                         <dl className="grid gap-5 sm:grid-cols-2 lg:min-w-[22rem]">
                           <div>
-                            <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
-                              Your team
-                            </dt>
-                            <dd className="mt-2 text-lg font-semibold text-white">
-                              {currentMember?.teamName ?? 'Team not set'}
+                            <dt className="text-sm font-medium text-white/85">Your team</dt>
+                            <dd className="mt-2 flex flex-wrap items-center gap-2 text-lg font-semibold text-white">
+                              <span>{currentMember?.teamName ?? 'Team not set'}</span>
+                              {canAccessCompetitionRules && (
+                                <span className="inline-flex min-h-7 items-center rounded-full border border-white/35 bg-white/10 px-3 text-xs font-semibold text-white">
+                                  Commissioner
+                                </span>
+                              )}
                             </dd>
-                            <p className="mt-1 text-sm text-white/70">
-                              {currentMember?.role === 'owner' || currentMember?.role === 'manager'
-                                ? 'Commissioner access'
-                                : 'Member access'}
-                            </p>
                           </div>
                           <div>
-                            <dt className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
-                              Waiver position
-                            </dt>
-                            <dd className="mt-2 text-lg font-semibold text-white">
-                              {waiverPriorityLabel}
+                            <dt className="text-sm font-medium text-white/85">Waiver position</dt>
+                            <dd className="mt-2 text-white">
+                              <span className="block text-lg font-semibold">
+                                {waiverPriorityLabel}
+                              </span>
+                              <span className="mt-1 block text-sm capitalize text-white/80">
+                                {waiverPolicyLabel} order
+                              </span>
                             </dd>
-                            <p className="mt-1 text-sm capitalize text-white/70">
-                              {waiverPolicyLabel} order
-                            </p>
                           </div>
                         </dl>
                       </div>
 
                       <div className="border-t border-white/15 pt-5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/65">
-                          Scoring categories
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-white/80">
+                        <h2 className="text-sm font-semibold text-white/90">Scoring categories</h2>
+                        <p className="mt-2 text-sm leading-6 text-white/85">
                           {categoryLabels.join(' · ')}
                         </p>
                       </div>
                     </div>
                   </section>
 
-                  <section className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4">
+                  <section
+                    aria-labelledby="overview-teams-heading"
+                    className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-4"
+                  >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--league-text-muted)]">
+                        <h2
+                          id="overview-teams-heading"
+                          className="text-lg font-semibold text-[color:var(--league-text)]"
+                        >
                           Teams
-                        </p>
-                        <h3 className="mt-1 text-lg font-semibold text-[color:var(--league-text)]">
+                        </h2>
+                        <p className="mt-1 text-sm text-[color:var(--league-text-muted)]">
                           {league.maxTeams}-team league
-                        </h3>
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -561,66 +584,87 @@ export default function LeagueTabs({
                       </button>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                      {overviewTeams.map((member) => (
-                        <div
-                          key={member.id}
-                          className="group flex min-h-32 flex-col items-center justify-center rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-3 text-center transition hover:-translate-y-0.5 hover:border-[color:var(--league-primary)] hover:bg-[color:var(--league-surface)] hover:shadow-md"
-                        >
-                          <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-sm sm:size-28">
-                            {member.teamLogoUrl ? (
-                              <img
-                                src={member.teamLogoUrl}
-                                alt={`${member.teamName || 'Team'} symbol`}
-                                referrerPolicy="no-referrer"
-                                style={getTeamLogoImageStyle(member)}
-                                className="h-full w-full object-cover will-change-transform"
-                              />
-                            ) : (
-                              <span className="text-lg font-semibold text-[color:var(--league-text-muted)]">
-                                {getTeamInitials(member.teamName || 'Team')}
+                    <ul
+                      className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
+                      aria-label="League teams"
+                    >
+                      {overviewTeams.map((member) => {
+                        const isCurrentTeam = member.userId === currentUserId;
+
+                        return (
+                          <li
+                            key={member.id}
+                            className={`group flex min-h-32 flex-col items-center justify-center rounded-2xl border px-3 py-3 text-center transition hover:-translate-y-0.5 hover:border-[color:var(--league-primary)] hover:bg-[color:var(--league-surface)] hover:shadow-md ${
+                              isCurrentTeam
+                                ? 'border-[color:var(--league-primary)] bg-[color:var(--league-primary-soft)] ring-2 ring-[color:var(--league-primary)]/15'
+                                : 'border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)]'
+                            }`}
+                          >
+                            <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-sm sm:size-28">
+                              {member.teamLogoUrl ? (
+                                <img
+                                  src={member.teamLogoUrl}
+                                  alt={`${member.teamName || 'Team'} symbol`}
+                                  referrerPolicy="no-referrer"
+                                  style={getTeamLogoImageStyle(member)}
+                                  className="h-full w-full object-cover will-change-transform"
+                                />
+                              ) : (
+                                <span className="text-lg font-semibold text-[color:var(--league-text-muted)]">
+                                  {getTeamInitials(member.teamName || 'Team')}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-3 text-sm font-semibold leading-5 text-[color:var(--league-text)]">
+                              {member.teamName || 'Unnamed team'}
+                            </p>
+                            {isCurrentTeam && (
+                              <span className="mt-2 inline-flex min-h-7 items-center rounded-full bg-[color:var(--league-primary)] px-3 text-xs font-semibold text-[color:var(--league-primary-foreground)]">
+                                Your team
                               </span>
                             )}
-                          </div>
-                          <p className="mt-3 text-sm font-semibold leading-5 text-[color:var(--league-text)]">
-                            {member.teamName || 'Unnamed team'}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </section>
                 </div>
 
-                <section className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.35)]">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <section
+                    aria-labelledby="overview-trades-heading"
+                    className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.35)]"
+                  >
                     <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Trades
-                        </p>
-                        <h2 className="mt-1 text-lg font-semibold text-slate-950">Trade offers</h2>
-                      </div>
+                      <h2
+                        id="overview-trades-heading"
+                        className="text-lg font-semibold text-[color:var(--league-text)]"
+                      >
+                        Trade offers
+                      </h2>
                       <button
                         type="button"
                         onClick={() => router.push(`/leagues/${league.id}/trades`)}
-                        className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                       >
                         Trade centre
                       </button>
                     </div>
                     <div className="mt-4 space-y-3">
                       {overviewTradesStatus === 'loading' ? (
-                        <p className="text-sm text-slate-600">Checking offers...</p>
+                        <p className="text-sm text-[color:var(--league-text-muted)]">
+                          Checking offers...
+                        </p>
                       ) : overviewTrades.length > 0 ? (
                         overviewTrades.map((trade) => (
                           <div
                             key={trade.tradeId}
-                            className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                            className="rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-3"
                           >
-                            <p className="text-sm font-semibold text-slate-950">
+                            <p className="text-sm font-semibold text-[color:var(--league-text)]">
                               {trade.tradeName ?? `Trade ${trade.tradeId.slice(0, 8)}`}
                             </p>
-                            <p className="mt-1 text-xs text-slate-600">
+                            <p className="mt-1 text-xs text-[color:var(--league-text-muted)]">
                               {trade.playerNames.length > 0
                                 ? trade.playerNames.join(', ')
                                 : 'Player details available in trade centre'}
@@ -628,49 +672,54 @@ export default function LeagueTabs({
                           </div>
                         ))
                       ) : (
-                        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+                        <p className="rounded-xl border border-dashed border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] px-3 py-4 text-sm text-[color:var(--league-text-muted)]">
                           No pending trade offers.
                         </p>
                       )}
                     </div>
-                  </div>
+                  </section>
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.35)]">
+                  <section
+                    aria-labelledby="overview-waivers-heading"
+                    className="rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.35)]"
+                  >
                     <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Waivers
-                        </p>
-                        <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                          Waiver position
-                        </h2>
-                      </div>
+                      <h2
+                        id="overview-waivers-heading"
+                        className="text-lg font-semibold text-[color:var(--league-text)]"
+                      >
+                        Waiver position
+                      </h2>
                       <button
                         type="button"
                         onClick={() => handleTabChange('waivers')}
-                        className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-4 text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                       >
                         Waivers
                       </button>
                     </div>
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-2xl font-semibold text-slate-950">{waiverPriorityLabel}</p>
-                      <p className="mt-1 text-sm capitalize text-slate-600">
+                    <div className="mt-4 rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface-muted)] p-4">
+                      <p className="text-lg font-semibold text-[color:var(--league-text)]">
+                        {waiverPriorityIndex >= 0 ? waiverPriorityLabel : 'Waiver order pending'}
+                      </p>
+                      <p className="mt-1 text-sm capitalize text-[color:var(--league-text-muted)]">
                         {waiverPolicyLabel} waiver order
                       </p>
                       {overviewWaiversStatus === 'loading' ? (
-                        <p className="mt-3 text-sm text-slate-600">Checking waiver bids...</p>
+                        <p className="mt-3 text-sm text-[color:var(--league-text-muted)]">
+                          Checking waiver bids...
+                        </p>
                       ) : overviewWaiverClaims.length > 0 ? (
                         <div className="mt-4 space-y-2">
                           {overviewWaiverClaims.map((claim) => (
                             <div
                               key={claim.id}
-                              className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                              className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 py-2"
                             >
-                              <p className="min-w-0 truncate text-sm font-semibold text-slate-950">
+                              <p className="min-w-0 truncate text-sm font-semibold text-[color:var(--league-text)]">
                                 {claim.playerName}
                               </p>
-                              <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                              <p className="shrink-0 text-xs font-semibold text-[color:var(--league-text-muted)]">
                                 {typeof claim.bidAmount === 'number'
                                   ? `$${claim.bidAmount}`
                                   : 'Claim'}
@@ -679,13 +728,15 @@ export default function LeagueTabs({
                           ))}
                         </div>
                       ) : (
-                        <p className="mt-3 text-sm text-slate-600">
-                          {waiverPriorityIndex >= 0 ? 'No pending waiver bids.' : 'Not set.'}
+                        <p className="mt-3 text-sm text-[color:var(--league-text-muted)]">
+                          {waiverPriorityIndex >= 0
+                            ? 'No pending waiver bids.'
+                            : 'Your position will appear when the order is set.'}
                         </p>
                       )}
                     </div>
-                  </div>
-                </section>
+                  </section>
+                </div>
               </div>
             )}
 

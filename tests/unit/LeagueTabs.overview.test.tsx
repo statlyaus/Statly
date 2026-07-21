@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import LeagueTabs from '@/components/league/LeagueTabs';
@@ -123,8 +123,10 @@ describe('LeagueTabs overview snapshot', () => {
     render(<LeagueTabs league={league} members={members} currentUserId="user-2" />);
 
     expect(screen.getByText('League overview')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Snapshot League' })).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot League').length).toBeGreaterThan(0);
     expect(screen.getByText(/3\/4 teams/)).toBeInTheDocument();
+    expect(screen.getByText('Draft completed')).toBeInTheDocument();
     expect(screen.getAllByText('Trade offers').length).toBeGreaterThan(0);
     expect(
       screen.getByText('Goals · Tackles · Inside 50s · Intercepts · Rebound 50s')
@@ -149,6 +151,11 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByText('ST')).toBeInTheDocument();
     expect(screen.getByText('Third Team')).toBeInTheDocument();
     expect(screen.getByText('TT')).toBeInTheDocument();
+    const currentTeamCard = within(screen.getByRole('list', { name: 'League teams' }))
+      .getByText('Second Team')
+      .closest('li');
+    expect(currentTeamCard).not.toBeNull();
+    expect(within(currentTeamCard as HTMLElement).getByText('Your team')).toBeInTheDocument();
     expect(screen.queryByText('Offers needing review')).not.toBeInTheDocument();
     expect(screen.getByText('4-team league').closest('section')).toHaveClass(
       'bg-[color:var(--league-surface)]'
@@ -175,5 +182,75 @@ describe('LeagueTabs overview snapshot', () => {
       '/api/leagues/league-1/waivers?playersLimit=0&activityLimit=0',
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
+
+    const leagueNavigation = screen.getByRole('navigation', { name: 'League sections' });
+    expect(within(leagueNavigation).getByRole('button', { name: 'Overview' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+  });
+
+  it('presents room-open, commissioner, and unassigned waiver states without raw or repeated copy', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ claims: [], playersIndex: {} }),
+      })
+    );
+    authenticatedFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ trades: [] }),
+    });
+
+    const roomOpenLeague: League = {
+      ...league,
+      waiverWire: {
+        ...league.waiverWire,
+        waiverOrder: [],
+      },
+      draftReadiness: {
+        leagueId: league.id,
+        draftId: 'draft-1',
+        status: 'room_open',
+        scheduledStartAt: null,
+        roomOpenedAt: '2026-07-21T10:00:00.000Z',
+        memberCount: members.length,
+        rosterSpots: 22,
+        totalPicks: 66,
+        playerPool: {
+          availableCount: 800,
+          hasPlayers: true,
+        },
+        lifecycle: {
+          shouldBeOpen: true,
+          canEnterRoom: true,
+          canStartClock: true,
+          isRunning: false,
+          isComplete: false,
+        },
+        blockers: [],
+      },
+    };
+
+    render(<LeagueTabs league={roomOpenLeague} members={members} currentUserId="user-1" />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Snapshot League' })).toBeInTheDocument();
+    expect(screen.getByText('Draft room open')).toBeInTheDocument();
+    expect(screen.queryByText(/room_open/)).not.toBeInTheDocument();
+    expect(screen.getByText('Commissioner')).toBeInTheDocument();
+    expect(screen.queryByText('Commissioner access')).not.toBeInTheDocument();
+    expect(screen.queryByText('Member access')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Not set')).toHaveLength(1);
+    expect(screen.getByText('Waiver order pending')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Your position will appear when the order is set.')
+    ).toBeInTheDocument();
+
+    for (const name of ['Scoring categories', 'Teams', 'Trade offers', 'Waiver position']) {
+      expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument();
+    }
+
+    expect(authenticatedFetchMock).toHaveBeenCalled();
   });
 });
