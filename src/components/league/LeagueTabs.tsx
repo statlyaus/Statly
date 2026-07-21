@@ -43,12 +43,20 @@ import { LeagueMatchupsPanel } from './matchups/LeagueMatchupsPanel';
 import { LeagueStandingsPanel } from './matchups/LeagueStandingsPanel';
 import { CompetitionSettingsPanel } from './settings/CompetitionSettingsPanel';
 import { ScoringSettingsPanel } from './settings/ScoringSettingsPanel';
+import { LeagueTradeCentrePanel } from './trades/LeagueTradeCentrePanel';
+import type {
+  LeagueTradeCentreSnapshot,
+  LeagueTradeDigest,
+} from '@/server/leagues/trades/tradeContracts';
 
 interface LeagueTabsProps {
   league: League;
   members: LeagueMember[];
   currentUserId?: string;
   onMembersChange?: (members: LeagueMember[]) => void;
+  initialTradeCentre?: LeagueTradeCentreSnapshot | null;
+  initialTradeCentreError?: string | null;
+  initialTradeDigest?: LeagueTradeDigest | null;
 }
 
 type TabType =
@@ -71,14 +79,6 @@ interface Tab {
   icon?: React.ReactNode;
   badge?: number;
 }
-
-type OverviewTradeSummary = {
-  tradeId: string;
-  tradeName?: string;
-  status: string;
-  playerNames: string[];
-  lastUpdated?: number;
-};
 
 type OverviewWaiverClaim = {
   id: string;
@@ -123,18 +123,28 @@ export default function LeagueTabs({
   members,
   currentUserId,
   onMembersChange,
+  initialTradeCentre = null,
+  initialTradeCentreError = null,
+  initialTradeDigest = null,
 }: LeagueTabsProps): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const initialCompetitionRulesAccess =
+    currentUserId === league.ownerId ||
+    members.some(
+      (member) =>
+        member.userId === currentUserId &&
+        (member.role === 'owner' || member.role === 'manager' || member.isCoCommissioner === true)
+    );
+  const [activeTab, setActiveTab] = useState<TabType>(
+    () =>
+      getLeagueTabFromSearch(searchParams?.get('tab') ?? null, initialCompetitionRulesAccess) ??
+      'overview'
+  );
   const [teamActionMessage, setTeamActionMessage] = useState<LeagueSettingsMessage | null>(null);
   const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
-  const [overviewTrades, setOverviewTrades] = useState<OverviewTradeSummary[]>([]);
-  const [overviewTradesStatus, setOverviewTradesStatus] = useState<
-    'idle' | 'loading' | 'ready' | 'error'
-  >('idle');
   const [overviewWaiverClaims, setOverviewWaiverClaims] = useState<OverviewWaiverClaim[]>([]);
   const [overviewWaiversStatus, setOverviewWaiversStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
@@ -143,6 +153,7 @@ export default function LeagueTabs({
 
   const currentMember = members.find((member) => member.userId === currentUserId);
   const selectedPlayerId = searchParams?.get('playerId') ?? null;
+  const selectedPlayerOwnerMemberId = searchParams?.get('ownerMemberId') ?? null;
   const isLeagueOwner = Boolean(currentUserId) && currentUserId === league.ownerId;
   const isAdmin =
     isLeagueOwner || currentMember?.role === 'owner' || currentMember?.role === 'manager';
@@ -224,7 +235,14 @@ export default function LeagueTabs({
     { id: 'matchups', name: 'Matchups' },
     { id: 'lineup', name: 'My Lineup' },
     { id: 'standings', name: 'Standings' },
-    { id: 'trades', name: 'Trades' },
+    {
+      id: 'trades',
+      name: 'Trades',
+      badge:
+        initialTradeCentre && initialTradeCentre.counts.inbox + initialTradeCentre.counts.review > 0
+          ? initialTradeCentre.counts.inbox + initialTradeCentre.counts.review
+          : undefined,
+    },
     { id: 'waivers', name: 'Waivers' },
     { id: 'draft', name: 'Draft' },
     {
@@ -263,72 +281,6 @@ export default function LeagueTabs({
     !isDraftComplete && draftReadiness?.draftId && draftReadiness.lifecycle.canEnterRoom
       ? `/drafts/${draftReadiness.draftId}`
       : null;
-  useEffect(() => {
-    if (!currentUserId) return;
-
-    let cancelled = false;
-
-    async function loadOverviewTrades() {
-      setOverviewTradesStatus('loading');
-
-      try {
-        const response = await authenticatedFetch(
-          `/api/trades/list?leagueId=${encodeURIComponent(league.id)}&status=PENDING&pageSize=3`,
-          {},
-          currentUserId
-        );
-
-        if (!response?.ok) {
-          throw new Error(`status ${response?.status ?? 'unknown'}`);
-        }
-
-        const payload = (await response.json()) as unknown;
-        const trades = isRecord(payload) && Array.isArray(payload.trades) ? payload.trades : [];
-        const summaries = trades
-          .map((trade): OverviewTradeSummary | null => {
-            if (!isRecord(trade) || !isRecord(trade.summary)) return null;
-            const summary = trade.summary;
-            const tradeId =
-              typeof summary.tradeId === 'string'
-                ? summary.tradeId
-                : typeof trade.tradeId === 'string'
-                  ? trade.tradeId
-                  : null;
-
-            if (!tradeId) return null;
-
-            return {
-              tradeId,
-              tradeName: typeof summary.tradeName === 'string' ? summary.tradeName : undefined,
-              status: typeof summary.status === 'string' ? summary.status : 'PENDING',
-              playerNames: Array.isArray(summary.playerNames)
-                ? summary.playerNames.filter((name): name is string => typeof name === 'string')
-                : [],
-              lastUpdated:
-                typeof summary.lastUpdated === 'number' ? summary.lastUpdated : undefined,
-            };
-          })
-          .filter((trade): trade is OverviewTradeSummary => trade !== null);
-
-        if (!cancelled) {
-          setOverviewTrades(summaries);
-          setOverviewTradesStatus('ready');
-        }
-      } catch {
-        if (!cancelled) {
-          setOverviewTrades([]);
-          setOverviewTradesStatus('error');
-        }
-      }
-    }
-
-    void loadOverviewTrades();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUserId, league.id]);
-
   useEffect(() => {
     if (!currentUserId) return;
 
@@ -602,23 +554,21 @@ export default function LeagueTabs({
                       </div>
                       <button
                         type="button"
-                        onClick={() => router.push(`/leagues/${league.id}/trades`)}
+                        onClick={() => handleTabChange('trades')}
                         className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
                       >
                         Trade centre
                       </button>
                     </div>
                     <div className="mt-4 space-y-3">
-                      {overviewTradesStatus === 'loading' ? (
-                        <p className="text-sm text-slate-600">Checking offers...</p>
-                      ) : overviewTrades.length > 0 ? (
-                        overviewTrades.map((trade) => (
+                      {initialTradeDigest?.recent.length ? (
+                        initialTradeDigest.recent.map((trade) => (
                           <div
-                            key={trade.tradeId}
+                            key={trade.id}
                             className="rounded-xl border border-slate-200 bg-slate-50 p-3"
                           >
                             <p className="text-sm font-semibold text-slate-950">
-                              {trade.tradeName ?? `Trade ${trade.tradeId.slice(0, 8)}`}
+                              {trade.teamNames.join(' ↔ ')}
                             </p>
                             <p className="mt-1 text-xs text-slate-600">
                               {trade.playerNames.length > 0
@@ -889,24 +839,14 @@ export default function LeagueTabs({
             )}
 
             {activeTab === 'trades' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Trades</h2>
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/leagues/${league.id}/trades`)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    Open trade centre
-                  </button>
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
-                  <p className="text-sm text-gray-600">
-                    Review proposals, counters, and commissioner decisions in the league trade
-                    centre.
-                  </p>
-                </div>
-              </div>
+              <LeagueTradeCentrePanel
+                leagueId={league.id}
+                currentUserId={currentUserId}
+                initialSnapshot={initialTradeCentre}
+                initialError={initialTradeCentreError}
+                requestedPlayerId={selectedPlayerId}
+                ownerMemberId={selectedPlayerOwnerMemberId}
+              />
             )}
 
             {activeTab === 'waivers' && (

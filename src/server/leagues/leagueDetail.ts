@@ -5,10 +5,7 @@ import { listActiveLeagueMembers } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
-import {
-  getLeagueMembershipAccess,
-  isActivePrismaMembership,
-} from '@/server/leagues/membership';
+import { getLeagueMembershipAccess, isActivePrismaMembership } from '@/server/leagues/membership';
 import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
 
@@ -132,8 +129,12 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
           draftReadiness,
           createdAt: prismaLeague.createdAt.toISOString(),
           tradeSettings: {
-            tradeLimit: 10,
-            tradeReview: 'none',
+            tradeLimit: prismaLeague.settings?.tradeLimit ?? 10,
+            tradeReview: toTradeReview(prismaLeague.settings?.tradeReviewMode),
+            tradeDeadline: prismaLeague.settings?.tradeDeadline?.toISOString(),
+            offerExpiryHours: prismaLeague.settings?.tradeOfferExpiryHours ?? 72,
+            reviewHours: prismaLeague.settings?.tradeReviewHours ?? 24,
+            vetoThreshold: prismaLeague.settings?.tradeVetoThreshold ?? 3,
           },
           waiverWire: {
             waiverOrder: waiverPriorityRows.map((row) => row.memberId),
@@ -209,6 +210,9 @@ function createTestLeague(): League {
     tradeSettings: {
       tradeLimit: 10,
       tradeReview: 'none',
+      offerExpiryHours: 72,
+      reviewHours: 24,
+      vetoThreshold: 3,
     },
     waiverWire: {
       waiverOrder: [],
@@ -216,6 +220,12 @@ function createTestLeague(): League {
       waiverResetPolicy: 'weekly',
     },
   };
+}
+
+function toTradeReview(value: string | null | undefined): League['tradeSettings']['tradeReview'] {
+  if (value === 'ADMIN') return 'admin';
+  if (value === 'VETO') return 'veto';
+  return 'none';
 }
 
 function createTestMembers(): LeagueMember[] {

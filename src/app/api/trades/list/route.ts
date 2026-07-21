@@ -1,8 +1,15 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import {
+  TRADE_VIEWS,
+  TradeServiceError,
+  type LeagueTradeCentreSnapshot,
+  type TradeView,
+} from '@/server/leagues/trades/tradeContracts';
+import { loadAuthorizedLeagueTradeCentre } from '@/server/leagues/trades/tradeReadModel';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 
 function toTimestamp(val: unknown): FirebaseFirestore.Timestamp | undefined {
@@ -18,27 +25,21 @@ function toTimestamp(val: unknown): FirebaseFirestore.Timestamp | undefined {
 
 export const runtime = 'nodejs';
 
-async function authorizeTradeListRead(request: NextRequest) {
+async function authorizeTradeListRead(
+  request: NextRequest
+): Promise<{ ok: true; userId: string } | { ok: false; response: NextResponse }> {
   const userId = await getAuthenticatedUserId(request);
   if (!userId) {
-    return { response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Unauthorized', code: 'UNAUTHORIZED' },
+        { status: 401, headers: { 'Cache-Control': 'private, no-store' } }
+      ),
+    };
   }
 
-  return { userId };
-}
-
-async function authorizeLeagueTradeList(request: NextRequest, leagueId: string) {
-  const auth = await authorizeTradeListRead(request);
-  if ('response' in auth) {
-    return auth.response;
-  }
-
-  const membership = await verifyLeagueMembership(leagueId, auth.userId);
-  if (!membership.isMember) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  return null;
+  return { ok: true, userId };
 }
 
 function parseBooleanParam(raw?: string | null): boolean | undefined {
@@ -80,57 +81,6 @@ function getNextCursor(
   return Buffer.from(JSON.stringify({ t: lastUpdatedTS.toMillis(), id: last.id })).toString(
     'base64'
   );
-}
-
-async function listLeagueTrades({
-  leagueId,
-  pageSize,
-  cursor,
-  dir,
-  status,
-}: {
-  leagueId: string;
-  pageSize: number;
-  cursor?: string;
-  dir: FirebaseFirestore.OrderByDirection;
-  status?: string;
-}) {
-  let q: FirebaseFirestore.Query = adminDb.collection('leagues').doc(leagueId).collection('trades');
-  if (status) q = q.where('status', '==', status);
-  q = q.orderBy('updatedAt', dir).orderBy(FieldPath.documentId());
-  q = applyCursor(q, cursor).limit(pageSize);
-  const snapshot = await q.get();
-
-  const trades = snapshot.docs.map((doc) => {
-    const data = doc.data() as Record<string, unknown>;
-    const lastUpdatedTS =
-      toTimestamp(data.updatedAt) ?? toTimestamp(data.createdAt) ?? Timestamp.fromMillis(0);
-    const playersOffered = Array.isArray(data.playersOffered) ? data.playersOffered : [];
-    const playersRequested = Array.isArray(data.playersRequested) ? data.playersRequested : [];
-    const playerNames = [...playersOffered, ...playersRequested]
-      .filter((playerId): playerId is string => typeof playerId === 'string')
-      .slice(0, 5);
-    const tradeName =
-      typeof data.message === 'string' && data.message.trim() ? data.message.trim() : undefined;
-
-    return {
-      tradeId: doc.id,
-      summary: {
-        tradeId: doc.id,
-        tradeName,
-        status: typeof data.status === 'string' ? data.status : 'PENDING',
-        teamCount: 2,
-        playerNames,
-        lastUpdated: lastUpdatedTS.toMillis(),
-        archived: false,
-      },
-    };
-  });
-
-  return {
-    trades,
-    nextCursor: getNextCursor(snapshot, pageSize, 'updatedAt'),
-  };
 }
 
 async function listTradeReviews({
@@ -191,18 +141,30 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || undefined;
     const archived = parseBooleanParam(searchParams.get('archived'));
     const leagueId = searchParams.get('leagueId') || undefined;
+    const auth = await authorizeTradeListRead(request);
+    if (!auth.ok) return auth.response;
 
     if (leagueId) {
-      const authError = await authorizeLeagueTradeList(request, leagueId);
-      if (authError) return authError;
-    } else {
-      const auth = await authorizeTradeListRead(request);
-      if ('response' in auth) return auth.response;
+      const view = parseTradeView(searchParams.get('view'), status);
+      const snapshot = await loadAuthorizedLeagueTradeCentre({
+        leagueId,
+        userId: auth.userId,
+        view,
+        cursor,
+        pageSize: Math.min(pageSize, 50),
+      });
+      return NextResponse.json(toLegacyLeagueTradeList(snapshot, pageSize, sortParam, status), {
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
     }
 
-    const { trades, nextCursor } = leagueId
-      ? await listLeagueTrades({ leagueId, pageSize, cursor, dir, status })
-      : await listTradeReviews({ pageSize, cursor, dir, status, archived });
+    const { trades, nextCursor } = await listTradeReviews({
+      pageSize,
+      cursor,
+      dir,
+      status,
+      archived,
+    });
 
     return NextResponse.json(
       {
@@ -225,7 +187,65 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (e) {
-    console.error('Failed to list trades', e);
-    return NextResponse.json({ error: 'Failed to list trades' }, { status: 500 });
+    if (e instanceof TradeServiceError) {
+      return NextResponse.json(
+        { error: e.message, code: e.code },
+        { status: e.status, headers: { 'Cache-Control': 'private, no-store' } }
+      );
+    }
+    logger.apiError('GET', '/api/trades/list', e);
+    return NextResponse.json(
+      { error: 'Failed to list trades', code: 'INTERNAL_ERROR' },
+      { status: 500, headers: { 'Cache-Control': 'private, no-store' } }
+    );
   }
+}
+
+function parseTradeView(value: string | null, legacyStatus?: string): TradeView {
+  if (value && (TRADE_VIEWS as readonly string[]).includes(value)) return value as TradeView;
+  if (value) throw new TradeServiceError('INVALID_INPUT', 'Unknown trade view.');
+  if (legacyStatus && legacyStatus.toUpperCase() !== 'PENDING') return 'history';
+  return 'inbox';
+}
+
+function toLegacyLeagueTradeList(
+  snapshot: LeagueTradeCentreSnapshot,
+  requestedPageSize: number,
+  sort: string,
+  status?: string
+) {
+  const trades = snapshot.trades.map((trade) => ({
+    tradeId: trade.id,
+    summary: {
+      tradeId: trade.id,
+      tradeName: trade.currentOffer.message || undefined,
+      status: trade.status,
+      teamCount: 2,
+      playerNames: trade.currentOffer.players.map((player) => player.name).slice(0, 5),
+      lastUpdated: Date.parse(trade.updatedAt),
+      archived: [
+        'completed',
+        'declined',
+        'withdrawn',
+        'rejected',
+        'vetoed',
+        'expired',
+        'invalidated',
+      ].includes(trade.status),
+    },
+  }));
+
+  return {
+    trades,
+    pageInfo: {
+      nextCursor: snapshot.nextCursor,
+      pageSize: Math.min(requestedPageSize, 50),
+      sort,
+      filters: {
+        status: status ?? null,
+        archived: null,
+        leagueId: snapshot.leagueId,
+      },
+    },
+  };
 }

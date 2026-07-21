@@ -4,6 +4,10 @@ import { useAuth } from '@/AuthContext';
 import { AppLayout } from '@/components/navigation';
 import { LoadingSpinner, Alert } from '@/components/ui';
 import LeagueTabs from '@/components/league/LeagueTabs';
+import type {
+  LeagueTradeCentreSnapshot,
+  LeagueTradeDigest,
+} from '@/server/leagues/trades/tradeContracts';
 import type { League, LeagueMember } from '@/types/leagues';
 import { useEffect, useState } from 'react';
 
@@ -13,6 +17,9 @@ interface Props {
   leagueId: string;
   initialUserId?: string | null;
   errorMsg?: string | null;
+  initialTradeCentre?: LeagueTradeCentreSnapshot | null;
+  initialTradeCentreError?: string | null;
+  initialTradeDigest?: LeagueTradeDigest | null;
 }
 
 export default function LeaguePageClient({
@@ -21,6 +28,9 @@ export default function LeaguePageClient({
   leagueId,
   initialUserId,
   errorMsg,
+  initialTradeCentre,
+  initialTradeCentreError,
+  initialTradeDigest,
 }: Props) {
   const { user } = useAuth();
   const currentUserId = user?.uid ?? initialUserId ?? undefined;
@@ -158,6 +168,9 @@ export default function LeaguePageClient({
             members={curMembers}
             currentUserId={currentUserId}
             onMembersChange={handleMembersChange}
+            initialTradeCentre={initialTradeCentre}
+            initialTradeCentreError={initialTradeCentreError}
+            initialTradeDigest={initialTradeDigest}
           />
         </div>
       </main>

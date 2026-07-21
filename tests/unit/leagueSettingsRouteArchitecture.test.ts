@@ -6,19 +6,20 @@ describe('league settings route architecture', () => {
   const readSource = () =>
     readFileSync(join(process.cwd(), 'src/app/api/leagues/[id]/settings/route.ts'), 'utf8');
 
-  it('authorizes members for reads and managers for writes before data access', () => {
+  it('authorizes active members for reads and commissioners for writes before data access', () => {
     const source = readSource();
 
     expect(source).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
     expect(source).toContain(
-      'getLeagueMembership,\n  isLeagueManagerRole,\n  listActiveLeagueMembers'
+      "import { getLeagueMembershipAccess } from '@/server/leagues/membership'"
     );
-    expect(source).toContain("from '@/lib/leagueMembership'");
     expect(source).toContain('authorizeLeagueSettingsRead(request, id)');
     expect(source).toContain('authorizeLeagueSettingsWrite(request, id)');
     expect(source).toContain('const userId = await getAuthenticatedUserId(request);');
-    expect(source).toContain('const membership = await getLeagueMembership(leagueId, userId);');
-    expect(source).toContain('!isLeagueManagerRole(membership.data?.role)');
+    expect(source).toContain('const access = await getLeagueMembershipAccess(leagueId, userId);');
+    expect(source).toContain('if (!access.isMember)');
+    expect(source).toContain('if (!access.canManage)');
+    expect(source).not.toContain('isLeagueManagerRole(membership.data?.role)');
     expect(source.indexOf('authorizeLeagueSettingsRead(request, id)')).toBeLessThan(
       source.indexOf('prisma.league.findUnique')
     );

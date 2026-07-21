@@ -19,7 +19,10 @@ describe('tradecentre gateway route ownership', () => {
     expect(page).toContain("import { prisma } from '@/lib/prisma'");
     expect(page).toContain("redirect('/login?next=/tradecentre')");
     expect(page).toContain('prisma.leagueMember.findFirst');
-    expect(page).toContain("redirect(`/leagues/${membership.leagueId}/trades`)");
+    expect(page).toContain("new URLSearchParams({ tab: 'trades' })");
+    expect(page).toContain("redirect(`/leagues/${membership.leagueId}?${target.toString()}`)");
+    expect(page).toContain("target.set('playerId', query.playerId)");
+    expect(page).toContain("target.set('ownerMemberId', query.ownerMemberId)");
     expect(page).toContain('Join or create a league to trade');
     expect(page).not.toContain("redirect('/draft/trades')");
 
@@ -31,5 +34,16 @@ describe('tradecentre gateway route ownership', () => {
     expect(serverAuth).toContain('cookieStore.get(DEVELOPMENT_AUTH_COOKIE)?.value');
     expect(serverAuth).toContain("cookieStore.get('statly_session')?.value");
     expect(serverAuth).toContain('adminAuth.verifySessionCookie(sessionCookie, true)');
+  });
+
+  it('redirects the former standalone league route into the embedded Trade Centre', () => {
+    const page = readRepoFile('src/app/(app)/leagues/[id]/trades/page.tsx');
+
+    expect(page).toContain("new URLSearchParams({ tab: 'trades' })");
+    expect(page).toContain('redirect(`/leagues/${encodeURIComponent(id)}?${target.toString()}`)');
+    expect(page).toContain("target.set('playerId', query.playerId)");
+    expect(page).toContain("target.set('ownerMemberId', query.ownerMemberId)");
+    expect(page).not.toContain('LeagueTradeProposalForm');
+    expect(page).not.toContain('/api/trades/list');
   });
 });

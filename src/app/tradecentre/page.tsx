@@ -7,7 +7,11 @@ import { AppLayout } from '@/components/navigation';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 
-export default async function TradeCentrePage() {
+export default async function TradeCentrePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ playerId?: string; ownerMemberId?: string }>;
+}) {
   const userId = await getAuthenticatedUserIdFromServerContext();
 
   if (!userId) {
@@ -15,13 +19,17 @@ export default async function TradeCentrePage() {
   }
 
   const membership = await prisma.leagueMember.findFirst({
-    where: { userId },
+    where: { userId, isActive: true, status: 'ACTIVE' },
     orderBy: { joinedAt: 'asc' },
     select: { leagueId: true },
   });
 
   if (membership) {
-    redirect(`/leagues/${membership.leagueId}/trades`);
+    const query = searchParams ? await searchParams : {};
+    const target = new URLSearchParams({ tab: 'trades' });
+    if (query.playerId) target.set('playerId', query.playerId);
+    if (query.ownerMemberId) target.set('ownerMemberId', query.ownerMemberId);
+    redirect(`/leagues/${membership.leagueId}?${target.toString()}`);
   }
 
   return (

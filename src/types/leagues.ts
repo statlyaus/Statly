@@ -24,6 +24,9 @@ export interface TradeSettings {
   tradeLimit: number; // Max trades per season per team
   tradeReview: TradeReview;
   tradeDeadline?: string; // ISO date string
+  offerExpiryHours?: number;
+  reviewHours?: number;
+  vetoThreshold?: number;
 }
 
 export interface WaiverWireSettings {
@@ -251,6 +254,9 @@ export const LEAGUE_CONSTRAINTS = {
 export const DEFAULT_TRADE_SETTINGS: TradeSettings = {
   tradeLimit: 10,
   tradeReview: 'none',
+  offerExpiryHours: 72,
+  reviewHours: 24,
+  vetoThreshold: 3,
 };
 
 export const DEFAULT_WAIVER_SETTINGS: Partial<WaiverWireSettings> = {
