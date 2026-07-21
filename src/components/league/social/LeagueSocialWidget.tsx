@@ -284,7 +284,7 @@ export default function LeagueSocialWidget({
           title="League Social"
           className="league-social fixed bottom-6 right-6 z-[55] inline-flex size-14 items-center justify-center rounded-full border border-social-brand-strong bg-social-brand-strong text-social-brand-foreground shadow-lg transition-colors hover:bg-social-action-hover active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface"
         >
-          <MessageCircle className="size-5" aria-hidden="true" />
+          <MessageCircle className="size-7" aria-hidden="true" />
           {totalUnread > 0 ? (
             <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-social-action px-1.5 text-xs font-bold text-social-action-foreground ring-2 ring-social-surface">
               <span className="sr-only">{totalUnread} unread</span>

@@ -102,6 +102,7 @@ describe('LeagueSocialWidget', () => {
       'right-6',
       'bg-social-brand-strong'
     );
+    expect(launcher.querySelector('svg')).toHaveClass('size-7');
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /5 unread/i })).toBeInTheDocument()
     );

@@ -1,5 +1,3 @@
-import 'server-only';
-
 import { prisma } from '@/lib/prisma';
 import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 
