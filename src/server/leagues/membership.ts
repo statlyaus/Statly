@@ -84,7 +84,10 @@ export async function getLeagueMembershipAccess(
   };
 }
 
-function isActivePrismaMembership(member: { isActive: boolean; status: string }): boolean {
+export function isActivePrismaMembership(member: {
+  isActive: boolean;
+  status: string;
+}): boolean {
   if (!member.isActive) {
     return false;
   }

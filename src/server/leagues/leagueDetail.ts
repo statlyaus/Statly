@@ -5,7 +5,10 @@ import { listActiveLeagueMembers } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
-import { getLeagueMembershipAccess } from '@/server/leagues/membership';
+import {
+  getLeagueMembershipAccess,
+  isActivePrismaMembership,
+} from '@/server/leagues/membership';
 import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
 
@@ -74,7 +77,8 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
           select: { memberId: true },
         }),
       ]);
-      const members = prismaLeague.members.map((member) => ({
+      const activeMembers = prismaLeague.members.filter(isActivePrismaMembership);
+      const members = activeMembers.map((member) => ({
         id: member.id,
         leagueId: member.leagueId,
         userId: member.userId,
@@ -111,7 +115,7 @@ async function loadLeagueDetail(leagueId: string): Promise<LeagueDetailResult> {
           code: prismaLeague.inviteCode,
           ownerId: prismaLeague.ownerId,
           maxTeams: prismaLeague.settings?.maxTeams || 12,
-          currentTeams: prismaLeague.members.length,
+          currentTeams: activeMembers.length,
           status: toLeagueStatus(prismaLeague.drafts[0]?.status),
           type: 'private',
           description: `${prismaLeague.name} Fantasy League`,
