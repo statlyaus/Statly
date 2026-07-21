@@ -11,6 +11,17 @@ function playerWithSeasons(id: string, availableStatSeasons: number[]): Player {
     position: 'MID',
     stats: {},
     availableStatSeasons,
+    statsBySeason: Object.fromEntries(
+      availableStatSeasons.map((season) => [
+        String(season),
+        {
+          games: 1,
+          dataThrough: `${season}-09-01`,
+          stats: { goals: 1 },
+          basisByStat: { goals: 'TOTAL' as const },
+        },
+      ])
+    ),
   };
 }
 
@@ -22,6 +33,14 @@ function playerWithStatsSeason(id: string, statsSeason: number): Player {
     position: 'MID',
     stats: {},
     statsSeason,
+    statsBySeason: {
+      [String(statsSeason)]: {
+        games: 1,
+        dataThrough: `${statsSeason}-09-01`,
+        stats: { goals: 1 },
+        basisByStat: { goals: 'TOTAL' },
+      },
+    },
   };
 }
 
@@ -39,10 +58,7 @@ describe('getDraftStatSeasonOptions', () => {
   });
 
   it('uses a requested season when that season is available', () => {
-    const options = getDraftStatSeasonOptions(
-      [playerWithSeasons('player-1', [2025, 2024])],
-      2024
-    );
+    const options = getDraftStatSeasonOptions([playerWithSeasons('player-1', [2025, 2024])], 2024);
 
     expect(options).toEqual({
       selectedSeason: 2024,

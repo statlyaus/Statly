@@ -17,7 +17,11 @@ import {
   normalizeDraftPickOrderMode,
   normalizeDraftPositionLimits,
 } from '@/lib/draftSettings';
-import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import {
+  normalizeFantasyCategoryKeys,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
 import {
   normalizeCategoryDirections,
   parseCategoryDirectionsJson,
@@ -36,8 +40,6 @@ type WaiverRuleValue = 'WEEKLY' | 'ROLLING';
 
 const TEST_LEAGUE_ID = 'test-league-id';
 const TEST_LEAGUE_OWNER_ID = '2qlfdHSCFTPlxoKFSUfNLSlCDRe2';
-const REAL_DATA_CATEGORY_KEYS = new Set<FantasyCategoryKey>(REAL_DATA_NINE_CATEGORY_PRESET);
-
 function isDevelopmentTestLeague(leagueId: string) {
   return process.env.NODE_ENV !== 'production' && leagueId === TEST_LEAGUE_ID;
 }
@@ -81,24 +83,13 @@ function getNestedValue(source: Record<string, unknown>, keys: string[]): unknow
 function normalizeLeagueCategories(value: unknown): FantasyCategoryKey[] {
   if (typeof value === 'string' && value.trim()) {
     try {
-      return normalizeLeagueCategories(JSON.parse(value));
+      return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
     } catch {
       return [...REAL_DATA_NINE_CATEGORY_PRESET];
     }
   }
 
-  if (!Array.isArray(value)) {
-    return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  }
-
-  const selected = value.filter(
-    (category): category is FantasyCategoryKey =>
-      typeof category === 'string' && REAL_DATA_CATEGORY_KEYS.has(category as FantasyCategoryKey)
-  );
-
-  return selected.length === value.length && selected.length
-    ? selected
-    : [...REAL_DATA_NINE_CATEGORY_PRESET];
+  return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 function normalizeLeagueScoringMode(
@@ -260,6 +251,7 @@ function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
   const autoPickRules = normalizeDraftAutoPickRules(
     draftInput.autoPickRules ?? DEFAULT_DRAFT_AUTO_PICK_RULES
   );
+  const categories = normalizeLeagueCategories(scoringInput.categories);
 
   return {
     league: {
@@ -274,12 +266,12 @@ function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
     },
     scoring: {
       scoringFormat: 'nine-category',
-      categories: normalizeLeagueCategories(scoringInput.categories),
+      categories,
       scoringMode: normalizeLeagueScoringMode(scoringInput.scoringMode, 'H2H_EACH_CATEGORY'),
       fixtureGenerationMode: normalizeFixtureGenerationMode(scoringInput.fixtureGenerationMode),
       lineupSlots: normalizeLineupSlots(scoringInput.lineupSlots),
       categoryDirections: normalizeCategoryDirections(
-        normalizeLeagueCategories(scoringInput.categories),
+        categories,
         scoringInput.categoryDirections as Partial<Record<FantasyCategoryKey, CategoryDirection>>
       ),
       scoringSettingsLockedAt: null,
@@ -586,12 +578,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         scoringInput.lineupSlots === undefined && body.lineupSlots === undefined
           ? parseLineupSlotsJson(prismaLeague.settings.lineupSlotsJson)
           : normalizeLineupSlots(scoringInput.lineupSlots ?? body.lineupSlots);
-      const categoryDirections = normalizeCategoryDirections(
-        categories,
-        (scoringInput.categoryDirections ?? body.categoryDirections) as Partial<
-          Record<FantasyCategoryKey, CategoryDirection>
-        >
-      );
+      const categoryDirectionsInput = scoringInput.categoryDirections ?? body.categoryDirections;
+      const categoryDirections =
+        categoryDirectionsInput === undefined
+          ? parseCategoryDirectionsJson(categories, prismaLeague.settings.categoryDirectionsJson)
+          : normalizeCategoryDirections(
+              categories,
+              categoryDirectionsInput as Partial<Record<FantasyCategoryKey, CategoryDirection>>
+            );
       const scoringSettingsChanged =
         scoringInput.scoringMode !== undefined ||
         body.scoringMode !== undefined ||

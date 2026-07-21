@@ -5,6 +5,10 @@ import { createHash } from 'node:crypto';
 import { Prisma, type TradeReviewMode } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import {
+  evaluateRosterExchangeCapacity,
+  getLeagueRosterCapacity,
+} from '@/server/rosters/rosterCapacity';
 
 import {
   createTradeSchema,
@@ -30,6 +34,7 @@ interface TradeAccess {
   isCommissioner: boolean;
   settings: {
     rosterSize: number;
+    benchSize: number;
     tradeLimit: number;
     tradeReviewMode: TradeReviewMode;
     tradeDeadline: Date | null;
@@ -37,6 +42,13 @@ interface TradeAccess {
     tradeReviewHours: number;
     tradeVetoThreshold: number;
   };
+}
+
+interface TradePlayerSnapshot {
+  id: string;
+  name: string;
+  club: string;
+  position: string;
 }
 
 export interface TradeCommandResult {
@@ -175,7 +187,7 @@ async function createTradeInTransaction(
   }
 
   await validateTradeLimits(tx, access, [access.memberId, recipient.id]);
-  await validateRosterExchange(tx, access, {
+  const playerSnapshots = await validateRosterExchange(tx, access, {
     firstMemberId: access.memberId,
     secondMemberId: recipient.id,
     firstPlayerIds: input.sendingPlayerIds,
@@ -204,18 +216,13 @@ async function createTradeInTransaction(
       reviewHours: access.settings.tradeReviewHours,
       vetoThreshold: access.settings.tradeVetoThreshold,
       players: {
-        create: [
-          ...input.sendingPlayerIds.map((playerId) => ({
-            playerId,
-            fromMemberId: access.memberId,
-            toMemberId: recipient.id,
-          })),
-          ...input.receivingPlayerIds.map((playerId) => ({
-            playerId,
-            fromMemberId: recipient.id,
-            toMemberId: access.memberId,
-          })),
-        ],
+        create: buildTradePlayerMoves({
+          firstMemberId: access.memberId,
+          secondMemberId: recipient.id,
+          firstPlayerIds: input.sendingPlayerIds,
+          secondPlayerIds: input.receivingPlayerIds,
+          playerSnapshots,
+        }),
       },
     },
     select: { id: true },
@@ -346,7 +353,7 @@ async function counterTrade(
 
   const otherMemberId =
     access.memberId === thread.memberOneId ? thread.memberTwoId : thread.memberOneId;
-  await validateRosterExchange(tx, access, {
+  const playerSnapshots = await validateRosterExchange(tx, access, {
     firstMemberId: access.memberId,
     secondMemberId: otherMemberId,
     firstPlayerIds: input.sendingPlayerIds,
@@ -369,18 +376,13 @@ async function counterTrade(
       reviewHours: access.settings.tradeReviewHours,
       vetoThreshold: access.settings.tradeVetoThreshold,
       players: {
-        create: [
-          ...input.sendingPlayerIds.map((playerId) => ({
-            playerId,
-            fromMemberId: access.memberId,
-            toMemberId: otherMemberId,
-          })),
-          ...input.receivingPlayerIds.map((playerId) => ({
-            playerId,
-            fromMemberId: otherMemberId,
-            toMemberId: access.memberId,
-          })),
-        ],
+        create: buildTradePlayerMoves({
+          firstMemberId: access.memberId,
+          secondMemberId: otherMemberId,
+          firstPlayerIds: input.sendingPlayerIds,
+          secondPlayerIds: input.receivingPlayerIds,
+          playerSnapshots,
+        }),
       },
     },
     select: { id: true },
@@ -703,11 +705,15 @@ async function validateRosterExchange(
     firstPlayerIds: string[];
     secondPlayerIds: string[];
   }
-): Promise<void> {
+): Promise<Map<string, TradePlayerSnapshot>> {
   const requestedIds = [...input.firstPlayerIds, ...input.secondPlayerIds];
   const owned = await tx.leagueRosterPlayer.findMany({
     where: { leagueId: access.leagueId, playerId: { in: requestedIds } },
-    select: { playerId: true, memberId: true },
+    select: {
+      playerId: true,
+      memberId: true,
+      player: { select: { id: true, name: true, club: true, position: true } },
+    },
   });
   const ownerByPlayer = new Map(owned.map((player) => [player.playerId, player.memberId]));
   const invalid = [
@@ -737,17 +743,64 @@ async function validateRosterExchange(
   const countByMember = new Map(counts.map((row) => [row.memberId, row._count._all]));
   const firstCurrent = countByMember.get(input.firstMemberId) ?? 0;
   const secondCurrent = countByMember.get(input.secondMemberId) ?? 0;
-  const firstNext = firstCurrent - input.firstPlayerIds.length + input.secondPlayerIds.length;
-  const secondNext = secondCurrent - input.secondPlayerIds.length + input.firstPlayerIds.length;
-  const firstLimit = Math.max(access.settings.rosterSize, firstCurrent);
-  const secondLimit = Math.max(access.settings.rosterSize, secondCurrent);
-  if (firstNext > firstLimit || secondNext > secondLimit) {
+  const capacity = getLeagueRosterCapacity(access.settings);
+  const firstCapacity = evaluateRosterExchangeCapacity({
+    currentCount: firstCurrent,
+    outgoingCount: input.firstPlayerIds.length,
+    incomingCount: input.secondPlayerIds.length,
+    capacity,
+  });
+  const secondCapacity = evaluateRosterExchangeCapacity({
+    currentCount: secondCurrent,
+    outgoingCount: input.secondPlayerIds.length,
+    incomingCount: input.firstPlayerIds.length,
+    capacity,
+  });
+  if (!firstCapacity.isAllowed || !secondCapacity.isAllowed) {
     throw new TradeServiceError(
       'ROSTER_LIMIT_EXCEEDED',
       'This trade would exceed a team roster limit.',
       409
     );
   }
+
+  return new Map(owned.map(({ player }) => [player.id, player]));
+}
+
+function buildTradePlayerMoves(input: {
+  firstMemberId: string;
+  secondMemberId: string;
+  firstPlayerIds: string[];
+  secondPlayerIds: string[];
+  playerSnapshots: Map<string, TradePlayerSnapshot>;
+}) {
+  const buildMove = (playerId: string, fromMemberId: string, toMemberId: string) => {
+    const player = input.playerSnapshots.get(playerId);
+    if (!player) {
+      throw new TradeServiceError(
+        'ROSTER_CHANGED',
+        'One or more players are no longer available.',
+        409
+      );
+    }
+    return {
+      playerId,
+      playerNameSnapshot: player.name,
+      playerClubSnapshot: player.club,
+      playerPositionSnapshot: player.position,
+      fromMemberId,
+      toMemberId,
+    };
+  };
+
+  return [
+    ...input.firstPlayerIds.map((playerId) =>
+      buildMove(playerId, input.firstMemberId, input.secondMemberId)
+    ),
+    ...input.secondPlayerIds.map((playerId) =>
+      buildMove(playerId, input.secondMemberId, input.firstMemberId)
+    ),
+  ];
 }
 
 async function validateTradeLimits(
@@ -784,6 +837,7 @@ async function requireTradeAccess(leagueId: string, userId: string): Promise<Tra
       settings: {
         select: {
           rosterSize: true,
+          benchSize: true,
           tradeLimit: true,
           tradeReviewMode: true,
           tradeDeadline: true,
@@ -829,6 +883,7 @@ async function requireTradeAccessByMember(
       settings: {
         select: {
           rosterSize: true,
+          benchSize: true,
           tradeLimit: true,
           tradeReviewMode: true,
           tradeDeadline: true,

@@ -94,6 +94,7 @@ describe('draft players read model route', () => {
         statsBySeason: {
           '2026': {
             games: 22,
+            dataThrough: '2026-09-01',
             stats: {
               kicks: 220,
               handballs: 176,
@@ -121,6 +122,33 @@ describe('draft players read model route', () => {
               scoreInvolvements: 99,
               aflFantasy: 1980,
             },
+            basisByStat: {
+              kicks: 'TOTAL',
+              handballs: 'TOTAL',
+              marks: 'TOTAL',
+              tackles: 'TOTAL',
+              goals: 'TOTAL',
+              hitouts: 'TOTAL',
+              clearances: 'TOTAL',
+              inside50s: 'TOTAL',
+              rebound50s: 'TOTAL',
+              clangers: 'TOTAL',
+              contestedPossessions: 'TOTAL',
+              uncontestedPossessions: 'TOTAL',
+              freesFor: 'TOTAL',
+              freesAgainst: 'TOTAL',
+              onePercenters: 'TOTAL',
+              goalAssists: 'TOTAL',
+              timeOnGroundPct: 'PER_GAME',
+              disposalEffPct: 'PER_GAME',
+              turnovers: 'TOTAL',
+              intercepts: 'TOTAL',
+              metresGained: 'TOTAL',
+              contestedMarks: 'TOTAL',
+              effectiveDisposals: 'TOTAL',
+              scoreInvolvements: 'TOTAL',
+              aflFantasy: 'TOTAL',
+            },
           },
         },
         stats: {},
@@ -138,7 +166,7 @@ describe('draft players read model route', () => {
 
     expect(body.data.selectedCategories).toEqual([...REAL_DATA_NINE_CATEGORY_PRESET]);
     expect(body.data.statSeason).toBe(2026);
-    expect(body.data.statSeasons).toEqual([2026, 2025]);
+    expect(body.data.statSeasons).toEqual([2026]);
     const [calebDaniel, unknownPlayer] = body.data.players;
 
     expect(body.data.players[0]).toMatchObject({
@@ -151,17 +179,6 @@ describe('draft players read model route', () => {
       avgPoints: 90,
       averagePoints: 90,
       statlyZScore: expect.any(Number),
-      statsTotal: {
-        goals: 11,
-        tackles: 88,
-        inside50s: 66,
-        intercepts: 66,
-        contestedMarks: 22,
-        rebound50s: 55,
-        contestedPossessions: 110,
-        effectiveDisposals: 308,
-        scoreInvolvements: 99,
-      },
       stats: {
         goals: 0.5,
         tackles: 4,
@@ -174,11 +191,10 @@ describe('draft players read model route', () => {
         scoreInvolvements: 4.5,
       },
     });
+    expect(calebDaniel).not.toHaveProperty('statsTotal');
     expect(calebDaniel.statlyZBreakdown).toHaveLength(REAL_DATA_NINE_CATEGORY_PRESET.length);
     expect(
-      calebDaniel.statlyZBreakdown.map(
-        (entry: { category: FantasyCategoryKey }) => entry.category
-      )
+      calebDaniel.statlyZBreakdown.map((entry: { category: FantasyCategoryKey }) => entry.category)
     ).toEqual([...REAL_DATA_NINE_CATEGORY_PRESET]);
     expect(calebDaniel.statlyZBreakdown).toEqual(
       expect.arrayContaining([
@@ -241,16 +257,18 @@ describe('draft players read model route', () => {
         name: 'Ace Player',
         team: 'Adelaide',
         position: 'DEF',
-        games: 1,
+        games: 2,
         statsSeason: 2026,
         availableStatSeasons: [2026],
         statsBySeason: {
           '2026': {
-            games: 1,
+            games: 2,
+            dataThrough: '2026-03-15',
             stats: {
               goals: 10,
-              aflFantasy: 100,
+              aflFantasy: 200,
             },
+            basisByStat: { goals: 'TOTAL', aflFantasy: 'TOTAL' },
           },
         },
         stats: {},
@@ -260,22 +278,26 @@ describe('draft players read model route', () => {
         name: 'Baseline Player',
         team: 'Brisbane',
         position: 'MID',
-        games: 1,
+        games: 2,
         statsSeason: 2026,
         availableStatSeasons: [2026],
         statsBySeason: {
           '2026': {
-            games: 1,
+            games: 2,
+            dataThrough: '2026-03-15',
             stats: {
-              goals: 1,
-              aflFantasy: 50,
+              goals: 2,
+              aflFantasy: 100,
             },
+            basisByStat: { goals: 'TOTAL', aflFantasy: 'TOTAL' },
           },
         },
         stats: {},
       },
     ];
-    dataMocks.getPlayers.mockResolvedValueOnce(cohortStatsPlayers).mockResolvedValueOnce(cohortStatsPlayers);
+    dataMocks.getPlayers
+      .mockResolvedValueOnce(cohortStatsPlayers)
+      .mockResolvedValueOnce(cohortStatsPlayers);
 
     const response = await GET(
       request(`/api/drafts/${draftId}/players?q=Ace&position=DEF&page=1&pageSize=2`),
@@ -294,12 +316,13 @@ describe('draft players read model route', () => {
       statlyZBreakdown: [
         {
           category: 'goals',
-          value: 10,
+          value: 5,
           zScore: 1,
         },
       ],
       statlyZMissingCategories: [],
     });
+    expect(body.data.players[0]).not.toHaveProperty('statsTotal');
 
     const pageCall = prismaMocks.player.findMany.mock.calls.find(
       ([args]) => args?.take === 3 && args?.skip === 0

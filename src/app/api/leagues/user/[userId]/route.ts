@@ -5,28 +5,21 @@ import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { listActiveUserLeagueMemberships } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
-import type { FantasyCategoryKey } from '@/types/fantasyCategories';
-
-const REAL_DATA_CATEGORY_KEYS = new Set<FantasyCategoryKey>(REAL_DATA_NINE_CATEGORY_PRESET);
+import {
+  normalizeFantasyCategoryKeys,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
 
 function normalizeCategories(value: unknown): FantasyCategoryKey[] {
-  if (typeof value !== 'string') {
-    return [...REAL_DATA_NINE_CATEGORY_PRESET];
+  if (Array.isArray(value)) {
+    return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
   }
 
+  if (typeof value !== 'string') return [...REAL_DATA_NINE_CATEGORY_PRESET];
+
   try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) {
-      return [...REAL_DATA_NINE_CATEGORY_PRESET];
-    }
-
-    const selected = parsed.filter(
-      (entry): entry is FantasyCategoryKey =>
-        typeof entry === 'string' && REAL_DATA_CATEGORY_KEYS.has(entry as FantasyCategoryKey)
-    );
-
-    return selected.length > 0 ? selected : [...REAL_DATA_NINE_CATEGORY_PRESET];
+    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
   } catch {
     return [...REAL_DATA_NINE_CATEGORY_PRESET];
   }
@@ -132,6 +125,7 @@ export async function GET(
           leagues.push({
             id: leagueDoc.id,
             ...data,
+            categories: normalizeCategories(data?.categories),
           });
         }
       }

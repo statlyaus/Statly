@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
 import {
   FANTASY_CATEGORIES,
+  isFantasyCategoryKey,
+  normalizeFantasyCategoryKeys,
   REAL_DATA_NINE_CATEGORY_PRESET,
   type FantasyCategoryKey,
 } from '@/types/fantasyCategories';
@@ -142,8 +144,7 @@ function parseStoredCategoryRows(categoriesJson: string | null | undefined): Arr
       if (!row || typeof row !== 'object') return [];
       const source = row as Record<string, unknown>;
       const category = source.category;
-      if (typeof category !== 'string') return [];
-      const categoryKey = category as FantasyCategoryKey;
+      if (!isFantasyCategoryKey(category)) return [];
       const homeValue = Number(source.homeValue ?? 0);
       const awayValue = Number(source.awayValue ?? 0);
       const winner = source.winner;
@@ -151,7 +152,7 @@ function parseStoredCategoryRows(categoriesJson: string | null | undefined): Arr
 
       return [
         {
-          category: categoryKey,
+          category,
           homeValue: Number.isFinite(homeValue) ? homeValue : 0,
           awayValue: Number.isFinite(awayValue) ? awayValue : 0,
           direction: direction === 'LOW_WINS' ? 'LOW_WINS' : 'HIGH_WINS',
@@ -410,15 +411,10 @@ export function resolveAflRoundForScoring({
 }
 
 function normalizeLeagueCategories(value: string | null | undefined): FantasyCategoryKey[] {
-  const realDataCategoryKeys = new Set<FantasyCategoryKey>(REAL_DATA_NINE_CATEGORY_PRESET);
   if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
+
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) && parsed.length
-      ? parsed.filter((category): category is FantasyCategoryKey =>
-          realDataCategoryKeys.has(category as FantasyCategoryKey)
-        )
-      : [...REAL_DATA_NINE_CATEGORY_PRESET];
+    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
   } catch {
     return [...REAL_DATA_NINE_CATEGORY_PRESET];
   }

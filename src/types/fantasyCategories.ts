@@ -306,12 +306,14 @@ export const FANTASY_CATEGORIES: Record<FantasyCategoryKey, FantasyCategory> = {
   },
 };
 
-const FANTASY_CATEGORY_KEYS = new Set<FantasyCategoryKey>(
+export const FANTASY_CATEGORY_KEYS = Object.freeze(
   Object.keys(FANTASY_CATEGORIES) as FantasyCategoryKey[]
 );
 
+const FANTASY_CATEGORY_KEY_SET = new Set<FantasyCategoryKey>(FANTASY_CATEGORY_KEYS);
+
 export function isFantasyCategoryKey(value: unknown): value is FantasyCategoryKey {
-  return typeof value === 'string' && FANTASY_CATEGORY_KEYS.has(value as FantasyCategoryKey);
+  return typeof value === 'string' && FANTASY_CATEGORY_KEY_SET.has(value as FantasyCategoryKey);
 }
 
 export function normalizeFantasyCategoryKeys(
@@ -430,7 +432,12 @@ export function calculateTotalValue(s: PlayerStats): number {
 /**
  * Format a stat value based on its category type
  */
-export function formatStatValue(value: number, category: FantasyCategory): string {
+export function formatStatValue(
+  value: number | null | undefined,
+  category: FantasyCategory
+): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+
   switch (category.format) {
     case 'percentage':
       return `${value.toFixed(1)}%`;
@@ -438,7 +445,7 @@ export function formatStatValue(value: number, category: FantasyCategory): strin
       return value.toFixed(2);
     case 'number':
     default:
-      return Math.round(value).toString();
+      return value.toFixed(1);
   }
 }
 

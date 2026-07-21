@@ -6,13 +6,15 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import { getLeagueMembershipAccess, isActivePrismaMembership } from '@/server/leagues/membership';
-import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import {
+  normalizeFantasyCategoryKeys,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
 import type { League, LeagueMember } from '@/types/leagues';
 
 import { parseCategoryDirectionsJson } from './categoryDirections';
 import { DEFAULT_ACTIVE_LINEUP_SLOTS, parseLineupSlotsJson } from './lineupSettings';
-
-const REAL_DATA_CATEGORY_KEYS = new Set<FantasyCategoryKey>(REAL_DATA_NINE_CATEGORY_PRESET);
 
 export type LeagueDetailSuccess = {
   ok: true;
@@ -383,24 +385,14 @@ function toLeagueStatus(status: unknown): League['status'] {
 }
 
 function normalizeLeagueCategories(value: unknown): FantasyCategoryKey[] {
-  if (typeof value !== 'string') {
-    return [...REAL_DATA_NINE_CATEGORY_PRESET];
+  if (Array.isArray(value)) {
+    return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
   }
 
+  if (typeof value !== 'string') return [...REAL_DATA_NINE_CATEGORY_PRESET];
+
   try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) {
-      return [...REAL_DATA_NINE_CATEGORY_PRESET];
-    }
-
-    const selected = parsed.filter(
-      (category): category is FantasyCategoryKey =>
-        typeof category === 'string' && REAL_DATA_CATEGORY_KEYS.has(category as FantasyCategoryKey)
-    );
-
-    return selected.length === parsed.length && selected.length
-      ? selected
-      : [...REAL_DATA_NINE_CATEGORY_PRESET];
+    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
   } catch {
     return [...REAL_DATA_NINE_CATEGORY_PRESET];
   }

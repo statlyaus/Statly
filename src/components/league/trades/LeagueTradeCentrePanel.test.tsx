@@ -19,6 +19,15 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/lib/authenticatedFetch', () => ({ authenticatedFetch }));
+vi.mock('@/components/league/LeagueSocialDiscussButton', () => ({
+  LeagueSocialDiscussButton: ({
+    context,
+    label,
+  }: {
+    context: { title: string };
+    label: string;
+  }) => <button aria-label={`${label}: ${context.title}`}>{label}</button>,
+}));
 
 const snapshot: LeagueTradeCentreSnapshot = {
   leagueId: 'league-1',
@@ -32,10 +41,31 @@ const snapshot: LeagueTradeCentreSnapshot = {
     reviewHours: 24,
     vetoThreshold: 3,
   },
+  playerStats: {
+    context: {
+      basis: 'PER_GAME',
+      period: 'SEASON',
+      season: 2026,
+      availableSeasons: [2026],
+      dataThrough: '2026-07-20',
+    },
+    columns: [
+      {
+        key: 'kicks',
+        label: 'Kicks',
+        shortLabel: 'K',
+        format: 'number',
+        direction: 'HIGH_WINS',
+      },
+    ],
+    playersById: {
+      'player-1': { gamesPlayed: 12, values: { kicks: 20 } },
+      'player-2': { gamesPlayed: 12, values: { kicks: 24 } },
+    },
+  },
   teams: [
     {
       memberId: 'member-1',
-      userId: 'user-1',
       teamName: 'Alpha FC',
       teamLogoUrl: null,
       isViewer: true,
@@ -43,7 +73,6 @@ const snapshot: LeagueTradeCentreSnapshot = {
     },
     {
       memberId: 'member-2',
-      userId: 'user-2',
       teamName: 'Beta FC',
       teamLogoUrl: null,
       isViewer: false,
@@ -53,7 +82,7 @@ const snapshot: LeagueTradeCentreSnapshot = {
   trades: [
     {
       id: 'trade-1',
-      status: 'open',
+      status: 'PENDING',
       version: 2,
       memberOne: { memberId: 'member-2', teamName: 'Beta FC', teamLogoUrl: null },
       memberTwo: { memberId: 'member-1', teamName: 'Alpha FC', teamLogoUrl: null },
@@ -62,7 +91,7 @@ const snapshot: LeagueTradeCentreSnapshot = {
         sequence: 1,
         proposerMemberId: 'member-2',
         recipientMemberId: 'member-1',
-        status: 'pending',
+        status: 'PENDING',
         message: 'A fair swap',
         expiresAt: '2026-07-24T10:00:00.000Z',
         reviewMode: 'admin',
@@ -117,11 +146,14 @@ describe('LeagueTradeCentrePanel', () => {
 
     expect(screen.getByRole('heading', { name: 'Trade Centre' })).toBeInTheDocument();
     expect(screen.getByText('Commissioner approval')).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Players from Alpha FC' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Players from Beta FC' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'You send' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'You receive from Beta FC' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: /Bailey Beta/ })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Accept trade' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Counteroffer' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Discuss trade: Beta FC and Alpha FC' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Inbox/ })).toHaveAttribute('aria-current', 'page');
   });
 

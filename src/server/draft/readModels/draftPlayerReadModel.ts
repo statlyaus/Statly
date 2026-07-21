@@ -1,41 +1,18 @@
 import { getPlayers } from '@/lib/data';
 import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import {
-  calculateTotalValue,
-  FANTASY_CATEGORIES,
+  FANTASY_CATEGORY_KEYS,
+  normalizeFantasyCategoryKeys,
   type FantasyCategoryKey,
   type PlayerStats,
 } from '@/types/fantasyCategories';
 import type { Player } from '@/types/players';
+import {
+  getLeaguePlayerStatSeasonOptions,
+  projectLeaguePlayerStatLine,
+  readPlayerSeasonStatAverage,
+} from '@/server/players/readModels/leaguePlayerStatReadModel';
 
-const STAT_KEYS = [
-  'kicks',
-  'handballs',
-  'marks',
-  'tackles',
-  'goals',
-  'hitouts',
-  'clearances',
-  'inside50s',
-  'rebound50s',
-  'clangers',
-  'contestedPossessions',
-  'uncontestedPossessions',
-  'freesFor',
-  'freesAgainst',
-  'onePercenters',
-  'goalAssists',
-  'timeOnGroundPct',
-  'disposalEffPct',
-  'turnovers',
-  'intercepts',
-  'metresGained',
-  'contestedMarks',
-  'effectiveDisposals',
-  'scoreInvolvements',
-] as const satisfies readonly (keyof PlayerStats)[];
-
-const AVERAGE_STAT_KEYS = new Set<keyof PlayerStats>(['timeOnGroundPct', 'disposalEffPct']);
 const LOWER_IS_BETTER_CATEGORIES = new Set<FantasyCategoryKey>([
   'clangers',
   'freesAgainst',
@@ -43,14 +20,13 @@ const LOWER_IS_BETTER_CATEGORIES = new Set<FantasyCategoryKey>([
 ]);
 
 type DraftPlayerStatsProjection = {
-  avgPoints: number;
-  averagePoints: number;
-  fantasyPoints: number;
+  avgPoints?: number;
+  averagePoints?: number;
+  fantasyPoints?: number;
   gamesPlayed: number;
   statsSeason: number;
   availableStatSeasons: number[];
   stats: Partial<PlayerStats>;
-  statsTotal: Partial<PlayerStats>;
 };
 
 export type StatlyZPlayerInput = {
@@ -100,33 +76,7 @@ export function parseSelectedCategories(raw: unknown): FantasyCategoryKey[] {
     }
   }
 
-  if (!Array.isArray(parsed)) return [];
-
-  const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
-  return parsed.map(String).filter((value): value is FantasyCategoryKey => validKeys.has(value));
-}
-
-function readNumericStat(
-  player: Player,
-  key: keyof PlayerStats,
-  statsSource: Record<string, unknown> | undefined = player.stats
-): number {
-  const stats = statsSource ?? {};
-  const aliases: Record<string, string[]> = {
-    disposalEffPct: ['disposalEffPct', 'disposalEfficiency'],
-    timeOnGroundPct: ['timeOnGroundPct', 'togPct'],
-  };
-  const candidateKeys = [key, ...(aliases[String(key)] ?? [])];
-
-  for (const candidateKey of candidateKeys) {
-    const statValue = stats[candidateKey];
-    if (typeof statValue === 'number' && Number.isFinite(statValue)) return statValue;
-
-    const playerValue = player[candidateKey as keyof Player];
-    if (typeof playerValue === 'number' && Number.isFinite(playerValue)) return playerValue;
-  }
-
-  return 0;
+  return normalizeFantasyCategoryKeys(parsed, []);
 }
 
 function roundStat(value: number): number {
@@ -141,14 +91,7 @@ function roundStatlyZ(value: number): number {
 function validSelectedCategories(
   selectedCategories: readonly (FantasyCategoryKey | string)[]
 ): FantasyCategoryKey[] {
-  const validKeys = new Set(Object.keys(FANTASY_CATEGORIES));
-  const seen = new Set<string>();
-
-  return selectedCategories.filter((category): category is FantasyCategoryKey => {
-    if (!validKeys.has(category) || seen.has(category)) return false;
-    seen.add(category);
-    return true;
-  });
+  return normalizeFantasyCategoryKeys(selectedCategories, []);
 }
 
 function readFinitePlayerStat(
@@ -218,99 +161,40 @@ export function calculateStatlyZScores(
   );
 }
 
-function buildCompleteStats(
-  player: Player,
-  gamesPlayed: number,
-  statsSource?: Record<string, unknown>
-): PlayerStats & { aflFantasy?: number } {
-  const stats = STAT_KEYS.reduce(
-    (acc, key) => {
-      acc[key] = readNumericStat(player, key, statsSource);
-      return acc;
-    },
-    { games: gamesPlayed } as PlayerStats
-  );
-
-  const aflFantasy = statsSource?.aflFantasy ?? player.stats?.aflFantasy;
-  if (typeof aflFantasy === 'number' && Number.isFinite(aflFantasy)) {
-    return { ...stats, aflFantasy };
-  }
-
-  return stats;
-}
-
-function getSeasonStatsSource(
-  player: Player,
-  requestedSeason?: number | null
-): { season: number; games: number; stats: Record<string, unknown> } | null {
-  const seasons = player.statsBySeason ?? {};
-  const selectedSeason =
-    requestedSeason ?? player.statsSeason ?? Number(player.availableStatSeasons?.[0] ?? 0);
-
-  if (selectedSeason && seasons[String(selectedSeason)]) {
-    const seasonStats = seasons[String(selectedSeason)];
-    return {
-      season: selectedSeason,
-      games: seasonStats.games,
-      stats: seasonStats.stats,
-    };
-  }
-
-  if (requestedSeason) {
-    return null;
-  }
-
-  const fallbackGames = typeof player.games === 'number' && player.games > 0 ? player.games : 0;
-  if (!fallbackGames && !player.stats) return null;
-
-  return {
-    season: selectedSeason || new Date().getFullYear(),
-    games: fallbackGames,
-    stats: player.stats ?? {},
-  };
-}
-
 function projectDraftPlayerStats(
   player: Player,
   requestedSeason?: number | null
 ): DraftPlayerStatsProjection | null {
-  const seasonSource = getSeasonStatsSource(player, requestedSeason);
-  if (!seasonSource || seasonSource.games <= 0) {
-    return null;
-  }
+  const seasonOptions = getLeaguePlayerStatSeasonOptions([player], requestedSeason);
+  const selectedSeason = requestedSeason ?? seasonOptions.selectedSeason;
+  const seasonSource = player.statsBySeason?.[String(selectedSeason)];
+  if (!seasonSource || seasonSource.games <= 0) return null;
 
-  const explicitGames = seasonSource.games;
-  const hasAnyStats = STAT_KEYS.some((key) => readNumericStat(player, key, seasonSource.stats) !== 0);
-
-  if (!hasAnyStats) {
-    return null;
-  }
-
-  const gamesPlayed = explicitGames;
-  const completeStats = buildCompleteStats(player, gamesPlayed, seasonSource.stats);
-  const statsTotal: Partial<PlayerStats> = {};
+  const statLine = projectLeaguePlayerStatLine(player, FANTASY_CATEGORY_KEYS, selectedSeason);
   const stats: Partial<PlayerStats> = {};
 
-  for (const key of STAT_KEYS) {
-    const total = completeStats[key];
-    statsTotal[key] = total;
-    stats[key] = AVERAGE_STAT_KEYS.has(key) ? roundStat(total) : roundStat(total / gamesPlayed);
+  for (const key of FANTASY_CATEGORY_KEYS) {
+    const value = statLine.values[key];
+    if (typeof value === 'number' && Number.isFinite(value)) stats[key] = roundStat(value);
   }
 
-  const score =
-    typeof completeStats.aflFantasy === 'number'
-      ? roundStat(completeStats.aflFantasy / gamesPlayed)
-      : calculateTotalValue(completeStats);
+  if (Object.keys(stats).length === 0) return null;
+
+  const averageFantasyPoints = readPlayerSeasonStatAverage(seasonSource, ['aflFantasy']);
+  const score = averageFantasyPoints === null ? null : roundStat(averageFantasyPoints);
 
   return {
-    avgPoints: score,
-    averagePoints: score,
-    fantasyPoints: score,
-    gamesPlayed,
-    statsSeason: seasonSource.season,
-    availableStatSeasons: player.availableStatSeasons ?? [seasonSource.season],
+    ...(score === null
+      ? {}
+      : {
+          avgPoints: score,
+          averagePoints: score,
+          fantasyPoints: score,
+        }),
+    gamesPlayed: statLine.gamesPlayed,
+    statsSeason: selectedSeason,
+    availableStatSeasons: seasonOptions.availableSeasons,
     stats,
-    statsTotal,
   };
 }
 
@@ -318,28 +202,7 @@ export function getDraftStatSeasonOptions(
   players: Player[],
   requestedSeason?: number | null
 ): DraftStatSeasonOptions {
-  const currentSeason = new Date().getFullYear();
-  const availableSeasonSet = new Set<number>();
-
-  for (const player of players) {
-    if (typeof player.statsSeason === 'number' && Number.isFinite(player.statsSeason)) {
-      availableSeasonSet.add(player.statsSeason);
-    }
-
-    for (const season of player.availableStatSeasons ?? []) {
-      if (Number.isFinite(season)) availableSeasonSet.add(season);
-    }
-  }
-
-  const availableSeasons = Array.from(availableSeasonSet).sort((a, b) => b - a);
-  const fallbackSeason = availableSeasons[0] ?? currentSeason;
-  const selectedSeason =
-    requestedSeason && availableSeasonSet.has(requestedSeason) ? requestedSeason : fallbackSeason;
-
-  return {
-    selectedSeason,
-    availableSeasons: availableSeasons.length > 0 ? availableSeasons : [fallbackSeason],
-  };
+  return getLeaguePlayerStatSeasonOptions(players, requestedSeason);
 }
 
 export function buildDraftPlayerStatsLookup(
@@ -419,6 +282,8 @@ export function buildAvailableDraftPlayer(
     position: player.position,
     club: player.club,
     isAvailable: true,
+    // Kept as an undefined compatibility field until roster and waiver adapters stop reading it.
+    statsTotal: undefined,
     ...(statsLookup ? findStatsProjection(statsLookup, player) : undefined),
   };
 }

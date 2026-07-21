@@ -1092,16 +1092,19 @@ model LeagueTradeOffer {
 }
 
 model LeagueTradePlayer {
-  id           String           @id @default(cuid())
-  offerId      String
-  playerId     String
-  fromMemberId String
-  toMemberId   String
-  createdAt    DateTime         @default(now())
-  offer        LeagueTradeOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  player       Player           @relation(fields: [playerId], references: [id], onDelete: Restrict)
-  fromMember   LeagueMember     @relation("TradePlayerFromMember", fields: [fromMemberId], references: [id], onDelete: Restrict)
-  toMember     LeagueMember     @relation("TradePlayerToMember", fields: [toMemberId], references: [id], onDelete: Restrict)
+  id                     String           @id @default(cuid())
+  offerId                String
+  playerId               String
+  playerNameSnapshot     String
+  playerClubSnapshot     String
+  playerPositionSnapshot String
+  fromMemberId           String
+  toMemberId             String
+  createdAt              DateTime         @default(now())
+  offer                  LeagueTradeOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  player                 Player           @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  fromMember             LeagueMember     @relation("TradePlayerFromMember", fields: [fromMemberId], references: [id], onDelete: Restrict)
+  toMember               LeagueMember     @relation("TradePlayerToMember", fields: [toMemberId], references: [id], onDelete: Restrict)
 
   @@unique([offerId, playerId])
   @@index([playerId])

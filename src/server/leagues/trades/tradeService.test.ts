@@ -105,6 +105,42 @@ describe.sequential('league trade service transactions', () => {
     await expect(prisma.leagueTradeCommand.count()).resolves.toBe(1);
   });
 
+  it('persists immutable player identity snapshots with an offer', async () => {
+    const created = await createTrade();
+    await prisma.player.update({
+      where: { id: ids.firstPlayer },
+      data: { name: 'Renamed Player', club: 'ZZZ', position: 'DEF' },
+    });
+
+    const storedPlayer = await prisma.leagueTradePlayer.findFirstOrThrow({
+      where: { offerId: created.offerId, playerId: ids.firstPlayer },
+    });
+
+    expect(storedPlayer).toMatchObject({
+      playerNameSnapshot: 'First Player',
+      playerClubSnapshot: 'AAA',
+      playerPositionSnapshot: 'MID',
+    });
+    const sent = await readModel.loadAuthorizedLeagueTradeCentre({
+      leagueId: ids.league,
+      userId: ids.firstUser,
+      view: 'sent',
+    });
+    expect(sent.trades[0]?.currentOffer.players).toContainEqual(
+      expect.objectContaining({
+        id: ids.firstPlayer,
+        name: 'First Player',
+        club: 'AAA',
+        position: 'MID',
+      })
+    );
+
+    await prisma.player.update({
+      where: { id: ids.firstPlayer },
+      data: { name: 'First Player', club: 'AAA', position: 'MID' },
+    });
+  });
+
   it('scopes the read model to the authenticated manager and rejects outsiders', async () => {
     await createTrade();
 
@@ -124,12 +160,24 @@ describe.sequential('league trade service transactions', () => {
     expect(inbox.trades).toHaveLength(1);
     expect(inbox.trades[0]?.allowedActions).toEqual(['accept', 'decline', 'counter']);
     expect(inbox.teams.find((team) => team.isViewer)?.memberId).toBe(ids.secondMember);
+    expect(inbox.playerStats.context.basis).toBe('PER_GAME');
+    expect(inbox.teams.some((team) => 'userId' in team)).toBe(false);
     await expect(
       readModel.loadAuthorizedLeagueTradeCentre({
         leagueId: ids.league,
         userId: 'not-a-league-member',
       })
     ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
+  });
+
+  it('rejects malformed pagination cursors deliberately', async () => {
+    await expect(
+      readModel.loadAuthorizedLeagueTradeCentre({
+        leagueId: ids.league,
+        userId: ids.firstUser,
+        cursor: 'not-a-valid-cursor',
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT', status: 400 });
   });
 
   it('conflicts when an idempotency key is reused with a changed payload', async () => {
@@ -285,8 +333,8 @@ describe.sequential('league trade service transactions', () => {
       view: 'inbox',
     });
     expect(inbox.trades[0]?.offerHistory).toMatchObject([
-      { sequence: 2, status: 'proposed', message: 'Counter offer' },
-      { sequence: 1, status: 'superseded', message: 'Opening offer' },
+      { sequence: 2, status: 'PENDING', message: 'Counter offer' },
+      { sequence: 1, status: 'COUNTERED', message: 'Opening offer' },
     ]);
     expect(inbox.trades[0]?.offerHistory.every((offer) => offer.players.length === 2)).toBe(true);
   });
@@ -432,16 +480,22 @@ describe.sequential('league trade service transactions', () => {
     await expect(ownerOf(ids.firstPlayer)).resolves.toBe(ids.secondMember);
     await expect(ownerOf(ids.secondPlayer)).resolves.toBe(ids.firstMember);
 
+    const participantHistory = await readModel.loadAuthorizedLeagueTradeCentre({
+      leagueId: ids.league,
+      userId: ids.firstUser,
+      view: 'history',
+    });
+    expect(participantHistory.trades).toHaveLength(1);
+    expect(participantHistory.trades[0]).toMatchObject({
+      id: created.threadId,
+      status: 'COMPLETED',
+    });
     const commissionerHistory = await readModel.loadAuthorizedLeagueTradeCentre({
       leagueId: ids.league,
       userId: ids.commissionerUser,
       view: 'history',
     });
-    expect(commissionerHistory.trades).toHaveLength(1);
-    expect(commissionerHistory.trades[0]).toMatchObject({
-      id: created.threadId,
-      status: 'completed',
-    });
+    expect(commissionerHistory.trades).toHaveLength(0);
   });
 
   it('surfaces a sanitized commissioner rejection reason in terminal audit history', async () => {
@@ -474,12 +528,15 @@ describe.sequential('league trade service transactions', () => {
 
     const history = await readModel.loadAuthorizedLeagueTradeCentre({
       leagueId: ids.league,
-      userId: ids.commissionerUser,
+      userId: ids.firstUser,
       view: 'history',
     });
     expect(history.trades).toHaveLength(1);
-    expect(history.trades[0]).toMatchObject({ status: 'rejected', allowedActions: [] });
-    expect(history.trades[0]?.events.find((event) => event.type === 'rejected')).toMatchObject({
+    expect(history.trades[0]).toMatchObject({
+      status: 'COMMISSIONER_REJECTED',
+      allowedActions: [],
+    });
+    expect(history.trades[0]?.events.find((event) => event.type === 'REJECTED')).toMatchObject({
       reasonCode: 'COMMISSIONER_REJECTED',
       reason: 'Competitive balance requires review.',
     });
@@ -734,6 +791,10 @@ async function seedLeague(): Promise<void> {
 async function resetTradeState(): Promise<void> {
   await prisma.leagueTradeCommand.deleteMany();
   await prisma.leagueTradeThread.deleteMany();
+  await prisma.player.update({
+    where: { id: ids.firstPlayer },
+    data: { name: 'First Player', club: 'AAA', position: 'MID' },
+  });
   await prisma.league.update({
     where: { id: ids.league },
     data: { activeSeasonId: ids.season },

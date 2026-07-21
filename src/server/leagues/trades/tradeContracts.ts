@@ -1,20 +1,22 @@
 import { z } from 'zod';
 
+import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
+
 export const TRADE_VIEWS = ['inbox', 'sent', 'history', 'review'] as const;
 export type TradeView = (typeof TRADE_VIEWS)[number];
 
 export type TradeReviewModeDto = 'none' | 'admin' | 'veto';
 export type TradeThreadStatusDto =
-  | 'open'
-  | 'pending_admin_review'
-  | 'pending_veto_review'
-  | 'completed'
-  | 'declined'
-  | 'withdrawn'
-  | 'rejected'
-  | 'vetoed'
-  | 'expired'
-  | 'invalidated';
+  | 'PENDING'
+  | 'ACCEPTED_PENDING_REVIEW'
+  | 'COMPLETED'
+  | 'DECLINED'
+  | 'WITHDRAWN'
+  | 'COMMISSIONER_REJECTED'
+  | 'VETOED'
+  | 'EXPIRED'
+  | 'FAILED';
+export type TradeOfferStatusDto = TradeThreadStatusDto | 'COUNTERED';
 
 export interface TradeRulesDto {
   limit: number;
@@ -34,7 +36,6 @@ export interface TradePlayerDto {
 
 export interface TradeTeamDto {
   memberId: string;
-  userId: string;
   teamName: string;
   teamLogoUrl: string | null;
   isViewer: boolean;
@@ -51,7 +52,7 @@ export interface TradeOfferDto {
   sequence: number;
   proposerMemberId: string;
   recipientMemberId: string;
-  status: string;
+  status: TradeOfferStatusDto;
   message: string | null;
   expiresAt: string;
   reviewMode: TradeReviewModeDto;
@@ -95,6 +96,7 @@ export interface LeagueTradeCentreSnapshot {
   viewerMemberId: string;
   isCommissioner: boolean;
   rules: TradeRulesDto;
+  playerStats: LeaguePlayerStatDatasetDto;
   teams: TradeTeamDto[];
   trades: LeagueTradeDto[];
   counts: Record<TradeView, number>;

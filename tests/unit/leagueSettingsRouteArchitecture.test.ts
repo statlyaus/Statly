@@ -31,18 +31,22 @@ describe('league settings route architecture', () => {
     );
   });
 
-  it('normalizes league settings to the canonical nine-category fantasy contract', () => {
+  it('normalizes league settings through the complete fantasy category registry', () => {
     const source = readSource();
 
     expect(source).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
+    expect(source).toContain('normalizeFantasyCategoryKeys');
     expect(source).toContain("scoringFormat: 'nine-category'");
     expect(source).toContain('normalizeLeagueCategories(prismaLeague.categoriesJson)');
-    expect(source).toContain('selected.length === value.length');
+    expect(source).not.toContain('REAL_DATA_CATEGORY_KEYS');
     expect(source).toContain('categoriesJson: JSON.stringify(categories)');
     expect(source).toContain('scoringMode');
     expect(source).toContain('fixtureGenerationMode');
     expect(source).toContain('lineupSlotsJson');
     expect(source).toContain('categoryDirectionsJson');
+    expect(source).toContain(
+      'parseCategoryDirectionsJson(categories, prismaLeague.settings.categoryDirectionsJson)'
+    );
     expect(source).toContain('scoringSettingsLockedAt');
   });
 

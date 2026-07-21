@@ -1,14 +1,29 @@
 import 'server-only';
 
-import { Prisma, type LeagueTradeThreadStatus, type TradeReviewMode } from '@prisma/client';
+import {
+  Prisma,
+  type LeagueTradeOfferStatus,
+  type LeagueTradeThreadStatus,
+  type TradeReviewMode,
+} from '@prisma/client';
 
+import { getPlayers } from '@/lib/data';
 import { prisma } from '@/lib/prisma';
+import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
+import { buildLeaguePlayerStatDatasetForTargets } from '@/server/players/readModels/leaguePlayerStatReadModel';
+import {
+  normalizeFantasyCategoryKeys,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
+import type { CategoryDirection } from '@/types/leagues';
 
 import {
   TradeServiceError,
   type LeagueTradeCentreSnapshot,
   type LeagueTradeDigest,
   type LeagueTradeDto,
+  type TradeOfferStatusDto,
   type TradeOfferDto,
   type TradeReviewModeDto,
   type TradeTeamDto,
@@ -29,7 +44,17 @@ const terminalStatuses: LeagueTradeThreadStatus[] = [
 ];
 
 const offerInclude = {
-  players: { include: { player: true }, orderBy: { createdAt: 'asc' } },
+  players: {
+    select: {
+      playerId: true,
+      playerNameSnapshot: true,
+      playerClubSnapshot: true,
+      playerPositionSnapshot: true,
+      fromMemberId: true,
+      toMemberId: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  },
   vetoes: { select: { voterMemberId: true } },
 } satisfies Prisma.LeagueTradeOfferInclude;
 
@@ -49,6 +74,8 @@ interface ReadAccess {
   memberId: string;
   isCommissioner: boolean;
   rules: LeagueTradeCentreSnapshot['rules'];
+  categories: FantasyCategoryKey[];
+  categoryDirections: Partial<Record<FantasyCategoryKey, CategoryDirection>>;
 }
 
 export async function loadAuthorizedLeagueTradeCentre({
@@ -69,12 +96,11 @@ export async function loadAuthorizedLeagueTradeCentre({
   const decodedCursor = decodeCursor(cursor);
   const take = Math.min(Math.max(pageSize, 1), 50);
 
-  const [members, legacyRosters, records, counts] = await Promise.all([
+  const [members, records, counts, sourcePlayers] = await Promise.all([
     prisma.leagueMember.findMany({
       where: { leagueId, isActive: true, status: 'ACTIVE' },
       select: {
         id: true,
-        userId: true,
         teamName: true,
         teamLogoUrl: true,
         rosterPlayers: {
@@ -83,10 +109,6 @@ export async function loadAuthorizedLeagueTradeCentre({
         },
       },
       orderBy: [{ draftSlot: 'asc' }, { joinedAt: 'asc' }],
-    }),
-    prisma.leagueRoster.findMany({
-      where: { leagueId },
-      select: { memberId: true, playerIds: true },
     }),
     prisma.leagueTradeThread.findMany({
       where: decodedCursor
@@ -107,34 +129,33 @@ export async function loadAuthorizedLeagueTradeCentre({
       take: take + 1,
     }),
     loadViewCounts(access),
+    getPlayers(),
   ]);
 
-  const legacyPlayerIds = new Map(
-    legacyRosters.map((roster) => [roster.memberId, parsePlayerIds(roster.playerIds)])
-  );
-  const missingPlayerIds = members.flatMap((member) =>
-    member.rosterPlayers.length ? [] : (legacyPlayerIds.get(member.id) ?? [])
-  );
-  const legacyPlayers = missingPlayerIds.length
-    ? await prisma.player.findMany({
-        where: { id: { in: [...new Set(missingPlayerIds)] } },
-        select: { id: true, name: true, club: true, position: true },
-      })
-    : [];
-  const legacyPlayersById = new Map(legacyPlayers.map((player) => [player.id, player]));
   const teams: TradeTeamDto[] = members.map((member) => ({
     memberId: member.id,
-    userId: member.userId,
     teamName: member.teamName,
     teamLogoUrl: member.teamLogoUrl,
     isViewer: member.id === access.memberId,
-    players: member.rosterPlayers.length
-      ? member.rosterPlayers.map(({ player }) => player)
-      : (legacyPlayerIds.get(member.id) ?? []).flatMap((playerId) => {
-          const player = legacyPlayersById.get(playerId);
-          return player ? [player] : [];
-        }),
+    players: member.rosterPlayers.map(({ player }) => player),
   }));
+  const historicalOfferPlayers = records.flatMap((record) =>
+    record.offers.flatMap((offer) =>
+      offer.players.map((player) => ({
+        id: player.playerId,
+        name: player.playerNameSnapshot,
+        club: player.playerClubSnapshot,
+      }))
+    )
+  );
+  const playerStats = buildLeaguePlayerStatDatasetForTargets(
+    sourcePlayers,
+    [...teams.flatMap((team) => team.players), ...historicalOfferPlayers],
+    {
+      categories: access.categories,
+      categoryDirections: access.categoryDirections,
+    }
+  );
 
   const hasNextPage = records.length > take;
   const page = hasNextPage ? records.slice(0, take) : records;
@@ -145,6 +166,7 @@ export async function loadAuthorizedLeagueTradeCentre({
     viewerMemberId: access.memberId,
     isCommissioner: access.isCommissioner,
     rules: access.rules,
+    playerStats,
     teams,
     trades: page.flatMap((record) => {
       const trade = toTradeDto(record, access);
@@ -188,7 +210,7 @@ export async function loadAuthorizedLeagueTradeDigest({
         memberTwo: { select: { teamName: true } },
         currentOffer: {
           select: {
-            players: { select: { player: { select: { name: true } } } },
+            players: { select: { playerNameSnapshot: true } },
           },
         },
       },
@@ -207,7 +229,9 @@ export async function loadAuthorizedLeagueTradeDigest({
               id: thread.id,
               status: toStatusDto(thread.status),
               teamNames: [thread.memberOne.teamName, thread.memberTwo.teamName] as [string, string],
-              playerNames: thread.currentOffer.players.map(({ player }) => player.name),
+              playerNames: thread.currentOffer.players.map(
+                ({ playerNameSnapshot }) => playerNameSnapshot
+              ),
               updatedAt: thread.updatedAt.toISOString(),
             },
           ]
@@ -223,8 +247,10 @@ async function requireReadAccess(leagueId: string, userId: string | null): Promi
     select: {
       ownerId: true,
       activeSeasonId: true,
+      categoriesJson: true,
       settings: {
         select: {
+          categoryDirectionsJson: true,
           tradeLimit: true,
           tradeReviewMode: true,
           tradeDeadline: true,
@@ -246,11 +272,17 @@ async function requireReadAccess(leagueId: string, userId: string | null): Promi
   if (!league.activeSeasonId) {
     throw new TradeServiceError('INVALID_STATE', 'The league does not have an active season.', 409);
   }
+  const categories = normalizeStoredCategories(league.categoriesJson);
   return {
     leagueId,
     seasonId: league.activeSeasonId,
     memberId: member.id,
     isCommissioner: league.ownerId === userId || member.isCoCommissioner,
+    categories,
+    categoryDirections: parseCategoryDirectionsJson(
+      categories,
+      league.settings.categoryDirectionsJson
+    ),
     rules: {
       limit: league.settings.tradeLimit,
       reviewMode: toReviewModeDto(league.settings.tradeReviewMode),
@@ -274,9 +306,7 @@ function buildViewFilter(access: ReadAccess, view: TradeView): Prisma.LeagueTrad
     return {
       ...base,
       status: { in: terminalStatuses },
-      ...(access.isCommissioner
-        ? {}
-        : { OR: [{ memberOneId: access.memberId }, { memberTwoId: access.memberId }] }),
+      OR: [{ memberOneId: access.memberId }, { memberTwoId: access.memberId }],
     };
   }
   return {
@@ -338,7 +368,7 @@ function toTradeDto(record: TradeThreadRecord, access: ReadAccess): LeagueTradeD
     ),
     events: record.events.map((event) => ({
       id: event.id,
-      type: event.eventType.toLowerCase(),
+      type: event.eventType,
       actorMemberId: event.actorMemberId,
       previousStatus: event.previousStatus,
       nextStatus: event.nextStatus,
@@ -363,17 +393,20 @@ function toOfferDto(
     sequence: offer.sequence,
     proposerMemberId: offer.proposerMemberId,
     recipientMemberId: offer.recipientMemberId,
-    status: offer.status.toLowerCase(),
+    status: toOfferStatusDto(offer.status),
     message: offer.message,
     expiresAt: offer.expiresAt.toISOString(),
     reviewMode: toReviewModeDto(offer.reviewMode),
     reviewEndsAt: reviewEndsAt?.toISOString() ?? null,
     vetoThreshold: offer.vetoThreshold,
     vetoCount: offer.vetoes.length,
-    players: offer.players.map(({ player, fromMemberId, toMemberId }) => ({
-      ...player,
-      fromMemberId,
-      toMemberId,
+    players: offer.players.map((player) => ({
+      id: player.playerId,
+      name: player.playerNameSnapshot,
+      club: player.playerClubSnapshot,
+      position: player.playerPositionSnapshot,
+      fromMemberId: player.fromMemberId,
+      toMemberId: player.toMemberId,
     })),
     createdAt: offer.createdAt.toISOString(),
     updatedAt: offer.updatedAt.toISOString(),
@@ -387,17 +420,33 @@ function toReviewModeDto(mode: TradeReviewMode): TradeReviewModeDto {
 }
 
 function toStatusDto(status: LeagueTradeThreadStatus): TradeThreadStatusDto {
-  return status.toLowerCase() as TradeThreadStatusDto;
+  if (status === 'OPEN') return 'PENDING';
+  if (status === 'PENDING_ADMIN_REVIEW' || status === 'PENDING_VETO_REVIEW') {
+    return 'ACCEPTED_PENDING_REVIEW';
+  }
+  if (status === 'REJECTED') return 'COMMISSIONER_REJECTED';
+  if (status === 'INVALIDATED') return 'FAILED';
+  return status;
 }
 
-function parsePlayerIds(value: string): string[] {
+function toOfferStatusDto(status: LeagueTradeOfferStatus): TradeOfferStatusDto {
+  if (status === 'PROPOSED') return 'PENDING';
+  if (status === 'ACCEPTED') return 'ACCEPTED_PENDING_REVIEW';
+  if (status === 'SUPERSEDED') return 'COUNTERED';
+  if (status === 'REJECTED') return 'COMMISSIONER_REJECTED';
+  if (status === 'INVALIDATED') return 'FAILED';
+  return status;
+}
+
+function normalizeStoredCategories(value: string | null): FantasyCategoryKey[] {
+  if (!value) return [...REAL_DATA_NINE_CATEGORY_PRESET];
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.filter((playerId): playerId is string => typeof playerId === 'string')
-      : [];
+    return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
   } catch {
-    return [];
+    return normalizeFantasyCategoryKeys(
+      value.split(',').map((category) => category.trim()),
+      REAL_DATA_NINE_CATEGORY_PRESET
+    );
   }
 }
 
@@ -429,10 +478,16 @@ function decodeCursor(value: string | null | undefined): { updatedAt: Date; id: 
       id?: unknown;
     };
     const updatedAt = typeof parsed.updatedAt === 'string' ? new Date(parsed.updatedAt) : null;
-    return updatedAt && !Number.isNaN(updatedAt.getTime()) && typeof parsed.id === 'string'
-      ? { updatedAt, id: parsed.id }
-      : null;
+    if (
+      !updatedAt ||
+      Number.isNaN(updatedAt.getTime()) ||
+      typeof parsed.id !== 'string' ||
+      !parsed.id
+    ) {
+      throw new TradeServiceError('INVALID_INPUT', 'Trade cursor is invalid.');
+    }
+    return { updatedAt, id: parsed.id };
   } catch {
-    return null;
+    throw new TradeServiceError('INVALID_INPUT', 'Trade cursor is invalid.');
   }
 }

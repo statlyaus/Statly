@@ -202,7 +202,7 @@ describe('league Trade Centre API routes', () => {
       trades: [
         {
           id: 'trade-1',
-          status: 'open',
+          status: 'PENDING',
           updatedAt: '2026-07-21T18:00:00.000Z',
           currentOffer: {
             message: 'Midfield swap',
@@ -234,6 +234,7 @@ describe('league Trade Centre API routes', () => {
           summary: {
             tradeName: 'Midfield swap',
             playerNames: ['Player One', 'Player Two'],
+            archived: false,
           },
         },
       ],

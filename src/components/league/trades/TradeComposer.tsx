@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 
 import type { TradeTeamDto } from '@/server/leagues/trades/tradeContracts';
+import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
+
+import { TradeComparisonTable } from './TradeComparisonTable';
+import { TradeRosterTable } from './TradeRosterTable';
 
 export interface TradeComposerSubmission {
   recipientMemberId: string;
@@ -13,6 +17,7 @@ export interface TradeComposerSubmission {
 
 interface TradeComposerProps {
   teams: TradeTeamDto[];
+  playerStats: LeaguePlayerStatDatasetDto;
   initialPartnerMemberId?: string | null;
   initialPlayerId?: string | null;
   counterPartnerMemberId?: string | null;
@@ -24,6 +29,7 @@ interface TradeComposerProps {
 
 export function TradeComposer({
   teams,
+  playerStats,
   initialPartnerMemberId,
   initialPlayerId,
   counterPartnerMemberId,
@@ -32,6 +38,7 @@ export function TradeComposer({
   onSubmit,
   onCancelCounter,
 }: TradeComposerProps): React.JSX.Element {
+  const errorId = useId();
   const viewerTeam = teams.find((team) => team.isViewer) ?? null;
   const partners = teams.filter((team) => !team.isViewer);
   const requestedPlayerOwner = initialPlayerId
@@ -49,7 +56,9 @@ export function TradeComposer({
     initialPlayerId && requestedPlayerOwner?.isViewer ? [initialPlayerId] : []
   );
   const [receivingPlayerIds, setReceivingPlayerIds] = useState<string[]>(() =>
-    initialPlayerId && requestedPlayerOwner && !requestedPlayerOwner.isViewer ? [initialPlayerId] : []
+    initialPlayerId && requestedPlayerOwner && !requestedPlayerOwner.isViewer
+      ? [initialPlayerId]
+      : []
   );
   const [message, setMessage] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -115,7 +124,11 @@ export function TradeComposer({
   }
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)} className="space-y-5">
+    <form
+      onSubmit={(event) => void handleSubmit(event)}
+      aria-describedby={validationError || error ? errorId : undefined}
+      className="space-y-5"
+    >
       <div>
         <label htmlFor="trade-partner" className="text-sm font-medium text-foreground">
           Trade partner
@@ -135,24 +148,32 @@ export function TradeComposer({
         </select>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <PlayerChecklist
-          legend={`Players from ${viewerTeam.teamName}`}
-          description="Choose the players you will send."
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <TradeRosterTable
+          label="You send"
+          description={viewerTeam.teamName}
           players={viewerTeam.players}
+          playerStats={playerStats}
           selectedIds={sendingPlayerIds}
           disabled={isSubmitting}
-          onChange={setSendingPlayerIds}
+          onSelectionChange={setSendingPlayerIds}
         />
-        <PlayerChecklist
-          legend={`Players from ${partner?.teamName ?? 'the other team'}`}
-          description="Choose the players you want to receive."
+        <TradeRosterTable
+          label={`You receive from ${partner?.teamName ?? 'the other team'}`}
+          description="Select one or more players"
           players={partner?.players ?? []}
+          playerStats={playerStats}
           selectedIds={receivingPlayerIds}
           disabled={isSubmitting}
-          onChange={setReceivingPlayerIds}
+          onSelectionChange={setReceivingPlayerIds}
         />
       </div>
+
+      <TradeComparisonTable
+        sendingPlayerIds={sendingPlayerIds}
+        receivingPlayerIds={receivingPlayerIds}
+        playerStats={playerStats}
+      />
 
       <div>
         <label htmlFor="trade-message" className="text-sm font-medium text-foreground">
@@ -171,7 +192,7 @@ export function TradeComposer({
       </div>
 
       {(validationError || error) && (
-        <p role="alert" className="text-sm font-medium text-destructive">
+        <p id={errorId} role="alert" className="text-sm font-medium text-destructive">
           {validationError ?? error}
         </p>
       )}
@@ -200,66 +221,5 @@ export function TradeComposer({
         )}
       </div>
     </form>
-  );
-}
-
-function PlayerChecklist({
-  legend,
-  description,
-  players,
-  selectedIds,
-  disabled,
-  onChange,
-}: {
-  legend: string;
-  description: string;
-  players: TradeTeamDto['players'];
-  selectedIds: string[];
-  disabled: boolean;
-  onChange: (ids: string[]) => void;
-}): React.JSX.Element {
-  return (
-    <fieldset className="min-w-0 rounded-lg border border-border bg-muted/20 p-4">
-      <legend className="px-1 text-sm font-semibold text-foreground">{legend}</legend>
-      <p className="mb-3 text-xs text-muted-foreground">{description}</p>
-      {players.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No rostered players are available.</p>
-      ) : (
-        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-          {players.map((player) => {
-            const checked = selectedIds.includes(player.id);
-            return (
-              <div
-                key={player.id}
-                className="flex cursor-pointer items-start gap-3 rounded-md border border-transparent p-2 transition-colors hover:border-border hover:bg-background has-[:checked]:border-primary/40 has-[:checked]:bg-primary/5"
-              >
-                <input
-                  id={`trade-player-${player.id}`}
-                  type="checkbox"
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={() =>
-                    onChange(
-                      checked
-                        ? selectedIds.filter((id) => id !== player.id)
-                        : [...selectedIds, player.id]
-                    )
-                  }
-                  className="mt-0.5 size-4 rounded border-input accent-[hsl(var(--primary))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                <label htmlFor={`trade-player-${player.id}`} className="min-w-0 cursor-pointer">
-                  <span className="block truncate text-sm font-medium text-foreground">
-                    {player.name}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">
-                    {[player.position, player.club].filter(Boolean).join(' · ')}
-                  </span>
-                </label>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </fieldset>
   );
 }

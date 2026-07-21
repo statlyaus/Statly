@@ -67,7 +67,11 @@ export function LeagueTradeCentrePanel({
     startNavigation(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
   }
 
-  async function postCommand(path: string, body: Record<string, unknown>): Promise<boolean> {
+  async function postCommand(
+    path: string,
+    body: Record<string, unknown>,
+    successMessage: string
+  ): Promise<boolean> {
     setMutationError(null);
     try {
       const response = await authenticatedFetch(
@@ -86,7 +90,7 @@ export function LeagueTradeCentrePanel({
       if (!response.ok) {
         throw new Error(payload?.error || `Trade request failed (${response.status}).`);
       }
-      setAnnouncement('Trade Centre updated.');
+      setAnnouncement(successMessage);
       router.refresh();
       return true;
     } catch (error) {
@@ -114,7 +118,8 @@ export function LeagueTradeCentrePanel({
             receivingPlayerIds: submission.receivingPlayerIds,
             message: submission.message,
             idempotencyKey: getCommandKey(commandSignature, 'counter'),
-          }
+          },
+          'Counteroffer sent.'
         );
         if (saved) {
           commandKeysRef.current.delete(commandSignature);
@@ -124,10 +129,14 @@ export function LeagueTradeCentrePanel({
       }
 
       const commandSignature = JSON.stringify({ command: 'proposal', submission });
-      const saved = await postCommand(`/api/leagues/${encodeURIComponent(leagueId)}/trades`, {
-        ...submission,
-        idempotencyKey: getCommandKey(commandSignature, 'proposal'),
-      });
+      const saved = await postCommand(
+        `/api/leagues/${encodeURIComponent(leagueId)}/trades`,
+        {
+          ...submission,
+          idempotencyKey: getCommandKey(commandSignature, 'proposal'),
+        },
+        'Trade proposal sent.'
+      );
       if (saved) commandKeysRef.current.delete(commandSignature);
       return saved;
     } finally {
@@ -176,7 +185,8 @@ export function LeagueTradeCentrePanel({
           expectedVersion: trade.version,
           idempotencyKey: getCommandKey(commandSignature, action),
           ...(reason ? { reason } : {}),
-        }
+        },
+        actionSuccessMessage(action)
       );
       if (saved) commandKeysRef.current.delete(commandSignature);
     } finally {
@@ -261,6 +271,7 @@ export function LeagueTradeCentrePanel({
         <TradeComposer
           key={counterTrade?.id ?? 'proposal'}
           teams={snapshot.teams}
+          playerStats={snapshot.playerStats}
           initialPartnerMemberId={ownerMemberId}
           initialPlayerId={counterTrade ? null : requestedPlayerId}
           counterPartnerMemberId={counterPartnerId}
@@ -322,6 +333,8 @@ export function LeagueTradeCentrePanel({
           <TradeCards
             trades={snapshot.trades}
             teams={snapshot.teams}
+            playerStats={snapshot.playerStats}
+            leagueId={leagueId}
             pendingTradeId={pendingTradeId}
             onAction={(trade, action) => void handleAction(trade, action)}
             onCounter={startCounter}
@@ -354,7 +367,7 @@ function TradeRuleSummary({
         ? `${rules.reviewHours}h veto window · ${rules.vetoThreshold} votes`
         : 'Completes on acceptance';
   return (
-    <dl className="grid min-w-0 gap-x-5 gap-y-2 rounded-lg border border-border bg-muted/30 p-3 text-xs sm:grid-cols-3 xl:max-w-2xl">
+    <dl className="grid min-w-0 gap-x-5 gap-y-2 rounded-lg border border-border bg-muted/30 p-3 text-xs sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-4">
       <div>
         <dt className="text-muted-foreground">Review</dt>
         <dd className="mt-0.5 font-medium text-foreground">{reviewLabel}</dd>
@@ -371,6 +384,12 @@ function TradeRuleSummary({
           {rules.deadline ? formatShortDate(rules.deadline) : 'No deadline'}
         </dd>
       </div>
+      <div>
+        <dt className="text-muted-foreground">Offer expiry</dt>
+        <dd className="mt-0.5 font-medium text-foreground">
+          {rules.offerExpiryHours}h after sending
+        </dd>
+      </div>
     </dl>
   );
 }
@@ -381,6 +400,18 @@ function createIdempotencyKey(action: string): string {
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `trade:${action}:${suffix}`;
+}
+
+function actionSuccessMessage(action: Exclude<TradeActionName, 'counter'>): string {
+  const messages: Record<Exclude<TradeActionName, 'counter'>, string> = {
+    accept: 'Trade accepted.',
+    decline: 'Trade declined.',
+    withdraw: 'Trade withdrawn.',
+    approve: 'Trade approved.',
+    reject: 'Trade rejected.',
+    veto: 'Veto recorded.',
+  };
+  return messages[action];
 }
 
 function formatShortDate(value: string): string {
