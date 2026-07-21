@@ -15,6 +15,8 @@ type DraftRoomPlayerFixture = {
 const playerGridSpy = vi.hoisted(() => vi.fn());
 const draftLeftRailSpy = vi.hoisted(() => vi.fn());
 const pickFeedSpy = vi.hoisted(() => vi.fn());
+const openLeagueSocialSpy = vi.hoisted(() => vi.fn());
+const setLeagueContextSpy = vi.hoisted(() => vi.fn());
 
 const draftContext = vi.hoisted<{
   status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
@@ -54,6 +56,13 @@ vi.mock('@/components/ui', () => ({
   useConfirmation: () => ({
     confirm: vi.fn(),
     ConfirmationModal: null,
+  }),
+}));
+
+vi.mock('@/components/league/social', () => ({
+  useLeagueSocialWidget: () => ({
+    open: openLeagueSocialSpy,
+    setLeagueContext: setLeagueContextSpy,
   }),
 }));
 
@@ -230,6 +239,8 @@ describe('UnifiedDraftRoom live shell composition', () => {
     playerGridSpy.mockClear();
     draftLeftRailSpy.mockClear();
     pickFeedSpy.mockClear();
+    openLeagueSocialSpy.mockClear();
+    setLeagueContextSpy.mockClear();
     draftContext.status = 'LIVE';
     draftContext.availablePlayers = [
       {
@@ -258,6 +269,12 @@ describe('UnifiedDraftRoom live shell composition', () => {
     expect(screen.getByRole('complementary', { name: 'Pick feed' })).toBeInTheDocument();
     expect(screen.getByText('Draft queue panel')).toBeInTheDocument();
     expect(screen.getByText('Watchlist panel')).toBeInTheDocument();
+    expect(setLeagueContextSpy).toHaveBeenCalledWith(
+      'league-1',
+      'Test AFL Champions League - LIVE'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'League chat' }));
+    expect(openLeagueSocialSpy).toHaveBeenCalledWith({ view: 'chat' });
     expect(screen.queryByText('Draft analytics panel')).not.toBeInTheDocument();
     expect(screen.queryByRole('tablist', { name: 'Draft room sections' })).not.toBeInTheDocument();
 

@@ -315,11 +315,15 @@ export async function syncPrismaLeagueMember(
       if (!member) {
         return { synced: false, reason: 'member-not-found' as const };
       }
-      if (await memberHasDraftDependencies(tx, member.id)) {
-        return { synced: false, reason: 'member-has-draft-dependencies' as const };
-      }
-      await tx.leagueMember.delete({ where: { id: member.id } });
-      return { synced: true, action: 'deleted' as const };
+      await tx.leagueMember.update({
+        where: { id: member.id },
+        data: {
+          isActive: false,
+          status: 'REMOVED',
+          leftAt: new Date(),
+        },
+      });
+      return { synced: true, action: 'deactivated' as const };
     }
 
     const member = toMirrorMember(
@@ -398,8 +402,14 @@ async function syncActiveMembers(
 
   for (const member of existingMembers) {
     if (activeUserIds.has(member.userId)) continue;
-    if (await memberHasDraftDependencies(tx, member.id)) continue;
-    await tx.leagueMember.delete({ where: { id: member.id } });
+    await tx.leagueMember.update({
+      where: { id: member.id },
+      data: {
+        isActive: false,
+        status: 'REMOVED',
+        leftAt: new Date(),
+      },
+    });
   }
 }
 
@@ -441,6 +451,9 @@ async function upsertPrismaMember(
     teamLogoPositionY: member.teamLogoPositionY,
     teamLogoZoom: member.teamLogoZoom,
     draftSlot: member.draftSlot,
+    isActive: true,
+    status: 'ACTIVE',
+    leftAt: null,
   };
 
   if (existingMember) {
@@ -471,17 +484,6 @@ async function getAvailableInviteCode(
     return inviteCode;
   }
   return `FS_${leagueId}`;
-}
-
-async function memberHasDraftDependencies(tx: PrismaTx, memberId: string): Promise<boolean> {
-  const counts = await Promise.all([
-    tx.draftOrder.count({ where: { memberId } }),
-    tx.pick.count({ where: { memberId } }),
-    tx.draftWatchlist.count({ where: { memberId } }),
-    tx.preDraftQueue.count({ where: { memberId } }),
-    tx.lobbyActivity.count({ where: { memberId } }),
-  ]);
-  return counts.some((count) => count > 0);
 }
 
 function toMirrorMember(

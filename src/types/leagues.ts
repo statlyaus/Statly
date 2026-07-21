@@ -1,6 +1,7 @@
 import type { FantasyCategoryKey } from './fantasyCategories';
 import type { DraftOperationalReadiness } from './draftReadiness';
 import type { Timestamp } from 'firebase-admin/firestore';
+import type { SocialNotificationPreferences } from './social';
 
 // Core League Types
 export type LeagueType = 'public' | 'private';
@@ -82,6 +83,7 @@ export interface LeagueMemberNotificationSettings {
   waiverPush: boolean;
   draftReminder: boolean;
   scoringAlerts: boolean;
+  social?: SocialNotificationPreferences;
 }
 
 // API/UI shape for league members (client-side), dates as ISO strings

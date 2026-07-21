@@ -3,10 +3,12 @@
 import { useMemo, useCallback, useState, useDeferredValue, useRef, useEffect } from 'react';
 
 import Link from 'next/link';
+import { MessagesSquare } from 'lucide-react';
 
 import DraftWatchlist from '@/components/DraftWatchlist';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
+import { useLeagueSocialWidget } from '@/components/league/social';
 import { useConfirmation } from '@/components/ui';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useDraft } from '@/contexts/DraftContext';
@@ -198,6 +200,7 @@ function buildRosterSlots({
 export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomProps) {
   const draft = useDraft();
   const { confirm, ConfirmationModal } = useConfirmation();
+  const { open: openLeagueSocial, setLeagueContext } = useLeagueSocialWidget();
 
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
@@ -371,6 +374,12 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       });
     }
   }, [isPickFeedOpen]);
+
+  useEffect(() => {
+    const leagueId = draft.draft?.leagueId;
+    setLeagueContext(leagueId ?? null, draft.draft?.name);
+    return () => setLeagueContext(null);
+  }, [draft.draft?.leagueId, draft.draft?.name, setLeagueContext]);
 
   // Loading
   if (draft.isLoading) {
@@ -643,6 +652,16 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+                  {activeDraft.leagueId ? (
+                    <button
+                      type="button"
+                      onClick={() => openLeagueSocial({ view: 'chat' })}
+                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel-strong)] px-4 py-2 text-sm font-semibold text-[color:var(--draft-broadcast-text)] transition-colors hover:bg-[color:var(--draft-broadcast-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <MessagesSquare className="size-4" aria-hidden="true" />
+                      League chat
+                    </button>
+                  ) : null}
                   <Link
                     href="/drafts"
                     className="inline-flex items-center rounded-full bg-[color:var(--draft-broadcast-red)] px-4 py-2 text-sm font-semibold text-white shadow-[0_0_24px_var(--draft-broadcast-red-glow)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

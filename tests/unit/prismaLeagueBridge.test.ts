@@ -267,7 +267,7 @@ describe('prismaLeagueBridge', () => {
     });
   });
 
-  it('does not delete a Prisma member that already has draft dependencies', async () => {
+  it('deactivates a removed Prisma member while retaining draft history', async () => {
     const tx = buildTx({
       league: {
         findUnique: vi.fn(async () => ({ id: 'league-1', ownerId: 'owner-user' })),
@@ -275,6 +275,7 @@ describe('prismaLeagueBridge', () => {
       leagueMember: {
         findFirst: vi.fn(async () => ({ id: 'member-2', userId: 'member-user' })),
         delete: vi.fn(),
+        update: vi.fn(),
       },
       draftOrder: { count: vi.fn(async () => 1) },
       pick: { count: vi.fn(async () => 0) },
@@ -294,9 +295,17 @@ describe('prismaLeagueBridge', () => {
     );
 
     expect(result).toEqual({
-      synced: false,
-      reason: 'member-has-draft-dependencies',
+      synced: true,
+      action: 'deactivated',
     });
     expect(tx.leagueMember.delete).not.toHaveBeenCalled();
+    expect(tx.leagueMember.update).toHaveBeenCalledWith({
+      where: { id: 'member-2' },
+      data: {
+        isActive: false,
+        status: 'REMOVED',
+        leftAt: expect.any(Date),
+      },
+    });
   });
 });

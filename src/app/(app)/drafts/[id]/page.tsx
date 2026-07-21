@@ -10,7 +10,6 @@ import { DraftProvider } from '@/contexts/DraftContext';
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/navigation';
-import { SocketProvider } from '@/providers/SocketProvider';
 
 function DraftAccessState({
   title,
@@ -73,11 +72,9 @@ export default function DraftPage() {
 
   return (
     <DraftErrorBoundary>
-      <SocketProvider uid={user.uid}>
-        <DraftProvider draftId={draftId} userId={user.uid}>
-          <UnifiedDraftRoom draftId={draftId} userId={user.uid} />
-        </DraftProvider>
-      </SocketProvider>
+      <DraftProvider draftId={draftId} userId={user.uid}>
+        <UnifiedDraftRoom draftId={draftId} userId={user.uid} />
+      </DraftProvider>
     </DraftErrorBoundary>
   );
 }

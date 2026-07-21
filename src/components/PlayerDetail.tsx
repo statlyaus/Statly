@@ -11,6 +11,7 @@ import PlayerSummaryCard from './PlayerSummaryCard';
 import MatchLogTable from './MatchLogTable';
 import PlayerChart from './PlayerChart';
 import { PlayerLeagueAvailabilityPanel } from './PlayerLeagueAvailabilityPanel';
+import { LeagueSocialDiscussButton } from './league/LeagueSocialDiscussButton';
 import { LoadingSpinner } from './ui';
 
 type PlayerDetailProps = {
@@ -415,6 +416,18 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 text-xs font-semibold text-muted-foreground">
+            <LeagueSocialDiscussButton
+              context={{
+                type: 'player',
+                id: String(player.id),
+                title: player.name,
+                subtitle: [player.team, player.position].filter(Boolean).join(' · ') || undefined,
+                metadata: {
+                  ...(player.team ? { club: player.team } : {}),
+                  ...(player.position ? { position: player.position } : {}),
+                },
+              }}
+            />
             <span className="rounded-full border border-border bg-muted px-3 py-1">
               {aggregateStatsAvailable ? 'Season profile' : 'Limited data'}
             </span>

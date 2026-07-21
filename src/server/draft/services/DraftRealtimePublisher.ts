@@ -1,6 +1,7 @@
 import { logger } from '@/lib/logger';
 import { revalidateTags } from '@/lib/cache';
 import { tags } from '@/lib/cacheTags';
+import { publishLeagueSystemMessage } from '@/server/leagues/social/socialSystemEvents';
 
 import { draftRepository } from '../repository/DraftRepository';
 import { draftRealtimeDispatcher } from './DraftRealtimeDispatcher';
@@ -123,6 +124,30 @@ export class DraftRealtimePublisher {
     );
   }
 
+  private async publishSocialDraftActivity(events: DraftOutboxEventRecord[]): Promise<void> {
+    const pickEvents = events.filter(
+      (
+        event
+      ): event is DraftOutboxEventRecord & {
+        payload: DraftPickEventPayload;
+      } =>
+        (event.event === 'draft:pick-made' || event.event === 'draft:auto-pick') &&
+        Boolean(event.payload)
+    );
+    if (pickEvents.length === 0) return;
+
+    await Promise.all(
+      pickEvents.map((event) =>
+        publishLeagueSystemMessage({
+          leagueId: event.leagueId,
+          eventType: 'PLAYER_DRAFTED',
+          relatedEntityId: event.payload.id || event.id,
+          content: `${event.payload.member.displayName} drafted ${event.payload.player.name}.`,
+        })
+      )
+    );
+  }
+
   private async drainOutboxEvents(
     events: DraftOutboxEventRecord[]
   ): Promise<LiveDraftState | null> {
@@ -157,6 +182,7 @@ export class DraftRealtimePublisher {
     let state: LiveDraftState | null = null;
     try {
       state = await this.drainOutboxEvents(outboxEvents);
+      await this.publishSocialDraftActivity(outboxEvents);
       await this.markOutboxPublished(outboxEvents.map((event) => event.id));
     } catch (error) {
       await this.markOutboxFailed(
@@ -187,6 +213,7 @@ export class DraftRealtimePublisher {
 
     try {
       const state = await this.drainOutboxEvents(outboxEvents);
+      await this.publishSocialDraftActivity(outboxEvents);
       await this.markOutboxPublished(outboxEvents.map((event) => event.id));
       return state;
     } catch (error) {
@@ -206,6 +233,7 @@ export class DraftRealtimePublisher {
 
     try {
       await this.drainOutboxEvents(outboxEvents);
+      await this.publishSocialDraftActivity(outboxEvents);
       await this.markOutboxPublished(outboxEvents.map((event) => event.id));
       return outboxEvents.length;
     } catch (error) {

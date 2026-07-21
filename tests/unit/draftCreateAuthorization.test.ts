@@ -85,7 +85,7 @@ describe('draft create authorization architecture', () => {
     );
   });
 
-  it('falls back to legacy membership when a Prisma league has no matching manager access', async () => {
+  it('does not fall back to legacy membership when Prisma has no active member', async () => {
     vi.mocked(prisma.league.findUnique).mockResolvedValue({
       ownerId: 'prisma-owner',
       members: [],
@@ -99,22 +99,17 @@ describe('draft create authorization architecture', () => {
 
     const access = await getLeagueMembershipAccess('league-1', 'user-1');
 
-    expect(getLeagueMembership).toHaveBeenCalledWith('league-1', 'user-1');
+    expect(getLeagueMembership).not.toHaveBeenCalled();
     expect(access).toEqual({
       leagueId: 'league-1',
       userId: 'user-1',
-      memberId: 'legacy-member',
-      role: 'commissioner',
-      isMember: true,
-      canManage: true,
+      isMember: false,
+      canManage: false,
     });
   });
 
   it('falls back to Firestore league ownership when Prisma access is missing', async () => {
-    vi.mocked(prisma.league.findUnique).mockResolvedValue({
-      ownerId: 'prisma-owner',
-      members: [],
-    } as never);
+    vi.mocked(prisma.league.findUnique).mockResolvedValue(null);
     vi.mocked(getLeagueMembership).mockResolvedValue({
       isMember: false,
       source: 'none',
@@ -139,10 +134,18 @@ describe('draft create authorization architecture', () => {
     });
   });
 
-  it('lets Firestore ownership elevate a stale non-manager Prisma member row', async () => {
+  it('does not let Firestore ownership override an active Prisma member role', async () => {
     vi.mocked(prisma.league.findUnique).mockResolvedValue({
       ownerId: 'prisma-owner',
-      members: [{ id: 'prisma-member', role: 'MEMBER' }],
+      members: [
+        {
+          id: 'prisma-member',
+          role: 'MEMBER',
+          isActive: true,
+          status: 'ACTIVE',
+          isCoCommissioner: false,
+        },
+      ],
     } as never);
     vi.mocked(getLeagueMembership).mockResolvedValue({
       isMember: false,
@@ -165,8 +168,9 @@ describe('draft create authorization architecture', () => {
       memberId: 'prisma-member',
       role: 'MEMBER',
       isMember: true,
-      canManage: true,
+      canManage: false,
     });
+    expect(adminDb.collection).not.toHaveBeenCalled();
   });
 
   it('returns 401 before parsing or draft side effects when the request is unauthenticated', async () => {

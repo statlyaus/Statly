@@ -30,7 +30,7 @@ vi.mock('@/components/waivers/LeagueWaiversContainer', () => ({
 }));
 
 vi.mock('@/lib/authenticatedFetch', () => ({
-  authenticatedFetch: vi.fn(),
+  authenticatedFetch: vi.fn().mockResolvedValue({ ok: false }),
 }));
 
 const league: League = {
