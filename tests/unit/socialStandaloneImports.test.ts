@@ -21,7 +21,11 @@ describe('League Social standalone server imports', () => {
       {
         cwd: repositoryRoot,
         encoding: 'utf8',
-        env: { ...process.env, NODE_ENV: 'test' },
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT ?? 'statly-test',
+        },
         timeout: 15_000,
       }
     );
