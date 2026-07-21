@@ -126,7 +126,7 @@ describe('LeagueTabs overview snapshot', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Snapshot League' })).toBeInTheDocument();
     expect(screen.getAllByText('Snapshot League').length).toBeGreaterThan(0);
     expect(screen.getByText(/3\/4 teams/)).toBeInTheDocument();
-    expect(screen.getByText('Draft completed')).toBeInTheDocument();
+    expect(screen.getByText('Draft not started')).toBeInTheDocument();
     expect(screen.getAllByText('Trade offers').length).toBeGreaterThan(0);
     expect(
       screen.getByText('Goals · Tackles · Inside 50s · Intercepts · Rebound 50s')

@@ -7,7 +7,7 @@ import {
 } from './helpers/devAuth';
 import { E2E_LEAGUE_ID } from './global.setup';
 
-const leagueId = process.env.STATLY_E2E_LEAGUE_ID ?? E2E_LEAGUE_ID;
+const leagueId = E2E_LEAGUE_ID;
 
 for (const viewport of [
   { width: 390, height: 844 },

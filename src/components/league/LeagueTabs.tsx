@@ -514,7 +514,7 @@ export default function LeagueTabs({
                               {activeMembers.length}/{league.maxTeams} teams
                             </span>
                             <span className="inline-flex min-h-7 items-center rounded-full border border-white/35 bg-white/10 px-3 text-xs font-semibold text-white">
-                              {getDraftStatusLabel(draftReadiness?.status ?? league.status)}
+                              {getDraftStatusLabel(draftReadiness?.status)}
                             </span>
                           </div>
                           <p className="mt-2 text-sm text-white/75">
