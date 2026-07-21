@@ -2,7 +2,15 @@
 
 import { Grid } from '@giphy/react-components';
 import { ImagePlus, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { SocialGif } from '@/types/social';
@@ -139,10 +147,16 @@ export default function GiphyPicker({
 
   if (!client || !fetchGifs) return null;
 
-  function handleSearch(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
+  function handleSearch(): void {
     setError(null);
     setSearchTerm(searchDraft.trim().slice(0, 50));
+  }
+
+  function handleSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleSearch();
   }
 
   return (
@@ -168,7 +182,7 @@ export default function GiphyPicker({
           aria-busy={selectionPending}
           className="bottom-full top-auto mb-2 mt-0 w-[min(24rem,calc(100vw-2rem))] border-social-border bg-social-surface p-3 text-social-text"
         >
-          <form className="flex items-center gap-2" onSubmit={handleSearch} role="search">
+          <div className="flex items-center gap-2" role="search">
             <label htmlFor={searchId} className="sr-only">
               Search GIPHY
             </label>
@@ -178,13 +192,15 @@ export default function GiphyPicker({
               type="search"
               value={searchDraft}
               onChange={(event) => setSearchDraft(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
               maxLength={50}
               placeholder="Search GIPHY"
               className="min-h-10 min-w-0 flex-1 rounded-lg border border-social-border bg-social-surface px-3 text-sm text-social-text outline-none placeholder:text-social-text-muted focus-visible:border-social-action focus-visible:ring-2 focus-visible:ring-social-focus"
             />
             <button
-              type="submit"
+              type="button"
               aria-label="Search GIFs"
+              onClick={handleSearch}
               className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-social-action bg-social-action text-social-action-foreground transition-colors hover:border-social-action-hover hover:bg-social-action-hover active:border-social-action-pressed active:bg-social-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus focus-visible:ring-offset-2 focus-visible:ring-offset-social-surface"
             >
               <Search className="size-4" aria-hidden="true" />
@@ -204,7 +220,7 @@ export default function GiphyPicker({
                 <X className="size-4" aria-hidden="true" />
               </button>
             ) : null}
-          </form>
+          </div>
 
           <p className="mt-2 text-xs font-medium text-social-text-muted">
             {searchTerm ? `Results for “${searchTerm}”` : 'Trending GIFs'}

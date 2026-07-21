@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { MouseEvent } from 'react';
+import type { FormEvent, MouseEvent } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -92,6 +92,40 @@ describe('GiphyPicker', () => {
     });
     await waitFor(() => expect(trigger).toHaveFocus());
     expect(screen.queryByRole('dialog', { name: 'Choose a GIF' })).not.toBeInTheDocument();
+  });
+
+  it('searches by button or Enter without submitting a host message form', async () => {
+    const user = userEvent.setup();
+    const onHostSubmit = vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault());
+    const { container } = render(
+      <form aria-label="Message composer" onSubmit={onHostSubmit}>
+        <textarea aria-label="Message draft" defaultValue="Keep this draft unsent" />
+        <GiphyPicker apiKey="test-web-key" onSelect={vi.fn().mockResolvedValue(undefined)} />
+        <button type="submit">Send message</button>
+      </form>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
+    const search = screen.getByRole('searchbox', { name: 'Search GIPHY' });
+    const searchRegion = screen.getByRole('search');
+
+    expect(searchRegion.tagName).toBe('DIV');
+    expect(container.querySelector('form form')).not.toBeInTheDocument();
+
+    await user.type(search, 'celebration');
+    await user.click(screen.getByRole('button', { name: 'Search GIFs' }));
+    await waitFor(() =>
+      expect(mocks.search).toHaveBeenCalledWith('celebration', expect.anything())
+    );
+    expect(onHostSubmit).not.toHaveBeenCalled();
+
+    await user.clear(search);
+    await user.type(search, 'victory{Enter}');
+    await waitFor(() => expect(mocks.search).toHaveBeenCalledWith('victory', expect.anything()));
+    expect(onHostSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Message draft' })).toHaveValue(
+      'Keep this draft unsent'
+    );
   });
 
   it('stays hidden when the chat-specific Web SDK key is not configured', () => {
