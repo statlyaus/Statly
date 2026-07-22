@@ -25,7 +25,7 @@ export function TradeOfferStatus({
   if (status === 'PENDING') {
     return (
       <span
-        className={`${baseClasses} border-[color:var(--trade-warning)]/25 bg-[color:var(--trade-send-soft)] text-[color:var(--trade-warning)]`}
+        className={`${baseClasses} border-[color:var(--trade-warning)]/25 bg-[color:var(--trade-warning-soft)] text-[color:var(--trade-warning)]`}
       >
         <Clock3 aria-hidden="true" className="size-3.5" />
         {TRADE_STATUS_LABELS[status]}
@@ -35,7 +35,7 @@ export function TradeOfferStatus({
   if (status === 'ACCEPTED_PENDING_REVIEW') {
     return (
       <span
-        className={`${baseClasses} border-[color:var(--trade-action)]/25 bg-[color:var(--trade-action-soft)] text-[color:var(--trade-action)]`}
+        className={`${baseClasses} border-[color:var(--trade-warning)]/25 bg-[color:var(--trade-warning-soft)] text-[color:var(--trade-warning)]`}
       >
         <ShieldCheck aria-hidden="true" className="size-3.5" />
         {TRADE_STATUS_LABELS[status]}
@@ -55,7 +55,7 @@ export function TradeOfferStatus({
   if (status === 'FAILED') {
     return (
       <span
-        className={`${baseClasses} border-[color:var(--trade-warning)]/25 bg-[color:var(--trade-send-soft)] text-[color:var(--trade-warning)]`}
+        className={`${baseClasses} border-[color:var(--trade-warning)]/25 bg-[color:var(--trade-warning-soft)] text-[color:var(--trade-warning)]`}
       >
         <AlertTriangle aria-hidden="true" className="size-3.5" />
         {TRADE_STATUS_LABELS[status]}

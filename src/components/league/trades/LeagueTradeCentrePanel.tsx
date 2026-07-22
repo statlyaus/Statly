@@ -46,6 +46,8 @@ export function LeagueTradeCentrePanel({
   const [pendingTradeId, setPendingTradeId] = useState<string | null>(null);
   const [isComposerSubmitting, setIsComposerSubmitting] = useState(false);
   const [counterTrade, setCounterTrade] = useState<LeagueTradeDto | null>(null);
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0);
+  const [composerError, setComposerError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const composerHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -53,9 +55,9 @@ export function LeagueTradeCentrePanel({
   const snapshot = initialSnapshot;
 
   useEffect(() => {
-    if (!counterTrade) return;
+    if (!counterTrade && composerFocusRequest === 0) return;
     composerHeadingRef.current?.focus();
-  }, [counterTrade]);
+  }, [composerFocusRequest, counterTrade]);
 
   function navigateToView(view: TradeView, cursor?: string): void {
     const next = new URLSearchParams(searchParams?.toString());
@@ -63,6 +65,7 @@ export function LeagueTradeCentrePanel({
     next.set('tradeView', view);
     if (cursor) next.set('tradeCursor', cursor);
     else next.delete('tradeCursor');
+    setComposerError(null);
     setMutationError(null);
     startNavigation(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
   }
@@ -70,9 +73,10 @@ export function LeagueTradeCentrePanel({
   async function postCommand(
     path: string,
     body: Record<string, unknown>,
-    successMessage: string
+    successMessage: string,
+    setRequestError: (message: string | null) => void = setMutationError
   ): Promise<boolean> {
-    setMutationError(null);
+    setRequestError(null);
     try {
       const response = await authenticatedFetch(
         path,
@@ -94,12 +98,13 @@ export function LeagueTradeCentrePanel({
       router.refresh();
       return true;
     } catch (error) {
-      setMutationError(error instanceof Error ? error.message : 'The trade request failed.');
+      setRequestError(error instanceof Error ? error.message : 'The trade request failed.');
       return false;
     }
   }
 
   async function submitComposer(submission: TradeComposerSubmission): Promise<boolean> {
+    setMutationError(null);
     setIsComposerSubmitting(true);
     try {
       if (counterTrade) {
@@ -119,11 +124,13 @@ export function LeagueTradeCentrePanel({
             message: submission.message,
             idempotencyKey: getCommandKey(commandSignature, 'counter'),
           },
-          'Counteroffer sent.'
+          'Counteroffer sent.',
+          setComposerError
         );
         if (saved) {
           commandKeysRef.current.delete(commandSignature);
           setCounterTrade(null);
+          requestComposerHeadingFocus();
         }
         return saved;
       }
@@ -135,9 +142,13 @@ export function LeagueTradeCentrePanel({
           ...submission,
           idempotencyKey: getCommandKey(commandSignature, 'proposal'),
         },
-        'Trade proposal sent.'
+        'Trade proposal sent.',
+        setComposerError
       );
-      if (saved) commandKeysRef.current.delete(commandSignature);
+      if (saved) {
+        commandKeysRef.current.delete(commandSignature);
+        requestComposerHeadingFocus();
+      }
       return saved;
     } finally {
       setIsComposerSubmitting(false);
@@ -170,6 +181,7 @@ export function LeagueTradeCentrePanel({
       }
     }
 
+    setComposerError(null);
     setPendingTradeId(trade.id);
     try {
       const commandSignature = JSON.stringify({
@@ -195,8 +207,19 @@ export function LeagueTradeCentrePanel({
   }
 
   function startCounter(trade: LeagueTradeDto): void {
+    setComposerError(null);
     setMutationError(null);
     setCounterTrade(trade);
+  }
+
+  function cancelCounter(): void {
+    setComposerError(null);
+    setCounterTrade(null);
+    requestComposerHeadingFocus();
+  }
+
+  function requestComposerHeadingFocus(): void {
+    setComposerFocusRequest((request) => request + 1);
   }
 
   function getCommandKey(signature: string, command: string): string {
@@ -215,7 +238,7 @@ export function LeagueTradeCentrePanel({
       >
         <div className="mx-auto max-w-[96rem] space-y-5">
           <div>
-            <h2 id="trade-centre-heading" className="text-2xl font-bold tracking-tight">
+            <h2 id="trade-centre-heading" className="text-[1.75rem] font-bold tracking-tight">
               Trade Centre
             </h2>
             <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
@@ -224,9 +247,9 @@ export function LeagueTradeCentrePanel({
           </div>
           <div
             role="alert"
-            className="rounded-xl border border-[color:var(--trade-negative)]/25 bg-[color:var(--trade-error-soft)] p-4"
+            className="rounded-xl border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] p-4"
           >
-            <p className="text-sm font-semibold text-[color:var(--trade-negative)]">
+            <p className="text-sm font-semibold text-[color:var(--trade-text)]">
               {initialError ?? 'The Trade Centre is unavailable.'}
             </p>
             <button
@@ -257,7 +280,7 @@ export function LeagueTradeCentrePanel({
       <div className="mx-auto max-w-[96rem] space-y-8">
         <header className="rounded-2xl bg-[color:var(--trade-surface-dark)] px-5 py-5 text-white shadow-[var(--trade-card-shadow)] sm:px-6 sm:py-6 lg:flex lg:items-start lg:justify-between lg:gap-8">
           <div className="max-w-2xl">
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/65">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/65">
               {viewerTeam?.teamName ?? 'Your team'}
             </p>
             <h2
@@ -278,7 +301,7 @@ export function LeagueTradeCentrePanel({
           <h3
             ref={composerHeadingRef}
             tabIndex={-1}
-            className="text-xl font-bold tracking-tight text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
+            className="text-lg font-bold tracking-tight text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
           >
             {counterTrade ? 'Build a counteroffer' : 'Propose a trade'}
           </h3>
@@ -290,14 +313,15 @@ export function LeagueTradeCentrePanel({
           <TradeComposer
             key={counterTrade?.id ?? 'proposal'}
             teams={snapshot.teams}
+            rules={snapshot.rules}
             playerStats={snapshot.playerStats}
             initialPartnerMemberId={ownerMemberId}
             initialPlayerId={counterTrade ? null : requestedPlayerId}
             counterPartnerMemberId={counterPartnerId}
             isSubmitting={isComposerSubmitting}
-            error={counterTrade ? mutationError : null}
+            error={composerError}
             onSubmit={submitComposer}
-            onCancelCounter={counterTrade ? () => setCounterTrade(null) : undefined}
+            onCancelCounter={counterTrade ? cancelCounter : undefined}
           />
         </div>
 
@@ -306,7 +330,7 @@ export function LeagueTradeCentrePanel({
             <div>
               <h3
                 id="trade-offers-heading"
-                className="text-xl font-bold tracking-tight text-[color:var(--trade-text)]"
+                className="text-lg font-bold tracking-tight text-[color:var(--trade-text)]"
               >
                 Offers
               </h3>
@@ -325,9 +349,9 @@ export function LeagueTradeCentrePanel({
                       aria-current={isActive ? 'page' : undefined}
                       disabled={isNavigating}
                       onClick={() => navigateToView(view)}
-                      className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-1 disabled:cursor-wait disabled:opacity-60 ${
+                      className={`inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-1 disabled:cursor-wait disabled:opacity-60 ${
                         isActive
-                          ? 'bg-[color:var(--trade-brand)] text-white shadow-sm'
+                          ? 'bg-[color:var(--trade-selection)] text-white shadow-sm'
                           : 'text-[color:var(--trade-text-muted)] hover:bg-[color:var(--trade-action-soft)] hover:text-[color:var(--trade-text)]'
                       }`}
                     >
@@ -348,10 +372,10 @@ export function LeagueTradeCentrePanel({
             </nav>
           </div>
 
-          {mutationError && !counterTrade && (
+          {mutationError && (
             <p
               role="alert"
-              className="rounded-lg border border-[color:var(--trade-negative)]/25 bg-[color:var(--trade-error-soft)] p-3 text-sm font-semibold text-[color:var(--trade-negative)]"
+              className="rounded-lg border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] p-3 text-sm font-semibold text-[color:var(--trade-text)]"
             >
               {mutationError}
             </p>

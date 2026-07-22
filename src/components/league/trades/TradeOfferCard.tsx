@@ -10,7 +10,7 @@ import type {
 } from '@/server/leagues/trades/tradeContracts';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
-import { TradeOfferAssets, type TradeOfferAssetTone } from './TradeOfferAssets';
+import { TradeOfferAssets } from './TradeOfferAssets';
 import { TRADE_STATUS_LABELS, TradeOfferStatus } from './TradeOfferStatus';
 
 interface TradeOfferCardProps {
@@ -50,12 +50,12 @@ export function TradeOfferCard({
     : memberTwo?.isViewer
       ? `Trade with ${trade.memberOne.teamName}`
       : `${trade.memberOne.teamName} ↔ ${trade.memberTwo.teamName}`;
-  const memberOnePresentation = assetPresentation(
+  const memberOneHeading = assetPresentation(
     trade.memberOne.teamName,
     Boolean(memberOne?.isViewer),
     Boolean(memberTwo?.isViewer)
   );
-  const memberTwoPresentation = assetPresentation(
+  const memberTwoHeading = assetPresentation(
     trade.memberTwo.teamName,
     Boolean(memberTwo?.isViewer),
     Boolean(memberOne?.isViewer)
@@ -69,7 +69,7 @@ export function TradeOfferCard({
             <ArrowLeftRight aria-hidden="true" className="size-4" />
           </span>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[color:var(--trade-text-muted)]">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--trade-text-muted)]">
               Offer {offer.sequence} · {formatDate(offer.createdAt)}
             </p>
             <h3 className="mt-1 text-base font-bold text-[color:var(--trade-text)]">
@@ -82,22 +82,20 @@ export function TradeOfferCard({
 
       <div className="grid min-w-0 gap-4 p-4 sm:p-5 xl:grid-cols-2">
         <TradeOfferAssets
-          heading={memberOnePresentation.heading}
+          heading={memberOneHeading}
           teamName={trade.memberOne.teamName}
           players={offer.players.filter(
             (player) => player.fromMemberId === trade.memberOne.memberId
           )}
           playerStats={playerStats}
-          tone={memberOnePresentation.tone}
         />
         <TradeOfferAssets
-          heading={memberTwoPresentation.heading}
+          heading={memberTwoHeading}
           teamName={trade.memberTwo.teamName}
           players={offer.players.filter(
             (player) => player.fromMemberId === trade.memberTwo.memberId
           )}
           playerStats={playerStats}
-          tone={memberTwoPresentation.tone}
         />
       </div>
 
@@ -240,10 +238,10 @@ function assetPresentation(
   teamName: string,
   isViewer: boolean,
   otherTeamIsViewer: boolean
-): { heading: string; tone: TradeOfferAssetTone } {
-  if (isViewer) return { heading: 'You send', tone: 'outgoing' };
-  if (otherTeamIsViewer) return { heading: `You receive from ${teamName}`, tone: 'incoming' };
-  return { heading: `${teamName} sends`, tone: 'neutral' };
+): string {
+  if (isViewer) return 'You send';
+  if (otherTeamIsViewer) return `You receive from ${teamName}`;
+  return `${teamName} sends`;
 }
 
 function formatLifecycleLabel(value: string): string {

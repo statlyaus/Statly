@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { compareTradeSelections } from '@/components/league/trades/tradeComparison';
+import {
+  compareTradeSelections,
+  summarizeTradeComparisons,
+} from '@/components/league/trades/tradeComparison';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
 const dataset: LeaguePlayerStatDatasetDto = {
@@ -62,5 +65,30 @@ describe('trade comparison', () => {
     const [disposals] = compareTradeSelections(['sendOne', 'incomplete'], ['receive'], dataset);
 
     expect(disposals).toMatchObject({ sendingAverage: null, outcome: 'unavailable' });
+  });
+
+  it('summarizes favourable, even, and unavailable category outcomes', () => {
+    const [favourable] = compareTradeSelections(['sendOne'], ['receive'], dataset);
+    const [unavailable] = compareTradeSelections(['sendOne', 'incomplete'], ['receive'], dataset);
+
+    expect(
+      summarizeTradeComparisons([
+        favourable,
+        favourable,
+        { ...favourable, outcome: 'even' },
+        unavailable,
+      ])
+    ).toEqual({ gained: 2, lost: 0, even: 1, unavailable: 1 });
+  });
+
+  it('counts unfavourable category outcomes as lost', () => {
+    const [comparison] = compareTradeSelections(['sendOne'], ['receive'], dataset);
+
+    expect(summarizeTradeComparisons([{ ...comparison, outcome: 'unfavourable' }])).toEqual({
+      gained: 0,
+      lost: 1,
+      even: 0,
+      unavailable: 0,
+    });
   });
 });

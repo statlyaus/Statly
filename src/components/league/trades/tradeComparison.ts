@@ -13,6 +13,27 @@ export interface TradeCategoryComparison {
   outcome: TradeComparisonOutcome;
 }
 
+export interface TradeComparisonSummary {
+  gained: number;
+  lost: number;
+  even: number;
+  unavailable: number;
+}
+
+export function summarizeTradeComparisons(
+  comparisons: readonly TradeCategoryComparison[]
+): TradeComparisonSummary {
+  const summary: TradeComparisonSummary = { gained: 0, lost: 0, even: 0, unavailable: 0 };
+
+  comparisons.forEach(({ outcome }) => {
+    if (outcome === 'favourable') summary.gained += 1;
+    else if (outcome === 'unfavourable') summary.lost += 1;
+    else summary[outcome] += 1;
+  });
+
+  return summary;
+}
+
 function averageSelected(
   playerIds: readonly string[],
   category: LeagueCategoryColumnDto['key'],
