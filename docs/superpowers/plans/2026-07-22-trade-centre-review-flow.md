@@ -28,6 +28,8 @@ Modify:
 - `src/components/league/trades/TradeRosterTable.tsx` — team-relative API, sports identity, full-row pointer selection, larger rows/values, explicit sort state, and category help.
 - `src/components/league/trades/TradeRosterTable.test.tsx` — prove row and checkbox interactions toggle exactly once.
 - `src/components/league/trades/TradeComparisonTable.tsx` — team columns, compact impact summary, combined impact column, neutral header, and average-basis disclosure.
+- `src/components/league/trades/TradeOfferAssets.tsx` — remove direction-colour semantics from persisted offer packages.
+- `src/components/league/trades/TradeOfferStatus.tsx` — retain warning semantics without depending on removed send styling.
 - `src/components/league/trades/TradeComposer.tsx` — reducer orchestration, edit/review focus management, and final-only submission.
 - `src/components/league/trades/LeagueTradeCentrePanel.tsx` — pass existing trade rules into the composer and strengthen context typography.
 - `src/components/league/trades/LeagueTradeCentrePanel.test.tsx` — update one-step submission expectations to the two-step flow.
@@ -287,6 +289,11 @@ export function getPositionCounts(players: readonly TradePlayerDto[]): Record<st
     return counts;
   }, {});
 }
+
+export function getPositionDeltas(
+  outgoingPlayers: readonly TradePlayerDto[],
+  incomingPlayers: readonly TradePlayerDto[]
+): Record<string, number>;
 ```
 
 Implement toggles with a shared immutable helper. `review` may only change `step` when `isTradeSelectionComplete(state)` is true. `reset` must preserve `partnerId`.
@@ -301,6 +308,8 @@ expect(getPositionCounts([{ id: '1', name: 'A', club: 'GWS', position: 'MID' }])
   MID: 1,
 });
 ```
+
+Add direct `getPositionDeltas` coverage across the union of positions, including positive, negative, zero, and unequal-package cases. The calculation is `incoming count - outgoing count`; it describes package balance only, never lineup legality or projected impact.
 
 - [ ] **Step 5: Run reducer tests and typecheck**
 
@@ -394,14 +403,18 @@ For each row:
 <tr
   aria-selected={selected}
   onClick={(event) => {
-    if (disabled || (event.target as HTMLElement).closest('input, button, a')) return;
+    if (
+      disabled ||
+      (event.target instanceof Element && event.target.closest('input, label, button, a'))
+    )
+      return;
     onTogglePlayer(player.id);
   }}
   className="group h-14 cursor-pointer border-b border-[color:var(--trade-border)]"
 >
 ```
 
-The checkbox calls `onTogglePlayer(player.id)` directly and remains the only tab stop for selection.
+The checkbox calls `onTogglePlayer(player.id)` directly and remains the only tab stop for selection. Extend the interaction regression so clicking the player-name label also toggles exactly once.
 
 - [ ] **Step 5: Add existing AFL club identity**
 
@@ -414,7 +427,7 @@ import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 
 Render a 24px club logo with the existing asset path and a neutral position badge. Use `getTeamAbbreviation(player.club)` for concise visible club identity and preserve the canonical club name in accessible text.
 
-Do not render injury or availability.
+Do not render injury or availability. `TradePlayerDto` has no authoritative field for either state, so this remains an explicit residual product gap rather than a silent omission. Do not expand the protected read-model/server boundary in this UI-only change.
 
 - [ ] **Step 6: Make sort state visibly explicit**
 
@@ -432,7 +445,7 @@ const stateLabel = !active
       : 'High–low';
 ```
 
-Sort buttons must be at least 44px high. Full category names remain in the accessible label and the native `title` attribute supplies a pointer tooltip without adding a dependency.
+Sort buttons must be at least 44px high. Every abbreviation control has the complete category name and sort state in its accessible label; a native `title` may provide optional pointer help. Do not use the existing global Tooltip because it cannot currently provide combined hover/focus semantics or a valid described-by relationship. The brief permits complete accessible expanded labels instead of a visual tooltip.
 
 - [ ] **Step 7: Apply neutral selection semantics**
 
@@ -477,7 +490,7 @@ it('uses symmetric team-relative headings and preserves both packages', async ()
 });
 ```
 
-The DOM contains both panels so desktop can show them together. Responsive `hidden`/`block` utilities control the mobile panel; the segmented buttons expose the active state with `aria-pressed`. Do not apply `aria-hidden` from viewport-independent React state because that would incorrectly hide one desktop panel from assistive technology.
+The DOM contains one instance of each panel so desktop can show them together. Give the inactive wrapper `hidden lg:block` and the active wrapper `block`; `display:none` removes the inactive mobile panel from the accessibility tree, so do not add `aria-hidden`. The segmented buttons expose active state with `aria-pressed`. JSDOM verifies the active state and responsive class contract; the in-app browser verifies actual breakpoint visibility and reflow.
 
 - [ ] **Step 2: Run the test and verify it fails**
 
@@ -554,11 +567,11 @@ interface TradeSelectionTrayProps {
 }
 ```
 
-The root uses `sticky bottom-0 z-40`, a solid neutral surface, top border, safe-area bottom padding, and a subtle shadow. The status copy is in `aria-live="polite"`. On mobile, Review trade is full width; on larger screens, actions align right.
+The composer edit view is a bounded flex workspace using `h-[clamp(28rem,65dvh,42rem)] min-h-0`. Partner, rosters, and live comparison sit in a `min-h-0 flex-1 overflow-y-auto overscroll-contain` content region, while the tray is a `shrink-0` footer sibling at the bottom of the composer. The tray uses a solid neutral surface, top border, safe-area bottom padding, and a subtle shadow. This makes it visible from the first selectable roster row through category inspection without viewport-global positioning. Keep roster tables horizontally scrollable and cap their vertical height so the two nested scroll regions remain distinguishable; browser QA must reject scroll trapping. The status copy is in `aria-live="polite"`. On mobile, Review trade is full width; on larger screens, actions align right.
 
 - [ ] **Step 3: Run the owning component test**
 
-Expected: both incomplete and complete tray states pass without invoking the proposal callback.
+Expected: both incomplete and complete tray states pass without invoking the proposal callback. Browser QA must prove the tray is visible before the roster content is scrolled, not only after reaching its normal-flow position.
 
 ## Task 6: Build the Client-Only Review Step
 
@@ -602,10 +615,11 @@ interface TradeReviewStepProps {
   onMessageChange: (message: string) => void;
   onBack: () => void;
   onSubmit: () => void;
+  onCancelCounter?: () => void;
 }
 ```
 
-Package summaries use player name, club identity, and position. Position consequences are labelled `Package position change` and show neutral counts only. Deadline uses the existing value when present; otherwise render `No league deadline`. Pre-send expiry must remain relative.
+Package summaries use player name, club identity, and position. Position consequences are labelled `Package position change` and use `getPositionDeltas` to show signed, neutral package-balance changes only. Deadline uses the existing value when present; otherwise render `No league deadline`. Pre-send expiry must remain relative. When `onCancelCounter` is present, expose `Cancel counteroffer` in review as well as edit.
 
 - [ ] **Step 3: Redesign comparison presentation without changing math**
 
@@ -621,13 +635,15 @@ interface TradeComparisonTableProps {
 }
 ```
 
-Use `summarizeTradeComparisons`. Render `Category impact: N gained · N lost · N even`, with unavailable appended only when non-zero. Team names become the two value columns. Replace Difference and Result with one Impact cell containing signed value, icon, and outcome text.
+Use `summarizeTradeComparisons`. When both packages are complete, render `Category impact: N gained · N lost · N even`, with unavailable appended only when non-zero. When either package is empty, render `Select players from both teams to compare` instead of a misleading all-unavailable summary. Team names become the two value columns. Replace Difference and Result with one Impact cell containing signed value, icon, and outcome text.
 
 Keep the caption and visible basis:
 
 ```text
 Season {season} average per selected player, per game. Not category totals or projected lineup impact.
 ```
+
+Render this live comparison below the roster workspace in edit mode so managers can inspect categories while selecting. Reuse the component in review mode, but render only the active step's instance so duplicate captions, IDs, or landmarks never exist.
 
 - [ ] **Step 4: Run comparison and review tests**
 
@@ -651,7 +667,7 @@ Add:
 rules: TradeRulesDto;
 ```
 
-to `TradeComposerProps`, and pass `initialSnapshot.rules` from `LeagueTradeCentrePanel`.
+to `TradeComposerProps`, and pass the already-narrowed `snapshot.rules` from `LeagueTradeCentrePanel` after its null guard.
 
 - [ ] **Step 2: Replace local state with `useReducer`**
 
@@ -694,7 +710,7 @@ Update the retry test so the same draft and proposal idempotency key survive a f
 
 - [ ] **Step 6: Verify counteroffers**
 
-Ensure counteroffer initialization opens in edit mode, keeps the locked partner, and final review uses `Send counteroffer`. Existing cancel behavior remains available in edit and review.
+Ensure counteroffer initialization opens in edit mode, keeps the locked partner, and final review uses `Send counteroffer`. Pass the existing cancel callback into both edit and review, and add a review-state cancellation assertion.
 
 - [ ] **Step 7: Run focused component verification**
 
@@ -722,6 +738,8 @@ Expected: all focused tests pass, lint has zero errors, and TypeScript exits 0.
 - Modify: `src/components/league/trades/TradeComparisonTable.tsx`
 - Modify: `src/components/league/trades/TradeSelectionTray.tsx`
 - Modify: `src/components/league/trades/TradeReviewStep.tsx`
+- Modify: `src/components/league/trades/TradeOfferAssets.tsx`
+- Modify: `src/components/league/trades/TradeOfferStatus.tsx`
 
 - [ ] **Step 1: Replace biased direction tokens**
 
@@ -734,15 +752,16 @@ Remove:
 --trade-receive-soft;
 ```
 
-Add:
+Replace the biased direction declarations with:
 
 ```css
 --trade-selection: #2563eb;
 --trade-selection-soft: #eff6ff;
---trade-warning: #b45309;
+--trade-negative-soft: #fef3f2;
+--trade-warning-soft: #fff7ed;
 ```
 
-Keep positive and negative tokens exclusively in calculated impact and actual error feedback.
+Retain the existing `--trade-warning`; do not duplicate it. Remove `--trade-error-soft`. Keep `--trade-positive`, `--trade-negative`, and `--trade-negative-soft` exclusively in calculated category impact. Validation, API, and offer-status warnings use `--trade-warning`/`--trade-warning-soft` or neutral text and never reuse gain/loss colour tokens. Neutralize `TradeOfferAssets` so persisted send/receive packages no longer depend on the removed direction tokens.
 
 - [ ] **Step 2: Apply the approved scale**
 
@@ -793,22 +812,26 @@ For 1920, 1440, 1024, and 390px assert:
 
 - document scroll width does not exceed client width;
 - all major actions and mobile switch controls are at least 44px high;
-- sticky tray is visible after scrolling within the composer;
+- the persistent tray is visible before and after scrolling within the composer;
 - the player table remains internally scrollable.
 
-At 200% browser zoom, repeat the 1024px journey in the user-selected in-app browser and verify no page-level overflow or hidden Review trade action. Keep this as supervised browser evidence; do not approximate zoom with a Playwright viewport resize.
+At 200% browser zoom, repeat the 1024px journey in the user-selected in-app browser and verify no page-level overflow or hidden Review trade action. Record the actual browser zoom control used. Keep this as supervised browser evidence; do not approximate zoom with device scale factor, CSS `zoom`, or a Playwright viewport resize.
 
 - [ ] **Step 4: Run E2E only against a disposable database**
 
-Copy an already migrated temporary database and run:
+Stop any writer using the source temporary database. Verify `/tmp/statly-trade-centre-runtime-20260722.db` exists, create a unique destination with `mktemp`, copy that disposable database to the resolved destination, and print/verify the exact destination before starting the app. Never use `prisma/dev.db` as the source. Then run the smoke test against the verified destination:
 
 ```bash
-DATABASE_URL='file:/tmp/statly-trade-centre-e2e.db' \
+test -s /tmp/statly-trade-centre-runtime-20260722.db
+TRADE_E2E_DB=$(mktemp /tmp/statly-trade-centre-e2e.XXXXXX)
+cp /tmp/statly-trade-centre-runtime-20260722.db "$TRADE_E2E_DB"
+test -s "$TRADE_E2E_DB"
+DATABASE_URL="file:$TRADE_E2E_DB" \
 PLAYWRIGHT_WITH_SOCKET=false \
 npm exec playwright test tests/e2e/league-trade-centre.smoke.test.ts
 ```
 
-Expected: the smoke test passes without reading or writing `prisma/dev.db`.
+Expected: the smoke test passes without reading or writing `prisma/dev.db`. If the disposable source database is unavailable, recreate and migrate a new temporary database through the repository's documented local setup before browser verification; do not fall back to the protected database.
 
 If Product Design browser policy requires the in-app browser instead of CLI, leave the Playwright test committed but perform the same journey in the in-app browser and report the automated smoke as not executed.
 
@@ -830,7 +853,9 @@ npm exec eslint -- src/components/league/trades tests/e2e/league-trade-centre.sm
 npm run typecheck
 npm exec -- vitest run src/components/league/trades
 npm exec -- vitest run --config vitest.config.unit.ts tests/unit/tradeComparison.test.ts --coverage.enabled=false
-DATABASE_URL='file:/tmp/statly-trade-centre-runtime-20260722.db' npm run build
+TRADE_RUNTIME_DB=/tmp/statly-trade-centre-runtime-20260722.db
+test -s "$TRADE_RUNTIME_DB"
+DATABASE_URL="file:$TRADE_RUNTIME_DB" npm run build
 git diff --check
 ```
 
@@ -838,7 +863,7 @@ Expected: formatting, lint, typecheck, focused tests, unit tests, build, and dif
 
 - [ ] **Step 2: Perform supervised responsive browser QA**
 
-Capture edit-empty, edit-selected, review, Back-to-edit, and mobile-switch states at matching viewports. Inspect each accepted screenshot and compare the 1440px edit state against the current committed baseline in one combined image.
+Capture edit-empty, edit-selected, review, Back-to-edit, and mobile-switch states at matching viewports. Inspect each accepted screenshot and compare the 1440px edit state against the pre-implementation committed-state baseline `/tmp/statly-trade-centre-design-audit-20260722/after-1440-viewport.jpg` in one combined image. The exact route is `/leagues/cmezlicop0002uxzjdtavv4mk?tab=trades` at a 1440px viewport.
 
 Verify:
 
@@ -846,7 +871,7 @@ Verify:
 - 200% zoom;
 - keyboard-only selection and edit/review navigation;
 - sticky tray overlap;
-- visible focus and tooltip access;
+- visible focus and complete expanded category names for assistive technology;
 - no page-level horizontal overflow.
 
 - [ ] **Step 3: Run independent read-only reviews**
@@ -888,6 +913,6 @@ Expected: one reviewed implementation commit containing only the planned source 
 - Review trade makes no network request; only final Send proposal uses the existing API callback.
 - Back to edit preserves selections and message.
 - Mobile uses a Send/Receive switch with retained selections.
-- No injury, availability, lineup-legality, or projected-impact claims are introduced.
+- No injury, availability, lineup-legality, or projected-impact claims are introduced. Injury/availability remains a reported residual gap because the protected Trade Centre DTO has no authoritative field.
 - Required responsive, keyboard, zoom, test, type, lint, build, and council checks have evidence.
 - `prisma/dev.db` remains untouched by the commit.
