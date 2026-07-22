@@ -165,6 +165,34 @@
   --draft-broadcast-shadow-deep: rgba(1, 6, 15, 0.92);
 }
 
+/* Trade Centre palette. Scoped so the analytical workspace can stay crisp and
+   brand-led without changing the warmer presentation of other league tabs. */
+.league-trade-centre {
+  --trade-canvas: #f4f6f8;
+  --trade-surface: #ffffff;
+  --trade-surface-subtle: #f8fafc;
+  --trade-surface-dark: #102a43;
+  --trade-text: #17212b;
+  --trade-text-muted: #5b6573;
+  --trade-border: #d7dee7;
+  --trade-border-strong: #b8c4d1;
+  --trade-brand: #102a43;
+  --trade-brand-hover: #0b1f33;
+  --trade-action: #2563eb;
+  --trade-action-hover: #1d4ed8;
+  --trade-action-soft: #eff6ff;
+  --trade-focus: #2563eb;
+  --trade-send: #b45309;
+  --trade-send-soft: #fff7ed;
+  --trade-receive: #0f766e;
+  --trade-receive-soft: #f0fdfa;
+  --trade-positive: #15803d;
+  --trade-negative: #b42318;
+  --trade-warning: #b45309;
+  --trade-error-soft: #fef3f2;
+  --trade-card-shadow: 0 8px 24px rgb(15 42 61 / 6%);
+}
+
 .league-social {
   --social-brand-strong: var(--statly-navy);
   --social-brand-foreground: var(--league-primary-foreground);

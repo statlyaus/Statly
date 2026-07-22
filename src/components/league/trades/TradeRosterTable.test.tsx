@@ -58,15 +58,26 @@ describe('TradeRosterTable', () => {
 
     const alice = screen.getByRole('checkbox', { name: /Alice Able/ });
     await user.click(alice);
-    await user.click(screen.getByRole('button', { name: /Kicks, higher is better/ }));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(alice.closest('tr')).toHaveAttribute('aria-selected', 'true');
+
+    const kicksSort = screen.getByRole('button', { name: /Kicks, higher is better/ });
+    await user.click(kicksSort);
+    expect(
+      screen.getByRole('button', {
+        name: 'Kicks, higher is better, sorted descending. Activate to sort ascending.',
+      })
+    ).toBeInTheDocument();
 
     const rows = screen.getAllByRole('row').slice(1);
     expect(within(rows[0]).getByText('Bob Best')).toBeInTheDocument();
 
-    const search = screen.getByRole('searchbox', { name: 'Search this roster' });
+    const search = screen.getByRole('searchbox', { name: 'Search roster for you send' });
     await user.type(search, 'Bob');
     expect(screen.queryByText('Alice Able')).not.toBeInTheDocument();
     await user.clear(search);
-    expect(screen.getByRole('checkbox', { name: /Alice Able/ })).toBeChecked();
+    const restoredAlice = screen.getByRole('checkbox', { name: /Alice Able/ });
+    expect(restoredAlice).toBeChecked();
+    expect(restoredAlice.closest('tr')).toHaveAttribute('aria-selected', 'true');
   });
 });

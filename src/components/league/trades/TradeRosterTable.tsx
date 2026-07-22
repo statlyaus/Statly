@@ -3,6 +3,7 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Wide data tables need a named keyboard-scroll target. */
 
 import { useId, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, Search } from 'lucide-react';
 
 import type { TradePlayerDto } from '@/server/leagues/trades/tradeContracts';
 import { FANTASY_CATEGORIES, formatStatValue } from '@/types/fantasyCategories';
@@ -71,27 +72,44 @@ export function TradeRosterTable({
   }
 
   return (
-    <section aria-labelledby={`${id}-heading`} className="min-w-0 rounded-lg border border-border">
-      <div className="space-y-3 border-b border-border bg-muted/20 p-3">
-        <div>
-          <h4 id={`${id}-heading`} className="text-sm font-semibold text-foreground">
-            {label}
-          </h4>
-          <p className="text-xs text-muted-foreground">{description}</p>
+    <section
+      aria-labelledby={`${id}-heading`}
+      className="min-w-0 overflow-hidden rounded-xl border border-[color:var(--trade-border)] border-t-[3px] border-t-[color:var(--trade-direction)] bg-[color:var(--trade-surface)]"
+    >
+      <div className="space-y-4 border-b border-[color:var(--trade-border)] bg-[color:var(--trade-direction-soft)] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h4 id={`${id}-heading`} className="text-base font-bold text-[color:var(--trade-text)]">
+              {label}
+            </h4>
+            <p className="mt-0.5 text-xs text-[color:var(--trade-text-muted)]">{description}</p>
+          </div>
+          <span className="shrink-0 rounded-md border border-[color:var(--trade-direction)]/25 bg-[color:var(--trade-surface)] px-2 py-1 text-xs font-bold tabular-nums text-[color:var(--trade-direction)]">
+            {selectedIds.length} selected
+          </span>
         </div>
         <div>
-          <label htmlFor={`${id}-search`} className="text-xs font-medium text-foreground">
-            Search this roster
+          <label
+            htmlFor={`${id}-search`}
+            className="text-xs font-semibold text-[color:var(--trade-text)]"
+          >
+            Search roster <span className="sr-only">for {label.toLowerCase()}</span>
           </label>
-          <input
-            id={`${id}-search`}
-            type="search"
-            value={query}
-            disabled={disabled}
-            onChange={(event) => setQuery(event.target.value)}
-            className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-            placeholder="Player, club, or position"
-          />
+          <div className="relative mt-1.5">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[color:var(--trade-text-muted)]"
+            />
+            <input
+              id={`${id}-search`}
+              type="search"
+              value={query}
+              disabled={disabled}
+              onChange={(event) => setQuery(event.target.value)}
+              className="h-11 w-full rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] pl-10 pr-3 text-sm text-[color:var(--trade-text)] outline-none placeholder:text-[color:var(--trade-text-muted)] focus:border-[color:var(--trade-focus)] focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]/20 disabled:opacity-60"
+              placeholder="Player, club, or position"
+            />
+          </div>
         </div>
       </div>
 
@@ -99,32 +117,39 @@ export function TradeRosterTable({
       <div
         tabIndex={0}
         aria-label={`${label} roster table, horizontally scrollable`}
-        className="max-h-96 overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="max-h-[32rem] overflow-auto focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)]"
       >
-        <table className="w-full min-w-max border-collapse text-left text-sm">
+        <table className="w-full min-w-max border-collapse text-left">
           <caption className="sr-only">
             {label}. Season {playerStats.context.season} per-game averages. {selectedIds.length}{' '}
             selected.
           </caption>
-          <thead className="sticky top-0 z-20 bg-background">
-            <tr className="border-b border-border">
+          <thead className="sticky top-0 z-20 bg-[color:var(--trade-surface-subtle)]">
+            <tr className="h-11 border-b border-[color:var(--trade-border-strong)]">
               <th
                 scope="col"
                 aria-sort={sortKey === 'player' ? sortDirection : 'none'}
-                className="sticky left-0 z-30 min-w-52 bg-background px-3 py-2"
+                className="sticky left-0 z-30 min-w-52 bg-[color:var(--trade-surface-subtle)] px-3 py-1.5"
               >
-                <SortButton label="Player" onClick={() => updateSort('player')} />
+                <SortButton
+                  label="Player"
+                  active={sortKey === 'player'}
+                  direction={sortDirection}
+                  onClick={() => updateSort('player')}
+                />
               </th>
               {playerStats.columns.map((column) => (
                 <th
                   key={column.key}
                   scope="col"
                   aria-sort={sortKey === column.key ? sortDirection : 'none'}
-                  className="min-w-20 px-3 py-2 text-right"
+                  className="min-w-20 px-3 py-1.5 text-right"
                 >
                   <SortButton
                     label={column.shortLabel}
                     accessibleLabel={`${column.label}, ${column.direction === 'LOW_WINS' ? 'lower' : 'higher'} is better`}
+                    active={sortKey === column.key}
+                    direction={sortDirection}
                     onClick={() => updateSort(column.key)}
                   />
                 </th>
@@ -135,8 +160,21 @@ export function TradeRosterTable({
             {visiblePlayers.map((player) => {
               const selected = selectedIds.includes(player.id);
               return (
-                <tr key={player.id} className="border-b border-border last:border-0">
-                  <th scope="row" className="sticky left-0 z-10 bg-card px-3 py-2 font-normal">
+                <tr
+                  key={player.id}
+                  aria-selected={selected}
+                  className={`group h-12 border-b border-[color:var(--trade-border)] transition-colors last:border-0 hover:bg-[color:var(--trade-action-soft)] ${
+                    selected ? 'bg-[color:var(--trade-direction-soft)]' : ''
+                  }`}
+                >
+                  <th
+                    scope="row"
+                    className={`sticky left-0 z-10 border-l-[3px] px-3 py-2 font-normal transition-colors group-hover:bg-[color:var(--trade-action-soft)] ${
+                      selected
+                        ? 'border-l-[color:var(--trade-direction)] bg-[color:var(--trade-direction-soft)]'
+                        : 'border-l-transparent bg-[color:var(--trade-surface)]'
+                    }`}
+                  >
                     <div className="flex items-start gap-2">
                       <input
                         id={`${id}-player-${player.id}`}
@@ -144,14 +182,16 @@ export function TradeRosterTable({
                         checked={selected}
                         disabled={disabled}
                         onChange={() => togglePlayer(player.id)}
-                        className="mt-0.5 size-4 rounded border-input accent-[hsl(var(--primary))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="mt-0.5 size-4.5 rounded border-[color:var(--trade-border-strong)] accent-[var(--trade-direction)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-1"
                       />
                       <label
                         htmlFor={`${id}-player-${player.id}`}
                         className="min-w-0 cursor-pointer"
                       >
-                        <span className="block font-medium text-foreground">{player.name}</span>
-                        <span className="block text-xs text-muted-foreground">
+                        <span className="block text-sm font-semibold text-[color:var(--trade-text)]">
+                          {player.name}
+                        </span>
+                        <span className="block text-xs text-[color:var(--trade-text-muted)]">
                           {[player.position, player.club].filter(Boolean).join(' · ')}
                         </span>
                       </label>
@@ -160,7 +200,7 @@ export function TradeRosterTable({
                   {playerStats.columns.map((column) => (
                     <td
                       key={column.key}
-                      className="px-3 py-2 text-right tabular-nums text-foreground"
+                      className="px-3 py-2 text-right text-[13px] font-medium tabular-nums text-[color:var(--trade-text)]"
                     >
                       {formatStatValue(
                         playerStats.playersById[player.id]?.values[column.key],
@@ -174,7 +214,7 @@ export function TradeRosterTable({
           </tbody>
         </table>
         {visiblePlayers.length === 0 && (
-          <p className="p-5 text-center text-sm text-muted-foreground">
+          <p className="bg-[color:var(--trade-surface-subtle)] p-6 text-center text-sm text-[color:var(--trade-text-muted)]">
             {players.length === 0 ? 'No rostered players are available.' : 'No players match.'}
           </p>
         )}
@@ -186,20 +226,37 @@ export function TradeRosterTable({
 function SortButton({
   label,
   accessibleLabel,
+  active,
+  direction,
   onClick,
 }: {
   label: string;
   accessibleLabel?: string;
+  active: boolean;
+  direction: 'ascending' | 'descending';
   onClick: () => void;
 }): React.JSX.Element {
+  const completeLabel = accessibleLabel ?? label;
+  const actionLabel = active
+    ? `${completeLabel}, sorted ${direction}. Activate to sort ${
+        direction === 'ascending' ? 'descending' : 'ascending'
+      }.`
+    : `${completeLabel}. Activate to sort.`;
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex min-h-8 items-center rounded px-1 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={actionLabel}
+      className="inline-flex min-h-9 items-center gap-1 rounded px-1 text-xs font-bold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
     >
-      <span aria-hidden={Boolean(accessibleLabel)}>{label}</span>
-      {accessibleLabel && <span className="sr-only">{accessibleLabel}</span>}
+      <span aria-hidden="true">{label}</span>
+      {active &&
+        (direction === 'ascending' ? (
+          <ArrowUp aria-hidden="true" className="size-3.5 text-[color:var(--trade-action)]" />
+        ) : (
+          <ArrowDown aria-hidden="true" className="size-3.5 text-[color:var(--trade-action)]" />
+        ))}
     </button>
   );
 }

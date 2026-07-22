@@ -151,6 +151,17 @@ describe('LeagueTradeCentrePanel', () => {
     expect(screen.getByRole('checkbox', { name: /Bailey Beta/ })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Accept trade' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Counteroffer' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Trade with Beta FC' })).toBeInTheDocument();
+    expect(screen.getByText('Awaiting response')).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'You send package from Alpha FC' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'You receive from Beta FC package from Beta FC' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('table', { name: 'Season 2026 per-game averages for you send.' })
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Discuss trade: Beta FC and Alpha FC' })
     ).toBeInTheDocument();

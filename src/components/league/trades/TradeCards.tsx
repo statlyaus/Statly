@@ -1,5 +1,7 @@
 'use client';
 
+import { Handshake } from 'lucide-react';
+
 import type {
   LeagueTradeDto,
   TradeActionName,
@@ -30,9 +32,12 @@ export function TradeCards({
 }: TradeCardsProps): React.JSX.Element {
   if (trades.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-muted/20 px-5 py-10 text-center">
-        <p className="text-sm font-medium text-foreground">Nothing here yet</p>
-        <p className="mt-1 text-sm text-muted-foreground">
+      <div className="rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] px-5 py-10 text-center shadow-[var(--trade-card-shadow)]">
+        <span className="mx-auto flex size-11 items-center justify-center rounded-lg bg-[color:var(--trade-action-soft)] text-[color:var(--trade-action)]">
+          <Handshake aria-hidden="true" className="size-5" />
+        </span>
+        <p className="mt-4 text-sm font-bold text-[color:var(--trade-text)]">Nothing here yet</p>
+        <p className="mx-auto mt-1 max-w-md text-sm text-[color:var(--trade-text-muted)]">
           Trade offers will appear here as managers take action.
         </p>
       </div>

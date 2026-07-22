@@ -1,6 +1,6 @@
 'use client';
 
-/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Wide data tables need a named keyboard-scroll target. */
+import { ArrowLeftRight, Clock3, ShieldCheck } from 'lucide-react';
 
 import { LeagueSocialDiscussButton } from '@/components/league/LeagueSocialDiscussButton';
 import type {
@@ -8,8 +8,10 @@ import type {
   TradeActionName,
   TradeTeamDto,
 } from '@/server/leagues/trades/tradeContracts';
-import { FANTASY_CATEGORIES, formatStatValue } from '@/types/fantasyCategories';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
+
+import { TradeOfferAssets, type TradeOfferAssetTone } from './TradeOfferAssets';
+import { TRADE_STATUS_LABELS, TradeOfferStatus } from './TradeOfferStatus';
 
 interface TradeOfferCardProps {
   leagueId: string;
@@ -20,18 +22,6 @@ interface TradeOfferCardProps {
   onAction: (trade: LeagueTradeDto, action: Exclude<TradeActionName, 'counter'>) => void;
   onCounter: (trade: LeagueTradeDto) => void;
 }
-
-const STATUS_LABELS: Record<LeagueTradeDto['status'], string> = {
-  PENDING: 'Awaiting response',
-  ACCEPTED_PENDING_REVIEW: 'Accepted · review pending',
-  COMPLETED: 'Completed',
-  DECLINED: 'Declined',
-  WITHDRAWN: 'Withdrawn',
-  COMMISSIONER_REJECTED: 'Commissioner rejected',
-  VETOED: 'Vetoed',
-  EXPIRED: 'Expired',
-  FAILED: 'Failed',
-};
 
 const ACTION_LABELS: Record<Exclude<TradeActionName, 'counter'>, string> = {
   accept: 'Accept trade',
@@ -55,49 +45,79 @@ export function TradeOfferCard({
   const memberOne = teams.find((team) => team.memberId === trade.memberOne.memberId);
   const memberTwo = teams.find((team) => team.memberId === trade.memberTwo.memberId);
   const title = `${trade.memberOne.teamName} and ${trade.memberTwo.teamName}`;
+  const displayTitle = memberOne?.isViewer
+    ? `Trade with ${trade.memberTwo.teamName}`
+    : memberTwo?.isViewer
+      ? `Trade with ${trade.memberOne.teamName}`
+      : `${trade.memberOne.teamName} ↔ ${trade.memberTwo.teamName}`;
+  const memberOnePresentation = assetPresentation(
+    trade.memberOne.teamName,
+    Boolean(memberOne?.isViewer),
+    Boolean(memberTwo?.isViewer)
+  );
+  const memberTwoPresentation = assetPresentation(
+    trade.memberTwo.teamName,
+    Boolean(memberTwo?.isViewer),
+    Boolean(memberOne?.isViewer)
+  );
 
   return (
-    <article className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm">
-      <header className="flex flex-col gap-3 border-b border-border bg-muted/30 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Offer {offer.sequence} · {formatDate(offer.createdAt)}
-          </p>
-          <h3 className="mt-1 text-base font-semibold text-foreground">
-            {trade.memberOne.teamName} ↔ {trade.memberTwo.teamName}
-          </h3>
+    <article className="overflow-hidden rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] text-[color:var(--trade-text)] shadow-[var(--trade-card-shadow)]">
+      <header className="flex flex-col gap-4 border-b border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-[color:var(--trade-action-soft)] text-[color:var(--trade-action)]">
+            <ArrowLeftRight aria-hidden="true" className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[color:var(--trade-text-muted)]">
+              Offer {offer.sequence} · {formatDate(offer.createdAt)}
+            </p>
+            <h3 className="mt-1 text-base font-bold text-[color:var(--trade-text)]">
+              {displayTitle}
+            </h3>
+          </div>
         </div>
-        <span className="w-fit rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
-          {STATUS_LABELS[trade.status]}
-        </span>
+        <TradeOfferStatus status={trade.status} />
       </header>
 
-      <div className="grid min-w-0 gap-4 p-4 xl:grid-cols-2">
-        <TradeAssets
+      <div className="grid min-w-0 gap-4 p-4 sm:p-5 xl:grid-cols-2">
+        <TradeOfferAssets
+          heading={memberOnePresentation.heading}
           teamName={trade.memberOne.teamName}
           players={offer.players.filter(
             (player) => player.fromMemberId === trade.memberOne.memberId
           )}
           playerStats={playerStats}
+          tone={memberOnePresentation.tone}
         />
-        <TradeAssets
+        <TradeOfferAssets
+          heading={memberTwoPresentation.heading}
           teamName={trade.memberTwo.teamName}
           players={offer.players.filter(
             (player) => player.fromMemberId === trade.memberTwo.memberId
           )}
           playerStats={playerStats}
+          tone={memberTwoPresentation.tone}
         />
       </div>
 
       {offer.message && (
-        <blockquote className="mx-4 mb-4 rounded-md border-l-4 border-primary/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        <blockquote className="mx-4 mb-4 rounded-lg border-l-[3px] border-[color:var(--trade-action)] bg-[color:var(--trade-action-soft)] px-4 py-3 text-sm leading-5 text-[color:var(--trade-text-muted)] sm:mx-5 sm:mb-5">
           {offer.message}
         </blockquote>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 pb-4 text-xs text-muted-foreground">
-        <span>Expires {formatDate(offer.expiresAt)}</span>
-        {offer.reviewEndsAt && <span>Review ends {formatDate(offer.reviewEndsAt)}</span>}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 pb-4 text-xs font-medium text-[color:var(--trade-text-muted)] sm:px-5 sm:pb-5">
+        <span className="inline-flex items-center gap-1.5">
+          <Clock3 aria-hidden="true" className="size-3.5" />
+          Expires {formatDate(offer.expiresAt)}
+        </span>
+        {offer.reviewEndsAt && (
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck aria-hidden="true" className="size-3.5" />
+            Review ends {formatDate(offer.reviewEndsAt)}
+          </span>
+        )}
         {trade.status === 'ACCEPTED_PENDING_REVIEW' && offer.reviewMode === 'veto' && (
           <span>
             {offer.vetoCount} of {offer.vetoThreshold} vetoes
@@ -109,7 +129,7 @@ export function TradeOfferCard({
 
       <footer
         aria-label={`Actions for ${title}`}
-        className="flex flex-wrap gap-2 border-t border-border bg-muted/20 px-4 py-3"
+        className="flex flex-wrap gap-2 border-t border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-4 py-3 sm:px-5"
       >
         {trade.allowedActions.map((action) =>
           action === 'counter' ? (
@@ -145,31 +165,34 @@ export function TradeOfferCard({
             type: 'trade',
             id: trade.id,
             title,
-            subtitle: STATUS_LABELS[trade.status],
+            subtitle: TRADE_STATUS_LABELS[trade.status],
             metadata: { offerId: offer.id, status: trade.status },
           }}
+          className="!min-h-11 !rounded-lg !border-[color:var(--trade-border-strong)] !bg-[color:var(--trade-surface)] !px-4 !text-sm !text-[color:var(--trade-text)] hover:!bg-[color:var(--trade-action-soft)] focus-visible:!ring-[3px] focus-visible:!ring-[color:var(--trade-focus)]"
         />
       </footer>
 
       {(trade.offerHistory.length > 1 || trade.events.length > 0) && (
-        <details className="border-t border-border px-4 py-3">
-          <summary className="cursor-pointer text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <details className="border-t border-[color:var(--trade-border)] px-4 py-3 sm:px-5">
+          <summary className="cursor-pointer rounded text-sm font-semibold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]">
             Trade history
           </summary>
           {trade.offerHistory.length > 1 && <TradeOfferHistory trade={trade} />}
           {trade.events.length > 0 && (
             <section aria-label="Trade decisions" className="mt-4">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-[color:var(--trade-text-muted)]">
                 Decisions
               </h4>
-              <ol className="mt-2 space-y-2 border-l border-border pl-4 text-xs text-muted-foreground">
+              <ol className="mt-2 space-y-2 border-l border-[color:var(--trade-border)] pl-4 text-xs text-[color:var(--trade-text-muted)]">
                 {trade.events.map((event) => (
                   <li key={event.id}>
-                    <span className="font-medium text-foreground">
+                    <span className="font-semibold text-[color:var(--trade-text)]">
                       {formatLifecycleLabel(event.type)}
                     </span>{' '}
                     · {formatDate(event.createdAt)}
-                    {event.reason && <p className="mt-1 text-foreground">Reason: {event.reason}</p>}
+                    {event.reason && (
+                      <p className="mt-1 text-[color:var(--trade-text)]">Reason: {event.reason}</p>
+                    )}
                   </li>
                 ))}
               </ol>
@@ -181,101 +204,28 @@ export function TradeOfferCard({
   );
 }
 
-function TradeAssets({
-  teamName,
-  players,
-  playerStats,
-}: {
-  teamName: string;
-  players: LeagueTradeDto['currentOffer']['players'];
-  playerStats: LeaguePlayerStatDatasetDto;
-}): React.JSX.Element {
-  return (
-    <section
-      aria-label={`Players sent by ${teamName}`}
-      className="min-w-0 rounded-lg border border-border"
-    >
-      <h4 className="border-b border-border px-3 py-2 text-sm font-semibold text-foreground">
-        {teamName} sends
-      </h4>
-      {players.length === 0 ? (
-        <p className="p-3 text-sm text-muted-foreground">No players from this team</p>
-      ) : (
-        <>
-          {/* A focus target is required so keyboard users can scroll the wide asset table. */}
-          <div
-            tabIndex={0}
-            aria-label={`${teamName} player averages, horizontally scrollable`}
-            className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <table className="w-full min-w-max text-left text-xs">
-              <caption className="sr-only">
-                Season {playerStats.context.season} per-game averages.
-              </caption>
-              <thead>
-                <tr className="border-b border-border">
-                  <th scope="col" className="px-3 py-2">
-                    Player
-                  </th>
-                  {playerStats.columns.map((column) => (
-                    <th
-                      key={column.key}
-                      scope="col"
-                      className="px-3 py-2 text-right"
-                      title={column.label}
-                    >
-                      {column.shortLabel}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {players.map((player) => (
-                  <tr key={player.id} className="border-b border-border last:border-0">
-                    <th scope="row" className="px-3 py-2 font-medium text-foreground">
-                      {player.name}
-                      <span className="block font-normal text-muted-foreground">
-                        {[player.position, player.club].filter(Boolean).join(' · ')}
-                      </span>
-                    </th>
-                    {playerStats.columns.map((column) => (
-                      <td key={column.key} className="px-3 py-2 text-right tabular-nums">
-                        {formatStatValue(
-                          playerStats.playersById[player.id]?.values[column.key],
-                          FANTASY_CATEGORIES[column.key]
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
 function TradeOfferHistory({ trade }: { trade: LeagueTradeDto }): React.JSX.Element {
   const offers = [...trade.offerHistory].sort((left, right) => left.sequence - right.sequence);
   return (
     <section aria-label="Previous offer terms" className="mt-4">
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h4 className="text-xs font-bold uppercase tracking-wide text-[color:var(--trade-text-muted)]">
         Offer terms
       </h4>
       <ol className="mt-2 space-y-3">
         {offers.map((offer) => (
-          <li key={offer.id} className="rounded-md border border-border bg-muted/20 p-3 text-xs">
-            <p className="font-medium text-foreground">
+          <li
+            key={offer.id}
+            className="rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] p-3 text-xs"
+          >
+            <p className="font-semibold text-[color:var(--trade-text)]">
               Offer {offer.sequence} · {formatLifecycleLabel(offer.status)} ·{' '}
               {formatDate(offer.createdAt)}
             </p>
-            <p className="mt-1 text-muted-foreground">
+            <p className="mt-1 text-[color:var(--trade-text-muted)]">
               {offer.players.map((player) => player.name).join(', ')}
             </p>
             {offer.message && (
-              <blockquote className="mt-2 border-l-2 border-primary/40 pl-2 text-muted-foreground">
+              <blockquote className="mt-2 border-l-2 border-[color:var(--trade-action)] pl-2 text-[color:var(--trade-text-muted)]">
                 {offer.message}
               </blockquote>
             )}
@@ -284,6 +234,16 @@ function TradeOfferHistory({ trade }: { trade: LeagueTradeDto }): React.JSX.Elem
       </ol>
     </section>
   );
+}
+
+function assetPresentation(
+  teamName: string,
+  isViewer: boolean,
+  otherTeamIsViewer: boolean
+): { heading: string; tone: TradeOfferAssetTone } {
+  if (isViewer) return { heading: 'You send', tone: 'outgoing' };
+  if (otherTeamIsViewer) return { heading: `You receive from ${teamName}`, tone: 'incoming' };
+  return { heading: `${teamName} sends`, tone: 'neutral' };
 }
 
 function formatLifecycleLabel(value: string): string {
@@ -301,6 +261,6 @@ function formatDate(value: string): string {
 }
 
 const primaryButtonClasses =
-  'inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+  'inline-flex h-11 items-center justify-center rounded-lg bg-[color:var(--trade-action)] px-4 text-sm font-bold text-white transition-colors hover:bg-[color:var(--trade-action-hover)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
 const secondaryButtonClasses =
-  'inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+  'inline-flex h-11 items-center justify-center rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';

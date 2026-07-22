@@ -209,22 +209,34 @@ export function LeagueTradeCentrePanel({
 
   if (!snapshot) {
     return (
-      <section aria-labelledby="trade-centre-heading" className="space-y-4">
-        <div>
-          <h2 id="trade-centre-heading" className="text-xl font-semibold text-foreground">
-            Trade Centre
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Propose and review league roster trades.
-          </p>
-        </div>
-        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-          <p className="text-sm font-medium text-destructive">
-            {initialError ?? 'The Trade Centre is unavailable.'}
-          </p>
-          <button type="button" onClick={() => router.refresh()} className={secondaryButtonClasses}>
-            Try again
-          </button>
+      <section
+        aria-labelledby="trade-centre-heading"
+        className="league-trade-centre -m-5 bg-[color:var(--trade-canvas)] p-5 text-[color:var(--trade-text)] sm:-m-6 sm:p-6"
+      >
+        <div className="mx-auto max-w-[96rem] space-y-5">
+          <div>
+            <h2 id="trade-centre-heading" className="text-2xl font-bold tracking-tight">
+              Trade Centre
+            </h2>
+            <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
+              Propose and review league roster trades.
+            </p>
+          </div>
+          <div
+            role="alert"
+            className="rounded-xl border border-[color:var(--trade-negative)]/25 bg-[color:var(--trade-error-soft)] p-4"
+          >
+            <p className="text-sm font-semibold text-[color:var(--trade-negative)]">
+              {initialError ?? 'The Trade Centre is unavailable.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => router.refresh()}
+              className={secondaryButtonClasses}
+            >
+              Try again
+            </button>
+          </div>
         </div>
       </section>
     );
@@ -238,118 +250,137 @@ export function LeagueTradeCentrePanel({
     : null;
 
   return (
-    <section aria-labelledby="trade-centre-heading" className="space-y-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {viewerTeam?.teamName ?? 'Your team'}
-          </p>
-          <h2 id="trade-centre-heading" className="mt-1 text-2xl font-semibold text-foreground">
-            Trade Centre
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Build proposals from current league rosters, respond to managers, and follow every
-            review decision in one place.
-          </p>
-        </div>
-        <TradeRuleSummary rules={snapshot.rules} />
-      </div>
-
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-        <h3
-          ref={composerHeadingRef}
-          tabIndex={-1}
-          className="text-lg font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {counterTrade ? 'Build a counteroffer' : 'Propose a trade'}
-        </h3>
-        <p className="mb-5 mt-1 text-sm text-muted-foreground">
-          {counterTrade
-            ? `Respond to offer ${counterTrade.currentOffer.sequence} with a new set of players.`
-            : 'Select at least one player from each roster.'}
-        </p>
-        <TradeComposer
-          key={counterTrade?.id ?? 'proposal'}
-          teams={snapshot.teams}
-          playerStats={snapshot.playerStats}
-          initialPartnerMemberId={ownerMemberId}
-          initialPlayerId={counterTrade ? null : requestedPlayerId}
-          counterPartnerMemberId={counterPartnerId}
-          isSubmitting={isComposerSubmitting}
-          error={counterTrade ? mutationError : null}
-          onSubmit={submitComposer}
-          onCancelCounter={counterTrade ? () => setCounterTrade(null) : undefined}
-        />
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">Offers</h3>
-            <p className="text-sm text-muted-foreground">
-              Filter by the action or outcome you need.
+    <section
+      aria-labelledby="trade-centre-heading"
+      className="league-trade-centre -m-5 min-h-[70vh] bg-[color:var(--trade-canvas)] p-5 text-[color:var(--trade-text)] sm:-m-6 sm:p-6"
+    >
+      <div className="mx-auto max-w-[96rem] space-y-8">
+        <header className="rounded-2xl bg-[color:var(--trade-surface-dark)] px-5 py-5 text-white shadow-[var(--trade-card-shadow)] sm:px-6 sm:py-6 lg:flex lg:items-start lg:justify-between lg:gap-8">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/65">
+              {viewerTeam?.teamName ?? 'Your team'}
+            </p>
+            <h2
+              id="trade-centre-heading"
+              className="mt-2 text-[1.75rem] font-bold leading-[2.125rem] tracking-tight text-white"
+            >
+              Trade Centre
+            </h2>
+            <p className="mt-2 text-sm leading-5 text-white/75">
+              Build proposals from current league rosters, respond to managers, and follow every
+              review decision in one place.
             </p>
           </div>
-          <nav aria-label="Trade offer views" className="overflow-x-auto">
-            <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
-              {TRADE_VIEWS.map((view) => {
-                const isActive = snapshot.activeView === view;
-                return (
-                  <button
-                    key={view}
-                    type="button"
-                    aria-current={isActive ? 'page' : undefined}
-                    disabled={isNavigating}
-                    onClick={() => navigateToView(view)}
-                    className={`inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                      isActive
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {VIEW_LABELS[view]}
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums">
-                      {snapshot.counts[view]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-        </div>
+          <TradeRuleSummary rules={snapshot.rules} />
+        </header>
 
-        {mutationError && !counterTrade && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive"
+        <div className="rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] p-4 shadow-[var(--trade-card-shadow)] sm:p-6">
+          <h3
+            ref={composerHeadingRef}
+            tabIndex={-1}
+            className="text-xl font-bold tracking-tight text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
           >
-            {mutationError}
+            {counterTrade ? 'Build a counteroffer' : 'Propose a trade'}
+          </h3>
+          <p className="mb-6 mt-1 text-sm text-[color:var(--trade-text-muted)]">
+            {counterTrade
+              ? `Respond to offer ${counterTrade.currentOffer.sequence} with a new set of players.`
+              : 'Select at least one player from each roster.'}
           </p>
-        )}
-        <p aria-live="polite" className="sr-only">
-          {isNavigating ? 'Loading trade offers.' : announcement}
-        </p>
-        <div aria-busy={isNavigating} className={isNavigating ? 'opacity-60' : undefined}>
-          <TradeCards
-            trades={snapshot.trades}
+          <TradeComposer
+            key={counterTrade?.id ?? 'proposal'}
             teams={snapshot.teams}
             playerStats={snapshot.playerStats}
-            leagueId={leagueId}
-            pendingTradeId={pendingTradeId}
-            onAction={(trade, action) => void handleAction(trade, action)}
-            onCounter={startCounter}
+            initialPartnerMemberId={ownerMemberId}
+            initialPlayerId={counterTrade ? null : requestedPlayerId}
+            counterPartnerMemberId={counterPartnerId}
+            isSubmitting={isComposerSubmitting}
+            error={counterTrade ? mutationError : null}
+            onSubmit={submitComposer}
+            onCancelCounter={counterTrade ? () => setCounterTrade(null) : undefined}
           />
         </div>
-        {snapshot.nextCursor && (
-          <button
-            type="button"
-            disabled={isNavigating}
-            onClick={() => navigateToView(snapshot.activeView, snapshot.nextCursor ?? undefined)}
-            className={secondaryButtonClasses}
-          >
-            Next page
-          </button>
-        )}
+
+        <section aria-labelledby="trade-offers-heading" className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3
+                id="trade-offers-heading"
+                className="text-xl font-bold tracking-tight text-[color:var(--trade-text)]"
+              >
+                Offers
+              </h3>
+              <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
+                Filter by the action or outcome you need.
+              </p>
+            </div>
+            <nav aria-label="Trade offer views" className="max-w-full overflow-x-auto pb-1">
+              <div className="inline-flex rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] p-1">
+                {TRADE_VIEWS.map((view) => {
+                  const isActive = snapshot.activeView === view;
+                  return (
+                    <button
+                      key={view}
+                      type="button"
+                      aria-current={isActive ? 'page' : undefined}
+                      disabled={isNavigating}
+                      onClick={() => navigateToView(view)}
+                      className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-1 disabled:cursor-wait disabled:opacity-60 ${
+                        isActive
+                          ? 'bg-[color:var(--trade-brand)] text-white shadow-sm'
+                          : 'text-[color:var(--trade-text-muted)] hover:bg-[color:var(--trade-action-soft)] hover:text-[color:var(--trade-text)]'
+                      }`}
+                    >
+                      {VIEW_LABELS[view]}
+                      <span
+                        className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs tabular-nums ${
+                          isActive
+                            ? 'bg-white/15 text-white'
+                            : 'bg-[color:var(--trade-border)]/55 text-[color:var(--trade-text)]'
+                        }`}
+                      >
+                        {snapshot.counts[view]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
+          </div>
+
+          {mutationError && !counterTrade && (
+            <p
+              role="alert"
+              className="rounded-lg border border-[color:var(--trade-negative)]/25 bg-[color:var(--trade-error-soft)] p-3 text-sm font-semibold text-[color:var(--trade-negative)]"
+            >
+              {mutationError}
+            </p>
+          )}
+          <p aria-live="polite" className="sr-only">
+            {isNavigating ? 'Loading trade offers.' : announcement}
+          </p>
+          <div aria-busy={isNavigating} className={isNavigating ? 'opacity-60' : undefined}>
+            <TradeCards
+              trades={snapshot.trades}
+              teams={snapshot.teams}
+              playerStats={snapshot.playerStats}
+              leagueId={leagueId}
+              pendingTradeId={pendingTradeId}
+              onAction={(trade, action) => void handleAction(trade, action)}
+              onCounter={startCounter}
+            />
+          </div>
+          {snapshot.nextCursor && (
+            <button
+              type="button"
+              disabled={isNavigating}
+              onClick={() => navigateToView(snapshot.activeView, snapshot.nextCursor ?? undefined)}
+              className={secondaryButtonClasses}
+            >
+              Next page
+            </button>
+          )}
+        </section>
       </div>
     </section>
   );
@@ -367,26 +398,26 @@ function TradeRuleSummary({
         ? `${rules.reviewHours}h veto window · ${rules.vetoThreshold} votes`
         : 'Completes on acceptance';
   return (
-    <dl className="grid min-w-0 gap-x-5 gap-y-2 rounded-lg border border-border bg-muted/30 p-3 text-xs sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-4">
-      <div>
-        <dt className="text-muted-foreground">Review</dt>
-        <dd className="mt-0.5 font-medium text-foreground">{reviewLabel}</dd>
+    <dl className="mt-5 grid min-w-0 grid-cols-2 gap-2 text-xs lg:mt-0 lg:w-[42rem] lg:grid-cols-4">
+      <div className="rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2.5">
+        <dt className="text-white/60">Review</dt>
+        <dd className="mt-1 font-semibold leading-4 text-white">{reviewLabel}</dd>
       </div>
-      <div>
-        <dt className="text-muted-foreground">Trade limit</dt>
-        <dd className="mt-0.5 font-medium text-foreground">
+      <div className="rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2.5">
+        <dt className="text-white/60">Trade limit</dt>
+        <dd className="mt-1 font-semibold leading-4 text-white">
           {rules.limit > 0 ? `${rules.limit} per team` : 'Unlimited'}
         </dd>
       </div>
-      <div>
-        <dt className="text-muted-foreground">Deadline</dt>
-        <dd className="mt-0.5 font-medium text-foreground">
+      <div className="rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2.5">
+        <dt className="text-white/60">Deadline</dt>
+        <dd className="mt-1 font-semibold leading-4 text-white">
           {rules.deadline ? formatShortDate(rules.deadline) : 'No deadline'}
         </dd>
       </div>
-      <div>
-        <dt className="text-muted-foreground">Offer expiry</dt>
-        <dd className="mt-0.5 font-medium text-foreground">
+      <div className="rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2.5">
+        <dt className="text-white/60">Offer expiry</dt>
+        <dd className="mt-1 font-semibold leading-4 text-white">
           {rules.offerExpiryHours}h after sending
         </dd>
       </div>
@@ -422,4 +453,4 @@ function formatShortDate(value: string): string {
 }
 
 const secondaryButtonClasses =
-  'mt-3 inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+  'mt-3 inline-flex h-11 items-center justify-center rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
