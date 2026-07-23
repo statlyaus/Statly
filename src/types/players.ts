@@ -5,6 +5,14 @@
  */
 
 export type Numeric = number | null | undefined;
+export type PlayerSeasonStatBasis = 'TOTAL' | 'PER_GAME';
+
+export interface PlayerSeasonStatSource {
+  games: number;
+  dataThrough: string | null;
+  stats: Record<string, Numeric | string>;
+  basisByStat: Record<string, PlayerSeasonStatBasis>;
+}
 
 /**
  * Base shape of a player record coming from your data source.
@@ -22,13 +30,7 @@ export type PlayerBase = {
 // Canonical player shape used across the app
 export interface Player extends Omit<PlayerBase, 'stats'> {
   stats?: Record<string, Numeric | string>;
-  statsBySeason?: Record<
-    string,
-    {
-      games: number;
-      stats: Record<string, Numeric | string>;
-    }
-  >;
+  statsBySeason?: Record<string, PlayerSeasonStatSource>;
   statsSeason?: number;
   availableStatSeasons?: number[];
   avg?: number;

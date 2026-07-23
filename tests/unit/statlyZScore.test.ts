@@ -34,10 +34,10 @@ describe('calculateStatlyZScores', () => {
   });
 
   it('reports missing selected categories without inflating the score', () => {
-    const scores = calculateStatlyZScores([{ id: 'p1', stats: { goals: 3 } }], [
-      'goals',
-      'tackles',
-    ]);
+    const scores = calculateStatlyZScores(
+      [{ id: 'p1', stats: { goals: 3 } }],
+      ['goals', 'tackles']
+    );
 
     expect(scores.get('p1')?.missingCategories).toEqual(['tackles']);
     expect(scores.get('p1')?.score).toBe(0);
@@ -81,7 +81,14 @@ describe('calculateStatlyZScores', () => {
           statsBySeason: {
             '2025': {
               games: 16,
+              dataThrough: '2025-07-18',
               stats: { goals: 22, marks: 43, tackles: 54, hitouts: 0 },
+              basisByStat: {
+                goals: 'TOTAL',
+                marks: 'TOTAL',
+                tackles: 'TOTAL',
+                hitouts: 'TOTAL',
+              },
             },
           },
         },

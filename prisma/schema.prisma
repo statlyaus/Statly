@@ -65,6 +65,9 @@ model League {
   socialMutes             SocialMute[]
   socialCommands          SocialCommand[]
   socialOutboxEvents      SocialOutboxEvent[]
+  tradeThreads            LeagueTradeThread[]
+  tradeCommands           LeagueTradeCommand[]
+  tradeOutboxEvents       LeagueTradeOutboxEvent[]
   createdAt               DateTime                 @default(now())
 
   @@index([ownerId])
@@ -113,6 +116,15 @@ model LeagueMember {
   socialMutesReceived       SocialMute[]             @relation("SocialMuteTarget")
   socialMutesCreated        SocialMute[]             @relation("SocialMuteActor")
   socialCommands            SocialCommand[]
+  tradeThreadsAsMemberOne   LeagueTradeThread[]      @relation("TradeThreadMemberOne")
+  tradeThreadsAsMemberTwo   LeagueTradeThread[]      @relation("TradeThreadMemberTwo")
+  proposedTradeOffers       LeagueTradeOffer[]       @relation("TradeOfferProposer")
+  receivedTradeOffers       LeagueTradeOffer[]       @relation("TradeOfferRecipient")
+  outgoingTradePlayers      LeagueTradePlayer[]      @relation("TradePlayerFromMember")
+  incomingTradePlayers      LeagueTradePlayer[]      @relation("TradePlayerToMember")
+  tradeVetoes               LeagueTradeVeto[]
+  tradeEvents               LeagueTradeEvent[]       @relation("TradeEventActor")
+  tradeCommands             LeagueTradeCommand[]     @relation("TradeCommandActor")
   isCoCommissioner          Boolean                  @default(false)
 
   // Lobby relations
@@ -148,6 +160,9 @@ model LeagueSeason {
   socialMutes             SocialMute[]
   socialCommands          SocialCommand[]
   socialOutboxEvents      SocialOutboxEvent[]
+  tradeThreads            LeagueTradeThread[]
+  tradeCommands           LeagueTradeCommand[]
+  tradeOutboxEvents       LeagueTradeOutboxEvent[]
 
   @@unique([leagueId, year])
   @@index([leagueId, createdAt])
@@ -182,6 +197,12 @@ model LeagueSettings {
   competitionRulesJson    String?
   competitionRulesVersion Int                         @default(0)
   competitionPublishedAt  DateTime?
+  tradeLimit              Int                         @default(10)
+  tradeReviewMode         TradeReviewMode             @default(NONE)
+  tradeDeadline           DateTime?
+  tradeOfferExpiryHours   Int                         @default(72)
+  tradeReviewHours        Int                         @default(24)
+  tradeVetoThreshold      Int                         @default(3)
 
   // Captain/Vice-Captain system (admin configurable)
   enableCaptainSystem   Boolean @default(false)
@@ -420,6 +441,7 @@ model Player {
   picks         Pick[]
   rosterPlayers LeagueRosterPlayer[]
   lineupPlayers LeagueLineupPlayer[]
+  tradePlayers  LeagueTradePlayer[]
 
   // Lobby relations
   watchlists     DraftWatchlist[]
@@ -958,6 +980,218 @@ model SocialOutboxEvent {
   @@index([leagueId, seasonId, channel, sequence])
   @@index([actorUserId, sequence])
   @@index([aggregateType, aggregateId])
+  @@index([lockedAt, createdAt])
+}
+
+enum TradeReviewMode {
+  NONE
+  ADMIN
+  VETO
+}
+
+enum LeagueTradeThreadStatus {
+  OPEN
+  PENDING_ADMIN_REVIEW
+  PENDING_VETO_REVIEW
+  COMPLETED
+  DECLINED
+  WITHDRAWN
+  REJECTED
+  VETOED
+  EXPIRED
+  INVALIDATED
+}
+
+enum LeagueTradeOfferStatus {
+  PROPOSED
+  ACCEPTED
+  SUPERSEDED
+  DECLINED
+  WITHDRAWN
+  REJECTED
+  VETOED
+  EXPIRED
+  COMPLETED
+  INVALIDATED
+}
+
+enum LeagueTradeEventType {
+  PROPOSED
+  COUNTERED
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  APPROVED
+  REJECTED
+  VETO_CAST
+  VETOED
+  EXPIRED
+  COMPLETED
+  INVALIDATED
+}
+
+model LeagueTradeThread {
+  id             String                   @id @default(cuid())
+  leagueId       String
+  seasonId       String
+  memberOneId    String
+  memberTwoId    String
+  currentOfferId String?                  @unique
+  status         LeagueTradeThreadStatus  @default(OPEN)
+  version        Int                      @default(0)
+  reviewEndsAt   DateTime?
+  completedAt    DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  league         League                   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season         LeagueSeason             @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  memberOne      LeagueMember             @relation("TradeThreadMemberOne", fields: [memberOneId], references: [id], onDelete: Restrict)
+  memberTwo      LeagueMember             @relation("TradeThreadMemberTwo", fields: [memberTwoId], references: [id], onDelete: Restrict)
+  currentOffer   LeagueTradeOffer?        @relation("CurrentTradeOffer", fields: [currentOfferId], references: [id], onDelete: SetNull)
+  offers         LeagueTradeOffer[]       @relation("TradeThreadOffers")
+  events         LeagueTradeEvent[]
+  outboxEvents   LeagueTradeOutboxEvent[]
+
+  @@index([leagueId, status, updatedAt])
+  @@index([seasonId, status, updatedAt])
+  @@index([memberOneId, status, updatedAt])
+  @@index([memberTwoId, status, updatedAt])
+}
+
+model LeagueTradeOffer {
+  id                String                   @id @default(cuid())
+  threadId          String
+  sequence          Int
+  proposerMemberId  String
+  recipientMemberId String
+  status            LeagueTradeOfferStatus   @default(PROPOSED)
+  version           Int                      @default(0)
+  message           String?
+  expiresAt         DateTime
+  reviewMode        TradeReviewMode
+  reviewHours       Int
+  vetoThreshold     Int
+  acceptedAt        DateTime?
+  resolvedAt        DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  thread            LeagueTradeThread        @relation("TradeThreadOffers", fields: [threadId], references: [id], onDelete: Cascade)
+  currentForThread  LeagueTradeThread?       @relation("CurrentTradeOffer")
+  proposer          LeagueMember             @relation("TradeOfferProposer", fields: [proposerMemberId], references: [id], onDelete: Restrict)
+  recipient         LeagueMember             @relation("TradeOfferRecipient", fields: [recipientMemberId], references: [id], onDelete: Restrict)
+  players           LeagueTradePlayer[]
+  vetoes            LeagueTradeVeto[]
+  events            LeagueTradeEvent[]
+  outboxEvents      LeagueTradeOutboxEvent[]
+
+  @@unique([threadId, sequence])
+  @@index([recipientMemberId, status, updatedAt])
+  @@index([proposerMemberId, status, updatedAt])
+  @@index([status, expiresAt])
+}
+
+model LeagueTradePlayer {
+  id                     String           @id @default(cuid())
+  offerId                String
+  playerId               String
+  playerNameSnapshot     String
+  playerClubSnapshot     String
+  playerPositionSnapshot String
+  fromMemberId           String
+  toMemberId             String
+  createdAt              DateTime         @default(now())
+  offer                  LeagueTradeOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  player                 Player           @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  fromMember             LeagueMember     @relation("TradePlayerFromMember", fields: [fromMemberId], references: [id], onDelete: Restrict)
+  toMember               LeagueMember     @relation("TradePlayerToMember", fields: [toMemberId], references: [id], onDelete: Restrict)
+
+  @@unique([offerId, playerId])
+  @@index([playerId])
+  @@index([fromMemberId])
+  @@index([toMemberId])
+}
+
+model LeagueTradeVeto {
+  id            String           @id @default(cuid())
+  offerId       String
+  voterMemberId String
+  createdAt     DateTime         @default(now())
+  offer         LeagueTradeOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  voter         LeagueMember     @relation(fields: [voterMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, voterMemberId])
+  @@index([voterMemberId, createdAt])
+}
+
+model LeagueTradeEvent {
+  id             String               @id @default(cuid())
+  threadId       String
+  offerId        String?
+  actorMemberId  String?
+  eventType      LeagueTradeEventType
+  previousStatus String?
+  nextStatus     String
+  reasonCode     String?
+  payloadJson    String?
+  createdAt      DateTime             @default(now())
+  thread         LeagueTradeThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  offer          LeagueTradeOffer?    @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  actorMember    LeagueMember?        @relation("TradeEventActor", fields: [actorMemberId], references: [id], onDelete: SetNull)
+
+  @@index([threadId, createdAt])
+  @@index([offerId, createdAt])
+  @@index([actorMemberId, createdAt])
+}
+
+model LeagueTradeCommand {
+  id             String        @id @default(cuid())
+  leagueId       String
+  seasonId       String
+  actorUserId    String
+  actorMemberId  String?
+  idempotencyKey String
+  commandType    String
+  requestHash    String
+  resultThreadId String?
+  resultOfferId  String?
+  responseJson   String?
+  createdAt      DateTime      @default(now())
+  expiresAt      DateTime?
+  league         League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season         LeagueSeason  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  actorMember    LeagueMember? @relation("TradeCommandActor", fields: [actorMemberId], references: [id], onDelete: SetNull)
+
+  @@unique([leagueId, actorUserId, idempotencyKey])
+  @@index([seasonId, createdAt])
+  @@index([expiresAt])
+}
+
+model LeagueTradeOutboxEvent {
+  sequence    Int                @id @default(autoincrement())
+  id          String             @unique @default(cuid())
+  leagueId    String
+  seasonId    String
+  threadId    String
+  offerId     String?
+  eventType   String
+  payloadJson String
+  status      SocialOutboxStatus @default(PENDING)
+  attempts    Int                @default(0)
+  availableAt DateTime           @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  publishedAt DateTime?
+  lastError   String?
+  createdAt   DateTime           @default(now())
+  league      League             @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season      LeagueSeason       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  thread      LeagueTradeThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  offer       LeagueTradeOffer?  @relation(fields: [offerId], references: [id], onDelete: SetNull)
+
+  @@index([status, availableAt, createdAt])
+  @@index([leagueId, seasonId, createdAt])
+  @@index([threadId, sequence])
   @@index([lockedAt, createdAt])
 }
 

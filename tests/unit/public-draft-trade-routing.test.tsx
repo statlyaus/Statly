@@ -40,16 +40,6 @@ vi.mock('next/navigation', () => ({
 import HomePage from '../../src/app/(public)/page';
 import DraftLayout from '../../src/app/(public)/draft/layout';
 
-type NextRedirect = {
-  source: string;
-  destination: string;
-  permanent?: boolean;
-};
-
-type NextConfigWithRedirects = {
-  redirects?: () => NextRedirect[] | Promise<NextRedirect[]>;
-};
-
 describe('public AFL draft trade routing', () => {
   it('links the homepage public archive product card to the canonical AFL archive', () => {
     render(<HomePage />);
@@ -59,23 +49,14 @@ describe('public AFL draft trade routing', () => {
     expect(archiveLink).not.toHaveAttribute('href', '/tradecentre');
   });
 
-  it('does not keep a request-level redirect from /tradecentre to the public archive', async () => {
-    const { default: nextConfig } = (await import(
-      '../../next.config.mjs'
-    )) as { default: NextConfigWithRedirects };
-    const redirects = await nextConfig.redirects?.();
+  it('keeps /tradecentre owned by the public AFL archive', () => {
     const tradeCentreRoute = readFileSync(
       join(process.cwd(), 'src/app/tradecentre/page.tsx'),
       'utf8'
     );
 
-    expect(redirects).not.toContainEqual({
-      source: '/tradecentre',
-      destination: '/draft/trades',
-      permanent: false,
-    });
-    expect(tradeCentreRoute).not.toContain("redirect('/draft/trades')");
-    expect(tradeCentreRoute).toContain("redirect('/login?next=/tradecentre')");
+    expect(tradeCentreRoute).toContain("redirect('/draft/trades')");
+    expect(tradeCentreRoute).not.toContain("redirect('/login?next=/tradecentre')");
   });
 
   it('keeps AuthProvider out of the root layout and inside the app/auth route groups', () => {

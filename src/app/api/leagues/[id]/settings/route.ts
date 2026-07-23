@@ -2,11 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { adminDb } from '@/lib/firebaseAdmin';
-import {
-  getLeagueMembership,
-  isLeagueManagerRole,
-  listActiveLeagueMembers,
-} from '@/lib/leagueMembership';
+import { listActiveLeagueMembers } from '@/lib/leagueMembership';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -21,26 +17,29 @@ import {
   normalizeDraftPickOrderMode,
   normalizeDraftPositionLimits,
 } from '@/lib/draftSettings';
-import { REAL_DATA_NINE_CATEGORY_PRESET, type FantasyCategoryKey } from '@/types/fantasyCategories';
+import {
+  normalizeFantasyCategoryKeys,
+  REAL_DATA_NINE_CATEGORY_PRESET,
+  type FantasyCategoryKey,
+} from '@/types/fantasyCategories';
 import {
   normalizeCategoryDirections,
   parseCategoryDirectionsJson,
 } from '@/server/leagues/categoryDirections';
 import { normalizeLineupSlots, parseLineupSlotsJson } from '@/server/leagues/lineupSettings';
-import type { CategoryDirection, LeagueScoringMode } from '@/types/leagues';
+import type { CategoryDirection, LeagueScoringMode, TradeReview } from '@/types/leagues';
 import {
   MAX_LEAGUE_TEAMS,
   MIN_LEAGUE_TEAMS,
   getMaxTeamsUpdateError,
 } from '@/server/leagues/leagueCapacity';
+import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 
 type DraftTypeValue = 'SNAKE' | 'LINEAR';
 type WaiverRuleValue = 'WEEKLY' | 'ROLLING';
 
 const TEST_LEAGUE_ID = 'test-league-id';
 const TEST_LEAGUE_OWNER_ID = '2qlfdHSCFTPlxoKFSUfNLSlCDRe2';
-const REAL_DATA_CATEGORY_KEYS = new Set<FantasyCategoryKey>(REAL_DATA_NINE_CATEGORY_PRESET);
-
 function isDevelopmentTestLeague(leagueId: string) {
   return process.env.NODE_ENV !== 'production' && leagueId === TEST_LEAGUE_ID;
 }
@@ -51,8 +50,8 @@ async function authorizeLeagueSettingsRead(request: NextRequest, leagueId: strin
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const membership = await getLeagueMembership(leagueId, userId);
-  if (!membership.isMember) {
+  const access = await getLeagueMembershipAccess(leagueId, userId);
+  if (!access.isMember) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -65,8 +64,8 @@ async function authorizeLeagueSettingsWrite(request: NextRequest, leagueId: stri
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const membership = await getLeagueMembership(leagueId, userId);
-  if (!membership.isMember || !isLeagueManagerRole(membership.data?.role)) {
+  const access = await getLeagueMembershipAccess(leagueId, userId);
+  if (!access.canManage) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -84,24 +83,13 @@ function getNestedValue(source: Record<string, unknown>, keys: string[]): unknow
 function normalizeLeagueCategories(value: unknown): FantasyCategoryKey[] {
   if (typeof value === 'string' && value.trim()) {
     try {
-      return normalizeLeagueCategories(JSON.parse(value));
+      return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);
     } catch {
       return [...REAL_DATA_NINE_CATEGORY_PRESET];
     }
   }
 
-  if (!Array.isArray(value)) {
-    return [...REAL_DATA_NINE_CATEGORY_PRESET];
-  }
-
-  const selected = value.filter(
-    (category): category is FantasyCategoryKey =>
-      typeof category === 'string' && REAL_DATA_CATEGORY_KEYS.has(category as FantasyCategoryKey)
-  );
-
-  return selected.length === value.length && selected.length
-    ? selected
-    : [...REAL_DATA_NINE_CATEGORY_PRESET];
+  return normalizeFantasyCategoryKeys(value, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 function normalizeLeagueScoringMode(
@@ -131,6 +119,18 @@ function normalizeWaiverRule(value: unknown, fallback: WaiverRuleValue): WaiverR
     : 'WEEKLY';
 }
 
+function normalizeTradeReview(value: unknown, fallback: TradeReview = 'none'): TradeReview {
+  const normalized = String(value ?? fallback)
+    .trim()
+    .toLowerCase();
+  if (normalized === 'admin' || normalized === 'veto') return normalized;
+  return 'none';
+}
+
+function toPrismaTradeReview(value: TradeReview): 'NONE' | 'ADMIN' | 'VETO' {
+  return value.toUpperCase() as 'NONE' | 'ADMIN' | 'VETO';
+}
+
 function parseOptionalDate(value: unknown): Date | undefined | null {
   if (value === undefined) return undefined;
   if (typeof value !== 'string' || value.trim().length === 0) return null;
@@ -143,6 +143,76 @@ function parseOptionalInteger(value: unknown): number | undefined {
   if (value === undefined) return undefined;
   const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
   return Number.isFinite(parsed) ? Math.floor(parsed) : undefined;
+}
+
+interface ParsedTradeSettingsUpdate {
+  tradeLimit?: number;
+  tradeReview?: TradeReview;
+  tradeDeadline?: Date | null;
+  offerExpiryHours?: number;
+  reviewHours?: number;
+  vetoThreshold?: number;
+}
+
+type TradeSettingsParseResult =
+  | { ok: true; data: ParsedTradeSettingsUpdate }
+  | { ok: false; error: string };
+
+function parseTradeSettingsUpdate(tradeInput: Record<string, unknown>): TradeSettingsParseResult {
+  const ranges = [
+    ['tradeLimit', 0, 100, 'Trade limit must be between 0 and 100'],
+    ['offerExpiryHours', 1, 336, 'Trade offer expiry must be between 1 and 336 hours'],
+    ['reviewHours', 1, 336, 'Trade review window must be between 1 and 336 hours'],
+    ['vetoThreshold', 1, 20, 'Trade veto threshold must be between 1 and 20'],
+  ] as const;
+  const parsedIntegers: Partial<
+    Record<'tradeLimit' | 'offerExpiryHours' | 'reviewHours' | 'vetoThreshold', number>
+  > = {};
+
+  for (const [key, minimum, maximum, error] of ranges) {
+    const input = tradeInput[key];
+    if (input === undefined) continue;
+
+    const isIntegerInput =
+      (typeof input === 'number' && Number.isInteger(input)) ||
+      (typeof input === 'string' && /^-?\d+$/.test(input.trim()));
+    const parsed = parseOptionalInteger(input);
+    if (!isIntegerInput || parsed === undefined || parsed < minimum || parsed > maximum) {
+      return { ok: false, error };
+    }
+    parsedIntegers[key] = parsed;
+  }
+
+  let tradeReview: TradeReview | undefined;
+  if (tradeInput.tradeReview !== undefined) {
+    const normalized = String(tradeInput.tradeReview).trim().toLowerCase();
+    if (!['none', 'admin', 'veto'].includes(normalized)) {
+      return { ok: false, error: 'Trade review must be none, admin, or veto' };
+    }
+    tradeReview = normalized as TradeReview;
+  }
+
+  let tradeDeadline: Date | null | undefined;
+  if (
+    tradeInput.tradeDeadline === null ||
+    (typeof tradeInput.tradeDeadline === 'string' && tradeInput.tradeDeadline.trim().length === 0)
+  ) {
+    tradeDeadline = null;
+  } else if (tradeInput.tradeDeadline !== undefined) {
+    tradeDeadline = parseOptionalDate(tradeInput.tradeDeadline);
+    if (tradeDeadline === null) {
+      return { ok: false, error: 'Invalid trade deadline' };
+    }
+  }
+
+  return {
+    ok: true,
+    data: {
+      ...parsedIntegers,
+      ...(tradeReview !== undefined ? { tradeReview } : {}),
+      ...(tradeDeadline !== undefined ? { tradeDeadline } : {}),
+    },
+  };
 }
 
 function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
@@ -165,6 +235,10 @@ function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
     string,
     unknown
   >;
+  const tradeInput = (body.trade && typeof body.trade === 'object' ? body.trade : {}) as Record<
+    string,
+    unknown
+  >;
   const draftDate =
     typeof draftInput.draftDate === 'string' && draftInput.draftDate.trim()
       ? draftInput.draftDate
@@ -177,6 +251,7 @@ function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
   const autoPickRules = normalizeDraftAutoPickRules(
     draftInput.autoPickRules ?? DEFAULT_DRAFT_AUTO_PICK_RULES
   );
+  const categories = normalizeLeagueCategories(scoringInput.categories);
 
   return {
     league: {
@@ -191,12 +266,12 @@ function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
     },
     scoring: {
       scoringFormat: 'nine-category',
-      categories: normalizeLeagueCategories(scoringInput.categories),
+      categories,
       scoringMode: normalizeLeagueScoringMode(scoringInput.scoringMode, 'H2H_EACH_CATEGORY'),
       fixtureGenerationMode: normalizeFixtureGenerationMode(scoringInput.fixtureGenerationMode),
       lineupSlots: normalizeLineupSlots(scoringInput.lineupSlots),
       categoryDirections: normalizeCategoryDirections(
-        normalizeLeagueCategories(scoringInput.categories),
+        categories,
         scoringInput.categoryDirections as Partial<Record<FantasyCategoryKey, CategoryDirection>>
       ),
       scoringSettingsLockedAt: null,
@@ -219,6 +294,14 @@ function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
     },
     waiver: {
       waiverRule: String(waiverInput.waiverRule ?? 'weekly').toLowerCase(),
+    },
+    trade: {
+      tradeLimit: parseOptionalInteger(tradeInput.tradeLimit) ?? 10,
+      tradeReview: normalizeTradeReview(tradeInput.tradeReview),
+      tradeDeadline: typeof tradeInput.tradeDeadline === 'string' ? tradeInput.tradeDeadline : null,
+      offerExpiryHours: parseOptionalInteger(tradeInput.offerExpiryHours) ?? 72,
+      reviewHours: parseOptionalInteger(tradeInput.reviewHours) ?? 24,
+      vetoThreshold: parseOptionalInteger(tradeInput.vetoThreshold) ?? 3,
     },
   };
 }
@@ -247,6 +330,12 @@ function toSettingsResponse(league: {
     lineupSlotsJson: string | null;
     categoryDirectionsJson: string | null;
     scoringSettingsLockedAt: Date | null;
+    tradeLimit: number;
+    tradeReviewMode: string;
+    tradeDeadline: Date | null;
+    tradeOfferExpiryHours: number;
+    tradeReviewHours: number;
+    tradeVetoThreshold: number;
   };
 }) {
   const positionLimits = normalizeDraftPositionLimits(league.settings.positionLimitsJson);
@@ -288,6 +377,14 @@ function toSettingsResponse(league: {
     },
     waiver: {
       waiverRule: league.settings.waiverRule.toLowerCase(),
+    },
+    trade: {
+      tradeLimit: league.settings.tradeLimit,
+      tradeReview: normalizeTradeReview(league.settings.tradeReviewMode),
+      tradeDeadline: league.settings.tradeDeadline?.toISOString() ?? null,
+      offerExpiryHours: league.settings.tradeOfferExpiryHours,
+      reviewHours: league.settings.tradeReviewHours,
+      vetoThreshold: league.settings.tradeVetoThreshold,
     },
   };
 }
@@ -370,6 +467,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         waiver: {
           waiverRule: String(data.waiverRule ?? data.waiverWire?.waiverResetPolicy ?? 'weekly'),
         },
+        trade: {
+          tradeLimit: Number(data.tradeSettings?.tradeLimit ?? 10),
+          tradeReview: normalizeTradeReview(data.tradeSettings?.tradeReview),
+          tradeDeadline: data.tradeSettings?.tradeDeadline ?? null,
+          offerExpiryHours: Number(data.tradeSettings?.offerExpiryHours ?? 72),
+          reviewHours: Number(data.tradeSettings?.reviewHours ?? 24),
+          vetoThreshold: Number(data.tradeSettings?.vetoThreshold ?? 3),
+        },
       },
     });
   } catch (error) {
@@ -424,6 +529,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const waiverInput = (
       body.waiver && typeof body.waiver === 'object' ? body.waiver : {}
     ) as Record<string, unknown>;
+    const tradeInput = (body.trade && typeof body.trade === 'object' ? body.trade : {}) as Record<
+      string,
+      unknown
+    >;
+    const tradeSettingsResult = parseTradeSettingsUpdate(tradeInput);
+    if (!tradeSettingsResult.ok) {
+      return NextResponse.json({ error: tradeSettingsResult.error }, { status: 400 });
+    }
+    const { tradeLimit, tradeReview, tradeDeadline, offerExpiryHours, reviewHours, vetoThreshold } =
+      tradeSettingsResult.data;
 
     const prismaLeague = await prisma.league.findUnique({
       where: { id },
@@ -463,12 +578,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         scoringInput.lineupSlots === undefined && body.lineupSlots === undefined
           ? parseLineupSlotsJson(prismaLeague.settings.lineupSlotsJson)
           : normalizeLineupSlots(scoringInput.lineupSlots ?? body.lineupSlots);
-      const categoryDirections = normalizeCategoryDirections(
-        categories,
-        (scoringInput.categoryDirections ?? body.categoryDirections) as Partial<
-          Record<FantasyCategoryKey, CategoryDirection>
-        >
-      );
+      const categoryDirectionsInput = scoringInput.categoryDirections ?? body.categoryDirections;
+      const categoryDirections =
+        categoryDirectionsInput === undefined
+          ? parseCategoryDirectionsJson(categories, prismaLeague.settings.categoryDirectionsJson)
+          : normalizeCategoryDirections(
+              categories,
+              categoryDirectionsInput as Partial<Record<FantasyCategoryKey, CategoryDirection>>
+            );
       const scoringSettingsChanged =
         scoringInput.scoringMode !== undefined ||
         body.scoringMode !== undefined ||
@@ -547,6 +664,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           ? String(draftInput.timeZone ?? body.timeZone)
           : prismaLeague.settings.timeZone;
 
+      const nextTradeReview =
+        tradeReview ?? normalizeTradeReview(prismaLeague.settings.tradeReviewMode);
+
       await prisma.$transaction([
         prisma.league.update({
           where: { id },
@@ -574,6 +694,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             fixtureGenerationMode,
             lineupSlotsJson: JSON.stringify(lineupSlots),
             categoryDirectionsJson: JSON.stringify(categoryDirections),
+            tradeLimit: tradeLimit ?? prismaLeague.settings.tradeLimit,
+            tradeReviewMode: toPrismaTradeReview(nextTradeReview),
+            ...(tradeDeadline !== undefined ? { tradeDeadline } : {}),
+            tradeOfferExpiryHours: offerExpiryHours ?? prismaLeague.settings.tradeOfferExpiryHours,
+            tradeReviewHours: reviewHours ?? prismaLeague.settings.tradeReviewHours,
+            tradeVetoThreshold: vetoThreshold ?? prismaLeague.settings.tradeVetoThreshold,
           },
         }),
       ]);
@@ -605,6 +731,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
 
+    const existingData = leagueDoc.data() ?? {};
+    const existingTradeSettings =
+      existingData.tradeSettings && typeof existingData.tradeSettings === 'object'
+        ? (existingData.tradeSettings as Record<string, unknown>)
+        : {};
     const maxTeamsInput = leagueInput.maxTeams ?? body.maxTeams;
     const maxTeams = parseOptionalInteger(maxTeamsInput);
     if (maxTeamsInput !== undefined && maxTeams === undefined) {
@@ -661,6 +792,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         rosterInput.positionLimits ?? body.positionLimits
       ),
       autoPickRules: normalizeDraftAutoPickRules(draftInput.autoPickRules ?? body.autoPickRules),
+      tradeSettings: {
+        ...existingTradeSettings,
+        ...(tradeLimit !== undefined ? { tradeLimit } : {}),
+        ...(tradeReview !== undefined ? { tradeReview } : {}),
+        ...(tradeDeadline !== undefined
+          ? { tradeDeadline: tradeDeadline?.toISOString() ?? null }
+          : {}),
+        ...(offerExpiryHours !== undefined ? { offerExpiryHours } : {}),
+        ...(reviewHours !== undefined ? { reviewHours } : {}),
+        ...(vetoThreshold !== undefined ? { vetoThreshold } : {}),
+      },
       updatedAt: new Date().toISOString(),
     });
 
@@ -705,6 +847,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         },
         waiver: {
           waiverRule: String(data.waiverRule ?? data.waiverWire?.waiverResetPolicy ?? 'weekly'),
+        },
+        trade: {
+          tradeLimit: Number(data.tradeSettings?.tradeLimit ?? 10),
+          tradeReview: normalizeTradeReview(data.tradeSettings?.tradeReview),
+          tradeDeadline: data.tradeSettings?.tradeDeadline ?? null,
+          offerExpiryHours: Number(data.tradeSettings?.offerExpiryHours ?? 72),
+          reviewHours: Number(data.tradeSettings?.reviewHours ?? 24),
+          vetoThreshold: Number(data.tradeSettings?.vetoThreshold ?? 3),
         },
       },
     });

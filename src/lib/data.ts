@@ -2,7 +2,7 @@
 void import('server-only').catch(() => undefined);
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Player } from '@/types/players';
+import type { Player, PlayerSeasonStatBasis } from '@/types/players';
 
 type AnyObj = Record<string, unknown>;
 
@@ -181,6 +181,43 @@ function readRound(row: AnyObj): number {
   return readNumber(rawRound) ?? 0;
 }
 
+function readDate(row: AnyObj): string | null {
+  const rawDate = pick<unknown>(row, ['date']);
+  if (typeof rawDate !== 'string' || rawDate.trim() === '') return null;
+
+  const timestamp = Date.parse(rawDate);
+  if (!Number.isFinite(timestamp)) return null;
+
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function getMatchIdentity(row: AnyObj, rowIndex: number): string {
+  const rawMatchId = pick<unknown>(row, ['matchId']);
+  if (typeof rawMatchId === 'string' || typeof rawMatchId === 'number') {
+    const matchId = String(rawMatchId).trim();
+    if (matchId) return `id:${matchId}`;
+  }
+
+  const season = readSeason(row);
+  const round = readRound(row);
+  const date = readDate(row) ?? '';
+  const opposition = String(pick<unknown>(row, ['opposition']) ?? '').trim();
+  if (season || round || date || opposition) {
+    return `context:${season}|${round}|${date}|${opposition}`;
+  }
+
+  // Rows without match context cannot be safely assumed to represent one game.
+  return `row:${rowIndex}`;
+}
+
+function deduplicateSeasonRows(rows: AnyObj[]): AnyObj[] {
+  const rowsByMatch = new Map<string, AnyObj>();
+  rows.forEach((row, rowIndex) => {
+    rowsByMatch.set(getMatchIdentity(row, rowIndex), row);
+  });
+  return Array.from(rowsByMatch.values());
+}
+
 function isNewerRow(candidate: AnyObj, current: AnyObj): boolean {
   const candidateSeason = readSeason(candidate);
   const currentSeason = readSeason(current);
@@ -191,18 +228,33 @@ function isNewerRow(candidate: AnyObj, current: AnyObj): boolean {
 function buildSeasonStats(rows: AnyObj[]): {
   season: number;
   games: number;
+  dataThrough: string | null;
   stats: Record<string, number>;
+  basisByStat: Record<string, PlayerSeasonStatBasis>;
 } {
-  const games = rows.length;
-  const season = readSeason(rows[0]);
+  const uniqueRows = deduplicateSeasonRows(rows);
+  const games = uniqueRows.length;
+  const season = readSeason(uniqueRows[0]);
+  const dataThrough = uniqueRows.reduce<string | null>((latest, row) => {
+    const date = readDate(row);
+    return date && (!latest || date > latest) ? date : latest;
+  }, null);
   const stats: Record<string, number> = {};
+  const basisByStat: Record<string, PlayerSeasonStatBasis> = {};
 
   for (const key of STAT_KEYS) {
-    const total = rows.reduce((sum, row) => sum + (readNumber(row[key]) ?? 0), 0);
-    stats[key] = AVERAGE_STAT_KEYS.has(key) && games > 0 ? total / games : total;
+    const values = uniqueRows
+      .map((row) => readNumber(row[key]))
+      .filter((value): value is number => value !== null);
+    if (values.length === 0) continue;
+
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const isPerGameSource = AVERAGE_STAT_KEYS.has(key);
+    stats[key] = isPerGameSource ? total / values.length : total;
+    basisByStat[key] = isPerGameSource ? 'PER_GAME' : 'TOTAL';
   }
 
-  return { season, games, stats };
+  return { season, games, dataThrough, stats, basisByStat };
 }
 
 async function loadAllPlayers(): Promise<Player[]> {
@@ -232,7 +284,10 @@ async function loadAllPlayers(): Promise<Player[]> {
 
   // build Player objects with unique ids + nested stats
   const players: Player[] = Array.from(byKey.values()).map((rows) => {
-    const latestRow = rows.reduce((latest, row) => (isNewerRow(row, latest) ? row : latest), rows[0]);
+    const latestRow = rows.reduce(
+      (latest, row) => (isNewerRow(row, latest) ? row : latest),
+      rows[0]
+    );
     const name = (
       pick<string>(latestRow, ['name', 'playerName', 'player'], 'Unknown') as string
     ).toString();
@@ -257,7 +312,15 @@ async function loadAllPlayers(): Promise<Player[]> {
     const statsBySeason = Object.fromEntries(
       availableStatSeasons.map((season) => {
         const seasonStats = buildSeasonStats(rowsBySeason.get(season) ?? []);
-        return [String(season), { games: seasonStats.games, stats: seasonStats.stats }];
+        return [
+          String(season),
+          {
+            games: seasonStats.games,
+            dataThrough: seasonStats.dataThrough,
+            stats: seasonStats.stats,
+            basisByStat: seasonStats.basisByStat,
+          },
+        ];
       })
     );
     const latestSeason = availableStatSeasons[0];

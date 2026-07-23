@@ -1,17 +1,22 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { getPlayers } from '@/lib/data';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import {
-  buildAvailableDraftPlayer,
-  loadDraftPlayerStatsLookup,
-  parseSelectedCategories,
-  type DraftPlayerStatsLookup,
-} from '@/server/draft/readModels/draftPlayerReadModel';
+  buildLeaguePlayerStatDatasetForTargets,
+  type LeaguePlayerStatTarget,
+} from '@/server/players/readModels/leaguePlayerStatReadModel';
+import { parseCategoryDirectionsJson } from '@/server/leagues/categoryDirections';
+import {
+  RosterPreferenceError,
+  RosterProjectionService,
+} from '@/server/rosters/RosterProjectionService';
 import {
   REAL_DATA_NINE_CATEGORY_PRESET,
+  normalizeFantasyCategoryKeys,
   type FantasyCategoryKey,
 } from '@/types/fantasyCategories';
 import { z } from 'zod';
@@ -34,61 +39,16 @@ async function ensureRosterTablesOnce() {
   await rosterTablesReady;
 }
 
-// Deterministic hash for stable pseudo-random numbers
-function hashStringToInt(str: string): number {
-  // FNV-1a hash for better distribution
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return Math.abs(h);
-}
-
-function deriveDeterministicStats(position: string | null | undefined, seedKey: string) {
-  const seed = hashStringToInt(seedKey);
-  const base =
-    position === 'MID'
-      ? 90
-      : position === 'FWD'
-        ? 80
-        : position === 'DEF'
-          ? 75
-          : position === 'RUC'
-            ? 85
-            : 75;
-  const variance = (seed % 21) - 10; // -10..+10
-  const averageScore = Math.max(40, Math.round(base + variance));
-  const lastGameScore = Math.max(20, Math.round(averageScore + (((seed >> 3) % 31) - 15))); // ±15
-  const projectedScore = Math.max(30, Math.round(averageScore + (((seed >> 5) % 21) - 10))); // ±10
-
-  const basePrice =
-    position === 'MID'
-      ? 650000
-      : position === 'FWD'
-        ? 600000
-        : position === 'DEF'
-          ? 550000
-          : position === 'RUC'
-            ? 580000
-            : 500000;
-  const priceVar = ((seed >> 7) % 200001) - 100000; // -100k..+100k
-  const price = Math.max(100000, basePrice + priceVar);
-
-  const form = [
-    lastGameScore,
-    Math.max(20, Math.round(averageScore + (((seed >> 9) % 21) - 10))),
-    Math.max(20, Math.round(averageScore + (((seed >> 11) % 21) - 10))),
-    Math.max(20, Math.round(averageScore + (((seed >> 13) % 21) - 10))),
-    Math.max(20, Math.round(averageScore + (((seed >> 15) % 21) - 10))),
-  ];
-
-  return { price, averageScore, lastGameScore, projectedScore, form } as const;
-}
-
 function getSelectedLeagueCategories(rawCategories: unknown): FantasyCategoryKey[] {
-  const selectedCategories = parseSelectedCategories(rawCategories);
-  return selectedCategories.length > 0 ? selectedCategories : [...REAL_DATA_NINE_CATEGORY_PRESET];
+  let parsed = rawCategories;
+  if (typeof rawCategories === 'string') {
+    try {
+      parsed = JSON.parse(rawCategories);
+    } catch {
+      parsed = rawCategories.split(',').map((category) => category.trim());
+    }
+  }
+  return normalizeFantasyCategoryKeys(parsed, REAL_DATA_NINE_CATEGORY_PRESET);
 }
 
 const PutSchema = z.object({
@@ -97,8 +57,6 @@ const PutSchema = z.object({
   viceCaptainId: z.string().optional().nullable(),
   benchOrder: z.array(z.string()).optional().nullable(),
 });
-
-import { Prisma } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
@@ -118,9 +76,10 @@ export async function GET(
 
     await ensureRosterTablesOnce();
 
-    // Fetch member and league in a single transaction
     const [member, league] = await prisma.$transaction([
-      prisma.leagueMember.findFirst({ where: { leagueId, userId } }),
+      prisma.leagueMember.findFirst({
+        where: { leagueId, userId, isActive: true, status: 'ACTIVE' },
+      }),
       prisma.league.findUnique({ where: { id: leagueId }, include: { settings: true } }),
     ]);
 
@@ -128,135 +87,44 @@ export async function GET(
     if (!league) return errorResponse('League not found', 404);
 
     const selectedCategories = getSelectedLeagueCategories(league.categoriesJson);
-
-    // Read normalized roster rows first; fallback to JSON list
-    // Use raw SQL to avoid depending on Prisma schema migrations
-    const rows =
-      (await prisma.$queryRaw`SELECT "playerId" FROM "LeagueRosterPlayer" WHERE "leagueId" = ${leagueId} AND "memberId" = ${member.id} ORDER BY "createdAt" ASC`) as Array<{
-        playerId: string;
-      }>;
-
-    // Read existing roster row (JSON payload) for compatibility
-    let roster = await prisma.leagueRoster.findUnique({
-      where: { leagueId_memberId: { leagueId, memberId: member.id } },
-    });
-
-    let playerIds: string[] = [];
-    if (Array.isArray(rows) && rows.length > 0) {
-      playerIds = rows.map((r) => String(r.playerId));
-      // Keep JSON roster in sync for compatibility
-      await prisma.leagueRoster.upsert({
+    const categoryDirections = parseCategoryDirectionsJson(
+      selectedCategories,
+      league.settings?.categoryDirectionsJson
+    );
+    const [roster, ownership, sourcePlayers] = await Promise.all([
+      prisma.leagueRoster.findUnique({
         where: { leagueId_memberId: { leagueId, memberId: member.id } },
-        create: { leagueId, memberId: member.id, playerIds: JSON.stringify(playerIds) },
-        update: { playerIds: JSON.stringify(playerIds) },
-      });
-      // Refresh roster row
-      roster = await prisma.leagueRoster.findUnique({
-        where: { leagueId_memberId: { leagueId, memberId: member.id } },
-      });
-    } else {
-      // Fallback to JSON roster storage if join table is empty
-      const fromJson = roster && roster.playerIds ? JSON.parse(String(roster.playerIds)) : [];
-      playerIds = Array.isArray(fromJson) ? fromJson.map(String) : [];
-      // If both are empty, initialize from draft picks
-      if (playerIds.length === 0) {
-        const draft = await prisma.draft.findFirst({
-          where: { leagueId },
-          include: {
-            picks: {
-              where: { memberId: member.id },
-              include: { player: true },
-              orderBy: { overall: 'asc' },
-            },
-          },
-        });
-        if (draft && draft.picks.length > 0) {
-          playerIds = draft.picks.map((p) => String(p.playerId));
-          await prisma.leagueRoster.upsert({
-            where: { leagueId_memberId: { leagueId, memberId: member.id } },
-            create: { leagueId, memberId: member.id, playerIds: JSON.stringify(playerIds) },
-            update: { playerIds: JSON.stringify(playerIds) },
-          });
-          // Insert into normalized table for future reads (batched)
-          try {
-            const rows = playerIds.map(
-              (pid) =>
-                Prisma.sql`(${`${leagueId}:${member.id}:${pid}`}, ${leagueId}, ${member.id}, ${pid})`
-            );
-            if (rows.length > 0) {
-              await prisma.$executeRaw`
-                INSERT INTO "LeagueRosterPlayer" ("id", "leagueId", "memberId", "playerId")
-                VALUES ${Prisma.join(rows)}
-                ON CONFLICT ("leagueId", "memberId", "playerId") DO NOTHING
-              `;
-            }
-          } catch (_e) {
-            // Ignore table/insert errors; JSON still accurate
-          }
-          // Refresh roster row
-          roster = await prisma.leagueRoster.findUnique({
-            where: { leagueId_memberId: { leagueId, memberId: member.id } },
-          });
-          logger.info('Created roster from draft picks', {
-            leagueId,
-            memberId: member.id,
-            playerCount: playerIds.length,
-          });
-        }
-      }
-    }
-    const players =
-      playerIds.length > 0
-        ? await prisma.player.findMany({ where: { id: { in: playerIds } } })
-        : [];
-
-    // Preserve original input order
-    const byId = new Map(players.map((p) => [String(p.id), p] as const));
-    const orderedPlayers = playerIds
-      .map((pid) => byId.get(String(pid)))
-      .filter(Boolean) as typeof players;
-
-    let statsLookup: DraftPlayerStatsLookup | null = null;
-    try {
-      statsLookup = await loadDraftPlayerStatsLookup();
-    } catch (error) {
-      logger.warn('League roster stat enrichment unavailable', {
-        leagueId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-
-    // Deterministic (cacheable) stats instead of per-request randomness
-    const playersWithStats = orderedPlayers.map((player) => {
-      const fallbackStats = deriveDeterministicStats(player.position, `${player.id}:${leagueId}`);
-      const enrichedPlayer = buildAvailableDraftPlayer(
-        {
-          id: player.id,
-          name: player.name,
-          position: player.position ?? '',
-          club: player.club ?? '',
+      }),
+      prisma.leagueRosterPlayer.findMany({
+        where: { leagueId, memberId: member.id },
+        select: {
+          player: { select: { id: true, name: true, club: true, position: true } },
         },
-        statsLookup
-      );
-      const averageScore = enrichedPlayer.averagePoints ?? fallbackStats.averageScore;
-
+        orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
+      }),
+      getPlayers(),
+    ]);
+    const orderedPlayers = ownership.map(({ player }) => player);
+    const statTargets: LeaguePlayerStatTarget[] = orderedPlayers.map((player) => ({
+      id: player.id,
+      name: player.name,
+      club: player.club,
+    }));
+    const leaguePlayerStats = buildLeaguePlayerStatDatasetForTargets(sourcePlayers, statTargets, {
+      categories: selectedCategories,
+      categoryDirections,
+    });
+    const playersWithStats = orderedPlayers.map((player) => {
+      const leagueStats = leaguePlayerStats.playersById[player.id];
       return {
         id: player.id,
         name: player.name,
         position: player.position,
         team: player.club,
         club: player.club,
-        stats: enrichedPlayer.stats ?? {},
-        statsTotal: enrichedPlayer.statsTotal ?? {},
-        gamesPlayed: enrichedPlayer.gamesPlayed ?? 0,
-        avgPoints: enrichedPlayer.avgPoints ?? averageScore,
-        averagePoints: enrichedPlayer.averagePoints ?? averageScore,
-        fantasyPoints: enrichedPlayer.fantasyPoints ?? averageScore,
-        price: fallbackStats.price,
-        averageScore,
-        lastGameScore: fallbackStats.lastGameScore,
-        projectedScore: fallbackStats.projectedScore,
-        form: fallbackStats.form,
+        stats: leagueStats?.values ?? {},
+        leagueStats,
+        gamesPlayed: leagueStats?.gamesPlayed ?? 0,
         isCaptain: roster?.captainId === player.id,
         isViceCaptain: roster?.viceCaptainId === player.id,
       };
@@ -268,19 +136,17 @@ export async function GET(
         leagueId,
         memberId: member.id,
         teamName: member.teamName,
+        playerIds: orderedPlayers.map((player) => player.id),
         players: playersWithStats,
         captainId: roster?.captainId ?? null,
         viceCaptainId: roster?.viceCaptainId ?? null,
         benchOrder: roster?.benchOrder ? JSON.parse(String(roster.benchOrder)) : [],
-        totalValue: playersWithStats.reduce((sum, p) => sum + p.price, 0),
-        averageScore: Math.round(
-          playersWithStats.reduce((s, p) => s + p.averageScore, 0) /
-            (playersWithStats.length || 1) || 0
-        ),
-        updatedAt: roster?.updatedAt || new Date(),
+        updatedAt: roster?.updatedAt ?? null,
       },
+      leaguePlayerStats,
       leagueSettings: {
         selectedCategories,
+        categoryDirections,
         enableCaptainSystem: Boolean(league.settings?.enableCaptainSystem ?? true),
         captainMultiplier: Number(league.settings?.captainMultiplier ?? 2.0),
         viceCaptainMultiplier: Number(league.settings?.viceCaptainMultiplier ?? 1.5),
@@ -317,52 +183,22 @@ export async function PUT(
     await ensureRosterTablesOnce();
 
     const [member, league] = await prisma.$transaction([
-      prisma.leagueMember.findFirst({ where: { leagueId, userId } }),
-      prisma.league.findUnique({ where: { id: leagueId }, include: { settings: true } }),
+      prisma.leagueMember.findFirst({
+        where: { leagueId, userId, isActive: true, status: 'ACTIVE' },
+      }),
+      prisma.league.findUnique({ where: { id: leagueId }, select: { id: true } }),
     ]);
 
     if (!member) return errorResponse('User is not a member of this league', 404);
     if (!league) return errorResponse('League not found', 404);
 
-    // Validate captain/vice vs playerIds
-    if (body.captainId && !body.playerIds.includes(body.captainId)) {
-      return errorResponse('Captain must be on the roster', 400);
-    }
-    if (body.viceCaptainId && !body.playerIds.includes(body.viceCaptainId)) {
-      return errorResponse('Vice-captain must be on the roster', 400);
-    }
-    if (body.captainId && body.viceCaptainId && body.captainId === body.viceCaptainId) {
-      return errorResponse('Captain and vice-captain cannot be the same player', 400);
-    }
-
-    const benchOrderJson = body.benchOrder ? JSON.stringify(body.benchOrder) : null;
-
-    // Upsert roster atomically via ORM and return updated row
-    const roster = await prisma.leagueRoster.upsert({
-      where: { leagueId_memberId: { leagueId, memberId: member.id } },
-      create: {
-        leagueId,
-        memberId: member.id,
-        playerIds: JSON.stringify(body.playerIds),
-        captainId: body.captainId || null,
-        viceCaptainId: body.viceCaptainId || null,
-        benchOrder: benchOrderJson,
-      },
-      update: {
-        playerIds: JSON.stringify(body.playerIds),
-        captainId: body.captainId || null,
-        viceCaptainId: body.viceCaptainId || null,
-        benchOrder: benchOrderJson,
-      },
-      select: {
-        id: true,
-        leagueId: true,
-        memberId: true,
-        captainId: true,
-        viceCaptainId: true,
-        benchOrder: true,
-        updatedAt: true,
-      },
+    const roster = await new RosterProjectionService().updateMemberPreferences({
+      leagueId,
+      memberId: member.id,
+      submittedPlayerIds: body.playerIds,
+      captainId: body.captainId,
+      viceCaptainId: body.viceCaptainId,
+      benchOrder: body.benchOrder,
     });
 
     logger.info('Updated league roster', { leagueId, memberId: member.id, rosterId: roster.id });
@@ -375,10 +211,16 @@ export async function PUT(
         captainId: roster.captainId ?? null,
         viceCaptainId: roster.viceCaptainId ?? null,
         benchOrder: roster.benchOrder ? JSON.parse(String(roster.benchOrder)) : [],
-        updatedAt: roster.updatedAt ?? new Date(),
+        updatedAt: roster.updatedAt,
       },
     });
   } catch (error) {
+    if (error instanceof RosterPreferenceError) {
+      return errorResponse(error.message, error.status);
+    }
+    if (error instanceof z.ZodError) {
+      return errorResponse('Invalid roster preferences', 400);
+    }
     logger.error('Failed to update league roster', {
       error: error instanceof Error ? error.message : String(error),
     });

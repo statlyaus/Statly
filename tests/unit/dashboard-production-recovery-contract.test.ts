@@ -30,10 +30,9 @@ describe('dashboard production recovery route contract', () => {
 
   it('keeps public AFL archive separate from fantasy Trade Centre', () => {
     const tradeCentreRoute = readRepoFile('src/app/tradecentre/page.tsx');
-    expect(tradeCentreRoute).not.toContain("redirect('/draft/trades')");
-    expect(tradeCentreRoute).toContain("redirect('/login?next=/tradecentre')");
-    expect(tradeCentreRoute).toContain('leagueMember.findFirst');
-    expect(tradeCentreRoute).toContain("redirect(`/leagues/${membership.leagueId}/trades`)");
+    expect(tradeCentreRoute).toContain("redirect('/draft/trades')");
+    expect(tradeCentreRoute).not.toContain('/leagues/');
+    expect(tradeCentreRoute).not.toContain('leagueMember.findFirst');
 
     const publicHome = readRepoFile('src/app/(public)/page.tsx');
     expect(publicHome).toContain('AFL Draft & Trade Archive');

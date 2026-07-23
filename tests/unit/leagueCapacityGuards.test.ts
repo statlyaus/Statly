@@ -22,6 +22,10 @@ const membershipMocks = vi.hoisted(() => ({
   queueLeagueMembershipSet: vi.fn(),
 }));
 
+const membershipAccessMocks = vi.hoisted(() => ({
+  getLeagueMembershipAccess: vi.fn(),
+}));
+
 const prismaMocks = vi.hoisted(() => ({
   $transaction: vi.fn(),
   league: {
@@ -81,6 +85,14 @@ vi.mock('../../src/lib/leagueMembership', () => ({
   isLeagueManagerRole: membershipMocks.isLeagueManagerRole,
   listActiveLeagueMembers: membershipMocks.listActiveLeagueMembers,
   queueLeagueMembershipSet: membershipMocks.queueLeagueMembershipSet,
+}));
+
+vi.mock('@/server/leagues/membership', () => ({
+  getLeagueMembershipAccess: membershipAccessMocks.getLeagueMembershipAccess,
+}));
+
+vi.mock('../../src/server/leagues/membership', () => ({
+  getLeagueMembershipAccess: membershipAccessMocks.getLeagueMembershipAccess,
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -151,6 +163,12 @@ describe('league capacity guards', () => {
       isMember: true,
       source: 'prisma',
       data: { role: 'OWNER' },
+    });
+    membershipAccessMocks.getLeagueMembershipAccess.mockResolvedValue({
+      leagueId: 'league-1',
+      userId: 'owner-user',
+      isMember: true,
+      canManage: true,
     });
     membershipMocks.isLeagueManagerRole.mockReturnValue(true);
     membershipMocks.getLeagueMemberDocId.mockImplementation(

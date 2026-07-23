@@ -7,7 +7,10 @@ vi.mock('@/lib/firebaseAdmin', () => ({
   adminDb: {},
 }));
 
-import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
+import {
+  RosterPreferenceError,
+  RosterProjectionService,
+} from '@/server/rosters/RosterProjectionService';
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
@@ -207,9 +210,70 @@ describe('RosterProjectionService', () => {
   it('projects rosters after completed draft command results', () => {
     const source = read('src/server/draft/services/DraftApplicationService.ts');
 
-    expect(source).toContain("import { RosterProjectionService }");
+    expect(source).toContain('import { RosterProjectionService }');
     expect(source).toContain('private readonly rosterProjectionService');
     expect(source).toContain('if (result.isComplete)');
     expect(source).toContain('this.rosterProjectionService.projectDraft');
+  });
+
+  it('updates preferences while projecting canonical ownership into legacy JSON', async () => {
+    const tx = {
+      leagueRosterPlayer: {
+        findMany: vi.fn().mockResolvedValue([{ playerId: 'player-2' }, { playerId: 'player-1' }]),
+      },
+      leagueRoster: { upsert: vi.fn().mockResolvedValue({ id: 'roster-1' }) },
+    };
+    const db = {
+      $transaction: vi.fn((work) => work(tx)),
+    };
+    const service = new RosterProjectionService(db as never);
+
+    await service.updateMemberPreferences({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      submittedPlayerIds: ['player-1', 'player-2'],
+      captainId: 'player-1',
+      viceCaptainId: 'player-2',
+      benchOrder: ['player-2'],
+    });
+
+    expect(tx.leagueRoster.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          playerIds: JSON.stringify(['player-2', 'player-1']),
+          captainId: 'player-1',
+          viceCaptainId: 'player-2',
+          benchOrder: JSON.stringify(['player-2']),
+        }),
+        update: expect.objectContaining({
+          playerIds: JSON.stringify(['player-2', 'player-1']),
+        }),
+      })
+    );
+  });
+
+  it('rejects a stale client roster without changing ownership or preferences', async () => {
+    const tx = {
+      leagueRosterPlayer: {
+        findMany: vi.fn().mockResolvedValue([{ playerId: 'player-1' }]),
+      },
+      leagueRoster: { upsert: vi.fn() },
+    };
+    const db = {
+      $transaction: vi.fn((work) => work(tx)),
+    };
+    const service = new RosterProjectionService(db as never);
+
+    await expect(
+      service.updateMemberPreferences({
+        leagueId: 'league-1',
+        memberId: 'member-1',
+        submittedPlayerIds: ['player-1', 'player-2'],
+      })
+    ).rejects.toMatchObject({
+      code: 'ROSTER_CHANGED',
+      status: 409,
+    } satisfies Partial<RosterPreferenceError>);
+    expect(tx.leagueRoster.upsert).not.toHaveBeenCalled();
   });
 });

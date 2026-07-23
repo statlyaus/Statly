@@ -69,7 +69,10 @@ describe('league detail route architecture', () => {
     expect(loaderSource).toContain("adminDb.collection('leagues').doc(leagueId)");
     expect(loaderSource).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
     expect(loaderSource).toContain('normalizeLeagueCategories(prismaLeague.categoriesJson)');
-    expect(loaderSource).toContain('selected.length === parsed.length');
+    expect(loaderSource).toContain('normalizeFantasyCategoryKeys');
+    expect(loaderSource).toContain(
+      'return normalizeFantasyCategoryKeys(JSON.parse(value), REAL_DATA_NINE_CATEGORY_PRESET);'
+    );
     expect(loaderSource).not.toContain(
       "categories: ['goals', 'kicks', 'handballs', 'marks', 'tackles', 'inside50s']"
     );

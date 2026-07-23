@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import LeagueTabs from '@/components/league/LeagueTabs';
+import type { LeagueTradeDigest } from '@/server/leagues/trades/tradeContracts';
 import type { League, LeagueMember } from '@/types/leagues';
 
 const authenticatedFetchMock = vi.hoisted(() => vi.fn());
@@ -78,6 +79,19 @@ const members: LeagueMember[] = [
 
 describe('LeagueTabs overview snapshot', () => {
   it('shows teams, waiver priority, pending trades, and league context at a glance', async () => {
+    const initialTradeDigest: LeagueTradeDigest = {
+      actionRequired: 1,
+      pending: 1,
+      recent: [
+        {
+          id: 'trade-1',
+          status: 'PENDING',
+          teamNames: ['First Team', 'Second Team'],
+          playerNames: ['Player A', 'Player B'],
+          updatedAt: '2026-07-04T00:00:00.000Z',
+        },
+      ],
+    };
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -105,22 +119,18 @@ describe('LeagueTabs overview snapshot', () => {
     authenticatedFetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
-        trades: [
-          {
-            tradeId: 'trade-1',
-            summary: {
-              tradeId: 'trade-1',
-              tradeName: 'Midfield upgrade',
-              status: 'PENDING',
-              playerNames: ['Player A', 'Player B'],
-              lastUpdated: 1000,
-            },
-          },
-        ],
+        data: { unread: { chat: 0, board: 0, activity: 0 } },
       }),
     });
 
-    render(<LeagueTabs league={league} members={members} currentUserId="user-2" />);
+    render(
+      <LeagueTabs
+        league={league}
+        members={members}
+        currentUserId="user-2"
+        initialTradeDigest={initialTradeDigest}
+      />
+    );
 
     expect(screen.getByText('League overview')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Snapshot League' })).toBeInTheDocument();
@@ -161,10 +171,7 @@ describe('LeagueTabs overview snapshot', () => {
       'bg-[color:var(--league-surface)]'
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('Midfield upgrade')).toBeInTheDocument();
-    });
-
+    expect(screen.getByText('First Team ↔ Second Team')).toBeInTheDocument();
     expect(screen.getByText('Player A, Player B')).toBeInTheDocument();
     expect(screen.getAllByText('Waiver position').length).toBeGreaterThan(0);
     expect(screen.queryByText('Your claim position')).not.toBeInTheDocument();
@@ -173,7 +180,7 @@ describe('LeagueTabs overview snapshot', () => {
     });
     expect(screen.getByText('$12')).toBeInTheDocument();
     expect(screen.queryByText('Next action')).not.toBeInTheDocument();
-    expect(authenticatedFetchMock).toHaveBeenCalledWith(
+    expect(authenticatedFetchMock).not.toHaveBeenCalledWith(
       '/api/trades/list?leagueId=league-1&status=PENDING&pageSize=3',
       {},
       'user-2'

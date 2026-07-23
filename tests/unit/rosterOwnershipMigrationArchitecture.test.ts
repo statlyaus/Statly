@@ -38,16 +38,19 @@ describe('roster ownership migration architecture', () => {
     expect(source).not.toContain('getUserIdFromRequest');
   });
 
-  it('enriches roster API players through the shared draft player stats read model', () => {
+  it('projects canonical ownership through the shared averages-only stat read model', () => {
     const source = readFileSync(
       join(root, 'src/app/api/leagues/[id]/roster/[userId]/route.ts'),
       'utf8'
     );
 
-    expect(source).toContain('loadDraftPlayerStatsLookup');
-    expect(source).toContain('buildAvailableDraftPlayer');
-    expect(source).toContain('parseSelectedCategories');
+    expect(source).toContain('buildLeaguePlayerStatDatasetForTargets');
+    expect(source).toContain('prisma.leagueRosterPlayer.findMany');
+    expect(source).toContain('leaguePlayerStats');
     expect(source).toContain('selectedCategories');
-    expect(source).toContain('stats: enrichedPlayer.stats');
+    expect(source).not.toContain('loadDraftPlayerStatsLookup');
+    expect(source).not.toContain('deriveDeterministicStats');
+    expect(source).not.toContain('statsTotal');
+    expect(source).not.toContain('prisma.$queryRaw');
   });
 });

@@ -6,19 +6,20 @@ describe('league settings route architecture', () => {
   const readSource = () =>
     readFileSync(join(process.cwd(), 'src/app/api/leagues/[id]/settings/route.ts'), 'utf8');
 
-  it('authorizes members for reads and managers for writes before data access', () => {
+  it('authorizes active members for reads and commissioners for writes before data access', () => {
     const source = readSource();
 
     expect(source).toContain("import { getAuthenticatedUserId } from '@/lib/serverAuth'");
     expect(source).toContain(
-      'getLeagueMembership,\n  isLeagueManagerRole,\n  listActiveLeagueMembers'
+      "import { getLeagueMembershipAccess } from '@/server/leagues/membership'"
     );
-    expect(source).toContain("from '@/lib/leagueMembership'");
     expect(source).toContain('authorizeLeagueSettingsRead(request, id)');
     expect(source).toContain('authorizeLeagueSettingsWrite(request, id)');
     expect(source).toContain('const userId = await getAuthenticatedUserId(request);');
-    expect(source).toContain('const membership = await getLeagueMembership(leagueId, userId);');
-    expect(source).toContain('!isLeagueManagerRole(membership.data?.role)');
+    expect(source).toContain('const access = await getLeagueMembershipAccess(leagueId, userId);');
+    expect(source).toContain('if (!access.isMember)');
+    expect(source).toContain('if (!access.canManage)');
+    expect(source).not.toContain('isLeagueManagerRole(membership.data?.role)');
     expect(source.indexOf('authorizeLeagueSettingsRead(request, id)')).toBeLessThan(
       source.indexOf('prisma.league.findUnique')
     );
@@ -30,18 +31,22 @@ describe('league settings route architecture', () => {
     );
   });
 
-  it('normalizes league settings to the canonical nine-category fantasy contract', () => {
+  it('normalizes league settings through the complete fantasy category registry', () => {
     const source = readSource();
 
     expect(source).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
+    expect(source).toContain('normalizeFantasyCategoryKeys');
     expect(source).toContain("scoringFormat: 'nine-category'");
     expect(source).toContain('normalizeLeagueCategories(prismaLeague.categoriesJson)');
-    expect(source).toContain('selected.length === value.length');
+    expect(source).not.toContain('REAL_DATA_CATEGORY_KEYS');
     expect(source).toContain('categoriesJson: JSON.stringify(categories)');
     expect(source).toContain('scoringMode');
     expect(source).toContain('fixtureGenerationMode');
     expect(source).toContain('lineupSlotsJson');
     expect(source).toContain('categoryDirectionsJson');
+    expect(source).toContain(
+      'parseCategoryDirectionsJson(categories, prismaLeague.settings.categoryDirectionsJson)'
+    );
     expect(source).toContain('scoringSettingsLockedAt');
   });
 
