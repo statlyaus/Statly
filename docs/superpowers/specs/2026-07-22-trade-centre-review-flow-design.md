@@ -4,7 +4,7 @@ Date: 2026-07-22
 
 Status: Approved design
 
-Selected direction: Approach A — composed two-step workspace
+Selected direction: Approach A — composed two-step workspace with an inline final-send checkpoint
 
 ## Goal
 
@@ -16,7 +16,8 @@ The design must:
 - present both trade sides symmetrically;
 - make dense player and category data easier to scan;
 - keep the selected package and next action visible;
-- require an explicit client-side review before submission;
+- require an explicit, recipient-led client-side checkpoint before submission;
+- tell the manager what acceptance does under the current league rules;
 - work as a focused Send/Receive roster switch on mobile;
 - preserve the existing proposal API, trade lifecycle, category arithmetic, and persistence.
 
@@ -36,10 +37,12 @@ The design must:
 2. The edit screen uses neutral white or cool-grey roster surfaces with restrained Statly-blue accents.
 3. Green and red are reserved for calculated favourable and unfavourable category impact.
 4. Amber is reserved for warnings.
-5. The review step is client-local. Only its final **Send proposal** action calls the existing proposal callback.
+5. The review step is client-local. Only its recipient-specific final action calls the existing proposal callback.
 6. The persistent tray says **Ready to review**, not **Trade valid**, because server validation remains authoritative.
 7. Injury and availability indicators are deferred until authoritative data is added to the Trade Centre read model.
 8. Position consequences are neutral package deltas only. They are not lineup-validity or projected-lineup claims.
+9. The final checkpoint is inline. It replaces the existing timing/action sidebar and does not add a second modal or submission step.
+10. Server validation remains authoritative. The checkpoint explains the current rule snapshot but never promises that the displayed draft is already valid.
 
 ## Information Hierarchy
 
@@ -171,14 +174,41 @@ The review step contains:
 - compact **You send** and **You receive** package summaries;
 - category-impact summary and detailed table;
 - explicit basis: season average per selected player, per game;
-- neutral position-count changes for both packages;
+- a concise neutral position-balance summary;
 - optional message;
-- league deadline;
-- `Expires N hours after sending` policy;
-- **Back to edit**;
-- final **Send proposal**.
+- an inline `TradeSendCheckpoint` as the final decision surface.
 
 Entering review moves focus to the review heading. Returning to edit restores focus to **Review trade**. Submission errors remain visible in review and do not discard selections or message text.
+
+`TradeComposer` passes an explicit `proposal | counteroffer` mode. Presentation must not infer the action type from the presence of an unrelated callback.
+
+### `TradeSendCheckpoint`
+
+The final checkpoint is a small presentational component composed inside `TradeReviewStep`. It contains:
+
+- eyebrow **Final send checkpoint**;
+- recipient-led heading `Send to {teamName}?`;
+- a summary explaining that the other manager receives the offer after submission;
+- a semantic definition list with **You send**, **You receive**, **Expires**, and **Deadline**;
+- complete multi-player package summaries that remain usable with long player and team names;
+- a rule-aware consequence notice describing immediate completion, commissioner review, or veto review;
+- **Back to edit**;
+- `Send proposal to {teamName}` or `Send counteroffer to {teamName}`;
+- an announced recipient-aware pending state and an associated submission error.
+
+The checkpoint states that Statly rechecks ownership, roster capacity, league limits, and other authoritative constraints at the server boundary. It does not tell the manager that they should perform those checks themselves.
+
+Offer-expiry copy must account for the league deadline. When both apply, the checkpoint explains that the offer expires after the configured duration or at the league deadline, whichever comes first.
+
+### Shared acceptance path and rule presentation
+
+A presentation-neutral acceptance-path classifier is shared by the server transition policy and client presentation. It classifies the current league rules as:
+
+- immediate completion after acceptance and final validation;
+- commissioner review after acceptance;
+- veto review after acceptance, including its window and threshold.
+
+The server remains the source of truth for the actual transition. A pure client-safe presenter turns the shared classification into hero summaries and checkpoint consequences so these surfaces cannot define competing rule semantics.
 
 ### `TradeComparisonTable` and `tradeComparison`
 
@@ -193,10 +223,11 @@ A pure summary helper counts:
 
 The comparison presentation becomes:
 
-- `Category impact: N gained · N lost · N even`;
+- `Package difference: N favour incoming · N favour outgoing · N even`;
 - team-name columns instead of generic send/receive labels;
-- one combined **Impact** column containing signed difference, direction icon, and text;
+- one combined **Package difference** column containing signed difference, direction icon, and `Favours incoming`, `Favours outgoing`, or `Even` text;
 - one compact legend explaining that category direction is normalized;
+- an explicit statement that the table is neither a fairness score nor a lineup projection;
 - no repeated “higher/lower is better” text in every visible row;
 - tooltip and accessible names retain the original category direction;
 - green/red never acts as the only outcome indicator.
@@ -219,6 +250,7 @@ Safe derived presentation:
 - category-impact counts;
 - neutral position counts and deltas;
 - relative pre-send expiry wording.
+- rule-aware acceptance consequence copy derived from the shared acceptance path.
 
 Deferred until authoritative data exists:
 
@@ -238,6 +270,7 @@ Deferred until authoritative data exists:
 - API and conflict errors remain owned by the existing submission boundary.
 - A failed submission preserves the review draft.
 - Successful submission resets local state and follows the existing refresh behavior.
+- League rules can change while review is open; submission always revalidates against the server's current authoritative state.
 
 ## Accessibility
 
@@ -248,14 +281,15 @@ Deferred until authoritative data exists:
 - Announce selection count and readiness changes.
 - Provide 3px focus indicators and logical focus restoration between edit and review.
 - Associate validation errors through `aria-invalid` and `aria-describedby` where applicable.
+- Use a semantic definition list for the checkpoint summary and announce its pending submission state.
 - Verify the mobile switch with keyboard and screen-reader semantics.
 - Verify horizontal scroll regions, sticky content, and 200% zoom without page overflow.
 
 ## Responsive Behavior
 
-- 1920/1440px: centred 96rem workspace, side-by-side rosters, sticky tray.
+- 1920/1440px: centred 96rem workspace, side-by-side rosters, sticky tray; checkpoint actions may sit side by side.
 - 1024px: side-by-side only when both player identity columns remain usable; otherwise switch to the mobile-style roster control.
-- 390px: Send/Receive switch, one visible roster, full-width tray action, internal table scrolling.
+- 390px and 320px: Send/Receive switch, one visible roster, full-width tray action, internal table scrolling; checkpoint rows and actions stack without clipping.
 - The existing league navigation may scroll horizontally.
 - No breakpoint may create page-level horizontal overflow.
 
@@ -268,6 +302,7 @@ Automated checks:
 - mobile switch tests showing preserved selections and unique control IDs;
 - review tests proving **Review trade** makes no network request;
 - final submission tests proving only **Send proposal** calls the existing callback;
+- checkpoint tests for proposal and counteroffer labels, multi-player packages, long names, pending state, errors, and all three acceptance paths;
 - Back-to-edit persistence for selections and message;
 - comparison-summary tests for higher-is-better, lower-is-better, even, and unavailable categories;
 - existing average-not-total tests remain green;
@@ -275,8 +310,8 @@ Automated checks:
 
 Browser checks:
 
-- 1920, 1440, 1024, and 390px;
-- 200% zoom;
+- 1920, 1440, 1024, 390, and 320px;
+- 200% and 400% zoom;
 - no page-level horizontal overflow;
 - sticky tray does not obscure content;
 - keyboard-only edit → review → edit → submit journey;
@@ -286,3 +321,5 @@ Browser checks:
 ## Residual Risk
 
 The existing Trade Centre has no authoritative injury/availability or lineup projection data. Those requested ideas are deliberately excluded rather than approximated. A future feature should extend a shared server-side trade projection/read model before presenting those claims.
+
+The displayed league-rule snapshot may become stale if a commissioner changes settings while the review screen remains open. Server submission and acceptance checks preserve integrity. Strict client-side rule locking would require a versioned rules contract and is outside this presentation change.

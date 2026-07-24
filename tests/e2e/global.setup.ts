@@ -5,6 +5,7 @@ import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../src/types/fantasyCategorie
 
 export const E2E_LEAGUE_ID = 'e2e-completed-league';
 export const E2E_DRAFT_ID = 'cme2edraft0000e2etestdraft';
+const E2E_SEASON_ID = 'e2e-completed-season';
 const E2E_SETTINGS_ID = 'e2e-completed-settings';
 const E2E_HUMAN_MEMBER_ID = 'e2e-member-human';
 const E2E_BOT_MEMBER_ID = 'e2e-member-bot';
@@ -122,6 +123,22 @@ async function globalSetup() {
           categoriesJson: JSON.stringify([...REAL_DATA_NINE_CATEGORY_PRESET]),
           createdAt: now,
         },
+      });
+
+      await tx.leagueSeason.create({
+        data: {
+          id: E2E_SEASON_ID,
+          leagueId: E2E_LEAGUE_ID,
+          label: '2026 season',
+          year: 2026,
+          startsAt: new Date('2026-01-01T00:00:00.000Z'),
+          endsAt: new Date('2026-12-31T23:59:59.999Z'),
+        },
+      });
+
+      await tx.league.update({
+        where: { id: E2E_LEAGUE_ID },
+        data: { activeSeasonId: E2E_SEASON_ID },
       });
 
       await tx.leagueMember.createMany({

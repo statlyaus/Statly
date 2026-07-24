@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
+import type { TradeReviewMode } from '@/lib/trades/tradeAcceptancePath';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
 export const TRADE_VIEWS = ['inbox', 'sent', 'history', 'review'] as const;
 export type TradeView = (typeof TRADE_VIEWS)[number];
 
-export type TradeReviewModeDto = 'none' | 'admin' | 'veto';
+export type TradeReviewModeDto = TradeReviewMode;
 export type TradeThreadStatusDto =
   | 'PENDING'
   | 'ACCEPTED_PENDING_REVIEW'

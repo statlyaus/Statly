@@ -14,6 +14,11 @@ import {
 
 import { TradeCards } from './TradeCards';
 import { TradeComposer, type TradeComposerSubmission } from './TradeComposer';
+import {
+  getTradeDeadlineSummary,
+  getTradeOfferExpirySummary,
+  getTradeReviewSummary,
+} from './tradeRulePresentation';
 
 interface LeagueTradeCentrePanelProps {
   leagueId: string;
@@ -46,18 +51,23 @@ export function LeagueTradeCentrePanel({
   const [pendingTradeId, setPendingTradeId] = useState<string | null>(null);
   const [isComposerSubmitting, setIsComposerSubmitting] = useState(false);
   const [counterTrade, setCounterTrade] = useState<LeagueTradeDto | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<'offers' | 'compose'>(() =>
+    requestedPlayerId || ownerMemberId ? 'compose' : 'offers'
+  );
   const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const [composerError, setComposerError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const composerHeadingRef = useRef<HTMLHeadingElement>(null);
+  const offersHeadingRef = useRef<HTMLHeadingElement>(null);
   const commandKeysRef = useRef(new Map<string, string>());
   const snapshot = initialSnapshot;
 
   useEffect(() => {
-    if (!counterTrade && composerFocusRequest === 0) return;
-    composerHeadingRef.current?.focus();
-  }, [composerFocusRequest, counterTrade]);
+    if (composerFocusRequest === 0) return;
+    if (workspaceMode === 'compose') composerHeadingRef.current?.focus();
+    else offersHeadingRef.current?.focus();
+  }, [composerFocusRequest, workspaceMode]);
 
   function navigateToView(view: TradeView, cursor?: string): void {
     const next = new URLSearchParams(searchParams?.toString());
@@ -130,7 +140,7 @@ export function LeagueTradeCentrePanel({
         if (saved) {
           commandKeysRef.current.delete(commandSignature);
           setCounterTrade(null);
-          requestComposerHeadingFocus();
+          showOffers();
         }
         return saved;
       }
@@ -147,7 +157,7 @@ export function LeagueTradeCentrePanel({
       );
       if (saved) {
         commandKeysRef.current.delete(commandSignature);
-        requestComposerHeadingFocus();
+        showOffers();
       }
       return saved;
     } finally {
@@ -210,15 +220,32 @@ export function LeagueTradeCentrePanel({
     setComposerError(null);
     setMutationError(null);
     setCounterTrade(trade);
+    setWorkspaceMode('compose');
+    requestWorkspaceHeadingFocus();
   }
 
   function cancelCounter(): void {
     setComposerError(null);
     setCounterTrade(null);
-    requestComposerHeadingFocus();
+    showOffers();
   }
 
-  function requestComposerHeadingFocus(): void {
+  function openComposer(): void {
+    setComposerError(null);
+    setMutationError(null);
+    setCounterTrade(null);
+    setWorkspaceMode('compose');
+    requestWorkspaceHeadingFocus();
+  }
+
+  function showOffers(): void {
+    setComposerError(null);
+    setCounterTrade(null);
+    setWorkspaceMode('offers');
+    requestWorkspaceHeadingFocus();
+  }
+
+  function requestWorkspaceHeadingFocus(): void {
     setComposerFocusRequest((request) => request + 1);
   }
 
@@ -297,46 +324,78 @@ export function LeagueTradeCentrePanel({
           <TradeRuleSummary rules={snapshot.rules} />
         </header>
 
-        <div className="rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] p-4 shadow-[var(--trade-card-shadow)] sm:p-6">
-          <h3
-            ref={composerHeadingRef}
-            tabIndex={-1}
-            className="text-lg font-bold tracking-tight text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
+        {workspaceMode === 'compose' ? (
+          <section
+            aria-labelledby="trade-composer-heading"
+            className="rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)] p-4 shadow-[var(--trade-card-shadow)] sm:p-6"
           >
-            {counterTrade ? 'Build a counteroffer' : 'Propose a trade'}
-          </h3>
-          <p className="mb-6 mt-1 text-sm text-[color:var(--trade-text-muted)]">
-            {counterTrade
-              ? `Respond to offer ${counterTrade.currentOffer.sequence} with a new set of players.`
-              : 'Select at least one player from each roster.'}
-          </p>
-          <TradeComposer
-            key={counterTrade?.id ?? 'proposal'}
-            teams={snapshot.teams}
-            rules={snapshot.rules}
-            playerStats={snapshot.playerStats}
-            initialPartnerMemberId={ownerMemberId}
-            initialPlayerId={counterTrade ? null : requestedPlayerId}
-            counterPartnerMemberId={counterPartnerId}
-            isSubmitting={isComposerSubmitting}
-            error={composerError}
-            onSubmit={submitComposer}
-            onCancelCounter={counterTrade ? cancelCounter : undefined}
-          />
-        </div>
-
-        <section aria-labelledby="trade-offers-heading" className="space-y-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h3
-                id="trade-offers-heading"
-                className="text-lg font-bold tracking-tight text-[color:var(--trade-text)]"
+            <div className="mb-6 flex flex-col gap-4 border-b border-[color:var(--trade-border)] pb-5 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--trade-text-muted)]">
+                  Trade Centre
+                </p>
+                <h3
+                  id="trade-composer-heading"
+                  ref={composerHeadingRef}
+                  tabIndex={-1}
+                  className="mt-1 text-lg font-bold tracking-tight text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
+                >
+                  {counterTrade ? 'Counteroffer workspace' : 'Proposal workspace'}
+                </h3>
+                <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
+                  {counterTrade
+                    ? `Respond to offer ${counterTrade.currentOffer.sequence} with revised terms.`
+                    : 'Build and review a proposal before it is sent.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={showOffers}
+                className={workspaceSecondaryButtonClasses}
               >
-                Offers
-              </h3>
-              <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
-                Filter by the action or outcome you need.
-              </p>
+                Back to offers
+              </button>
+            </div>
+            <TradeComposer
+              key={counterTrade?.id ?? 'proposal'}
+              teams={snapshot.teams}
+              rules={snapshot.rules}
+              playerStats={snapshot.playerStats}
+              initialPartnerMemberId={ownerMemberId}
+              initialPlayerId={counterTrade ? null : requestedPlayerId}
+              counterPartnerMemberId={counterPartnerId}
+              isSubmitting={isComposerSubmitting}
+              error={composerError}
+              onSubmit={submitComposer}
+              onCancelCounter={counterTrade ? cancelCounter : undefined}
+            />
+          </section>
+        ) : (
+          <section aria-labelledby="trade-offers-heading" className="space-y-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--trade-text-muted)]">
+                  Trade ledger
+                </p>
+                <h3
+                  id="trade-offers-heading"
+                  ref={offersHeadingRef}
+                  tabIndex={-1}
+                  className="text-lg font-bold tracking-tight text-[color:var(--trade-text)] outline-none focus-visible:rounded focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
+                >
+                  Offers
+                </h3>
+                <p className="mt-1 text-sm text-[color:var(--trade-text-muted)]">
+                  Filter by the action or outcome you need.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openComposer}
+                className={workspacePrimaryButtonClasses}
+              >
+                New proposal
+              </button>
             </div>
             <nav aria-label="Trade offer views" className="max-w-full overflow-x-auto pb-1">
               <div className="inline-flex rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] p-1">
@@ -370,41 +429,44 @@ export function LeagueTradeCentrePanel({
                 })}
               </div>
             </nav>
-          </div>
 
-          {mutationError && (
-            <p
-              role="alert"
-              className="rounded-lg border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] p-3 text-sm font-semibold text-[color:var(--trade-text)]"
-            >
-              {mutationError}
+            {mutationError && (
+              <p
+                role="alert"
+                className="rounded-lg border border-[color:var(--trade-warning)]/30 bg-[color:var(--trade-warning-soft)] p-3 text-sm font-semibold text-[color:var(--trade-text)]"
+              >
+                {mutationError}
+              </p>
+            )}
+            <p aria-live="polite" className="sr-only">
+              {isNavigating ? 'Loading trade offers.' : announcement}
             </p>
-          )}
-          <p aria-live="polite" className="sr-only">
-            {isNavigating ? 'Loading trade offers.' : announcement}
-          </p>
-          <div aria-busy={isNavigating} className={isNavigating ? 'opacity-60' : undefined}>
-            <TradeCards
-              trades={snapshot.trades}
-              teams={snapshot.teams}
-              playerStats={snapshot.playerStats}
-              leagueId={leagueId}
-              pendingTradeId={pendingTradeId}
-              onAction={(trade, action) => void handleAction(trade, action)}
-              onCounter={startCounter}
-            />
-          </div>
-          {snapshot.nextCursor && (
-            <button
-              type="button"
-              disabled={isNavigating}
-              onClick={() => navigateToView(snapshot.activeView, snapshot.nextCursor ?? undefined)}
-              className={secondaryButtonClasses}
-            >
-              Next page
-            </button>
-          )}
-        </section>
+            <div aria-busy={isNavigating} className={isNavigating ? 'opacity-60' : undefined}>
+              <TradeCards
+                trades={snapshot.trades}
+                teams={snapshot.teams}
+                playerStats={snapshot.playerStats}
+                rules={snapshot.rules}
+                leagueId={leagueId}
+                pendingTradeId={pendingTradeId}
+                onAction={(trade, action) => void handleAction(trade, action)}
+                onCounter={startCounter}
+              />
+            </div>
+            {snapshot.nextCursor && (
+              <button
+                type="button"
+                disabled={isNavigating}
+                onClick={() =>
+                  navigateToView(snapshot.activeView, snapshot.nextCursor ?? undefined)
+                }
+                className={secondaryButtonClasses}
+              >
+                Next page
+              </button>
+            )}
+          </section>
+        )}
       </div>
     </section>
   );
@@ -415,17 +477,11 @@ function TradeRuleSummary({
 }: {
   rules: LeagueTradeCentreSnapshot['rules'];
 }): React.JSX.Element {
-  const reviewLabel =
-    rules.reviewMode === 'admin'
-      ? 'Commissioner approval'
-      : rules.reviewMode === 'veto'
-        ? `${rules.reviewHours}h veto window · ${rules.vetoThreshold} votes`
-        : 'Completes on acceptance';
   return (
     <dl className="mt-5 grid min-w-0 grid-cols-2 gap-2 text-xs lg:mt-0 lg:w-[42rem] lg:grid-cols-4">
       <div className="rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2.5">
         <dt className="text-white/60">Review</dt>
-        <dd className="mt-1 font-semibold leading-4 text-white">{reviewLabel}</dd>
+        <dd className="mt-1 font-semibold leading-4 text-white">{getTradeReviewSummary(rules)}</dd>
       </div>
       <div className="rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2.5">
         <dt className="text-white/60">Trade limit</dt>
@@ -436,13 +492,13 @@ function TradeRuleSummary({
       <div className="rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2.5">
         <dt className="text-white/60">Deadline</dt>
         <dd className="mt-1 font-semibold leading-4 text-white">
-          {rules.deadline ? formatShortDate(rules.deadline) : 'No deadline'}
+          {getTradeDeadlineSummary(rules.deadline)}
         </dd>
       </div>
       <div className="rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2.5">
         <dt className="text-white/60">Offer expiry</dt>
         <dd className="mt-1 font-semibold leading-4 text-white">
-          {rules.offerExpiryHours}h after sending
+          {getTradeOfferExpirySummary(rules.offerExpiryHours)}
         </dd>
       </div>
     </dl>
@@ -469,12 +525,9 @@ function actionSuccessMessage(action: Exclude<TradeActionName, 'counter'>): stri
   return messages[action];
 }
 
-function formatShortDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? 'Not set'
-    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
-}
-
 const secondaryButtonClasses =
   'mt-3 inline-flex h-11 items-center justify-center rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+const workspacePrimaryButtonClasses =
+  'inline-flex h-11 items-center justify-center rounded-lg bg-[color:var(--trade-action)] px-4 text-sm font-bold text-white transition-colors hover:bg-[color:var(--trade-action-hover)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2';
+const workspaceSecondaryButtonClasses =
+  'inline-flex h-11 shrink-0 items-center justify-center rounded-lg border border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface)] px-4 text-sm font-semibold text-[color:var(--trade-text)] transition-colors hover:bg-[color:var(--trade-action-soft)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] focus-visible:ring-offset-2';

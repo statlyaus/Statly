@@ -1,5 +1,4 @@
 import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import type { LeagueTradeDto } from '@/server/leagues/trades/tradeContracts';
@@ -42,8 +41,7 @@ const playerStats: LeaguePlayerStatDatasetDto = {
 };
 
 describe('persisted trade offer presentation', () => {
-  it('makes the named horizontal stats region keyboard focusable', async () => {
-    const user = userEvent.setup();
+  it('presents a compact package summary without a second horizontal stats table', () => {
     render(
       <TradeOfferAssets
         heading="You send"
@@ -53,21 +51,18 @@ describe('persisted trade offer presentation', () => {
       />
     );
 
-    const scrollRegion = screen.getByRole('region', {
-      name: 'Alpha FC player averages, horizontally scrollable',
+    const packageRegion = screen.getByRole('region', {
+      name: 'You send package from Alpha FC',
     });
-    expect(scrollRegion).toHaveAttribute('tabindex', '0');
-    expect(scrollRegion).toHaveClass(
-      'focus-visible:ring-[3px]',
-      'focus-visible:ring-inset',
-      'focus-visible:ring-[color:var(--trade-focus)]'
+    expect(within(packageRegion).getByRole('listitem')).toHaveTextContent(
+      'Alex AlphaAdelaide Crows · MID12 GPsample size'
     );
-
-    await user.tab();
-    expect(scrollRegion).toHaveFocus();
+    expect(
+      screen.queryByRole('region', { name: /player averages, horizontally scrollable/ })
+    ).not.toBeInTheDocument();
   });
 
-  it('uses one neutral brand package treatment for outgoing and incoming assets', () => {
+  it('distinguishes outgoing and incoming packages with semantic trade tokens', () => {
     render(
       <>
         <TradeOfferAssets
@@ -92,16 +87,15 @@ describe('persisted trade offer presentation', () => {
       name: 'You receive package from Beta FC',
     });
 
-    for (const packageRegion of [outgoing, incoming]) {
-      expect(packageRegion).toHaveClass('border-t-[color:var(--trade-brand)]');
-      expect(packageRegion.className).not.toMatch(/trade-(?:offer-direction|send|receive)/);
-      expect(packageRegion.firstElementChild).toHaveClass('bg-[color:var(--trade-surface-subtle)]');
-    }
-    expect(within(outgoing).getByRole('heading', { name: 'You send' })).toHaveClass('text-base');
-    expect(within(incoming).getByRole('heading', { name: 'You receive' })).toHaveClass('text-base');
-    expect(within(outgoing).getByText('20.0')).toHaveClass('text-sm');
-    expect(within(outgoing).getByRole('row', { name: /Alex Alpha/ }).className).not.toContain(
-      'hover:'
+    expect(outgoing).toHaveStyle('border-top-color: var(--trade-send)');
+    expect(incoming).toHaveStyle('border-top-color: var(--trade-receive)');
+    expect(outgoing.firstElementChild).toHaveStyle('background-color: var(--trade-send-soft)');
+    expect(incoming.firstElementChild).toHaveStyle('background-color: var(--trade-receive-soft)');
+    expect(within(outgoing).getByRole('heading', { name: 'You send' })).toHaveStyle(
+      'color: var(--trade-send)'
+    );
+    expect(within(incoming).getByRole('heading', { name: 'You receive' })).toHaveStyle(
+      'color: var(--trade-receive)'
     );
   });
 

@@ -10,16 +10,18 @@ import { E2E_LEAGUE_ID } from './global.setup';
 const leagueId = process.env.STATLY_E2E_LEAGUE_ID ?? E2E_LEAGUE_ID;
 
 const viewports = [
-  { name: 'wide desktop', width: 1920, height: 1000 },
-  { name: 'desktop', width: 1440, height: 1000 },
-  { name: 'tablet', width: 1024, height: 900 },
-  { name: 'mobile', width: 390, height: 844 },
+  { name: 'wide desktop', width: 1920, height: 1000, mobile: false },
+  { name: 'desktop', width: 1440, height: 1000, mobile: false },
+  { name: 'tablet', width: 1024, height: 900, mobile: false },
+  { name: 'mobile', width: 390, height: 844, mobile: true },
+  { name: 'compact mobile', width: 320, height: 800, mobile: true },
 ] as const;
 
 test('trade centre remains usable and responsive across supported viewports', async ({ page }) => {
   const runtimeErrors = collectRuntimeErrors(page);
   await authenticateAsDevelopmentUser(page);
   await page.goto(`/leagues/${leagueId}?tab=trades`);
+  await page.getByRole('button', { name: 'New proposal' }).click();
 
   const sendRoster = rosterSection(page, 'Robbo Rockers sends');
   const receiveRoster = rosterSection(page, 'AFL Legends sends');
@@ -34,17 +36,17 @@ test('trade centre remains usable and responsive across supported viewports', as
       await page.setViewportSize(viewport);
       await composerContent.evaluate((element) => element.scrollTo({ top: 0 }));
 
-      if (viewport.name === 'mobile') {
+      if (viewport.mobile) {
         await assertMobileRosterSwitch(page, sendRoster, receiveRoster);
       } else {
         await expect(sendRoster).toBeVisible();
         await expect(receiveRoster).toBeVisible();
       }
 
-      await assertMajorControlsAreTouchSized(page, viewport.name === 'mobile');
+      await assertMajorControlsAreTouchSized(page, viewport.mobile);
       await assertNoPageLevelHorizontalOverflow(page);
       await assertRosterTableScrollsInternally(page, 'Robbo Rockers');
-      if (viewport.name !== 'mobile') {
+      if (!viewport.mobile) {
         await assertRosterTableScrollsInternally(page, 'AFL Legends');
       }
       await assertPersistentSelectionTray(composerContent, selectionTray);
@@ -71,7 +73,7 @@ test('trade centre remains usable and responsive across supported viewports', as
   await expect(page.getByText('Ready to review')).toBeVisible();
 
   await page.getByRole('button', { name: 'Review trade' }).click();
-  await expect(page.getByRole('heading', { name: 'Review trade proposal' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Send to AFL Legends?' })).toBeFocused();
 
   const sendingPackage = page.getByRole('region', { name: 'You send package' });
   const receivingPackage = page.getByRole('region', { name: 'You receive package' });
@@ -79,7 +81,36 @@ test('trade centre remains usable and responsive across supported viewports', as
   await expect(sendingPackage).toContainText('Darcy Cameron');
   await expect(receivingPackage).toContainText('AFL Legends');
   await expect(receivingPackage).toContainText('Zach Merrett');
-  await expect(page.getByText('average per selected player, per game')).toBeVisible();
+  await expect(page.getByText(/per-game average per selected player/i)).toBeVisible();
+
+  for (const viewport of viewports.slice(1)) {
+    await test.step(`${viewport.name} final checkpoint`, async () => {
+      await page.setViewportSize(viewport);
+      const checkpoint = page.getByRole('region', { name: 'Send to AFL Legends?' });
+      await expect(checkpoint).toBeVisible();
+      await expect(checkpoint.locator('dt')).toHaveText([
+        'You send',
+        'You receive',
+        'Expires',
+        'Deadline',
+      ]);
+      await expect(checkpoint).toContainText('Darcy Cameron');
+      await expect(checkpoint).toContainText('Zach Merrett');
+      await expect(checkpoint).toContainText('completes immediately');
+
+      const back = checkpoint.getByRole('button', { name: 'Back to edit' });
+      const submit = checkpoint.getByRole('button', { name: 'Send proposal to AFL Legends' });
+      for (const action of [back, submit]) {
+        const box = await action.boundingBox();
+        expect(box, 'checkpoint action should have a measurable box').not.toBeNull();
+        expect(
+          box!.height,
+          'checkpoint actions should be at least 44px high'
+        ).toBeGreaterThanOrEqual(44);
+      }
+      await assertNoPageLevelHorizontalOverflow(page);
+    });
+  }
 
   await page.getByRole('button', { name: 'Back to edit' }).click();
   await expect(page.getByRole('heading', { name: 'Robbo Rockers sends' })).toBeVisible();
@@ -88,6 +119,10 @@ test('trade centre remains usable and responsive across supported viewports', as
     'aria-selected',
     'true'
   );
+  await page
+    .getByRole('group', { name: 'Choose roster' })
+    .getByRole('button', { name: /Receive AFL Legends, 1 selected/i })
+    .click();
   await expect(receiveRoster.getByRole('row', { name: /Zach Merrett/ })).toHaveAttribute(
     'aria-selected',
     'true'
@@ -181,14 +216,20 @@ async function assertPersistentSelectionTray(
   composerContent: Locator,
   selectionTray: Locator
 ): Promise<void> {
+  await selectionTray.scrollIntoViewIfNeeded();
   await expect(selectionTray).toBeInViewport();
   const initialBox = await selectionTray.boundingBox();
   expect(initialBox, 'selection tray should have a measurable box').not.toBeNull();
 
-  await composerContent.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
-  await expect
-    .poll(() => composerContent.evaluate((element) => element.scrollTop))
-    .toBeGreaterThan(0);
+  const canScroll = await composerContent.evaluate(
+    (element) => element.scrollHeight > element.clientHeight
+  );
+  if (canScroll) {
+    await composerContent.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+    await expect
+      .poll(() => composerContent.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+  }
   await expect(selectionTray).toBeInViewport();
 
   const scrolledBox = await selectionTray.boundingBox();

@@ -125,7 +125,7 @@ export function TradeRosterTable({
               <th
                 scope="col"
                 aria-sort={sortKey === 'player' ? sortDirection : 'none'}
-                className="sticky left-0 z-30 min-w-60 bg-[color:var(--trade-surface-subtle)] px-3"
+                className="sticky left-0 z-30 min-w-60 border-l-[3px] border-l-transparent bg-[color:var(--trade-surface-subtle)] px-3"
               >
                 <SortButton
                   label="Player"
@@ -281,7 +281,6 @@ function SortButton({
   onClick: () => void;
 }): React.JSX.Element {
   const completeLabel = accessibleLabel ?? label;
-  const visibleState = getVisibleSortState(active, direction, kind);
   const accessibleState = getAccessibleSortState(active, direction, kind);
   const actionLabel = active
     ? `${completeLabel}. ${accessibleState}. Activate to sort ${getAccessibleSortState(true, toggleDirection(direction), kind).replace('Sorted ', '').toLowerCase()}.`
@@ -293,17 +292,11 @@ function SortButton({
       title={`${completeLabel}. ${accessibleState}.`}
       onClick={onClick}
       aria-label={actionLabel}
-      className="inline-flex h-11 w-full items-center justify-end gap-1.5 rounded px-1 text-xs font-bold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)]"
+      className={`inline-flex h-11 w-full items-center gap-1.5 rounded p-0 text-xs font-bold text-[color:var(--trade-text)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--trade-focus)] ${
+        kind === 'player' ? 'justify-start' : 'justify-end'
+      }`}
     >
       <span aria-hidden="true">{label}</span>
-      <span
-        aria-hidden="true"
-        className={`whitespace-nowrap text-xs font-semibold ${
-          active ? 'text-[color:var(--trade-selection)]' : 'text-[color:var(--trade-text-muted)]'
-        }`}
-      >
-        {visibleState}
-      </span>
       {active &&
         (direction === 'ascending' ? (
           <ArrowUp aria-hidden="true" className="size-3.5 text-[color:var(--trade-selection)]" />
@@ -312,16 +305,6 @@ function SortButton({
         ))}
     </button>
   );
-}
-
-function getVisibleSortState(
-  active: boolean,
-  direction: SortDirection,
-  kind: 'player' | 'numeric'
-): string {
-  if (!active) return '—';
-  if (kind === 'player') return direction === 'ascending' ? 'A–Z' : 'Z–A';
-  return direction === 'ascending' ? 'Low–high' : 'High–low';
 }
 
 function getAccessibleSortState(

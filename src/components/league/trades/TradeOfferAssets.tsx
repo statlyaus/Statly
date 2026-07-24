@@ -1,6 +1,5 @@
-/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Wide data tables need a named keyboard-scroll target. */
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
-import { FANTASY_CATEGORIES, formatStatValue } from '@/types/fantasyCategories';
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 import type { LeagueTradeDto } from '@/server/leagues/trades/tradeContracts';
 
@@ -9,6 +8,7 @@ interface TradeOfferAssetsProps {
   teamName: string;
   players: LeagueTradeDto['currentOffer']['players'];
   playerStats: LeaguePlayerStatDatasetDto;
+  direction?: 'send' | 'receive';
 }
 
 export function TradeOfferAssets({
@@ -16,83 +16,73 @@ export function TradeOfferAssets({
   teamName,
   players,
   playerStats,
+  direction = heading.toLowerCase().includes('send') ? 'send' : 'receive',
 }: TradeOfferAssetsProps): React.JSX.Element {
+  const isSending = direction === 'send';
+  const DirectionIcon = isSending ? ArrowUpRight : ArrowDownLeft;
+  const accent = isSending ? 'var(--trade-send)' : 'var(--trade-receive)';
+  const accentSoft = isSending ? 'var(--trade-send-soft)' : 'var(--trade-receive-soft)';
+
   return (
     <section
       aria-label={`${heading} package from ${teamName}`}
-      className="min-w-0 overflow-hidden rounded-lg border border-[color:var(--trade-border)] border-t-[3px] border-t-[color:var(--trade-brand)] bg-[color:var(--trade-surface)]"
+      className="min-w-0 overflow-hidden rounded-lg border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]"
+      style={{ borderTopColor: accent, borderTopWidth: 3 }}
     >
-      <div className="border-b border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-3 py-2.5">
-        <h4 className="text-base font-bold text-[color:var(--trade-text)]">{heading}</h4>
-        <p className="mt-0.5 text-xs text-[color:var(--trade-text-muted)]">{teamName}</p>
+      <div
+        className="flex items-start justify-between gap-3 border-b border-[color:var(--trade-border)] px-3 py-2.5"
+        style={{ backgroundColor: accentSoft }}
+      >
+        <div className="min-w-0">
+          <h4 className="flex items-center gap-1.5 text-sm font-bold" style={{ color: accent }}>
+            <DirectionIcon aria-hidden="true" className="size-4 shrink-0" />
+            {heading}
+          </h4>
+          <p className="mt-0.5 truncate text-xs text-[color:var(--trade-text-muted)]">{teamName}</p>
+        </div>
+        <span className="shrink-0 text-xs font-semibold text-[color:var(--trade-text-muted)]">
+          {playerStats.context.season} season
+        </span>
       </div>
 
       {players.length === 0 ? (
-        <p className="bg-[color:var(--trade-surface-subtle)] p-4 text-sm text-[color:var(--trade-text-muted)]">
+        <p className="p-4 text-sm text-[color:var(--trade-text-muted)]">
           No players from this team
         </p>
       ) : (
-        <div
-          role="region"
-          tabIndex={0}
-          aria-label={`${teamName} player averages, horizontally scrollable`}
-          className="overflow-x-auto focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)]"
-        >
-          <table className="w-full min-w-max border-collapse text-left text-xs">
-            <caption className="sr-only">
-              Season {playerStats.context.season} per-game averages for {heading.toLowerCase()}.
-            </caption>
-            <thead className="bg-[color:var(--trade-surface-subtle)] text-[color:var(--trade-text-muted)]">
-              <tr className="h-10 border-b border-[color:var(--trade-border-strong)]">
-                <th
-                  scope="col"
-                  className="sticky left-0 z-10 min-w-48 bg-[color:var(--trade-surface-subtle)] px-3 py-2 font-bold"
-                >
-                  Player
-                </th>
-                {playerStats.columns.map((column) => (
-                  <th key={column.key} scope="col" className="min-w-16 px-3 py-2 text-right">
-                    <span aria-hidden="true">{column.shortLabel}</span>
-                    <span className="sr-only">
-                      {column.label}, {column.direction === 'LOW_WINS' ? 'lower' : 'higher'} is
-                      better
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {players.map((player) => (
-                <tr
-                  key={player.id}
-                  className="h-12 border-b border-[color:var(--trade-border)] last:border-0"
-                >
-                  <th
-                    scope="row"
-                    className="sticky left-0 z-10 bg-[color:var(--trade-surface)] px-3 py-2 text-sm font-semibold text-[color:var(--trade-text)]"
-                  >
+        <ul className="divide-y divide-[color:var(--trade-border)]">
+          {players.map((player) => {
+            const gamesPlayed = playerStats.playersById[player.id]?.gamesPlayed;
+            return (
+              <li
+                key={player.id}
+                className="flex min-w-0 items-center justify-between gap-4 px-3 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-[color:var(--trade-text)]">
                     {player.name}
-                    <span className="block text-xs font-normal text-[color:var(--trade-text-muted)]">
-                      {[player.position, player.club].filter(Boolean).join(' · ')}
-                    </span>
-                  </th>
-                  {playerStats.columns.map((column) => (
-                    <td
-                      key={column.key}
-                      className="px-3 py-2 text-right text-sm font-medium tabular-nums text-[color:var(--trade-text)]"
-                    >
-                      {formatStatValue(
-                        playerStats.playersById[player.id]?.values[column.key],
-                        FANTASY_CATEGORIES[column.key]
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-[color:var(--trade-text-muted)]">
+                    {[player.club, player.position].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-xs font-bold tabular-nums text-[color:var(--trade-text)]">
+                    {formatGamesPlayed(gamesPlayed)}
+                  </p>
+                  <p className="mt-0.5 text-[0.6875rem] text-[color:var(--trade-text-muted)]">
+                    sample size
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );
+}
+
+function formatGamesPlayed(gamesPlayed: number | null | undefined): string {
+  return typeof gamesPlayed === 'number' ? `${gamesPlayed} GP` : 'GP unavailable';
 }

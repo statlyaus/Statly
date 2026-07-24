@@ -48,29 +48,44 @@ export function TradeComparisonTable({
   const comparisons = compareTradeSelections(sendingPlayerIds, receivingPlayerIds, playerStats);
   const summary = summarizeTradeComparisons(comparisons);
   const unavailableSummary = summary.unavailable > 0 ? ` · ${summary.unavailable} unavailable` : '';
+  const isHistorical = playerStats.context.season !== new Date().getFullYear();
+  const sendingSample = formatPackageSample(sendingPlayerIds, playerStats);
+  const receivingSample = formatPackageSample(receivingPlayerIds, playerStats);
 
   return (
     <section
       aria-labelledby={headingId}
       className="overflow-hidden rounded-xl border border-[color:var(--trade-border)] bg-[color:var(--trade-surface)]"
     >
-      <div className="border-b border-[color:var(--trade-border-strong)] bg-[color:var(--trade-surface-dark)] px-4 py-3 text-white">
-        <Heading id={headingId} className="text-base font-bold">
-          Package comparison
-        </Heading>
-        <p className="mt-1 text-xs font-semibold leading-4">
-          Category impact: {summary.gained} gained · {summary.lost} lost · {summary.even} even
-          {unavailableSummary}
-        </p>
-        <p className="mt-1 text-xs leading-4 text-white/70">
-          Season {playerStats.context.season} average per selected player, per game. Not category
-          totals or projected lineup impact.
-        </p>
+      <div className="border-b border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-4 py-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+          <div>
+            <Heading id={headingId} className="text-base font-bold text-[color:var(--trade-text)]">
+              Package comparison
+            </Heading>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--trade-text)]">
+              Categories: {summary.gained} favour incoming · {summary.lost} favour outgoing ·{' '}
+              {summary.even} even
+              {unavailableSummary}
+            </p>
+          </div>
+          <p className="max-w-xl text-xs leading-5 text-[color:var(--trade-text-muted)] sm:text-right">
+            Comparison basis: {playerStats.context.season} season, per-game average per selected
+            player. Send sample: {sendingSample}. Receive sample: {receivingSample}.
+          </p>
+        </div>
+        {isHistorical && (
+          <p className="mt-2 rounded-md border border-[color:var(--trade-warning)]/25 bg-[color:var(--trade-warning-soft)] px-2.5 py-1.5 text-xs font-semibold text-[color:var(--trade-warning)]">
+            Historical data: this comparison uses the {playerStats.context.season} season, not the
+            current season.
+          </p>
+        )}
       </div>
 
       <p className="border-b border-[color:var(--trade-border)] bg-[color:var(--trade-surface-subtle)] px-4 py-2 text-xs leading-4 text-[color:var(--trade-text-muted)]">
-        Higher- and lower-is-better categories are normalized. Positive impact means the receiving
-        package is better after category direction is normalized.
+        Higher- and lower-is-better categories are normalized. Positive differences favour the
+        incoming package; negative differences favour the outgoing package. This is not a fairness
+        score or projected lineup impact.
       </p>
 
       {/* A focus target is required so keyboard users can scroll the wide comparison table. */}
@@ -79,10 +94,10 @@ export function TradeComparisonTable({
         aria-label="Trade package comparison, horizontally scrollable"
         className="overflow-x-auto focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[color:var(--trade-focus)]"
       >
-        <table className="w-full min-w-[38rem] border-collapse text-left text-sm">
+        <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
           <caption className="sr-only">
-            Average category comparison between {sendingTeamName} and {receivingTeamName} for the
-            selected trade packages.
+            Per-game category comparison between {sendingTeamName} and {receivingTeamName} for the
+            selected trade packages, averaged per selected player.
           </caption>
           <thead className="bg-[color:var(--trade-surface-dark)] text-xs text-white">
             <tr className="h-11 border-b border-[color:var(--trade-border-strong)]">
@@ -96,7 +111,7 @@ export function TradeComparisonTable({
                 {receivingTeamName}
               </th>
               <th scope="col" className="px-4 py-2 font-bold">
-                Impact
+                Package difference
               </th>
             </tr>
           </thead>
@@ -128,7 +143,7 @@ export function TradeComparisonTable({
                     {formatComparisonValue(comparison.receivingAverage, comparison.column.key)}
                   </td>
                   <td className="px-4 py-2">
-                    <ImpactLabel
+                    <PackageDifferenceLabel
                       outcome={comparison.outcome}
                       value={formatImpactValue(
                         comparison.favourableDifference,
@@ -147,7 +162,7 @@ export function TradeComparisonTable({
   );
 }
 
-function ImpactLabel({
+function PackageDifferenceLabel({
   outcome,
   value,
 }: {
@@ -159,7 +174,7 @@ function ImpactLabel({
       <span className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--trade-positive)]/25 bg-[color:var(--trade-positive)]/8 px-2 py-1 text-sm font-bold text-[color:var(--trade-positive)]">
         <ArrowUpRight aria-hidden="true" className="size-3.5" />
         <span className="tabular-nums">{value}</span>
-        <span>Gained</span>
+        <span>Favours incoming</span>
       </span>
     );
   }
@@ -169,7 +184,7 @@ function ImpactLabel({
       <span className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--trade-negative)]/25 bg-[color:var(--trade-negative-soft)] px-2 py-1 text-sm font-bold text-[color:var(--trade-negative)]">
         <ArrowDownRight aria-hidden="true" className="size-3.5" />
         <span className="tabular-nums">{value}</span>
-        <span>Lost</span>
+        <span>Favours outgoing</span>
       </span>
     );
   }
@@ -221,4 +236,17 @@ function formatSmallMagnitude(value: number, category: keyof typeof FANTASY_CATE
   const decimalPlaces = Math.min(8, Math.max(3, Math.ceil(-Math.log10(value)) + 2));
   const formatted = value.toFixed(decimalPlaces).replace(/0+$/, '').replace(/\.$/, '');
   return FANTASY_CATEGORIES[category].format === 'percentage' ? `${formatted}%` : formatted;
+}
+
+function formatPackageSample(playerIds: string[], playerStats: LeaguePlayerStatDatasetDto): string {
+  const gamesPlayed = playerIds
+    .map((playerId) => playerStats.playersById[playerId]?.gamesPlayed)
+    .filter((value): value is number => typeof value === 'number');
+  const playerLabel = `${playerIds.length} ${playerIds.length === 1 ? 'player' : 'players'}`;
+  if (gamesPlayed.length !== playerIds.length) return `${playerLabel} · games played unavailable`;
+
+  const minimum = Math.min(...gamesPlayed);
+  const maximum = Math.max(...gamesPlayed);
+  const gamesLabel = minimum === maximum ? `${minimum} GP each` : `${minimum}–${maximum} GP`;
+  return `${playerLabel} · ${gamesLabel}`;
 }

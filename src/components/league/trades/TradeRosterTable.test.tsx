@@ -170,7 +170,7 @@ describe('TradeRosterTable', () => {
     expect(onTogglePlayer).not.toHaveBeenCalled();
   });
 
-  it('exposes complete category names and explicit visible sort states', async () => {
+  it('exposes complete category names with one concise active sort indicator', async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
@@ -178,25 +178,28 @@ describe('TradeRosterTable', () => {
     const inside50sSort = screen.getByRole('button', {
       name: /Inside 50s, higher is better.*Not sorted/i,
     });
-    expect(within(playerSort).getByText('A–Z')).toHaveClass('text-xs');
-    expect(within(inside50sSort).getByText('—')).toBeInTheDocument();
+    expect(within(playerSort).getByText('Player')).toBeInTheDocument();
+    expect(playerSort.querySelector('svg')).toBeInTheDocument();
+    expect(inside50sSort.querySelector('svg')).not.toBeInTheDocument();
+    expect(within(inside50sSort).queryByText('—')).not.toBeInTheDocument();
 
     await user.click(inside50sSort);
     const descendingSort = screen.getByRole('button', {
       name: /Inside 50s, higher is better.*sorted high to low/i,
     });
-    expect(within(descendingSort).getByText('High–low')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Player. Not sorted. Activate to sort.' })
-    ).toBeInTheDocument();
+    expect(descendingSort.querySelector('svg')).toBeInTheDocument();
+    const inactivePlayerSort = screen.getByRole('button', {
+      name: 'Player. Not sorted. Activate to sort.',
+    });
+    expect(inactivePlayerSort.querySelector('svg')).not.toBeInTheDocument();
 
     await user.click(descendingSort);
     expect(
-      within(
-        screen.getByRole('button', {
+      screen
+        .getByRole('button', {
           name: /Inside 50s, higher is better.*sorted low to high/i,
         })
-      ).getByText('Low–high')
+        .querySelector('svg')
     ).toBeInTheDocument();
   });
 
@@ -254,7 +257,6 @@ describe('TradeRosterTable', () => {
       'bg-[color:var(--trade-selection-soft)]'
     );
     expect(aliceCheckbox).toHaveClass('accent-[var(--trade-selection)]');
-    expect(within(playerSort).getByText('A–Z')).toHaveClass('text-[color:var(--trade-selection)]');
     expect(playerSort.querySelector('svg')).toHaveClass('text-[color:var(--trade-selection)]');
   });
 

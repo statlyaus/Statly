@@ -184,6 +184,10 @@
   --trade-focus: #2563eb;
   --trade-selection: #2563eb;
   --trade-selection-soft: #eff6ff;
+  --trade-send: #b45309;
+  --trade-send-soft: #fff7ed;
+  --trade-receive: #0f766e;
+  --trade-receive-soft: #f0fdfa;
   --trade-positive: #15803d;
   --trade-negative: #b42318;
   --trade-negative-soft: #fef3f2;
