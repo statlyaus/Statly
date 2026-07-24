@@ -110,6 +110,26 @@ describe('team actions route architecture', () => {
     expect(rosterMocks.ensureRosterTables).not.toHaveBeenCalled();
     expect(membershipMocks.verifyLeagueMembership).not.toHaveBeenCalled();
   });
+
+  it('rejects non-object action details without silently replacing the payload', async () => {
+    authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
+    membershipMocks.verifyLeagueMembership.mockResolvedValue({ isMember: true });
+
+    const { POST } = await import('../../src/app/api/leagues/[id]/actions/[userId]/route');
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/actions/user-1', {
+        actionType: 'OPTIMIZE_LINEUP',
+        details: 'unexpected-details',
+      }),
+      { params: Promise.resolve({ id: 'league-1', userId: 'user-1' }) }
+    );
+
+    expect(response!.status).toBe(400);
+    await expect(response!.json()).resolves.toMatchObject({
+      error: { message: 'Action details must be an object' },
+    });
+    expect(rosterMocks.ensureRosterTables).not.toHaveBeenCalled();
+  });
 });
 
 function jsonRequest(path: string, body: unknown): NextRequest {

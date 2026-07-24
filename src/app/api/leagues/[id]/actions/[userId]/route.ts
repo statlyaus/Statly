@@ -96,6 +96,9 @@ export async function POST(
     if (!actionType || !details) {
       return errorResponse('Action type and details are required', 400);
     }
+    if (typeof details !== 'object' || Array.isArray(details)) {
+      return errorResponse('Action details must be an object', 400);
+    }
     const canonicalDetails = await resolveTeamActionPlayerIds(details);
 
     await ensureRosterTables();
@@ -190,10 +193,10 @@ export async function POST(
   }
 }
 
-async function resolveTeamActionPlayerIds(details: unknown): Promise<Record<string, unknown>> {
-  if (!details || typeof details !== 'object' || Array.isArray(details)) return {};
-
-  const canonicalDetails = { ...(details as Record<string, unknown>) };
+async function resolveTeamActionPlayerIds(
+  details: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const canonicalDetails = { ...details };
   for (const key of ['playerId', 'dropPlayerId'] as const) {
     const requestedPlayerId = canonicalDetails[key];
     if (typeof requestedPlayerId !== 'string') continue;

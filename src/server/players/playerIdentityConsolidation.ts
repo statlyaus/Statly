@@ -181,22 +181,27 @@ async function mergeRosterOwnership(
 async function rewriteLegacyRosterDocuments(tx: Prisma.TransactionClient, aliases: AliasMap) {
   const rows = await tx.leagueRoster.findMany();
   for (const row of rows) {
-    const playerIds = rewriteJsonIdArray(row.playerIds, aliases)!;
-    const captainId = row.captainId ? (aliases.get(row.captainId) ?? row.captainId) : null;
-    const viceCaptainId = row.viceCaptainId
-      ? (aliases.get(row.viceCaptainId) ?? row.viceCaptainId)
-      : null;
-    const benchOrder = rewriteJsonIdArray(row.benchOrder, aliases);
-    if (
-      playerIds !== row.playerIds ||
-      captainId !== row.captainId ||
-      viceCaptainId !== row.viceCaptainId ||
-      benchOrder !== row.benchOrder
-    ) {
-      await tx.leagueRoster.update({
-        where: { id: row.id },
-        data: { playerIds, captainId, viceCaptainId, benchOrder },
-      });
+    try {
+      const playerIds = rewriteJsonIdArray(row.playerIds, aliases)!;
+      const captainId = row.captainId ? (aliases.get(row.captainId) ?? row.captainId) : null;
+      const viceCaptainId = row.viceCaptainId
+        ? (aliases.get(row.viceCaptainId) ?? row.viceCaptainId)
+        : null;
+      const benchOrder = rewriteJsonIdArray(row.benchOrder, aliases);
+      if (
+        playerIds !== row.playerIds ||
+        captainId !== row.captainId ||
+        viceCaptainId !== row.viceCaptainId ||
+        benchOrder !== row.benchOrder
+      ) {
+        await tx.leagueRoster.update({
+          where: { id: row.id },
+          data: { playerIds, captainId, viceCaptainId, benchOrder },
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to rewrite legacy roster ${row.id}: ${message}`, { cause: error });
     }
   }
 }
