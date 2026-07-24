@@ -385,6 +385,10 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
   });
 
   it('rejects waiver claims for Prisma-owned drafted players before Firestore ownership checks', async () => {
+    prismaMocks.player.findMany.mockResolvedValue([
+      { id: 'drafted-player', name: 'Drafted Player', club: 'CARL', position: 'MID' },
+      { id: 'free-player', name: 'Free Player', club: 'SYD', position: 'FWD' },
+    ]);
     const { POST } = await import('../../src/app/api/leagues/[id]/waivers/submit/route');
 
     const response = await POST(
@@ -399,7 +403,7 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     expect(response.status).toBe(409);
     expect(body.error).toBe('Player already owned');
     expect(prismaMocks.leagueRosterPlayer.findFirst).toHaveBeenCalledWith({
-      where: { leagueId: 'league-1', playerId: 'drafted-player' },
+      where: { leagueId: 'league-1', playerId: { in: ['drafted-player'] } },
       select: { playerId: true, memberId: true },
     });
     expect(firestoreMocks.adminDb.runTransaction).not.toHaveBeenCalled();
@@ -432,7 +436,7 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     );
   });
 
-  it('continues through Firestore waiver checks when the Prisma ownership pre-check fails', async () => {
+  it('fails closed when the canonical Prisma ownership pre-check fails', async () => {
     prismaMocks.leagueRosterPlayer.findFirst.mockRejectedValue(new Error('prisma unavailable'));
 
     const { POST } = await import('../../src/app/api/leagues/[id]/waivers/submit/route');
@@ -446,9 +450,9 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     );
     const body = await response.json();
 
-    expect(response.status).toBe(201);
-    expect(body).toEqual({ id: 'claim-1' });
-    expect(prismaMocks.teamAction.create).toHaveBeenCalled();
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: 'Internal Server Error' });
+    expect(prismaMocks.teamAction.create).not.toHaveBeenCalled();
     expect(firestoreMocks.adminDb.runTransaction).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
+import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
 
 type PrismaLike = Pick<typeof prisma, 'leagueRosterPlayer' | 'player' | 'teamAction'>;
 type FirestoreLike = typeof adminDb;
@@ -16,9 +17,7 @@ export class WaiverAvailabilityProjectionService {
     private readonly firestore: FirestoreLike = adminDb
   ) {}
 
-  async projectLeague(input: {
-    leagueId: string;
-  }): Promise<WaiverAvailabilityProjectionResult> {
+  async projectLeague(input: { leagueId: string }): Promise<WaiverAvailabilityProjectionResult> {
     const ownerships = await this.db.leagueRosterPlayer.findMany({
       where: { leagueId: input.leagueId },
       select: { playerId: true, memberId: true },
@@ -32,7 +31,10 @@ export class WaiverAvailabilityProjectionService {
       },
       select: { details: true, processingAt: true },
     });
-    const allPlayers = await this.db.player.findMany({ select: { id: true } });
+    const allPlayers = await this.db.player.findMany({
+      select: { id: true, name: true, club: true, position: true },
+    });
+    const playerGroups = groupWaiverPlayersByIdentity(allPlayers);
     const owned = new Map(ownerships.map((ownership) => [ownership.playerId, ownership.memberId]));
     const held = new Map<string, Date | null>();
     for (const hold of waiverHolds) {
@@ -65,13 +67,20 @@ export class WaiverAvailabilityProjectionService {
       writeCount += 1;
     };
 
-    for (const player of allPlayers) {
-      const ownerMemberId = owned.get(player.id);
+    let ownedCount = 0;
+    let availableCount = 0;
+
+    for (const group of playerGroups) {
+      const player = group.representative;
+      const ownedAlias = group.aliases.find((alias) => owned.has(alias.id));
+      const heldAlias = group.aliases.find((alias) => held.has(alias.id));
+      const ownerMemberId = ownedAlias ? owned.get(ownedAlias.id) : undefined;
       const ownershipRef = leagueRef.collection('playerOwnerships').doc(player.id);
       const availabilityRef = leagueRef.collection('availablePlayers').doc(player.id);
       const updatedAt = new Date().toISOString();
 
       if (ownerMemberId) {
+        ownedCount += 1;
         await set(
           ownershipRef,
           {
@@ -84,20 +93,21 @@ export class WaiverAvailabilityProjectionService {
           { merge: true }
         );
         await remove(availabilityRef);
-      } else if (held.has(player.id)) {
+      } else if (heldAlias) {
         await set(
           availabilityRef,
           {
             playerId: player.id,
             status: 'waiver',
             available: false,
-            processingAt: held.get(player.id),
+            processingAt: held.get(heldAlias.id),
             updatedAt,
           },
           { merge: true }
         );
         await remove(ownershipRef);
       } else {
+        availableCount += 1;
         await set(
           availabilityRef,
           {
@@ -110,6 +120,12 @@ export class WaiverAvailabilityProjectionService {
         );
         await remove(ownershipRef);
       }
+
+      for (const alias of group.aliases) {
+        if (alias.id === player.id) continue;
+        await remove(leagueRef.collection('availablePlayers').doc(alias.id));
+        await remove(leagueRef.collection('playerOwnerships').doc(alias.id));
+      }
     }
 
     if (writeCount > 0) {
@@ -117,9 +133,8 @@ export class WaiverAvailabilityProjectionService {
     }
 
     return {
-      owned: ownerships.length,
-      available: allPlayers.filter((player) => !owned.has(player.id) && !held.has(player.id))
-        .length,
+      owned: ownedCount,
+      available: availableCount,
     };
   }
 }

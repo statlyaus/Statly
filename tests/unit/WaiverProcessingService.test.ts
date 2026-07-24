@@ -62,14 +62,25 @@ function createDbMock() {
     leagueRosterPlayer: {
       count: vi.fn().mockResolvedValue(2),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
-      findFirst: vi.fn(async ({ where }: { where: { playerId?: string; memberId?: string } }) => {
-        if (where.playerId === 'free-player') return null;
-        if (where.playerId === 'old-player' && where.memberId === 'member-1') {
+      findFirst: vi.fn(async ({ where }: { where: { playerId?: unknown; memberId?: string } }) => {
+        const playerIds =
+          where.playerId && typeof where.playerId === 'object' && 'in' in where.playerId
+            ? (where.playerId as { in: string[] }).in
+            : [where.playerId];
+        if (playerIds.includes('free-player')) return null;
+        if (playerIds.includes('old-player') && where.memberId === 'member-1') {
           return { playerId: 'old-player', memberId: 'member-1' };
         }
         return null;
       }),
       upsert: vi.fn().mockResolvedValue({ id: 'roster-player-1' }),
+    },
+    player: {
+      findMany: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'free-player', name: 'Free Player', club: 'Test Club', position: 'MID' },
+        ]),
     },
     teamAction: {
       create: vi.fn().mockResolvedValue({ id: 'drop-hold-1' }),
@@ -221,6 +232,50 @@ describe('WaiverProcessingService', () => {
     expect(projection.projectLeague).not.toHaveBeenCalled();
   });
 
+  it('rejects a claim when another alias for the logical player is already owned', async () => {
+    const { db, tx } = createDbMock();
+    tx.player.findMany.mockResolvedValue([
+      {
+        id: 'jack-ginnivan-hawthorn',
+        name: 'Jack Ginnivan',
+        club: 'Hawthorn',
+        position: null,
+      },
+      {
+        id: 'jack_ginnivan',
+        name: 'Jack Ginnivan',
+        club: 'Hawthorn',
+        position: 'FWD',
+      },
+    ]);
+    tx.leagueRosterPlayer.findFirst.mockResolvedValue({
+      playerId: 'jack-ginnivan-hawthorn',
+      memberId: 'member-2',
+    });
+    const claimStore = createClaimStoreMock();
+    const projection = { projectLeague: vi.fn() };
+    const service = new WaiverProcessingService(db as never, claimStore, projection);
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim({ playerId: 'jack_ginnivan' })],
+    });
+
+    expect(result.results).toEqual([
+      { id: 'claim-1', status: 'FAILED', reason: 'Player already owned' },
+    ]);
+    expect(tx.leagueRosterPlayer.findFirst).toHaveBeenCalledWith({
+      where: {
+        leagueId: 'league-1',
+        playerId: { in: ['jack_ginnivan', 'jack-ginnivan-hawthorn'] },
+      },
+      select: { playerId: true, memberId: true },
+    });
+    expect(tx.leagueRosterPlayer.upsert).not.toHaveBeenCalled();
+    expect(projection.projectLeague).not.toHaveBeenCalled();
+  });
+
   it('sorts FAAB claims by bid, then waiver priority, then submission time', () => {
     const sorted = sortWaiverClaims(
       [
@@ -286,6 +341,11 @@ describe('WaiverProcessingService', () => {
     tx.league.findUnique.mockResolvedValue({ id: 'league-1', settings: { rosterSize: 10 } });
     tx.leagueRosterPlayer.count.mockResolvedValue(0);
     tx.leagueRoster.findUnique.mockResolvedValue({ id: 'roster-1', playerIds: '[]' });
+    tx.player.findMany.mockResolvedValue([
+      { id: 'player-1', name: 'Player One', club: 'Test Club', position: 'MID' },
+      { id: 'player-2', name: 'Player Two', club: 'Test Club', position: 'FWD' },
+      { id: 'player-3', name: 'Player Three', club: 'Test Club', position: 'DEF' },
+    ]);
     const claimStore = createClaimStoreMock();
     const projection = { projectLeague: vi.fn().mockResolvedValue({ owned: 3, available: 9 }) };
     const service = new WaiverProcessingService(db as never, claimStore, projection);

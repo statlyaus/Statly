@@ -18,6 +18,7 @@ import {
   type FantasyCategoryKey,
   type PlayerStats,
 } from '@/types/fantasyCategories';
+import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -205,40 +206,20 @@ async function loadAvailablePlayers(input: {
   const heldPlayerIds = waiverHolds
     .map((hold) => parseActionDetails(hold.details).playerId)
     .filter((playerId): playerId is string => typeof playerId === 'string' && Boolean(playerId));
-  const unavailablePlayerIds = [...new Set([...ownedPlayerIds, ...heldPlayerIds])];
-  const idFilter: { notIn?: string[]; gt?: string } = {};
-
-  if (unavailablePlayerIds.length > 0) {
-    idFilter.notIn = unavailablePlayerIds;
-  }
-  if (input.cursor) {
-    idFilter.gt = input.cursor;
-  }
-
-  const where = {
-    active: true,
-    ...(Object.keys(idFilter).length > 0 ? { id: idFilter } : {}),
-  };
-  const statlyZWhere = {
-    active: true,
-    ...(unavailablePlayerIds.length > 0 ? { id: { notIn: unavailablePlayerIds } } : {}),
-  };
+  const unavailablePlayerIds = new Set([...ownedPlayerIds, ...heldPlayerIds]);
   const playerSelect = { id: true, name: true, club: true, position: true } as const;
-
-  const [players, statlyZSourcePlayers] = await Promise.all([
-    prisma.player.findMany({
-      where,
-      orderBy: { id: 'asc' },
-      take: input.limit,
-      select: playerSelect,
-    }),
-    prisma.player.findMany({
-      where: statlyZWhere,
-      orderBy: { id: 'asc' },
-      select: playerSelect,
-    }),
-  ]);
-  const statlyZCohortPlayers = statlyZSourcePlayers.map((player) =>
+  const activePlayers = await prisma.player.findMany({
+    where: { active: true },
+    orderBy: { id: 'asc' },
+    select: playerSelect,
+  });
+  const normalizedPlayers = normalizeAvailableWaiverPlayers(activePlayers, unavailablePlayerIds);
+  const firstPlayerAfterCursor = input.cursor
+    ? normalizedPlayers.findIndex((player) => player.id > input.cursor!)
+    : 0;
+  const pageStart = firstPlayerAfterCursor >= 0 ? firstPlayerAfterCursor : normalizedPlayers.length;
+  const players = normalizedPlayers.slice(pageStart, pageStart + input.limit);
+  const statlyZCohortPlayers = normalizedPlayers.map((player) =>
     buildAvailableDraftPlayer(player, input.statsLookup)
   );
   const statlyZScores = calculateStatlyZScores(statlyZCohortPlayers, input.selectedCategories);
@@ -268,7 +249,7 @@ async function loadAvailablePlayers(input: {
 
   return {
     items,
-    nextCursor: players.length === input.limit && last ? last.id : null,
+    nextCursor: pageStart + players.length < normalizedPlayers.length && last ? last.id : null,
   };
 }
 
@@ -279,9 +260,7 @@ async function loadSelectedCategories(leagueId: string): Promise<FantasyCategory
   });
   const selectedCategories = parseSelectedCategories(league?.categoriesJson);
 
-  return selectedCategories.length > 0
-    ? selectedCategories
-    : [...REAL_DATA_NINE_CATEGORY_PRESET];
+  return selectedCategories.length > 0 ? selectedCategories : [...REAL_DATA_NINE_CATEGORY_PRESET];
 }
 
 async function loadStatsLookup(leagueId: string): Promise<DraftPlayerStatsLookup | null> {
@@ -337,27 +316,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     activityQuery = activityQuery.limit(activityLimit);
 
-    const [
-      claimsSnap,
-      prioritySnap,
-      activitySnap,
-      settingsSnap,
-      roster,
-      availablePlayersResult,
-    ] = await Promise.all([
-      leagueRef.collection('waivers').where('userId', '==', userId).limit(100).get(),
-      leagueRef.collection('waiverPriorities').doc(userId).get(),
-      activityQuery.get(),
-      leagueRef.collection('config').doc('settings').get(),
-      loadCurrentRoster(leagueId, userId),
-      loadAvailablePlayers({
-        leagueId,
-        limit: playersLimit,
-        cursor: playersCursor,
-        selectedCategories,
-        statsLookup,
-      }),
-    ]);
+    const [claimsSnap, prioritySnap, activitySnap, settingsSnap, roster, availablePlayersResult] =
+      await Promise.all([
+        leagueRef.collection('waivers').where('userId', '==', userId).limit(100).get(),
+        leagueRef.collection('waiverPriorities').doc(userId).get(),
+        activityQuery.get(),
+        leagueRef.collection('config').doc('settings').get(),
+        loadCurrentRoster(leagueId, userId),
+        loadAvailablePlayers({
+          leagueId,
+          limit: playersLimit,
+          cursor: playersCursor,
+          selectedCategories,
+          statsLookup,
+        }),
+      ]);
 
     const claims = claimsSnap.docs
       .map((doc) => {

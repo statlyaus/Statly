@@ -1,7 +1,15 @@
-import { DraftDirection, DraftStatus, DraftType, LeagueRole, Prisma, PrismaClient } from '@prisma/client';
+import {
+  DraftDirection,
+  DraftStatus,
+  DraftType,
+  LeagueRole,
+  Prisma,
+  PrismaClient,
+} from '@prisma/client';
 
 import { DEVELOPMENT_AUTH_EMAIL, DEVELOPMENT_AUTH_USER_ID } from '../../../src/lib/devAuth';
 import { getPlayers } from '../../../src/lib/data';
+import { buildCanonicalPlayerId } from '../../../src/lib/playerIdentity';
 import {
   buildAvailableDraftPlayer,
   buildDraftPlayerStatsLookup,
@@ -126,13 +134,16 @@ async function upsertUsers(tx: TxClient) {
   );
 }
 
-async function upsertActivePlayerPool(tx: TxClient) {
+async function upsertActivePlayerPool(tx: TxClient): Promise<string[]> {
   const players = await getPlayers();
-  const activePlayers = players.slice(0, Math.max(FULL_DRAFT_SOAK.totalPicks + 64, 360));
+  const activePlayers = players
+    .slice(0, Math.max(FULL_DRAFT_SOAK.totalPicks + 64, 360))
+    .map((player) => ({ ...player, id: buildCanonicalPlayerId(player.name) }));
+  const candidateIds = [...new Set(activePlayers.map((player) => player.id))];
 
-  if (activePlayers.length < FULL_DRAFT_SOAK.totalPicks) {
+  if (candidateIds.length < FULL_DRAFT_SOAK.totalPicks) {
     throw new Error(
-      `Full draft soak requires at least ${FULL_DRAFT_SOAK.totalPicks} players, found ${activePlayers.length}`
+      `Full draft soak requires at least ${FULL_DRAFT_SOAK.totalPicks} canonical players, found ${candidateIds.length}`
     );
   }
 
@@ -154,16 +165,20 @@ async function upsertActivePlayerPool(tx: TxClient) {
       },
     });
   }
+
+  return candidateIds;
 }
 
-async function rankActivePlayerIds(tx: TxClient): Promise<string[]> {
+async function rankActivePlayerIds(tx: TxClient, candidateIds: string[]): Promise<string[]> {
   const candidates = await tx.player.findMany({
-    where: { active: true },
+    where: { active: true, id: { in: candidateIds } },
     orderBy: [{ position: 'asc' }, { name: 'asc' }],
     select: { id: true, name: true, position: true, club: true },
   });
   const statsLookup = buildDraftPlayerStatsLookup(await getPlayers());
-  const projectedCandidates = candidates.map((player) => buildAvailableDraftPlayer(player, statsLookup));
+  const projectedCandidates = candidates.map((player) =>
+    buildAvailableDraftPlayer(player, statsLookup)
+  );
   const zScores = calculateStatlyZScores(projectedCandidates, REAL_DATA_NINE_CATEGORY_PRESET);
 
   return [...candidates]
@@ -278,9 +293,9 @@ export async function seedFullDraftSoakFixture(): Promise<SoakFixture> {
       async (tx) => {
         await deleteExistingFixture(tx);
         await upsertUsers(tx);
-        await upsertActivePlayerPool(tx);
+        const candidateIds = await upsertActivePlayerPool(tx);
 
-        const rankedPlayerIds = await rankActivePlayerIds(tx);
+        const rankedPlayerIds = await rankActivePlayerIds(tx, candidateIds);
         if (rankedPlayerIds.length < FULL_DRAFT_SOAK.totalPicks) {
           throw new Error(
             `Full draft soak requires ${FULL_DRAFT_SOAK.totalPicks} active ranked players, found ${rankedPlayerIds.length}`

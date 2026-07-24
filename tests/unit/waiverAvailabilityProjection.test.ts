@@ -52,7 +52,10 @@ describe('WaiverAvailabilityProjectionService', () => {
         findMany: vi.fn().mockResolvedValue([]),
       },
       player: {
-        findMany: vi.fn().mockResolvedValue([{ id: 'owned-1' }, { id: 'free-1' }]),
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'owned-1', name: 'Owned One', club: 'Club One', position: 'MID' },
+          { id: 'free-1', name: 'Free One', club: 'Club Two', position: 'FWD' },
+        ]),
       },
     };
 
@@ -72,7 +75,9 @@ describe('WaiverAvailabilityProjectionService', () => {
       },
       select: { details: true, processingAt: true },
     });
-    expect(db.player.findMany).toHaveBeenCalledWith({ select: { id: true } });
+    expect(db.player.findMany).toHaveBeenCalledWith({
+      select: { id: true, name: true, club: true, position: true },
+    });
 
     const setCalls = batches.flatMap((batch) => batch.set.mock.calls);
     const setPayloads = setCalls.map(([, data]) => data);
@@ -127,7 +132,10 @@ describe('WaiverAvailabilityProjectionService', () => {
         ]),
       },
       player: {
-        findMany: vi.fn().mockResolvedValue([{ id: 'dropped-1' }, { id: 'free-1' }]),
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'dropped-1', name: 'Dropped One', club: 'Club One', position: 'DEF' },
+          { id: 'free-1', name: 'Free One', club: 'Club Two', position: 'FWD' },
+        ]),
       },
     };
 
@@ -155,7 +163,12 @@ describe('WaiverAvailabilityProjectionService', () => {
 
   it('commits multiple Firestore batches when player projection exceeds one batch', async () => {
     const { batches, firestore } = createFirestoreMock();
-    const players = Array.from({ length: 226 }, (_, index) => ({ id: `free-${index}` }));
+    const players = Array.from({ length: 226 }, (_, index) => ({
+      id: `free-${index}`,
+      name: `Free Player ${index}`,
+      club: 'Test Club',
+      position: 'MID',
+    }));
     const db = {
       leagueRosterPlayer: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -175,6 +188,58 @@ describe('WaiverAvailabilityProjectionService', () => {
     expect(batches).toHaveLength(2);
     expect(batches.every((batch) => batch.commit.mock.calls.length === 1)).toBe(true);
     expect(result).toEqual({ owned: 0, available: 226 });
+  });
+
+  it('projects one logical player and removes all aliases when any alias is owned', async () => {
+    const { batches, firestore } = createFirestoreMock();
+    const db = {
+      leagueRosterPlayer: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ playerId: 'jack-ginnivan-hawthorn', memberId: 'member-1' }]),
+      },
+      teamAction: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      player: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'jack-ginnivan-hawthorn',
+            name: 'Jack Ginnivan',
+            club: 'Hawthorn',
+            position: null,
+          },
+          {
+            id: 'jack_ginnivan',
+            name: 'Jack Ginnivan',
+            club: 'Hawthorn',
+            position: 'FWD',
+          },
+        ]),
+      },
+    };
+
+    const service = new WaiverAvailabilityProjectionService(db as never, firestore as never);
+    const result = await service.projectLeague({ leagueId: 'league-1' });
+
+    const setPayloads = batches.flatMap((batch) => batch.set.mock.calls.map(([, data]) => data));
+    const deletedIds = batches.flatMap((batch) =>
+      batch.delete.mock.calls.map(([ref]) => (ref as { id: string }).id)
+    );
+
+    expect(setPayloads).toContainEqual(
+      expect.objectContaining({
+        playerId: 'jack_ginnivan',
+        memberId: 'member-1',
+        status: 'owned',
+        available: false,
+      })
+    );
+    expect(setPayloads).not.toContainEqual(
+      expect.objectContaining({ playerId: 'jack-ginnivan-hawthorn', available: true })
+    );
+    expect(deletedIds).toEqual(expect.arrayContaining(['jack_ginnivan', 'jack-ginnivan-hawthorn']));
+    expect(result).toEqual({ owned: 1, available: 0 });
   });
 
   it('refreshes waiver availability after roster ownership projection', () => {

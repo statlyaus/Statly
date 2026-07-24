@@ -13,6 +13,7 @@ import {
   WaiverClaimStoreError,
   type WaiverSettings as ProcessingWaiverSettings,
 } from '@/server/waivers/WaiverProcessingService';
+import { findWaiverPlayerAliasIds } from '@/server/waivers/waiverPlayerIdentity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,35 +49,48 @@ export const POST = withMetrics(
         return NextResponse.json({ error: 'League membership required' }, { status: 403 });
       }
 
-      let prismaOwnership: { playerId: string; memberId: string } | null = null;
-      try {
-        prismaOwnership = await prisma.leagueRosterPlayer.findFirst({
-          where: { leagueId, playerId: String(playerId) },
-          select: { playerId: true, memberId: true },
-        });
-      } catch (error) {
-        logger.warn('Prisma ownership pre-check failed; continuing with Firestore checks', {
-          leagueId,
-          playerId: String(playerId),
-          error: error instanceof Error ? error.message : String(error),
-        });
+      const requestedPlayerId = String(playerId);
+      const activePlayers = await prisma.player.findMany({
+        where: { active: true },
+        select: { id: true, name: true, club: true, position: true },
+      });
+      const playerAliasIds = findWaiverPlayerAliasIds(activePlayers, requestedPlayerId);
+      if (playerAliasIds.length === 0) {
+        return NextResponse.json({ error: 'Player not found' }, { status: 404 });
       }
+
+      const prismaOwnership = await prisma.leagueRosterPlayer.findFirst({
+        where: { leagueId, playerId: { in: playerAliasIds } },
+        select: { playerId: true, memberId: true },
+      });
       if (prismaOwnership) {
         return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
       // Ownership checks (doc read + roster scan) concurrently to reduce latency
-      const ownershipRef = adminDb.doc(`leagues/${leagueId}/playerOwnerships/${String(playerId)}`);
-      const ownershipPromise = withTiming('waivers.ownership.get', () => ownershipRef.get());
-      const rosterScanPromise = withTiming('waivers.roster.scan', () =>
-        adminDb
-          .collection(`leagues/${leagueId}/rosters`)
-          .where('playerIds', 'array-contains', String(playerId))
-          .limit(1)
-          .get()
+      const ownershipRefs = playerAliasIds.map((aliasId) =>
+        adminDb.doc(`leagues/${leagueId}/playerOwnerships/${aliasId}`)
       );
-      const [ownershipDoc, rosterOwned] = await Promise.all([ownershipPromise, rosterScanPromise]);
-      if (ownershipDoc.exists || !rosterOwned.empty) {
+      const [ownershipDocs, rosterScans] = await Promise.all([
+        Promise.all(
+          ownershipRefs.map((ref) => withTiming('waivers.ownership.get', () => ref.get()))
+        ),
+        Promise.all(
+          playerAliasIds.map((aliasId) =>
+            withTiming('waivers.roster.scan', () =>
+              adminDb
+                .collection(`leagues/${leagueId}/rosters`)
+                .where('playerIds', 'array-contains', aliasId)
+                .limit(1)
+                .get()
+            )
+          )
+        ),
+      ]);
+      if (
+        ownershipDocs.some((document) => document.exists) ||
+        rosterScans.some((scan) => !scan.empty)
+      ) {
         return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
@@ -103,10 +117,10 @@ export const POST = withMetrics(
         validatedBid = bidAmount;
       }
 
-      const freshOwnershipDoc = await withTiming('waivers.ownership.recheck', () =>
-        ownershipRef.get()
+      const freshOwnershipDocs = await Promise.all(
+        ownershipRefs.map((ref) => withTiming('waivers.ownership.recheck', () => ref.get()))
       );
-      if (freshOwnershipDoc.exists) {
+      if (freshOwnershipDocs.some((document) => document.exists)) {
         return NextResponse.json({ error: 'Player already owned' }, { status: 409 });
       }
 
@@ -114,7 +128,7 @@ export const POST = withMetrics(
         leagueId,
         userId,
         teamId: String(teamId),
-        playerId: String(playerId),
+        playerId: requestedPlayerId,
         priority: Number(priority) || 1,
         waiverSettings: (ws ?? {}) as ProcessingWaiverSettings,
         ...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {}),
@@ -126,7 +140,7 @@ export const POST = withMetrics(
         leagueId,
         userId,
         teamId,
-        playerId: String(playerId),
+        playerId: requestedPlayerId,
         claimId,
       });
       try {

@@ -6,6 +6,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
+import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
 
 export interface WaiverSettings {
   system?: 'FAAB' | 'PRIORITY' | string;
@@ -105,7 +106,13 @@ type PrismaTransactionClient = Omit<
 
 type PrismaLike = Pick<
   typeof prisma,
-  '$transaction' | 'league' | 'leagueMember' | 'leagueRoster' | 'leagueRosterPlayer' | 'teamAction'
+  | '$transaction'
+  | 'league'
+  | 'leagueMember'
+  | 'leagueRoster'
+  | 'leagueRosterPlayer'
+  | 'player'
+  | 'teamAction'
 >;
 
 type PrismaWaiverStoreDb = Pick<
@@ -118,7 +125,7 @@ type FirestoreLike = Pick<typeof adminDb, 'collection' | 'doc'>;
 type ProjectionLike = Pick<WaiverAvailabilityProjectionService, 'projectLeague'>;
 
 type CanonicalRosterPlan =
-  | { status: 'READY'; memberId: string; nextPlayerIds: string }
+  | { status: 'READY'; memberId: string; playerId: string; nextPlayerIds: string }
   | { status: 'FAILED'; reason: string };
 
 function parsePlayerIds(raw?: string | null): string[] {
@@ -440,7 +447,7 @@ export class WaiverProcessingService {
           create: { leagueId, memberId: plan.memberId, playerIds: plan.nextPlayerIds },
         });
         await tx.leagueRosterPlayer.upsert({
-          where: { leagueId_playerId: { leagueId, playerId: claim.playerId } },
+          where: { leagueId_playerId: { leagueId, playerId: plan.playerId } },
           update: {
             memberId: plan.memberId,
             draftId: null,
@@ -451,7 +458,7 @@ export class WaiverProcessingService {
           create: {
             leagueId,
             memberId: plan.memberId,
-            playerId: claim.playerId,
+            playerId: plan.playerId,
             acquiredBy: 'WAIVER',
             acquiredAt: new Date(),
           },
@@ -498,8 +505,21 @@ export class WaiverProcessingService {
     }
 
     const memberId = member.id;
+    const activePlayers = await tx.player.findMany({
+      where: { active: true },
+      select: { id: true, name: true, club: true, position: true },
+    });
+    const playerGroup = groupWaiverPlayersByIdentity(activePlayers).find((group) =>
+      group.aliases.some((player) => player.id === claim.playerId)
+    );
+    if (!playerGroup) {
+      return { status: 'FAILED', reason: 'Player not found' };
+    }
+
+    const playerAliasIds = playerGroup.aliases.map((player) => player.id);
+    const canonicalPlayerId = playerGroup.representative.id;
     const existingOwnership = await tx.leagueRosterPlayer.findFirst({
-      where: { leagueId, playerId: claim.playerId },
+      where: { leagueId, playerId: { in: playerAliasIds } },
       select: { playerId: true, memberId: true },
     });
 
@@ -536,12 +556,13 @@ export class WaiverProcessingService {
     });
     const playerIds = parsePlayerIds(roster?.playerIds)
       .filter((playerId) => playerId !== claim.dropPlayerId)
-      .filter((playerId) => playerId !== claim.playerId);
-    playerIds.push(claim.playerId);
+      .filter((playerId) => !playerAliasIds.includes(playerId));
+    playerIds.push(canonicalPlayerId);
 
     return {
       status: 'READY',
       memberId,
+      playerId: canonicalPlayerId,
       nextPlayerIds: stringifyPlayerIds(playerIds),
     };
   }

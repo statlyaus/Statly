@@ -15,6 +15,15 @@ describe('e2e fixture setup', () => {
     expect(source).toContain('tx.player.upsert');
   });
 
+  it('uses canonical player ids and ranks only the full-draft fixture pool', () => {
+    const source = read('tests/e2e/helpers/fullDraftSoakFixture.ts');
+
+    expect(source).toContain('buildCanonicalPlayerId(player.name)');
+    expect(source).toContain('const candidateIds = await upsertActivePlayerPool(tx)');
+    expect(source).toContain('where: { active: true, id: { in: candidateIds } }');
+    expect(source).not.toContain('where: { active: true },');
+  });
+
   it('disables performance analytics beacons during Playwright runs', () => {
     const playwrightConfig = read('playwright.config.ts');
     const performanceMonitor = read('src/components/PerformanceMonitor.tsx');
