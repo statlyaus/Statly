@@ -14,6 +14,7 @@ const prismaMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/serverAuth', () => authMocks);
 vi.mock('@/lib/data', () => dataMocks);
+vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {} }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
 vi.mock('@/lib/ensureLobbyColumns', () => ({
   ensureRosterTables: vi.fn().mockResolvedValue(undefined),
