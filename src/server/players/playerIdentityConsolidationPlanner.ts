@@ -17,6 +17,7 @@ export type PlayerIdentityBlockerCode =
   | 'LINEUP_COLLISION'
   | 'TRADE_COLLISION'
   | 'CAPTAIN_COLLISION'
+  | 'AUTOSUB_REFERENCE'
   | 'AUTOSUB_COLLISION';
 
 export type PlayerIdentityBlocker = {
@@ -402,6 +403,11 @@ export async function planPlayerIdentityConsolidation(
   }
 
   for (const autosub of autosubs) {
+    const referencedAliasIds = [autosub.outgoingPlayerId, autosub.replacementPlayerId].filter(
+      (playerId) => aliasIds.has(playerId)
+    );
+    if (referencedAliasIds.length === 0) continue;
+
     const outgoing = projectedPlayerId(autosub.outgoingPlayerId, aliasMap);
     const replacement = projectedPlayerId(autosub.replacementPlayerId, aliasMap);
     if (outgoing === replacement) {
@@ -412,7 +418,17 @@ export async function planPlayerIdentityConsolidation(
         aliasIds: [autosub.outgoingPlayerId, autosub.replacementPlayerId],
         message: `Autosub ${autosub.id} would replace a player with the same canonical player.`,
       });
+      continue;
     }
+
+    blockers.push({
+      code: 'AUTOSUB_REFERENCE',
+      canonicalPlayerId:
+        aliasMap.get(autosub.outgoingPlayerId) ?? aliasMap.get(autosub.replacementPlayerId) ?? '',
+      scopeId: autosub.id,
+      aliasIds: referencedAliasIds,
+      message: `Historical autosub ${autosub.id} references a player alias and must remain immutable.`,
+    });
   }
 
   for (const action of teamActions) {

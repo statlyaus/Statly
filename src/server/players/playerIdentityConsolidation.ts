@@ -45,6 +45,7 @@ function rewriteJson(value: string | null, aliases: AliasMap): string | null {
 }
 
 function rewriteJsonIdArray(value: string | null, aliases: AliasMap): string | null {
+  if (!value || ![...aliases.keys()].some((aliasId) => value.includes(aliasId))) return value;
   const rewritten = rewriteJson(value, aliases);
   if (!rewritten) return rewritten;
   const parsed = JSON.parse(rewritten) as unknown;
@@ -214,6 +215,9 @@ async function assertNoRelationalReferences(tx: Prisma.TransactionClient, aliasI
     tx.queueItem.count({ where: { playerId: aliasId } }),
     tx.leagueRosterPlayer.count({ where: { playerId: aliasId } }),
     tx.leagueLineupPlayer.count({ where: { playerId: aliasId } }),
+    tx.leagueLineupAutosub.count({
+      where: { OR: [{ outgoingPlayerId: aliasId }, { replacementPlayerId: aliasId }] },
+    }),
     tx.leagueTradePlayer.count({ where: { playerId: aliasId } }),
   ]);
   if (counts.some((count) => count > 0)) {

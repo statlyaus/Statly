@@ -525,4 +525,102 @@ describe.sequential('canonical player identity migration', () => {
       ])
     );
   });
+
+  it('leaves unrelated malformed legacy roster JSON untouched', async () => {
+    const canonicalId = 'unrelated_roster_canonical';
+    const aliasId = 'unrelated-roster-alias';
+    await prisma.player.createMany({
+      data: [
+        { id: canonicalId, name: 'Unrelated Roster', club: 'Club', position: 'DEF' },
+        { id: aliasId, name: 'Unrelated Roster', club: 'Club', position: 'DEF' },
+      ],
+    });
+    await prisma.playerExternalIdentity.createMany({
+      data: [canonicalId, aliasId].map((playerId) => ({
+        playerId,
+        provider: 'statly-legacy',
+        externalId: playerId,
+      })),
+    });
+    await prisma.leagueRoster.update({
+      where: { leagueId_memberId: { leagueId: 'league-b', memberId: 'member-b' } },
+      data: { playerIds: 'unrelated malformed data', benchOrder: 'also malformed' },
+    });
+
+    const mapping = [{ aliasId, canonicalPlayerId: canonicalId }];
+    await expect(planPlayerIdentityConsolidation(prisma, mapping)).resolves.toMatchObject({
+      status: 'ready',
+    });
+    await expect(consolidatePlayerIdentities(prisma, mapping)).resolves.toMatchObject({
+      status: 'ready',
+    });
+    await expect(
+      prisma.leagueRoster.findUnique({
+        where: { leagueId_memberId: { leagueId: 'league-b', memberId: 'member-b' } },
+        select: { playerIds: true, benchOrder: true },
+      })
+    ).resolves.toEqual({
+      playerIds: 'unrelated malformed data',
+      benchOrder: 'also malformed',
+    });
+    await expect(prisma.player.findUnique({ where: { id: aliasId } })).resolves.toBeNull();
+  });
+
+  it('blocks alias retirement when immutable autosub history references it', async () => {
+    const canonicalId = 'autosub_history_canonical';
+    const aliasId = 'autosub-history-alias';
+    const replacementId = 'autosub-history-replacement';
+    await prisma.player.createMany({
+      data: [
+        { id: canonicalId, name: 'Autosub History', club: 'Club', position: 'MID' },
+        { id: aliasId, name: 'Autosub History', club: 'Club', position: 'MID' },
+        { id: replacementId, name: 'Autosub Replacement', club: 'Club', position: 'MID' },
+      ],
+    });
+    await prisma.playerExternalIdentity.createMany({
+      data: [canonicalId, aliasId, replacementId].map((playerId) => ({
+        playerId,
+        provider: 'statly-legacy',
+        externalId: playerId,
+      })),
+    });
+    await prisma.leagueLineup.create({
+      data: { id: 'autosub-history-lineup', leagueId: 'league-b', memberId: 'member-b', round: 1 },
+    });
+    await prisma.leagueLineupAutosub.create({
+      data: {
+        id: 'autosub-history-record',
+        lineupId: 'autosub-history-lineup',
+        outgoingPlayerId: aliasId,
+        replacementPlayerId: replacementId,
+        outgoingSlot: 'MID',
+        outgoingSlotIndex: 0,
+        interchangeSlotIndex: 0,
+        reason: 'DID_NOT_PLAY',
+      },
+    });
+
+    const mapping = [{ aliasId, canonicalPlayerId: canonicalId }];
+    const plan = await planPlayerIdentityConsolidation(prisma, mapping);
+    expect(plan.status).toBe('blocked');
+    expect(plan.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'AUTOSUB_REFERENCE',
+          scopeId: 'autosub-history-record',
+          aliasIds: [aliasId],
+        }),
+      ])
+    );
+    await expect(consolidatePlayerIdentities(prisma, mapping)).rejects.toBeInstanceOf(
+      PlayerIdentityConsolidationBlockedError
+    );
+    await expect(prisma.player.findUnique({ where: { id: aliasId } })).resolves.not.toBeNull();
+    await expect(
+      prisma.leagueLineupAutosub.findUnique({
+        where: { id: 'autosub-history-record' },
+        select: { outgoingPlayerId: true, replacementPlayerId: true },
+      })
+    ).resolves.toEqual({ outgoingPlayerId: aliasId, replacementPlayerId: replacementId });
+  });
 });
