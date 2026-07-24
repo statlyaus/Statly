@@ -1,5 +1,7 @@
 import type { LeagueTradeOfferStatus, LeagueTradeThreadStatus } from '@prisma/client';
 
+import { getTradeAcceptancePath } from '@/lib/trades/tradeAcceptancePath';
+
 import type { TradeActionName, TradeReviewModeDto } from './tradeContracts';
 
 export interface AcceptanceTransition {
@@ -14,7 +16,9 @@ export function determineAcceptanceTransition(
   acceptedAt: Date,
   reviewHours: number
 ): AcceptanceTransition {
-  if (reviewMode === 'none') {
+  const acceptancePath = getTradeAcceptancePath(reviewMode);
+
+  if (acceptancePath.kind === 'immediate') {
     return {
       threadStatus: 'COMPLETED',
       offerStatus: 'COMPLETED',
@@ -23,7 +27,7 @@ export function determineAcceptanceTransition(
     };
   }
 
-  if (reviewMode === 'admin') {
+  if (acceptancePath.kind === 'commissioner-review') {
     return {
       threadStatus: 'PENDING_ADMIN_REVIEW',
       offerStatus: 'ACCEPTED',

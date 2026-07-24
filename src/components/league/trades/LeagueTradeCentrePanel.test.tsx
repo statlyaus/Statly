@@ -141,42 +141,105 @@ describe('LeagueTradeCentrePanel', () => {
     );
   });
 
-  it('renders real rosters, governance, deep-link selection, filters, and available actions', () => {
+  it('opens a focused proposal workspace for a deep-linked player', () => {
     renderPanel();
 
     const title = screen.getByRole('heading', { name: 'Trade Centre' });
-    const proposeHeading = screen.getByRole('heading', { name: 'Propose a trade' });
-    const offersHeading = screen.getByRole('heading', { name: 'Offers' });
-    const inboxButton = screen.getByRole('button', { name: /Inbox/ });
+    const proposalHeading = screen.getByRole('heading', { name: 'Proposal workspace' });
     expect(title).toHaveClass('text-[1.75rem]');
     expect(title.previousElementSibling).toHaveClass('text-xs');
-    expect(proposeHeading).toHaveClass('text-lg');
-    expect(offersHeading).toHaveClass('text-lg');
-    expect(inboxButton).toHaveClass('h-11', 'bg-[color:var(--trade-selection)]');
+    expect(proposalHeading).toHaveClass('text-lg');
     expect(screen.getByText('Commissioner approval')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Alpha FC sends' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Beta FC sends' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-2');
     expect(screen.getByRole('checkbox', { name: /Bailey Beta/ })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Review trade' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Back to offers' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Offers' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept trade' })).not.toBeInTheDocument();
+  });
+
+  it('renders a scan-first offer ledger with one expanded offer', () => {
+    renderOffersPanel();
+
+    const offersHeading = screen.getByRole('heading', { name: 'Offers' });
+    const inboxButton = screen.getByRole('button', { name: /Inbox/ });
+    expect(offersHeading).toHaveClass('text-lg');
+    expect(inboxButton).toHaveClass('h-11', 'bg-[color:var(--trade-selection)]');
+    expect(inboxButton).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'New proposal' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Accept trade' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Counteroffer' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Trade with Beta FC' })).toBeInTheDocument();
+    expect(screen.getByText('Alpha ↔ Beta')).toBeInTheDocument();
     expect(screen.getByText(/^Offer 1 ·/)).toHaveClass('text-xs');
     expect(screen.getByText('Awaiting response')).toBeInTheDocument();
     expect(
       screen.getByRole('region', { name: 'You send package from Alpha FC' })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('region', { name: 'You receive from Beta FC package from Beta FC' })
+      screen.getByRole('region', { name: 'You receive package from Beta FC' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /category comparison/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Discuss trade: Alpha ↔ Beta' })
+    ).toBeInTheDocument();
+  });
+
+  it('derives commissioner review parties from the trade instead of an unrelated viewer team', () => {
+    renderOffersPanel({
+      ...snapshot,
+      isCommissioner: true,
+      activeView: 'review',
+      teams: [
+        {
+          memberId: 'member-3',
+          teamName: 'Commissioner FC',
+          teamLogoUrl: null,
+          isViewer: true,
+          players: [],
+        },
+        { ...snapshot.teams[0], isViewer: false },
+        snapshot.teams[1],
+      ],
+    });
+
+    expect(screen.getByText(/^Offer 1 · Alpha FC$/)).toBeInTheDocument();
+    expect(screen.getByText('Beta ↔ Alpha')).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Beta FC sends package from Beta FC' })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('table', { name: /Alpha FC sends.*Season 2026 per-game averages/i })
+      screen.getByRole('region', { name: 'Alpha FC sends package from Alpha FC' })
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Discuss trade: Beta FC and Alpha FC' })
-    ).toBeInTheDocument();
-    expect(inboxButton).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByText(/No players ↔ No players/)).not.toBeInTheDocument();
+  });
+
+  it('keeps only one ledger offer expanded at a time', async () => {
+    const user = userEvent.setup();
+    const secondTrade = {
+      ...snapshot.trades[0],
+      id: 'trade-2',
+      currentOffer: {
+        ...snapshot.trades[0].currentOffer,
+        id: 'offer-2',
+        sequence: 2,
+      },
+    };
+    renderOffersPanel({
+      ...snapshot,
+      trades: [snapshot.trades[0], secondTrade],
+      counts: { ...snapshot.counts, inbox: 2 },
+    });
+
+    expect(screen.getAllByRole('heading', { name: 'Package comparison' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Collapse Alpha ↔ Beta' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Expand Alpha ↔ Beta' }));
+
+    expect(screen.getAllByRole('heading', { name: 'Package comparison' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Collapse Alpha ↔ Beta' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand Alpha ↔ Beta' })).toBeInTheDocument();
   });
 
   it('keeps the unavailable state title and warning surface in the approved hierarchy', () => {
@@ -195,7 +258,7 @@ describe('LeagueTradeCentrePanel', () => {
 
   it('keeps offer filters in the canonical league tab URL', async () => {
     const user = userEvent.setup();
-    renderPanel();
+    renderOffersPanel();
 
     await user.click(screen.getByRole('button', { name: /History/ }));
 
@@ -318,7 +381,7 @@ describe('LeagueTradeCentrePanel', () => {
 
     expect(authenticatedFetch).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Review trade proposal' })).toHaveFocus()
+      expect(screen.getByRole('heading', { name: 'Send to Beta FC?' })).toHaveFocus()
     );
     expect(screen.getByRole('region', { name: 'You send package' })).toHaveTextContent(
       'Alex Alpha'
@@ -327,11 +390,11 @@ describe('LeagueTradeCentrePanel', () => {
       'Bailey Beta'
     );
     expect(screen.getByText('No league deadline')).toBeInTheDocument();
-    expect(screen.getByText('Expires 72 hours after sending')).toBeInTheDocument();
+    expect(screen.getByText('72 hours after sending')).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { name: 'Package comparison' })).toHaveLength(1);
 
     await user.type(screen.getByRole('textbox', { name: 'Message (optional)' }), 'Let us swap');
-    await user.click(screen.getByRole('button', { name: 'Send proposal' }));
+    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(1));
     const [path, request] = authenticatedFetch.mock.calls[0] as [string, RequestInit];
@@ -344,9 +407,7 @@ describe('LeagueTradeCentrePanel', () => {
       idempotencyKey: expect.stringMatching(/^trade:proposal:/),
     });
     expect(refresh).toHaveBeenCalledTimes(1);
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Propose a trade' })).toHaveFocus()
-    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Offers' })).toHaveFocus());
   });
 
   it('reconciles removed roster players before review rendering or submission', async () => {
@@ -369,7 +430,7 @@ describe('LeagueTradeCentrePanel', () => {
 
     const sendingPackage = screen.getByRole('region', { name: 'You send package' });
     expect(within(sendingPackage).queryByText('Alex Alpha')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Send proposal' }));
+    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
     expect(authenticatedFetch).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent(
       'The selected trade package is incomplete. Return to edit and review it.'
@@ -451,13 +512,13 @@ describe('LeagueTradeCentrePanel', () => {
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
     await user.type(screen.getByRole('textbox', { name: 'Message (optional)' }), 'Retry me');
-    await user.click(screen.getByRole('button', { name: 'Send proposal' }));
+    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
     const submissionAlert = await screen.findByRole('alert');
 
     expect(submissionAlert).toHaveTextContent('Temporary response failure');
     expect(submissionAlert).toHaveClass('bg-[color:var(--trade-warning-soft)]');
     expect(submissionAlert.className).not.toMatch(/trade-(?:send|receive|positive|negative)/);
-    expect(screen.getByRole('heading', { name: 'Review trade proposal' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Send to Beta FC?' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Message (optional)' })).toHaveValue('Retry me');
     expect(screen.getByRole('region', { name: 'You send package' })).toHaveTextContent(
       'Alex Alpha'
@@ -465,7 +526,7 @@ describe('LeagueTradeCentrePanel', () => {
     expect(screen.getByRole('region', { name: 'You receive package' })).toHaveTextContent(
       'Bailey Beta'
     );
-    await user.click(screen.getByRole('button', { name: 'Send proposal' }));
+    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(2));
     const firstBody = JSON.parse(
@@ -480,38 +541,36 @@ describe('LeagueTradeCentrePanel', () => {
 
   it('keeps the counteroffer partner locked and exposes cancellation in edit and review', async () => {
     const user = userEvent.setup();
-    renderPanel();
+    renderOffersPanel();
 
     await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
-    expect(screen.getByRole('heading', { name: 'Build a counteroffer' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Counteroffer workspace' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Trade partner' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-2');
     expect(screen.getByRole('button', { name: 'Cancel counteroffer' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review trade' })).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Cancel counteroffer' }));
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Propose a trade' })).toHaveFocus()
-    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Offers' })).toHaveFocus());
 
     await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('checkbox', { name: /Bailey Beta/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
 
-    expect(screen.getByRole('button', { name: 'Send counteroffer' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Send counteroffer to Beta FC' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel counteroffer' })).toBeInTheDocument();
     expect(authenticatedFetch).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Cancel counteroffer' }));
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Propose a trade' })).toHaveFocus()
-    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Offers' })).toHaveFocus());
   });
 
   it('invalidates a counteroffer instead of retargeting it when its partner leaves', async () => {
     const user = userEvent.setup();
     const snapshotWithThirdTeam = createSnapshotWithThirdTeam();
-    const rendered = renderPanel(snapshotWithThirdTeam);
+    const rendered = renderOffersPanel(snapshotWithThirdTeam);
 
     await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
     expect(screen.getByRole('combobox', { name: 'Trade partner' })).toHaveValue('member-2');
@@ -531,15 +590,13 @@ describe('LeagueTradeCentrePanel', () => {
     expect(screen.queryByRole('button', { name: 'Review trade' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Cancel counteroffer' }));
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Propose a trade' })).toHaveFocus()
-    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Offers' })).toHaveFocus());
   });
 
   it('ignores proposal deep-link changes while a counteroffer is active', async () => {
     const user = userEvent.setup();
     const snapshotWithThirdTeam = createSnapshotWithThirdTeam();
-    const rendered = renderPanel(snapshotWithThirdTeam);
+    const rendered = renderOffersPanel(snapshotWithThirdTeam);
 
     await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
@@ -560,63 +617,50 @@ describe('LeagueTradeCentrePanel', () => {
 
   it('focuses the stable composer heading after a successful counteroffer', async () => {
     const user = userEvent.setup();
-    renderPanel();
+    renderOffersPanel();
 
     await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('checkbox', { name: /Bailey Beta/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
-    await user.click(screen.getByRole('button', { name: 'Send counteroffer' }));
+    await user.click(screen.getByRole('button', { name: 'Send counteroffer to Beta FC' }));
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(1));
     expect(authenticatedFetch.mock.calls[0]?.[0]).toBe(
       '/api/leagues/league-1/trades/trade-1/actions'
     );
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Propose a trade' })).toHaveFocus()
-    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Offers' })).toHaveFocus());
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps offer-action errors accessible while a counteroffer is active', async () => {
+  it('keeps offer actions out of the focused counteroffer workspace', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    authenticatedFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: 'The offer changed before acceptance.' }), {
-        status: 409,
-      })
-    );
-    renderPanel();
+    renderOffersPanel();
 
     await user.click(screen.getByRole('button', { name: 'Counteroffer' }));
-    await user.click(screen.getByRole('button', { name: 'Accept trade' }));
 
-    const actionAlert = await screen.findByRole('alert');
-    expect(actionAlert).toHaveTextContent('The offer changed before acceptance.');
-    expect(actionAlert).toHaveClass('bg-[color:var(--trade-warning-soft)]');
-    expect(screen.getByRole('heading', { name: 'Build a counteroffer' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Counteroffer workspace' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Trade partner' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Accept trade' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Offers' })).not.toBeInTheDocument();
   });
 
-  it('preserves a composer submission error when offer confirmation is cancelled', async () => {
+  it('keeps a composer submission error inside the proposal workspace', async () => {
     const user = userEvent.setup();
     authenticatedFetch.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: 'Keep this composer error.' }), { status: 409 })
     );
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderPanel();
 
     await user.click(screen.getByRole('checkbox', { name: /Alex Alpha/ }));
     await user.click(screen.getByRole('button', { name: 'Review trade' }));
-    await user.click(screen.getByRole('button', { name: 'Send proposal' }));
+    await user.click(screen.getByRole('button', { name: 'Send proposal to Beta FC' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Keep this composer error.');
 
-    await user.click(screen.getByRole('button', { name: 'Accept trade' }));
-
-    expect(window.confirm).toHaveBeenCalledOnce();
     expect(authenticatedFetch).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('alert')).toHaveTextContent('Keep this composer error.');
-    expect(screen.getByRole('heading', { name: 'Review trade proposal' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Send to Beta FC?' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept trade' })).not.toBeInTheDocument();
   });
 
   it('confirms acceptance before posting the expected trade version', async () => {
@@ -627,7 +671,7 @@ describe('LeagueTradeCentrePanel', () => {
         status: 200,
       })
     );
-    renderPanel();
+    renderOffersPanel();
 
     await user.click(screen.getByRole('button', { name: 'Accept trade' }));
 
@@ -653,7 +697,7 @@ describe('LeagueTradeCentrePanel', () => {
           status: 200,
         })
       );
-    renderPanel();
+    renderOffersPanel();
 
     await user.click(screen.getByRole('button', { name: 'Accept trade' }));
     const actionAlert = await screen.findByRole('alert');
@@ -675,6 +719,10 @@ describe('LeagueTradeCentrePanel', () => {
 
 function renderPanel(snapshotOverride: LeagueTradeCentreSnapshot = snapshot) {
   return render(createPanel(snapshotOverride));
+}
+
+function renderOffersPanel(snapshotOverride: LeagueTradeCentreSnapshot = snapshot) {
+  return render(createPanel(snapshotOverride, { requestedPlayerId: null, ownerMemberId: null }));
 }
 
 function createPanel(

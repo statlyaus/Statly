@@ -75,25 +75,27 @@ describe('TradeComparisonTable', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('summarizes gained, lost, even, and unavailable categories', () => {
+  it('summarizes categories from the incoming and outgoing package perspective', () => {
     render(<TradeComparisonTable {...defaultProps} />);
 
     expect(
-      screen.getByText('Category impact: 1 gained · 1 lost · 1 even · 1 unavailable')
+      screen.getByText('Categories: 1 favour incoming · 1 favour outgoing · 1 even · 1 unavailable')
     ).toBeInTheDocument();
   });
 
-  it('uses team columns and one normalized impact column with signed accessible outcomes', () => {
+  it('uses team columns and one normalized difference column with signed accessible outcomes', () => {
     render(<TradeComparisonTable {...defaultProps} />);
 
     expect(screen.getByRole('heading', { level: 4, name: 'Package comparison' })).toHaveClass(
       'text-base'
     );
-    const table = screen.getByRole('table', { name: /average category comparison/i });
+    const table = screen.getByRole('table', { name: /category comparison/i });
     expect(within(table).getByRole('columnheader', { name: 'Category' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Robbo Rockers' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'AFL Legends' })).toBeInTheDocument();
-    expect(within(table).getAllByRole('columnheader', { name: 'Impact' })).toHaveLength(1);
+    expect(within(table).getAllByRole('columnheader', { name: 'Package difference' })).toHaveLength(
+      1
+    );
     expect(
       within(table).queryByRole('columnheader', { name: 'Difference' })
     ).not.toBeInTheDocument();
@@ -102,7 +104,9 @@ describe('TradeComparisonTable', () => {
     expect(
       within(within(table).getByRole('row', { name: /Goals/ })).getByText('+2.0')
     ).toBeInTheDocument();
-    const gained = within(within(table).getByRole('row', { name: /Goals/ })).getByText('Gained');
+    const gained = within(within(table).getByRole('row', { name: /Goals/ })).getByText(
+      'Favours incoming'
+    );
     expect(gained.parentElement).toHaveClass(
       'bg-[color:var(--trade-positive)]/8',
       'text-[color:var(--trade-positive)]'
@@ -110,7 +114,9 @@ describe('TradeComparisonTable', () => {
     expect(
       within(within(table).getByRole('row', { name: /Clangers/ })).getByText('−2.0')
     ).toBeInTheDocument();
-    const lost = within(within(table).getByRole('row', { name: /Clangers/ })).getByText('Lost');
+    const lost = within(within(table).getByRole('row', { name: /Clangers/ })).getByText(
+      'Favours outgoing'
+    );
     expect(lost.parentElement).toHaveClass(
       'bg-[color:var(--trade-negative-soft)]',
       'text-[color:var(--trade-negative)]'
@@ -128,12 +134,12 @@ describe('TradeComparisonTable', () => {
 
     expect(
       screen.getByText(
-        'Season 2026 average per selected player, per game. Not category totals or projected lineup impact.'
+        'Comparison basis: 2026 season, per-game average per selected player. Send sample: 1 player · 12 GP each. Receive sample: 1 player · 12 GP each.'
       )
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Positive impact means the receiving package is better after category direction is normalized/i
+        /Positive differences favour the incoming package; negative differences favour the outgoing package/i
       )
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Goals, higher is better')).toBeInTheDocument();
@@ -159,7 +165,7 @@ describe('TradeComparisonTable', () => {
     const gainedRow = screen.getByRole('row', { name: /Goals/ });
     expect(within(gainedRow).getByText('+0.004')).toBeInTheDocument();
     expect(within(gainedRow).queryByText('+0.0')).not.toBeInTheDocument();
-    expect(within(gainedRow).getByText('Gained')).toBeInTheDocument();
+    expect(within(gainedRow).getByText('Favours incoming')).toBeInTheDocument();
 
     rerender(
       <TradeComparisonTable
@@ -197,11 +203,11 @@ describe('TradeComparisonTable', () => {
     );
   });
 
-  it('uses at least 14px typography for numeric values and impact labels', () => {
+  it('uses at least 14px typography for numeric values and difference labels', () => {
     render(<TradeComparisonTable {...defaultProps} />);
 
     const goalsRow = screen.getByRole('row', { name: /Goals/ });
     expect(within(goalsRow).getByText('10.0')).toHaveClass('text-sm');
-    expect(within(goalsRow).getByText('Gained').parentElement).toHaveClass('text-sm');
+    expect(within(goalsRow).getByText('Favours incoming').parentElement).toHaveClass('text-sm');
   });
 });

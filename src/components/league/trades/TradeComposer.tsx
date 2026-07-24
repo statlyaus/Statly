@@ -280,6 +280,7 @@ export function TradeComposer({
         receivingPlayerIds={validReceivingPlayerIds}
         message={composerState.message}
         rules={rules}
+        mode={isCounter ? 'counteroffer' : 'proposal'}
         playerStats={playerStats}
         isSubmitting={isSubmitting}
         error={validationError ?? error}

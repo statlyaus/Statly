@@ -11,6 +11,7 @@ import type {
 import type { LeaguePlayerStatDatasetDto } from '@/types/leaguePlayerStats';
 
 import { TradeReviewStep } from './TradeReviewStep';
+import { formatTradeDateTime } from './tradeDateFormatting';
 
 const sendingPlayers: TradePlayerDto[] = [
   { id: 'send-mid', name: 'Riley Rocker', club: 'Richmond Tigers', position: 'MID' },
@@ -65,6 +66,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof TradeReviewS
     receivingPlayerIds: receivingPlayers.map(({ id }) => id),
     message: 'A balanced offer',
     rules,
+    mode: 'proposal' as const,
     playerStats,
     isSubmitting: false,
     error: null,
@@ -97,37 +99,47 @@ describe('TradeReviewStep', () => {
     expect(
       screen.getByRole('heading', { level: 5, name: 'Package comparison' })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Send proposal' })).toHaveClass('h-11');
+    expect(screen.getByRole('button', { name: 'Send proposal to AFL Legends' })).toHaveClass(
+      'h-11'
+    );
     expect(screen.queryByText(/injur|available to play/i)).not.toBeInTheDocument();
   });
 
-  it('exposes a programmatically focusable review heading', () => {
+  it('exposes a recipient-specific, programmatically focusable checkpoint heading', () => {
     const headingRef = createRef<HTMLHeadingElement>();
     render(<TradeReviewStep {...createProps({ headingRef })} />);
 
-    const heading = screen.getByRole('heading', { level: 4, name: 'Review trade proposal' });
+    const heading = screen.getByRole('heading', { level: 4, name: 'Send to AFL Legends?' });
     expect(heading).toHaveAttribute('tabindex', '-1');
     expect(heading).toHaveClass('focus-visible:ring-[3px]');
-    expect(heading).toHaveClass('text-lg');
     headingRef.current?.focus();
     expect(heading).toHaveFocus();
   });
 
-  it('formats the league deadline and pluralizes offer expiry', () => {
-    const deadline = new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(rules.deadline!));
+  it('renders the four checkpoint facts with selected players, expiry, and deadline', () => {
+    const deadline = formatTradeDateTime(rules.deadline!);
     const { rerender } = render(
       <TradeReviewStep {...createProps({ rules: { ...rules, offerExpiryHours: 1 } })} />
     );
 
-    expect(screen.getByText(deadline)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Expires 1 hour after sending or at the league deadline, whichever comes first'
-      )
-    ).toBeInTheDocument();
+    const checkpoint = screen.getByRole('region', { name: 'Send to AFL Legends?' });
+    const summary = checkpoint.querySelector('dl');
+    expect(summary).not.toBeNull();
+    expect(Array.from(summary!.querySelectorAll('dt')).map((term) => term.textContent)).toEqual([
+      'You send',
+      'You receive',
+      'Expires',
+      'Deadline',
+    ]);
+    expect(summary!.querySelectorAll('dd')).toHaveLength(4);
+
+    const rows = Array.from(summary!.querySelectorAll('dt')).map((term) => term.parentElement);
+    expect(rows[0]).toHaveTextContent('Riley Rocker');
+    expect(rows[0]).toHaveTextContent('Finley Forward');
+    expect(rows[1]).toHaveTextContent('Alex Legend');
+    expect(rows[1]).toHaveTextContent('Casey Legend');
+    expect(rows[2]).toHaveTextContent(/1 hour after sending/i);
+    expect(rows[3]).toHaveTextContent(deadline);
 
     rerender(
       <TradeReviewStep
@@ -136,11 +148,51 @@ describe('TradeReviewStep', () => {
         })}
       />
     );
-    expect(screen.getByText('No league deadline')).toBeInTheDocument();
-    expect(screen.getByText('Expires 2 hours after sending')).toBeInTheDocument();
+    const updatedSummary = screen
+      .getByRole('region', { name: 'Send to AFL Legends?' })
+      .querySelector('dl');
+    const updatedRows = Array.from(updatedSummary!.querySelectorAll('dt')).map(
+      (term) => term.parentElement
+    );
+    expect(updatedRows[2]).toHaveTextContent(/2 hours after sending/i);
+    expect(updatedRows[3]).toHaveTextContent('No league deadline');
   });
 
-  it('shows neutral package position deltas, including zero, with a scope disclaimer', () => {
+  it('describes the acceptance consequence for each league review policy', () => {
+    const { rerender } = render(<TradeReviewStep {...createProps()} />);
+
+    const immediateCheckpoint = screen.getByRole('region', { name: 'Send to AFL Legends?' });
+    expect(immediateCheckpoint).toHaveTextContent(/AFL Legends accepts/i);
+    expect(immediateCheckpoint).toHaveTextContent(/completes immediately/i);
+    expect(immediateCheckpoint).toHaveTextContent(/Statly rechecks/i);
+
+    rerender(
+      <TradeReviewStep
+        {...createProps({
+          rules: { ...rules, reviewMode: 'admin' },
+        })}
+      />
+    );
+    const adminCheckpoint = screen.getByRole('region', { name: 'Send to AFL Legends?' });
+    expect(adminCheckpoint).toHaveTextContent(/AFL Legends accepts/i);
+    expect(adminCheckpoint).toHaveTextContent(/commissioner review/i);
+    expect(adminCheckpoint).toHaveTextContent(/only after approval/i);
+    expect(adminCheckpoint).not.toHaveTextContent(/completes immediately/i);
+
+    rerender(
+      <TradeReviewStep
+        {...createProps({
+          rules: { ...rules, reviewMode: 'veto', reviewHours: 24, vetoThreshold: 3 },
+        })}
+      />
+    );
+    const vetoCheckpoint = screen.getByRole('region', { name: 'Send to AFL Legends?' });
+    expect(vetoCheckpoint).toHaveTextContent(/AFL Legends accepts/i);
+    expect(vetoCheckpoint).toHaveTextContent(/24.?hour.*veto/i);
+    expect(vetoCheckpoint).toHaveTextContent(/3.*votes?/i);
+  });
+
+  it('shows only meaningful package position deltas with a scope disclaimer', () => {
     render(<TradeReviewStep {...createProps()} />);
 
     const positionChange = screen.getByRole('region', { name: 'Package position change' });
@@ -151,11 +203,32 @@ describe('TradeReviewStep', () => {
       })
     ).toHaveClass('text-base');
     expect(within(positionChange).getByText('MID −1')).toBeInTheDocument();
-    expect(within(positionChange).getByText('FWD 0')).toBeInTheDocument();
     expect(within(positionChange).getByText('DEF +1')).toBeInTheDocument();
+    expect(within(positionChange).queryByText('FWD 0')).not.toBeInTheDocument();
     expect(
       within(positionChange).getByText(/Package balance only; not a lineup projection/i)
     ).toBeInTheDocument();
+  });
+
+  it('summarizes an all-zero package position change without an empty delta list', () => {
+    const positionNeutralPlayers: TradePlayerDto[] = [
+      { id: 'receive-mid', name: 'Morgan Mid', club: 'Essendon Bombers', position: 'MID' },
+      { id: 'receive-fwd', name: 'Frank Forward', club: 'Fremantle Dockers', position: 'FWD' },
+    ];
+    render(
+      <TradeReviewStep
+        {...createProps({
+          receivingPlayers: positionNeutralPlayers,
+          receivingPlayerIds: positionNeutralPlayers.map(({ id }) => id),
+        })}
+      />
+    );
+
+    const positionChange = screen.getByRole('region', { name: 'Package position change' });
+    expect(within(positionChange).getByText('No positional balance change')).toBeInTheDocument();
+    expect(
+      within(positionChange).queryByRole('list', { name: 'Position count changes' })
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the optional message controlled with help text, limit, and count', () => {
@@ -175,10 +248,20 @@ describe('TradeReviewStep', () => {
     const onBack = vi.fn();
     const onSubmit = vi.fn();
     const onCancelCounter = vi.fn();
-    render(<TradeReviewStep {...createProps({ onBack, onSubmit, onCancelCounter })} />);
+    render(
+      <TradeReviewStep
+        {...createProps({
+          mode: 'counteroffer',
+          onBack,
+          onSubmit,
+          onCancelCounter,
+        })}
+      />
+    );
 
     const back = screen.getByRole('button', { name: 'Back to edit' });
-    const submit = screen.getByRole('button', { name: 'Send counteroffer' });
+    expect(screen.getByRole('heading', { name: 'Send to AFL Legends?' })).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Send counteroffer to AFL Legends' });
     const cancel = screen.getByRole('button', { name: 'Cancel counteroffer' });
     expect(back).toHaveClass('h-11');
     expect(submit).toHaveClass('h-11');
@@ -190,13 +273,11 @@ describe('TradeReviewStep', () => {
     expect(onCancelCounter).toHaveBeenCalledOnce();
   });
 
-  it('uses a neutral alert and disables review controls while sending', () => {
+  it('keeps submission errors neutral without obscuring the checkpoint actions', () => {
     render(
       <TradeReviewStep
         {...createProps({
-          isSubmitting: true,
           error: 'The roster changed. Review the proposal again.',
-          onCancelCounter: vi.fn(),
         })}
       />
     );
@@ -205,12 +286,45 @@ describe('TradeReviewStep', () => {
     expect(alert).toHaveTextContent('The roster changed. Review the proposal again.');
     expect(alert).toHaveClass('bg-[color:var(--trade-warning-soft)]');
     expect(alert.className).not.toMatch(/trade-(?:send|receive|positive|negative)/);
+    expect(screen.getByRole('textbox', { name: 'Message (optional)' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Back to edit' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Send proposal to AFL Legends' })).toBeEnabled();
+  });
+
+  it('disables review controls and keeps the pending label recipient-specific while sending', () => {
+    render(
+      <TradeReviewStep
+        {...createProps({
+          mode: 'counteroffer',
+          isSubmitting: true,
+          onCancelCounter: vi.fn(),
+        })}
+      />
+    );
+
     expect(screen.getByRole('textbox', { name: 'Message (optional)' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Back to edit' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel counteroffer' })).toBeDisabled();
-    const sending = screen.getByRole('button', { name: 'Sending…' });
+    const sending = screen.getByRole('button', {
+      name: 'Sending counteroffer to AFL Legends…',
+    });
     expect(sending).toBeDisabled();
     expect(sending).toHaveClass('h-11');
+    expect(screen.getByRole('region', { name: 'Send to AFL Legends?' })).toHaveAttribute(
+      'aria-busy',
+      'true'
+    );
+  });
+
+  it('keeps final actions in logical mobile order and a two-column responsive group', () => {
+    render(<TradeReviewStep {...createProps()} />);
+
+    const back = screen.getByRole('button', { name: 'Back to edit' });
+    const submit = screen.getByRole('button', { name: 'Send proposal to AFL Legends' });
+    const actions = back.parentElement;
+    expect(actions).toBe(submit.parentElement);
+    expect(actions).toHaveClass('grid', 'sm:grid-cols-2');
+    expect(back.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('uses unique accessible heading relationships across multiple review instances', () => {
@@ -221,8 +335,8 @@ describe('TradeReviewStep', () => {
       </>
     );
 
-    const headings = screen.getAllByRole('heading', { level: 4, name: 'Review trade proposal' });
-    const regions = screen.getAllByRole('region', { name: 'Review trade proposal' });
+    const headings = screen.getAllByRole('heading', { level: 4, name: 'Send to AFL Legends?' });
+    const regions = screen.getAllByRole('region', { name: 'Send to AFL Legends?' });
     const headingIds = headings.map(({ id }) => id);
     expect(new Set(headingIds).size).toBe(2);
     expect(regions.map((region) => region.getAttribute('aria-labelledby'))).toEqual(headingIds);
