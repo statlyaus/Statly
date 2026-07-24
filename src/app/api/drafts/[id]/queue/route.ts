@@ -12,16 +12,16 @@ import {
 } from '@/server/players/playerIdentityService';
 
 const QueuePostSchema = z.object({
-  playerId: z.string().min(1),
+  playerId: z.string().trim().min(1),
   rank: z.coerce.number().int().positive().optional(),
 });
 
 const QueueDeleteQuerySchema = z.object({
-  playerId: z.string().min(1),
+  playerId: z.string().trim().min(1),
 });
 
 const QueuePutSchema = z.object({
-  queue: z.array(z.string().min(1)).default([]),
+  queue: z.array(z.string().trim().min(1)).default([]),
 });
 
 const queueEntrySelect = {

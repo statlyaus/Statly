@@ -1,5 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 
+import { assertPlayerIdentitySourceFingerprint } from './playerIdentityConsolidationCli';
+import { containsPlayerIdentityReference } from './playerIdentityJsonReferences';
 import {
   planPlayerIdentityConsolidation,
   type PlayerAliasMapping,
@@ -14,6 +16,12 @@ export class PlayerIdentityConsolidationBlockedError extends Error {
 }
 
 type AliasMap = ReadonlyMap<string, string>;
+
+export type PlayerIdentityConsolidationOptions = {
+  expectedSourceFingerprint?: string;
+  maxWaitMs?: number;
+  timeoutMs?: number;
+};
 
 function replacePlayerIds(value: unknown, aliases: AliasMap): unknown {
   if (typeof value === 'string') {
@@ -35,7 +43,7 @@ function replacePlayerIds(value: unknown, aliases: AliasMap): unknown {
 
 function rewriteJson(value: string | null, aliases: AliasMap): string | null {
   if (!value) return value;
-  if (![...aliases.keys()].some((aliasId) => value.includes(aliasId))) return value;
+  if (!containsPlayerIdentityReference(value, new Set(aliases.keys()))) return value;
 
   try {
     return JSON.stringify(replacePlayerIds(JSON.parse(value), aliases));
@@ -45,7 +53,7 @@ function rewriteJson(value: string | null, aliases: AliasMap): string | null {
 }
 
 function rewriteJsonIdArray(value: string | null, aliases: AliasMap): string | null {
-  if (!value || ![...aliases.keys()].some((aliasId) => value.includes(aliasId))) return value;
+  if (!value || !containsPlayerIdentityReference(value, new Set(aliases.keys()))) return value;
   const rewritten = rewriteJson(value, aliases);
   if (!rewritten) return rewritten;
   const parsed = JSON.parse(rewritten) as unknown;
@@ -251,28 +259,43 @@ async function applyMapping(
 
 export async function consolidatePlayerIdentities(
   client: PrismaClient,
-  mappings: readonly PlayerAliasMapping[]
+  mappings: readonly PlayerAliasMapping[],
+  options: PlayerIdentityConsolidationOptions = {}
 ): Promise<PlayerIdentityConsolidationPlan> {
-  return client.$transaction(async (tx) => {
-    const plan = await planPlayerIdentityConsolidation(tx, mappings);
-    if (plan.status === 'blocked') {
-      throw new PlayerIdentityConsolidationBlockedError(plan);
+  return client.$transaction(
+    async (tx) => {
+      if (options.expectedSourceFingerprint) {
+        const players = await tx.player.findMany({
+          orderBy: { id: 'asc' },
+          select: { id: true, name: true, club: true, position: true },
+        });
+        assertPlayerIdentitySourceFingerprint(options.expectedSourceFingerprint, players);
+      }
+
+      const plan = await planPlayerIdentityConsolidation(tx, mappings);
+      if (plan.status === 'blocked') {
+        throw new PlayerIdentityConsolidationBlockedError(plan);
+      }
+
+      const aliasMap = new Map(
+        plan.mappings.map((mapping) => [mapping.aliasId, mapping.canonicalPlayerId])
+      );
+      for (const mapping of plan.mappings) {
+        await applyMapping(tx, mapping);
+      }
+
+      await rewriteLegacyRosterDocuments(tx, aliasMap);
+
+      for (const mapping of plan.mappings) {
+        await assertNoRelationalReferences(tx, mapping.aliasId);
+        await tx.player.delete({ where: { id: mapping.aliasId } });
+      }
+
+      return plan;
+    },
+    {
+      maxWait: options.maxWaitMs ?? 10_000,
+      timeout: options.timeoutMs ?? 300_000,
     }
-
-    const aliasMap = new Map(
-      plan.mappings.map((mapping) => [mapping.aliasId, mapping.canonicalPlayerId])
-    );
-    for (const mapping of plan.mappings) {
-      await applyMapping(tx, mapping);
-    }
-
-    await rewriteLegacyRosterDocuments(tx, aliasMap);
-
-    for (const mapping of plan.mappings) {
-      await assertNoRelationalReferences(tx, mapping.aliasId);
-      await tx.player.delete({ where: { id: mapping.aliasId } });
-    }
-
-    return plan;
-  });
+  );
 }

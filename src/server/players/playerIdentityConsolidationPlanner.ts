@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
+import { containsPlayerIdentityReference } from './playerIdentityJsonReferences';
+
 export type PlayerAliasMapping = {
   aliasId: string;
   canonicalPlayerId: string;
@@ -109,8 +111,24 @@ function groupBy<T>(rows: readonly T[], keyFor: (row: T) => string): Map<string,
 }
 
 function containsAnyAlias(value: string | null, aliasIds: ReadonlySet<string>): boolean {
-  if (!value) return false;
-  return [...aliasIds].some((aliasId) => value.includes(aliasId));
+  return containsPlayerIdentityReference(value, aliasIds);
+}
+
+const PLANNER_BATCH_SIZE = 250;
+
+async function collectBatchedRows<T extends { id: string }>(
+  loadPage: (cursor: string | undefined) => Promise<T[]>
+): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await loadPage(cursor);
+    rows.push(...page);
+    cursor = page.length === PLANNER_BATCH_SIZE ? page[page.length - 1]?.id : undefined;
+  } while (cursor);
+
+  return rows;
 }
 
 export async function planPlayerIdentityConsolidation(
@@ -208,6 +226,9 @@ export async function planPlayerIdentityConsolidation(
   const canonicalIds = new Set(aliasMap.values());
 
   const referencedPlayerIds = [...new Set([...aliasIds, ...canonicalIds])];
+  const aliasIdList = [...aliasIds];
+  const cursorPage = (cursor: string | undefined): { cursor?: { id: string }; skip?: number } =>
+    cursor ? { cursor: { id: cursor }, skip: 1 } : {};
   const [
     picks,
     watchlists,
@@ -231,7 +252,21 @@ export async function planPlayerIdentityConsolidation(
     client.preDraftQueue.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
     client.queueItem.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
     client.leagueRosterPlayer.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
-    client.leagueRoster.findMany(),
+    collectBatchedRows((cursor) =>
+      client.leagueRoster.findMany({
+        where: {
+          OR: [
+            ...referencedPlayerIds.map((playerId) => ({ playerIds: { contains: playerId } })),
+            { captainId: { in: referencedPlayerIds } },
+            { viceCaptainId: { in: referencedPlayerIds } },
+            ...referencedPlayerIds.map((playerId) => ({ benchOrder: { contains: playerId } })),
+          ],
+        },
+        orderBy: { id: 'asc' },
+        take: PLANNER_BATCH_SIZE,
+        ...cursorPage(cursor),
+      })
+    ),
     client.leagueLineupPlayer.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
     client.leagueLineupAutosub.findMany({
       where: {
@@ -242,28 +277,76 @@ export async function planPlayerIdentityConsolidation(
       },
     }),
     client.leagueTradePlayer.findMany({ where: { playerId: { in: referencedPlayerIds } } }),
-    client.lobbyActivity.findMany({ where: { details: { not: null } }, select: { details: true } }),
-    client.draftEvent.findMany({ where: { payload: { not: null } }, select: { payload: true } }),
-    client.leagueCompetitionAudit.findMany({ select: { payloadJson: true } }),
-    client.teamAction.findMany({
-      select: { id: true, leagueId: true, status: true, details: true },
-    }),
-    client.leagueTradeEvent.findMany({
-      where: { payloadJson: { not: null } },
-      select: { payloadJson: true },
-    }),
-    client.leagueTradeCommand.findMany({
-      where: { responseJson: { not: null } },
-      select: { responseJson: true },
-    }),
-    client.leagueTradeOutboxEvent.findMany({ select: { payloadJson: true } }),
+    collectBatchedRows((cursor) =>
+      client.lobbyActivity.findMany({
+        where: { OR: aliasIdList.map((aliasId) => ({ details: { contains: aliasId } })) },
+        select: { id: true, details: true },
+        orderBy: { id: 'asc' },
+        take: PLANNER_BATCH_SIZE,
+        ...cursorPage(cursor),
+      })
+    ),
+    collectBatchedRows((cursor) =>
+      client.draftEvent.findMany({
+        where: { OR: aliasIdList.map((aliasId) => ({ payload: { contains: aliasId } })) },
+        select: { id: true, payload: true },
+        orderBy: { id: 'asc' },
+        take: PLANNER_BATCH_SIZE,
+        ...cursorPage(cursor),
+      })
+    ),
+    collectBatchedRows((cursor) =>
+      client.leagueCompetitionAudit.findMany({
+        where: { OR: aliasIdList.map((aliasId) => ({ payloadJson: { contains: aliasId } })) },
+        select: { id: true, payloadJson: true },
+        orderBy: { id: 'asc' },
+        take: PLANNER_BATCH_SIZE,
+        ...cursorPage(cursor),
+      })
+    ),
+    collectBatchedRows((cursor) =>
+      client.teamAction.findMany({
+        where: { OR: aliasIdList.map((aliasId) => ({ details: { contains: aliasId } })) },
+        select: { id: true, leagueId: true, status: true, details: true },
+        orderBy: { id: 'asc' },
+        take: PLANNER_BATCH_SIZE,
+        ...cursorPage(cursor),
+      })
+    ),
+    collectBatchedRows((cursor) =>
+      client.leagueTradeEvent.findMany({
+        where: { OR: aliasIdList.map((aliasId) => ({ payloadJson: { contains: aliasId } })) },
+        select: { id: true, payloadJson: true },
+        orderBy: { id: 'asc' },
+        take: PLANNER_BATCH_SIZE,
+        ...cursorPage(cursor),
+      })
+    ),
+    collectBatchedRows((cursor) =>
+      client.leagueTradeCommand.findMany({
+        where: { OR: aliasIdList.map((aliasId) => ({ responseJson: { contains: aliasId } })) },
+        select: { id: true, responseJson: true },
+        orderBy: { id: 'asc' },
+        take: PLANNER_BATCH_SIZE,
+        ...cursorPage(cursor),
+      })
+    ),
+    collectBatchedRows((cursor) =>
+      client.leagueTradeOutboxEvent.findMany({
+        where: { OR: aliasIdList.map((aliasId) => ({ payloadJson: { contains: aliasId } })) },
+        select: { id: true, payloadJson: true },
+        orderBy: { id: 'asc' },
+        take: PLANNER_BATCH_SIZE,
+        ...cursorPage(cursor),
+      })
+    ),
   ]);
 
   for (const [key, rows] of groupBy(
     picks,
     (row) => `${row.draftId}\u0000${projectedPlayerId(row.playerId, aliasMap)}`
   )) {
-    if (rows.length < 2) continue;
+    if (rows.length < 2 || !rows.some((row) => aliasIds.has(row.playerId))) continue;
     const [draftId, canonicalPlayerId] = key.split('\u0000');
     blockers.push({
       code: 'DRAFT_PICK_COLLISION',
@@ -279,7 +362,7 @@ export async function planPlayerIdentityConsolidation(
     rosterPlayers,
     (row) => `${row.leagueId}\u0000${projectedPlayerId(row.playerId, aliasMap)}`
   )) {
-    if (rows.length < 2) continue;
+    if (rows.length < 2 || !rows.some((row) => aliasIds.has(row.playerId))) continue;
     const [leagueId, canonicalPlayerId] = key.split('\u0000');
     const memberIds = new Set(rows.map((row) => row.memberId));
     if (memberIds.size === 1) {
@@ -338,7 +421,7 @@ export async function planPlayerIdentityConsolidation(
     (row) => `${row.leagueId}\u0000${projectedPlayerId(row.playerId, aliasMap)}`
   )) {
     const memberIds = new Set(rows.map((row) => row.memberId));
-    if (memberIds.size < 2) continue;
+    if (memberIds.size < 2 || !rows.some((row) => aliasIds.has(row.playerId))) continue;
     const [leagueId, canonicalPlayerId] = key.split('\u0000');
     const alreadyBlocked = blockers.some(
       (blocker) =>
@@ -360,7 +443,7 @@ export async function planPlayerIdentityConsolidation(
     lineupPlayers,
     (row) => `${row.lineupId}\u0000${projectedPlayerId(row.playerId, aliasMap)}`
   )) {
-    if (rows.length < 2) continue;
+    if (rows.length < 2 || !rows.some((row) => aliasIds.has(row.playerId))) continue;
     const [lineupId, canonicalPlayerId] = key.split('\u0000');
     blockers.push({
       code: 'LINEUP_COLLISION',
@@ -375,7 +458,7 @@ export async function planPlayerIdentityConsolidation(
     tradePlayers,
     (row) => `${row.offerId}\u0000${projectedPlayerId(row.playerId, aliasMap)}`
   )) {
-    if (rows.length < 2) continue;
+    if (rows.length < 2 || !rows.some((row) => aliasIds.has(row.playerId))) continue;
     const [offerId, canonicalPlayerId] = key.split('\u0000');
     blockers.push({
       code: 'TRADE_COLLISION',
@@ -387,6 +470,13 @@ export async function planPlayerIdentityConsolidation(
   }
 
   for (const roster of legacyRosters) {
+    if (
+      ![roster.captainId, roster.viceCaptainId].some(
+        (playerId) => playerId && aliasIds.has(playerId)
+      )
+    ) {
+      continue;
+    }
     const captainId = roster.captainId ? projectedPlayerId(roster.captainId, aliasMap) : null;
     const viceCaptainId = roster.viceCaptainId
       ? projectedPlayerId(roster.viceCaptainId, aliasMap)

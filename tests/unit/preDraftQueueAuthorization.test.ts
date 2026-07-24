@@ -26,6 +26,7 @@ describe('pre-draft queue authorization', () => {
     expect(source).toContain('preDraftQueue');
     expect(source).toContain('resolveCanonicalPlayerId');
     expect(source).toContain('resolveCanonicalPlayerIds');
+    expect(source).toContain('z.string().trim().min(1)');
     expect(source).not.toMatch(/\\bqueueItem\\b/i);
     expect(source).not.toContain('memberId: z.string().min(1)');
   });

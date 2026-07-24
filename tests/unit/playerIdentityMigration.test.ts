@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import {
+  accessSync,
+  constants as fsConstants,
   cpSync,
   mkdirSync,
   mkdtempSync,
@@ -9,7 +11,8 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { delimiter, join, resolve } from 'node:path';
 
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,6 +21,7 @@ import {
   consolidatePlayerIdentities,
   PlayerIdentityConsolidationBlockedError,
 } from '../../src/server/players/playerIdentityConsolidation';
+import { createPlayerIdentitySourceFingerprint } from '../../src/server/players/playerIdentityConsolidationCli';
 import { planPlayerIdentityConsolidation } from '../../src/server/players/playerIdentityConsolidationPlanner';
 import {
   AmbiguousPlayerIdentityError,
@@ -31,12 +35,14 @@ const conflictCanonicalId = 'same_player';
 const conflictAliasId = 'same-player-club';
 const now = new Date('2026-07-24T00:00:00.000Z');
 
-let databaseDirectory: string;
+const databaseDirectoryPrefix = join(tmpdir(), 'statly-verify-player-migration-');
+
+let databaseDirectory: string | undefined;
 let databasePath: string;
 let schemaPath: string;
 let prisma: PrismaClient;
-let protectedDatabaseBefore: Stats;
-let protectedDatabaseStatusBefore: string;
+let protectedDatabaseBefore: Stats | undefined;
+let protectedDatabaseStatusBefore: string | undefined;
 
 function runPrisma(args: string[]) {
   const prismaCli = resolve(process.cwd(), 'node_modules/.bin/prisma');
@@ -48,9 +54,32 @@ function runPrisma(args: string[]) {
 }
 
 function oldSchemaWithoutExternalIdentities(): string {
-  return readFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), 'utf8')
-    .replace('  externalIdentities PlayerExternalIdentity[]\n', '')
-    .replace(/\nmodel PlayerExternalIdentity \{[\s\S]*?\n\}\n\nmodel Pick \{/, '\nmodel Pick {');
+  const source = readFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), 'utf8');
+  const withoutRelation = source.replace('  externalIdentities PlayerExternalIdentity[]\n', '');
+  if (withoutRelation === source) {
+    throw new Error('Test schema setup could not remove Player.externalIdentities');
+  }
+  const withoutModel = withoutRelation.replace(
+    /\nmodel PlayerExternalIdentity \{[\s\S]*?\n\}\n\nmodel Pick \{/,
+    '\nmodel Pick {'
+  );
+  if (withoutModel === withoutRelation) {
+    throw new Error('Test schema setup could not remove PlayerExternalIdentity model');
+  }
+  return withoutModel;
+}
+
+function resolveExecutablePath(executable: string): string {
+  for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
+    const candidate = join(directory, executable);
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      return candidate;
+    } catch {
+      // Try the next PATH entry.
+    }
+  }
+  throw new Error(`${executable} is required to run the player identity migration test`);
 }
 
 async function seedTwoLeagueOwnerships() {
@@ -190,7 +219,7 @@ describe.sequential('canonical player identity migration', () => {
       { cwd: process.cwd(), encoding: 'utf8' }
     );
 
-    databaseDirectory = mkdtempSync('/tmp/statly-verify-player-migration-');
+    databaseDirectory = mkdtempSync(databaseDirectoryPrefix);
     databasePath = resolve(databaseDirectory, 'player-identity.db');
     schemaPath = resolve(databaseDirectory, 'schema.prisma');
     writeFileSync(schemaPath, oldSchemaWithoutExternalIdentities());
@@ -203,7 +232,10 @@ describe.sequential('canonical player identity migration', () => {
       schemaPath,
       '--script',
     ]);
-    execFileSync('/usr/bin/sqlite3', [databasePath], { input: schemaSql, stdio: 'pipe' });
+    execFileSync(resolveExecutablePath('sqlite3'), [databasePath], {
+      input: schemaSql,
+      stdio: 'pipe',
+    });
 
     const { PrismaClient } = await import('@prisma/client');
     prisma = new PrismaClient({ datasourceUrl: `file:${databasePath}` });
@@ -243,9 +275,11 @@ describe.sequential('canonical player identity migration', () => {
 
   afterAll(async () => {
     await prisma?.$disconnect();
-    if (databaseDirectory.startsWith('/tmp/statly-verify-player-migration-')) {
+    if (databaseDirectory?.startsWith(databaseDirectoryPrefix)) {
       rmSync(databaseDirectory, { recursive: true, force: true });
     }
+
+    if (!protectedDatabaseBefore) return;
 
     const protectedDatabaseAfter = statSync(resolve(process.cwd(), 'prisma/dev.db'));
     const protectedDatabaseStatusAfter = execFileSync(
@@ -268,6 +302,7 @@ describe.sequential('canonical player identity migration', () => {
 
   it('backfills legacy IDs and preserves independent ownership in different leagues', async () => {
     await expect(prisma.playerExternalIdentity.count()).resolves.toBe(2);
+    await expect(resolveCanonicalPlayerId(' ', undefined, prisma)).resolves.toBeNull();
 
     await prisma.queueItem.createMany({
       data: [
@@ -564,6 +599,40 @@ describe.sequential('canonical player identity migration', () => {
       benchOrder: 'also malformed',
     });
     await expect(prisma.player.findUnique({ where: { id: aliasId } })).resolves.toBeNull();
+  });
+
+  it('rechecks the reviewed player fingerprint inside the apply transaction', async () => {
+    const canonicalId = 'fingerprint_guard_canonical';
+    const aliasId = 'fingerprint-guard-alias';
+    await prisma.player.createMany({
+      data: [
+        { id: canonicalId, name: 'Fingerprint Guard', club: 'Club', position: 'FWD' },
+        { id: aliasId, name: 'Fingerprint Guard', club: 'Club', position: 'FWD' },
+      ],
+    });
+    await prisma.playerExternalIdentity.createMany({
+      data: [canonicalId, aliasId].map((playerId) => ({
+        playerId,
+        provider: 'statly-legacy',
+        externalId: playerId,
+      })),
+    });
+    const reviewedPlayers = await prisma.player.findMany({
+      orderBy: { id: 'asc' },
+      select: { id: true, name: true, club: true, position: true },
+    });
+    const reviewedFingerprint = createPlayerIdentitySourceFingerprint(reviewedPlayers);
+    await prisma.player.update({
+      where: { id: canonicalId },
+      data: { club: 'Changed After Review' },
+    });
+
+    await expect(
+      consolidatePlayerIdentities(prisma, [{ aliasId, canonicalPlayerId: canonicalId }], {
+        expectedSourceFingerprint: reviewedFingerprint,
+      })
+    ).rejects.toThrow('generate and review a new manifest');
+    await expect(prisma.player.findUnique({ where: { id: aliasId } })).resolves.not.toBeNull();
   });
 
   it('blocks alias retirement when immutable autosub history references it', async () => {

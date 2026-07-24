@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import { buildCanonicalPlayerId } from '../src/lib/playerIdentity';
 import {
   PLAYER_STATS_2025_PROVIDER,
+  STATLY_LEGACY_PLAYER_PROVIDER,
   upsertCanonicalPlayer,
 } from '../src/server/players/playerIdentityService';
 
@@ -34,7 +35,7 @@ async function main() {
   // Resolve the source identity before writing so re-seeding cannot create a
   // second Player row with a different ID convention.
   for (const player of players) {
-    await upsertCanonicalPlayer(prisma, {
+    const canonicalPlayer = await upsertCanonicalPlayer(prisma, {
       provider: PLAYER_STATS_2025_PROVIDER,
       externalId: buildCanonicalPlayerId(`${player.name}|${player.club}`),
       name: player.name,
@@ -42,6 +43,15 @@ async function main() {
       position: player.position,
       active: true,
       allowExactAttributeMatch: true,
+    });
+    await upsertCanonicalPlayer(prisma, {
+      provider: STATLY_LEGACY_PLAYER_PROVIDER,
+      externalId: buildCanonicalPlayerId(player.name),
+      canonicalPlayerId: canonicalPlayer.id,
+      name: player.name,
+      club: player.club,
+      position: player.position,
+      active: true,
     });
   }
 

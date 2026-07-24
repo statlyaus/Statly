@@ -18,7 +18,10 @@ import {
   type FantasyCategoryKey,
   type PlayerStats,
 } from '@/types/fantasyCategories';
-import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
+import {
+  resolveCanonicalPlayerId,
+  resolveCanonicalPlayerIds,
+} from '@/server/players/playerIdentityService';
 import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
 
 export const runtime = 'nodejs';
@@ -338,7 +341,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }),
       ]);
 
-    const claims = claimsSnap.docs
+    const rawClaims = claimsSnap.docs
       .map((doc) => {
         const data = doc.data() as WaiverClaimDoc;
         const createdAt = toIso(data.createdAt);
@@ -360,7 +363,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .filter((claim) => claim.playerId)
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
-    const activity = activitySnap.docs.map((doc) => {
+    const rawActivity = activitySnap.docs.map((doc) => {
       const data = doc.data() as ActivityDoc;
 
       return {
@@ -378,6 +381,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         timestamp: toIso(data.timestamp),
       };
     });
+
+    const responsePlayerIds = [
+      ...rawClaims.flatMap((claim) => [claim.playerId, claim.dropPlayerId].filter(Boolean)),
+      ...rawActivity.flatMap((item) => [item.playerId, item.dropPlayerId].filter(Boolean)),
+    ] as string[];
+    const canonicalPlayerIds = await resolveCanonicalPlayerIds(responsePlayerIds);
+    const canonicalizePlayerId = (playerId: string) =>
+      canonicalPlayerIds.get(playerId.trim()) ?? playerId;
+    const claims = rawClaims.map((claim) => ({
+      ...claim,
+      playerId: canonicalizePlayerId(claim.playerId),
+      ...(claim.dropPlayerId ? { dropPlayerId: canonicalizePlayerId(claim.dropPlayerId) } : {}),
+    }));
+    const activity = rawActivity.map((item) => ({
+      ...item,
+      ...(item.playerId ? { playerId: canonicalizePlayerId(item.playerId) } : {}),
+      ...(item.dropPlayerId ? { dropPlayerId: canonicalizePlayerId(item.dropPlayerId) } : {}),
+    }));
 
     const playerIdsForIndex = new Set<string>();
     for (const player of availablePlayersResult.items) playerIdsForIndex.add(player.id);

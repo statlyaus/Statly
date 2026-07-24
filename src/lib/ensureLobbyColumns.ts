@@ -144,7 +144,12 @@ export async function ensureRosterTables(): Promise<boolean> {
           "id" TEXT NOT NULL,
           "leagueId" TEXT NOT NULL,
           "memberId" TEXT NOT NULL,
+          "draftId" TEXT,
+          "pickId" TEXT,
           "playerId" TEXT NOT NULL,
+          "slot" TEXT,
+          "acquiredBy" TEXT NOT NULL DEFAULT 'DRAFT',
+          "acquiredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
           "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
           "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
           CONSTRAINT "LeagueRosterPlayer_pkey" PRIMARY KEY ("id")
@@ -256,12 +261,53 @@ export async function ensureRosterTables(): Promise<boolean> {
       }
     }
 
+    const rosterPlayerColumns = (await prisma.$queryRaw`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'LeagueRosterPlayer'
+    `) as Array<{ column_name: string }>;
+    const existingRosterPlayerColumns = new Set(
+      rosterPlayerColumns.map((column) => column.column_name)
+    );
+    const missingRosterPlayerColumns = [
+      { name: 'draftId', sql: 'ALTER TABLE "LeagueRosterPlayer" ADD COLUMN "draftId" TEXT' },
+      { name: 'pickId', sql: 'ALTER TABLE "LeagueRosterPlayer" ADD COLUMN "pickId" TEXT' },
+      { name: 'slot', sql: 'ALTER TABLE "LeagueRosterPlayer" ADD COLUMN "slot" TEXT' },
+      {
+        name: 'acquiredBy',
+        sql: `ALTER TABLE "LeagueRosterPlayer" ADD COLUMN "acquiredBy" TEXT NOT NULL DEFAULT 'DRAFT'`,
+      },
+      {
+        name: 'acquiredAt',
+        sql: 'ALTER TABLE "LeagueRosterPlayer" ADD COLUMN "acquiredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP',
+      },
+    ].filter((column) => !existingRosterPlayerColumns.has(column.name));
+
+    for (const column of missingRosterPlayerColumns) {
+      try {
+        await prisma.$executeRawUnsafe(column.sql);
+        logger.info(`Added LeagueRosterPlayer.${column.name}`);
+      } catch (error) {
+        logger.warn(`Failed to add LeagueRosterPlayer.${column.name}`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     // Ownership is scoped to a league, not a member. Keep this outside the
     // creation branch so databases made by the older fallback are corrected.
-    await prisma.$executeRaw`
-      CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_leagueId_playerId_key"
-      ON "LeagueRosterPlayer"("leagueId", "playerId")
-    `;
+    try {
+      await prisma.$executeRaw`
+        CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_leagueId_playerId_key"
+        ON "LeagueRosterPlayer"("leagueId", "playerId")
+      `;
+    } catch (error) {
+      logger.error('Failed to enforce unique league player ownership', {
+        error: error instanceof Error ? error.message : String(error),
+        hint: 'Resolve duplicate (leagueId, playerId) rows in LeagueRosterPlayer before retrying.',
+      });
+    }
 
     // Add captain system columns to LeagueSettings if they don't exist
     try {

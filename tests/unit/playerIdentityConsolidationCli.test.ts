@@ -1,19 +1,23 @@
 import { symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  assertPlayerIdentitySourceFingerprint,
   createPlayerIdentitySourceFingerprint,
   parsePlayerIdentityCliArgs,
   validateDisposablePlayerIdentityDatabase,
   validateProductionPlayerIdentityDatabase,
+  validatePlayerIdentityFirestoreProject,
   validateReviewedPlayerIdentityManifest,
 } from '../../src/server/players/playerIdentityConsolidationCli';
 
 const createdPaths: string[] = [];
 
 function tempDatabasePath(suffix: string): string {
-  return `/tmp/statly-verify-player-${process.pid}-${suffix}.db`;
+  return join(tmpdir(), `statly-verify-player-${process.pid}-${suffix}.db`);
 }
 
 afterEach(() => {
@@ -31,6 +35,9 @@ describe('player identity consolidation CLI safety', () => {
     expect(() => parsePlayerIdentityCliArgs([])).toThrow('Use --propose');
     expect(() => parsePlayerIdentityCliArgs(['--manifest', '--apply'])).toThrow(
       '--manifest requires a file path'
+    );
+    expect(() => parsePlayerIdentityCliArgs(['--propose', '--project-waivers'])).toThrow(
+      '--propose cannot be combined'
     );
     expect(parsePlayerIdentityCliArgs(['--manifest', 'manifest.json', '--apply'])).toEqual({
       apply: true,
@@ -74,6 +81,9 @@ describe('player identity consolidation CLI safety', () => {
     expect(createPlayerIdentitySourceFingerprint(players)).toBe(
       createPlayerIdentitySourceFingerprint([...players].reverse())
     );
+    expect(() => assertPlayerIdentitySourceFingerprint('0'.repeat(64), players)).toThrow(
+      'generate and review a new manifest'
+    );
     expect(
       validateReviewedPlayerIdentityManifest({
         schemaVersion: 1,
@@ -95,6 +105,7 @@ describe('player identity consolidation CLI safety', () => {
       validateDisposablePlayerIdentityDatabase({
         databaseUrl: `file:${databasePath}`,
         expectedPath: databasePath,
+        repositoryRoot: join(tmpdir(), 'statly-repository-without-dev-db'),
       })
     ).toBe(`file:${databasePath}`);
   });
@@ -113,8 +124,8 @@ describe('player identity consolidation CLI safety', () => {
   });
 
   it('requires an explicitly matched production database and separate backup for apply', () => {
-    const databasePath = `/tmp/statly-production-player-${process.pid}.db`;
-    const backupPath = `/tmp/statly-production-player-${process.pid}.backup.db`;
+    const databasePath = join(tmpdir(), `statly-production-player-${process.pid}.db`);
+    const backupPath = join(tmpdir(), `statly-production-player-${process.pid}.backup.db`);
     createdPaths.push(databasePath, backupPath);
     writeFileSync(databasePath, 'production sqlite fixture');
     writeFileSync(backupPath, 'backup sqlite fixture');
@@ -134,5 +145,34 @@ describe('player identity consolidation CLI safety', () => {
         requireBackup: true,
       })
     ).toThrow('BACKUP');
+  });
+
+  it('rejects empty backups and mismatched Firestore projects', () => {
+    const databasePath = join(tmpdir(), `statly-production-player-${process.pid}-guard.db`);
+    const backupPath = join(tmpdir(), `statly-production-player-${process.pid}-empty.db`);
+    createdPaths.push(databasePath, backupPath);
+    writeFileSync(databasePath, 'production sqlite fixture');
+    writeFileSync(backupPath, '');
+
+    expect(() =>
+      validateProductionPlayerIdentityDatabase({
+        databaseUrl: `file:${databasePath}`,
+        expectedPath: databasePath,
+        backupPath,
+        requireBackup: true,
+      })
+    ).toThrow('must not be empty');
+    expect(() =>
+      validatePlayerIdentityFirestoreProject({
+        expectedProjectId: 'statly-production',
+        actualProjectId: 'statly-staging',
+      })
+    ).toThrow('Firestore project mismatch');
+    expect(
+      validatePlayerIdentityFirestoreProject({
+        expectedProjectId: 'statly-production',
+        actualProjectId: 'statly-production',
+      })
+    ).toBe('statly-production');
   });
 });

@@ -138,14 +138,14 @@ async function upsertUsers(tx: TxClient) {
   );
 }
 
-async function upsertActivePlayerPool(tx: TxClient): Promise<string[]> {
+async function upsertActivePlayerPool(prisma: PrismaClient): Promise<string[]> {
   const players = await getPlayers();
   const activePlayers = players.slice(0, Math.max(FULL_DRAFT_SOAK.totalPicks + 64, 360));
   const candidateIds: string[] = [];
 
   for (const player of activePlayers) {
     const club = player.team ?? 'N/A';
-    const canonicalPlayer = await upsertCanonicalPlayer(tx, {
+    const canonicalPlayer = await upsertCanonicalPlayer(prisma, {
       provider: PLAYER_STATS_2025_PROVIDER,
       externalId: buildCanonicalPlayerId(`${player.name}|${club}`),
       name: player.name,
@@ -287,11 +287,11 @@ export async function seedFullDraftSoakFixture(): Promise<SoakFixture> {
   const prisma = new PrismaClient();
 
   try {
+    const candidateIds = await upsertActivePlayerPool(prisma);
     return await prisma.$transaction(
       async (tx) => {
         await deleteExistingFixture(tx);
         await upsertUsers(tx);
-        const candidateIds = await upsertActivePlayerPool(tx);
 
         const rankedPlayerIds = await rankActivePlayerIds(tx, candidateIds);
         if (rankedPlayerIds.length < FULL_DRAFT_SOAK.totalPicks) {

@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
-import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
+import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
@@ -197,11 +197,35 @@ async function resolveTeamActionPlayerIds(
   details: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   const canonicalDetails = { ...details };
-  for (const key of ['playerId', 'dropPlayerId'] as const) {
+  const scalarKeys = ['playerId', 'dropPlayerId'] as const;
+  const arrayKeys = ['offeredPlayers', 'requestedPlayers'] as const;
+  const requestedPlayerIds = [
+    ...scalarKeys.flatMap((key) =>
+      typeof canonicalDetails[key] === 'string' ? [canonicalDetails[key] as string] : []
+    ),
+    ...arrayKeys.flatMap((key) =>
+      Array.isArray(canonicalDetails[key])
+        ? (canonicalDetails[key] as unknown[]).filter(
+            (playerId): playerId is string => typeof playerId === 'string'
+          )
+        : []
+    ),
+  ];
+  const resolvedPlayerIds = await resolveCanonicalPlayerIds(requestedPlayerIds);
+  const canonicalPlayerId = (playerId: string) =>
+    resolvedPlayerIds.get(playerId.trim()) ?? playerId;
+
+  for (const key of scalarKeys) {
     const requestedPlayerId = canonicalDetails[key];
     if (typeof requestedPlayerId !== 'string') continue;
-    const canonicalPlayerId = await resolveCanonicalPlayerId(requestedPlayerId);
-    if (canonicalPlayerId) canonicalDetails[key] = canonicalPlayerId;
+    canonicalDetails[key] = canonicalPlayerId(requestedPlayerId);
+  }
+  for (const key of arrayKeys) {
+    const requestedPlayerIdsForKey = canonicalDetails[key];
+    if (!Array.isArray(requestedPlayerIdsForKey)) continue;
+    canonicalDetails[key] = requestedPlayerIdsForKey.map((playerId) =>
+      typeof playerId === 'string' ? canonicalPlayerId(playerId) : playerId
+    );
   }
   return canonicalDetails;
 }

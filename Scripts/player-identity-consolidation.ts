@@ -11,10 +11,12 @@ import {
   PlayerIdentityConsolidationBlockedError,
 } from '@/server/players/playerIdentityConsolidation';
 import {
+  assertPlayerIdentitySourceFingerprint,
   createPlayerIdentitySourceFingerprint,
   parsePlayerIdentityCliArgs,
   validateDisposablePlayerIdentityDatabase,
   validateProductionPlayerIdentityDatabase,
+  validatePlayerIdentityFirestoreProject,
   validateReviewedPlayerIdentityManifest,
   type ReviewedPlayerIdentityManifest,
 } from '@/server/players/playerIdentityConsolidationCli';
@@ -94,6 +96,14 @@ async function projectWaiverAvailability(prisma: PrismaClient) {
   return results;
 }
 
+async function validateWaiverProjectionTarget(): Promise<void> {
+  const { adminDb } = await import('@/lib/firebaseAdmin');
+  validatePlayerIdentityFirestoreProject({
+    expectedProjectId: process.env.STATLY_PLAYER_IDENTITY_FIRESTORE_PROJECT ?? '',
+    actualProjectId: (adminDb as unknown as { projectId?: string }).projectId,
+  });
+}
+
 async function main() {
   const args = parsePlayerIdentityCliArgs(process.argv.slice(2));
   const databaseUrl = args.production
@@ -110,6 +120,9 @@ async function main() {
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
 
   try {
+    if (args.projectWaivers || (args.production && args.apply)) {
+      await validateWaiverProjectionTarget();
+    }
     if (args.projectWaivers) {
       process.stdout.write(
         `${JSON.stringify({ status: 'projected', leagues: await projectWaiverAvailability(prisma) }, null, 2)}\n`
@@ -126,12 +139,7 @@ async function main() {
       orderBy: { id: 'asc' },
       select: { id: true, name: true, club: true, position: true },
     });
-    const currentFingerprint = createPlayerIdentitySourceFingerprint(currentPlayers);
-    if (currentFingerprint !== manifest.sourceFingerprint) {
-      throw new Error(
-        'Player identity data changed after manifest proposal; generate and review a new manifest'
-      );
-    }
+    assertPlayerIdentitySourceFingerprint(manifest.sourceFingerprint, currentPlayers);
     const plan = await planPlayerIdentityConsolidation(prisma, manifest.mappings);
 
     if (!args.apply) {
@@ -146,7 +154,9 @@ async function main() {
       throw new Error('Refusing to apply an identity manifest until reviewed is true');
     }
 
-    const appliedPlan = await consolidatePlayerIdentities(prisma, manifest.mappings);
+    const appliedPlan = await consolidatePlayerIdentities(prisma, manifest.mappings, {
+      expectedSourceFingerprint: manifest.sourceFingerprint,
+    });
     const waiverProjectionResults = args.production ? await projectWaiverAvailability(prisma) : [];
     process.stdout.write(
       `${JSON.stringify(

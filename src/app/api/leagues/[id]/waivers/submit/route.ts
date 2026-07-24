@@ -59,10 +59,7 @@ export const POST = withMetrics(
       const transitionalAliasIds = resolvedPlayerId
         ? findWaiverPlayerAliasIds(activePlayers, resolvedPlayerId)
         : [];
-      const canonicalPlayerId =
-        resolvedPlayerId && resolvedPlayerId !== requestedPlayerId
-          ? resolvedPlayerId
-          : transitionalAliasIds[0];
+      const canonicalPlayerId = resolvedPlayerId;
       if (!canonicalPlayerId || transitionalAliasIds.length === 0) {
         return NextResponse.json({ error: 'Player not found' }, { status: 404 });
       }

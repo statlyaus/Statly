@@ -517,6 +517,9 @@ export class WaiverProcessingService {
       select: { id: true, name: true, club: true, position: true },
     });
     const resolvedPlayerId = await resolveCanonicalPlayerId(claim.playerId, undefined, tx);
+    if (!resolvedPlayerId) {
+      return { status: 'FAILED', reason: 'Player not found' };
+    }
     const playerGroup = groupWaiverPlayersByIdentity(activePlayers).find((group) =>
       group.aliases.some((player) => player.id === claim.playerId || player.id === resolvedPlayerId)
     );
@@ -531,10 +534,7 @@ export class WaiverProcessingService {
         ...playerGroup.aliases.map((player) => player.id),
       ]),
     ];
-    const canonicalPlayerId =
-      resolvedPlayerId && resolvedPlayerId !== claim.playerId
-        ? resolvedPlayerId
-        : playerGroup.representative.id;
+    const canonicalPlayerId = resolvedPlayerId;
     const existingOwnership = await tx.leagueRosterPlayer.findFirst({
       where: { leagueId, playerId: { in: playerAliasIds } },
       select: { playerId: true, memberId: true },

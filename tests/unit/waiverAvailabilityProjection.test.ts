@@ -299,9 +299,12 @@ describe('WaiverAvailabilityProjectionService', () => {
   it('uses shared league membership helpers in waiver routes', () => {
     const submitSource = read('src/app/api/leagues/[id]/waivers/submit/route.ts');
     const processSource = read('src/app/api/leagues/[id]/waivers/process/route.ts');
+    const processingServiceSource = read('src/server/waivers/WaiverProcessingService.ts');
 
     expect(submitSource).toContain('getLeagueMembershipAccess');
     expect(submitSource).not.toContain('verifyLeagueMembership');
+    expect(submitSource).toContain('const canonicalPlayerId = resolvedPlayerId');
+    expect(processingServiceSource).toContain('const canonicalPlayerId = resolvedPlayerId');
 
     expect(processSource).toContain('canManageLeague');
     expect(processSource).not.toContain('getLeagueMembership');

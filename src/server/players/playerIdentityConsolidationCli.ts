@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { lstatSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import type { PlayerAliasMapping } from './playerIdentityConsolidationPlanner';
@@ -36,8 +37,11 @@ export function parsePlayerIdentityCliArgs(argv: readonly string[]): PlayerIdent
   const manifestIndex = argv.indexOf('--manifest');
   const manifestPath = manifestIndex >= 0 ? argv[manifestIndex + 1] : undefined;
 
+  if (manifestIndex >= 0 && (!manifestPath || manifestPath.startsWith('--'))) {
+    throw new Error('--manifest requires a file path');
+  }
   if (propose && (apply || manifestPath || projectWaivers)) {
-    throw new Error('--propose cannot be combined with --apply or --manifest');
+    throw new Error('--propose cannot be combined with --apply, --manifest, or --project-waivers');
   }
   if (projectWaivers && (apply || propose || manifestPath)) {
     throw new Error('--project-waivers must be run as a standalone mode');
@@ -51,10 +55,6 @@ export function parsePlayerIdentityCliArgs(argv: readonly string[]): PlayerIdent
   if (!propose && !projectWaivers && !manifestPath) {
     throw new Error('Use --propose or provide --manifest <reviewed-manifest.json>');
   }
-  if (manifestIndex >= 0 && (!manifestPath || manifestPath.startsWith('--'))) {
-    throw new Error('--manifest requires a file path');
-  }
-
   return {
     apply,
     projectWaivers,
@@ -142,8 +142,45 @@ export function createPlayerIdentitySourceFingerprint(
       club: player.club,
       position: player.position,
     }))
-    .sort((left, right) => left.id.localeCompare(right.id));
+    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
   return createHash('sha256').update(JSON.stringify(normalizedRows)).digest('hex');
+}
+
+export function assertPlayerIdentitySourceFingerprint(
+  expectedFingerprint: string,
+  players: readonly PlayerIdentitySourceRow[]
+): void {
+  if (createPlayerIdentitySourceFingerprint(players) !== expectedFingerprint) {
+    throw new Error(
+      'Player identity data changed after manifest proposal; generate and review a new manifest'
+    );
+  }
+}
+
+export function validatePlayerIdentityFirestoreProject(input: {
+  expectedProjectId: string;
+  actualProjectId: string | undefined;
+}): string {
+  const expectedProjectId = input.expectedProjectId.trim();
+  const actualProjectId = input.actualProjectId?.trim();
+  if (!expectedProjectId) {
+    throw new Error('STATLY_PLAYER_IDENTITY_FIRESTORE_PROJECT is required for projection');
+  }
+  if (!actualProjectId || actualProjectId !== expectedProjectId) {
+    throw new Error(
+      `Firestore project mismatch: expected ${expectedProjectId}, resolved ${actualProjectId || 'unknown'}`
+    );
+  }
+  return actualProjectId;
+}
+
+function safeRealpath(filePath: string): string | null {
+  try {
+    return realpathSync(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
 }
 
 export function validateDisposablePlayerIdentityDatabase(input: {
@@ -164,25 +201,32 @@ export function validateDisposablePlayerIdentityDatabase(input: {
 
   const databasePath = path.normalize(decodeURIComponent(parsedUrl.pathname));
   const normalizedExpectedPath = path.normalize(expectedPath);
+  const verificationDirectory = path.normalize(tmpdir());
   if (
     databasePath !== normalizedExpectedPath ||
-    !/^\/tmp\/statly-verify-player-[^/]+\.db$/.test(normalizedExpectedPath)
+    path.dirname(normalizedExpectedPath) !== verificationDirectory ||
+    !/^statly-verify-player-[^/]+\.db$/.test(path.basename(normalizedExpectedPath))
   ) {
     throw new Error(
-      'Identity consolidation is restricted to matching /tmp/statly-verify-player-*.db files'
+      `Identity consolidation is restricted to matching ${verificationDirectory}/statly-verify-player-*.db files`
     );
   }
 
-  const stat = lstatSync(normalizedExpectedPath);
+  let stat;
+  try {
+    stat = lstatSync(normalizedExpectedPath);
+  } catch {
+    throw new Error('Identity verification database must exist and be readable');
+  }
   if (!stat.isFile() || stat.isSymbolicLink()) {
     throw new Error('Identity verification database must be a regular non-symlink file');
   }
 
   const realDatabasePath = realpathSync(normalizedExpectedPath);
-  const protectedDatabasePath = realpathSync(
+  const protectedDatabasePath = safeRealpath(
     path.resolve(input.repositoryRoot ?? process.cwd(), 'prisma/dev.db')
   );
-  if (realDatabasePath === protectedDatabasePath) {
+  if (protectedDatabasePath && realDatabasePath === protectedDatabasePath) {
     throw new Error('Refusing to use protected prisma/dev.db');
   }
 
@@ -213,16 +257,21 @@ export function validateProductionPlayerIdentityDatabase(input: {
     throw new Error('DATABASE_URL must exactly match STATLY_PLAYER_IDENTITY_PRODUCTION_DB');
   }
 
-  const stat = lstatSync(normalizedExpectedPath);
+  let stat;
+  try {
+    stat = lstatSync(normalizedExpectedPath);
+  } catch {
+    throw new Error('Production identity database must exist and be readable');
+  }
   if (!stat.isFile() || stat.isSymbolicLink()) {
     throw new Error('Production identity database must be a regular non-symlink file');
   }
 
   const realDatabasePath = realpathSync(normalizedExpectedPath);
-  const protectedDatabasePath = realpathSync(
+  const protectedDatabasePath = safeRealpath(
     path.resolve(input.repositoryRoot ?? process.cwd(), 'prisma/dev.db')
   );
-  if (realDatabasePath === protectedDatabasePath) {
+  if (protectedDatabasePath && realDatabasePath === protectedDatabasePath) {
     throw new Error('Refusing to use protected prisma/dev.db');
   }
 
@@ -231,12 +280,23 @@ export function validateProductionPlayerIdentityDatabase(input: {
     if (!backupPath) {
       throw new Error('STATLY_PLAYER_IDENTITY_BACKUP is required for production apply');
     }
-    const backupStat = lstatSync(backupPath);
+    let backupStat;
+    try {
+      backupStat = lstatSync(backupPath);
+    } catch {
+      throw new Error('Production backup must exist and be readable');
+    }
     if (!backupStat.isFile() || backupStat.isSymbolicLink()) {
       throw new Error('Production backup must be a regular non-symlink file');
     }
+    if (backupStat.size === 0) {
+      throw new Error('Production backup must not be empty');
+    }
     if (realpathSync(backupPath) === realDatabasePath) {
       throw new Error('Production backup must be a separate file');
+    }
+    if (backupStat.mtimeMs < stat.mtimeMs) {
+      throw new Error('Production backup is older than the database; create a fresh backup');
     }
   }
 

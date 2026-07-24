@@ -1,4 +1,4 @@
-import type { Player, Prisma } from '@prisma/client';
+import type { Player, Prisma, PrismaClient } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 
@@ -10,7 +10,9 @@ type PlayerIdentityReadClient = Pick<Prisma.TransactionClient, 'player'> &
 type PlayerIdentityWriteClient = Pick<
   Prisma.TransactionClient,
   'player' | 'playerExternalIdentity'
->;
+> & {
+  $transaction?: PrismaClient['$transaction'];
+};
 
 export type CanonicalPlayerInput = {
   provider: string;
@@ -58,8 +60,10 @@ export async function resolveCanonicalPlayerId(
   provider = STATLY_LEGACY_PLAYER_PROVIDER,
   client: PlayerIdentityReadClient = prisma
 ): Promise<string | null> {
+  const normalizedExternalId = externalId.trim();
+  if (!normalizedExternalId) return null;
+
   const normalizedProvider = requiredIdentityPart(provider, 'Player identity provider');
-  const normalizedExternalId = requiredIdentityPart(externalId, 'External player ID');
   const identity = client.playerExternalIdentity
     ? await client.playerExternalIdentity.findUnique({
         where: {
@@ -122,7 +126,7 @@ export async function resolveCanonicalPlayerIds(
   return resolved;
 }
 
-export async function upsertCanonicalPlayer(
+async function upsertCanonicalPlayerWithClient(
   client: PlayerIdentityWriteClient,
   input: CanonicalPlayerInput
 ): Promise<Player> {
@@ -205,8 +209,21 @@ export async function upsertCanonicalPlayer(
   return canonicalPlayer;
 }
 
+export async function upsertCanonicalPlayer(
+  client: PlayerIdentityWriteClient,
+  input: CanonicalPlayerInput
+): Promise<Player> {
+  if (typeof client.$transaction === 'function') {
+    return client.$transaction((tx: Prisma.TransactionClient) =>
+      upsertCanonicalPlayerWithClient(tx, input)
+    );
+  }
+
+  return upsertCanonicalPlayerWithClient(client, input);
+}
+
 export async function upsertCanonicalPlayerInTransaction(
   input: CanonicalPlayerInput
 ): Promise<Player> {
-  return prisma.$transaction((tx) => upsertCanonicalPlayer(tx, input));
+  return upsertCanonicalPlayer(prisma, input);
 }

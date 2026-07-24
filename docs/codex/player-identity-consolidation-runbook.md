@@ -39,7 +39,10 @@ Review the plan without changing data:
 npm run player-identity:consolidate -- --production --manifest player-identity-manifest.json
 ```
 
-For apply, also set `STATLY_PLAYER_IDENTITY_BACKUP` to the separate, verified backup file:
+For apply, also set `STATLY_PLAYER_IDENTITY_BACKUP` to the separate, verified backup file and set
+`STATLY_PLAYER_IDENTITY_FIRESTORE_PROJECT` to the exact Firebase project ID paired with this
+production database. The command checks the resolved Firestore client before changing relational
+data or projecting waivers:
 
 ```sh
 npm run player-identity:consolidate -- --production --manifest player-identity-manifest.json --apply
@@ -68,3 +71,17 @@ npm run player-identity:consolidate -- --production --project-waivers
 If relational apply succeeds but a Firestore projection fails, keep the backup and use the standalone
 projection command before declaring the rollout complete. Do not restore only Firestore or only
 SQLite.
+
+## Rollback
+
+1. Keep maintenance mode enabled and stop all roster, draft, waiver, lineup, and trade writes.
+2. Restore the verified SQLite backup as the complete relational source of truth.
+3. Run the standalone `--production --project-waivers` command with
+   `STATLY_PLAYER_IDENTITY_FIRESTORE_PROJECT` still pinned to the paired Firebase project. This
+   rebuilds Firestore from the restored relational state.
+4. Verify the restored player rows, league-scoped ownership, waiver availability, and Firestore
+   ownership documents together.
+5. Re-enable writes only after both stores agree.
+
+Never restore SQLite or Firestore independently; the waiver projection must be regenerated after a
+relational rollback.

@@ -20,7 +20,10 @@ describe('e2e fixture setup', () => {
 
     expect(source).toContain('buildCanonicalPlayerId(`${player.name}|${club}`)');
     expect(source).toContain('provider: PLAYER_STATS_2025_PROVIDER');
-    expect(source).toContain('const candidateIds = await upsertActivePlayerPool(tx)');
+    expect(source).toContain('const candidateIds = await upsertActivePlayerPool(prisma)');
+    expect(source.indexOf('upsertActivePlayerPool(prisma)')).toBeLessThan(
+      source.indexOf('prisma.$transaction')
+    );
     expect(source).toContain('where: { active: true, id: { in: candidateIds } }');
     expect(source).not.toContain('where: { active: true },');
   });

@@ -507,12 +507,13 @@ function normalizeSubmittedPlayers(players: readonly unknown[]): SubmittedLineup
           ? Number(source.slotIndex)
           : Number.NaN;
 
-    if (typeof source.playerId !== 'string' || !isLeagueLineupSlot(source.slot)) {
+    const playerId = typeof source.playerId === 'string' ? source.playerId.trim() : '';
+    if (!playerId || !isLeagueLineupSlot(source.slot)) {
       return [];
     }
 
     return {
-      playerId: source.playerId,
+      playerId,
       slot: source.slot,
       slotIndex,
     };
