@@ -18,6 +18,7 @@ import {
   type FantasyCategoryKey,
   type PlayerStats,
 } from '@/types/fantasyCategories';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
 
 export const runtime = 'nodejs';
@@ -203,9 +204,12 @@ async function loadAvailablePlayers(input: {
     select: { details: true },
   });
   const ownedPlayerIds = ownerships.map((ownership) => ownership.playerId);
-  const heldPlayerIds = waiverHolds
+  const heldExternalPlayerIds = waiverHolds
     .map((hold) => parseActionDetails(hold.details).playerId)
     .filter((playerId): playerId is string => typeof playerId === 'string' && Boolean(playerId));
+  const heldPlayerIds = (
+    await Promise.all(heldExternalPlayerIds.map((playerId) => resolveCanonicalPlayerId(playerId)))
+  ).filter((playerId): playerId is string => Boolean(playerId));
   const unavailablePlayerIds = new Set([...ownedPlayerIds, ...heldPlayerIds]);
   const playerSelect = { id: true, name: true, club: true, position: true } as const;
   const activePlayers = await prisma.player.findMany({
@@ -213,6 +217,8 @@ async function loadAvailablePlayers(input: {
     orderBy: { id: 'asc' },
     select: playerSelect,
   });
+  // Keep the name/club grouping only as a transition guard for databases that
+  // have not completed the reviewed identity consolidation yet.
   const normalizedPlayers = normalizeAvailableWaiverPlayers(activePlayers, unavailablePlayerIds);
   const firstPlayerAfterCursor = input.cursor
     ? normalizedPlayers.findIndex((player) => player.id > input.cursor!)

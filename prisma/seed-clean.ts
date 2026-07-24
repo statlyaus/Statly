@@ -1,6 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs/promises';
 import { getPlayerPosition } from '../src/lib/playerPositionMapping';
+import { buildCanonicalPlayerId } from '../src/lib/playerIdentity';
+import {
+  PLAYER_STATS_2025_PROVIDER,
+  upsertCanonicalPlayer,
+} from '../src/server/players/playerIdentityService';
 
 const prisma = new PrismaClient();
 
@@ -10,10 +15,7 @@ async function main() {
   const raw = await fs.readFile('player_stats_2025.json', 'utf8');
   const data = JSON.parse(raw);
 
-  const playersMap = new Map<
-    string,
-    { id: string; name: string; club: string; position: string }
-  >();
+  const playersMap = new Map<string, { name: string; club: string; position: string }>();
 
   for (const entry of data) {
     const playerName = entry.Player?.trim();
@@ -22,20 +24,11 @@ async function main() {
       continue; // Skip empty names or already processed players
     }
 
-    // Generate a clean, unique ID based on player name
-    const playerId = playerName
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '') // Remove special chars but keep spaces
-      .replace(/\s+/g, '_') // Replace spaces with underscores
-      .replace(/_+/g, '_') // Replace multiple underscores with single
-      .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
-
     // Extract position from the data or use smart position mapping
     const position = entry.Position || getPlayerPosition(playerName);
     const club = entry.Team || 'UNK';
 
     playersMap.set(playerName, {
-      id: playerId,
       name: playerName,
       club: club,
       position: position,
@@ -59,15 +52,17 @@ async function main() {
   for (let i = 0; i < players.length; i += batchSize) {
     const batch = players.slice(i, i + batchSize);
 
-    await prisma.player.createMany({
-      data: batch.map((player) => ({
-        id: player.id,
+    for (const player of batch) {
+      await upsertCanonicalPlayer(prisma, {
+        provider: PLAYER_STATS_2025_PROVIDER,
+        externalId: buildCanonicalPlayerId(`${player.name}|${player.club}`),
         name: player.name,
         club: player.club,
         position: player.position,
         active: true,
-      })),
-    });
+        allowExactAttributeMatch: true,
+      });
+    }
 
     console.log(
       `✅ Seeded batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(players.length / batchSize)}`

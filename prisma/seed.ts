@@ -1,5 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs/promises';
+import { buildCanonicalPlayerId } from '../src/lib/playerIdentity';
+import {
+  PLAYER_STATS_2025_PROVIDER,
+  upsertCanonicalPlayer,
+} from '../src/server/players/playerIdentityService';
 
 const prisma = new PrismaClient();
 
@@ -7,21 +12,14 @@ async function main() {
   const raw = await fs.readFile('player_stats_2025.json', 'utf8');
   const data = JSON.parse(raw);
 
-  const playersMap = new Map<
-    string,
-    { id: string; name: string; club: string; position: string }
-  >();
+  const playersMap = new Map<string, { name: string; club: string; position: string }>();
 
   for (const entry of data) {
     if (!playersMap.has(entry.Player)) {
-      // Generate a unique ID based on player name
-      const playerId = entry.Player.toLowerCase().replace(/[^a-z0-9]/g, '_');
-
       // Extract position from the data or default to a general position
       const position = entry.Position || 'UTIL'; // Fallback position
 
       playersMap.set(entry.Player, {
-        id: playerId,
         name: entry.Player,
         club: entry.Team || 'UNK', // Use 'UNK' if team is missing
         position: position,
@@ -33,23 +31,17 @@ async function main() {
 
   console.log(`Seeding ${players.length} players...`);
 
-  // Use upsert to handle potential duplicates
+  // Resolve the source identity before writing so re-seeding cannot create a
+  // second Player row with a different ID convention.
   for (const player of players) {
-    await prisma.player.upsert({
-      where: { id: player.id },
-      update: {
-        name: player.name,
-        club: player.club,
-        position: player.position,
-        active: true,
-      },
-      create: {
-        id: player.id,
-        name: player.name,
-        club: player.club,
-        position: player.position,
-        active: true,
-      },
+    await upsertCanonicalPlayer(prisma, {
+      provider: PLAYER_STATS_2025_PROVIDER,
+      externalId: buildCanonicalPlayerId(`${player.name}|${player.club}`),
+      name: player.name,
+      club: player.club,
+      position: player.position,
+      active: true,
+      allowExactAttributeMatch: true,
     });
   }
 

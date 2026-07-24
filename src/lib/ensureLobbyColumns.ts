@@ -150,11 +150,6 @@ export async function ensureRosterTables(): Promise<boolean> {
           CONSTRAINT "LeagueRosterPlayer_pkey" PRIMARY KEY ("id")
         )
       `;
-      await prisma.$executeRaw`
-        CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_unique" 
-        ON "LeagueRosterPlayer"("leagueId", "memberId", "playerId")
-      `;
-
       // Add foreign key constraints with proper namespace checking
       try {
         const constraintExists = await prisma.$queryRaw`
@@ -260,6 +255,13 @@ export async function ensureRosterTables(): Promise<boolean> {
         }
       }
     }
+
+    // Ownership is scoped to a league, not a member. Keep this outside the
+    // creation branch so databases made by the older fallback are corrected.
+    await prisma.$executeRaw`
+      CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_leagueId_playerId_key"
+      ON "LeagueRosterPlayer"("leagueId", "playerId")
+    `;
 
     // Add captain system columns to LeagueSettings if they don't exist
     try {

@@ -13,6 +13,7 @@ import {
   WaiverClaimStoreError,
   type WaiverSettings as ProcessingWaiverSettings,
 } from '@/server/waivers/WaiverProcessingService';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { findWaiverPlayerAliasIds } from '@/server/waivers/waiverPlayerIdentity';
 
 export const runtime = 'nodejs';
@@ -54,10 +55,18 @@ export const POST = withMetrics(
         where: { active: true },
         select: { id: true, name: true, club: true, position: true },
       });
-      const playerAliasIds = findWaiverPlayerAliasIds(activePlayers, requestedPlayerId);
-      if (playerAliasIds.length === 0) {
+      const transitionalAliasIds = findWaiverPlayerAliasIds(activePlayers, requestedPlayerId);
+      const resolvedPlayerId = await resolveCanonicalPlayerId(requestedPlayerId);
+      const canonicalPlayerId =
+        resolvedPlayerId && resolvedPlayerId !== requestedPlayerId
+          ? resolvedPlayerId
+          : transitionalAliasIds[0];
+      if (!canonicalPlayerId || transitionalAliasIds.length === 0) {
         return NextResponse.json({ error: 'Player not found' }, { status: 404 });
       }
+      const playerAliasIds = [
+        ...new Set([requestedPlayerId, canonicalPlayerId, ...transitionalAliasIds]),
+      ];
 
       const prismaOwnership = await prisma.leagueRosterPlayer.findFirst({
         where: { leagueId, playerId: { in: playerAliasIds } },
@@ -128,10 +137,15 @@ export const POST = withMetrics(
         leagueId,
         userId,
         teamId: String(teamId),
-        playerId: requestedPlayerId,
+        playerId: canonicalPlayerId,
         priority: Number(priority) || 1,
         waiverSettings: (ws ?? {}) as ProcessingWaiverSettings,
-        ...(dropPlayerId ? { dropPlayerId: String(dropPlayerId) } : {}),
+        ...(dropPlayerId
+          ? {
+              dropPlayerId:
+                (await resolveCanonicalPlayerId(String(dropPlayerId))) ?? String(dropPlayerId),
+            }
+          : {}),
         ...(typeof validatedBid === 'number' ? { bidAmount: validatedBid } : {}),
       });
       const claimId = submittedClaim.id;
@@ -140,7 +154,7 @@ export const POST = withMetrics(
         leagueId,
         userId,
         teamId,
-        playerId: requestedPlayerId,
+        playerId: canonicalPlayerId,
         claimId,
       });
       try {

@@ -1,8 +1,12 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
 
-type PrismaLike = Pick<typeof prisma, 'leagueRosterPlayer' | 'player' | 'teamAction'>;
+type PrismaLike = Pick<
+  typeof prisma,
+  'leagueRosterPlayer' | 'player' | 'playerExternalIdentity' | 'teamAction'
+>;
 type FirestoreLike = typeof adminDb;
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 
@@ -40,7 +44,11 @@ export class WaiverAvailabilityProjectionService {
     for (const hold of waiverHolds) {
       const details = parseActionDetails(hold.details);
       const playerId = typeof details.playerId === 'string' ? details.playerId : null;
-      if (playerId) held.set(playerId, hold.processingAt ?? null);
+      if (playerId) {
+        const canonicalPlayerId =
+          (await resolveCanonicalPlayerId(playerId, undefined, this.db)) ?? playerId;
+        held.set(canonicalPlayerId, hold.processingAt ?? null);
+      }
     }
     const leagueRef = this.firestore.collection('leagues').doc(input.leagueId);
     let batch = this.firestore.batch();
