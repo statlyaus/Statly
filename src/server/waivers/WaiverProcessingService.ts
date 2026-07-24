@@ -126,7 +126,13 @@ type FirestoreLike = Pick<typeof adminDb, 'collection' | 'doc'>;
 type ProjectionLike = Pick<WaiverAvailabilityProjectionService, 'projectLeague'>;
 
 type CanonicalRosterPlan =
-  | { status: 'READY'; memberId: string; playerId: string; nextPlayerIds: string }
+  | {
+      status: 'READY';
+      memberId: string;
+      playerId: string;
+      dropPlayerId?: string;
+      nextPlayerIds: string;
+    }
   | { status: 'FAILED'; reason: string };
 
 function parsePlayerIds(raw?: string | null): string[] {
@@ -421,9 +427,9 @@ export class WaiverProcessingService {
         if (plan.status === 'FAILED') {
           return plan;
         }
-        if (claim.dropPlayerId) {
+        if (plan.dropPlayerId) {
           await tx.leagueRosterPlayer.deleteMany({
-            where: { leagueId, memberId: plan.memberId, playerId: claim.dropPlayerId },
+            where: { leagueId, memberId: plan.memberId, playerId: plan.dropPlayerId },
           });
           await tx.teamAction.create({
             data: {
@@ -432,7 +438,7 @@ export class WaiverProcessingService {
               actionType: 'DROP_PLAYER',
               status: 'PENDING',
               details: JSON.stringify({
-                playerId: claim.dropPlayerId,
+                playerId: plan.dropPlayerId,
                 source: 'drop-to-waivers',
                 waiverClaimId: claim.id,
               }),
@@ -577,6 +583,7 @@ export class WaiverProcessingService {
       status: 'READY',
       memberId,
       playerId: canonicalPlayerId,
+      ...(canonicalDropPlayerId ? { dropPlayerId: canonicalDropPlayerId } : {}),
       nextPlayerIds: stringifyPlayerIds(playerIds),
     };
   }

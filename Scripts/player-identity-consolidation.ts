@@ -11,62 +11,20 @@ import {
   PlayerIdentityConsolidationBlockedError,
 } from '@/server/players/playerIdentityConsolidation';
 import {
-  planPlayerIdentityConsolidation,
-  type PlayerAliasMapping,
-} from '@/server/players/playerIdentityConsolidationPlanner';
+  createPlayerIdentitySourceFingerprint,
+  parsePlayerIdentityCliArgs,
+  validateDisposablePlayerIdentityDatabase,
+  validateProductionPlayerIdentityDatabase,
+  validateReviewedPlayerIdentityManifest,
+  type ReviewedPlayerIdentityManifest,
+} from '@/server/players/playerIdentityConsolidationCli';
+import { planPlayerIdentityConsolidation } from '@/server/players/playerIdentityConsolidationPlanner';
 
-type ReviewedManifest = {
-  reviewed: boolean;
-  mappings: PlayerAliasMapping[];
-};
-
-function parseArgs(argv: readonly string[]) {
-  const apply = argv.includes('--apply');
-  const propose = argv.includes('--propose');
-  const manifestIndex = argv.indexOf('--manifest');
-  const manifestPath = manifestIndex >= 0 ? argv[manifestIndex + 1] : undefined;
-
-  if (propose && (apply || manifestPath)) {
-    throw new Error('--propose cannot be combined with --apply or --manifest');
-  }
-  if (!propose && !manifestPath) {
-    throw new Error('Use --propose or provide --manifest <reviewed-manifest.json>');
-  }
-
-  return { apply, propose, manifestPath };
-}
-
-function validateDisposableDatabase(): string {
-  const databaseUrl = (process.env.DATABASE_URL ?? '').trim();
-  const expectedPath = (process.env.STATLY_VERIFY_DB ?? '').trim();
-
-  if (!databaseUrl || !expectedPath) {
-    throw new Error('DATABASE_URL and STATLY_VERIFY_DB are required');
-  }
-
-  const parsedUrl = new URL(databaseUrl);
-  const databasePath = decodeURIComponent(parsedUrl.pathname);
-  if (
-    parsedUrl.protocol !== 'file:' ||
-    databasePath !== expectedPath ||
-    !expectedPath.startsWith('/tmp/statly-verify-player-') ||
-    !expectedPath.endsWith('.db')
-  ) {
-    throw new Error(
-      'Identity consolidation is restricted to matching file:/tmp/statly-verify-player-*.db URLs'
-    );
-  }
-
-  return databaseUrl;
-}
-
-async function readManifest(manifestPath: string): Promise<ReviewedManifest> {
+async function readManifest(manifestPath: string): Promise<ReviewedPlayerIdentityManifest> {
   const absolutePath = path.resolve(manifestPath);
-  const manifest = JSON.parse(await fs.readFile(absolutePath, 'utf8')) as ReviewedManifest;
-  if (!Array.isArray(manifest.mappings)) {
-    throw new Error('Manifest mappings must be an array');
-  }
-  return manifest;
+  return validateReviewedPlayerIdentityManifest(
+    JSON.parse(await fs.readFile(absolutePath, 'utf8')) as unknown
+  );
 }
 
 async function proposeManifest(prisma: PrismaClient) {
@@ -108,7 +66,11 @@ async function proposeManifest(prisma: PrismaClient) {
     });
 
   return {
+    schemaVersion: 1,
     reviewed: false,
+    reviewedBy: '',
+    reviewedAt: '',
+    sourceFingerprint: createPlayerIdentitySourceFingerprint(players),
     warning:
       'Name and club are candidate evidence only. Review every group; do not apply this proposal directly.',
     candidateGroups: candidates,
@@ -116,18 +78,60 @@ async function proposeManifest(prisma: PrismaClient) {
   };
 }
 
+async function projectWaiverAvailability(prisma: PrismaClient) {
+  const { WaiverAvailabilityProjectionService } = await import(
+    '@/server/waivers/WaiverAvailabilityProjectionService'
+  );
+  const projector = new WaiverAvailabilityProjectionService(prisma);
+  const leagues = await prisma.league.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
+  const results = [];
+  for (const league of leagues) {
+    results.push({
+      leagueId: league.id,
+      ...(await projector.projectLeague({ leagueId: league.id })),
+    });
+  }
+  return results;
+}
+
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const databaseUrl = validateDisposableDatabase();
+  const args = parsePlayerIdentityCliArgs(process.argv.slice(2));
+  const databaseUrl = args.production
+    ? validateProductionPlayerIdentityDatabase({
+        databaseUrl: process.env.DATABASE_URL ?? '',
+        expectedPath: process.env.STATLY_PLAYER_IDENTITY_PRODUCTION_DB ?? '',
+        backupPath: process.env.STATLY_PLAYER_IDENTITY_BACKUP,
+        requireBackup: args.apply,
+      })
+    : validateDisposablePlayerIdentityDatabase({
+        databaseUrl: process.env.DATABASE_URL ?? '',
+        expectedPath: process.env.STATLY_VERIFY_DB ?? '',
+      });
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
 
   try {
+    if (args.projectWaivers) {
+      process.stdout.write(
+        `${JSON.stringify({ status: 'projected', leagues: await projectWaiverAvailability(prisma) }, null, 2)}\n`
+      );
+      return;
+    }
     if (args.propose) {
       process.stdout.write(`${JSON.stringify(await proposeManifest(prisma), null, 2)}\n`);
       return;
     }
 
     const manifest = await readManifest(args.manifestPath!);
+    const currentPlayers = await prisma.player.findMany({
+      orderBy: { id: 'asc' },
+      select: { id: true, name: true, club: true, position: true },
+    });
+    const currentFingerprint = createPlayerIdentitySourceFingerprint(currentPlayers);
+    if (currentFingerprint !== manifest.sourceFingerprint) {
+      throw new Error(
+        'Player identity data changed after manifest proposal; generate and review a new manifest'
+      );
+    }
     const plan = await planPlayerIdentityConsolidation(prisma, manifest.mappings);
 
     if (!args.apply) {
@@ -138,17 +142,19 @@ async function main() {
       return;
     }
 
-    if (!manifest.reviewed) {
+    if (manifest.reviewed !== true) {
       throw new Error('Refusing to apply an identity manifest until reviewed is true');
     }
 
     const appliedPlan = await consolidatePlayerIdentities(prisma, manifest.mappings);
+    const waiverProjectionResults = args.production ? await projectWaiverAvailability(prisma) : [];
     process.stdout.write(
       `${JSON.stringify(
         {
           status: 'applied',
           appliedMappings: appliedPlan.mappings.length,
           preservedOwnershipBoundary: 'leagueId + canonicalPlayerId',
+          projectedLeagues: waiverProjectionResults.length,
         },
         null,
         2

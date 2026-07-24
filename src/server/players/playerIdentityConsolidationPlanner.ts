@@ -11,6 +11,9 @@ export type PlayerIdentityBlockerCode =
   | 'CANONICAL_IS_ALIAS'
   | 'DRAFT_PICK_COLLISION'
   | 'LEAGUE_OWNERSHIP_CONFLICT'
+  | 'LEGACY_OWNERSHIP_CONFLICT'
+  | 'INVALID_LEGACY_ROSTER'
+  | 'PENDING_ACTION_REFERENCE'
   | 'LINEUP_COLLISION'
   | 'TRADE_COLLISION'
   | 'CAPTAIN_COLLISION'
@@ -241,7 +244,9 @@ export async function planPlayerIdentityConsolidation(
     client.lobbyActivity.findMany({ where: { details: { not: null } }, select: { details: true } }),
     client.draftEvent.findMany({ where: { payload: { not: null } }, select: { payload: true } }),
     client.leagueCompetitionAudit.findMany({ select: { payloadJson: true } }),
-    client.teamAction.findMany({ select: { details: true } }),
+    client.teamAction.findMany({
+      select: { id: true, leagueId: true, status: true, details: true },
+    }),
     client.leagueTradeEvent.findMany({
       where: { payloadJson: { not: null } },
       select: { payloadJson: true },
@@ -286,6 +291,67 @@ export async function planPlayerIdentityConsolidation(
       scopeId: leagueId,
       aliasIds: rows.map((row) => row.playerId),
       message: `League ${leagueId} has different members owning aliases of ${canonicalPlayerId}.`,
+    });
+  }
+
+  const ownershipEvidence = rosterPlayers.map((row) => ({
+    leagueId: row.leagueId,
+    memberId: row.memberId,
+    playerId: row.playerId,
+    sourceId: row.id,
+  }));
+  for (const roster of legacyRosters) {
+    let playerIds: string[];
+    try {
+      const parsed = JSON.parse(roster.playerIds) as unknown;
+      if (!Array.isArray(parsed) || parsed.some((playerId) => typeof playerId !== 'string')) {
+        throw new Error('not a string array');
+      }
+      playerIds = parsed;
+    } catch {
+      if (containsAnyAlias(roster.playerIds, aliasIds)) {
+        blockers.push({
+          code: 'INVALID_LEGACY_ROSTER',
+          canonicalPlayerId: '',
+          scopeId: roster.id,
+          aliasIds: [...aliasIds].filter((aliasId) => roster.playerIds.includes(aliasId)),
+          message: `Legacy roster ${roster.id} contains player aliases in invalid JSON.`,
+        });
+      }
+      continue;
+    }
+
+    for (const playerId of playerIds) {
+      if (!referencedPlayerIds.includes(playerId)) continue;
+      ownershipEvidence.push({
+        leagueId: roster.leagueId,
+        memberId: roster.memberId,
+        playerId,
+        sourceId: roster.id,
+      });
+    }
+  }
+
+  for (const [key, rows] of groupBy(
+    ownershipEvidence,
+    (row) => `${row.leagueId}\u0000${projectedPlayerId(row.playerId, aliasMap)}`
+  )) {
+    const memberIds = new Set(rows.map((row) => row.memberId));
+    if (memberIds.size < 2) continue;
+    const [leagueId, canonicalPlayerId] = key.split('\u0000');
+    const alreadyBlocked = blockers.some(
+      (blocker) =>
+        blocker.code === 'LEAGUE_OWNERSHIP_CONFLICT' &&
+        blocker.scopeId === leagueId &&
+        blocker.canonicalPlayerId === canonicalPlayerId
+    );
+    if (alreadyBlocked) continue;
+    blockers.push({
+      code: 'LEGACY_OWNERSHIP_CONFLICT',
+      canonicalPlayerId,
+      scopeId: leagueId,
+      aliasIds: [...new Set(rows.map((row) => row.playerId))],
+      message: `League ${leagueId} has conflicting normalized or legacy owners for ${canonicalPlayerId}.`,
     });
   }
 
@@ -347,6 +413,17 @@ export async function planPlayerIdentityConsolidation(
         message: `Autosub ${autosub.id} would replace a player with the same canonical player.`,
       });
     }
+  }
+
+  for (const action of teamActions) {
+    if (action.status !== 'PENDING' || !containsAnyAlias(action.details, aliasIds)) continue;
+    blockers.push({
+      code: 'PENDING_ACTION_REFERENCE',
+      canonicalPlayerId: '',
+      scopeId: action.id,
+      aliasIds: [...aliasIds].filter((aliasId) => action.details.includes(aliasId)),
+      message: `Pending team action ${action.id} in league ${action.leagueId} must be resolved before consolidation.`,
+    });
   }
 
   const jsonDocuments = [

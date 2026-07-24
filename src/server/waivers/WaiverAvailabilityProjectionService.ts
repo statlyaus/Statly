@@ -38,6 +38,16 @@ export class WaiverAvailabilityProjectionService {
     const allPlayers = await this.db.player.findMany({
       select: { id: true, name: true, club: true, position: true },
     });
+    const retiredExternalIds = this.db.playerExternalIdentity
+      ? (
+          await this.db.playerExternalIdentity.findMany({
+            where: { provider: 'statly-legacy' },
+            select: { externalId: true, playerId: true },
+          })
+        )
+          .filter((identity) => identity.externalId !== identity.playerId)
+          .map((identity) => identity.externalId)
+      : [];
     const playerGroups = groupWaiverPlayersByIdentity(allPlayers);
     const owned = new Map(ownerships.map((ownership) => [ownership.playerId, ownership.memberId]));
     const held = new Map<string, Date | null>();
@@ -77,6 +87,7 @@ export class WaiverAvailabilityProjectionService {
 
     let ownedCount = 0;
     let availableCount = 0;
+    const removedAliasIds = new Set<string>();
 
     for (const group of playerGroups) {
       const player = group.representative;
@@ -133,7 +144,14 @@ export class WaiverAvailabilityProjectionService {
         if (alias.id === player.id) continue;
         await remove(leagueRef.collection('availablePlayers').doc(alias.id));
         await remove(leagueRef.collection('playerOwnerships').doc(alias.id));
+        removedAliasIds.add(alias.id);
       }
+    }
+
+    for (const retiredExternalId of retiredExternalIds) {
+      if (removedAliasIds.has(retiredExternalId)) continue;
+      await remove(leagueRef.collection('availablePlayers').doc(retiredExternalId));
+      await remove(leagueRef.collection('playerOwnerships').doc(retiredExternalId));
     }
 
     if (writeCount > 0) {

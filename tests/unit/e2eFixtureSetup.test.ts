@@ -12,13 +12,14 @@ describe('e2e fixture setup', () => {
     const source = read('tests/e2e/global.setup.ts');
 
     expect(source).not.toContain('player.deleteMany');
-    expect(source).toContain('tx.player.upsert');
+    expect(source).toContain('upsertCanonicalPlayer(tx');
   });
 
   it('uses canonical player ids and ranks only the full-draft fixture pool', () => {
     const source = read('tests/e2e/helpers/fullDraftSoakFixture.ts');
 
-    expect(source).toContain('buildCanonicalPlayerId(player.name)');
+    expect(source).toContain('buildCanonicalPlayerId(`${player.name}|${club}`)');
+    expect(source).toContain('provider: PLAYER_STATS_2025_PROVIDER');
     expect(source).toContain('const candidateIds = await upsertActivePlayerPool(tx)');
     expect(source).toContain('where: { active: true, id: { in: candidateIds } }');
     expect(source).not.toContain('where: { active: true },');

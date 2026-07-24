@@ -18,6 +18,7 @@ const ids = {
   firstMember: 'trade-test-member-first',
   secondMember: 'trade-test-member-second',
   firstPlayer: 'trade-test-player-first',
+  firstPlayerAlias: 'trade-test-player-first-retired',
   secondPlayer: 'trade-test-player-second',
 } as const;
 
@@ -103,6 +104,19 @@ describe.sequential('league trade service transactions', () => {
     await expect(prisma.leagueTradeThread.count()).resolves.toBe(1);
     await expect(prisma.leagueTradeOffer.count()).resolves.toBe(1);
     await expect(prisma.leagueTradeCommand.count()).resolves.toBe(1);
+  });
+
+  it('resolves a retired player alias before validating trade ownership', async () => {
+    const created = await service.createLeagueTrade(
+      ids.league,
+      ids.firstUser,
+      createInput({ sendingPlayerIds: [ids.firstPlayerAlias] }),
+      now
+    );
+
+    await expect(
+      prisma.leagueTradePlayer.findFirstOrThrow({ where: { offerId: created.offerId } })
+    ).resolves.toMatchObject({ playerId: ids.firstPlayer });
   });
 
   it('persists immutable player identity snapshots with an offer', async () => {
@@ -751,6 +765,13 @@ async function seedLeague(): Promise<void> {
       { id: ids.firstPlayer, name: 'First Player', club: 'AAA', position: 'MID' },
       { id: ids.secondPlayer, name: 'Second Player', club: 'BBB', position: 'FWD' },
     ],
+  });
+  await prisma.playerExternalIdentity.create({
+    data: {
+      provider: 'statly-legacy',
+      externalId: ids.firstPlayerAlias,
+      playerId: ids.firstPlayer,
+    },
   });
   await prisma.leagueRosterPlayer.createMany({
     data: [

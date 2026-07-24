@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { Prisma, type TradeReviewMode } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import {
   evaluateRosterExchangeCapacity,
   getLeagueRosterCapacity,
@@ -70,9 +71,14 @@ export async function createLeagueTrade(
   if (!parsed.success) {
     throw new TradeServiceError('INVALID_INPUT', 'Trade proposal is invalid.');
   }
-  const selection = validateTradePlayerSelection(
+  const canonicalSelection = await resolveTradePlayerSelection(
     parsed.data.sendingPlayerIds,
     parsed.data.receivingPlayerIds
+  );
+  const canonicalInput: CreateTradeInput = { ...parsed.data, ...canonicalSelection };
+  const selection = validateTradePlayerSelection(
+    canonicalInput.sendingPlayerIds,
+    canonicalInput.receivingPlayerIds
   );
   if (!selection.ok) throw new TradeServiceError('INVALID_INPUT', selection.error);
 
@@ -81,10 +87,10 @@ export async function createLeagueTrade(
 
   return executeIdempotentTradeCommand(
     access,
-    parsed.data.idempotencyKey,
+    canonicalInput.idempotencyKey,
     'CREATE_TRADE',
-    parsed.data,
-    async (tx) => createTradeInTransaction(tx, access, parsed.data, now)
+    canonicalInput,
+    async (tx) => createTradeInTransaction(tx, access, canonicalInput, now)
   );
 }
 
@@ -99,15 +105,41 @@ export async function executeLeagueTradeAction(
   if (!parsed.success) {
     throw new TradeServiceError('INVALID_INPUT', 'Trade action is invalid.');
   }
+  let canonicalInput: TradeActionInput = parsed.data;
+  if (parsed.data.action === 'counter') {
+    canonicalInput = {
+      ...parsed.data,
+      ...(await resolveTradePlayerSelection(
+        parsed.data.sendingPlayerIds,
+        parsed.data.receivingPlayerIds
+      )),
+    };
+  }
   const access = await requireTradeAccess(leagueId, userId);
 
   return executeIdempotentTradeCommand(
     access,
-    parsed.data.idempotencyKey,
-    `TRADE_${parsed.data.action.toUpperCase()}`,
-    { threadId, ...parsed.data },
-    async (tx) => executeActionInTransaction(tx, access, threadId, parsed.data, now)
+    canonicalInput.idempotencyKey,
+    `TRADE_${canonicalInput.action.toUpperCase()}`,
+    { threadId, ...canonicalInput },
+    async (tx) => executeActionInTransaction(tx, access, threadId, canonicalInput, now)
   );
+}
+
+async function resolveTradePlayerSelection(
+  sendingPlayerIds: readonly string[],
+  receivingPlayerIds: readonly string[]
+): Promise<{ sendingPlayerIds: string[]; receivingPlayerIds: string[] }> {
+  const requestedPlayerIds = [...sendingPlayerIds, ...receivingPlayerIds];
+  const resolvedPlayerIds = await resolveCanonicalPlayerIds(requestedPlayerIds);
+  if (requestedPlayerIds.some((playerId) => !resolvedPlayerIds.has(playerId))) {
+    throw new TradeServiceError('INVALID_INPUT', 'One or more selected players no longer exist.');
+  }
+
+  return {
+    sendingPlayerIds: sendingPlayerIds.map((playerId) => resolvedPlayerIds.get(playerId)!),
+    receivingPlayerIds: receivingPlayerIds.map((playerId) => resolvedPlayerIds.get(playerId)!),
+  };
 }
 
 export async function processDueLeagueTrades(now = new Date(), limit = 50): Promise<number> {

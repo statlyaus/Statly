@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
@@ -95,6 +96,7 @@ export async function POST(
     if (!actionType || !details) {
       return errorResponse('Action type and details are required', 400);
     }
+    const canonicalDetails = await resolveTeamActionPlayerIds(details);
 
     await ensureRosterTables();
 
@@ -113,7 +115,7 @@ export async function POST(
     // Validate action based on type
     const validationResult = await validateTeamAction(
       actionType,
-      details,
+      canonicalDetails,
       leagueId,
       member.id,
       targetMemberId
@@ -140,7 +142,7 @@ export async function POST(
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     await prisma.$executeRaw`
       INSERT INTO TeamAction (id, leagueId, memberId, actionType, details, targetMemberId, processingAt, createdAt, updatedAt)
-      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(details)}, ${targetMemberId}, ${processingAt}, datetime('now'), datetime('now'))
+      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(canonicalDetails)}, ${targetMemberId}, ${processingAt}, datetime('now'), datetime('now'))
     `;
 
     const action = {
@@ -148,7 +150,7 @@ export async function POST(
       leagueId,
       memberId: member.id,
       actionType,
-      details: JSON.stringify(details),
+      details: JSON.stringify(canonicalDetails),
       targetMemberId,
       processingAt,
       createdAt: new Date(),
@@ -186,6 +188,19 @@ export async function POST(
     });
     return errorResponse('Failed to create team action', 500);
   }
+}
+
+async function resolveTeamActionPlayerIds(details: unknown): Promise<Record<string, unknown>> {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return {};
+
+  const canonicalDetails = { ...(details as Record<string, unknown>) };
+  for (const key of ['playerId', 'dropPlayerId'] as const) {
+    const requestedPlayerId = canonicalDetails[key];
+    if (typeof requestedPlayerId !== 'string') continue;
+    const canonicalPlayerId = await resolveCanonicalPlayerId(requestedPlayerId);
+    if (canonicalPlayerId) canonicalDetails[key] = canonicalPlayerId;
+  }
+  return canonicalDetails;
 }
 
 async function authorizeTeamActionRequest(

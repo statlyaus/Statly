@@ -55,8 +55,10 @@ export const POST = withMetrics(
         where: { active: true },
         select: { id: true, name: true, club: true, position: true },
       });
-      const transitionalAliasIds = findWaiverPlayerAliasIds(activePlayers, requestedPlayerId);
       const resolvedPlayerId = await resolveCanonicalPlayerId(requestedPlayerId);
+      const transitionalAliasIds = resolvedPlayerId
+        ? findWaiverPlayerAliasIds(activePlayers, resolvedPlayerId)
+        : [];
       const canonicalPlayerId =
         resolvedPlayerId && resolvedPlayerId !== requestedPlayerId
           ? resolvedPlayerId

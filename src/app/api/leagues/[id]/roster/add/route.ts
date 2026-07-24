@@ -9,6 +9,7 @@ import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 function parsePlayerIds(value: unknown): string[] {
@@ -30,8 +31,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!userId) return errorResponse('Unauthorized', 401);
 
     const body = (await request.json().catch(() => ({}))) as { playerId?: unknown };
-    const playerId = typeof body.playerId === 'string' ? body.playerId.trim() : '';
-    if (!leagueId || !playerId) return errorResponse('League ID and player ID are required', 400);
+    const requestedPlayerId = typeof body.playerId === 'string' ? body.playerId.trim() : '';
+    if (!leagueId || !requestedPlayerId)
+      return errorResponse('League ID and player ID are required', 400);
+    const playerId = await resolveCanonicalPlayerId(requestedPlayerId);
+    if (!playerId) return errorResponse('Player not found', 404);
 
     const [member, player, existingOwnership, activeWaiverHold] = await prisma.$transaction([
       prisma.leagueMember.findFirst({ where: { leagueId, userId }, select: { id: true } }),

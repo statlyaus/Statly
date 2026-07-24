@@ -131,6 +131,9 @@ async function mergeLegacyQueues(
     });
     if (existing) {
       await tx.queueItem.delete({ where: { id: row.id } });
+      if (row.rank < existing.rank) {
+        await tx.queueItem.update({ where: { id: existing.id }, data: { rank: row.rank } });
+      }
     } else {
       await tx.queueItem.update({ where: { id: row.id }, data: { playerId: canonicalPlayerId } });
     }
@@ -198,66 +201,6 @@ async function rewriteLegacyRosterDocuments(tx: Prisma.TransactionClient, aliase
   }
 }
 
-async function rewriteGenericJsonDocuments(tx: Prisma.TransactionClient, aliases: AliasMap) {
-  const lobbyActivities = await tx.lobbyActivity.findMany({ where: { details: { not: null } } });
-  for (const row of lobbyActivities) {
-    const details = rewriteJson(row.details, aliases);
-    if (details !== row.details)
-      await tx.lobbyActivity.update({ where: { id: row.id }, data: { details } });
-  }
-
-  const draftEvents = await tx.draftEvent.findMany({ where: { payload: { not: null } } });
-  for (const row of draftEvents) {
-    const payload = rewriteJson(row.payload, aliases);
-    if (payload !== row.payload)
-      await tx.draftEvent.update({ where: { id: row.id }, data: { payload } });
-  }
-
-  const competitionAudits = await tx.leagueCompetitionAudit.findMany();
-  for (const row of competitionAudits) {
-    const payloadJson = rewriteJson(row.payloadJson, aliases)!;
-    if (payloadJson !== row.payloadJson) {
-      await tx.leagueCompetitionAudit.update({ where: { id: row.id }, data: { payloadJson } });
-    }
-  }
-
-  const teamActions = await tx.teamAction.findMany();
-  for (const row of teamActions) {
-    const details = rewriteJson(row.details, aliases)!;
-    if (details !== row.details)
-      await tx.teamAction.update({ where: { id: row.id }, data: { details } });
-  }
-
-  const tradeEvents = await tx.leagueTradeEvent.findMany({ where: { payloadJson: { not: null } } });
-  for (const row of tradeEvents) {
-    const payloadJson = rewriteJson(row.payloadJson, aliases);
-    if (payloadJson !== row.payloadJson) {
-      await tx.leagueTradeEvent.update({ where: { id: row.id }, data: { payloadJson } });
-    }
-  }
-
-  const tradeCommands = await tx.leagueTradeCommand.findMany({
-    where: { responseJson: { not: null } },
-  });
-  for (const row of tradeCommands) {
-    const responseJson = rewriteJson(row.responseJson, aliases);
-    if (responseJson !== row.responseJson) {
-      await tx.leagueTradeCommand.update({ where: { id: row.id }, data: { responseJson } });
-    }
-  }
-
-  const outboxEvents = await tx.leagueTradeOutboxEvent.findMany();
-  for (const row of outboxEvents) {
-    const payloadJson = rewriteJson(row.payloadJson, aliases)!;
-    if (payloadJson !== row.payloadJson) {
-      await tx.leagueTradeOutboxEvent.update({
-        where: { sequence: row.sequence },
-        data: { payloadJson },
-      });
-    }
-  }
-}
-
 async function assertNoRelationalReferences(tx: Prisma.TransactionClient, aliasId: string) {
   const counts = await Promise.all([
     tx.pick.count({ where: { playerId: aliasId } }),
@@ -267,9 +210,6 @@ async function assertNoRelationalReferences(tx: Prisma.TransactionClient, aliasI
     tx.leagueRosterPlayer.count({ where: { playerId: aliasId } }),
     tx.leagueLineupPlayer.count({ where: { playerId: aliasId } }),
     tx.leagueTradePlayer.count({ where: { playerId: aliasId } }),
-    tx.leagueLineupAutosub.count({
-      where: { OR: [{ outgoingPlayerId: aliasId }, { replacementPlayerId: aliasId }] },
-    }),
   ]);
   if (counts.some((count) => count > 0)) {
     throw new Error(`Relational references remain for player alias ${aliasId}`);
@@ -293,14 +233,6 @@ async function applyMapping(
   await tx.leagueTradePlayer.updateMany({
     where: { playerId: aliasId },
     data: { playerId: canonicalPlayerId },
-  });
-  await tx.leagueLineupAutosub.updateMany({
-    where: { outgoingPlayerId: aliasId },
-    data: { outgoingPlayerId: canonicalPlayerId },
-  });
-  await tx.leagueLineupAutosub.updateMany({
-    where: { replacementPlayerId: aliasId },
-    data: { replacementPlayerId: canonicalPlayerId },
   });
   await tx.playerExternalIdentity.updateMany({
     where: { playerId: aliasId },
@@ -326,7 +258,6 @@ export async function consolidatePlayerIdentities(
     }
 
     await rewriteLegacyRosterDocuments(tx, aliasMap);
-    await rewriteGenericJsonDocuments(tx, aliasMap);
 
     for (const mapping of plan.mappings) {
       await assertNoRelationalReferences(tx, mapping.aliasId);

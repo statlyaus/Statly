@@ -76,7 +76,7 @@ export async function resolveCanonicalPlayerId(
     return identity.playerId;
   }
 
-  if (typeof client.player.findUnique !== 'function') {
+  if (typeof client.player?.findUnique !== 'function') {
     return normalizedExternalId;
   }
 
@@ -86,6 +86,40 @@ export async function resolveCanonicalPlayerId(
   });
 
   return directPlayer?.id ?? null;
+}
+
+export async function resolveCanonicalPlayerIds(
+  externalIds: readonly string[],
+  provider = STATLY_LEGACY_PLAYER_PROVIDER,
+  client: PlayerIdentityReadClient = prisma
+): Promise<Map<string, string>> {
+  const uniqueExternalIds = [
+    ...new Set(externalIds.map((playerId) => playerId.trim()).filter(Boolean)),
+  ];
+  if (uniqueExternalIds.length === 0) return new Map();
+
+  const resolved = new Map<string, string>();
+  if (client.playerExternalIdentity) {
+    const identities = await client.playerExternalIdentity.findMany({
+      where: { provider, externalId: { in: uniqueExternalIds } },
+      select: { externalId: true, playerId: true },
+    });
+    for (const identity of identities) resolved.set(identity.externalId, identity.playerId);
+  }
+
+  const unresolvedIds = uniqueExternalIds.filter((playerId) => !resolved.has(playerId));
+  if (unresolvedIds.length === 0) return resolved;
+  if (typeof client.player?.findMany !== 'function') {
+    for (const playerId of unresolvedIds) resolved.set(playerId, playerId);
+    return resolved;
+  }
+
+  const directPlayers = await client.player.findMany({
+    where: { id: { in: unresolvedIds } },
+    select: { id: true },
+  });
+  for (const player of directPlayers) resolved.set(player.id, player.id);
+  return resolved;
 }
 
 export async function upsertCanonicalPlayer(
@@ -134,6 +168,20 @@ export async function upsertCanonicalPlayer(
     }
 
     canonicalPlayer = candidates[0] ?? null;
+    if (!canonicalPlayer) {
+      const sameNameCandidates = await client.player.findMany({
+        where: { name: playerData.name },
+        orderBy: { id: 'asc' },
+        take: 2,
+      });
+      if (sameNameCandidates.length > 0) {
+        throw new AmbiguousPlayerIdentityError(
+          playerData.name,
+          playerData.club,
+          sameNameCandidates.map((candidate) => candidate.id)
+        );
+      }
+    }
   }
 
   if (canonicalPlayer) {

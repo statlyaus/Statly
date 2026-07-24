@@ -242,6 +242,52 @@ describe('WaiverAvailabilityProjectionService', () => {
     expect(result).toEqual({ owned: 1, available: 0 });
   });
 
+  it('removes retired alias documents after relational consolidation', async () => {
+    const { batches, firestore } = createFirestoreMock();
+    const db = {
+      leagueRosterPlayer: {
+        findMany: vi.fn().mockResolvedValue([{ playerId: 'jack_ginnivan', memberId: 'member-1' }]),
+      },
+      teamAction: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      player: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'jack_ginnivan',
+            name: 'Jack Ginnivan',
+            club: 'Hawthorn',
+            position: 'FWD',
+          },
+        ]),
+      },
+      playerExternalIdentity: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            externalId: 'jack_ginnivan',
+            playerId: 'jack_ginnivan',
+          },
+          {
+            externalId: 'jack-ginnivan-hawthorn',
+            playerId: 'jack_ginnivan',
+          },
+        ]),
+      },
+    };
+
+    const service = new WaiverAvailabilityProjectionService(db as never, firestore as never);
+    await service.projectLeague({ leagueId: 'league-1' });
+
+    expect(db.playerExternalIdentity.findMany).toHaveBeenCalledWith({
+      where: { provider: 'statly-legacy' },
+      select: { externalId: true, playerId: true },
+    });
+    const deletedIds = batches.flatMap((batch) =>
+      batch.delete.mock.calls.map(([ref]) => (ref as { id: string }).id)
+    );
+    expect(deletedIds).toEqual(expect.arrayContaining(['jack-ginnivan-hawthorn']));
+  });
+
   it('refreshes waiver availability after roster ownership projection', () => {
     const source = read('src/server/rosters/RosterProjectionService.ts');
 

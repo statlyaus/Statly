@@ -20,6 +20,7 @@ import {
 } from '../../src/server/players/playerIdentityConsolidation';
 import { planPlayerIdentityConsolidation } from '../../src/server/players/playerIdentityConsolidationPlanner';
 import {
+  AmbiguousPlayerIdentityError,
   resolveCanonicalPlayerId,
   upsertCanonicalPlayer,
 } from '../../src/server/players/playerIdentityService';
@@ -268,6 +269,23 @@ describe.sequential('canonical player identity migration', () => {
   it('backfills legacy IDs and preserves independent ownership in different leagues', async () => {
     await expect(prisma.playerExternalIdentity.count()).resolves.toBe(2);
 
+    await prisma.queueItem.createMany({
+      data: [
+        { id: 'canonical-queue', memberId: 'queue-member', playerId: canonicalPlayerId, rank: 2 },
+        { id: 'alias-queue', memberId: 'queue-member', playerId: aliasPlayerId, rank: 1 },
+      ],
+    });
+    await prisma.teamAction.create({
+      data: {
+        id: 'historical-alias-action',
+        leagueId: 'league-a',
+        memberId: 'member-a',
+        actionType: 'WAIVER_CLAIM',
+        status: 'PROCESSED',
+        details: JSON.stringify({ playerId: aliasPlayerId }),
+      },
+    });
+
     const mapping = [{ aliasId: aliasPlayerId, canonicalPlayerId }];
     const plan = await planPlayerIdentityConsolidation(prisma, mapping);
     expect(plan.status).toBe('ready');
@@ -295,6 +313,20 @@ describe.sequential('canonical player identity migration', () => {
         select: { playerId: true },
       })
     ).resolves.toEqual({ playerId: canonicalPlayerId });
+    await expect(
+      prisma.queueItem.findUnique({
+        where: {
+          memberId_playerId: { memberId: 'queue-member', playerId: canonicalPlayerId },
+        },
+        select: { rank: true },
+      })
+    ).resolves.toEqual({ rank: 1 });
+    await expect(
+      prisma.teamAction.findUnique({
+        where: { id: 'historical-alias-action' },
+        select: { details: true },
+      })
+    ).resolves.toEqual({ details: JSON.stringify({ playerId: aliasPlayerId }) });
     await expect(resolveCanonicalPlayerId(aliasPlayerId, undefined, prisma)).resolves.toBe(
       canonicalPlayerId
     );
@@ -311,6 +343,17 @@ describe.sequential('canonical player identity migration', () => {
     await expect(
       prisma.player.count({ where: { name: 'Jack Ginnivan', club: 'Hawthorn' } })
     ).resolves.toBe(1);
+    await expect(
+      upsertCanonicalPlayer(prisma, {
+        provider: 'future-weak-import',
+        externalId: 'fixture-jack-ginnivan-new-club',
+        name: 'Jack Ginnivan',
+        club: 'New Club',
+        position: 'FWD',
+        allowExactAttributeMatch: true,
+      })
+    ).rejects.toBeInstanceOf(AmbiguousPlayerIdentityError);
+    await expect(prisma.player.count({ where: { name: 'Jack Ginnivan' } })).resolves.toBe(1);
     await expect(
       prisma.$queryRawUnsafe<Array<Record<string, unknown>>>('PRAGMA foreign_key_check')
     ).resolves.toEqual([]);
@@ -433,6 +476,53 @@ describe.sequential('canonical player identity migration', () => {
     );
     await expect(prisma.pick.count({ where: { draftId: 'duplicate-player-draft' } })).resolves.toBe(
       2
+    );
+  });
+
+  it('blocks ownership conflicts that exist only in legacy roster JSON', async () => {
+    const canonicalId = 'legacy_conflict_player';
+    const aliasId = 'legacy-conflict-player-club';
+    await prisma.player.createMany({
+      data: [
+        { id: canonicalId, name: 'Legacy Conflict', club: 'Club', position: 'MID' },
+        { id: aliasId, name: 'Legacy Conflict', club: 'Club', position: 'MID' },
+      ],
+    });
+    await prisma.playerExternalIdentity.createMany({
+      data: [canonicalId, aliasId].map((playerId) => ({
+        playerId,
+        provider: 'statly-legacy',
+        externalId: playerId,
+      })),
+    });
+    await prisma.leagueRosterPlayer.create({
+      data: {
+        id: 'legacy-conflict-normalized',
+        leagueId: 'league-a',
+        memberId: 'member-a',
+        playerId: canonicalId,
+      },
+    });
+    await prisma.leagueRoster.create({
+      data: {
+        id: 'legacy-conflict-json',
+        leagueId: 'league-a',
+        memberId: 'member-c',
+        playerIds: JSON.stringify([aliasId]),
+      },
+    });
+
+    const plan = await planPlayerIdentityConsolidation(prisma, [
+      { aliasId, canonicalPlayerId: canonicalId },
+    ]);
+    expect(plan.status).toBe('blocked');
+    expect(plan.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'LEGACY_OWNERSHIP_CONFLICT',
+          scopeId: 'league-a',
+        }),
+      ])
     );
   });
 });
