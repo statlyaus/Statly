@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 
 export async function handlePickCommand(
   request: NextRequest,
@@ -63,11 +64,15 @@ export async function handlePickCommand(
         ? request.headers.get('x-dev-user-id') || undefined
         : undefined;
     const effectiveUserId = devOverrideUserId || userId;
+    const canonicalPlayerId = await resolveCanonicalPlayerId(parsed.data.playerId);
+    if (!canonicalPlayerId) {
+      return commonErrors.notFound('Player not found');
+    }
 
     const result = await draftApplicationService.makePick({
       draftId,
       actorUserId: effectiveUserId,
-      playerId: parsed.data.playerId,
+      playerId: canonicalPlayerId,
     });
 
     const eventPick = result.data.eventPick ?? null;

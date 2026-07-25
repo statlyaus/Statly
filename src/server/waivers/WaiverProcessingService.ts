@@ -5,6 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
 
@@ -125,7 +126,13 @@ type FirestoreLike = Pick<typeof adminDb, 'collection' | 'doc'>;
 type ProjectionLike = Pick<WaiverAvailabilityProjectionService, 'projectLeague'>;
 
 type CanonicalRosterPlan =
-  | { status: 'READY'; memberId: string; playerId: string; nextPlayerIds: string }
+  | {
+      status: 'READY';
+      memberId: string;
+      playerId: string;
+      dropPlayerId?: string;
+      nextPlayerIds: string;
+    }
   | { status: 'FAILED'; reason: string };
 
 function parsePlayerIds(raw?: string | null): string[] {
@@ -420,9 +427,9 @@ export class WaiverProcessingService {
         if (plan.status === 'FAILED') {
           return plan;
         }
-        if (claim.dropPlayerId) {
+        if (plan.dropPlayerId) {
           await tx.leagueRosterPlayer.deleteMany({
-            where: { leagueId, memberId: plan.memberId, playerId: claim.dropPlayerId },
+            where: { leagueId, memberId: plan.memberId, playerId: plan.dropPlayerId },
           });
           await tx.teamAction.create({
             data: {
@@ -431,7 +438,7 @@ export class WaiverProcessingService {
               actionType: 'DROP_PLAYER',
               status: 'PENDING',
               details: JSON.stringify({
-                playerId: claim.dropPlayerId,
+                playerId: plan.dropPlayerId,
                 source: 'drop-to-waivers',
                 waiverClaimId: claim.id,
               }),
@@ -509,15 +516,25 @@ export class WaiverProcessingService {
       where: { active: true },
       select: { id: true, name: true, club: true, position: true },
     });
+    const resolvedPlayerId = await resolveCanonicalPlayerId(claim.playerId, undefined, tx);
+    if (!resolvedPlayerId) {
+      return { status: 'FAILED', reason: 'Player not found' };
+    }
     const playerGroup = groupWaiverPlayersByIdentity(activePlayers).find((group) =>
-      group.aliases.some((player) => player.id === claim.playerId)
+      group.aliases.some((player) => player.id === claim.playerId || player.id === resolvedPlayerId)
     );
     if (!playerGroup) {
       return { status: 'FAILED', reason: 'Player not found' };
     }
 
-    const playerAliasIds = playerGroup.aliases.map((player) => player.id);
-    const canonicalPlayerId = playerGroup.representative.id;
+    const playerAliasIds = [
+      ...new Set([
+        claim.playerId,
+        ...(resolvedPlayerId ? [resolvedPlayerId] : []),
+        ...playerGroup.aliases.map((player) => player.id),
+      ]),
+    ];
+    const canonicalPlayerId = resolvedPlayerId;
     const existingOwnership = await tx.leagueRosterPlayer.findFirst({
       where: { leagueId, playerId: { in: playerAliasIds } },
       select: { playerId: true, memberId: true },
@@ -532,10 +549,13 @@ export class WaiverProcessingService {
       where: { leagueId, memberId },
     });
     let nextRosterCount = currentRosterCount + 1;
+    const canonicalDropPlayerId = claim.dropPlayerId
+      ? ((await resolveCanonicalPlayerId(claim.dropPlayerId, undefined, tx)) ?? claim.dropPlayerId)
+      : undefined;
 
-    if (claim.dropPlayerId) {
+    if (canonicalDropPlayerId) {
       const dropOwnership = await tx.leagueRosterPlayer.findFirst({
-        where: { leagueId, memberId, playerId: claim.dropPlayerId },
+        where: { leagueId, memberId, playerId: canonicalDropPlayerId },
         select: { playerId: true },
       });
 
@@ -555,7 +575,7 @@ export class WaiverProcessingService {
       select: { playerIds: true },
     });
     const playerIds = parsePlayerIds(roster?.playerIds)
-      .filter((playerId) => playerId !== claim.dropPlayerId)
+      .filter((playerId) => playerId !== claim.dropPlayerId && playerId !== canonicalDropPlayerId)
       .filter((playerId) => !playerAliasIds.includes(playerId));
     playerIds.push(canonicalPlayerId);
 
@@ -563,6 +583,7 @@ export class WaiverProcessingService {
       status: 'READY',
       memberId,
       playerId: canonicalPlayerId,
+      ...(canonicalDropPlayerId ? { dropPlayerId: canonicalDropPlayerId } : {}),
       nextPlayerIds: stringifyPlayerIds(playerIds),
     };
   }
@@ -1233,19 +1254,19 @@ export class FirestoreWaiverClaimStore implements ClaimStore {
       let query: FirebaseFirestore.Query = pendingCol.orderBy('__name__').limit(pageSize);
       if (cursor) query = query.startAfter(cursor);
 
-	      const snap = await query.get();
-	      if (snap.empty) break;
+      const snap = await query.get();
+      if (snap.empty) break;
 
-	      for (const document of snap.docs) {
-	        pending.push(toFirestoreWaiverClaim(document, leagueId));
-	      }
+      for (const document of snap.docs) {
+        pending.push(toFirestoreWaiverClaim(document, leagueId));
+      }
 
-	      if (snap.size < pageSize) break;
-	      cursor = snap.docs[snap.docs.length - 1] ?? null;
-	    }
+      if (snap.size < pageSize) break;
+      cursor = snap.docs[snap.docs.length - 1] ?? null;
+    }
 
-	    return applyWaiverPriorities(pending, await loadWaiverPriorityByUserId(leagueId));
-	  }
+    return applyWaiverPriorities(pending, await loadWaiverPriorityByUserId(leagueId));
+  }
 
   async markSuccessful(input: {
     leagueId: string;

@@ -30,7 +30,11 @@ const prismaMocks = vi.hoisted(() => ({
   },
   player: {
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     count: vi.fn(),
+  },
+  playerExternalIdentity: {
+    findUnique: vi.fn(),
   },
   teamAction: {
     create: vi.fn(),
@@ -288,6 +292,10 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
     prismaMocks.player.findMany.mockResolvedValue([
       { id: 'free-player', name: 'Free Player', club: 'SYD', position: 'FWD' },
     ]);
+    prismaMocks.player.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+      Promise.resolve(where.id ? { id: where.id } : null)
+    );
+    prismaMocks.playerExternalIdentity.findUnique.mockResolvedValue(null);
     prismaMocks.player.count.mockResolvedValue(1);
     prismaMocks.teamAction.create.mockResolvedValue({ id: 'claim-1' });
     prismaMocks.teamAction.update.mockResolvedValue({ id: 'claim-1' });
@@ -431,6 +439,39 @@ describe('league free-agent availability uses Prisma ownership as canonical', ()
           leagueId: 'league-1',
           memberId: 'member-1',
           actionType: 'WAIVER_CLAIM',
+        }),
+      })
+    );
+  });
+
+  it('submits a retired player alias against its canonical player', async () => {
+    prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
+    prismaMocks.player.findMany.mockResolvedValue([
+      { id: 'free-player', name: 'Free Player', club: 'SYD', position: 'FWD' },
+    ]);
+    prismaMocks.playerExternalIdentity.findUnique.mockResolvedValue({ playerId: 'free-player' });
+
+    const { POST } = await import('../../src/app/api/leagues/[id]/waivers/submit/route');
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/waivers/submit', {
+        teamId: 'member-1',
+        playerId: 'retired-free-player',
+      }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(201);
+    expect(prismaMocks.leagueRosterPlayer.findFirst).toHaveBeenCalledWith({
+      where: {
+        leagueId: 'league-1',
+        playerId: { in: ['retired-free-player', 'free-player'] },
+      },
+      select: { playerId: true, memberId: true },
+    });
+    expect(prismaMocks.teamAction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          details: expect.stringContaining('"playerId":"free-player"'),
         }),
       })
     );

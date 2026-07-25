@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { buildCanonicalPlayerId } from '@/lib/playerIdentity';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import type { Player } from '@/types/players';
 
 type PlayerStatSnapshot = {
@@ -145,7 +146,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const nameCandidate = decodedId.replace(/[_-]+/g, ' ');
     let fallbackPlayer: Player | null = null;
 
-    let player = await prisma.player.findUnique({ where: { id: decodedId } });
+    const canonicalPlayerId = await resolveCanonicalPlayerId(decodedId);
+    let player = canonicalPlayerId
+      ? await prisma.player.findUnique({ where: { id: canonicalPlayerId } })
+      : null;
     if (!player) {
       fallbackPlayer = await getPlayer(decodedId);
     }

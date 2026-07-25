@@ -15,6 +15,10 @@ import {
   buildDraftPlayerStatsLookup,
   calculateStatlyZScores,
 } from '../../../src/server/draft/readModels/draftPlayerReadModel';
+import {
+  PLAYER_STATS_2025_PROVIDER,
+  upsertCanonicalPlayer,
+} from '../../../src/server/players/playerIdentityService';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../../src/types/fantasyCategories';
 
 export const FULL_DRAFT_SOAK = {
@@ -134,39 +138,33 @@ async function upsertUsers(tx: TxClient) {
   );
 }
 
-async function upsertActivePlayerPool(tx: TxClient): Promise<string[]> {
+async function upsertActivePlayerPool(prisma: PrismaClient): Promise<string[]> {
   const players = await getPlayers();
-  const activePlayers = players
-    .slice(0, Math.max(FULL_DRAFT_SOAK.totalPicks + 64, 360))
-    .map((player) => ({ ...player, id: buildCanonicalPlayerId(player.name) }));
-  const candidateIds = [...new Set(activePlayers.map((player) => player.id))];
+  const activePlayers = players.slice(0, Math.max(FULL_DRAFT_SOAK.totalPicks + 64, 360));
+  const candidateIds: string[] = [];
 
-  if (candidateIds.length < FULL_DRAFT_SOAK.totalPicks) {
+  for (const player of activePlayers) {
+    const club = player.team ?? 'N/A';
+    const canonicalPlayer = await upsertCanonicalPlayer(prisma, {
+      provider: PLAYER_STATS_2025_PROVIDER,
+      externalId: buildCanonicalPlayerId(`${player.name}|${club}`),
+      name: player.name,
+      club,
+      position: player.position ?? '',
+      active: true,
+      allowExactAttributeMatch: true,
+    });
+    candidateIds.push(canonicalPlayer.id);
+  }
+
+  const uniqueCandidateIds = [...new Set(candidateIds)];
+  if (uniqueCandidateIds.length < FULL_DRAFT_SOAK.totalPicks) {
     throw new Error(
-      `Full draft soak requires at least ${FULL_DRAFT_SOAK.totalPicks} canonical players, found ${candidateIds.length}`
+      `Full draft soak requires at least ${FULL_DRAFT_SOAK.totalPicks} canonical players, found ${uniqueCandidateIds.length}`
     );
   }
 
-  for (const player of activePlayers) {
-    await tx.player.upsert({
-      where: { id: player.id },
-      update: {
-        name: player.name,
-        club: player.team ?? 'N/A',
-        position: player.position ?? '',
-        active: true,
-      },
-      create: {
-        id: player.id,
-        name: player.name,
-        club: player.team ?? 'N/A',
-        position: player.position ?? '',
-        active: true,
-      },
-    });
-  }
-
-  return candidateIds;
+  return uniqueCandidateIds;
 }
 
 async function rankActivePlayerIds(tx: TxClient, candidateIds: string[]): Promise<string[]> {
@@ -289,11 +287,11 @@ export async function seedFullDraftSoakFixture(): Promise<SoakFixture> {
   const prisma = new PrismaClient();
 
   try {
+    const candidateIds = await upsertActivePlayerPool(prisma);
     return await prisma.$transaction(
       async (tx) => {
         await deleteExistingFixture(tx);
         await upsertUsers(tx);
-        const candidateIds = await upsertActivePlayerPool(tx);
 
         const rankedPlayerIds = await rankActivePlayerIds(tx, candidateIds);
         if (rankedPlayerIds.length < FULL_DRAFT_SOAK.totalPicks) {

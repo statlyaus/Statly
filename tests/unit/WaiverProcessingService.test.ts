@@ -187,6 +187,41 @@ describe('WaiverProcessingService', () => {
     expect(projection.projectLeague).toHaveBeenCalledWith({ leagueId: 'league-1' });
   });
 
+  it('drops canonical ownership when a pending claim contains a retired alias', async () => {
+    const { db, tx } = createDbMock();
+    Object.assign(tx, {
+      playerExternalIdentity: {
+        findUnique: vi.fn(({ where }: { where: { provider_externalId: { externalId: string } } }) =>
+          Promise.resolve(
+            where.provider_externalId.externalId === 'retired-old-player'
+              ? { playerId: 'old-player' }
+              : null
+          )
+        ),
+      },
+    });
+    const claimStore = createClaimStoreMock();
+    const projection = { projectLeague: vi.fn().mockResolvedValue({ owned: 2, available: 10 }) };
+    const service = new WaiverProcessingService(db as never, claimStore, projection);
+
+    const result = await service.processClaims({
+      leagueId: 'league-1',
+      waiverSettings: { system: 'PRIORITY' },
+      claims: [claim({ dropPlayerId: 'retired-old-player' })],
+    });
+
+    expect(result.results).toEqual([{ id: 'claim-1', status: 'SUCCESSFUL' }]);
+    expect(tx.leagueRosterPlayer.deleteMany).toHaveBeenCalledWith({
+      where: { leagueId: 'league-1', memberId: 'member-1', playerId: 'old-player' },
+    });
+    expect(tx.teamAction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        details: expect.stringContaining('"playerId":"old-player"'),
+      }),
+      select: { id: true },
+    });
+  });
+
   it('fails a claim before ownership transfer when the roster is full and no drop player is supplied', async () => {
     const { db, tx } = createDbMock();
     const claimStore = createClaimStoreMock();

@@ -44,6 +44,7 @@
     "player-data:temp-db-runner": "tsx Scripts/player-data-convergence-temp-db-runner.ts",
     "player-data:temp-db-apply-simulation": "tsx Scripts/player-data-convergence-temp-db-apply-simulation.ts",
     "player-data:runner": "tsx Scripts/player-data-convergence-runner.ts",
+    "player-identity:consolidate": "tsx Scripts/player-identity-consolidation.ts",
     "db:check": "tsx Scripts/check-database.ts",
     "firestore:smoke": "tsx Scripts/firestore-smoke.ts",
     "test:unit": "vitest run --config vitest.config.unit.ts",

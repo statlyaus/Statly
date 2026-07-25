@@ -27,6 +27,23 @@ describe('roster ownership migration architecture', () => {
     expect(structuredMigration).toBeDefined();
   });
 
+  it('enforces one canonical owner per player inside each league in both schema paths', () => {
+    const schema = readFileSync(join(root, 'prisma/schema.prisma'), 'utf8');
+    const runtimeFallback = readFileSync(join(root, 'src/lib/ensureLobbyColumns.ts'), 'utf8');
+
+    const rosterPlayerModel = schema.match(/model LeagueRosterPlayer \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(rosterPlayerModel).not.toBe('');
+    expect(rosterPlayerModel).toContain('@@unique([leagueId, playerId])');
+    expect(runtimeFallback).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "LeagueRosterPlayer_leagueId_playerId_key"'
+    );
+    expect(runtimeFallback).toContain('ON "LeagueRosterPlayer"("leagueId", "playerId")');
+    for (const column of ['draftId', 'pickId', 'slot', 'acquiredBy', 'acquiredAt']) {
+      expect(runtimeFallback).toContain(`"${column}"`);
+    }
+    expect(runtimeFallback).toContain('Failed to enforce unique league player ownership');
+  });
+
   it('uses the shared authenticated request helper for roster APIs', () => {
     const source = readFileSync(
       join(root, 'src/app/api/leagues/[id]/roster/[userId]/route.ts'),

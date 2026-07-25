@@ -433,21 +433,37 @@ model DraftOrder {
 }
 
 model Player {
-  id            String               @id
-  name          String
-  club          String
-  position      String
-  active        Boolean              @default(true)
-  picks         Pick[]
-  rosterPlayers LeagueRosterPlayer[]
-  lineupPlayers LeagueLineupPlayer[]
-  tradePlayers  LeagueTradePlayer[]
+  id                 String                   @id @default(cuid())
+  name               String
+  club               String
+  position           String
+  active             Boolean                  @default(true)
+  externalIdentities PlayerExternalIdentity[]
+  picks              Pick[]
+  rosterPlayers      LeagueRosterPlayer[]
+  lineupPlayers      LeagueLineupPlayer[]
+  tradePlayers       LeagueTradePlayer[]
 
   // Lobby relations
   watchlists     DraftWatchlist[]
   preDraftQueues PreDraftQueue[]
 
   @@index([name])
+}
+
+model PlayerExternalIdentity {
+  id         String    @id @default(cuid())
+  playerId   String
+  provider   String
+  externalId String
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([playerId])
 }
 
 model Pick {

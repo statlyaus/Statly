@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    player: { findMany: vi.fn() },
+    playerExternalIdentity: { findMany: vi.fn() },
     $transaction: vi.fn(),
   };
   return { getRoundMatchesResult: vi.fn(), prisma };
@@ -60,6 +62,8 @@ function rosterPlayer(playerId = 'player-1', club = 'GWS') {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.prisma.player.findMany.mockResolvedValue([{ id: 'player-1' }]);
+  mocks.prisma.playerExternalIdentity.findMany.mockResolvedValue([]);
   mocks.prisma.$transaction.mockImplementation(async (work: (tx: typeof mocks.prisma) => unknown) =>
     work(mocks.prisma)
   );
@@ -226,6 +230,43 @@ describe('authoritative lineup timing', () => {
     ).resolves.toEqual({
       ok: false,
       error: 'Official AFL match timing is temporarily unavailable.',
+    });
+  });
+
+  it('resolves a retired player alias before saving a lineup', async () => {
+    const thursdaySettings = {
+      ...settings,
+      competitionRulesJson: JSON.stringify({ lockPolicy: 'THURSDAY_7PM_AEST' }),
+    };
+    mocks.prisma.playerExternalIdentity.findMany.mockResolvedValue([
+      { externalId: 'retired-player-1', playerId: 'player-1' },
+    ]);
+    mocks.prisma.league.findUnique.mockResolvedValue({ settings: thursdaySettings });
+    mocks.prisma.leagueRosterPlayer.findMany.mockResolvedValue([rosterPlayer()]);
+    mocks.prisma.leagueCompetitionRound.findUnique.mockResolvedValue({
+      ...scheduledRound,
+      startsAt: new Date('2027-07-18T09:00:00.000Z'),
+    });
+    mocks.prisma.leagueLineup.findUnique.mockResolvedValue(null);
+    mocks.prisma.leagueLineup.upsert.mockResolvedValue({ id: 'lineup-1' });
+
+    const result = await saveMemberLineup({
+      leagueId: 'league-1',
+      memberId: 'member-1',
+      round: 1,
+      players: [{ playerId: 'retired-player-1', slot: 'MID', slotIndex: 1 }],
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mocks.prisma.leagueLineupPlayer.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          lineupId: 'lineup-1',
+          playerId: 'player-1',
+          slot: 'MID',
+          slotIndex: 1,
+        },
+      ],
     });
   });
 });

@@ -31,6 +31,7 @@ describe('draft command routes', () => {
     expect(pickRoute).not.toContain('prisma.$transaction');
     expect(pickCommand).toContain('draftApplicationService.makePick');
     expect(pickCommand).toContain('draftRealtimePublisher.publishCommandResult');
+    expect(pickCommand).toContain('resolveCanonicalPlayerId');
   });
 
   it('supports the client POST path used by DraftContext.makePick', () => {
@@ -68,7 +69,9 @@ describe('draft command routes', () => {
     expect(pickCommand).toContain('void draftRealtimePublisher.publishCommandResult(result)');
     expect(pickCommand).not.toContain('await draftRealtimePublisher.publishCommandResult(result)');
     expect(autoPickRoute).toContain('void draftRealtimePublisher.publishCommandResult(result)');
-    expect(autoPickRoute).not.toContain('await draftRealtimePublisher.publishCommandResult(result)');
+    expect(autoPickRoute).not.toContain(
+      'await draftRealtimePublisher.publishCommandResult(result)'
+    );
   });
 
   it('supports the authenticated client POST path used by DraftContext.startDraft', () => {

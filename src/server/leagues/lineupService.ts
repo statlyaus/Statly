@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { getRoundMatchesResult } from '@/lib/etlIntegration';
 import { prisma } from '@/lib/prisma';
 import { getTeamName } from '@/lib/teamLogos';
+import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 
 import { parseCompetitionRulesJson, type CompetitionRules } from './competitionRules';
 import { parseLineupSlotsJson } from './lineupSettings';
@@ -506,12 +507,13 @@ function normalizeSubmittedPlayers(players: readonly unknown[]): SubmittedLineup
           ? Number(source.slotIndex)
           : Number.NaN;
 
-    if (typeof source.playerId !== 'string' || !isLeagueLineupSlot(source.slot)) {
+    const playerId = typeof source.playerId === 'string' ? source.playerId.trim() : '';
+    if (!playerId || !isLeagueLineupSlot(source.slot)) {
       return [];
     }
 
     return {
-      playerId: source.playerId,
+      playerId,
       slot: source.slot,
       slotIndex,
     };
@@ -628,14 +630,29 @@ export async function saveMemberLineup({
     return { ok: false, code: 'INVALID_LINEUP', errors: ['Invalid round.'] };
   }
 
-  const submittedPlayers = normalizeSubmittedPlayers(players);
-  if (submittedPlayers.length !== players.length) {
+  const normalizedPlayers = normalizeSubmittedPlayers(players);
+  if (normalizedPlayers.length !== players.length) {
     return {
       ok: false,
       code: 'INVALID_LINEUP',
       errors: ['Lineup payload contains invalid player rows.'],
     };
   }
+
+  const playerIdsByRequestedId = await resolveCanonicalPlayerIds(
+    normalizedPlayers.map((player) => player.playerId)
+  );
+  if (normalizedPlayers.some((player) => !playerIdsByRequestedId.has(player.playerId))) {
+    return {
+      ok: false,
+      code: 'INVALID_LINEUP',
+      errors: ['Lineup contains a player who no longer exists.'],
+    };
+  }
+  const submittedPlayers = normalizedPlayers.map((player) => ({
+    ...player,
+    playerId: playerIdsByRequestedId.get(player.playerId)!,
+  }));
 
   const [league, initialRosterPlayers] = await Promise.all([
     prisma.league.findUnique({

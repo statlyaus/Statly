@@ -1,8 +1,12 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { prisma } from '@/lib/prisma';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { groupWaiverPlayersByIdentity } from '@/server/waivers/waiverPlayerIdentity';
 
-type PrismaLike = Pick<typeof prisma, 'leagueRosterPlayer' | 'player' | 'teamAction'>;
+type PrismaLike = Pick<
+  typeof prisma,
+  'leagueRosterPlayer' | 'player' | 'playerExternalIdentity' | 'teamAction'
+>;
 type FirestoreLike = typeof adminDb;
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 
@@ -34,13 +38,27 @@ export class WaiverAvailabilityProjectionService {
     const allPlayers = await this.db.player.findMany({
       select: { id: true, name: true, club: true, position: true },
     });
+    const retiredExternalIds = this.db.playerExternalIdentity
+      ? (
+          await this.db.playerExternalIdentity.findMany({
+            where: { provider: 'statly-legacy' },
+            select: { externalId: true, playerId: true },
+          })
+        )
+          .filter((identity) => identity.externalId !== identity.playerId)
+          .map((identity) => identity.externalId)
+      : [];
     const playerGroups = groupWaiverPlayersByIdentity(allPlayers);
     const owned = new Map(ownerships.map((ownership) => [ownership.playerId, ownership.memberId]));
     const held = new Map<string, Date | null>();
     for (const hold of waiverHolds) {
       const details = parseActionDetails(hold.details);
       const playerId = typeof details.playerId === 'string' ? details.playerId : null;
-      if (playerId) held.set(playerId, hold.processingAt ?? null);
+      if (playerId) {
+        const canonicalPlayerId =
+          (await resolveCanonicalPlayerId(playerId, undefined, this.db)) ?? playerId;
+        held.set(canonicalPlayerId, hold.processingAt ?? null);
+      }
     }
     const leagueRef = this.firestore.collection('leagues').doc(input.leagueId);
     let batch = this.firestore.batch();
@@ -69,6 +87,7 @@ export class WaiverAvailabilityProjectionService {
 
     let ownedCount = 0;
     let availableCount = 0;
+    const removedAliasIds = new Set<string>();
 
     for (const group of playerGroups) {
       const player = group.representative;
@@ -125,7 +144,14 @@ export class WaiverAvailabilityProjectionService {
         if (alias.id === player.id) continue;
         await remove(leagueRef.collection('availablePlayers').doc(alias.id));
         await remove(leagueRef.collection('playerOwnerships').doc(alias.id));
+        removedAliasIds.add(alias.id);
       }
+    }
+
+    for (const retiredExternalId of retiredExternalIds) {
+      if (removedAliasIds.has(retiredExternalId)) continue;
+      await remove(leagueRef.collection('availablePlayers').doc(retiredExternalId));
+      await remove(leagueRef.collection('playerOwnerships').doc(retiredExternalId));
     }
 
     if (writeCount > 0) {

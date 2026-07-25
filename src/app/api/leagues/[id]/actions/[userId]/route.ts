@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
+import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 // GET /api/leagues/[id]/actions/[userId] - Get user's team actions
@@ -95,6 +96,10 @@ export async function POST(
     if (!actionType || !details) {
       return errorResponse('Action type and details are required', 400);
     }
+    if (typeof details !== 'object' || Array.isArray(details)) {
+      return errorResponse('Action details must be an object', 400);
+    }
+    const canonicalDetails = await resolveTeamActionPlayerIds(details);
 
     await ensureRosterTables();
 
@@ -113,7 +118,7 @@ export async function POST(
     // Validate action based on type
     const validationResult = await validateTeamAction(
       actionType,
-      details,
+      canonicalDetails,
       leagueId,
       member.id,
       targetMemberId
@@ -140,7 +145,7 @@ export async function POST(
     const actionId = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     await prisma.$executeRaw`
       INSERT INTO TeamAction (id, leagueId, memberId, actionType, details, targetMemberId, processingAt, createdAt, updatedAt)
-      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(details)}, ${targetMemberId}, ${processingAt}, datetime('now'), datetime('now'))
+      VALUES (${actionId}, ${leagueId}, ${member.id}, ${actionType}, ${JSON.stringify(canonicalDetails)}, ${targetMemberId}, ${processingAt}, datetime('now'), datetime('now'))
     `;
 
     const action = {
@@ -148,7 +153,7 @@ export async function POST(
       leagueId,
       memberId: member.id,
       actionType,
-      details: JSON.stringify(details),
+      details: JSON.stringify(canonicalDetails),
       targetMemberId,
       processingAt,
       createdAt: new Date(),
@@ -186,6 +191,43 @@ export async function POST(
     });
     return errorResponse('Failed to create team action', 500);
   }
+}
+
+async function resolveTeamActionPlayerIds(
+  details: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const canonicalDetails = { ...details };
+  const scalarKeys = ['playerId', 'dropPlayerId'] as const;
+  const arrayKeys = ['offeredPlayers', 'requestedPlayers'] as const;
+  const requestedPlayerIds = [
+    ...scalarKeys.flatMap((key) =>
+      typeof canonicalDetails[key] === 'string' ? [canonicalDetails[key] as string] : []
+    ),
+    ...arrayKeys.flatMap((key) =>
+      Array.isArray(canonicalDetails[key])
+        ? (canonicalDetails[key] as unknown[]).filter(
+            (playerId): playerId is string => typeof playerId === 'string'
+          )
+        : []
+    ),
+  ];
+  const resolvedPlayerIds = await resolveCanonicalPlayerIds(requestedPlayerIds);
+  const canonicalPlayerId = (playerId: string) =>
+    resolvedPlayerIds.get(playerId.trim()) ?? playerId;
+
+  for (const key of scalarKeys) {
+    const requestedPlayerId = canonicalDetails[key];
+    if (typeof requestedPlayerId !== 'string') continue;
+    canonicalDetails[key] = canonicalPlayerId(requestedPlayerId);
+  }
+  for (const key of arrayKeys) {
+    const requestedPlayerIdsForKey = canonicalDetails[key];
+    if (!Array.isArray(requestedPlayerIdsForKey)) continue;
+    canonicalDetails[key] = requestedPlayerIdsForKey.map((playerId) =>
+      typeof playerId === 'string' ? canonicalPlayerId(playerId) : playerId
+    );
+  }
+  return canonicalDetails;
 }
 
 async function authorizeTeamActionRequest(

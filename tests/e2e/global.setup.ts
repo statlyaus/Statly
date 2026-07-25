@@ -1,6 +1,7 @@
 import { DraftDirection, DraftStatus, DraftType, LeagueRole, PrismaClient } from '@prisma/client';
 
 import { DEVELOPMENT_AUTH_EMAIL, DEVELOPMENT_AUTH_USER_ID } from '../../src/lib/devAuth';
+import { upsertCanonicalPlayer } from '../../src/server/players/playerIdentityService';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '../../src/types/fantasyCategories';
 
 export const E2E_LEAGUE_ID = 'e2e-completed-league';
@@ -164,15 +165,19 @@ async function globalSetup() {
         ],
       });
 
-      await Promise.all(
-        E2E_PLAYERS.map((player) =>
-          tx.player.upsert({
-            where: { id: player.id },
-            update: { ...player, active: true },
-            create: { ...player, active: true },
-          })
-        )
-      );
+      const canonicalPlayerIds: string[] = [];
+      for (const player of E2E_PLAYERS) {
+        const canonicalPlayer = await upsertCanonicalPlayer(tx, {
+          provider: 'statly-e2e',
+          externalId: player.id,
+          name: player.name,
+          club: player.club,
+          position: player.position,
+          active: true,
+          allowExactAttributeMatch: true,
+        });
+        canonicalPlayerIds.push(canonicalPlayer.id);
+      }
 
       await tx.draft.create({
         data: {
@@ -206,7 +211,7 @@ async function globalSetup() {
           round: 1,
           slot: 1,
           memberId: E2E_HUMAN_MEMBER_ID,
-          playerId: E2E_PLAYERS[0].id,
+          playerId: canonicalPlayerIds[0],
         },
         {
           id: 'e2e-pick-2',
@@ -214,7 +219,7 @@ async function globalSetup() {
           round: 1,
           slot: 2,
           memberId: E2E_BOT_MEMBER_ID,
-          playerId: E2E_PLAYERS[1].id,
+          playerId: canonicalPlayerIds[1],
         },
         {
           id: 'e2e-pick-3',
@@ -222,7 +227,7 @@ async function globalSetup() {
           round: 2,
           slot: 2,
           memberId: E2E_BOT_MEMBER_ID,
-          playerId: E2E_PLAYERS[2].id,
+          playerId: canonicalPlayerIds[2],
         },
         {
           id: 'e2e-pick-4',
@@ -230,7 +235,7 @@ async function globalSetup() {
           round: 2,
           slot: 1,
           memberId: E2E_HUMAN_MEMBER_ID,
-          playerId: E2E_PLAYERS[3].id,
+          playerId: canonicalPlayerIds[3],
         },
       ];
 
@@ -248,7 +253,7 @@ async function globalSetup() {
           id: 'e2e-roster-human',
           leagueId: E2E_LEAGUE_ID,
           memberId: E2E_HUMAN_MEMBER_ID,
-          playerIds: JSON.stringify([E2E_PLAYERS[0].id, E2E_PLAYERS[3].id]),
+          playerIds: JSON.stringify([canonicalPlayerIds[0], canonicalPlayerIds[3]]),
         },
       });
 
@@ -260,7 +265,7 @@ async function globalSetup() {
             memberId: E2E_HUMAN_MEMBER_ID,
             draftId: E2E_DRAFT_ID,
             pickId: 'e2e-pick-1',
-            playerId: E2E_PLAYERS[0].id,
+            playerId: canonicalPlayerIds[0],
             slot: 'RUC',
             acquiredBy: 'DRAFT',
             acquiredAt: now,
@@ -271,7 +276,7 @@ async function globalSetup() {
             memberId: E2E_HUMAN_MEMBER_ID,
             draftId: E2E_DRAFT_ID,
             pickId: 'e2e-pick-4',
-            playerId: E2E_PLAYERS[3].id,
+            playerId: canonicalPlayerIds[3],
             slot: 'MID',
             acquiredBy: 'DRAFT',
             acquiredAt: now,
@@ -282,7 +287,7 @@ async function globalSetup() {
             memberId: E2E_BOT_MEMBER_ID,
             draftId: E2E_DRAFT_ID,
             pickId: 'e2e-pick-2',
-            playerId: E2E_PLAYERS[1].id,
+            playerId: canonicalPlayerIds[1],
             slot: 'MID',
             acquiredBy: 'DRAFT',
             acquiredAt: now,
@@ -293,7 +298,7 @@ async function globalSetup() {
             memberId: E2E_BOT_MEMBER_ID,
             draftId: E2E_DRAFT_ID,
             pickId: 'e2e-pick-3',
-            playerId: E2E_PLAYERS[2].id,
+            playerId: canonicalPlayerIds[2],
             slot: 'MID',
             acquiredBy: 'DRAFT',
             acquiredAt: now,

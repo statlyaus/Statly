@@ -13,6 +13,9 @@ const prismaMocks = vi.hoisted(() => ({
   player: {
     findUnique: vi.fn(),
   },
+  playerExternalIdentity: {
+    findUnique: vi.fn(),
+  },
   leagueRoster: {
     upsert: vi.fn(),
     update: vi.fn(),
@@ -92,6 +95,7 @@ describe('league roster free-agent add eligibility', () => {
     authMocks.getAuthenticatedUserId.mockResolvedValue('user-1');
     prismaMocks.leagueMember.findFirst.mockResolvedValue({ id: 'member-1' });
     prismaMocks.player.findUnique.mockResolvedValue({ id: 'held-player' });
+    prismaMocks.playerExternalIdentity.findUnique.mockResolvedValue(null);
     prismaMocks.leagueRosterPlayer.findFirst.mockResolvedValue(null);
     prismaMocks.teamAction.findFirst.mockResolvedValue({
       id: 'drop-hold-1',
@@ -133,6 +137,24 @@ describe('league roster free-agent add eligibility', () => {
       },
       select: { id: true },
     });
+    expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
+  });
+
+  it('checks waiver holds using the canonical id for a retired alias', async () => {
+    prismaMocks.playerExternalIdentity.findUnique.mockResolvedValue({ playerId: 'held-player' });
+    const { POST } = await import('../../src/app/api/leagues/[id]/roster/add/route');
+
+    const response = await POST(
+      jsonRequest('/api/leagues/league-1/roster/add', { playerId: 'retired-held-player' }),
+      { params: Promise.resolve({ id: 'league-1' }) }
+    );
+
+    expect(response.status).toBe(409);
+    expect(prismaMocks.teamAction.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ details: { contains: '"playerId":"held-player"' } }),
+      })
+    );
     expect(prismaMocks.leagueRosterPlayer.create).not.toHaveBeenCalled();
   });
 });

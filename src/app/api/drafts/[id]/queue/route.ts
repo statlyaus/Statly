@@ -6,18 +6,22 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { getDraftMembershipAccess } from '@/server/leagues/membership';
+import {
+  resolveCanonicalPlayerId,
+  resolveCanonicalPlayerIds,
+} from '@/server/players/playerIdentityService';
 
 const QueuePostSchema = z.object({
-  playerId: z.string().min(1),
+  playerId: z.string().trim().min(1),
   rank: z.coerce.number().int().positive().optional(),
 });
 
 const QueueDeleteQuerySchema = z.object({
-  playerId: z.string().min(1),
+  playerId: z.string().trim().min(1),
 });
 
 const QueuePutSchema = z.object({
-  queue: z.array(z.string().min(1)).default([]),
+  queue: z.array(z.string().trim().min(1)).default([]),
 });
 
 const queueEntrySelect = {
@@ -73,7 +77,10 @@ export async function POST(
       });
     }
 
-    const { playerId } = parsed.data;
+    const playerId = await resolveCanonicalPlayerId(parsed.data.playerId);
+    if (!playerId) {
+      return commonErrors.badRequest('Player not found or not available');
+    }
     const memberId = access.memberId;
 
     const alreadyPicked = await prisma.pick.findFirst({
@@ -110,11 +117,12 @@ export async function POST(
 
       const rank =
         parsed.data.rank ??
-        ((await tx.preDraftQueue.aggregate({
-          where: { draftId, memberId },
-          _max: { rank: true },
-        }))._max.rank ?? 0) +
-          1;
+        ((
+          await tx.preDraftQueue.aggregate({
+            where: { draftId, memberId },
+            _max: { rank: true },
+          })
+        )._max.rank ?? 0) + 1;
 
       return tx.preDraftQueue.upsert({
         where: {
@@ -177,7 +185,10 @@ export async function DELETE(
     }
 
     const { memberId } = access;
-    const { playerId } = parsed.data;
+    const playerId = await resolveCanonicalPlayerId(parsed.data.playerId);
+    if (!playerId) {
+      return commonErrors.notFound('Player not in queue');
+    }
     const deleted = await prisma.preDraftQueue.deleteMany({
       where: { draftId, memberId, playerId },
     });
@@ -275,7 +286,11 @@ export async function PUT(
     }
 
     const memberId = access.memberId;
-    const inputIds = Array.from(new Set(parsed.data.queue.map(String)));
+    const requestedIds = Array.from(new Set(parsed.data.queue.map(String)));
+    const resolvedIds = await resolveCanonicalPlayerIds(requestedIds);
+    const inputIds = Array.from(
+      new Set(requestedIds.map((playerId) => resolvedIds.get(playerId) ?? playerId))
+    );
 
     const { created, failedIds } = await prisma.$transaction(async (tx) => {
       const [activePlayers, alreadyPicked] = await Promise.all([

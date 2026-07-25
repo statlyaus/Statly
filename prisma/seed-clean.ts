@@ -1,6 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs/promises';
 import { getPlayerPosition } from '../src/lib/playerPositionMapping';
+import { buildCanonicalPlayerId } from '../src/lib/playerIdentity';
+import {
+  PLAYER_STATS_2025_PROVIDER,
+  STATLY_LEGACY_PLAYER_PROVIDER,
+  upsertCanonicalPlayer,
+} from '../src/server/players/playerIdentityService';
 
 const prisma = new PrismaClient();
 
@@ -10,10 +16,7 @@ async function main() {
   const raw = await fs.readFile('player_stats_2025.json', 'utf8');
   const data = JSON.parse(raw);
 
-  const playersMap = new Map<
-    string,
-    { id: string; name: string; club: string; position: string }
-  >();
+  const playersMap = new Map<string, { name: string; club: string; position: string }>();
 
   for (const entry of data) {
     const playerName = entry.Player?.trim();
@@ -22,20 +25,11 @@ async function main() {
       continue; // Skip empty names or already processed players
     }
 
-    // Generate a clean, unique ID based on player name
-    const playerId = playerName
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '') // Remove special chars but keep spaces
-      .replace(/\s+/g, '_') // Replace spaces with underscores
-      .replace(/_+/g, '_') // Replace multiple underscores with single
-      .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
-
     // Extract position from the data or use smart position mapping
     const position = entry.Position || getPlayerPosition(playerName);
     const club = entry.Team || 'UNK';
 
     playersMap.set(playerName, {
-      id: playerId,
       name: playerName,
       club: club,
       position: position,
@@ -54,24 +48,30 @@ async function main() {
 
   console.log('📥 Seeding players...');
 
-  // Batch insert for better performance
-  const batchSize = 100;
-  for (let i = 0; i < players.length; i += batchSize) {
-    const batch = players.slice(i, i + batchSize);
-
-    await prisma.player.createMany({
-      data: batch.map((player) => ({
-        id: player.id,
-        name: player.name,
-        club: player.club,
-        position: player.position,
-        active: true,
-      })),
+  const progressInterval = 100;
+  for (const [index, player] of players.entries()) {
+    const canonicalPlayer = await upsertCanonicalPlayer(prisma, {
+      provider: PLAYER_STATS_2025_PROVIDER,
+      externalId: buildCanonicalPlayerId(`${player.name}|${player.club}`),
+      name: player.name,
+      club: player.club,
+      position: player.position,
+      active: true,
+      allowExactAttributeMatch: true,
+    });
+    await upsertCanonicalPlayer(prisma, {
+      provider: STATLY_LEGACY_PLAYER_PROVIDER,
+      externalId: buildCanonicalPlayerId(player.name),
+      canonicalPlayerId: canonicalPlayer.id,
+      name: player.name,
+      club: player.club,
+      position: player.position,
+      active: true,
     });
 
-    console.log(
-      `✅ Seeded batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(players.length / batchSize)}`
-    );
+    if ((index + 1) % progressInterval === 0 || index === players.length - 1) {
+      console.log(`✅ Seeded ${index + 1}/${players.length} players`);
+    }
   }
 
   console.log('🎉 Seeding completed successfully!');

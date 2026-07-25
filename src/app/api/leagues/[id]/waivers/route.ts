@@ -18,6 +18,10 @@ import {
   type FantasyCategoryKey,
   type PlayerStats,
 } from '@/types/fantasyCategories';
+import {
+  resolveCanonicalPlayerId,
+  resolveCanonicalPlayerIds,
+} from '@/server/players/playerIdentityService';
 import { normalizeAvailableWaiverPlayers } from '@/server/waivers/waiverPlayerIdentity';
 
 export const runtime = 'nodejs';
@@ -203,9 +207,12 @@ async function loadAvailablePlayers(input: {
     select: { details: true },
   });
   const ownedPlayerIds = ownerships.map((ownership) => ownership.playerId);
-  const heldPlayerIds = waiverHolds
+  const heldExternalPlayerIds = waiverHolds
     .map((hold) => parseActionDetails(hold.details).playerId)
     .filter((playerId): playerId is string => typeof playerId === 'string' && Boolean(playerId));
+  const heldPlayerIds = (
+    await Promise.all(heldExternalPlayerIds.map((playerId) => resolveCanonicalPlayerId(playerId)))
+  ).filter((playerId): playerId is string => Boolean(playerId));
   const unavailablePlayerIds = new Set([...ownedPlayerIds, ...heldPlayerIds]);
   const playerSelect = { id: true, name: true, club: true, position: true } as const;
   const activePlayers = await prisma.player.findMany({
@@ -213,6 +220,8 @@ async function loadAvailablePlayers(input: {
     orderBy: { id: 'asc' },
     select: playerSelect,
   });
+  // Keep the name/club grouping only as a transition guard for databases that
+  // have not completed the reviewed identity consolidation yet.
   const normalizedPlayers = normalizeAvailableWaiverPlayers(activePlayers, unavailablePlayerIds);
   const firstPlayerAfterCursor = input.cursor
     ? normalizedPlayers.findIndex((player) => player.id > input.cursor!)
@@ -332,7 +341,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }),
       ]);
 
-    const claims = claimsSnap.docs
+    const rawClaims = claimsSnap.docs
       .map((doc) => {
         const data = doc.data() as WaiverClaimDoc;
         const createdAt = toIso(data.createdAt);
@@ -354,7 +363,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .filter((claim) => claim.playerId)
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
-    const activity = activitySnap.docs.map((doc) => {
+    const rawActivity = activitySnap.docs.map((doc) => {
       const data = doc.data() as ActivityDoc;
 
       return {
@@ -372,6 +381,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         timestamp: toIso(data.timestamp),
       };
     });
+
+    const responsePlayerIds = [
+      ...rawClaims.flatMap((claim) => [claim.playerId, claim.dropPlayerId].filter(Boolean)),
+      ...rawActivity.flatMap((item) => [item.playerId, item.dropPlayerId].filter(Boolean)),
+    ] as string[];
+    const canonicalPlayerIds = await resolveCanonicalPlayerIds(responsePlayerIds);
+    const canonicalizePlayerId = (playerId: string) =>
+      canonicalPlayerIds.get(playerId.trim()) ?? playerId;
+    const claims = rawClaims.map((claim) => ({
+      ...claim,
+      playerId: canonicalizePlayerId(claim.playerId),
+      ...(claim.dropPlayerId ? { dropPlayerId: canonicalizePlayerId(claim.dropPlayerId) } : {}),
+    }));
+    const activity = rawActivity.map((item) => ({
+      ...item,
+      ...(item.playerId ? { playerId: canonicalizePlayerId(item.playerId) } : {}),
+      ...(item.dropPlayerId ? { dropPlayerId: canonicalizePlayerId(item.dropPlayerId) } : {}),
+    }));
 
     const playerIdsForIndex = new Set<string>();
     for (const player of availablePlayersResult.items) playerIdsForIndex.add(player.id);

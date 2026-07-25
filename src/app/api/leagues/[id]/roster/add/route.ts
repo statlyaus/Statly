@@ -3,12 +3,14 @@ export const dynamic = 'force-dynamic';
 
 import type { NextRequest } from 'next/server';
 import { revalidateTag } from 'next/cache';
+import { NextResponse } from 'next/server';
 
-import { errorResponse, successResponse } from '@/lib/apiResponse';
+import { createErrorResponse, errorResponse, successResponse } from '@/lib/apiResponse';
 import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import { resolveCanonicalPlayerId } from '@/server/players/playerIdentityService';
 import { WaiverAvailabilityProjectionService } from '@/server/waivers/WaiverAvailabilityProjectionService';
 
 function parsePlayerIds(value: unknown): string[] {
@@ -30,8 +32,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!userId) return errorResponse('Unauthorized', 401);
 
     const body = (await request.json().catch(() => ({}))) as { playerId?: unknown };
-    const playerId = typeof body.playerId === 'string' ? body.playerId.trim() : '';
-    if (!leagueId || !playerId) return errorResponse('League ID and player ID are required', 400);
+    const requestedPlayerId = typeof body.playerId === 'string' ? body.playerId.trim() : '';
+    if (!leagueId || !requestedPlayerId)
+      return errorResponse('League ID and player ID are required', 400);
+    const playerId = await resolveCanonicalPlayerId(requestedPlayerId);
+    if (!playerId) {
+      return NextResponse.json(createErrorResponse('Player not found', 'NOT_FOUND'), {
+        status: 404,
+      });
+    }
 
     const [member, player, existingOwnership, activeWaiverHold] = await prisma.$transaction([
       prisma.leagueMember.findFirst({ where: { leagueId, userId }, select: { id: true } }),
@@ -53,7 +62,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ]);
 
     if (!member) return errorResponse('User is not a member of this league', 404);
-    if (!player) return errorResponse('Player not found', 404);
+    if (!player) {
+      return NextResponse.json(createErrorResponse('Player not found', 'NOT_FOUND'), {
+        status: 404,
+      });
+    }
     if (existingOwnership) return errorResponse('Player already owned in this league', 409);
     if (activeWaiverHold) return errorResponse('Player is on waivers', 409);
 
