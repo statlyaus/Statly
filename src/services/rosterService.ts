@@ -2,7 +2,6 @@
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { executeDbSafely } from '@/lib/errorHandling';
 
 /**
@@ -25,20 +24,8 @@ function stringifyIds(ids: string[]): string {
 }
 
 export const rosterService = {
-  _ensurePromise: null as Promise<void> | null,
-  async ensureTablesOnce(): Promise<void> {
-    if (!this._ensurePromise) {
-      this._ensurePromise = (async () => {
-        await executeDbSafely(() => ensureRosterTables(), 'ensure roster tables', {
-          service: 'rosterService',
-        });
-      })();
-    }
-    await this._ensurePromise;
-  },
   /** Ensure a roster row exists for (leagueId, memberId), returns its id */
   async ensureRoster(leagueId: string, memberId: string): Promise<string> {
-    await this.ensureTablesOnce();
     const existing = await prisma.leagueRoster.findFirst({ where: { leagueId, memberId } });
     if (existing) return existing.id;
     const created = await prisma.leagueRoster.create({
@@ -55,7 +42,6 @@ export const rosterService = {
 
   /** Add a player to a roster, idempotent */
   async addPlayer(leagueId: string, memberId: string, playerId: string): Promise<void> {
-    await this.ensureTablesOnce();
     const id = await this.ensureRoster(leagueId, memberId);
     const row = await prisma.leagueRoster.findUnique({ where: { id } });
     const ids = parseIds(row?.playerIds);
@@ -78,7 +64,6 @@ export const rosterService = {
 
   /** Remove a player from a roster */
   async removePlayer(leagueId: string, memberId: string, playerId: string): Promise<void> {
-    await this.ensureTablesOnce();
     const id = `${leagueId}:${memberId}`;
     const row = await prisma.leagueRoster.findUnique({ where: { id } });
     if (!row) return;

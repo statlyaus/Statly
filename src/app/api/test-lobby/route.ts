@@ -1,22 +1,22 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { ensureLobbyColumns, ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { prisma } from '@/lib/prisma';
 
 /**
- * Test endpoint to check and fix lobby setup
+ * Test endpoint to check lobby setup without mutating the schema.
  */
 export async function GET(_request: NextRequest) {
   try {
     logger.info('Testing lobby setup');
 
-    // Check and ensure columns exist
-    const columnsReady = await ensureLobbyColumns();
-    const tablesReady = await ensureRosterTables();
-
-    // Test a simple query
-    const draftCount = await prisma.draft.count();
+    const [draftCount] = await Promise.all([
+      prisma.draft.count(),
+      prisma.leagueRoster.count(),
+      prisma.teamAction.count(),
+      prisma.leagueRosterPlayer.count(),
+    ]);
+    const tablesReady = true;
 
     // Try to query with lobby columns
     let lobbyTest = null;
@@ -36,6 +36,7 @@ export async function GET(_request: NextRequest) {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+    const columnsReady = lobbyTest.success;
 
     const result = {
       columnsReady,

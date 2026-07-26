@@ -3,7 +3,6 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { getPlayers } from '@/lib/data';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import {
   buildLeaguePlayerStatDatasetForTargets,
@@ -24,20 +23,6 @@ import { z } from 'zod';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-// Ensure roster tables only once per cold start
-let rosterTablesReady: Promise<void> | null = null;
-async function ensureRosterTablesOnce() {
-  if (!rosterTablesReady) {
-    rosterTablesReady = ensureRosterTables()
-      .then(() => undefined)
-      .catch((e) => {
-        rosterTablesReady = null;
-        throw e;
-      });
-  }
-  await rosterTablesReady;
-}
 
 function getSelectedLeagueCategories(rawCategories: unknown): FantasyCategoryKey[] {
   let parsed = rawCategories;
@@ -73,8 +58,6 @@ export async function GET(
     const reqUserId = await getAuthenticatedUserId(request);
     if (!reqUserId) return errorResponse('Unauthorized', 401);
     if (reqUserId !== userId) return errorResponse('Forbidden', 403);
-
-    await ensureRosterTablesOnce();
 
     const [member, league] = await prisma.$transaction([
       prisma.leagueMember.findFirst({
@@ -179,8 +162,6 @@ export async function PUT(
     const reqUserId = await getAuthenticatedUserId(request);
     if (!reqUserId) return errorResponse('Unauthorized', 401);
     if (reqUserId !== userId) return errorResponse('Forbidden', 403);
-
-    await ensureRosterTablesOnce();
 
     const [member, league] = await prisma.$transaction([
       prisma.leagueMember.findFirst({

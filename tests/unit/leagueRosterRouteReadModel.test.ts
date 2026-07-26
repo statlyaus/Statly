@@ -16,9 +16,6 @@ vi.mock('@/lib/serverAuth', () => authMocks);
 vi.mock('@/lib/data', () => dataMocks);
 vi.mock('@/lib/firebaseAdmin', () => ({ adminDb: {} }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMocks }));
-vi.mock('@/lib/ensureLobbyColumns', () => ({
-  ensureRosterTables: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock('@/lib/logger', () => ({ logger: loggerMocks }));
 
 import { GET, PUT } from '@/app/api/leagues/[id]/roster/[userId]/route';
