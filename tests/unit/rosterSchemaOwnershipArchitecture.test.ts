@@ -7,6 +7,7 @@ const runtimePaths = [
   'src/app/api/leagues/[id]/actions/[userId]/route.ts',
   'src/services/rosterService.ts',
   'src/app/api/test-lobby/route.ts',
+  'src/server/diagnostics/lobbySchemaDiagnostic.ts',
   'src/lib/ensureLobbyColumns.ts',
 ] as const;
 
@@ -43,8 +44,12 @@ describe('roster schema ownership architecture', () => {
   });
 
   it('keeps the lobby diagnostic read-only', () => {
-    const diagnostic = readWorkspaceFile('src/app/api/test-lobby/route.ts');
+    const route = readWorkspaceFile('src/app/api/test-lobby/route.ts');
+    const diagnostic = readWorkspaceFile('src/server/diagnostics/lobbySchemaDiagnostic.ts');
 
+    expect(route).toContain('loadLobbySchemaDiagnostic()');
+    expect(route).not.toContain("from '@/lib/prisma'");
+    expect(diagnostic).toContain('Promise.allSettled');
     expect(diagnostic).toContain('prisma.leagueRoster.count()');
     expect(diagnostic).toContain('prisma.teamAction.count()');
     expect(diagnostic).toContain('prisma.leagueRosterPlayer.count()');
