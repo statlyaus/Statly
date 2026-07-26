@@ -11,10 +11,6 @@ const membershipMocks = vi.hoisted(() => ({
   verifyLeagueMembership: vi.fn(),
 }));
 
-const rosterMocks = vi.hoisted(() => ({
-  ensureRosterTables: vi.fn(),
-}));
-
 vi.mock('@/lib/serverAuth', () => ({
   getAuthenticatedUserId: authMocks.getAuthenticatedUserId,
 }));
@@ -29,14 +25,6 @@ vi.mock('@/lib/leagueMembership', () => ({
 
 vi.mock('../../src/lib/leagueMembership', () => ({
   verifyLeagueMembership: membershipMocks.verifyLeagueMembership,
-}));
-
-vi.mock('@/lib/ensureLobbyColumns', () => ({
-  ensureRosterTables: rosterMocks.ensureRosterTables,
-}));
-
-vi.mock('../../src/lib/ensureLobbyColumns', () => ({
-  ensureRosterTables: rosterMocks.ensureRosterTables,
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -77,9 +65,6 @@ describe('team actions route architecture', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    rosterMocks.ensureRosterTables.mockRejectedValue(
-      new Error('Unexpected Prisma setup before authorization')
-    );
   });
 
   it('rejects anonymous action reads before Prisma work', async () => {
@@ -92,7 +77,6 @@ describe('team actions route architecture', () => {
     );
 
     expect(response!.status).toBe(401);
-    expect(rosterMocks.ensureRosterTables).not.toHaveBeenCalled();
     expect(membershipMocks.verifyLeagueMembership).not.toHaveBeenCalled();
   });
 
@@ -109,7 +93,6 @@ describe('team actions route architecture', () => {
     );
 
     expect(response!.status).toBe(403);
-    expect(rosterMocks.ensureRosterTables).not.toHaveBeenCalled();
     expect(membershipMocks.verifyLeagueMembership).not.toHaveBeenCalled();
   });
 
@@ -130,7 +113,6 @@ describe('team actions route architecture', () => {
     await expect(response!.json()).resolves.toMatchObject({
       error: { message: 'Action details must be an object' },
     });
-    expect(rosterMocks.ensureRosterTables).not.toHaveBeenCalled();
   });
 
   it('canonicalizes scalar and trade-array player references before persistence', () => {
@@ -142,6 +124,7 @@ describe('team actions route architecture', () => {
     expect(source).toContain("const scalarKeys = ['playerId', 'dropPlayerId']");
     expect(source).toContain("const arrayKeys = ['offeredPlayers', 'requestedPlayers']");
     expect(source).toContain('resolveCanonicalPlayerIds(requestedPlayerIds)');
+    expect(source).not.toContain('ensureRosterTables');
   });
 });
 

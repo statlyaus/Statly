@@ -4,7 +4,6 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { tags } from '@/lib/cacheTags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { ensureRosterTables } from '@/lib/ensureLobbyColumns';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { verifyLeagueMembership } from '@/lib/leagueMembership';
 import { resolveCanonicalPlayerIds } from '@/server/players/playerIdentityService';
@@ -26,8 +25,6 @@ export async function GET(
     if ('response' in authorization) {
       return authorization.response;
     }
-
-    await ensureRosterTables();
 
     // Get user's member record
     const member = await prisma.leagueMember.findFirst({
@@ -100,8 +97,6 @@ export async function POST(
       return errorResponse('Action details must be an object', 400);
     }
     const canonicalDetails = await resolveTeamActionPlayerIds(details);
-
-    await ensureRosterTables();
 
     // Get user's member record
     const member = await prisma.leagueMember.findFirst({
