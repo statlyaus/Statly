@@ -155,9 +155,17 @@ export default function HomePage(): ReactElement {
         </div>
 
         <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col items-center justify-end px-6 pb-16 pt-16 text-center max-sm:justify-center lg:px-10 lg:pb-20 lg:pt-20">
-          <h1 className="sr-only">Statly</h1>
-
           <div className="flex flex-col items-center gap-7">
+            <div className="max-w-3xl space-y-3">
+              <h1 className="text-balance text-3xl font-black tracking-tight text-primary-foreground drop-shadow-sm sm:text-5xl">
+                Run your AFL fantasy league with a clearer read.
+              </h1>
+              <p className="mx-auto max-w-2xl text-sm leading-6 text-primary-foreground/85 drop-shadow-sm sm:text-base">
+                Drafts, rosters, trades, waivers, player research, and live scoring in one calm
+                workspace.
+              </p>
+            </div>
+
             <div className="flex flex-wrap justify-center gap-3">
               <Link
                 href="/dashboard"
