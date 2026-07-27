@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import '@/lib/sentry-init'; // Initialize Sentry early
 import * as Sentry from '@sentry/react';
 
 interface Props {

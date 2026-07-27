@@ -190,7 +190,7 @@ function PlayerDecisionDashboard({
 
   return (
     <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-6">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Decision Hub</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -206,24 +206,46 @@ function PlayerDecisionDashboard({
         </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-[220px_minmax(0,1fr)_220px] gap-4">
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[220px_minmax(0,1fr)_220px]">
         <div className="rounded-md border border-border bg-background p-3">
           <h3 className="text-sm font-semibold text-foreground">Form Snapshot</h3>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <Metric label="Latest value" value={formatNumber(latestStatlyValue, 2)} detail={latestLog ? `R${latestLog.round} vs ${latestLog.opponent || '-'}` : 'No round log'} />
-            <Metric label="3-game value" value={formatNumber(recentStatlyValue, 2)} detail={`${recentStatlyValues.length} games counted`} />
+            <Metric
+              label="Latest value"
+              value={formatNumber(latestStatlyValue, 2)}
+              detail={
+                latestLog ? `R${latestLog.round} vs ${latestLog.opponent || '-'}` : 'No round log'
+              }
+            />
+            <Metric
+              label="3-game value"
+              value={formatNumber(recentStatlyValue, 2)}
+              detail={`${recentStatlyValues.length} games counted`}
+            />
             <Metric
               label="Statly value"
               value={formatNumber(seasonStatlyValue, 2)}
-              detail={statlyValues.length > 0 ? `${statlyValues.length} value samples` : aggregateStatsAvailable ? 'From player record' : 'Pending value'}
+              detail={
+                statlyValues.length > 0
+                  ? `${statlyValues.length} value samples`
+                  : aggregateStatsAvailable
+                    ? 'From player record'
+                    : 'Pending value'
+              }
             />
-            <Metric label="Categories" value={formatNumber(categoryRows.filter((category) => category.value !== null).length)} detail="Available category averages" />
+            <Metric
+              label="Categories"
+              value={formatNumber(
+                categoryRows.filter((category) => category.value !== null).length
+              )}
+              detail="Available category averages"
+            />
           </div>
         </div>
 
         <div className="rounded-md border border-border bg-background p-3">
           <h3 className="text-sm font-semibold text-foreground">Category Profile</h3>
-          <div className="mt-3 grid grid-cols-4 gap-3">
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {categoryRows.map((category) => (
               <div
                 key={category.key}
@@ -237,7 +259,10 @@ function PlayerDecisionDashboard({
                   {category.label}
                 </div>
                 <div className="mt-2 text-xl font-semibold text-foreground">
-                  {formatNumber(category.value, category.value !== null && category.value < 10 ? 1 : 0)}
+                  {formatNumber(
+                    category.value,
+                    category.value !== null && category.value < 10 ? 1 : 0
+                  )}
                 </div>
               </div>
             ))}
@@ -248,17 +273,22 @@ function PlayerDecisionDashboard({
           <h3 className="text-sm font-semibold text-foreground">Role And Risk</h3>
           <div className="mt-3 space-y-2">
             {roleSignals.map((signal) => (
-              <div key={signal.label} className="flex items-center justify-between gap-4 border-b border-border pb-2 last:border-b-0 last:pb-0">
+              <div
+                key={signal.label}
+                className="flex items-center justify-between gap-4 border-b border-border pb-2 last:border-b-0 last:pb-0"
+              >
                 <span className="text-sm text-muted-foreground">{signal.label}</span>
                 <span className="text-sm font-semibold text-foreground">{signal.value}</span>
               </div>
             ))}
           </div>
-          <div className={`mt-3 rounded-md border p-3 text-sm ${
-            injuryLabel
-              ? 'border-destructive/30 bg-destructive/10 text-destructive'
-              : 'border-emerald-200 bg-emerald-50 text-emerald-900'
-          }`}>
+          <div
+            className={`mt-3 rounded-md border p-3 text-sm ${
+              injuryLabel
+                ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+            }`}
+          >
             <span className="font-semibold">Availability:</span> {riskLabel}
           </div>
         </div>
@@ -303,7 +333,10 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
         totalValue: readMatchStatlyValue(log) ?? 0,
         opposition: log.opponent,
         categories: Object.fromEntries(
-          categoryProfile.map((category) => [category.key, readMatchCategory(log, category.key) ?? 0])
+          categoryProfile.map((category) => [
+            category.key,
+            readMatchCategory(log, category.key) ?? 0,
+          ])
         ),
       })),
     [matchLogs]
@@ -384,106 +417,106 @@ export const PlayerDetail = ({ player }: PlayerDetailProps) => {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_42%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
-      <div className="mx-auto grid w-full max-w-[var(--app-shell-max-width)] grid-cols-[minmax(0,1fr)_430px] gap-5 px-5 py-5 lg:px-8">
-      <div className="min-w-0 space-y-5">
-        <nav
-          aria-label="Player page"
-          className="flex h-12 items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 shadow-sm"
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background p-1">
-              <Image
-                src={teamLogo}
-                alt={`${player.team || 'AFL'} logo`}
-                width={28}
-                height={28}
-                className="h-7 w-7 object-contain"
-                style={{ width: 'auto', height: 'auto' }}
-                unoptimized={teamLogo.endsWith('.svg')}
+      <div className="mx-auto grid w-full max-w-[var(--app-shell-max-width)] grid-cols-1 gap-5 px-4 py-5 sm:px-5 lg:px-8 xl:grid-cols-[minmax(0,1fr)_430px]">
+        <div className="min-w-0 space-y-5">
+          <nav
+            aria-label="Player page"
+            className="flex h-12 items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 shadow-sm"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background p-1">
+                <Image
+                  src={teamLogo}
+                  alt={`${player.team || 'AFL'} logo`}
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 object-contain"
+                  style={{ width: 'auto', height: 'auto' }}
+                  unoptimized={teamLogo.endsWith('.svg')}
+                />
+              </div>
+              <Link
+                href="/players"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Players
+              </Link>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">{player.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {teamAbbreviation} · {coverageLabel}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <LeagueSocialDiscussButton
+                context={{
+                  type: 'player',
+                  id: String(player.id),
+                  title: player.name,
+                  subtitle: [player.team, player.position].filter(Boolean).join(' · ') || undefined,
+                  metadata: {
+                    ...(player.team ? { club: player.team } : {}),
+                    ...(player.position ? { position: player.position } : {}),
+                  },
+                }}
               />
-            </div>
-            <Link
-              href="/players"
-              className="inline-flex h-8 items-center rounded-md border border-border bg-background px-3 text-sm font-semibold text-foreground transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Players
-            </Link>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">{player.name}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {teamAbbreviation} · {coverageLabel}
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 text-xs font-semibold text-muted-foreground">
-            <LeagueSocialDiscussButton
-              context={{
-                type: 'player',
-                id: String(player.id),
-                title: player.name,
-                subtitle: [player.team, player.position].filter(Boolean).join(' · ') || undefined,
-                metadata: {
-                  ...(player.team ? { club: player.team } : {}),
-                  ...(player.position ? { position: player.position } : {}),
-                },
-              }}
-            />
-            <span className="rounded-full border border-border bg-muted px-3 py-1">
-              {aggregateStatsAvailable ? 'Season profile' : 'Limited data'}
-            </span>
-            {getInjuryLabel(player) ? (
-              <span className="rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-destructive">
-                Injury flag
+              <span className="rounded-full border border-border bg-muted px-3 py-1">
+                {aggregateStatsAvailable ? 'Season profile' : 'Limited data'}
               </span>
-            ) : null}
-          </div>
-        </nav>
-
-        <PlayerSummaryCard player={player} />
-
-        <section className="min-w-0">
-          {loading ? (
-            <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-card shadow-sm">
-              <LoadingSpinner />
+              {getInjuryLabel(player) ? (
+                <span className="rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-destructive">
+                  Injury flag
+                </span>
+              ) : null}
             </div>
-          ) : error ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
-              {error}
-            </div>
-          ) : (
-            <PlayerChart
-              matchData={chartData}
-              playerName={player.name}
-              seasonGames={player.games}
-              hasAggregateStats={aggregateStatsAvailable}
-            />
-          )}
-        </section>
+          </nav>
 
-        <section className="min-w-0">
-          {loading ? (
-            <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-card shadow-sm">
-              <LoadingSpinner />
-            </div>
-          ) : error ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
-              {error}
-            </div>
-          ) : (
-            <MatchLogTable
-              matchLogs={matchLogs}
-              playerName={player.name}
-              onRefresh={() => window.location.reload()}
-            />
-          )}
-        </section>
+          <PlayerSummaryCard player={player} />
 
-        <PlayerDecisionDashboard player={player} matchLogs={matchLogs} />
-      </div>
+          <section className="min-w-0">
+            {loading ? (
+              <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-card shadow-sm">
+                <LoadingSpinner />
+              </div>
+            ) : error ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
+                {error}
+              </div>
+            ) : (
+              <PlayerChart
+                matchData={chartData}
+                playerName={player.name}
+                seasonGames={player.games}
+                hasAggregateStats={aggregateStatsAvailable}
+              />
+            )}
+          </section>
 
-      <aside className="sticky top-20 max-h-[calc(100vh-6rem)] min-w-0 overflow-y-auto">
-        <PlayerLeagueAvailabilityPanel playerId={player.id} />
-      </aside>
+          <section className="min-w-0">
+            {loading ? (
+              <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-card shadow-sm">
+                <LoadingSpinner />
+              </div>
+            ) : error ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
+                {error}
+              </div>
+            ) : (
+              <MatchLogTable
+                matchLogs={matchLogs}
+                playerName={player.name}
+                onRefresh={() => window.location.reload()}
+              />
+            )}
+          </section>
+
+          <PlayerDecisionDashboard player={player} matchLogs={matchLogs} />
+        </div>
+
+        <aside className="min-w-0 xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
+          <PlayerLeagueAvailabilityPanel playerId={player.id} />
+        </aside>
       </div>
     </div>
   );

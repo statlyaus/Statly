@@ -19,6 +19,7 @@ const E2E_PLAYERS = [
   { id: 'e2e-player-hayden-young', name: 'Hayden Young', club: 'Fremantle', position: 'MID' },
   { id: 'e2e-player-sam-durham', name: 'Sam Durham', club: 'Essendon', position: 'MID' },
 ] as const;
+export const E2E_PLAYER_ID = E2E_PLAYERS[0].id;
 
 async function globalSetup() {
   const prisma = new PrismaClient();
@@ -165,8 +166,31 @@ async function globalSetup() {
         ],
       });
 
+      await tx.playerExternalIdentity.deleteMany({
+        where: {
+          provider: 'statly-e2e',
+          externalId: { in: E2E_PLAYERS.map((player) => player.id) },
+        },
+      });
+
       const canonicalPlayerIds: string[] = [];
       for (const player of E2E_PLAYERS) {
+        await tx.player.upsert({
+          where: { id: player.id },
+          update: {
+            name: player.name,
+            club: player.club,
+            position: player.position,
+            active: true,
+          },
+          create: {
+            id: player.id,
+            name: player.name,
+            club: player.club,
+            position: player.position,
+            active: true,
+          },
+        });
         const canonicalPlayer = await upsertCanonicalPlayer(tx, {
           provider: 'statly-e2e',
           externalId: player.id,
@@ -174,7 +198,7 @@ async function globalSetup() {
           club: player.club,
           position: player.position,
           active: true,
-          allowExactAttributeMatch: true,
+          canonicalPlayerId: player.id,
         });
         canonicalPlayerIds.push(canonicalPlayer.id);
       }

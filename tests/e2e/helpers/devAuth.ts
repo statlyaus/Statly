@@ -51,6 +51,15 @@ export async function expectNoAppErrorBoundary(page: Page) {
   await expect(page.getByText('rankings.find is not a function')).toHaveCount(0);
 }
 
+export async function expectNoPageLevelHorizontalOverflow(page: Page): Promise<void> {
+  const widths = await page.evaluate(() => ({
+    client: document.documentElement.clientWidth,
+    scroll: document.documentElement.scrollWidth,
+  }));
+
+  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+}
+
 function isExpectedDevelopmentNoise(message: string) {
   return [
     'Download the React DevTools',

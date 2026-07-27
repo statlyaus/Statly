@@ -80,6 +80,12 @@ interface Tab {
   badge?: number;
 }
 
+interface TabGroup {
+  id: 'play' | 'league' | 'social' | 'settings';
+  name: string;
+  tabs: Tab[];
+}
+
 type OverviewWaiverClaim = {
   id: string;
   playerId: string;
@@ -89,19 +95,43 @@ type OverviewWaiverClaim = {
 
 type TeamNotificationToggleKey = 'tradePush' | 'waiverPush' | 'draftReminder' | 'scoringAlerts';
 
-const TAB_IDS: readonly TabType[] = [
-  'overview',
-  'teams',
-  'roster',
-  'matchups',
-  'lineup',
-  'standings',
-  'trades',
-  'waivers',
-  'draft',
-  'team-settings',
-  'league-settings',
-];
+const LEAGUE_TAB_GROUPS = [
+  {
+    id: 'play',
+    name: 'Play',
+    tabIds: ['overview', 'roster', 'lineup', 'matchups', 'trades', 'waivers', 'draft'],
+  },
+  { id: 'league', name: 'League', tabIds: ['teams', 'standings'] },
+  { id: 'social', name: 'Social', tabIds: ['social'] },
+  { id: 'settings', name: 'Settings', tabIds: ['team-settings', 'league-settings'] },
+] as const satisfies ReadonlyArray<{
+  id: TabGroup['id'];
+  name: string;
+  tabIds: readonly TabType[];
+}>;
+
+type GroupedLeagueTabId = (typeof LEAGUE_TAB_GROUPS)[number]['tabIds'][number];
+const allLeagueTabsAreGrouped: Exclude<TabType, GroupedLeagueTabId> extends never ? true : never =
+  true;
+void allLeagueTabsAreGrouped;
+
+const TAB_IDS: readonly TabType[] = LEAGUE_TAB_GROUPS.flatMap((group) => group.tabIds);
+
+function groupLeagueTabs(tabs: readonly Tab[]): TabGroup[] {
+  const tabsById = new Map(tabs.map((tab) => [tab.id, tab]));
+
+  return LEAGUE_TAB_GROUPS.map((group) => ({
+    id: group.id,
+    name: group.name,
+    tabs: group.tabIds
+      .map((tabId) => tabsById.get(tabId))
+      .filter((tab): tab is Tab => Boolean(tab)),
+  })).filter((group) => group.tabs.length > 0);
+}
+
+function getTabOptionLabel(tab: Tab): string {
+  return tab.badge ? `${tab.name} (${tab.badge} unread)` : tab.name;
+}
 
 function isLeagueTab(value: unknown): value is TabType {
   return typeof value === 'string' && TAB_IDS.includes(value as TabType);
@@ -262,6 +292,7 @@ export default function LeagueTabs({
         { id: 'league-settings', name: isAdmin ? 'League Settings' : 'Competition Rules' },
       ]
     : baseTabs;
+  const tabGroups = groupLeagueTabs(tabs);
   const waiverMembersIndex = useMemo(
     () =>
       Object.fromEntries(
@@ -400,38 +431,79 @@ export default function LeagueTabs({
     <div className="space-y-6">
       <div className="overflow-hidden rounded-[22px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_18px_60px_-48px_rgba(23,34,48,0.38)]">
         <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)]/80">
-          <nav
-            className="flex max-w-full scroll-px-3 gap-1 overflow-x-auto overscroll-x-contain px-3 py-3 [scrollbar-width:thin]"
-            aria-label="League sections"
-          >
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => handleTabChange(tab.id)}
-                onFocus={(event) =>
-                  event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-                }
-                aria-current={activeTab === tab.id ? 'page' : undefined}
-                className={`scroll-mx-3 inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--league-page)] ${
-                  activeTab === tab.id
-                    ? 'bg-[color:var(--league-primary)] text-[color:var(--league-primary-foreground)] shadow-sm'
-                    : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
-                }`}
+          <nav className="max-w-full px-3 py-3" aria-label="League sections">
+            <div className="md:hidden">
+              <label
+                htmlFor="league-section-select"
+                className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]"
               >
-                <div className="flex items-center gap-2">
-                  <span>{tab.name}</span>
-                  {tab.badge && (
-                    <span
-                      aria-label={`${tab.badge} unread`}
-                      className="rounded-full bg-[color:var(--league-danger-soft)] px-2 py-0.5 text-xs font-semibold text-[color:var(--league-danger)]"
-                    >
-                      {tab.badge}
-                    </span>
-                  )}
+                League section
+              </label>
+              <select
+                id="league-section-select"
+                value={activeTab}
+                onChange={(event) => handleTabChange(event.target.value as TabType)}
+                className="block h-11 w-full rounded-xl border border-[color:var(--league-border)] bg-[color:var(--league-surface)] px-3 text-sm font-semibold text-[color:var(--league-text)] focus:border-[color:var(--league-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--league-primary)]/25"
+              >
+                {tabGroups.map((group) => (
+                  <optgroup key={group.id} label={group.name}>
+                    {group.tabs.map((tab) => (
+                      <option key={tab.id} value={tab.id}>
+                        {getTabOptionLabel(tab)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div className="hidden max-w-full scroll-px-3 gap-4 overflow-x-auto overscroll-x-contain md:flex [scrollbar-width:thin]">
+              {tabGroups.map((group) => (
+                <div
+                  key={group.id}
+                  role="group"
+                  aria-label={`${group.name} sections`}
+                  className="shrink-0"
+                >
+                  <span className="mb-1.5 block px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--league-text-muted)]">
+                    {group.name}
+                  </span>
+                  <div className="flex gap-1">
+                    {group.tabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => handleTabChange(tab.id)}
+                        onFocus={(event) =>
+                          event.currentTarget.scrollIntoView({
+                            block: 'nearest',
+                            inline: 'nearest',
+                          })
+                        }
+                        aria-current={activeTab === tab.id ? 'page' : undefined}
+                        className={`scroll-mx-3 inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--league-page)] ${
+                          activeTab === tab.id
+                            ? 'bg-[color:var(--league-primary)] text-[color:var(--league-primary-foreground)] shadow-sm'
+                            : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span>{tab.name}</span>
+                          {tab.badge && (
+                            <span
+                              aria-label={`${tab.badge} unread`}
+                              className="rounded-full bg-[color:var(--league-danger-soft)] px-2 py-0.5 text-xs font-semibold text-[color:var(--league-danger)]"
+                            >
+                              {tab.badge}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </button>
-            ))}
+              ))}
+            </div>
           </nav>
         </div>
 

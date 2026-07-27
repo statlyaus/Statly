@@ -48,6 +48,10 @@ const PLAYER_COLUMN_WIDTH = 340;
 const Z_SCORE_COLUMN_WIDTH = 144;
 const STAT_COLUMN_WIDTH = 88;
 const ACTIONS_COLUMN_WIDTH = 236;
+const FALLBACK_TABLE_VIEWPORT_HEIGHT = 680;
+const FALLBACK_VIRTUALIZED_ROW_HEIGHT = 112;
+const VIRTUALIZED_ROW_OVERSCAN = 6;
+const VIRTUALIZED_ROW_THRESHOLD = 120;
 const STATLY_Z_DESCRIPTION = "Combined Z score across this league's selected scoring categories.";
 const ACTION_BUTTON_BASE_CLASS =
   'inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -55,6 +59,13 @@ const ACTION_BUTTON_DISABLED_CLASS =
   'cursor-not-allowed border border-border bg-muted/70 text-muted-foreground';
 const ACTION_BUTTON_OUTLINE_CLASS =
   'border border-input bg-[color:var(--draft-broadcast-field)] text-foreground hover:bg-[color:var(--draft-broadcast-field-strong)]';
+
+interface VisibleRowRange {
+  start: number;
+  end: number;
+  topSpacerHeight: number;
+  bottomSpacerHeight: number;
+}
 
 function formatLeagueStat(player: DraftPlayer, category: FantasyCategoryKey): string {
   const categoryData = FANTASY_CATEGORIES[category];
@@ -375,6 +386,7 @@ function PlayerTableRow({
       aria-label={`${player.name}, ${player.position}, ${player.club}. Press Enter to select.`}
       aria-rowindex={index + (visibleCategories.length > 0 ? 3 : 2)}
       data-selected={isSelected ? 'true' : undefined}
+      data-player-row="true"
     >
       <PlayerIdentityCell
         player={player}
@@ -601,10 +613,14 @@ function PlayerGridEmptyState({
 
 interface PlayerGridTableProps {
   filteredPlayers: DraftPlayer[];
+  visiblePlayers: DraftPlayer[];
   visibleCategories: FantasyCategoryKey[];
+  visibleRange: VisibleRowRange;
   tableMinWidth: number;
+  statColumnCount: number;
+  shouldWindowRows: boolean;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  rowRefs: React.MutableRefObject<Array<HTMLTableRowElement | null>>;
+  registerRow: (index: number, element: HTMLTableRowElement | null) => void;
   focusedRow: number | null;
   selectedPlayerId: string | null;
   queuedIds: ReadonlySet<string>;
@@ -616,6 +632,7 @@ interface PlayerGridTableProps {
   pendingSelectionId: string | null;
   sortBy: PlayerGridSortKey;
   onSortChange: (sort: PlayerGridSortKey) => void;
+  setScrollTop: (scrollTop: number) => void;
   onKeyDown: (event: React.KeyboardEvent, playerIndex: number) => void;
   onFocusChange: (index: number | null) => void;
   onSelect: (player: DraftPlayer) => void;
@@ -625,10 +642,14 @@ interface PlayerGridTableProps {
 
 function PlayerGridTable({
   filteredPlayers,
+  visiblePlayers,
   visibleCategories,
+  visibleRange,
   tableMinWidth,
+  statColumnCount,
+  shouldWindowRows,
   scrollContainerRef,
-  rowRefs,
+  registerRow,
   focusedRow,
   selectedPlayerId,
   queuedIds,
@@ -640,6 +661,7 @@ function PlayerGridTable({
   pendingSelectionId,
   sortBy,
   onSortChange,
+  setScrollTop,
   onKeyDown,
   onFocusChange,
   onSelect,
@@ -651,6 +673,11 @@ function PlayerGridTable({
       <div
         ref={scrollContainerRef}
         className="h-full overflow-auto bg-[color:var(--draft-broadcast-table)]"
+        onScroll={(event) => {
+          if (shouldWindowRows) {
+            setScrollTop(event.currentTarget.scrollTop);
+          }
+        }}
       >
         <table
           className="w-full table-fixed border-collapse text-left"
@@ -743,7 +770,18 @@ function PlayerGridTable({
             )}
           </thead>
           <tbody className="divide-y divide-[color:var(--draft-broadcast-border-soft)]">
-            {filteredPlayers.map((player, index) => {
+            {shouldWindowRows && visibleRange.topSpacerHeight > 0 && (
+              <tr aria-hidden="true" role="presentation">
+                <td
+                  colSpan={2 + statColumnCount + 1}
+                  className="border-0 p-0"
+                  style={{ height: visibleRange.topSpacerHeight }}
+                />
+              </tr>
+            )}
+            {visiblePlayers.map((player, visibleIndex) => {
+              const index = visibleRange.start + visibleIndex;
+
               return (
                 <PlayerTableRow
                   key={player.id}
@@ -764,12 +802,19 @@ function PlayerGridTable({
                   onSelect={onSelect}
                   onAddToQueue={onAddToQueue}
                   onToggleWatchlist={onToggleWatchlist}
-                  registerRow={(rowIndex, element) => {
-                    rowRefs.current[rowIndex] = element;
-                  }}
+                  registerRow={registerRow}
                 />
               );
             })}
+            {shouldWindowRows && visibleRange.bottomSpacerHeight > 0 && (
+              <tr aria-hidden="true" role="presentation">
+                <td
+                  colSpan={2 + statColumnCount + 1}
+                  className="border-0 p-0"
+                  style={{ height: visibleRange.bottomSpacerHeight }}
+                />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -817,9 +862,14 @@ export default function PlayerGrid({
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(FALLBACK_TABLE_VIEWPORT_HEIGHT);
+  const [virtualizedRowHeight, setVirtualizedRowHeight] = useState(FALLBACK_VIRTUALIZED_ROW_HEIGHT);
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingScrollTopRef = useRef(0);
+  const scrollFrameRef = useRef<number | null>(null);
   const queuedIds = useMemo(() => new Set(queuedPlayerIds), [queuedPlayerIds]);
   const watchedIds = useMemo(() => new Set(watchedPlayerIds), [watchedPlayerIds]);
   const pendingWatchlistIds = useMemo(
@@ -841,6 +891,93 @@ export default function PlayerGrid({
     Z_SCORE_COLUMN_WIDTH +
     statColumnCount * STAT_COLUMN_WIDTH +
     ACTIONS_COLUMN_WIDTH;
+  const shouldWindowRows = filteredPlayers.length > VIRTUALIZED_ROW_THRESHOLD;
+  const visibleRange = useMemo<VisibleRowRange>(() => {
+    if (!shouldWindowRows) {
+      return {
+        start: 0,
+        end: filteredPlayers.length,
+        topSpacerHeight: 0,
+        bottomSpacerHeight: 0,
+      };
+    }
+
+    const firstVisibleRow = Math.floor(scrollTop / virtualizedRowHeight);
+    const start = Math.max(0, firstVisibleRow - VIRTUALIZED_ROW_OVERSCAN);
+    const visibleRowCount =
+      Math.ceil(viewportHeight / virtualizedRowHeight) + VIRTUALIZED_ROW_OVERSCAN * 2;
+    const end = Math.min(filteredPlayers.length, start + visibleRowCount);
+
+    return {
+      start,
+      end,
+      topSpacerHeight: start * virtualizedRowHeight,
+      bottomSpacerHeight: (filteredPlayers.length - end) * virtualizedRowHeight,
+    };
+  }, [filteredPlayers.length, scrollTop, shouldWindowRows, viewportHeight, virtualizedRowHeight]);
+  const visiblePlayers = useMemo(
+    () => filteredPlayers.slice(visibleRange.start, visibleRange.end),
+    [filteredPlayers, visibleRange.end, visibleRange.start]
+  );
+
+  const registerRow = useCallback((index: number, element: HTMLTableRowElement | null) => {
+    rowRefs.current[index] = element;
+  }, []);
+
+  const handleScrollTopChange = useCallback((nextScrollTop: number) => {
+    pendingScrollTopRef.current = nextScrollTop;
+    if (scrollFrameRef.current !== null) return;
+
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      setScrollTop(pendingScrollTopRef.current);
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!shouldWindowRows) return;
+
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) return;
+
+    const updateViewportHeight = () => {
+      if (scrollContainer.clientHeight > 0) {
+        setViewportHeight(scrollContainer.clientHeight);
+      }
+    };
+
+    updateViewportHeight();
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const resizeObserver = new ResizeObserver(updateViewportHeight);
+    resizeObserver.observe(scrollContainer);
+
+    return () => resizeObserver.disconnect();
+  }, [shouldWindowRows]);
+
+  useEffect(() => {
+    if (!shouldWindowRows) return;
+
+    const measuredHeights = rowRefs.current
+      .map((row) => row?.getBoundingClientRect().height ?? 0)
+      .filter((height) => height > 0);
+    if (measuredHeights.length === 0) return;
+
+    const measuredAverage =
+      measuredHeights.reduce((total, height) => total + height, 0) / measuredHeights.length;
+    setVirtualizedRowHeight((currentHeight) =>
+      Math.abs(currentHeight - measuredAverage) > 0.5 ? measuredAverage : currentHeight
+    );
+  }, [shouldWindowRows, visibleCategories.length, visibleRange.end, visibleRange.start]);
 
   // Handle player selection
   const handlePlayerSelect = useCallback(
@@ -916,13 +1053,26 @@ export default function PlayerGrid({
   // Focus management
   useEffect(() => {
     if (focusedRow !== null) {
-      rowRefs.current[focusedRow]?.scrollIntoView({ block: 'center' });
+      if (shouldWindowRows) {
+        scrollContainerRef.current?.scrollTo?.({
+          top: Math.max(0, focusedRow * virtualizedRowHeight - viewportHeight / 2),
+          behavior: 'auto',
+        });
+      } else {
+        rowRefs.current[focusedRow]?.scrollIntoView({ block: 'center' });
+      }
     }
-  }, [focusedRow]);
+  }, [focusedRow, shouldWindowRows, viewportHeight, virtualizedRowHeight]);
 
   useEffect(() => {
+    if (scrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollFrameRef.current);
+      scrollFrameRef.current = null;
+    }
+    pendingScrollTopRef.current = 0;
     rowRefs.current = [];
     setFocusedRow(null);
+    setScrollTop(0);
     scrollContainerRef.current?.scrollTo?.({ top: 0, behavior: 'auto' });
   }, [searchQuery, positionFilter, sortBy, filteredPlayers.length]);
 
@@ -969,10 +1119,14 @@ export default function PlayerGrid({
 
       <PlayerGridTable
         filteredPlayers={filteredPlayers}
+        visiblePlayers={visiblePlayers}
         visibleCategories={visibleCategories}
+        visibleRange={visibleRange}
         tableMinWidth={tableMinWidth}
+        statColumnCount={statColumnCount}
+        shouldWindowRows={shouldWindowRows}
         scrollContainerRef={scrollContainerRef}
-        rowRefs={rowRefs}
+        registerRow={registerRow}
         focusedRow={focusedRow}
         selectedPlayerId={selectedPlayerId}
         queuedIds={queuedIds}
@@ -984,6 +1138,7 @@ export default function PlayerGrid({
         pendingSelectionId={pendingSelectionId}
         sortBy={sortBy}
         onSortChange={onSortChange}
+        setScrollTop={handleScrollTopChange}
         onKeyDown={handleKeyDown}
         onFocusChange={setFocusedRow}
         onSelect={handlePlayerSelect}

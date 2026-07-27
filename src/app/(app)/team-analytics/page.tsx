@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/AuthContext';
 import { LoadingSpinner } from '@/components/ui';
 import { AppLayout } from '@/components/navigation';
@@ -38,12 +39,12 @@ export default function TeamAnalyticsPage() {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
             <p className="text-gray-600">Please sign in to view your team analytics.</p>
             <div className="mt-4">
-              <button
-                onClick={() => (window.location.href = '/auth/signin')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              <Link
+                href="/login?callbackUrl=/team-analytics"
+                className="inline-flex rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 Sign In
-              </button>
+              </Link>
             </div>
           </div>
         </div>

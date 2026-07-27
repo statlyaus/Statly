@@ -75,6 +75,15 @@ interface TeamAnalyticsDashboardProps {
   };
 }
 
+const TEAM_ANALYTICS_TABS = [
+  { id: 'overview', label: 'Team Overview' },
+  { id: 'players', label: 'Player Analysis' },
+  { id: 'analytics', label: 'Performance Analytics' },
+  { id: 'trades', label: 'Trade Opportunities' },
+] as const;
+
+type TeamAnalyticsTabId = (typeof TEAM_ANALYTICS_TABS)[number]['id'];
+
 // Mock data for demo
 const mockTeamPlayers: Player[] = [
   {
@@ -216,9 +225,7 @@ export default function TeamAnalyticsDashboard({
   const [teamStats, setTeamStats] = useState<TeamStats>(propTeamStats || mockTeamStats);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'analytics' | 'trades'>(
-    'overview'
-  );
+  const [activeTab, setActiveTab] = useState<TeamAnalyticsTabId>('overview');
   const [sortBy, setSortBy] = useState<'score' | 'form' | 'price' | 'projected'>('score');
   const [liveMessage, setLiveMessage] = useState<string>('');
 
@@ -361,6 +368,7 @@ export default function TeamAnalyticsDashboard({
   }, []);
 
   // Keyboard & focus management for the players list
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
   const listRef = useRef<FixedSizeList<Player[]> | null>(null);
@@ -436,6 +444,29 @@ export default function TeamAnalyticsDashboard({
   // Adapter used by react-window to render rows
   const itemData = useMemo(() => sortedPlayers, [sortedPlayers]);
 
+  const onTabKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
+      let nextIndex: number | null = null;
+
+      if (event.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % TEAM_ANALYTICS_TABS.length;
+      } else if (event.key === 'ArrowLeft') {
+        nextIndex = (currentIndex - 1 + TEAM_ANALYTICS_TABS.length) % TEAM_ANALYTICS_TABS.length;
+      } else if (event.key === 'Home') {
+        nextIndex = 0;
+      } else if (event.key === 'End') {
+        nextIndex = TEAM_ANALYTICS_TABS.length - 1;
+      }
+
+      if (nextIndex === null) return;
+
+      event.preventDefault();
+      setActiveTab(TEAM_ANALYTICS_TABS[nextIndex].id);
+      tabRefs.current[nextIndex]?.focus();
+    },
+    []
+  );
+
   const VirtualizedRowInner = React.memo(function VirtualizedRowInner({
     index,
     style,
@@ -482,7 +513,7 @@ export default function TeamAnalyticsDashboard({
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 p-4 sm:p-6">
       {/* Screen reader live region for focus changes */}
       <div aria-live="polite" aria-atomic="true" role="status" className="sr-only">
         {liveMessage}
@@ -491,12 +522,12 @@ export default function TeamAnalyticsDashboard({
       {/* League Selector - Multi-League Support */}
       {user && !propTeamPlayers && leagues.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border p-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold text-gray-900">League Selection</h2>
               <p className="text-sm text-gray-600">Switch between your different league teams</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex w-full min-w-0 items-center gap-3 sm:w-auto">
               {leaguesLoading ? (
                 <LeagueSelectorSkeleton />
               ) : (
@@ -509,7 +540,7 @@ export default function TeamAnalyticsDashboard({
                     aria-label="Select League"
                     value={selectedLeague || ''}
                     onChange={(e) => setSelectedLeague(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full min-w-0 max-w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:w-auto"
                   >
                     <option value="">Select a league...</option>
                     {leagues.map((league) => (
@@ -549,8 +580,8 @@ export default function TeamAnalyticsDashboard({
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold text-gray-900">My Team</h1>
           <p className="text-gray-600 mt-1">
             {selectedLeague
@@ -559,7 +590,7 @@ export default function TeamAnalyticsDashboard({
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="grid w-full grid-cols-2 gap-4 sm:w-auto">
           <div className="text-right">
             <div className="text-2xl font-bold text-green-600">
               ${(teamStats.totalValue / 1000000).toFixed(2)}M
@@ -677,27 +708,27 @@ export default function TeamAnalyticsDashboard({
       <div
         role="tablist"
         aria-label="Team tabs"
-        className="flex space-x-1 bg-gray-100 p-1 rounded-lg"
+        className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 sm:grid-cols-4"
       >
-        {[
-          { id: 'overview', label: 'Team Overview' },
-          { id: 'players', label: 'Player Analysis' },
-          { id: 'analytics', label: 'Performance Analytics' },
-          { id: 'trades', label: 'Trade Opportunities' },
-        ].map((tab) => {
+        {TEAM_ANALYTICS_TABS.map((tab, index) => {
           const isActive = activeTab === tab.id;
           const classes =
-            'flex-1 px-4 py-2 rounded-md font-medium transition-colors ' +
+            'min-w-0 rounded-md px-3 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ' +
             (isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900');
           return (
             <button
               key={tab.id}
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
+              type="button"
               id={`tab-${tab.id}`}
               role="tab"
               aria-selected={isActive}
               aria-controls={`panel-${tab.id}`}
               tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => onTabKeyDown(event, index)}
               className={classes}
             >
               {tab.label}

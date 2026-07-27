@@ -33,7 +33,7 @@ export const draftHubHeaderShellClass =
   'relative overflow-hidden rounded-[2rem] border border-primary/20 bg-card/95 p-5 shadow-xl shadow-primary/10 md:p-6';
 
 export const draftHubHeaderKickerClass =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-primary/80';
+  'text-xs font-semibold uppercase tracking-[0.2em] text-primary/80';
 
 export const draftHubHeaderTitleClass =
   'mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl';
@@ -42,7 +42,10 @@ export const draftHubHeaderDescriptionClass =
   'mt-2 max-w-3xl text-sm leading-6 text-muted-foreground md:text-base';
 
 export const draftHubSectionPillClass =
-  'inline-flex items-center rounded-full border border-primary/20 bg-background/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary shadow-sm';
+  'inline-flex items-center rounded-full border border-primary/20 bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary shadow-sm';
+
+export const draftHubNavKickerClass =
+  'text-xs font-semibold uppercase tracking-[0.18em] text-primary/80';
 
 export const draftHubSubtlePanelClass = 'rounded-2xl border border-border bg-card/90 shadow-sm';
 

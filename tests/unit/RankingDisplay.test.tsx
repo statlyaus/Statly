@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import RankingDisplay from '@/components/RankingDisplay';
 
@@ -10,7 +10,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 describe('RankingDisplay', () => {
-  it('renders Statly Z from the wrapped rankings API response', async () => {
+  beforeEach(() => {
     fetchApiMock.mockResolvedValue({
       success: true,
       data: {
@@ -24,11 +24,28 @@ describe('RankingDisplay', () => {
         ],
       },
     });
+  });
 
+  it('renders Statly Z with accessible, theme-aware chip styling', async () => {
     render(<RankingDisplay playerId="player-1" variant="chip" />);
 
-    expect(await screen.findByText('#3')).toBeInTheDocument();
+    const chip = await screen.findByRole('status');
+
+    expect(screen.getByText('#3')).toBeInTheDocument();
     expect(screen.getByText('Z 14.67')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveAccessibleName('Rank 3, Statly Z 14.67');
+    expect(chip).toHaveAccessibleName('Rank 3, Statly Z 14.67');
+    expect(chip).toHaveClass('bg-primary/10', 'text-primary', 'ring-primary/20', 'text-xs');
+    expect(chip.className).not.toMatch(/text-\[(?:9|10|11)px\]/);
+  });
+
+  it('keeps the compact chip on the same semantic 12px treatment', async () => {
+    render(<RankingDisplay playerId="player-1" variant="chip" compact />);
+
+    const chip = await screen.findByRole('status');
+
+    expect(chip).toHaveAccessibleName('Rank 3, Statly Z 14.67');
+    expect(chip).toHaveClass('bg-primary/10', 'text-primary', 'ring-primary/20', 'text-xs');
+    expect(chip.className).not.toMatch(/text-\[(?:9|10|11)px\]/);
+    expect(screen.queryByText('Z 14.67')).not.toBeInTheDocument();
   });
 });

@@ -3,7 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { draftHubSubtlePanelClass } from '@/components/draft/draftHubChrome';
+import {
+  draftHubNavKickerClass,
+  draftHubSubtlePanelClass,
+} from '@/components/draft/draftHubChrome';
 
 export function DraftHubNav() {
   const pathname = usePathname() ?? '';
@@ -22,9 +25,7 @@ export function DraftHubNav() {
           }`}
           aria-current={tradesActive ? 'page' : undefined}
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
-            Explorer
-          </p>
+          <p className={draftHubNavKickerClass}>Explorer</p>
           <p className="mt-1 text-sm font-semibold">Trades</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Scan deals by season, club, and asset profile with a persistent detail rail.
@@ -39,9 +40,7 @@ export function DraftHubNav() {
           }`}
           aria-current={clubsActive ? 'page' : undefined}
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
-            Directory
-          </p>
+          <p className={draftHubNavKickerClass}>Directory</p>
           <p className="mt-1 text-sm font-semibold">Clubs</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Compare club-level trade activity and open each club&apos;s historical record.

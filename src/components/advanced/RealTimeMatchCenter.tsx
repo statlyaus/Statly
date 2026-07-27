@@ -299,7 +299,7 @@ export default function RealTimeMatchCenter({
     <div className="max-w-6xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Live Match Centre</h1>
+          <h2 className="text-3xl font-bold text-gray-900">Live Match Centre</h2>
           <p className="text-gray-600 mt-1">Real-time scores and fantasy updates</p>
         </div>
         <div className="text-sm text-gray-500">
@@ -325,7 +325,7 @@ export default function RealTimeMatchCenter({
       </div>
 
       <div
-        className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6"
+        className="flex max-w-full space-x-1 overflow-x-auto overscroll-x-contain rounded-lg bg-gray-100 p-1 mb-6"
         role="tablist"
         aria-label="Live sections"
       >

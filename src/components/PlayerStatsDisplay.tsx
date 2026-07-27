@@ -145,7 +145,7 @@ export function CompactStatsRow({
             className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-1.5 border-r border-border/70 px-2 py-1.5 last:border-r-0"
             aria-label={`${categoryData.label}: ${displayValue}`}
           >
-            <span className="text-[10px] font-semibold uppercase leading-none text-muted-foreground">
+            <span className="text-xs font-semibold uppercase leading-none text-muted-foreground">
               {categoryData.abbrev}
             </span>
             <span className="min-w-0 text-right font-semibold tabular-nums text-foreground">

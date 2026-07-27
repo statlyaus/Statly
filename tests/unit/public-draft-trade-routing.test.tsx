@@ -41,6 +41,31 @@ import HomePage from '../../src/app/(public)/page';
 import DraftLayout from '../../src/app/(public)/draft/layout';
 
 describe('public AFL draft trade routing', () => {
+  it('states the homepage promise before the two primary hero destinations', () => {
+    render(<HomePage />);
+
+    const promise = screen.getByRole('heading', {
+      level: 1,
+      name: 'Run your AFL fantasy league with a clearer read.',
+    });
+
+    expect(promise).toBeVisible();
+    expect(promise).not.toHaveClass('sr-only');
+    expect(
+      screen.getByText(
+        'Drafts, rosters, trades, waivers, player research, and live scoring in one calm workspace.'
+      )
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Open Fantasy Workspace' })).toHaveAttribute(
+      'href',
+      '/dashboard'
+    );
+    expect(screen.getByRole('link', { name: 'Explore AFL Archive' })).toHaveAttribute(
+      'href',
+      '/draft/trades'
+    );
+  });
+
   it('links the homepage public archive product card to the canonical AFL archive', () => {
     render(<HomePage />);
 

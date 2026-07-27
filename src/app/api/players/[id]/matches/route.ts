@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 
 import { type NextRequest } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminDb, firebaseAdminIsDisabled } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { prisma } from '@/lib/prisma';
@@ -148,11 +148,24 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     console.log(`🔍 Fetching matches for player: ${id}`, { playerNames });
 
-    const snapshots = await Promise.all(
-      playerNames.map((name) =>
-        adminDb.collection('player_match_stats').where('player_name', '==', name).get()
-      )
-    );
+    let snapshots: FirebaseFirestore.QuerySnapshot[];
+    try {
+      snapshots = await Promise.all(
+        playerNames.map((name) =>
+          adminDb.collection('player_match_stats').where('player_name', '==', name).get()
+        )
+      );
+    } catch (error) {
+      if (!firebaseAdminIsDisabled()) {
+        throw error;
+      }
+
+      logger.warn('Failed to load optional player match history; returning empty history', {
+        playerId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return successResponse([]);
+    }
     const docsById = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
     snapshots.forEach((snapshot) => {
       snapshot.docs.forEach((doc) => {

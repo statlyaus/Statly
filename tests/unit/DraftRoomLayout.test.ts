@@ -22,9 +22,9 @@ describe('draft room layout sizing', () => {
     );
 
     expect(unifiedDraftRoom).toContain(
-      'xl:grid-cols-[minmax(18rem,20rem)_minmax(52rem,1fr)_minmax(20rem,22rem)]'
+      'xl:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)_minmax(20rem,22rem)]'
     );
-    expect(unifiedDraftRoom).toContain('2xl:grid-cols-[20rem_minmax(62rem,1fr)_22rem]');
+    expect(unifiedDraftRoom).toContain('2xl:grid-cols-[20rem_minmax(0,1fr)_22rem]');
     expect(unifiedDraftRoom).toContain('mx-auto w-full max-w-[2100px] px-4 pb-6 sm:px-6 lg:px-8');
     expect(unifiedDraftRoom).toContain('grid min-h-[calc(100vh-24rem)] items-stretch gap-4');
     expect(unifiedDraftRoom).toContain('className="flex min-h-0 min-w-0 overflow-x-auto"');

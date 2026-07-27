@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminDb, firebaseAdminIsDisabled } from '@/lib/firebaseAdmin';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { firestoreTimestampToDate } from '@/utils/firestore';
 import { logger } from '@/lib/logger';
@@ -311,11 +311,53 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     );
     const playersCursor = url.searchParams.get('playersCursor') || undefined;
     const activityCursor = url.searchParams.get('activityCursor') || undefined;
-    const leagueRef = adminDb.collection('leagues').doc(leagueId);
     const [selectedCategories, statsLookup] = await Promise.all([
       loadSelectedCategories(leagueId),
       loadStatsLookup(leagueId),
     ]);
+
+    if (firebaseAdminIsDisabled()) {
+      const [roster, availablePlayersResult] = await Promise.all([
+        loadCurrentRoster(leagueId, userId),
+        loadAvailablePlayers({
+          leagueId,
+          limit: playersLimit,
+          cursor: playersCursor,
+          selectedCategories,
+          statsLookup,
+        }),
+      ]);
+      const rosterPlayers =
+        roster && roster.playerIds.length > 0
+          ? await prisma.player.findMany({
+              where: { id: { in: roster.playerIds } },
+              select: { id: true, name: true, club: true, position: true },
+            })
+          : [];
+      const playersIndex: Record<string, PlayerLite> = Object.fromEntries(
+        rosterPlayers.map((player) => [player.id, toPlayerLite(player)])
+      );
+      for (const player of availablePlayersResult.items) {
+        playersIndex[player.id] = player;
+      }
+
+      return NextResponse.json(
+        {
+          claims: [],
+          roster,
+          activity: [],
+          selectedCategories,
+          availablePlayers: availablePlayersResult.items,
+          playersIndex,
+          nextPlayersCursor: availablePlayersResult.nextCursor,
+          activityNextCursor: null,
+          activityHasMore: false,
+        },
+        { status: 200 }
+      );
+    }
+
+    const leagueRef = adminDb.collection('leagues').doc(leagueId);
 
     let activityQuery: FirebaseFirestore.Query = leagueRef
       .collection('activity')

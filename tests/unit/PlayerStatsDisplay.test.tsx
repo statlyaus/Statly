@@ -44,7 +44,8 @@ describe('CompactStatsRow', () => {
   it('renders finite values instead of NaN when stat payloads do not include games', () => {
     render(<CompactStatsRow stats={{ kicks: 310 }} selectedCategories={['kicks']} />);
 
-    expect(screen.getByText('K')).toBeInTheDocument();
+    expect(screen.getByText('K')).toHaveClass('text-xs');
+    expect(screen.getByText('K').className).not.toMatch(/text-\[(?:9|10|11)px\]/);
     expect(screen.getByText('310.0')).toBeInTheDocument();
     expect(screen.queryByText('NaN')).not.toBeInTheDocument();
   });
