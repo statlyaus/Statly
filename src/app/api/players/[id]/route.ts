@@ -110,29 +110,37 @@ async function resolveStatsSeason(): Promise<number> {
 }
 
 async function getLatestStatsByName(name: string): Promise<LatestPlayerStats | null> {
-  const season = await resolveStatsSeason();
-  const snap = await adminDb
-    .collection('player_match_stats')
-    .where('season', '==', season)
-    .where('player_name', '==', name)
-    .get();
-  if (snap.empty) return null;
+  try {
+    const season = await resolveStatsSeason();
+    const snap = await adminDb
+      .collection('player_match_stats')
+      .where('season', '==', season)
+      .where('player_name', '==', name)
+      .get();
+    if (snap.empty) return null;
 
-  let latest: LatestPlayerStats | null = null;
-  let latestKey = -Infinity;
-  snap.forEach((doc) => {
-    const data = doc.data() as Record<string, unknown>;
-    const key = getStatSortKey(data);
-    if (key >= latestKey) {
-      latestKey = key;
-      latest = {
-        stats: toStatSnapshot(data),
-        team: typeof data.team === 'string' ? data.team : undefined,
-        playerName: typeof data.player_name === 'string' ? data.player_name : undefined,
-      };
-    }
-  });
-  return latest;
+    let latest: LatestPlayerStats | null = null;
+    let latestKey = -Infinity;
+    snap.forEach((doc) => {
+      const data = doc.data() as Record<string, unknown>;
+      const key = getStatSortKey(data);
+      if (key >= latestKey) {
+        latestKey = key;
+        latest = {
+          stats: toStatSnapshot(data),
+          team: typeof data.team === 'string' ? data.team : undefined,
+          playerName: typeof data.player_name === 'string' ? data.player_name : undefined,
+        };
+      }
+    });
+    return latest;
+  } catch (error) {
+    logger.warn('Failed to load optional player stats; using base player data', {
+      playerName: name,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {

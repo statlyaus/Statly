@@ -158,25 +158,32 @@ async function loadUserLeagueContexts(userId: string): Promise<UserLeagueContext
     });
   }
 
-  const firestoreMemberships = await listActiveUserLeagueMemberships(userId);
-  const missingFirestoreMemberships = firestoreMemberships.filter(
-    (membership) => membership.leagueId && !contexts.has(membership.leagueId)
-  );
-  const firestoreLeagueDocs = await Promise.all(
-    missingFirestoreMemberships.map(async (membership) => ({
-      membership,
-      snap: await adminDb.collection('leagues').doc(membership.leagueId).get(),
-    }))
-  );
+  try {
+    const firestoreMemberships = await listActiveUserLeagueMemberships(userId);
+    const missingFirestoreMemberships = firestoreMemberships.filter(
+      (membership) => membership.leagueId && !contexts.has(membership.leagueId)
+    );
+    const firestoreLeagueDocs = await Promise.all(
+      missingFirestoreMemberships.map(async (membership) => ({
+        membership,
+        snap: await adminDb.collection('leagues').doc(membership.leagueId).get(),
+      }))
+    );
 
-  for (const { membership, snap } of firestoreLeagueDocs) {
-    const data = snap.data() ?? {};
-    contexts.set(membership.leagueId, {
-      leagueId: membership.leagueId,
-      leagueName: String(data.name ?? data.leagueName ?? membership.leagueId),
-      teamName: membership.teamName || 'My team',
-      memberId: getMembershipMemberId(membership),
-      source: 'firestore',
+    for (const { membership, snap } of firestoreLeagueDocs) {
+      const data = snap.data() ?? {};
+      contexts.set(membership.leagueId, {
+        leagueId: membership.leagueId,
+        leagueName: String(data.name ?? data.leagueName ?? membership.leagueId),
+        teamName: membership.teamName || 'My team',
+        memberId: getMembershipMemberId(membership),
+        source: 'firestore',
+      });
+    }
+  } catch (error) {
+    logger.warn('Firestore memberships unavailable for player availability; using Prisma data', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 

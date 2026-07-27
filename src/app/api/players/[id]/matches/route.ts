@@ -148,11 +148,20 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     console.log(`🔍 Fetching matches for player: ${id}`, { playerNames });
 
-    const snapshots = await Promise.all(
-      playerNames.map((name) =>
-        adminDb.collection('player_match_stats').where('player_name', '==', name).get()
-      )
-    );
+    let snapshots: FirebaseFirestore.QuerySnapshot[];
+    try {
+      snapshots = await Promise.all(
+        playerNames.map((name) =>
+          adminDb.collection('player_match_stats').where('player_name', '==', name).get()
+        )
+      );
+    } catch (error) {
+      logger.warn('Failed to load optional player match history; returning empty history', {
+        playerId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return successResponse([]);
+    }
     const docsById = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
     snapshots.forEach((snapshot) => {
       snapshot.docs.forEach((doc) => {
