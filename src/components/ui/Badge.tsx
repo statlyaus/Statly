@@ -32,6 +32,7 @@ interface BadgeProps {
   dot?: boolean;
   removable?: boolean;
   onRemove?: () => void;
+  removeLabel?: string;
   className?: string;
   animate?: boolean;
   href?: string;
@@ -140,6 +141,7 @@ export default function Badge({
   dot = false,
   removable = false,
   onRemove,
+  removeLabel,
   className = '',
   animate = false,
   href,
@@ -153,13 +155,22 @@ export default function Badge({
 
   const isInteractive = href || onClick;
   const isClickable = !disabled && isInteractive;
+  const accessibleRemoveLabel =
+    removeLabel ??
+    (typeof children === 'string' || typeof children === 'number'
+      ? `Remove ${children}`
+      : 'Remove badge');
 
   // Base classes
   const baseClasses = `
     inline-flex items-center font-medium
     ${sizeConfig.padding} ${sizeConfig.text} ${shapeConfig}
     ${variantConfig.background} ${variantConfig.text} ${variantConfig.border}
-    ${isClickable ? `${variantConfig.hover} cursor-pointer transition-colors` : ''}
+    ${
+      isClickable
+        ? `${variantConfig.hover} cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background`
+        : ''
+    }
     ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
     ${className}
   `;
@@ -198,8 +209,8 @@ export default function Badge({
         <button
           type="button"
           onClick={handleRemove}
-          className={`${sizeConfig.remove} text-current hover:text-opacity-70 transition-opacity`}
-          aria-label="Remove"
+          className={`${sizeConfig.remove} text-current hover:text-opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background`}
+          aria-label={accessibleRemoveLabel}
         >
           <XMarkIcon className="w-full h-full" />
         </button>
@@ -289,7 +300,9 @@ export function StatusBadge({
 
   return (
     <span className={`inline-block rounded-full ${className}`}>
+      <span className="sr-only">{config.text}</span>
       <span
+        aria-hidden="true"
         className={`block rounded-full ${
           size === 'xs'
             ? 'w-2 h-2'
