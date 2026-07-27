@@ -1,6 +1,5 @@
 'use client';
 
-import { Grid } from '@giphy/react-components';
 import { ImagePlus, Search, X } from 'lucide-react';
 import {
   useCallback,
@@ -37,31 +36,14 @@ export default function GiphyPicker({
   const searchId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
   const selectionAttemptRef = useRef<{ gifId: string; idempotencyKey: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [gridWidth, setGridWidth] = useState(320);
   const [initialGifs, setInitialGifs] = useState<GiphyGif[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectionPending, setSelectionPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const element = gridRef.current;
-    if (!open || !element) return;
-
-    const updateWidth = () => {
-      setGridWidth(Math.max(240, Math.floor(element.getBoundingClientRect().width || 320)));
-    };
-    updateWidth();
-
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [open]);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -226,10 +208,7 @@ export default function GiphyPicker({
             {searchTerm ? `Results for “${searchTerm}”` : 'Trending GIFs'}
           </p>
 
-          <div
-            ref={gridRef}
-            className="mt-2 max-h-80 min-h-48 overflow-y-auto rounded-lg bg-social-surface-subtle"
-          >
+          <div className="mt-2 max-h-80 min-h-48 overflow-y-auto rounded-lg bg-social-surface-subtle">
             {loading ? (
               <p role="status" className="py-16 text-center text-sm text-social-text-muted">
                 Loading GIFs…
@@ -237,28 +216,33 @@ export default function GiphyPicker({
             ) : initialGifs.length === 0 ? (
               <p className="py-16 text-center text-sm text-social-text-muted">No GIFs found</p>
             ) : (
-              <Grid
-                key={searchTerm || 'trending'}
-                width={gridWidth}
-                columns={gridWidth < 300 ? 2 : 3}
-                gutter={6}
-                fetchGifs={fetchGifs}
-                initialGifs={initialGifs}
-                noLink
-                tabIndex={selectionPending ? -1 : 0}
-                noResultsMessage="No GIFs found"
-                onGifsFetchError={() => setError('GIPHY is unavailable right now.')}
-                onGifClick={(gif, event) => {
-                  event.preventDefault();
-                  void selectGif(gif);
-                }}
-                onGifKeyPress={(gif, event) => {
-                  const key = (event.nativeEvent as KeyboardEvent).key;
-                  if (key !== 'Enter' && key !== ' ') return;
-                  event.preventDefault();
-                  void selectGif(gif);
-                }}
-              />
+              <ul className="grid grid-cols-2 gap-1.5 p-1.5 sm:grid-cols-3">
+                {initialGifs.map((gif) => {
+                  const image = gif.images.fixed_width ?? gif.images.original;
+                  const title = gif.title?.trim() || 'GIF';
+
+                  return (
+                    <li key={String(gif.id)}>
+                      <button
+                        type="button"
+                        disabled={selectionPending}
+                        aria-label={`Choose ${title}`}
+                        onClick={() => void selectGif(gif)}
+                        className="group block w-full overflow-hidden rounded-md bg-social-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <img
+                          src={image.url}
+                          alt=""
+                          width={Number(image.width) || 200}
+                          height={Number(image.height) || 150}
+                          loading="lazy"
+                          className="aspect-square w-full object-cover transition-transform group-hover:scale-[1.02]"
+                        />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
 
