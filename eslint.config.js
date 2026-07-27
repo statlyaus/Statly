@@ -60,7 +60,6 @@ export default [
       '**/graphify-out/**',
       '**/tmp/**',
       // local config/meta files
-      'eslint.config.js',
       'tailwind.config.*',
       'next.config.*',
       'postcss.config.*',
