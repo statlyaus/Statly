@@ -44,6 +44,9 @@ export const draftHubHeaderDescriptionClass =
 export const draftHubSectionPillClass =
   'inline-flex items-center rounded-full border border-primary/20 bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary shadow-sm';
 
+export const draftHubNavKickerClass =
+  'text-xs font-semibold uppercase tracking-[0.18em] text-primary/80';
+
 export const draftHubSubtlePanelClass = 'rounded-2xl border border-border bg-card/90 shadow-sm';
 
 /** Season / headline chips (e.g. `Season 2025`, trade counts, year span). */
