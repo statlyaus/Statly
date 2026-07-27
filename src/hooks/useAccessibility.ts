@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 // Hook for managing focus trap
-export function useFocusTrap(isActive: boolean = true) {
-  const containerRef = useRef<HTMLElement>(null);
+export function useFocusTrap<T extends HTMLElement = HTMLElement>(isActive: boolean = true) {
+  const containerRef = useRef<T>(null);
 
   useEffect(() => {
     if (!isActive || !containerRef.current) return;
 
     const container = containerRef.current;
+    const previouslyFocusedElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusableElements = container.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
@@ -38,6 +40,9 @@ export function useFocusTrap(isActive: boolean = true) {
 
     return () => {
       container.removeEventListener('keydown', handleTabKey);
+      if (previouslyFocusedElement?.isConnected) {
+        previouslyFocusedElement.focus();
+      }
     };
   }, [isActive]);
 
