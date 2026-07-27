@@ -22,66 +22,70 @@ type ButtonAsLink = CommonProps & AnchorHTMLAttributes<HTMLAnchorElement> & { hr
 
 type ButtonProps = ButtonAsButton | ButtonAsLink;
 
+const BASE_CLASSES = [
+  'inline-flex items-center justify-center font-medium rounded-md',
+  'focus:outline-none focus:ring-2 focus:ring-offset-2',
+  'transition-colors duration-200',
+  'disabled:opacity-50 disabled:cursor-not-allowed',
+];
+
+const SIZE_CLASSES = {
+  sm: 'px-3 py-1.5 text-xs',
+  md: 'px-4 py-2 text-sm',
+  lg: 'px-6 py-3 text-base',
+} as const;
+
+const VARIANT_CLASSES = {
+  primary: [
+    'bg-blue-600 text-white border border-transparent',
+    'hover:bg-blue-700 focus:ring-blue-500',
+    'disabled:bg-blue-300',
+  ],
+  secondary: [
+    'bg-white text-gray-700 border border-gray-300',
+    'hover:bg-gray-50 focus:ring-blue-500',
+    'disabled:bg-gray-100',
+  ],
+  danger: [
+    'bg-red-600 text-white border border-transparent',
+    'hover:bg-red-700 focus:ring-red-500',
+    'disabled:bg-red-300',
+  ],
+  ghost: [
+    'bg-transparent text-gray-700 border border-transparent',
+    'hover:bg-gray-100 focus:ring-gray-500',
+    'disabled:bg-transparent',
+  ],
+} as const;
+
 function isLink(props: ButtonProps): props is ButtonAsLink {
   return 'href' in props && typeof (props as ButtonAsLink).href === 'string';
 }
 
-export default function Button(props: ButtonProps) {
+function getButtonClasses(props: ButtonProps, prefersReducedMotion: boolean): string {
   const variant = props.variant ?? 'primary';
   const size = props.size ?? 'md';
-  const loading = props.loading ?? false;
-  const fullWidth = props.fullWidth ?? false;
-  const className = props.className;
-  const children = props.children;
 
-  const prefersReducedMotion = useReducedMotion();
-
-  const baseClasses = [
-    'inline-flex items-center justify-center font-medium rounded-md',
-    'focus:outline-none focus:ring-2 focus:ring-offset-2',
-    'transition-colors duration-200',
-    'disabled:opacity-50 disabled:cursor-not-allowed',
+  return clsx(
+    BASE_CLASSES,
     !prefersReducedMotion && 'transform transition-transform hover:scale-105 active:scale-95',
-  ].filter(Boolean);
-
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base',
-  } as const;
-
-  const variantClasses = {
-    primary: [
-      'bg-blue-600 text-white border border-transparent',
-      'hover:bg-blue-700 focus:ring-blue-500',
-      'disabled:bg-blue-300',
-    ],
-    secondary: [
-      'bg-white text-gray-700 border border-gray-300',
-      'hover:bg-gray-50 focus:ring-blue-500',
-      'disabled:bg-gray-100',
-    ],
-    danger: [
-      'bg-red-600 text-white border border-transparent',
-      'hover:bg-red-700 focus:ring-red-500',
-      'disabled:bg-red-300',
-    ],
-    ghost: [
-      'bg-transparent text-gray-700 border border-transparent',
-      'hover:bg-gray-100 focus:ring-gray-500',
-      'disabled:bg-transparent',
-    ],
-  } as const;
-
-  const classes = clsx(
-    baseClasses,
-    sizeClasses[size],
-    variantClasses[variant],
-    fullWidth && 'w-full',
-    className
+    SIZE_CLASSES[size],
+    VARIANT_CLASSES[variant],
+    props.fullWidth && 'w-full',
+    props.className
   );
+}
 
-  const content = (
+function ButtonContent({
+  loading,
+  loadingText,
+  leftIcon,
+  rightIcon,
+  children,
+}: Pick<CommonProps, 'loading' | 'loadingText' | 'leftIcon' | 'rightIcon'> & {
+  children: ReactNode;
+}) {
+  return (
     <>
       {loading && (
         <svg
@@ -107,52 +111,76 @@ export default function Button(props: ButtonProps) {
         </svg>
       )}
 
-      {!loading && props.leftIcon && (
+      {!loading && leftIcon && (
         <span className="mr-2" aria-hidden="true">
-          {props.leftIcon}
+          {leftIcon}
         </span>
       )}
 
-      <span>{loading ? props.loadingText || 'Loading...' : children}</span>
+      <span>{loading ? loadingText || 'Loading...' : children}</span>
 
-      {!loading && props.rightIcon && (
+      {!loading && rightIcon && (
         <span className="ml-2" aria-hidden="true">
-          {props.rightIcon}
+          {rightIcon}
         </span>
       )}
     </>
   );
+}
 
-  if (isLink(props)) {
-    const isDisabled = Boolean(props.disabled || loading);
-    const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
-      if (isDisabled) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-
-      if (props.onClick) props.onClick(e);
-    };
-    return (
-      <Link
-        href={props.href}
-        className={clsx(classes, isDisabled && 'cursor-not-allowed opacity-50')}
-        aria-disabled={isDisabled}
-        onClick={handleClick}
-        tabIndex={isDisabled ? -1 : props.tabIndex}
-        target={props.target}
-        rel={props.rel}
-        title={props.title}
-        id={props.id}
-        role="button"
-      >
-        {content}
-      </Link>
-    );
-  }
-
+function LinkButton({
+  props,
+  classes,
+  loading,
+  children,
+}: {
+  props: ButtonAsLink;
+  classes: string;
+  loading: boolean;
+  children: ReactNode;
+}) {
   const isDisabled = Boolean(props.disabled || loading);
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (isDisabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    props.onClick?.(event);
+  };
+
+  return (
+    <Link
+      href={props.href}
+      className={clsx(classes, isDisabled && 'cursor-not-allowed opacity-50')}
+      aria-disabled={isDisabled}
+      onClick={handleClick}
+      tabIndex={isDisabled ? -1 : props.tabIndex}
+      target={props.target}
+      rel={props.rel}
+      title={props.title}
+      id={props.id}
+      role="button"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function NativeButton({
+  props,
+  classes,
+  loading,
+  children,
+}: {
+  props: ButtonAsButton;
+  classes: string;
+  loading: boolean;
+  children: ReactNode;
+}) {
+  const isDisabled = Boolean(props.disabled || loading);
+
   return (
     <button
       className={classes}
@@ -166,7 +194,38 @@ export default function Button(props: ButtonProps) {
       value={props.value}
       form={props.form}
     >
-      {content}
+      {children}
     </button>
+  );
+}
+
+export default function Button(props: ButtonProps) {
+  const loading = props.loading ?? false;
+  const prefersReducedMotion = useReducedMotion();
+  const classes = getButtonClasses(props, prefersReducedMotion);
+
+  const content = (
+    <ButtonContent
+      loading={loading}
+      loadingText={props.loadingText}
+      leftIcon={props.leftIcon}
+      rightIcon={props.rightIcon}
+    >
+      {props.children}
+    </ButtonContent>
+  );
+
+  if (isLink(props)) {
+    return (
+      <LinkButton props={props} classes={classes} loading={loading}>
+        {content}
+      </LinkButton>
+    );
+  }
+
+  return (
+    <NativeButton props={props} classes={classes} loading={loading}>
+      {content}
+    </NativeButton>
   );
 }
