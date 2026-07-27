@@ -77,6 +77,24 @@ test.describe('shared app shell at 390px', () => {
   });
 });
 
+for (const width of [1440, 1536]) {
+  test(`keeps the immersive draft room within a ${width}px viewport`, async ({ page }) => {
+    const runtimeErrors = collectRuntimeErrors(page);
+    await page.setViewportSize({ width, height: 900 });
+    await authenticateAsDevelopmentUser(page);
+
+    await page.goto(`/drafts/${E2E_DRAFT_ID}`);
+
+    await expect(page.locator('body')).toContainText(
+      /Pick \d+ of \d+|Draft is complete|Draft room is ready/
+    );
+    await expect(page.locator('[data-app-shell]')).toHaveCount(0);
+    await expectNoAppErrorBoundary(page);
+    await assertNoPageLevelHorizontalOverflow(page);
+    expect(runtimeErrors).toEqual([]);
+  });
+}
+
 async function assertNoPageLevelHorizontalOverflow(page: Page): Promise<void> {
   const widths = await page.evaluate(() => ({
     client: document.documentElement.clientWidth,

@@ -69,7 +69,7 @@ describe('unified draft room design architecture', () => {
 
     expect(roomSource).toContain('grid min-h-[calc(100vh-24rem)] items-stretch gap-4');
     expect(roomSource).toContain(
-      'xl:grid-cols-[minmax(18rem,20rem)_minmax(52rem,1fr)_minmax(20rem,22rem)]'
+      'xl:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)_minmax(20rem,22rem)]'
     );
     expect(roomSource).toContain('className="flex min-h-0 min-w-0 overflow-x-auto"');
     expect(roomSource).toContain('max-w-[2100px]');
@@ -79,7 +79,7 @@ describe('unified draft room design architecture', () => {
     expect(roomSource).toContain(
       'className="sticky top-4 flex h-full min-h-[30rem] max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-lg border border-[color:var(--draft-broadcast-border)] bg-[color:var(--draft-broadcast-panel)] p-3 text-[color:var(--draft-broadcast-text)]'
     );
-    expect(roomSource).toContain('2xl:grid-cols-[20rem_minmax(62rem,1fr)_22rem]');
+    expect(roomSource).toContain('2xl:grid-cols-[20rem_minmax(0,1fr)_22rem]');
     expect(roomSource).toContain('hidden min-h-0 lg:block');
     expect(roomSource).not.toContain('md:pr-[23rem]');
     expect(roomSource).not.toContain('fixed right-0 top-0 hidden h-full w-[22rem]');
