@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import LeagueTabs from '@/components/league/LeagueTabs';
@@ -6,11 +6,12 @@ import type { LeagueTradeDigest } from '@/server/leagues/trades/tradeContracts';
 import type { League, LeagueMember } from '@/types/leagues';
 
 const authenticatedFetchMock = vi.hoisted(() => vi.fn());
+const routerPushMock = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/leagues/league-1',
   useRouter: () => ({
-    push: vi.fn(),
+    push: routerPushMock,
   }),
   useSearchParams: () => ({
     get: (key: string) => (key === 'tab' ? 'overview' : null),
@@ -191,10 +192,29 @@ describe('LeagueTabs overview snapshot', () => {
     );
 
     const leagueNavigation = screen.getByRole('navigation', { name: 'League sections' });
+    const sectionSelect = within(leagueNavigation).getByRole('combobox', {
+      name: 'League section',
+    });
+    const groupLabels = Array.from(sectionSelect.querySelectorAll('optgroup')).map(
+      (group) => group.label
+    );
+
+    expect(groupLabels).toEqual(['Play', 'League', 'Social', 'Settings']);
+    expect(sectionSelect).toHaveValue('overview');
+    expect(within(sectionSelect).getByRole('option', { name: 'My Roster' })).toHaveValue('roster');
+    for (const groupName of ['Play', 'League', 'Social', 'Settings']) {
+      expect(
+        within(leagueNavigation).getByRole('group', { name: `${groupName} sections` })
+      ).toBeInTheDocument();
+    }
     expect(within(leagueNavigation).getByRole('button', { name: 'Overview' })).toHaveAttribute(
       'aria-current',
       'page'
     );
+
+    fireEvent.change(sectionSelect, { target: { value: 'teams' } });
+
+    expect(routerPushMock).toHaveBeenCalledWith('/leagues/league-1?tab=teams', { scroll: false });
   });
 
   it('presents room-open, commissioner, and unassigned waiver states without raw or repeated copy', async () => {
