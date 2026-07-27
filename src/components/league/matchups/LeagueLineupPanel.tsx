@@ -167,13 +167,13 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           : [];
         const savedPlayers = Array.isArray(payload.data?.players) ? payload.data.players : [];
         const nextAssignments = savedPlayers
-          .map((player: LineupApiPlayer) => ({
+          .filter(isLineupAssignment)
+          .map((player) => ({
             playerId: player.playerId,
             slot: player.slot,
             slotIndex: player.slotIndex,
             lockedAt: player.lockedAt ?? null,
-          }))
-          .filter(isLineupAssignment);
+          }));
 
         setLineupSlots(normalizeLineupBuilderSlots(payload.data?.lineupSlots));
         setInterchangeSlots(Math.max(0, Number(payload.data?.interchangeSlots) || 0));
