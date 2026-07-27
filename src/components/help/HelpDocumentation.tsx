@@ -279,6 +279,7 @@ export default function HelpDocumentation({
     return (
       <div className="mx-auto w-full min-w-0 max-w-4xl p-4 sm:p-6">
         <button
+          type="button"
           onClick={() => setSelectedArticle(null)}
           className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6"
         >
@@ -349,10 +350,16 @@ export default function HelpDocumentation({
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-gray-600 mb-4">Was this article helpful?</p>
             <div className="flex gap-2">
-              <button className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors">
+              <button
+                type="button"
+                className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+              >
                 👍 Yes
               </button>
-              <button className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors">
+              <button
+                type="button"
+                className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+              >
                 👎 No
               </button>
             </div>
@@ -390,6 +397,7 @@ export default function HelpDocumentation({
           {categories.map((category) => (
             <button
               key={category}
+              type="button"
               onClick={() => setSelectedCategory(category)}
               className={`shrink-0 whitespace-nowrap rounded-md px-4 py-2 font-medium capitalize transition-colors ${
                 selectedCategory === category
@@ -413,6 +421,7 @@ export default function HelpDocumentation({
         ].map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={`flex min-w-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
               activeTab === tab.id
@@ -526,6 +535,7 @@ export default function HelpDocumentation({
               {filteredFAQs.map((faq) => (
                 <div key={faq.id} className="p-6">
                   <button
+                    type="button"
                     onClick={() => setExpandedFAQ(expandedFAQ === faq.id ? null : faq.id)}
                     className="w-full flex items-center justify-between text-left"
                   >
@@ -639,14 +649,20 @@ export default function HelpDocumentation({
                 />
               </div>
 
-              <button className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+              <button
+                type="button"
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
                 Send Message
               </button>
             </div>
 
             <div className="mt-8 pt-6 border-t border-gray-200 text-center">
               <p className="text-gray-600 mb-2">Prefer live chat?</p>
-              <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+              <button
+                type="button"
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
                 Start Live Chat
               </button>
             </div>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type React from 'react';
@@ -210,6 +210,79 @@ describe('PlayerGrid accessibility', () => {
       'aria-rowcount',
       '322'
     );
+  });
+
+  it('uses measured dimensions and coalesces rapid virtualized scrolling', async () => {
+    const originalClientHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'clientHeight'
+    );
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => 384,
+    });
+    const rowMeasurement = vi
+      .spyOn(HTMLTableRowElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ height: 96 } as DOMRect);
+    let scheduledFrame: FrameRequestCallback | undefined;
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        scheduledFrame = callback;
+        return 1;
+      });
+    const largePool = Array.from({ length: 320 }, (_, index) => buildPlayer(index + 1));
+    const { unmount } = render(
+      <PlayerGrid
+        {...defaultProps}
+        players={largePool}
+        totalPlayers={largePool.length}
+        selectedCategories={['goals', 'tackles']}
+      />
+    );
+
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /select player 016/i })).toBeInTheDocument();
+        expect(
+          screen.queryByRole('button', { name: /select player 017/i })
+        ).not.toBeInTheDocument();
+      });
+
+      const scrollContainer = screen.getByRole('table', {
+        name: /available draft players/i,
+      }).parentElement as HTMLDivElement;
+      Object.defineProperty(scrollContainer, 'scrollTop', {
+        configurable: true,
+        writable: true,
+        value: 960,
+      });
+      fireEvent.scroll(scrollContainer);
+      scrollContainer.scrollTop = 1920;
+      fireEvent.scroll(scrollContainer);
+
+      expect(requestFrame).toHaveBeenCalledTimes(1);
+      act(() => scheduledFrame?.(0));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /select player 015/i })).toBeInTheDocument();
+        expect(
+          screen.queryByRole('button', { name: /select player 001/i })
+        ).not.toBeInTheDocument();
+      });
+      expect(
+        scrollContainer.querySelector<HTMLTableCellElement>('tbody > tr[role="presentation"] > td')
+      ).toHaveStyle({ height: '1344px' });
+    } finally {
+      unmount();
+      requestFrame.mockRestore();
+      rowMeasurement.mockRestore();
+      if (originalClientHeight) {
+        Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalClientHeight);
+      } else {
+        delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+      }
+    }
   });
 
   it('keeps the draft player table aligned to semantic tokens and compact radii', () => {

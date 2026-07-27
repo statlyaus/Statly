@@ -7,7 +7,7 @@ const sentryEnabled = process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true';
 if (sentryEnabled) {
   Sentry.init({
     dsn: 'https://6ffbb0f42b9432dc3e0ef0aff3c60f94@o4509945105481728.ingest.us.sentry.io/4509945108299776',
-    sendDefaultPii: true,
+    integrations: [Sentry.replayIntegration()],
     tracesSampleRate: 1.0,
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,

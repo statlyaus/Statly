@@ -95,25 +95,7 @@ type OverviewWaiverClaim = {
 
 type TeamNotificationToggleKey = 'tradePush' | 'waiverPush' | 'draftReminder' | 'scoringAlerts';
 
-const TAB_IDS: readonly TabType[] = [
-  'overview',
-  'teams',
-  'roster',
-  'matchups',
-  'lineup',
-  'standings',
-  'trades',
-  'waivers',
-  'draft',
-  'team-settings',
-  'league-settings',
-];
-
-const LEAGUE_TAB_GROUPS: ReadonlyArray<{
-  id: TabGroup['id'];
-  name: string;
-  tabIds: readonly TabType[];
-}> = [
+const LEAGUE_TAB_GROUPS = [
   {
     id: 'play',
     name: 'Play',
@@ -122,7 +104,18 @@ const LEAGUE_TAB_GROUPS: ReadonlyArray<{
   { id: 'league', name: 'League', tabIds: ['teams', 'standings'] },
   { id: 'social', name: 'Social', tabIds: ['social'] },
   { id: 'settings', name: 'Settings', tabIds: ['team-settings', 'league-settings'] },
-];
+] as const satisfies ReadonlyArray<{
+  id: TabGroup['id'];
+  name: string;
+  tabIds: readonly TabType[];
+}>;
+
+type GroupedLeagueTabId = (typeof LEAGUE_TAB_GROUPS)[number]['tabIds'][number];
+const allLeagueTabsAreGrouped: Exclude<TabType, GroupedLeagueTabId> extends never ? true : never =
+  true;
+void allLeagueTabsAreGrouped;
+
+const TAB_IDS: readonly TabType[] = LEAGUE_TAB_GROUPS.flatMap((group) => group.tabIds);
 
 function groupLeagueTabs(tabs: readonly Tab[]): TabGroup[] {
   const tabsById = new Map(tabs.map((tab) => [tab.id, tab]));

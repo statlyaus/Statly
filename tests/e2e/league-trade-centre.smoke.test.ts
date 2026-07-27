@@ -4,6 +4,7 @@ import {
   authenticateAsDevelopmentUser,
   collectRuntimeErrors,
   expectNoAppErrorBoundary,
+  expectNoPageLevelHorizontalOverflow,
 } from './helpers/devAuth';
 import { E2E_LEAGUE_ID } from './global.setup';
 
@@ -44,7 +45,7 @@ test('trade centre remains usable and responsive across supported viewports', as
       }
 
       await assertMajorControlsAreTouchSized(page, viewport.mobile);
-      await assertNoPageLevelHorizontalOverflow(page);
+      await expectNoPageLevelHorizontalOverflow(page);
       await assertRosterTableScrollsInternally(page, 'Robbo Rockers');
       if (!viewport.mobile) {
         await assertRosterTableScrollsInternally(page, 'AFL Legends');
@@ -108,7 +109,7 @@ test('trade centre remains usable and responsive across supported viewports', as
           'checkpoint actions should be at least 44px high'
         ).toBeGreaterThanOrEqual(44);
       }
-      await assertNoPageLevelHorizontalOverflow(page);
+      await expectNoPageLevelHorizontalOverflow(page);
     });
   }
 
@@ -187,15 +188,6 @@ async function assertMajorControlsAreTouchSized(page: Page, mobile: boolean): Pr
     expect(box, 'major control should have a measurable box').not.toBeNull();
     expect(box!.height, 'major controls should be at least 44px high').toBeGreaterThanOrEqual(44);
   }
-}
-
-async function assertNoPageLevelHorizontalOverflow(page: Page): Promise<void> {
-  const widths = await page.evaluate(() => ({
-    client: document.documentElement.clientWidth,
-    scroll: document.documentElement.scrollWidth,
-  }));
-
-  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
 }
 
 async function assertRosterTableScrollsInternally(page: Page, teamName: string): Promise<void> {

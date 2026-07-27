@@ -212,6 +212,7 @@ export default function LiveScoringMatchup({
 
         <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
           <button
+            type="button"
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 transition-colors ${
               autoRefresh
@@ -224,6 +225,7 @@ export default function LiveScoringMatchup({
           </button>
 
           <button
+            type="button"
             onClick={() => {
               onRefresh?.();
               setLastRefresh(new Date());

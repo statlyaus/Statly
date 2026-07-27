@@ -75,6 +75,15 @@ interface TeamAnalyticsDashboardProps {
   };
 }
 
+const TEAM_ANALYTICS_TABS = [
+  { id: 'overview', label: 'Team Overview' },
+  { id: 'players', label: 'Player Analysis' },
+  { id: 'analytics', label: 'Performance Analytics' },
+  { id: 'trades', label: 'Trade Opportunities' },
+] as const;
+
+type TeamAnalyticsTabId = (typeof TEAM_ANALYTICS_TABS)[number]['id'];
+
 // Mock data for demo
 const mockTeamPlayers: Player[] = [
   {
@@ -216,9 +225,7 @@ export default function TeamAnalyticsDashboard({
   const [teamStats, setTeamStats] = useState<TeamStats>(propTeamStats || mockTeamStats);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'analytics' | 'trades'>(
-    'overview'
-  );
+  const [activeTab, setActiveTab] = useState<TeamAnalyticsTabId>('overview');
   const [sortBy, setSortBy] = useState<'score' | 'form' | 'price' | 'projected'>('score');
   const [liveMessage, setLiveMessage] = useState<string>('');
 
@@ -361,6 +368,7 @@ export default function TeamAnalyticsDashboard({
   }, []);
 
   // Keyboard & focus management for the players list
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
   const listRef = useRef<FixedSizeList<Player[]> | null>(null);
@@ -435,6 +443,29 @@ export default function TeamAnalyticsDashboard({
 
   // Adapter used by react-window to render rows
   const itemData = useMemo(() => sortedPlayers, [sortedPlayers]);
+
+  const onTabKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
+      let nextIndex: number | null = null;
+
+      if (event.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % TEAM_ANALYTICS_TABS.length;
+      } else if (event.key === 'ArrowLeft') {
+        nextIndex = (currentIndex - 1 + TEAM_ANALYTICS_TABS.length) % TEAM_ANALYTICS_TABS.length;
+      } else if (event.key === 'Home') {
+        nextIndex = 0;
+      } else if (event.key === 'End') {
+        nextIndex = TEAM_ANALYTICS_TABS.length - 1;
+      }
+
+      if (nextIndex === null) return;
+
+      event.preventDefault();
+      setActiveTab(TEAM_ANALYTICS_TABS[nextIndex].id);
+      tabRefs.current[nextIndex]?.focus();
+    },
+    []
+  );
 
   const VirtualizedRowInner = React.memo(function VirtualizedRowInner({
     index,
@@ -679,12 +710,7 @@ export default function TeamAnalyticsDashboard({
         aria-label="Team tabs"
         className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 sm:grid-cols-4"
       >
-        {[
-          { id: 'overview', label: 'Team Overview' },
-          { id: 'players', label: 'Player Analysis' },
-          { id: 'analytics', label: 'Performance Analytics' },
-          { id: 'trades', label: 'Trade Opportunities' },
-        ].map((tab) => {
+        {TEAM_ANALYTICS_TABS.map((tab, index) => {
           const isActive = activeTab === tab.id;
           const classes =
             'min-w-0 rounded-md px-3 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ' +
@@ -692,12 +718,17 @@ export default function TeamAnalyticsDashboard({
           return (
             <button
               key={tab.id}
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
+              type="button"
               id={`tab-${tab.id}`}
               role="tab"
               aria-selected={isActive}
               aria-controls={`panel-${tab.id}`}
               tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => onTabKeyDown(event, index)}
               className={classes}
             >
               {tab.label}

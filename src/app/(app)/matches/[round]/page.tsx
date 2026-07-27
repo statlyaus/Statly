@@ -68,13 +68,13 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
 
         <div className="flex items-center gap-2 mb-6">
           {roundNumber <= 1 ? (
-            <span
-              role="link"
-              aria-disabled="true"
+            <button
+              type="button"
+              disabled
               className="cursor-not-allowed rounded border px-3 py-1 text-sm opacity-50"
             >
               ← Previous
-            </span>
+            </button>
           ) : (
             <Link
               href={`/matches/${prevRound}`}

@@ -53,7 +53,7 @@ Overall health: **critical remediation required before polish**.
 
 - Route source of truth: 56 `page.tsx` files under `src/app`.
 - Browser evidence: 61 distinct route/tab states captured at 1440×900 and 390×844 (122 accepted screenshots).
-- Screenshot archive: `/Users/robert/.codex/visualizations/2026/07/26/019f9f1b-a0e6-7ce0-a679-10c9bf789a1e/site-design-audit/`.
+- Screenshot archive: Codex task artifact collection `site-design-audit/` (not committed to the repository).
 - Captures were taken after DOM load and a 1.8-second visual-settle window. Blank or narrow captures were checked against populated DOM snapshots and are rendered-layout failures, not empty loading screenshots.
 - Authenticated captures used the existing local development user. `prisma/dev.db` SHA-256 and timestamp were checked before and after; neither changed.
 - Browser-only development controls (Next.js issue badge and floating development/social controls) are visible in some captures but excluded from product-layout scoring unless they obscure content.
@@ -84,17 +84,17 @@ Overall health: **critical remediation required before polish**.
 
 ### P1 — Correct navigation and mobile task flow
 
-5. **Fix broken destinations.** Signed-out navigation links to missing `/fantasy`; Waivers links to missing `/waivers/submit`; Team Analytics points guests to missing `/auth/signin` instead of `/login`.
-6. **Remove horizontal overflow and clipped controls.** Measured mobile document widths: Live Scoring 440px, Help 489px, Player Detail 509px, Commissioner 555px, and Team Analytics 687px. Draft Room also overflows desktop at 1504px on a 1440px viewport.
-7. **Reduce league decision load.** Group the 12 peer tabs into task-oriented navigation (Play, League, Social, Settings), retain deep links, and use a compact mobile disclosure. Preserve direct access for common tasks rather than turning every section into a long scrolling page.
-8. **Normalize page hierarchy.** Use one page title, one short purpose line, one primary action, and a consistent content container. Rankings, Match Centre, and several tab states currently duplicate or omit top-level headings.
+1. **Fix broken destinations.** Signed-out navigation links to missing `/fantasy`; Waivers links to missing `/waivers/submit`; Team Analytics points guests to missing `/auth/signin` instead of `/login`.
+2. **Remove horizontal overflow and clipped controls.** Measured mobile document widths: Live Scoring 440px, Help 489px, Player Detail 509px, Commissioner 555px, and Team Analytics 687px. Draft Room also overflows desktop at 1504px on a 1440px viewport.
+3. **Reduce league decision load.** Group the 12 peer tabs into task-oriented navigation (Play, League, Social, Settings), retain deep links, and use a compact mobile disclosure. Preserve direct access for common tasks rather than turning every section into a long scrolling page.
+4. **Normalize page hierarchy.** Use one page title, one short purpose line, one primary action, and a consistent content container. Rankings, Match Centre, and several tab states currently duplicate or omit top-level headings.
 
 ### P2 — Consolidate the design and accessibility system
 
-9. **Adopt semantic tokens end to end.** The shadcn token layer is strong, but 138 of 309 TSX files use fixed palette utilities while 97 use semantic tokens. Replace the second hard-coded league token object incrementally and wire the existing `light | dark | system` preference before claiming theme support.
-10. **Set a type floor.** Raise recurring 10–11px captions/navigation labels to at least 12px with comfortable line height, then verify at 200% zoom.
-11. **Repair shared primitives.** Modal focus trapping/restoration and reduced-motion values are computed but not applied; Tooltip's `aria-describedby` target lacks the matching id; link-style Button loading/disabled states remain tabbable; interactive Badge/StatusBadge states need focus and text equivalents.
-12. **Clarify the home hero.** Keep the authentic stadium image and two clear CTAs, but add a concise visible product promise. The current H1 is screen-reader-only, so sighted users meet imagery and actions before understanding the offer.
+1. **Adopt semantic tokens end to end.** The shadcn token layer is strong, but 138 of 309 TSX files use fixed palette utilities while 97 use semantic tokens. Replace the second hard-coded league token object incrementally and wire the existing `light | dark | system` preference before claiming theme support.
+2. **Set a type floor.** Raise recurring 10–11px captions/navigation labels to at least 12px with comfortable line height, then verify at 200% zoom.
+3. **Repair shared primitives.** Modal focus trapping/restoration and reduced-motion values are computed but not applied; Tooltip's `aria-describedby` target lacks the matching id; link-style Button loading/disabled states remain tabbable; interactive Badge/StatusBadge states need focus and text equivalents.
+4. **Clarify the home hero.** Keep the authentic stadium image and two clear CTAs, but add a concise visible product promise. The current H1 is screen-reader-only, so sighted users meet imagery and actions before understanding the offer.
 
 ## Page-by-page route audit
 

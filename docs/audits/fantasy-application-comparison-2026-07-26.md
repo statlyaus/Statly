@@ -17,7 +17,7 @@ The best direction for Statly is therefore a combination: **AFL Fantasy's authen
 - Capture tool: Codex in-app Browser.
 - Viewports: 1440×900 and 390×844.
 - Evidence: 13 screenshots captured and visually inspected during this audit.
-- Screenshot archive: `/Users/robert/.codex/visualizations/2026/07/26/019f9f1b-a0e6-7ce0-a679-10c9bf789a1e/comparative-app-audit/`.
+- Screenshot archive: Codex task artifact collection `comparative-app-audit/` (not committed to the repository).
 - Cookie notices were left visible where they affected the first-run experience.
 - Public DOM structure was checked to distinguish missing content from rendered-layout failures.
 

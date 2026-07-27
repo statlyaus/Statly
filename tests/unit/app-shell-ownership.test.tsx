@@ -1,10 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ReactNode } from 'react';
 
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import AppRouteLayout from '@/app/(app)/layout';
 import AppLayout, { isImmersiveAppPath } from '@/components/navigation/AppLayout';
 
 const navigation = vi.hoisted(() => ({ pathname: '/drafts' }));
@@ -15,6 +14,27 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/components/navigation/MainNavigation', () => ({
   default: () => <header role="banner">Primary navigation</header>,
+}));
+
+vi.mock('@/AuthContext', () => ({
+  AuthProvider: ({ children }: { children: ReactNode }) => (
+    <div data-testid="auth-provider">{children}</div>
+  ),
+}));
+
+vi.mock('@/components/league/social/LeagueSocialAppProvider', () => ({
+  default: ({ children }: { children: ReactNode }) => (
+    <div data-testid="league-social-provider">{children}</div>
+  ),
+}));
+
+vi.mock('@/components/PerformanceMonitor', () => ({
+  default: () => <div data-testid="performance-monitor" />,
+}));
+
+vi.mock('@/components/ui/ErrorBoundary', () => ({
+  PageErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SectionErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/contexts/TeamContext', () => ({
@@ -85,16 +105,17 @@ describe('app shell ownership', () => {
   });
 
   it('keeps route-group ownership above page content', () => {
-    const repoRoot = process.cwd();
-    const appRouteLayout = readFileSync(join(repoRoot, 'src/app/(app)/layout.tsx'), 'utf8');
-    const navigationSource = readFileSync(
-      join(repoRoot, 'src/components/navigation/MainNavigation.tsx'),
-      'utf8'
+    render(
+      <AppRouteLayout>
+        <div>Protected route content</div>
+      </AppRouteLayout>
     );
 
-    expect(appRouteLayout).toContain("import { AppLayout } from '@/components/navigation'");
-    expect(appRouteLayout).toContain('<AppLayout>{children}</AppLayout>');
-    expect(navigationSource).not.toContain("import { TeamProvider } from '@/contexts/TeamContext'");
-    expect(navigationSource).not.toContain('<TeamProvider>');
+    expect(document.querySelectorAll('[data-app-shell]')).toHaveLength(1);
+    expect(screen.getAllByTestId('team-provider')).toHaveLength(1);
+    expect(screen.getAllByTestId('auth-provider')).toHaveLength(1);
+    expect(screen.getAllByTestId('league-social-provider')).toHaveLength(1);
+    expect(screen.getAllByTestId('performance-monitor')).toHaveLength(1);
+    expect(screen.getByRole('main')).toHaveTextContent('Protected route content');
   });
 });

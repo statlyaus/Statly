@@ -122,6 +122,37 @@ describe('GiphyPicker', () => {
     );
   });
 
+  it('loads another page of trending GIFs', async () => {
+    const user = userEvent.setup();
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      ...mocks.gif,
+      id: `gif-${index}`,
+      title: `GIF ${index}`,
+    }));
+    const additionalGif = {
+      ...mocks.gif,
+      id: 'extra-gif',
+      title: 'Extra GIF',
+    };
+    mocks.trending
+      .mockResolvedValueOnce({ data: firstPage })
+      .mockResolvedValueOnce({ data: [additionalGif] });
+
+    render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
+    await user.click(await screen.findByRole('button', { name: 'Load more GIFs' }));
+
+    await waitFor(() =>
+      expect(mocks.trending).toHaveBeenNthCalledWith(2, {
+        offset: 20,
+        limit: 20,
+        rating: 'g',
+        type: 'gifs',
+      })
+    );
+    expect(await screen.findByRole('button', { name: 'Choose Extra GIF' })).toBeInTheDocument();
+  });
+
   it('stays hidden when the chat-specific Web SDK key is not configured', () => {
     const { container } = render(<GiphyPicker apiKey="" onSelect={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();

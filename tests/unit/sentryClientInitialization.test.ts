@@ -15,6 +15,8 @@ describe('Sentry client initialization', () => {
 
     expect(instrumentationSource).toContain("import * as Sentry from '@sentry/nextjs'");
     expect(instrumentationSource).toContain('Sentry.init({');
+    expect(instrumentationSource).toContain('integrations: [Sentry.replayIntegration()]');
+    expect(instrumentationSource).not.toContain('sendDefaultPii: true');
     expect(instrumentationSource).toContain(
       'export const onRouterTransitionStart = Sentry.captureRouterTransitionStart'
     );

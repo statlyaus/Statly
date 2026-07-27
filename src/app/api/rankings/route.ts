@@ -297,19 +297,7 @@ export async function GET(request: NextRequest) {
         const categoryScores: Record<RankingCategory, { perGame: number; zScore: number }> =
           {} as Record<RankingCategory, { perGame: number; zScore: number }>;
         let overallScore = 0;
-        (
-          [
-            'goals',
-            'goal_assists',
-            'tackles',
-            'clearances',
-            'inside_50s',
-            'rebound_50s',
-            'hitouts',
-            'intercepts',
-            'marks',
-          ] as RankingCategory[]
-        ).forEach((cat) => {
+        categories.forEach((cat) => {
           // Apply shrinkage to handle small sample sizes
           const adjustedRate = shrinkToLeagueAverage(
             player.perGameStats[cat],

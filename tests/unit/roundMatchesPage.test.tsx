@@ -37,9 +37,8 @@ describe('RoundMatchesPage navigation', () => {
   it('renders a non-interactive Previous control for round one', async () => {
     render(await RoundMatchesPage({ params: Promise.resolve({ round: '1' }) }));
 
-    const previous = screen.getByRole('link', { name: '← Previous' });
-    expect(previous.tagName).toBe('SPAN');
-    expect(previous).toHaveAttribute('aria-disabled', 'true');
+    const previous = screen.getByRole('button', { name: '← Previous' });
+    expect(previous).toBeDisabled();
     expect(previous).not.toHaveAttribute('href');
     expect(screen.getByRole('link', { name: 'Next →' })).toHaveAttribute('href', '/matches/2');
     expect(screen.getByText('Round matches 1')).toBeVisible();

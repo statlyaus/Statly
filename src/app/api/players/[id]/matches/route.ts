@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 
 import { type NextRequest } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminDb, firebaseAdminIsDisabled } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { prisma } from '@/lib/prisma';
@@ -156,6 +156,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         )
       );
     } catch (error) {
+      if (!firebaseAdminIsDisabled()) {
+        throw error;
+      }
+
       logger.warn('Failed to load optional player match history; returning empty history', {
         playerId: id,
         error: error instanceof Error ? error.message : String(error),

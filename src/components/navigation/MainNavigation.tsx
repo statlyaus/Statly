@@ -28,7 +28,7 @@ interface NavigationItem {
   }>;
 }
 
-const publicNavigationItems: NavigationItem[] = [
+export const publicNavigationItems: NavigationItem[] = [
   {
     name: 'Home',
     href: '/',

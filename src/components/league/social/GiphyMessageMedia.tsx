@@ -107,15 +107,13 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
             </div>
             <div className="max-h-[calc(90dvh-3.5rem)] overflow-auto p-4">
               <div className="mx-auto max-w-2xl overflow-hidden rounded-xl bg-social-surface-subtle">
-                {expandedImage ? (
-                  <img
-                    src={expandedImage.url}
-                    alt={imageAlt}
-                    width={Number(expandedImage.width) || 640}
-                    height={Number(expandedImage.height) || 480}
-                    className="max-h-[calc(90dvh-8rem)] w-full object-contain"
-                  />
-                ) : null}
+                <img
+                  src={(expandedImage ?? timelineImage).url}
+                  alt={imageAlt}
+                  width={Number((expandedImage ?? timelineImage).width) || 640}
+                  height={Number((expandedImage ?? timelineImage).height) || 480}
+                  className="max-h-[calc(90dvh-8rem)] w-full object-contain"
+                />
               </div>
               <a
                 href="https://giphy.com/"

@@ -1,11 +1,11 @@
-import { expect, test, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import { expect, test } from '@playwright/test';
 
-import { E2E_DRAFT_ID } from './global.setup';
+import { E2E_DRAFT_ID, E2E_PLAYER_ID } from './global.setup';
 import {
   authenticateAsDevelopmentUser,
   collectRuntimeErrors,
   expectNoAppErrorBoundary,
+  expectNoPageLevelHorizontalOverflow,
 } from './helpers/devAuth';
 
 test.describe('shared app shell at 390px', () => {
@@ -15,28 +15,24 @@ test.describe('shared app shell at 390px', () => {
     await page.goto('/');
     await expect(page.locator('[data-app-shell]')).toHaveCount(0);
     await expect(page.locator('#main-content')).toHaveCount(1);
-    await assertNoPageLevelHorizontalOverflow(page);
+    await expectNoPageLevelHorizontalOverflow(page);
 
     await page.goto('/login');
     await expect(page.locator('[data-app-shell]')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Sign in to Statly' })).toBeVisible();
-    await assertNoPageLevelHorizontalOverflow(page);
+    await expectNoPageLevelHorizontalOverflow(page);
   });
 
   test('renders one responsive shell across representative protected routes', async ({ page }) => {
     const runtimeErrors = collectRuntimeErrors(page);
     await authenticateAsDevelopmentUser(page);
-    const prisma = new PrismaClient();
-    const player = await prisma.player.findFirst({ select: { id: true } });
-    await prisma.$disconnect();
-    expect(player).not.toBeNull();
 
     const protectedRoutes = [
       '/drafts',
       '/scheduling',
       '/help',
       '/team-analytics',
-      `/players/${player!.id}`,
+      `/players/${E2E_PLAYER_ID}`,
       '/live-scoring',
       '/commissioner',
       '/rosters',
@@ -46,14 +42,14 @@ test.describe('shared app shell at 390px', () => {
       await test.step(route, async () => {
         await page.goto(route);
         if (route.startsWith('/players/')) {
-          await page.waitForLoadState('networkidle');
+          await expect(page.getByRole('heading', { name: 'Darcy Cameron' })).toBeVisible();
         }
         await expect(page.locator('[data-app-shell]')).toHaveCount(1);
         await expect(page.getByRole('banner')).toHaveCount(1);
         await expect(page.locator('#main-content')).toHaveCount(1);
         await expect(page.getByRole('button', { name: 'Open navigation' })).toBeVisible();
         await expectNoAppErrorBoundary(page);
-        await assertNoPageLevelHorizontalOverflow(page);
+        await expectNoPageLevelHorizontalOverflow(page);
       });
     }
 
@@ -72,7 +68,7 @@ test.describe('shared app shell at 390px', () => {
     await expect(page.locator('[data-app-shell]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveCount(0);
     await expectNoAppErrorBoundary(page);
-    await assertNoPageLevelHorizontalOverflow(page);
+    await expectNoPageLevelHorizontalOverflow(page);
     expect(runtimeErrors).toEqual([]);
   });
 });
@@ -90,16 +86,7 @@ for (const width of [1440, 1536]) {
     );
     await expect(page.locator('[data-app-shell]')).toHaveCount(0);
     await expectNoAppErrorBoundary(page);
-    await assertNoPageLevelHorizontalOverflow(page);
+    await expectNoPageLevelHorizontalOverflow(page);
     expect(runtimeErrors).toEqual([]);
   });
-}
-
-async function assertNoPageLevelHorizontalOverflow(page: Page): Promise<void> {
-  const widths = await page.evaluate(() => ({
-    client: document.documentElement.clientWidth,
-    scroll: document.documentElement.scrollWidth,
-  }));
-
-  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
 }

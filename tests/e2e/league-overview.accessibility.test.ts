@@ -1,9 +1,10 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import {
   authenticateAsDevelopmentUser,
   collectRuntimeErrors,
   expectNoAppErrorBoundary,
+  expectNoPageLevelHorizontalOverflow,
 } from './helpers/devAuth';
 import { E2E_LEAGUE_ID } from './global.setup';
 
@@ -36,7 +37,7 @@ for (const viewport of [
     const leagueSettings = leagueNavigation.getByRole('button', { name: 'League Settings' });
 
     await expect(leagueNavigation).toBeVisible();
-    await assertNoPageLevelHorizontalOverflow(page);
+    await expectNoPageLevelHorizontalOverflow(page);
 
     if (viewport.width < 768) {
       await expect(sectionSelect).toBeVisible();
@@ -95,17 +96,8 @@ for (const viewport of [
       await expect(leagueSettings).toHaveAttribute('aria-current', 'page');
     }
     await expect(page.getByRole('heading', { name: 'League Settings' })).toBeVisible();
-    await assertNoPageLevelHorizontalOverflow(page);
+    await expectNoPageLevelHorizontalOverflow(page);
     await expectNoAppErrorBoundary(page);
     expect(runtimeErrors).toEqual([]);
   });
-}
-
-async function assertNoPageLevelHorizontalOverflow(page: Page) {
-  const widths = await page.evaluate(() => ({
-    client: document.documentElement.clientWidth,
-    scroll: document.documentElement.scrollWidth,
-  }));
-
-  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
 }
