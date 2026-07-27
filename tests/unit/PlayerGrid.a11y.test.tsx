@@ -185,13 +185,15 @@ describe('PlayerGrid accessibility', () => {
     expect(
       screen.getByRole('button', { name: 'Add Marcus Bontempelli to watchlist' })
     ).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Add Adam Treloar to watchlist' })).not.toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Add Adam Treloar to watchlist' })
+    ).not.toBeDisabled();
   });
 
-  it('renders large draft player pools without truncating available rows', () => {
-    const largePool = Array.from({ length: 130 }, (_, index) => buildPlayer(index + 1));
+  it('windows large draft player pools while preserving their semantic row count', () => {
+    const largePool = Array.from({ length: 320 }, (_, index) => buildPlayer(index + 1));
 
-    const { container } = render(
+    render(
       <PlayerGrid
         {...defaultProps}
         players={largePool}
@@ -200,12 +202,13 @@ describe('PlayerGrid accessibility', () => {
       />
     );
 
-    expect(screen.getByText('Showing 130 of 130 players')).toBeInTheDocument();
+    expect(screen.getByText('Showing 320 of 320 players')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /select player 001/i })).toBeInTheDocument();
-    expect(container.querySelector('button[aria-label="Select Player 130"]')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /select player 320/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('row').length).toBeLessThan(80);
     expect(screen.getByRole('table', { name: /available draft players/i })).toHaveAttribute(
       'aria-rowcount',
-      '132'
+      '322'
     );
   });
 
@@ -225,7 +228,9 @@ describe('PlayerGrid accessibility', () => {
       'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm'
     );
     expect(source).toContain('className="relative min-h-0 flex-1"');
-    expect(source).toContain('className="h-full overflow-auto bg-[color:var(--draft-broadcast-table)]"');
+    expect(source).toContain(
+      'className="h-full overflow-auto bg-[color:var(--draft-broadcast-table)]"'
+    );
     expect(source).toContain('sticky left-0 z-20 bg-[color:var(--draft-broadcast-panel)]');
     expect(source).toContain('sticky left-0 z-[1] bg-card');
     expect(source).toContain("onClick={() => onSortChange('statlyZ')}");

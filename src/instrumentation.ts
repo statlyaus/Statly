@@ -1,5 +1,5 @@
 export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
+  if (process.env.NEXT_RUNTIME === 'nodejs' && process.env.SENTRY_DISABLED !== 'true') {
     const Sentry = await import('@sentry/node');
 
     Sentry.init({
@@ -18,6 +18,8 @@ export async function register() {
 }
 
 export const onRequestError = async (error: Error) => {
+  if (process.env.SENTRY_DISABLED === 'true') return;
+
   const Sentry = await import('@sentry/node');
   Sentry.captureException(error);
 };

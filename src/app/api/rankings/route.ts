@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getPlayerPosition } from '@/lib/playerPositionMapping';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminDb, firebaseAdminIsDisabled } from '@/lib/firebaseAdmin';
 
 export const runtime = 'nodejs';
 const CACHE_SECONDS = 300; // 5 minutes cache
@@ -16,6 +16,18 @@ export type RankingCategory =
   | 'hitouts'
   | 'intercepts'
   | 'marks';
+
+const RANKING_CATEGORIES: RankingCategory[] = [
+  'goals',
+  'goal_assists',
+  'tackles',
+  'clearances',
+  'inside_50s',
+  'rebound_50s',
+  'hitouts',
+  'intercepts',
+  'marks',
+];
 
 // Player ownership status
 export type OwnershipStatus = 'OWNED' | 'AVAILABLE' | 'WAIVER';
@@ -72,7 +84,6 @@ async function getOwnershipStatus(_playerId: string, _leagueId?: string): Promis
 
 export async function GET(request: NextRequest) {
   try {
-    const db = adminDb;
     const { searchParams } = new URL(request.url);
 
     // Query parameters
@@ -85,6 +96,31 @@ export async function GET(request: NextRequest) {
     const sortDirection = searchParams.get('sortDirection') || 'desc'; // asc or desc
     const limit = parseInt(searchParams.get('limit') || '0'); // 0 means no limit
     const search = searchParams.get('search');
+
+    if (firebaseAdminIsDisabled()) {
+      const emptyCategoryValues = Object.fromEntries(
+        RANKING_CATEGORIES.map((category) => [category, 0])
+      ) as Record<RankingCategory, number>;
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          players: [],
+          meta: {
+            period,
+            position: position || undefined,
+            ownership: ownership || undefined,
+            sortBy,
+            totalPlayers: 0,
+            averages: emptyCategoryValues,
+            stdDevs: emptyCategoryValues,
+          },
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const db = adminDb;
 
     console.log(
       `[Rankings API] Querying for season=${season}, period=${period}, position=${position}, ownership=${ownership}`
@@ -241,17 +277,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate league averages for each category
-    const categories: RankingCategory[] = [
-      'goals',
-      'goal_assists',
-      'tackles',
-      'clearances',
-      'inside_50s',
-      'rebound_50s',
-      'hitouts',
-      'intercepts',
-      'marks',
-    ];
+    const categories = RANKING_CATEGORIES;
     const leagueAverages: Record<RankingCategory, number> = {} as Record<RankingCategory, number>;
     const stdDevs: Record<RankingCategory, number> = {} as Record<RankingCategory, number>;
 

@@ -10,6 +10,7 @@ const sampleServiceAccount = {
 
 describe('firebaseAdmin initialization', () => {
   const originalEnv = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+  const originalDisabled = process.env.FIREBASE_ADMIN_DISABLED;
   const originalGoogleProject = process.env.GOOGLE_CLOUD_PROJECT;
   const originalGcloudProject = process.env.GCLOUD_PROJECT;
   const originalPublicProject = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
@@ -17,6 +18,7 @@ describe('firebaseAdmin initialization', () => {
   beforeEach(() => {
     vi.resetModules();
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = encodeServiceAccount(sampleServiceAccount);
+    delete process.env.FIREBASE_ADMIN_DISABLED;
     delete process.env.GOOGLE_CLOUD_PROJECT;
     delete process.env.GCLOUD_PROJECT;
     delete process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
@@ -31,6 +33,12 @@ describe('firebaseAdmin initialization', () => {
       delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
     } else {
       process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = originalEnv;
+    }
+
+    if (originalDisabled === undefined) {
+      delete process.env.FIREBASE_ADMIN_DISABLED;
+    } else {
+      process.env.FIREBASE_ADMIN_DISABLED = originalDisabled;
     }
 
     if (originalGoogleProject === undefined) {
@@ -93,6 +101,45 @@ describe('firebaseAdmin initialization', () => {
     );
     expect(getFirestore).toHaveBeenCalledWith(configuredApp);
     expect(getAuth).toHaveBeenCalledWith(configuredApp);
+  });
+
+  it('fails Firebase operations immediately when the integration is disabled', async () => {
+    process.env.FIREBASE_ADMIN_DISABLED = 'true';
+
+    const cert = vi.fn();
+    const applicationDefault = vi.fn();
+    const getApps = vi.fn(() => []);
+    const initializeApp = vi.fn();
+    const getFirestore = vi.fn(() => ({ kind: 'firestore' }));
+    const getAuth = vi.fn(() => ({ kind: 'auth' }));
+
+    vi.doMock('firebase-admin/app', () => ({
+      applicationDefault,
+      cert,
+      getApps,
+      initializeApp,
+    }));
+    vi.doMock('firebase-admin/firestore', () => ({
+      getFirestore,
+    }));
+    vi.doMock('firebase-admin/auth', () => ({
+      getAuth,
+    }));
+
+    const { adminAuth, adminDb } = await import('../../src/lib/firebaseAdmin');
+
+    expect(cert).not.toHaveBeenCalled();
+    expect(applicationDefault).not.toHaveBeenCalled();
+    expect(getApps).not.toHaveBeenCalled();
+    expect(initializeApp).not.toHaveBeenCalled();
+    expect(getFirestore).not.toHaveBeenCalled();
+    expect(getAuth).not.toHaveBeenCalled();
+    expect(() => adminDb.collection('players')).toThrow(
+      'Firestore operation "collection" is unavailable because Firebase Admin integration is disabled'
+    );
+    expect(() => adminAuth.verifyIdToken('token')).toThrow(
+      'Auth operation "verifyIdToken" is unavailable because Firebase Admin integration is disabled'
+    );
   });
 
   it('treats checked-in placeholder service account values as absent', async () => {
