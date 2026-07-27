@@ -231,6 +231,15 @@ describe('PlayerGrid accessibility', () => {
         scheduledFrame = callback;
         return 1;
       });
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class ResizeObserverMock {
+        observe = observe;
+        disconnect = disconnect;
+      }
+    );
     const largePool = Array.from({ length: 320 }, (_, index) => buildPlayer(index + 1));
     const { unmount } = render(
       <PlayerGrid
@@ -270,11 +279,15 @@ describe('PlayerGrid accessibility', () => {
           screen.queryByRole('button', { name: /select player 001/i })
         ).not.toBeInTheDocument();
       });
+      expect(observe).toHaveBeenCalledTimes(1);
+      expect(disconnect).not.toHaveBeenCalled();
       expect(
         scrollContainer.querySelector<HTMLTableCellElement>('tbody > tr[role="presentation"] > td')
       ).toHaveStyle({ height: '1344px' });
     } finally {
       unmount();
+      expect(disconnect).toHaveBeenCalledTimes(1);
+      vi.unstubAllGlobals();
       requestFrame.mockRestore();
       rowMeasurement.mockRestore();
       if (originalClientHeight) {

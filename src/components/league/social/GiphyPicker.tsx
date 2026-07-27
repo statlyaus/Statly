@@ -44,10 +44,19 @@ export default function GiphyPicker({
   const [gifs, setGifs] = useState<GiphyGif[]>([]);
   const [nextOffset, setNextOffset] = useState(PICKER_RESULT_LIMIT);
   const [hasMore, setHasMore] = useState(false);
+  const [hasLoadedAdditionalPage, setHasLoadedAdditionalPage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectionPending, setSelectionPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const gifTiles = useMemo(
+    () =>
+      gifs.flatMap((gif) => {
+        const image = gif.images?.fixed_width ?? gif.images?.original ?? null;
+        return image ? [{ gif, image }] : [];
+      }),
+    [gifs]
+  );
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -88,6 +97,7 @@ export default function GiphyPicker({
     setLoadingMore(false);
     setGifs([]);
     setHasMore(false);
+    setHasLoadedAdditionalPage(false);
     setError(null);
     void fetchGifs(0)
       .then(({ data }) => {
@@ -130,6 +140,7 @@ export default function GiphyPicker({
         return Array.from(gifsById.values());
       });
       setNextOffset((offset) => offset + PICKER_RESULT_LIMIT);
+      setHasLoadedAdditionalPage(true);
       setHasMore(data.length === PICKER_RESULT_LIMIT);
     } catch {
       if (resultSetVersionRef.current === resultSetVersion) {
@@ -256,13 +267,12 @@ export default function GiphyPicker({
               <p role="status" className="py-16 text-center text-sm text-social-text-muted">
                 Loading GIFs…
               </p>
-            ) : gifs.length === 0 ? (
+            ) : gifTiles.length === 0 ? (
               <p className="py-16 text-center text-sm text-social-text-muted">No GIFs found</p>
             ) : (
               <>
                 <ul className="grid grid-cols-2 gap-1.5 p-1.5 sm:grid-cols-3">
-                  {gifs.map((gif) => {
-                    const image = gif.images.fixed_width ?? gif.images.original;
+                  {gifTiles.map(({ gif, image }) => {
                     const title = gif.title?.trim() || 'GIF';
 
                     return (
@@ -287,15 +297,19 @@ export default function GiphyPicker({
                     );
                   })}
                 </ul>
-                {hasMore ? (
+                {hasMore || hasLoadedAdditionalPage ? (
                   <div className="p-2 pt-0 text-center">
                     <button
                       type="button"
-                      disabled={loadingMore}
+                      disabled={loadingMore || !hasMore}
                       onClick={() => void loadMoreGifs()}
                       className="min-h-10 rounded-lg border border-social-border bg-social-surface px-4 text-sm font-semibold text-social-text transition-colors hover:border-social-action hover:bg-social-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-wait disabled:opacity-60"
                     >
-                      {loadingMore ? 'Loading more GIFs…' : 'Load more GIFs'}
+                      {loadingMore
+                        ? 'Loading more GIFs…'
+                        : hasMore
+                          ? 'Load more GIFs'
+                          : 'No more GIFs'}
                     </button>
                   </div>
                 ) : null}

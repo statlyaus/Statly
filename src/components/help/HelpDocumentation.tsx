@@ -206,7 +206,7 @@ export default function HelpDocumentation({
   videos = mockVideos,
   faqs = mockFAQs,
   onSearchQuery,
-  onRateContent: _onRateContent,
+  onRateContent,
 }: HelpSystemProps) {
   const [activeTab, setActiveTab] = useState<'articles' | 'videos' | 'faqs' | 'contact'>(
     'articles'
@@ -214,6 +214,7 @@ export default function HelpDocumentation({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedArticle, setSelectedArticle] = useState<HelpArticle | null>(null);
+  const [articleRating, setArticleRating] = useState<1 | -1 | null>(null);
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
 
   // Get unique categories
@@ -280,7 +281,10 @@ export default function HelpDocumentation({
       <div className="mx-auto w-full min-w-0 max-w-4xl p-4 sm:p-6">
         <button
           type="button"
-          onClick={() => setSelectedArticle(null)}
+          onClick={() => {
+            setSelectedArticle(null);
+            setArticleRating(null);
+          }}
           className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6"
         >
           ← Back to Help
@@ -352,12 +356,22 @@ export default function HelpDocumentation({
             <div className="flex gap-2">
               <button
                 type="button"
+                aria-pressed={articleRating === 1}
+                onClick={() => {
+                  setArticleRating(1);
+                  onRateContent?.(selectedArticle.id, 1);
+                }}
                 className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
               >
                 👍 Yes
               </button>
               <button
                 type="button"
+                aria-pressed={articleRating === -1}
+                onClick={() => {
+                  setArticleRating(-1);
+                  onRateContent?.(selectedArticle.id, -1);
+                }}
                 className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
               >
                 👎 No
@@ -451,7 +465,10 @@ export default function HelpDocumentation({
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow"
-                onClick={() => setSelectedArticle(article)}
+                onClick={() => {
+                  setSelectedArticle(article);
+                  setArticleRating(null);
+                }}
               >
                 <div className="flex items-start justify-between mb-4">
                   <BookOpenIcon className="w-8 h-8 text-blue-600" />

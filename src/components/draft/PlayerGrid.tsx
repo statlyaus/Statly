@@ -949,33 +949,34 @@ export default function PlayerGrid({
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) return;
 
-    const updateMeasurements = () => {
+    const updateViewportHeight = () => {
       if (scrollContainer.clientHeight > 0) {
         setViewportHeight(scrollContainer.clientHeight);
       }
-
-      const measuredHeights = rowRefs.current
-        .map((row) => row?.getBoundingClientRect().height ?? 0)
-        .filter((height) => height > 0);
-      if (measuredHeights.length === 0) return;
-
-      const measuredAverage =
-        measuredHeights.reduce((total, height) => total + height, 0) / measuredHeights.length;
-      setVirtualizedRowHeight((currentHeight) =>
-        Math.abs(currentHeight - measuredAverage) > 0.5 ? measuredAverage : currentHeight
-      );
     };
 
-    updateMeasurements();
+    updateViewportHeight();
     if (typeof ResizeObserver === 'undefined') return;
 
-    const resizeObserver = new ResizeObserver(updateMeasurements);
+    const resizeObserver = new ResizeObserver(updateViewportHeight);
     resizeObserver.observe(scrollContainer);
-    rowRefs.current.forEach((row) => {
-      if (row) resizeObserver.observe(row);
-    });
 
     return () => resizeObserver.disconnect();
+  }, [shouldWindowRows]);
+
+  useEffect(() => {
+    if (!shouldWindowRows) return;
+
+    const measuredHeights = rowRefs.current
+      .map((row) => row?.getBoundingClientRect().height ?? 0)
+      .filter((height) => height > 0);
+    if (measuredHeights.length === 0) return;
+
+    const measuredAverage =
+      measuredHeights.reduce((total, height) => total + height, 0) / measuredHeights.length;
+    setVirtualizedRowHeight((currentHeight) =>
+      Math.abs(currentHeight - measuredAverage) > 0.5 ? measuredAverage : currentHeight
+    );
   }, [shouldWindowRows, visibleCategories.length, visibleRange.end, visibleRange.start]);
 
   // Handle player selection

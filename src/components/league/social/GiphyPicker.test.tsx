@@ -140,7 +140,8 @@ describe('GiphyPicker', () => {
 
     render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
-    await user.click(await screen.findByRole('button', { name: 'Load more GIFs' }));
+    const loadMore = await screen.findByRole('button', { name: 'Load more GIFs' });
+    await user.click(loadMore);
 
     await waitFor(() =>
       expect(mocks.trending).toHaveBeenNthCalledWith(2, {
@@ -151,6 +152,29 @@ describe('GiphyPicker', () => {
       })
     );
     expect(await screen.findByRole('button', { name: 'Choose Extra GIF' })).toBeInTheDocument();
+    const endOfResults = screen.getByRole('button', { name: 'No more GIFs' });
+    expect(endOfResults).toBeDisabled();
+    expect(endOfResults).toHaveFocus();
+  });
+
+  it('skips GIFs without a usable image rendition', async () => {
+    const user = userEvent.setup();
+    mocks.trending.mockResolvedValueOnce({
+      data: [
+        {
+          ...mocks.gif,
+          id: 'missing-image',
+          title: 'Missing Image',
+          images: {},
+        },
+      ],
+    });
+
+    render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
+
+    expect(await screen.findByText('No GIFs found')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Choose Missing Image' })).not.toBeInTheDocument();
   });
 
   it('stays hidden when the chat-specific Web SDK key is not configured', () => {
