@@ -67,14 +67,22 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
         </div>
 
         <div className="flex items-center gap-2 mb-6">
-          <Link
-            href={`/matches/${prevRound}`}
-            aria-disabled={roundNumber <= 1}
-            className={`px-3 py-1 rounded border text-sm ${roundNumber <= 1 ? 'pointer-events-none opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-            onClick={roundNumber <= 1 ? (e) => e.preventDefault() : undefined}
-          >
-            ← Previous
-          </Link>
+          {roundNumber <= 1 ? (
+            <span
+              role="link"
+              aria-disabled="true"
+              className="cursor-not-allowed rounded border px-3 py-1 text-sm opacity-50"
+            >
+              ← Previous
+            </span>
+          ) : (
+            <Link
+              href={`/matches/${prevRound}`}
+              className="rounded border px-3 py-1 text-sm hover:bg-gray-50"
+            >
+              ← Previous
+            </Link>
+          )}
           <Link
             href={`/matches/${nextRound}`}
             className="px-3 py-1 rounded border text-sm hover:bg-gray-50"

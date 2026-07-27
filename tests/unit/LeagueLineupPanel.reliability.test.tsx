@@ -37,6 +37,15 @@ function response(payload: unknown, ok = true) {
   };
 }
 
+function emptyResponse(ok = false) {
+  return {
+    ok,
+    json: async () => {
+      throw new SyntaxError('Unexpected end of JSON input');
+    },
+  };
+}
+
 function lineupPayload(
   lockState: 'OPEN' | 'LOCKED' | 'NO_MATCHUP' = 'OPEN',
   playerName = 'First Player'
@@ -128,6 +137,17 @@ describe('LeagueLineupPanel reliability', () => {
     ).toHaveLength(0);
   });
 
+  it('shows an actionable error when a lineup load returns an empty body', async () => {
+    authenticatedFetchMock.mockResolvedValue(emptyResponse());
+
+    render(<LeagueLineupPanel leagueId="league-1" currentUserId="user-1" />);
+
+    expect(
+      await screen.findByText('Failed to load lineup. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Unexpected end of JSON input')).not.toBeInTheDocument();
+  });
+
   it.each(['LOCKED', 'NO_MATCHUP'] as const)(
     'does not mutate or autosave a %s lineup',
     async (lockState) => {
@@ -188,5 +208,28 @@ describe('LeagueLineupPanel reliability', () => {
     expect(
       authenticatedFetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')
     ).toHaveLength(2);
+  });
+
+  it('shows an actionable error when an autosave returns an empty body', async () => {
+    vi.useFakeTimers();
+    authenticatedFetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') return Promise.resolve(emptyResponse(true));
+      return Promise.resolve(response(lineupPayload()));
+    });
+
+    render(<LeagueLineupPanel leagueId="league-1" currentUserId="user-1" />);
+    await act(flushPromises);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Assign player' }));
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      await flushPromises();
+    });
+
+    expect(screen.getByText('Failed to save lineup. Please try again.')).toBeInTheDocument();
+    expect(screen.queryByText('Unexpected end of JSON input')).not.toBeInTheDocument();
+    expect(
+      authenticatedFetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')
+    ).toHaveLength(1);
   });
 });

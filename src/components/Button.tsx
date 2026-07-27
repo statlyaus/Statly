@@ -8,6 +8,7 @@ import { useReducedMotion } from '@/hooks/useAccessibility';
 interface CommonProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
+  disabled?: boolean;
   loading?: boolean;
   loadingText?: string;
   leftIcon?: ReactNode;
@@ -123,21 +124,23 @@ export default function Button(props: ButtonProps) {
   );
 
   if (isLink(props)) {
-    const isDisabled = Boolean(loading);
+    const isDisabled = Boolean(props.disabled || loading);
     const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
       if (isDisabled) {
         e.preventDefault();
         e.stopPropagation();
+        return;
       }
-      // Allow consumer onClick if provided
+
       if (props.onClick) props.onClick(e);
     };
     return (
       <Link
         href={props.href}
-        className={classes}
+        className={clsx(classes, isDisabled && 'cursor-not-allowed opacity-50')}
         aria-disabled={isDisabled}
         onClick={handleClick}
+        tabIndex={isDisabled ? -1 : props.tabIndex}
         target={props.target}
         rel={props.rel}
         title={props.title}

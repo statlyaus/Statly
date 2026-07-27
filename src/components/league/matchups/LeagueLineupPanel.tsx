@@ -39,6 +39,22 @@ interface LineupRoundContext {
   opponent: { id: string; teamName: string } | null;
 }
 
+interface LineupApiResponse {
+  success?: boolean;
+  data?: {
+    rosterPlayers?: LineupRosterPlayer[];
+    players?: LineupApiPlayer[];
+    lineupSlots?: unknown;
+    interchangeSlots?: unknown;
+    context?: LineupRoundContext | null;
+    setupRequired?: unknown;
+    canManageCompetition?: unknown;
+    savedRound?: unknown;
+  };
+  error?: string;
+  details?: string[];
+}
+
 function isLineupAssignment(player: LineupApiPlayer): player is LineupAssignment {
   return (
     player.playerId.length > 0 &&
@@ -55,6 +71,26 @@ function isLineupAssignment(player: LineupApiPlayer): player is LineupAssignment
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+async function parseLineupApiResponse(
+  response: Response,
+  fallbackMessage: string
+): Promise<LineupApiResponse> {
+  let payload: unknown;
+
+  try {
+    payload = await response.json();
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw new Error(fallbackMessage);
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(fallbackMessage);
+  }
+
+  return payload as LineupApiResponse;
 }
 
 export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanelProps) {
@@ -117,7 +153,10 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           { signal: controller.signal },
           currentUserId
         );
-        const payload = await response.json();
+        const payload = await parseLineupApiResponse(
+          response,
+          'Failed to load lineup. Please try again.'
+        );
         if (!response.ok || !payload.success) {
           throw new Error(payload.error ?? 'Failed to load lineup.');
         }
@@ -128,13 +167,13 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
           : [];
         const savedPlayers = Array.isArray(payload.data?.players) ? payload.data.players : [];
         const nextAssignments = savedPlayers
-          .map((player: LineupApiPlayer) => ({
+          .filter(isLineupAssignment)
+          .map((player) => ({
             playerId: player.playerId,
             slot: player.slot,
             slotIndex: player.slotIndex,
             lockedAt: player.lockedAt ?? null,
-          }))
-          .filter(isLineupAssignment);
+          }));
 
         setLineupSlots(normalizeLineupBuilderSlots(payload.data?.lineupSlots));
         setInterchangeSlots(Math.max(0, Number(payload.data?.interchangeSlots) || 0));
@@ -247,7 +286,10 @@ export function LeagueLineupPanel({ leagueId, currentUserId }: LeagueLineupPanel
         },
         currentUserId
       );
-      const payload = await response.json();
+      const payload = await parseLineupApiResponse(
+        response,
+        'Failed to save lineup. Please try again.'
+      );
       if (!response.ok || !payload.success) {
         throw new Error(payload.details?.join(', ') ?? payload.error ?? 'Failed to save lineup.');
       }

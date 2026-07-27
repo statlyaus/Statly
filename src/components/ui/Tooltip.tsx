@@ -226,6 +226,7 @@ export default function Tooltip({
 }: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const tooltipId = React.useId();
   const triggerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -304,6 +305,8 @@ export default function Tooltip({
     if (trigger === 'hover') {
       handlers.onMouseEnter = showTooltip;
       handlers.onMouseLeave = hideTooltip;
+      handlers.onFocus = showTooltip;
+      handlers.onBlur = hideTooltip;
     } else if (trigger === 'click') {
       handlers.onClick = () => {
         if (isVisible) {
@@ -347,6 +350,7 @@ export default function Tooltip({
     <AnimatePresence>
       {isVisible && (
         <motion.div
+          id={tooltipId}
           ref={tooltipRef}
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -388,7 +392,7 @@ export default function Tooltip({
         ref={triggerRef}
         className={`inline-block ${className}`}
         {...eventHandlers}
-        aria-describedby={isVisible ? 'tooltip' : undefined}
+        aria-describedby={isVisible ? tooltipId : undefined}
       >
         {children}
       </div>

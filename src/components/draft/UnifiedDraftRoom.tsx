@@ -686,7 +686,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
           >
             <section
               aria-label="Draft board"
-              className="mt-6 grid min-h-[calc(100vh-24rem)] items-stretch gap-4 lg:grid-cols-[minmax(17rem,19rem)_minmax(0,1fr)] xl:min-h-[calc(100vh-20rem)] xl:grid-cols-[minmax(18rem,20rem)_minmax(52rem,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(62rem,1fr)_22rem]"
+              className="mt-6 grid min-h-[calc(100vh-24rem)] items-stretch gap-4 lg:grid-cols-[minmax(17rem,19rem)_minmax(0,1fr)] xl:min-h-[calc(100vh-20rem)] xl:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)_minmax(20rem,22rem)] 2xl:grid-cols-[20rem_minmax(0,1fr)_22rem]"
             >
               <DraftLeftRail
                 draftStatus={activeDraft.status}

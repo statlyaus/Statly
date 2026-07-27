@@ -277,7 +277,7 @@ export default function HelpDocumentation({
 
   if (selectedArticle) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="mx-auto w-full min-w-0 max-w-4xl p-4 sm:p-6">
         <button
           onClick={() => setSelectedArticle(null)}
           className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6"
@@ -285,7 +285,7 @@ export default function HelpDocumentation({
           ← Back to Help
         </button>
 
-        <article className="bg-white rounded-xl shadow-lg p-8">
+        <article className="rounded-xl bg-white p-5 shadow-lg sm:p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{selectedArticle.title}</h1>
@@ -363,7 +363,7 @@ export default function HelpDocumentation({
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 p-4 sm:p-6">
       {/* Header */}
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900">Help & Documentation</h1>
@@ -385,13 +385,13 @@ export default function HelpDocumentation({
       </div>
 
       {/* Category Filter */}
-      <div className="flex justify-center">
-        <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+      <div className="max-w-full">
+        <div className="flex max-w-full gap-2 overflow-x-auto rounded-lg bg-gray-100 p-1">
           {categories.map((category) => (
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded-md font-medium transition-colors capitalize ${
+              className={`shrink-0 whitespace-nowrap rounded-md px-4 py-2 font-medium capitalize transition-colors ${
                 selectedCategory === category
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -404,7 +404,7 @@ export default function HelpDocumentation({
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg max-w-2xl mx-auto">
+      <div className="mx-auto grid max-w-2xl grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 sm:grid-cols-4">
         {[
           { id: 'articles', label: 'Articles', icon: DocumentTextIcon },
           { id: 'videos', label: 'Video Tutorials', icon: VideoCameraIcon },
@@ -414,7 +414,7 @@ export default function HelpDocumentation({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+            className={`flex min-w-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
               activeTab === tab.id
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'

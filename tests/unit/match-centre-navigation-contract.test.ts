@@ -30,4 +30,23 @@ describe('live scoring and AFL match route ownership', () => {
     expect(matchesPage).toContain('RealTimeMatchCenter');
     expect(liveScoringPage).toContain('LiveScoringMatchup');
   });
+
+  it('keeps one page title above the reusable live match section', () => {
+    const matchesPage = readRepoFile('src/app/(app)/matches/page.tsx');
+    const realTimeMatchCenter = readRepoFile('src/components/advanced/RealTimeMatchCenter.tsx');
+
+    expect(matchesPage).toContain('<h1 className="text-2xl font-semibold">Match Centre</h1>');
+    expect(realTimeMatchCenter).toContain(
+      '<h2 className="text-3xl font-bold text-gray-900">Live Match Centre</h2>'
+    );
+    expect(realTimeMatchCenter).not.toContain('<h1');
+  });
+
+  it('contains the live-section tabs within the match centre on narrow screens', () => {
+    const realTimeMatchCenter = readRepoFile('src/components/advanced/RealTimeMatchCenter.tsx');
+
+    expect(realTimeMatchCenter).toContain('max-w-full');
+    expect(realTimeMatchCenter).toContain('overflow-x-auto');
+    expect(realTimeMatchCenter).toContain('overscroll-x-contain');
+  });
 });

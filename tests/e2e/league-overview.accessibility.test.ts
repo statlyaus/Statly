@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import {
   authenticateAsDevelopmentUser,
@@ -31,51 +31,81 @@ for (const viewport of [
     await expect(currentTeam.getByText('Your team', { exact: true })).toBeVisible();
 
     const leagueNavigation = page.getByRole('navigation', { name: 'League sections' });
-    const navigationItems = leagueNavigation.getByRole('button');
+    const sectionSelect = leagueNavigation.getByRole('combobox', { name: 'League section' });
     const overview = leagueNavigation.getByRole('button', { name: 'Overview' });
     const leagueSettings = leagueNavigation.getByRole('button', { name: 'League Settings' });
 
     await expect(leagueNavigation).toBeVisible();
-    await expect(overview).toHaveAttribute('aria-current', 'page');
-    await expect
-      .poll(() => leagueNavigation.evaluate((element) => element.scrollWidth > element.clientWidth))
-      .toBe(true);
+    await assertNoPageLevelHorizontalOverflow(page);
 
-    await overview.focus();
-    const itemCount = await navigationItems.count();
-    for (let index = 1; index < itemCount; index += 1) {
-      await page.keyboard.press('Tab');
+    if (viewport.width < 768) {
+      await expect(sectionSelect).toBeVisible();
+      await expect(sectionSelect).toHaveValue('overview');
+      await expect(overview).toBeHidden();
+
+      await sectionSelect.selectOption('league-settings');
+    } else {
+      await expect(sectionSelect).toBeHidden();
+      await expect(overview).toBeVisible();
+      await expect(overview).toHaveAttribute('aria-current', 'page');
+
+      for (const groupName of ['Play', 'League', 'Social', 'Settings']) {
+        await expect(
+          leagueNavigation.getByRole('group', { name: `${groupName} sections` })
+        ).toBeVisible();
+      }
+
+      const navigationItems = leagueNavigation.getByRole('button');
+      await overview.focus();
+      const itemCount = await navigationItems.count();
+      for (let index = 1; index < itemCount; index += 1) {
+        await page.keyboard.press('Tab');
+      }
+
+      await expect(leagueSettings).toBeFocused();
+      await expect
+        .poll(() =>
+          leagueNavigation.evaluate((element) => {
+            const activeElement = document.activeElement;
+            if (!(activeElement instanceof HTMLElement)) return false;
+
+            const navigationBox = element.getBoundingClientRect();
+            const activeBox = activeElement.getBoundingClientRect();
+            return (
+              element.contains(activeElement) &&
+              activeBox.left >= navigationBox.left &&
+              activeBox.right <= navigationBox.right
+            );
+          })
+        )
+        .toBe(true);
+
+      const focusBoxShadow = await leagueSettings.evaluate(
+        (element) => window.getComputedStyle(element).boxShadow
+      );
+      expect(focusBoxShadow).not.toBe('none');
+
+      await page.keyboard.press('Enter');
     }
 
-    await expect(leagueSettings).toBeFocused();
-    await expect
-      .poll(() =>
-        leagueNavigation.evaluate((element) => {
-          const activeElement = document.activeElement;
-          if (!(activeElement instanceof HTMLElement)) return false;
-
-          const navigationBox = element.getBoundingClientRect();
-          const activeBox = activeElement.getBoundingClientRect();
-          return (
-            element.contains(activeElement) &&
-            activeBox.left >= navigationBox.left &&
-            activeBox.right <= navigationBox.right
-          );
-        })
-      )
-      .toBe(true);
-
-    const focusBoxShadow = await leagueSettings.evaluate(
-      (element) => window.getComputedStyle(element).boxShadow
-    );
-    expect(focusBoxShadow).not.toBe('none');
-
-    await page.keyboard.press('Enter');
-
     await expect(page).toHaveURL(new RegExp(`/leagues/${leagueId}\\?tab=league-settings$`));
-    await expect(leagueSettings).toHaveAttribute('aria-current', 'page');
+    if (viewport.width < 768) {
+      await expect(sectionSelect).toHaveValue('league-settings');
+    } else {
+      await expect(leagueSettings).toHaveAttribute('aria-current', 'page');
+    }
     await expect(page.getByRole('heading', { name: 'League Settings' })).toBeVisible();
+    await assertNoPageLevelHorizontalOverflow(page);
     await expectNoAppErrorBoundary(page);
     expect(runtimeErrors).toEqual([]);
   });
+}
+
+async function assertNoPageLevelHorizontalOverflow(page: Page) {
+  const widths = await page.evaluate(() => ({
+    client: document.documentElement.clientWidth,
+    scroll: document.documentElement.scrollWidth,
+  }));
+
+  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
 }

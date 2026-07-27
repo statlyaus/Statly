@@ -5,13 +5,7 @@ import type { ReactNode } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import {
-  useFocusTrap,
-  useEscapeKey,
-  useClickOutside,
-  useId,
-  useReducedMotion,
-} from '@/hooks/useAccessibility';
+import { useFocusTrap, useEscapeKey, useReducedMotion } from '@/hooks/useAccessibility';
 
 // Modal sizes
 export type ModalSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'full';
@@ -97,16 +91,11 @@ export default function Modal({
   zIndex = 50,
 }: ModalProps) {
   // Accessibility hooks
-  const _modalId = useId('modal');
-  const _titleId = useId('modal-title');
-  const _descriptionId = useId('modal-description');
-  const _focusTrapRef = useFocusTrap(isOpen);
-  const _clickOutsideRef = useClickOutside(() => {
-    if (closeOnOverlayClick && !persistent) {
-      onClose();
-    }
-  }, isOpen);
-  const _prefersReducedMotion = useReducedMotion();
+  const modalId = React.useId();
+  const titleId = React.useId();
+  const descriptionId = React.useId();
+  const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen);
+  const prefersReducedMotion = useReducedMotion();
 
   // Handle escape key
   useEscapeKey(() => {
@@ -192,26 +181,35 @@ export default function Modal({
           {/* Backdrop */}
           <motion.div
             variants={BACKDROP_VARIANTS}
-            initial="hidden"
+            initial={prefersReducedMotion ? false : 'hidden'}
             animate="visible"
-            exit="hidden"
-            className={`fixed inset-0 bg-black bg-opacity-50 transition-opacity ${overlayClassName}`}
+            exit={prefersReducedMotion ? undefined : 'hidden'}
+            transition={prefersReducedMotion ? { duration: 0 } : undefined}
+            className={`fixed inset-0 bg-black bg-opacity-50 ${
+              prefersReducedMotion ? '' : 'transition-opacity'
+            } ${overlayClassName}`}
             onClick={handleOverlayClick}
           />
 
           {/* Modal container */}
           <div className={getContainerClasses()}>
             <motion.div
+              id={modalId}
+              ref={focusTrapRef}
               variants={getModalVariants()}
-              initial="hidden"
+              initial={prefersReducedMotion ? false : 'hidden'}
               animate="visible"
-              exit="exit"
-              transition={{ type: 'spring', damping: 25, stiffness: 500 }}
+              exit={prefersReducedMotion ? undefined : 'exit'}
+              transition={
+                prefersReducedMotion
+                  ? { duration: 0 }
+                  : { type: 'spring', damping: 25, stiffness: 500 }
+              }
               className={`${getModalClasses()} ${contentClassName}`}
               role="dialog"
               aria-modal="true"
-              aria-labelledby={title ? 'modal-title' : undefined}
-              aria-describedby={description ? 'modal-description' : undefined}
+              aria-labelledby={title ? titleId : undefined}
+              aria-describedby={description ? descriptionId : undefined}
             >
               {/* Header */}
               {(title || showCloseButton) && (
@@ -222,12 +220,12 @@ export default function Modal({
                 >
                   <div className="flex-1">
                     {title && (
-                      <h3 id="modal-title" className="text-lg font-semibold text-gray-900">
+                      <h3 id={titleId} className="text-lg font-semibold text-gray-900">
                         {title}
                       </h3>
                     )}
                     {description && (
-                      <p id="modal-description" className="mt-1 text-sm text-gray-500">
+                      <p id={descriptionId} className="mt-1 text-sm text-gray-500">
                         {description}
                       </p>
                     )}

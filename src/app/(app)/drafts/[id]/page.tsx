@@ -21,7 +21,7 @@ function DraftAccessState({
   icon: typeof AlertTriangle;
 }) {
   return (
-    <AppLayout>
+    <AppLayout mode="shell">
       <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-10 text-[color:var(--league-text)]">
         <section className="mx-auto max-w-md rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 text-center shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)]">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
