@@ -35,8 +35,8 @@ export default function RankingDisplay({
         title={label}
         className={[
           compact
-            ? 'inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-200'
-            : 'inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-200',
+            ? 'inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20'
+            : 'inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20',
           className,
         ].join(' ')}
       >
@@ -47,7 +47,7 @@ export default function RankingDisplay({
         {!compact && (
           <>
             <span className="opacity-60">•</span>
-            <span className="tabular-nums text-[10px]">Z {statlyZ.toFixed(2)}</span>
+            <span className="tabular-nums">Z {statlyZ.toFixed(2)}</span>
           </>
         )}
       </span>
