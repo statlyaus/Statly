@@ -248,10 +248,10 @@ export default function CommissionerTools({
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold text-gray-900">Commissioner Tools</h1>
           <p className="text-gray-600 mt-1">
             {league ? `Managing ${league.name}` : 'Manage league settings and members'}
@@ -265,7 +265,7 @@ export default function CommissionerTools({
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+      <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 sm:grid-cols-4">
         {[
           { id: 'settings', label: 'League Settings', icon: CogIcon },
           { id: 'members', label: 'Manage Members', icon: UserGroupIcon },
@@ -275,7 +275,7 @@ export default function CommissionerTools({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+            className={`flex min-w-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors sm:px-4 sm:text-base ${
               activeTab === tab.id
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'

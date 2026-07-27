@@ -11,7 +11,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '@/AuthContext';
 import PlayerSearch from '@/components/PlayerSearch';
 import { AlertContainer, useAlert } from '@/components/ui';
-import { TeamProvider } from '@/contexts/TeamContext';
 import { logger } from '@/lib/logger';
 
 import LeagueSwitcher from './LeagueSwitcher';
@@ -495,358 +494,354 @@ export default function MainNavigation(): ReactNode {
   }
 
   return (
-    <TeamProvider>
-      <>
-        <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
+    <>
+      <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
 
-        <header
-          className={`sticky top-0 z-50 border-b border-[color:var(--league-border)] bg-[color:var(--league-surface)]/95 backdrop-blur ${
-            scrolled ? 'shadow-[0_16px_40px_-32px_rgba(23,34,48,0.28)]' : ''
-          }`}
-          role="banner"
-        >
-          <div className="mx-auto grid h-16 w-full max-w-[var(--app-shell-max-width)] grid-cols-[minmax(0,max-content)_minmax(0,1fr)_minmax(0,max-content)] items-center gap-3 px-4 sm:px-6 lg:px-8">
-            <div className="min-w-0">
-              <Link href={brandHref} className="flex min-w-0 items-center">
-                <Image
-                  src="/brand/statly-wordmark-logo.png"
-                  alt="Statly"
-                  width={122}
-                  height={40}
-                  priority
-                  className="h-auto w-24 sm:w-28"
-                />
-              </Link>
-            </div>
+      <header
+        className={`sticky top-0 z-50 border-b border-[color:var(--league-border)] bg-[color:var(--league-surface)]/95 backdrop-blur ${
+          scrolled ? 'shadow-[0_16px_40px_-32px_rgba(23,34,48,0.28)]' : ''
+        }`}
+        role="banner"
+      >
+        <div className="mx-auto grid h-16 w-full max-w-[var(--app-shell-max-width)] grid-cols-[minmax(0,max-content)_minmax(0,1fr)_minmax(0,max-content)] items-center gap-3 px-4 sm:px-6 lg:px-8">
+          <div className="min-w-0">
+            <Link href={brandHref} className="flex min-w-0 items-center">
+              <Image
+                src="/brand/statly-wordmark-logo.png"
+                alt="Statly"
+                width={122}
+                height={40}
+                priority
+                className="h-auto w-24 sm:w-28"
+              />
+            </Link>
+          </div>
 
-            <div className="hidden min-w-0 items-center justify-center lg:flex">
-              <div className="inline-flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-1 [scrollbar-width:none]">
-                {desktopNavigationItems.map((item) => {
-                  const isActive = isNavActive(pathname, item.href);
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      aria-current={isActive ? 'page' : undefined}
-                      className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] ${
-                        isActive
-                          ? 'bg-[color:var(--league-primary)] text-white'
-                          : 'text-[color:var(--league-text-muted)] hover:bg-white hover:text-[color:var(--league-text)]'
-                      }`}
-                    >
-                      <span className="hidden sm:block">{item.icon}</span>
-                      <span>{item.name}</span>
-                    </Link>
-                  );
-                })}
-                {user ? <NavDropdown item={toolsNavigationItem} pathname={pathname} /> : null}
-              </div>
-            </div>
-
-            <div className="hidden min-w-0 items-center justify-self-end gap-2 lg:flex">
-              {user ? (
-                <div className="hidden 2xl:block">
-                  <PlayerSearch
-                    placeholder="Search players"
-                    size="sm"
-                    variant="default"
-                    className="w-56"
-                  />
-                </div>
-              ) : null}
-
-              {showLeagueSwitcher ? (
-                <div className="hidden 2xl:block">
-                  <LeagueSwitcher />
-                </div>
-              ) : null}
-
-              {user ? (
-                <div className="relative" ref={accountMenuRef}>
-                  <button
-                    type="button"
-                    ref={accountButtonRef}
-                    onClick={() => setIsAccountMenuOpen((open) => !open)}
-                    className="inline-flex items-center gap-3 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1.5 text-sm font-medium text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
-                    aria-haspopup="menu"
-                    aria-expanded={isAccountMenuOpen}
-                    aria-controls="account-menu"
+          <div className="hidden min-w-0 items-center justify-center lg:flex">
+            <div className="inline-flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-1 [scrollbar-width:none]">
+              {desktopNavigationItems.map((item) => {
+                const isActive = isNavActive(pathname, item.href);
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] ${
+                      isActive
+                        ? 'bg-[color:var(--league-primary)] text-white'
+                        : 'text-[color:var(--league-text-muted)] hover:bg-white hover:text-[color:var(--league-text)]'
+                    }`}
                   >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-xs font-semibold text-white">
-                      {accountInitial}
-                    </span>
-                    <span className="hidden max-w-[160px] truncate 2xl:block">{accountLabel}</span>
-                    <svg
-                      className="h-4 w-4 text-[color:var(--league-text-muted)]"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
-                  </button>
+                    <span className="hidden sm:block">{item.icon}</span>
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+              {user ? <NavDropdown item={toolsNavigationItem} pathname={pathname} /> : null}
+            </div>
+          </div>
 
-                  {isAccountMenuOpen ? (
-                    <div
-                      id="account-menu"
-                      role="menu"
-                      className="absolute right-0 mt-2 w-56 overflow-hidden rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]"
-                    >
-                      <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm">
-                        <p className="font-semibold text-[color:var(--league-text)]">Signed in</p>
-                        <p className="truncate text-[color:var(--league-text-muted)]">
-                          {accountLabel}
-                        </p>
+          <div className="hidden min-w-0 items-center justify-self-end gap-2 lg:flex">
+            {user ? (
+              <div className="hidden 2xl:block">
+                <PlayerSearch
+                  placeholder="Search players"
+                  size="sm"
+                  variant="default"
+                  className="w-56"
+                />
+              </div>
+            ) : null}
+
+            {showLeagueSwitcher ? (
+              <div className="hidden 2xl:block">
+                <LeagueSwitcher />
+              </div>
+            ) : null}
+
+            {user ? (
+              <div className="relative" ref={accountMenuRef}>
+                <button
+                  type="button"
+                  ref={accountButtonRef}
+                  onClick={() => setIsAccountMenuOpen((open) => !open)}
+                  className="inline-flex items-center gap-3 rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-2.5 py-1.5 text-sm font-medium text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)]"
+                  aria-haspopup="menu"
+                  aria-expanded={isAccountMenuOpen}
+                  aria-controls="account-menu"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-xs font-semibold text-white">
+                    {accountInitial}
+                  </span>
+                  <span className="hidden max-w-[160px] truncate 2xl:block">{accountLabel}</span>
+                  <svg
+                    className="h-4 w-4 text-[color:var(--league-text-muted)]"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+
+                {isAccountMenuOpen ? (
+                  <div
+                    id="account-menu"
+                    role="menu"
+                    className="absolute right-0 mt-2 w-56 overflow-hidden rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] shadow-[0_24px_60px_-35px_rgba(23,34,48,0.22)]"
+                  >
+                    <div className="border-b border-[color:var(--league-border)] bg-[color:var(--league-page)] px-4 py-3 text-sm">
+                      <p className="font-semibold text-[color:var(--league-text)]">Signed in</p>
+                      <p className="truncate text-[color:var(--league-text-muted)]">
+                        {accountLabel}
+                      </p>
+                    </div>
+                    <div className="p-2" role="none">
+                      <Link
+                        href="/dashboard"
+                        role="menuitem"
+                        className="flex rounded-2xl px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        onClick={() => setIsAccountMenuOpen(false)}
+                      >
+                        Dashboard
+                      </Link>
+                      <Link
+                        href="/help"
+                        role="menuitem"
+                        className="flex rounded-2xl px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        onClick={() => setIsAccountMenuOpen(false)}
+                      >
+                        Help
+                      </Link>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full rounded-2xl px-3 py-2 text-left text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
+                        onClick={() => {
+                          setIsAccountMenuOpen(false);
+                          void handleLogout();
+                        }}
+                        disabled={isLoggingOut || loading}
+                        aria-busy={isLoggingOut || loading}
+                      >
+                        {isLoggingOut ? 'Signing out…' : 'Sign out'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+              >
+                Sign in
+              </Link>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen((open) => !open)}
+            className="ml-auto inline-flex items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-2 text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)] lg:hidden"
+            aria-expanded={isMobileOpen}
+            aria-controls="mobile-main-navigation"
+            aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {isMobileOpen ? (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              ) : (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              )}
+            </svg>
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {isMobileOpen ? (
+            <motion.div
+              id="mobile-main-navigation"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] lg:hidden"
+            >
+              <div className="space-y-4 px-4 py-4">
+                {user ? (
+                  <>
+                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                        Quick actions
+                      </p>
+                      <div className="mt-3 space-y-3">
+                        <PlayerSearch placeholder="Search players" size="md" variant="default" />
+                        {showLeagueSwitcher ? <LeagueSwitcher /> : null}
                       </div>
-                      <div className="p-2" role="none">
+                    </div>
+
+                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                      <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                        Navigate
+                      </p>
+                      <div className="mt-2 space-y-1">
+                        {primaryNavigationItems.map((item) => {
+                          const isActive = isNavActive(pathname, item.href);
+                          return (
+                            <Link
+                              key={item.name}
+                              href={item.href}
+                              onClick={() => setIsMobileOpen(false)}
+                              aria-current={isActive ? 'page' : undefined}
+                              className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
+                                isActive
+                                  ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
+                                  : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+                              }`}
+                            >
+                              <span className="mt-0.5">{item.icon}</span>
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium">{item.name}</span>
+                                <span className="mt-1 block text-xs leading-5 opacity-80">
+                                  {item.description}
+                                </span>
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                      <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
+                        Tools
+                      </p>
+                      <div className="mt-2 space-y-1">
+                        {toolsNavigationItem.submenu?.map((item) => {
+                          const isActive = isNavActive(pathname, item.href);
+                          return (
+                            <Link
+                              key={item.name}
+                              href={item.href}
+                              onClick={() => setIsMobileOpen(false)}
+                              aria-current={isActive ? 'page' : undefined}
+                              className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
+                                isActive
+                                  ? 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]'
+                                  : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+                              }`}
+                            >
+                              <span className="mt-0.5">{item.icon}</span>
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium">{item.name}</span>
+                                <span className="mt-1 block text-xs leading-5 opacity-80">
+                                  {item.description}
+                                </span>
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-sm font-semibold text-white">
+                          {accountInitial}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
+                            {accountLabel}
+                          </p>
+                          <p className="text-xs text-[color:var(--league-text-muted)]">Signed in</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-2">
                         <Link
                           href="/dashboard"
-                          role="menuitem"
-                          className="flex rounded-2xl px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
-                          onClick={() => setIsAccountMenuOpen(false)}
+                          onClick={() => setIsMobileOpen(false)}
+                          className="rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                         >
                           Dashboard
                         </Link>
-                        <Link
-                          href="/help"
-                          role="menuitem"
-                          className="flex rounded-2xl px-3 py-2 text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
-                          onClick={() => setIsAccountMenuOpen(false)}
-                        >
-                          Help
-                        </Link>
                         <button
                           type="button"
-                          role="menuitem"
-                          className="flex w-full rounded-2xl px-3 py-2 text-left text-sm text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
                           onClick={() => {
-                            setIsAccountMenuOpen(false);
+                            setIsMobileOpen(false);
                             void handleLogout();
                           }}
                           disabled={isLoggingOut || loading}
-                          aria-busy={isLoggingOut || loading}
+                          className="rounded-2xl bg-[color:var(--league-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:opacity-50"
                         >
                           {isLoggingOut ? 'Signing out…' : 'Sign out'}
                         </button>
                       </div>
                     </div>
-                  ) : null}
-                </div>
-              ) : (
-                <Link
-                  href="/login"
-                  className="rounded-full bg-[color:var(--league-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
-                >
-                  Sign in
-                </Link>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsMobileOpen((open) => !open)}
-              className="ml-auto inline-flex items-center justify-center rounded-full border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-2 text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)] lg:hidden"
-              aria-expanded={isMobileOpen}
-              aria-controls="mobile-main-navigation"
-              aria-label={isMobileOpen ? 'Close navigation' : 'Open navigation'}
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isMobileOpen ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
+                  </>
                 ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                )}
-              </svg>
-            </button>
-          </div>
-
-          <AnimatePresence>
-            {isMobileOpen ? (
-              <motion.div
-                id="mobile-main-navigation"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="border-t border-[color:var(--league-border)] bg-[color:var(--league-surface)] lg:hidden"
-              >
-                <div className="space-y-4 px-4 py-4">
-                  {user ? (
-                    <>
-                      <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                          Quick actions
-                        </p>
-                        <div className="mt-3 space-y-3">
-                          <PlayerSearch placeholder="Search players" size="md" variant="default" />
-                          {showLeagueSwitcher ? <LeagueSwitcher /> : null}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
-                        <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                          Navigate
-                        </p>
-                        <div className="mt-2 space-y-1">
-                          {primaryNavigationItems.map((item) => {
-                            const isActive = isNavActive(pathname, item.href);
-                            return (
-                              <Link
-                                key={item.name}
-                                href={item.href}
-                                onClick={() => setIsMobileOpen(false)}
-                                aria-current={isActive ? 'page' : undefined}
-                                className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
-                                  isActive
-                                    ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
-                                    : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
-                                }`}
-                              >
-                                <span className="mt-0.5">{item.icon}</span>
-                                <span className="min-w-0">
-                                  <span className="block text-sm font-medium">{item.name}</span>
-                                  <span className="mt-1 block text-xs leading-5 opacity-80">
-                                    {item.description}
-                                  </span>
-                                </span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
-                        <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--league-text-muted)]">
-                          Tools
-                        </p>
-                        <div className="mt-2 space-y-1">
-                          {toolsNavigationItem.submenu?.map((item) => {
-                            const isActive = isNavActive(pathname, item.href);
-                            return (
-                              <Link
-                                key={item.name}
-                                href={item.href}
-                                onClick={() => setIsMobileOpen(false)}
-                                aria-current={isActive ? 'page' : undefined}
-                                className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
-                                  isActive
-                                    ? 'bg-[color:var(--league-accent-soft)] text-[color:var(--league-accent)]'
-                                    : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
-                                }`}
-                              >
-                                <span className="mt-0.5">{item.icon}</span>
-                                <span className="min-w-0">
-                                  <span className="block text-sm font-medium">{item.name}</span>
-                                  <span className="mt-1 block text-xs leading-5 opacity-80">
-                                    {item.description}
-                                  </span>
-                                </span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-page)] p-4">
-                        <div className="flex items-center gap-3">
-                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--league-primary)] text-sm font-semibold text-white">
-                            {accountInitial}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[color:var(--league-text)]">
-                              {accountLabel}
-                            </p>
-                            <p className="text-xs text-[color:var(--league-text-muted)]">
-                              Signed in
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-4 grid gap-2">
-                          <Link
-                            href="/dashboard"
-                            onClick={() => setIsMobileOpen(false)}
-                            className="rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-sm font-medium text-[color:var(--league-text-muted)] transition hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]"
-                          >
-                            Dashboard
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsMobileOpen(false);
-                              void handleLogout();
-                            }}
-                            disabled={isLoggingOut || loading}
-                            className="rounded-2xl bg-[color:var(--league-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)] disabled:opacity-50"
-                          >
-                            {isLoggingOut ? 'Signing out…' : 'Sign out'}
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
-                      {publicNavigationItems.map((item) => {
-                        const isActive = isNavActive(pathname, item.href);
-                        return (
-                          <Link
-                            key={item.name}
-                            href={item.href}
-                            onClick={() => setIsMobileOpen(false)}
-                            aria-current={isActive ? 'page' : undefined}
-                            className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
-                              isActive
-                                ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
-                                : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
-                            }`}
-                          >
-                            <span className="mt-0.5">{item.icon}</span>
-                            <span className="min-w-0">
-                              <span className="block text-sm font-medium">{item.name}</span>
-                              <span className="mt-1 block text-xs leading-5 opacity-80">
-                                {item.description}
-                              </span>
+                  <div className="rounded-[24px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-2">
+                    {publicNavigationItems.map((item) => {
+                      const isActive = isNavActive(pathname, item.href);
+                      return (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          onClick={() => setIsMobileOpen(false)}
+                          aria-current={isActive ? 'page' : undefined}
+                          className={`flex items-start gap-3 rounded-2xl px-3 py-3 transition ${
+                            isActive
+                              ? 'bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]'
+                              : 'text-[color:var(--league-text-muted)] hover:bg-[color:var(--league-surface-muted)] hover:text-[color:var(--league-text)]'
+                          }`}
+                        >
+                          <span className="mt-0.5">{item.icon}</span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium">{item.name}</span>
+                            <span className="mt-1 block text-xs leading-5 opacity-80">
+                              {item.description}
                             </span>
-                          </Link>
-                        );
-                      })}
-                      <div className="px-3 pb-3 pt-2">
-                        <Link
-                          href="/fantasy"
-                          onClick={() => setIsMobileOpen(false)}
-                          className="mb-2 block rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-center text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
-                        >
-                          Open Fantasy
+                          </span>
                         </Link>
-                        <Link
-                          href="/login"
-                          onClick={() => setIsMobileOpen(false)}
-                          className="block rounded-2xl bg-[color:var(--league-primary)] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
-                        >
-                          Sign in
-                        </Link>
-                      </div>
+                      );
+                    })}
+                    <div className="px-3 pb-3 pt-2">
+                      <Link
+                        href="/fantasy"
+                        onClick={() => setIsMobileOpen(false)}
+                        className="mb-2 block rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-center text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
+                      >
+                        Open Fantasy
+                      </Link>
+                      <Link
+                        href="/login"
+                        onClick={() => setIsMobileOpen(false)}
+                        className="block rounded-2xl bg-[color:var(--league-primary)] px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--league-primary-hover)]"
+                      >
+                        Sign in
+                      </Link>
                     </div>
-                  )}
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-        </header>
-      </>
-    </TeamProvider>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </header>
+    </>
   );
 }

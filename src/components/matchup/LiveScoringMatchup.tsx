@@ -202,18 +202,18 @@ export default function LiveScoringMatchup({
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold text-gray-900">Week {matchupData.week} Matchup</h1>
           <p className="text-gray-600 mt-1">Live scoring and projections</p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+            className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 transition-colors ${
               autoRefresh
                 ? 'bg-green-100 text-green-700 hover:bg-green-200'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -228,7 +228,7 @@ export default function LiveScoringMatchup({
               onRefresh?.();
               setLastRefresh(new Date());
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors"
+            className="flex items-center justify-center gap-2 rounded-lg bg-blue-100 px-4 py-2 text-blue-700 transition-colors hover:bg-blue-200"
           >
             <ArrowPathIcon className="w-4 h-4" />
             Refresh Now
@@ -243,8 +243,8 @@ export default function LiveScoringMatchup({
           animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 border border-green-200"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
                 <span className="font-semibold text-green-700">LIVE</span>
@@ -254,7 +254,7 @@ export default function LiveScoringMatchup({
               </div>
             </div>
 
-            <div className="flex items-center gap-6">
+            <div className="grid w-full grid-cols-2 items-center gap-4 sm:w-auto sm:grid-cols-[auto_auto_8rem] sm:gap-6">
               <div className="text-center">
                 <div className="text-2xl font-bold text-gray-900">
                   {matchupData.gameProgress.gamesInProgress}
@@ -267,7 +267,7 @@ export default function LiveScoringMatchup({
                 </div>
                 <div className="text-sm text-gray-600">Games Complete</div>
               </div>
-              <div className="w-32">
+              <div className="col-span-2 w-full sm:col-span-1 sm:w-32">
                 <div className="flex justify-between text-sm text-gray-600 mb-1">
                   <span>Progress</span>
                   <span>{progressPercentage.toFixed(0)}%</span>
