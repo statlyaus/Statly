@@ -130,7 +130,7 @@ export default function WaiversModule() {
           View All
         </Link>
         <Link
-          href="/waivers/submit"
+          href="/waivers#waiver-player-search"
           className="bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors text-center"
         >
           + Submit Claim

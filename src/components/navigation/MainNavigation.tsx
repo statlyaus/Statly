@@ -46,8 +46,8 @@ const publicNavigationItems: NavigationItem[] = [
   },
   {
     name: 'Fantasy',
-    href: '/fantasy',
-    description: 'Public overview of the fantasy platform',
+    href: '/dashboard',
+    description: 'Open your fantasy workspace and leagues',
     icon: (
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -821,7 +821,7 @@ export default function MainNavigation(): ReactNode {
                     })}
                     <div className="px-3 pb-3 pt-2">
                       <Link
-                        href="/fantasy"
+                        href="/dashboard"
                         onClick={() => setIsMobileOpen(false)}
                         className="mb-2 block rounded-2xl border border-[color:var(--league-border)] bg-white px-4 py-3 text-center text-sm font-semibold text-[color:var(--league-text)] transition hover:bg-[color:var(--league-surface-muted)]"
                       >
