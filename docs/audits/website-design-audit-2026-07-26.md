@@ -4,6 +4,45 @@
 - Branch: `codex/site-design-principles-audit`
 - Scope: all 56 App Router page routes, including public, authentication, customer workspace, redirects, dynamic-detail states, demos, and internal diagnostics.
 
+## Remediation status — 2026-07-27
+
+The original findings below are preserved as the pre-remediation baseline. The audited
+customer-facing site is now production-ready within the verified local scope: the P0 and P1
+failures are no longer reproducible, and the shared P2 accessibility, reduced-motion, homepage,
+and highest-reuse typography issues were corrected at their owning boundaries.
+
+Resolved outcomes:
+
+- Shared route-group shell ownership now prevents the narrow, off-canvas, and horizontally
+  overflowing customer layouts recorded in the baseline.
+- The Stats, Rosters, and round Match Centre runtime failures were repaired, audited navigation
+  destinations resolve, Draft Room desktop overflow is contained, and league navigation is grouped
+  without removing deep links.
+- Button, Tooltip, Modal, and Badge accessibility contracts were repaired; global reduced-motion
+  handling is active; client Sentry initializes at the client boundary.
+- The homepage has a visible product promise, and recurring public Draft, ranking-chip, and compact
+  stat microcopy now uses the 12px type floor and semantic theme tokens where applicable.
+
+Completion evidence:
+
+- `npm run test:unit -- --coverage.enabled=false`: 183 files and 719 tests passed.
+- `npm run typecheck`, `npm run typecheck:tests`, and `npm run lint`: passed; lint retains the
+  repository's pre-existing advisory warnings and reports zero errors.
+- `npm run build`: passed on Next.js 15.4.10; all 81 static pages generated.
+- Browser verification: 30 customer routes plus all 12 populated league task states passed direct
+  load checks at 390px, 768px, and 1440px with no persistent blank state, horizontal overflow,
+  runtime-error text, 404, or captured browser error.
+- `prisma/dev.db` and `output/` remained protected and were excluded from every reviewed commit.
+
+Residual, non-blocking risk:
+
+- Integration tests were not pointed at the protected development database; they still require an
+  isolated `DATABASE_URL_TEST` environment.
+- Full `light | dark | system` preference wiring, remaining fixed-palette migration, and lower-use
+  10–11px labels remain incremental design-system work; this report does not claim WCAG compliance.
+- Live draft variants, role-specific league permissions, and external production services still
+  require environment-specific acceptance testing before a deployment decision.
+
 ## Overall verdict
 
 Statly has a promising newer visual language: a restrained primary navigation, authentic AFL imagery, clear action blue, semantic page headings, strong skip-link/form patterns, and several well-composed fantasy workflows. It is not ready for a broad visual polish pass yet. The highest-impact problem is structural: page-shell and width ownership varies by route, causing severe narrow-column, off-canvas, blank, and horizontal-overflow failures on both desktop and mobile. Three customer routes also hit runtime error boundaries.
