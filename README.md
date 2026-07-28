@@ -1,270 +1,128 @@
-# Statly - Fantasy AFL Platform
+# Statly
 
-This is a comprehensive fantasy sports platform for the Australian Football League (AFL), built with Next.js, React, TypeScript, and Firebase, featuring real-time player statistics and live scoring.
+Statly is an AFL fantasy platform for category head-to-head leagues. Managers draft AFL players,
+set positional lineups, compare selected statistical categories each round, and manage rosters through
+trades and waivers.
 
-## 🏗️ Architecture
+Leagues support two category scoring modes:
 
-- **Frontend**: Next.js 15 with React and TypeScript
-- **Styling**: Tailwind CSS with custom AFL team themes
-- **Backend**: Firebase (Firestore, Authentication)
-- **Real-time Data**: fitzRoy (R) fetcher with a TypeScript ingestion pipeline
-- **Deployment**: Vercel (frontend) + Google Cloud Run (ETL)
+- `H2H_EACH_CATEGORY`: every won, lost, or drawn category contributes to the standings.
+- `H2H_MOST_CATEGORIES`: the team winning more categories receives the matchup result.
 
-## 🚀 Tech Stack
+The default real-data preset is goals, tackles, inside 50s, intercepts, contested marks, rebound 50s,
+contested possessions, effective disposals, and score involvements. Commissioners can choose other
+supported categories and whether higher or lower values win.
 
-- **Framework**: [Next.js](https://nextjs.org/) 15.4.6
-- **Language**: [TypeScript](https://www.typescriptlang.org/) with strict mode
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + [Framer Motion](https://www.framer.com/motion/)
-- **Database**: [Firebase Firestore](https://firebase.google.com/docs/firestore)
-- **Authentication**: [Firebase Auth](https://firebase.google.com/docs/auth)
-- **Data Pipeline**: R + TypeScript ETL system
-- **UI Components**: Custom component library with accessibility
-- **Icons**: [Heroicons](https://heroicons.com/)
-- **Linting**: [ESLint](https://eslint.org/)
-- **Formatting**: [Prettier](https://prettier.io/)
+## Architecture
 
-## 📊 Features
+Statly is a Next.js 15 and React 19 application written in TypeScript.
 
-### ✅ Implemented
+- Prisma with SQLite currently owns protected relational state. Managed PostgreSQL is the accepted
+  production target, but that cutover is not complete.
+- Firebase Authentication owns user identity; server services enforce league and season access.
+- Firestore receives live-stat ingestion and temporary compatibility projections. It is not the
+  canonical store for protected league state.
+- Redis supports queues, short-lived coordination, and Socket.IO fan-out.
+- Socket.IO provides bidirectional draft and social delivery; BullMQ runs scheduled work.
+- The `etl` package fetches Footywire data through fitzRoy, normalizes it, and writes live-stat
+  evidence to Firestore.
 
-- **Universal Navigation**: Familiar fantasy sports tabs across all pages
-- **Team Analytics Dashboard**: Comprehensive team performance metrics
-- **Live Scoring & Matchups**: Real-time match tracking and head-to-head comparisons
-- **Player Analysis**: Advanced player statistics and performance insights
-- **Waiver/FAAB System**: Free agent acquisition with budget management
-- **Commissioner Tools**: League management and administrative features
-- **Help Documentation**: Complete user guides and tutorials
-- **Draft Management**: Snake draft system with real-time updates
-- **Responsive Design**: Mobile-first design with desktop optimization
+See [runtime and data ownership](docs/architecture/data-platform.md) for the complete boundary map.
 
-### 🔄 In Development
+## Prerequisites
 
-- **Real-time Data Integration**: Live AFL statistics via ETL pipeline
-- **Trade System**: Player trading with analysis tools
-- **Advanced Analytics**: Machine learning player predictions
-- **Social Features**: League chat and community features
+- Node.js 22 and npm
+- A local SQLite-compatible environment for ordinary development and tests
+- A Firebase project or the Firebase emulators for authenticated/live-data flows
+- Redis for realtime and worker flows that are not run with the repository's disabled/test mode
+- R plus the packages documented in [the ETL guide](etl/README.md) for ingestion work
 
-## 📡 ETL Data Pipeline
+## Install
 
-Statly includes a sophisticated ETL pipeline for real-time AFL data ingestion:
-
-### Data Sources
-
-- **Canonical source**: Footywire via fitzRoy
-- **Failure policy**: Fail closed; there is no mock-data fallback
-- **Update Frequency**: 30-second polling during live matches
-
-### Pipeline Components
-
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│ fitzRoy (R) │───▶│ NDJSON Stream│───▶│  TypeScript │
-│   Fetcher   │    │              │    │  Processor  │
-└─────────────┘    └──────────────┘    └─────────────┘
-                                              │
-                                              ▼
-┌─────────────┐    ┌──────────────┐
-│  Firestore  │◀───│  Live Guard  │
-│ Collections │    │   Poller     │
-└─────────────┘    └──────────────┘
+```sh
+git clone https://github.com/statlyaus/Statly.git
+cd Statly
+npm ci
+cp .env.example .env.local
+npm run prisma:generate
 ```
 
-### Firestore Schema
+Fill only the values needed for the flow you are running. Never commit `.env.local`, service-account
+JSON, encoded credentials, or local databases. The example file contains placeholders and documents
+which values are optional.
 
-- **matches/{matchUid}**: Match details and status
-- **players/{playerUid}**: Player profiles and team affiliations
-- **player*match_stats/{matchUid}*{playerUid}**: Real-time player statistics
+For Firebase emulator setup, credential boundaries, and environment details, see
+[local setup](docs/development/setup.md).
 
-### ETL Setup
+## Local development
 
-```bash
-# Navigate to ETL directory
-cd etl/
+Start the Next.js application:
 
-# Install dependencies
-npm install
-
-# Test the data fetcher (writes NDJSON to stdout)
-Rscript fetch_fw_round.R 2025 18 | head
-
-# Configure Firebase credentials
-cp .env.template .env
-# Set FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 in .env
-
-# Run ETL pipeline
+```sh
 npm run dev
 ```
 
-See `etl/README.md` for detailed ETL documentation.
+Start web, Socket.IO, draft worker, Firebase emulators, deterministic seed data, and smoke checks:
 
-## Getting Started
-
-### Prerequisites
-
-1.  Node.js (v18 or later)
-2.  `npm` or your favorite package manager
-3.  A Firebase project.
-
-### Installation
-
-1.  Clone the repository.
-2.  Install dependencies: `npm install`
-3.  Create a `.env.local` file in the root of the project and add your Firebase configuration keys. You can get these from your Firebase project settings.
-
-### Environment Variables
-
-Service account credentials should be loaded from environment variables instead of committed JSON files. Use
-`secrets/serviceAccountKey.example.json` as a template and set `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to the base64-encoded
-contents of your key.
-
-The application and helper scripts rely on the following environment variables:
-
-```bash
-# Firebase web config used by the Next.js app
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
-
-# Service account JSON used by scripts in the Scripts/ directory
-GOOGLE_SERVICE_ACCOUNT='{"type":"service_account",...}'
-# Base64-encoded service account JSON used by src/lib/firebaseAdmin.ts
-FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=...
-
-# Token for GitHub-hosted language models used in the weekend summary
-GITHUB_TOKEN=...
-
-# Standard OpenAI API key if you prefer using OpenAI directly
-OPENAI_API_KEY=...
+```sh
+npm run dev:full:local
 ```
 
-The weekend summary endpoint relies on external language models. These services impose rate limits, so caching the summary or limiting how often it is refreshed is recommended.
+The full local stack is intentionally isolated. Development authentication must be explicitly enabled
+and must never be enabled in production.
 
-Copy `secrets/serviceAccountKey.example.json` to `secrets/serviceAccountKey.json` and fill it with your Firebase service account credentials.
+## Verification
 
-`GOOGLE_SERVICE_ACCOUNT` should contain the raw JSON from that file. You can set it on the command line:
+| Purpose                  | Command                |
+| ------------------------ | ---------------------- |
+| Documentation/repo rules | `npm run docs:check`   |
+| Formatting               | `npm run format:check` |
+| Lint                     | `npm run lint:ci`      |
+| TypeScript               | `npm run typecheck`    |
+| Unit tests               | `npm run test:unit`    |
+| Integration tests        | `npm run test:int`     |
+| Race tests               | `npm run test:race`    |
+| Browser tests            | `npm run test:e2e`     |
+| Production build         | `npm run build`        |
 
-```bash
-export GOOGLE_SERVICE_ACCOUNT="$(cat secrets/serviceAccountKey.json)"
+Integration and browser verification must use the configured test database or another disposable
+database. Do not point tests at `prisma/dev.db`.
+
+## Data and ETL
+
+The ingestion path is:
+
+```text
+Footywire → fitzRoy/R → NDJSON → TypeScript normalization → Firestore live-stat evidence
 ```
 
-`FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` should contain a base64-encoded version of the same file for admin use in [`src/lib/firebaseAdmin.ts`](src/lib/firebaseAdmin.ts). For example:
+The pipeline fails closed when its source, parser, or write boundary fails; there is no mock-data
+fallback. Protected league, draft, roster, trade, and waiver state remains owned by Prisma.
 
-```bash
-# macOS (zsh)
-export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -b 0 secrets/serviceAccountKey.json)"
+Read [the ETL guide](etl/README.md) before running ingestion commands. Player identity consolidation
+is a separate reviewed data operation described in the
+[player identity runbook](docs/runbooks/player-identity.md).
 
-# Linux
-export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w 0 secrets/serviceAccountKey.json)"
-```
+## Documentation
 
----
+The [documentation index](docs/README.md) is the entry point for current architecture, domain rules,
+development setup, product standards, and operational runbooks. Historical implementation reports and
+completed plans belong in Git and merged pull-request history, not in the live documentation tree.
 
-## Firebase Setup
+## Pull requests and delivery
 
-See docs/firebase-setup.md for complete setup, environment variables, authentication transport, and web vitals ingestion details.
+Create feature branches from fetched `origin/main`, keep unrelated local state out of the diff, and use
+a pull request for every change to `main`. Required documentation, lint, typecheck, test, build, and
+security gates must pass before GitHub's native squash auto-merge completes the pull request.
 
-### Authentication flow (Firebase token transport)
+The merged pull request is the durable archive: it records rationale, review, checks, discussion, and
+the source diff. GitHub deletes the temporary remote branch after merge; tags are reserved for releases
+or explicit recovery milestones. See [delivery and archival policy](docs/development/delivery.md).
 
-1. The client signs in with Firebase Web SDK and waits for Statly's auth service worker to control the page.
-2. The worker adds a current Firebase ID token only to eligible same-origin app requests.
-3. Protected server routes resolve identity through the shared server auth boundary and verify the token with revocation checking.
-4. Authorization remains at the protected data boundary; middleware is an optimistic routing check only.
+## Deployment status
 
-Existing `statly_session` cookies remain a temporary migration fallback when no bearer is present;
-new sign-ins do not create them, and sign-out clears them before ending the Firebase session.
-
-### Web Vitals ingestion (Firestore by default)
-
-- Endpoint: `POST /api/analytics/performance`.
-- Default backend: Firestore (no ClickHouse/Postgres required). Leave `METRICS_BACKEND` unset or set to `firestore`.
-- Collection name: `analytics_web_vitals` (override with `METRICS_COLLECTION`).
-- Allowed origins: set `METRICS_ALLOWED_ORIGINS` to a comma-separated list of allowed origins. Requests from other origins are rejected (403).
-- Public origin: set `NEXT_PUBLIC_API_BASE_URL` to your app origin (e.g., `https://localhost:3000` or your deployed URL). Do not include `/api`.
-- Rate limiting & de-dup: Redis is used when available; if unavailable, the API fails open for rate limiting and falls back to in-memory de-dup.
-
-### Troubleshooting
-
-- Invalid private key / ASN.1 errors: ensure `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` is set and contains the raw JSON; the code replaces `\\n` with real newlines at runtime.
-- 403 on analytics ingestion: ensure `METRICS_ALLOWED_ORIGINS` includes the requesting origin exactly.
-- Missing env: `NEXT_PUBLIC_API_BASE_URL` can be set to your app origin; if omitted, client calls default to relative URLs.
-
-### Running the Development Server
-
-Run the following command to start the development server:
-
-```bash
-npm run dev
-```
-
-### Seeding Draft Metadata
-
-Use the `Scripts/seedRoomMeta.ts` script to initialize draft metadata for a room:
-
-```bash
-# Seed the default room
-npx ts-node Scripts/seedRoomMeta.ts
-
-# Seed a specific room and shuffle draft order
-npx ts-node Scripts/seedRoomMeta.ts <roomId> --shuffle
-```
-
-Pass `--test` to generate placeholder team names instead of loading teams from the database.
-
-### Migration: league_members → leagueMembers
-
-To backfill the canonical collection from the legacy name:
-
-````bash
-npx tsx Scripts/migrate-league-members.ts
-# or:
-# npm exec tsx Scripts/migrate-league-members.ts
-
-Requires `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` to be set (see `ENV.EXAMPLE`).
-
-### Sample Player Data
-
-Sample AFL player records for local development are now kept in `src/Data/aflPlayers.ts`. The previous `public/data/aflPlayers.js` has been removed.
-
-## 🧪 Testing & Automation
-
-- **test:socket**
-  - Client-only test requiring the dev server to be running.
-  - Use for quick local socket interaction checks.
-  - Run with:
-    ```bash
-    npm run test:socket
-    ```
-
-- **test:smoke:socket**
-  - Self-contained test that starts a socket server, runs the client test, then shuts down.
-  - Ideal for Continuous Integration (CI) environments.
-  - Run with:
-    ```bash
-    npm run test:smoke:socket
-    ```
-
-- **test:all**
-  - Runs the full suite: lint, typecheck, unit, integration, race, end-to-end, and smoke tests.
-  - Use before pushing changes or opening pull requests.
-  - Run with:
-    ```bash
-    npm run test:all
-    ```
-
-- **When to use each:**
-  - Use `test:socket` for rapid local dev feedback when the server is already running.
-  - Use `test:smoke:socket` for isolated socket tests in CI or when you want a clean environment.
-  - Use `test:all` to validate all aspects of the codebase before sharing or merging.
-
-- **Typical Codex workflow:**
-  1. Branch from main/master.
-  2. Commit changes locally.
-  3. Run `npm run test:all` to verify code quality and correctness.
-  4. Push branch to remote repository.
-  5. Open a Pull Request (PR) for review.
-  6. Once approved, merge (land) the PR.
-````
+The repository contains a Netlify build configuration (`npm run build:production`) and Vercel cron
+configuration, but GitHub Actions does not perform a production deployment. A successful `main` build
+therefore proves the application build, not a deployment. Any deployment supplied by an external
+GitHub integration must be verified independently from its commit status and a non-destructive smoke
+check; do not infer production health from the build job alone.

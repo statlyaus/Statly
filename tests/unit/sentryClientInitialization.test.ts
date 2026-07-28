@@ -32,7 +32,7 @@ describe('Sentry client initialization', () => {
     const runtimeSource = readFileSync(join(process.cwd(), 'src/instrumentation.ts'), 'utf8');
     const serverSource = readFileSync(join(process.cwd(), 'src/sentry.server.config.ts'), 'utf8');
     const edgeSource = readFileSync(join(process.cwd(), 'src/sentry.edge.config.ts'), 'utf8');
-    const environmentExample = readFileSync(join(process.cwd(), 'ENV.EXAMPLE'), 'utf8');
+    const environmentExample = readFileSync(join(process.cwd(), '.env.example'), 'utf8');
 
     expect(runtimeSource).toContain("import('./sentry.server.config')");
     expect(runtimeSource).toContain("import('./sentry.edge.config')");

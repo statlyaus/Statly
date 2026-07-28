@@ -67,7 +67,7 @@ describe('local development auth architecture', () => {
   });
 
   it('documents explicit opt-in and enables it only in the isolated browser harness', () => {
-    const firebaseDocs = read('docs/firebase-setup.md');
+    const firebaseDocs = read('docs/development/setup.md');
     const playwrightConfig = read('playwright.config.ts');
 
     expect(firebaseDocs).toContain('NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true');

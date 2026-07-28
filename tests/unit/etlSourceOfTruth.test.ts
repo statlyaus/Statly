@@ -69,8 +69,8 @@ describe('ETL source-of-truth architecture', () => {
     expect(deployment).toContain('FIREBASE_SERVICE_ACCOUNT_JSON_BASE64');
     expect(deployment).toContain('Rscript -e');
     expect(deployment).not.toContain('python3');
-    expect(etlReadme).toContain('Streams the R fetcher output directly');
-    expect(rootReadme).toContain('there is no mock-data fallback');
+    expect(etlReadme).toMatch(/streams the R\s+fetcher output directly/i);
+    expect(rootReadme).toMatch(/there is no mock-data\s+fallback/);
   });
 });
 

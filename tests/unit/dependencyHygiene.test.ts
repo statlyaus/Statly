@@ -28,7 +28,7 @@ describe('dependency and runtime hygiene', () => {
   it('keeps the dead API placeholder absent and override policy documented', () => {
     expect(existsSync(join(process.cwd(), 'src/app/api/api.ts'))).toBe(false);
 
-    const policy = read('docs/dependency-overrides.md');
+    const policy = read('docs/development/dependency-overrides.md');
     for (const dependency of ['zod', '@google-cloud/firestore', 'node-forge', 'jws']) {
       expect(policy).toContain(dependency);
     }
