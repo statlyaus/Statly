@@ -7,14 +7,15 @@ The ETL (Extract, Transform, Load) system provides real-time AFL player statisti
 ## System Architecture
 
 ```
-Python Scraper → TypeScript Ingestor → Firebase Firestore → Next.js API → React Components
+fitzRoy (R) → TypeScript Stream Processor → Firebase Firestore → Next.js API → React Components
 ```
 
 ### Components:
 
-- **Python Scraper** (`etl/fetch_fw_round.py`): Fetches data from Footywire
-- **TypeScript Ingestor** (`etl/ingestFootywire.ts`): Processes and stores data
-- **Firebase Integration** (`etl/liveGuard.ts`): Database helpers
+- **R Fetcher** (`etl/fetch_fw_round.R`): Fetches Footywire data through fitzRoy and emits NDJSON
+- **Pipeline Runner** (`etl/fetchPipeline.ts`): Connects the fetcher to the processor and propagates failures
+- **TypeScript Processor** (`etl/processFootywireData.ts`): Validates, deduplicates, and stores data
+- **Live Guard** (`etl/liveGuard.ts`): Runs the pipeline only while matches are in progress
 - **React Hooks** (`src/hooks/useLiveData.ts`): Component integration layer
 - **API Routes** (`src/app/api/live-data/route.ts`): REST endpoints
 
