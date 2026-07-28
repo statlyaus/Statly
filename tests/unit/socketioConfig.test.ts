@@ -40,6 +40,10 @@ describe('getSocketIoConfig', () => {
     expect(socketServerSource).toContain('socket.handshake.auth.token');
     expect(socketServerSource).toContain('validateAuthToken(token)');
     expect(socketServerSource).toContain("token.startsWith('dev:')");
+    expect(socketServerSource).toContain(
+      'authenticateSocketConnection(socket, next).catch((error) =>'
+    );
+    expect(socketServerSource).toContain("next(new Error('Authentication system error'))");
     expect(socketServerSource).not.toContain("req.headers['authorization']");
     expect(socketServerSource).not.toContain('socket.data.userId = userId');
     expect(socketServerSource).not.toContain("userId: userId || 'anonymous'");
@@ -47,11 +51,62 @@ describe('getSocketIoConfig', () => {
 
   it('sources reconnect backfill from persisted draft events', () => {
     const socketServerSource = read('src/server/socketioServer.ts');
+    const backfillSource = socketServerSource.slice(
+      socketServerSource.indexOf('async function getDeltasSince'),
+      socketServerSource.indexOf('async function runAutoPickForExpiredTimer')
+    );
 
-    expect(socketServerSource).toContain('prisma.draftEvent.findMany');
-    expect(socketServerSource).toContain('createdAt: { gt: new Date(since) }');
-    expect(socketServerSource).not.toContain('getRedis');
-    expect(socketServerSource).not.toContain('zrangebyscore');
+    expect(backfillSource).toContain('prisma.draftEvent.findMany');
+    expect(backfillSource).toContain('createdAt: { gt: new Date(since) }');
+    expect(backfillSource).not.toContain('getRedis');
+    expect(backfillSource).not.toContain('zrangebyscore');
+  });
+
+  it('makes duplicate local draft timers observable before replacement', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+
+    expect(socketServerSource).toContain("logger.warn('Replacing an existing local draft timer'");
+    expect(socketServerSource).toContain('clearInterval(existing)');
+  });
+
+  it('settles asynchronous request authorization through the Socket.IO callback contract', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+
+    expect(socketServerSource).toContain('allowRequest: (req, callback) =>');
+    expect(socketServerSource).not.toContain('allowRequest: async');
+    expect(socketServerSource).toContain('void evaluateSocketRequest(req)');
+    expect(socketServerSource).toContain("callback('Authentication error', false)");
+  });
+
+  it('requires the Redis adapter before production starts accepting connections', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+
+    expect(socketServerSource).toContain('const redis = getRedisConnection()');
+    expect(socketServerSource).not.toContain('await redisClient.connect()');
+    expect(socketServerSource).toContain('await installSocketRedisAdapter(io, redis)');
+    expect(socketServerSource).toContain("if (process.env.NODE_ENV === 'production')");
+    expect(socketServerSource).toContain('void configureSocketRedisAdapter()');
+    expect(socketServerSource.indexOf('void configureSocketRedisAdapter()')).toBeLessThan(
+      socketServerSource.lastIndexOf('httpServer.listen(PORT')
+    );
+    expect(socketServerSource).toContain('socketRedisAdapterLifecycle?.close()');
+    expect(socketServerSource).toContain('ScalableRedisConnection.shutdownInstance()');
+    expect(socketServerSource).toContain('if (!httpServer.listening)');
+  });
+
+  it('records startup failures as logger errors with structured context', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+
+    expect(socketServerSource).toContain("logger.error('❌ Socket.IO startup failed', error, {");
+  });
+
+  it('keeps process shutdown ownership out of the shared Redis connection manager', () => {
+    const scalableConnectionSource = read('src/server/realtime/scalableConnection.ts');
+
+    expect(scalableConnectionSource).toContain('static async shutdownInstance()');
+    expect(scalableConnectionSource).not.toContain("process.on('SIGTERM'");
+    expect(scalableConnectionSource).not.toContain("process.on('SIGINT'");
+    expect(scalableConnectionSource).not.toContain('process.exit(');
   });
 
   it('does not expose fake Socket.IO success semantics from the Next route', () => {

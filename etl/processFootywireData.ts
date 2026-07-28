@@ -131,6 +131,78 @@ interface PlayerRow {
   tog_pct?: number;
 }
 
+const PLAYER_NUMERIC_FIELDS = [
+  'kicks',
+  'handballs',
+  'disposals',
+  'marks',
+  'tackles',
+  'goals',
+  'behinds',
+  'hit_outs',
+  'clearances',
+  'inside_50s',
+  'rebound_50s',
+  'clangers',
+  'contested_possessions',
+  'uncontested_possessions',
+  'frees_for',
+  'frees_against',
+  'one_percenters',
+  'goal_assists',
+  'turnovers',
+  'intercepts',
+  'metres_gained',
+  'contested_marks',
+  'effective_disposals',
+  'score_involvements',
+  'minutes',
+  'tog_pct',
+] as const;
+
+type PlayerNumericField = (typeof PLAYER_NUMERIC_FIELDS)[number];
+
+function toFiniteNumber(value: unknown, field: string, required = false): number | undefined {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
+    if (required) throw new Error(`${field} is required`);
+    return undefined;
+  }
+
+  const normalized = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(normalized)) {
+    throw new Error(`${field} must be a finite number`);
+  }
+  return normalized;
+}
+
+function requiredString(row: Record<string, unknown>, field: string): string {
+  const value = row[field];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`${field} is required`);
+  }
+  return value.trim();
+}
+
+function normalizePlayerRow(input: unknown): PlayerRow {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Player row must be an object');
+  }
+
+  const row = input as Record<string, unknown>;
+  const numericStats = Object.fromEntries(
+    PLAYER_NUMERIC_FIELDS.map((field) => [field, toFiniteNumber(row[field], field)])
+  ) as Partial<Pick<PlayerRow, PlayerNumericField>>;
+
+  return {
+    season: toFiniteNumber(row.season, 'season', true)!,
+    round: toFiniteNumber(row.round, 'round', true)!,
+    team: requiredString(row, 'team'),
+    opposition: typeof row.opposition === 'string' ? row.opposition.trim() : '',
+    player_name: requiredString(row, 'player_name'),
+    ...numericStats,
+  };
+}
+
 interface ProcessedStats {
   kicks: number;
   handballs: number;
@@ -253,17 +325,12 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
     data_source: 'footywire_fitzroy',
   };
 
-  // Upsert document
-  try {
-    await docRef.set(documentData, { merge: true });
-    console.log(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
+  await docRef.set(documentData, { merge: true });
+  console.log(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
 
-    // Add jitter delay
-    const delay = addJitter(0, 6000);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-  } catch (error) {
-    console.error(`✗ Failed to update ${docId}:`, error);
-  }
+  // Add jitter delay
+  const delay = addJitter(0, 6000);
+  await new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 async function main(): Promise<void> {
@@ -283,7 +350,7 @@ async function main(): Promise<void> {
     if (!line.trim()) continue;
 
     try {
-      const row: PlayerRow = JSON.parse(line);
+      const row = normalizePlayerRow(JSON.parse(line));
       await processPlayerRow(row);
       processedCount++;
     } catch (error) {
@@ -293,6 +360,10 @@ async function main(): Promise<void> {
   }
 
   console.log(`\nETL Complete: ${processedCount} processed, ${errorCount} errors`);
+
+  if (errorCount > 0) {
+    process.exitCode = 1;
+  }
 }
 
 // Handle graceful shutdown
@@ -307,7 +378,10 @@ process.on('SIGTERM', () => {
 });
 
 if (require.main === module) {
-  main().catch(console.error);
+  main().catch((error) => {
+    console.error('Fatal ETL processor error:', error);
+    process.exitCode = 1;
+  });
 }
 
-export { processPlayerRow, checkMatchStatus };
+export { processPlayerRow, checkMatchStatus, normalizePlayerRow };

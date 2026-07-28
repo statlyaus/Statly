@@ -11,6 +11,9 @@ const useSocketWebServer =
 
 const nextCommand = [
   'NODE_ENV=development',
+  'STATLY_ENABLE_DEV_AUTH=true',
+  'STATLY_ENABLE_DEV_TOOLS=true',
+  'NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true',
   'NEXT_PUBLIC_FIREBASE_API_KEY=',
   `GOOGLE_CLOUD_PROJECT=${firebaseProjectId}`,
   `GCLOUD_PROJECT=${firebaseProjectId}`,
@@ -32,6 +35,8 @@ const nextCommand = [
 
 const socketCommand = [
   'NODE_ENV=development',
+  'STATLY_ENABLE_DEV_AUTH=true',
+  'NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true',
   `SOCKET_PORT=${socketPort}`,
   `SOCKET_IO_CORS_ORIGINS=${baseURL},http://localhost:${port}`,
   './node_modules/.bin/tsx -r dotenv/config ./src/server/socketioServer.ts',
@@ -77,6 +82,16 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox-smoke',
+      testMatch: /.*\.smoke\.test\.ts/,
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit-smoke',
+      testMatch: /.*\.smoke\.test\.ts/,
+      use: { ...devices['Desktop Safari'] },
     },
   ],
 });

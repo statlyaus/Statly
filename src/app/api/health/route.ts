@@ -5,6 +5,7 @@ import { withRequestTracing } from '@/lib/requestTracing';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { redisClient } from '@/lib/redis';
 import { metricsCollector, type ApplicationMetrics } from '@/lib/metrics';
+import { checkRelationalDatabase } from '@/server/health/relationalDatabaseHealth';
 
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -13,6 +14,7 @@ interface HealthCheck {
   uptime: number;
   services: {
     database: ServiceStatus;
+    relationalDatabase: ServiceStatus;
     memory: ServiceStatus;
     redis?: ServiceStatus;
     metrics: ServiceStatus;
@@ -60,17 +62,7 @@ function redisFailureStatus(error: string, responseTime: number): ServiceStatus 
 async function checkDatabase(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
-    // Enhanced database check - test both read and write capabilities
-    const healthCollection = adminDb.collection('_health');
-
-    // Test read
-    await healthCollection.limit(1).get();
-
-    // Test write (with immediate cleanup)
-    const testDoc = healthCollection.doc('health_check');
-    const testData = { timestamp: new Date(), check: 'health' };
-    await testDoc.set(testData);
-    await testDoc.delete(); // Clean up immediately
+    await adminDb.collection('_health').doc('ping').get();
 
     const responseTime = Date.now() - start;
 
@@ -194,8 +186,9 @@ export async function GET(req: NextRequest) {
 
   try {
     // Run all health checks in parallel
-    const [database, memory, redis, metricsCheck] = await Promise.all([
+    const [database, relationalDatabase, memory, redis, metricsCheck] = await Promise.all([
       checkDatabase(),
+      checkRelationalDatabase(),
       Promise.resolve(checkMemory()),
       checkRedis(),
       checkMetrics(),
@@ -206,6 +199,7 @@ export async function GET(req: NextRequest) {
 
     const services = {
       database,
+      relationalDatabase,
       memory,
       redis,
       metrics: metricsCheck,
@@ -298,14 +292,15 @@ export async function PATCH(req: NextRequest) {
 
   try {
     // More comprehensive checks for readiness
-    const [database, redis, metricsCheck] = await Promise.all([
+    const [database, relationalDatabase, redis, metricsCheck] = await Promise.all([
       checkDatabase(),
+      checkRelationalDatabase(),
       checkRedis(),
       checkMetrics(),
     ]);
 
     // For readiness, we require all critical services to be healthy
-    const criticalServices = [database, metricsCheck];
+    const criticalServices = [database, relationalDatabase, metricsCheck];
     const redisReady = isRedisRequired()
       ? redis.status === 'healthy'
       : redis.status !== 'unhealthy';
@@ -323,6 +318,7 @@ export async function PATCH(req: NextRequest) {
         timestamp: new Date().toISOString(),
         services: {
           database: database.status,
+          relationalDatabase: relationalDatabase.status,
           redis: redis.status,
           metrics: metricsCheck.status,
         },

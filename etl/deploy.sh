@@ -25,9 +25,9 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-if [ -z "$GOOGLE_SERVICE_ACCOUNT" ]; then
-    echo "❌ GOOGLE_SERVICE_ACCOUNT environment variable is required"
-    echo "   Set this to your Firebase service account JSON string"
+if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64" ]; then
+    echo "❌ FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 environment variable is required"
+    echo "   Set this to your base64-encoded Firebase service account JSON"
     exit 1
 fi
 
@@ -36,17 +36,13 @@ echo "✅ Requirements met"
 # Build and test
 echo ""
 echo "🔨 Building and testing..."
-npm install
+npm ci
 npm run build
 
-# Test Python script
-echo "🐍 Testing Python data fetcher..."
-python3 fetch_fw_round.py 2025 18 /tmp/test_deploy.json
-if [ ! -f "/tmp/test_deploy.json" ]; then
-    echo "❌ Python script test failed"
-    exit 1
-fi
-echo "✅ Python script working"
+# Verify the canonical fetch runtime without making an external data request.
+echo "📊 Verifying R data fetcher dependencies..."
+Rscript -e 'packages <- c("fitzRoy", "jsonlite", "janitor", "dplyr", "stringr"); stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))'
+echo "✅ R data fetcher dependencies available"
 
 # Deploy to Cloud Run
 echo ""
@@ -58,7 +54,7 @@ gcloud run deploy $SERVICE_NAME \
     --region $REGION \
     --project $PROJECT_ID \
     --allow-unauthenticated \
-    --set-env-vars GOOGLE_SERVICE_ACCOUNT="$GOOGLE_SERVICE_ACCOUNT" \
+    --set-env-vars="FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64" \
     --memory 512Mi \
     --cpu 1 \
     --timeout 900 \

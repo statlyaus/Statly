@@ -27,7 +27,14 @@ A comprehensive real-time ETL pipeline for AFL player statistics using fitzRoy (
 - Cleans and normalizes column names to snake_case
 - Supports season/round parameters
 
-### 2. Node.js ETL Processor (`processFootywireData.ts`)
+### 2. Pipeline Orchestrator (`fetchPipeline.ts`)
+
+- Resolves source and compiled runtime paths consistently
+- Streams the R fetcher output directly to the Node.js processor
+- Propagates fetch and processing failures through exit codes
+- Supports live and historical backfill modes without alternate sources
+
+### 3. Node.js ETL Processor (`processFootywireData.ts`)
 
 - Reads NDJSON from STDIN
 - Computes checksums to avoid duplicate writes
@@ -36,14 +43,14 @@ A comprehensive real-time ETL pipeline for AFL player statistics using fitzRoy (
 - Upserts to Firestore with jitter delays
 - Only processes matches with status="in_progress"
 
-### 3. Live Window Guard (`liveGuard.ts`)
+### 4. Live Window Guard (`liveGuard.ts`)
 
 - Monitors Firestore for matches with status="in_progress"
 - Runs fetch/upsert cycles only during live matches
 - Implements intelligent sleep intervals with jitter
 - Handles graceful shutdown and error recovery
 
-### 4. Data Validation (`validateMatchData.ts`)
+### 5. Data Validation (`validateMatchData.ts`)
 
 - Validates team scores: sum(goals\*6 + behinds) vs expected scores
 - Checks disposals = kicks + handballs for ≥95% of players
@@ -68,7 +75,7 @@ Generate service account key and encode:
 ```bash
 # Download JSON key file
 cat serviceAccountKey.json | base64 -w0 > encoded_key.txt
-# Set as CI environment variable FIREBASE_SERVICE_ACCOUNT_JSON
+# Set as CI environment variable FIREBASE_SERVICE_ACCOUNT_JSON_BASE64
 ```
 
 ### 2. Local Development
@@ -101,7 +108,14 @@ npm run test-r
 Test full pipeline:
 
 ```bash
+# Requires FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 and Firestore access
 npm run test-pipeline
+```
+
+Run a historical backfill through the same source and processor:
+
+```bash
+npm run backfill -- 2024 2024 1 24
 ```
 
 ### 3. Docker Deployment
@@ -262,8 +276,8 @@ curl http://localhost:3000/api/health
 - **Jitter**: ±6s delays prevent thundering herd
 - **Checksum deduplication**: Skip unchanged records
 - **Live window detection**: Only fetch during active matches
-- **Batch processing**: Single transaction per player update
-- **Error recovery**: Automatic retry with exponential backoff
+- **Streaming processing**: Rows are processed as the fetcher emits NDJSON
+- **Failure propagation**: Fetch, parsing, and Firestore write failures make the cycle fail
 
 ## Future Enhancements
 
@@ -297,8 +311,8 @@ install.packages(c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr'))
 
 ```bash
 # Verify service account permissions
-# Check FIREBASE_SERVICE_ACCOUNT_JSON encoding
-echo $FIREBASE_SERVICE_ACCOUNT_JSON | base64 -d | jq .
+# Check FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 encoding
+echo "$FIREBASE_SERVICE_ACCOUNT_JSON_BASE64" | base64 -d | jq .
 ```
 
 **No live matches:**

@@ -35,4 +35,15 @@ describe('draft realtime dispatcher production readiness', () => {
     expect(source).toContain('direction: pick.nextDirection');
     expect(source).toContain('pickDeadlineAt: pick.pickDeadlineAt');
   });
+
+  it('keeps application pubsub fanout local when the Socket.IO adapter is installed', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/server/draft/services/DraftRealtimeDispatcher.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('this.io?.local.to(draftId).emit(event, payload)');
+    expect(source).toContain('this.io?.local.to(`draft:${draftId}`).emit(event, payload)');
+    expect(source).not.toContain('this.io?.to(draftId).emit(event, payload)');
+  });
 });

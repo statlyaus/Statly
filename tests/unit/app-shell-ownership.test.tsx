@@ -9,6 +9,7 @@ import AppLayout, { isImmersiveAppPath } from '@/components/navigation/AppLayout
 const navigation = vi.hoisted(() => ({ pathname: '/drafts' }));
 
 vi.mock('next/navigation', () => ({
+  redirect: vi.fn(),
   usePathname: () => navigation.pathname,
 }));
 
@@ -20,6 +21,10 @@ vi.mock('@/AuthContext', () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => (
     <div data-testid="auth-provider">{children}</div>
   ),
+}));
+
+vi.mock('@/lib/serverAuth', () => ({
+  getAuthenticatedUserIdFromServerContext: async () => 'test-user',
 }));
 
 vi.mock('@/components/league/social/LeagueSocialAppProvider', () => ({
@@ -104,12 +109,12 @@ describe('app shell ownership', () => {
     expect(isImmersiveAppPath('/drafts')).toBe(false);
   });
 
-  it('keeps route-group ownership above page content', () => {
-    render(
-      <AppRouteLayout>
-        <div>Protected route content</div>
-      </AppRouteLayout>
-    );
+  it('keeps route-group ownership above page content', async () => {
+    const layout = await AppRouteLayout({
+      children: <div>Protected route content</div>,
+    });
+
+    render(layout);
 
     expect(document.querySelectorAll('[data-app-shell]')).toHaveLength(1);
     expect(screen.getAllByTestId('team-provider')).toHaveLength(1);

@@ -23,10 +23,9 @@ test.describe('shared app shell at 390px', () => {
     await expectNoPageLevelHorizontalOverflow(page);
   });
 
-  test('renders one responsive shell across representative protected routes', async ({ page }) => {
-    const runtimeErrors = collectRuntimeErrors(page);
-    await authenticateAsDevelopmentUser(page);
-
+  test('renders one responsive shell across representative protected routes', async ({
+    context,
+  }) => {
     const protectedRoutes = [
       '/drafts',
       '/scheduling',
@@ -40,20 +39,27 @@ test.describe('shared app shell at 390px', () => {
 
     for (const route of protectedRoutes) {
       await test.step(route, async () => {
-        await page.goto(route);
-        if (route.startsWith('/players/')) {
-          await expect(page.getByRole('heading', { name: 'Darcy Cameron' })).toBeVisible();
+        const routePage = await context.newPage();
+        const runtimeErrors = collectRuntimeErrors(routePage);
+
+        try {
+          await authenticateAsDevelopmentUser(routePage);
+          await routePage.goto(route);
+          if (route.startsWith('/players/')) {
+            await expect(routePage.getByRole('heading', { name: 'Darcy Cameron' })).toBeVisible();
+          }
+          await expect(routePage.locator('[data-app-shell]')).toHaveCount(1);
+          await expect(routePage.getByRole('banner')).toHaveCount(1);
+          await expect(routePage.locator('#main-content')).toHaveCount(1);
+          await expect(routePage.getByRole('button', { name: 'Open navigation' })).toBeVisible();
+          await expectNoAppErrorBoundary(routePage);
+          await expectNoPageLevelHorizontalOverflow(routePage);
+          expect(runtimeErrors).toEqual([]);
+        } finally {
+          await routePage.close();
         }
-        await expect(page.locator('[data-app-shell]')).toHaveCount(1);
-        await expect(page.getByRole('banner')).toHaveCount(1);
-        await expect(page.locator('#main-content')).toHaveCount(1);
-        await expect(page.getByRole('button', { name: 'Open navigation' })).toBeVisible();
-        await expectNoAppErrorBoundary(page);
-        await expectNoPageLevelHorizontalOverflow(page);
       });
     }
-
-    expect(runtimeErrors).toEqual([]);
   });
 
   test('keeps the live draft room immersive', async ({ page }) => {

@@ -34,6 +34,16 @@ Note: We use relative URLs for internal API calls, so `NEXT_PUBLIC_API_BASE_URL`
 - `METRICS_BACKEND`: leave unset or `firestore` (default)
 - `METRICS_ALLOWED_ORIGINS`: comma-separated list of allowed origins for analytics ingestion
 
+The legacy development-auth fallback is disabled by default. To opt into it for an isolated local
+process, set both `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true` and
+`STATLY_ENABLE_DEV_AUTH=true`. The public flag allows the browser to emit a development credential;
+the server flag separately authorizes local servers to trust it. Neither flag enables the fallback
+when `NODE_ENV=production`.
+
+Development and debug routes are also disabled by default. The canonical local and Playwright
+harnesses set `STATLY_ENABLE_DEV_TOOLS=true`; set it manually only for an isolated local server that
+needs `/test-draft` or its supporting APIs. The flag has no effect when `NODE_ENV=production`.
+
 Note: `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST` are for local/dev servers only. Do not set them in production.
 
 ### Where to put them
@@ -94,6 +104,20 @@ The code in `src/lib/firebaseAdmin.ts` reads FIREBASE_SERVICE_ACCOUNT_JSON_BASE6
 4. Protected routes verify the cookie with `adminAuth.verifySessionCookie`.
 
 Sign out via `DELETE /api/auth/session`.
+
+## Service Account Key Rotation
+
+Use overlapping credentials for planned rotation so the current deployment stays available:
+
+1. Create a new key for the existing least-privilege Statly service account. Keep the old key active.
+2. Encode the new JSON locally with the platform-specific command above. Never paste the decoded JSON into logs, tickets, or source control.
+3. Update `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` in preview or staging and deploy that environment.
+4. Verify `/api/auth/health`, `/api/health`, sign-in/session creation, and one authenticated Firestore read.
+5. Update the production secret and perform a rolling deployment so old instances can finish while new instances use the new key.
+6. Repeat the health and authenticated smoke checks in production.
+7. Disable and delete the old key only after every production instance is on the new deployment.
+
+If a key may be compromised, revoke it immediately, rotate the secret, deploy, and verify. Accept the brief credential interruption rather than preserving overlap with a suspected key.
 
 ## Web Vitals (Firestore by default)
 
@@ -161,6 +185,7 @@ NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=statly-4cbed.firebaseapp.com
 NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL=http://127.0.0.1:9099
 NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=127.0.0.1
 NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT=8080
+STATLY_ENABLE_DEV_TOOLS=true
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
 GOOGLE_CLOUD_PROJECT=statly-4cbed
@@ -173,5 +198,13 @@ The app already connects the client SDK to the emulators when `NEXT_PUBLIC_USE_E
 The Admin SDK auto-targets the emulators when `FIRESTORE_EMULATOR_HOST` and
 `FIREBASE_AUTH_EMULATOR_HOST` are set.
 
-The legacy development-auth fallback remains available only when Firebase client config is absent.
-For full-stack testing, prefer the Auth emulator path above.
+The legacy development-auth fallback remains available only when Firebase client config is absent
+and both explicit development-auth flags are enabled. For full-stack testing, prefer the Auth
+emulator path above. For an isolated fallback session, add these local-only values:
+
+```dotenv
+NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true
+STATLY_ENABLE_DEV_AUTH=true
+# Optional override for the generated local-only phrase
+STATLY_LOCAL_AUTH_PHRASE=replace-with-a-local-only-phrase
+```

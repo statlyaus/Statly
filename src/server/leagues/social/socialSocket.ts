@@ -209,7 +209,7 @@ export async function broadcastLeagueSocialEvent(
   envelope: SocialRealtimeEnvelope
 ): Promise<void> {
   const room = getLeagueSocialRoom(envelope.leagueId);
-  const sockets = await io.in(room).fetchSockets();
+  const sockets = await io.local.in(room).fetchSockets();
   await Promise.all(
     sockets.map(async (socket) => {
       const userId =

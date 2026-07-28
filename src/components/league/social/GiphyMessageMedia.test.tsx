@@ -8,13 +8,8 @@ const mocks = vi.hoisted(() => ({
       id: 'xT9IgG50Fb7Mi0prBC',
       title: 'Celebration',
       images: {
-        fixed_width: {
+        downsized_medium: {
           url: 'https://media.giphy.com/celebration.gif',
-          width: '200',
-          height: '150',
-        },
-        original: {
-          url: 'https://media.giphy.com/celebration-original.gif',
           width: '480',
           height: '360',
         },
@@ -47,7 +42,10 @@ describe('GiphyMessageMedia', () => {
     );
 
     const expand = await screen.findByRole('button', { name: 'Expand GIF' });
-    expect(screen.getByRole('img', { name: 'Celebration' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Celebration' })).toHaveAttribute(
+      'src',
+      'https://media.giphy.com/celebration.gif'
+    );
     expect(container.querySelector('.max-h-60')).toBeInTheDocument();
     expect(expand).toHaveClass(
       'bg-social-surface',

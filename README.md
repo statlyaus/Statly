@@ -7,7 +7,7 @@ This is a comprehensive fantasy sports platform for the Australian Football Leag
 - **Frontend**: Next.js 15 with React and TypeScript
 - **Styling**: Tailwind CSS with custom AFL team themes
 - **Backend**: Firebase (Firestore, Authentication)
-- **Real-time Data**: Custom ETL pipeline with Python/R data fetchers
+- **Real-time Data**: fitzRoy (R) fetcher with a TypeScript ingestion pipeline
 - **Deployment**: Vercel (frontend) + Google Cloud Run (ETL)
 
 ## 🚀 Tech Stack
@@ -17,7 +17,7 @@ This is a comprehensive fantasy sports platform for the Australian Football Leag
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) + [Framer Motion](https://www.framer.com/motion/)
 - **Database**: [Firebase Firestore](https://firebase.google.com/docs/firestore)
 - **Authentication**: [Firebase Auth](https://firebase.google.com/docs/auth)
-- **Data Pipeline**: Python + TypeScript ETL system
+- **Data Pipeline**: R + TypeScript ETL system
 - **UI Components**: Custom component library with accessibility
 - **Icons**: [Heroicons](https://heroicons.com/)
 - **Linting**: [ESLint](https://eslint.org/)
@@ -50,23 +50,23 @@ Statly includes a sophisticated ETL pipeline for real-time AFL data ingestion:
 
 ### Data Sources
 
-- **Primary**: Footywire (via custom Python scraper)
-- **Backup**: AFL Official, AFL Tables (via fitzRoy when R available)
+- **Canonical source**: Footywire via fitzRoy
+- **Failure policy**: Fail closed; there is no mock-data fallback
 - **Update Frequency**: 30-second polling during live matches
 
 ### Pipeline Components
 
 ```
 ┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│   Python    │───▶│  Data Fetch  │───▶│ NDJSON File │
-│   Scraper   │    │   Script     │    │             │
+│ fitzRoy (R) │───▶│ NDJSON Stream│───▶│  TypeScript │
+│   Fetcher   │    │              │    │  Processor  │
 └─────────────┘    └──────────────┘    └─────────────┘
                                               │
                                               ▼
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│  Firestore  │◀───│ TypeScript   │◀───│   Node.js   │
-│ Collections │    │ Ingestor     │    │   Poller    │
-└─────────────┘    └──────────────┘    └─────────────┘
+┌─────────────┐    ┌──────────────┐
+│  Firestore  │◀───│  Live Guard  │
+│ Collections │    │   Poller     │
+└─────────────┘    └──────────────┘
 ```
 
 ### Firestore Schema
@@ -84,12 +84,12 @@ cd etl/
 # Install dependencies
 npm install
 
-# Test data fetcher
-python3 fetch_fw_round.py 2025 18 /tmp/test.json
+# Test the data fetcher (writes NDJSON to stdout)
+Rscript fetch_fw_round.R 2025 18 | head
 
 # Configure Firebase credentials
 cp .env.template .env
-# Edit .env with your GOOGLE_SERVICE_ACCOUNT JSON
+# Set FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 in .env
 
 # Run ETL pipeline
 npm run dev

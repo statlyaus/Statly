@@ -1,17 +1,10 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "noEmit": false,
-    "declaration": false,
-    "sourceMap": true,
-    "module": "CommonJS",
-    "moduleResolution": "Node",
-    "target": "ES2022",
-    "lib": ["ES2023"],
-    "verbatimModuleSyntax": false,
-    "allowJs": false,
-    "isolatedModules": false,
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
@@ -19,25 +12,9 @@
     "types": ["node"]
   },
   "include": [
+    "src/server/workers/enhancedDraftWorker.ts",
     "src/server/workers/webVitalsWorker.ts",
-    "src/server/realtime/**/*.ts",
-    "src/services/webVitalsPersistence.ts",
-    "src/lib/logger.ts",
-    "src/lib/firebaseAdmin.ts"
+    "src/**/*.d.ts"
   ],
-  "exclude": [
-    "node_modules",
-    ".next",
-    "dist",
-    "functions",
-    "etl",
-    "src/**/*.test.ts",
-    "src/**/*.test.tsx",
-    "src/lib/__tests__/**",
-    "src/lib/**",
-    "src/app/**",
-    "src/components/**",
-    "src/contexts/**",
-    "src/pages/**"
-  ]
+  "exclude": ["node_modules", ".next", "dist", "functions", "etl", "src/**/*.test.ts"]
 }

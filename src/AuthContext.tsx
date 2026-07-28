@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
+import type { User as FirebaseUser } from 'firebase/auth';
 import {
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -12,7 +13,6 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import type { User, UserCredential } from 'firebase/auth';
 import { auth, authEmulatorReady } from '@/lib/firebaseClient';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import {
@@ -24,11 +24,23 @@ import {
   readStoredDevelopmentAuthUser,
 } from '@/lib/devAuth';
 
+export interface AuthUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  emailVerified: boolean;
+  metadata: {
+    creationTime?: string;
+    lastSignInTime?: string;
+  };
+}
+
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
-  login: (email: string, pass: string) => Promise<UserCredential>;
-  signup: (email: string, pass: string) => Promise<UserCredential>;
+  login: (email: string, pass: string) => Promise<void>;
+  signup: (email: string, pass: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   loginWithFacebook: () => Promise<void>;
   loginWithApple: () => Promise<void>;
@@ -37,7 +49,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function toFirebaseDevelopmentUser(): User {
+function toDevelopmentAuthUser(): AuthUser {
   const developmentUser = createDevelopmentAuthUser();
 
   return {
@@ -45,43 +57,33 @@ function toFirebaseDevelopmentUser(): User {
     email: developmentUser.email,
     displayName: developmentUser.displayName,
     emailVerified: true,
-    isAnonymous: false,
-    phoneNumber: null,
     photoURL: null,
-    providerId: 'development',
-    providerData: [],
-    refreshToken: '',
-    tenantId: null,
-    delete: async () => undefined,
-    getIdToken: async () => `dev:${developmentUser.uid}`,
-    getIdTokenResult: async () =>
-      ({
-        token: `dev:${developmentUser.uid}`,
-        signInProvider: 'development',
-        claims: {},
-      }) as Awaited<ReturnType<User['getIdTokenResult']>>,
-    reload: async () => undefined,
-    toJSON: () => developmentUser,
-  } as unknown as User;
+    metadata: {},
+  };
 }
 
-function toDevelopmentCredential(user: User): UserCredential {
-  return {
-    user,
-    providerId: 'development',
-    operationType: 'signIn',
-  } as unknown as UserCredential;
+async function createServerSessionForUser(user: FirebaseUser): Promise<void> {
+  const idToken = await user.getIdToken();
+  const response = await fetch('/api/auth/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Server session creation failed with status ${response.status}`);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Skip Firebase auth if not available
     if (!auth) {
       if (isDevelopmentAuthEnabled() && readStoredDevelopmentAuthUser()) {
-        setUser(toFirebaseDevelopmentUser());
+        setUser(toDevelopmentAuthUser());
       }
       setLoading(false);
       return;
@@ -90,12 +92,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentAuth = auth;
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
+    let authStateVersion = 0;
 
     void authEmulatorReady.finally(() => {
       if (cancelled) return;
-      unsubscribe = onAuthStateChanged(currentAuth, (user) => {
-        setUser(user);
-        setLoading(false);
+      unsubscribe = onAuthStateChanged(currentAuth, (firebaseUser) => {
+        const version = ++authStateVersion;
+
+        if (!firebaseUser) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        void createServerSessionForUser(firebaseUser)
+          .then(() => {
+            if (!cancelled && version === authStateVersion) {
+              setUser(firebaseUser);
+            }
+          })
+          .catch((error) => {
+            if (!cancelled && version === authStateVersion) {
+              setUser(null);
+              console.error('Failed to restore server session:', error);
+            }
+          })
+          .finally(() => {
+            if (!cancelled && version === authStateVersion) {
+              setLoading(false);
+            }
+          });
       });
     });
 
@@ -109,12 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const createServerSession = async () => {
     if (!auth || !auth.currentUser) return;
     try {
-      const idToken = await auth.currentUser.getIdToken();
-      await fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      });
+      await createServerSessionForUser(auth.currentUser);
     } catch (error) {
       // Non-fatal: client remains signed in, but server-side protection may redirect
       console.error('Failed to create server session:', error);
@@ -147,24 +168,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login: async (email: string, pass: string) => {
       if (!auth) {
         if (isDevelopmentLogin(email, pass)) {
-          const developmentUser = toFirebaseDevelopmentUser();
           persistDevelopmentAuthUser();
-          setUser(developmentUser);
-          return toDevelopmentCredential(developmentUser);
+          setUser(toDevelopmentAuthUser());
+          return;
         }
         throw new Error('Use the documented local development credentials.');
       }
       await authEmulatorReady;
-      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      await signInWithEmailAndPassword(auth, email, pass);
       await createServerSession();
-      return cred;
     },
     signup: async (email: string, pass: string) => {
       if (!auth) throw new Error('Firebase Auth not available');
       await authEmulatorReady;
-      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      await createUserWithEmailAndPassword(auth, email, pass);
       await createServerSession();
-      return cred;
     },
     loginWithGoogle: async () => {
       if (!auth) throw new Error('Firebase Auth not available');

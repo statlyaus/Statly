@@ -65,13 +65,15 @@ function attachSocket(socket: SocketIOSocket) {
   const emit = vi.fn();
   const to = vi.fn(() => ({ emit }));
   const inRoom = vi.fn(() => ({ fetchSockets: vi.fn(async () => [socket]) }));
+  const globalInRoom = vi.fn();
   const io = {
     on: vi.fn((event: string, handler: EventHandler) => {
       if (event === 'connection') connectionHandler = handler;
       return io;
     }),
     to,
-    in: inRoom,
+    in: globalInRoom,
+    local: { in: inRoom },
   };
 
   attachLeagueSocialSocketHandlers(io as unknown as SocketIOServer);
@@ -83,6 +85,7 @@ function attachSocket(socket: SocketIOSocket) {
     io: io as unknown as SocketIOServer,
     to,
     inRoom,
+    globalInRoom,
   };
 }
 
@@ -236,6 +239,7 @@ describe('league social socket sidecar', () => {
 
     expect(getLeagueSocialRoom('league-1')).toBe('social:league:league-1');
     expect(ioState.inRoom).toHaveBeenCalledWith('social:league:league-1');
+    expect(ioState.globalInRoom).not.toHaveBeenCalled();
     expect(socketState.emit).toHaveBeenCalledWith('social:message', envelope);
   });
 

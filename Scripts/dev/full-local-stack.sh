@@ -28,6 +28,7 @@ export SOCKET_PORT="3002"
 export SOCKETIO_PORT="3002"
 export SOCKET_IO_PORT="3002"
 export NEXT_PUBLIC_SOCKET_URL="http://localhost:3002"
+export STATLY_ENABLE_DEV_TOOLS="true"
 
 FIREBASE_PID=""
 

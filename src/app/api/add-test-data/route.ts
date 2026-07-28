@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { revalidatePlayersTags } from '@/lib/cache';
+import {
+  developmentToolsNotFoundResponse,
+  isDevelopmentToolsEnabled,
+} from '@/server/developmentTools';
 
 export const runtime = 'nodejs';
 
@@ -53,10 +57,11 @@ const testData = [
 ];
 
 export async function POST(_request: NextRequest) {
+  if (!isDevelopmentToolsEnabled()) {
+    return developmentToolsNotFoundResponse();
+  }
+
   try {
-    if (process.env.NODE_ENV !== 'development') {
-      return NextResponse.json({ success: false, error: 'forbidden' }, { status: 403 });
-    }
     const db = adminDb;
 
     console.log('Adding test data to Firebase...');
@@ -90,6 +95,10 @@ export async function POST(_request: NextRequest) {
 }
 
 export async function GET() {
+  if (!isDevelopmentToolsEnabled()) {
+    return developmentToolsNotFoundResponse();
+  }
+
   return NextResponse.json({
     message: 'Use POST to add test data to Firebase',
     data: testData,

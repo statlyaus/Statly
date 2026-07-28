@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 
 // Example protected route enforcement placeholder.
 // If you move to server-verified Firebase sessions, replace the stub with real checks.
@@ -25,7 +26,7 @@ export function proxy(req: NextRequest): NextResponse {
     }
 
     // Dev-only token format: dev:<userId>
-    if (process.env.NODE_ENV !== 'production' && token && token.startsWith('dev:')) {
+    if (isServerDevelopmentAuthEnabled() && token && token.startsWith('dev:')) {
       const userId = token.slice(4);
       const requestHeaders = new Headers(req.headers);
       requestHeaders.set('x-auth-user', userId);
@@ -37,10 +38,15 @@ export function proxy(req: NextRequest): NextResponse {
   }
 
   // List of protected route prefixes (customize to your app)
-  const protectedPrefixes = ['/dashboard', '/app', '/league'];
-  const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
+  const protectedPrefixes = ['/dashboard', '/app', '/league', '/leagues'];
+  const isProtected = protectedPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
 
-  if (!isProtected) return NextResponse.next();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-statly-request-path', `${pathname}${req.nextUrl.search}`);
+
+  if (!isProtected) return NextResponse.next({ request: { headers: requestHeaders } });
 
   // Read a session cookie set by server after verifying Firebase ID token
   const session = req.cookies.get('statly_session');
@@ -51,9 +57,9 @@ export function proxy(req: NextRequest): NextResponse {
   }
 
   // Optionally: verify/refresh session via a lightweight endpoint if needed
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/dashboard/:path*', '/app/:path*', '/league/:path*'],
+  matcher: ['/api/:path*', '/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };

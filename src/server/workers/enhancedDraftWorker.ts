@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
 import { Worker, QueueEvents } from 'bullmq';
@@ -15,7 +16,7 @@ import {
   type DraftPickExpiryJobData,
   type DraftStartJobData,
 } from '../queue/draftQueue';
-import { ScalableRedisConnection } from '../realtime/scalableConnection';
+import { getRedisConnection, ScalableRedisConnection } from '../realtime/scalableConnection';
 
 import type { Job } from 'bullmq';
 
@@ -31,7 +32,23 @@ interface WorkerMetrics {
   workerId: string;
 }
 
-export async function reconcileLiveDraftPickExpiryJobs(): Promise<number> {
+const RECONCILIATION_LOCK_KEY = 'draft:worker:reconcile-pick-expiry';
+const DEFAULT_RECONCILIATION_LOCK_TTL_MS = 5 * 60 * 1000;
+const RELEASE_RECONCILIATION_LOCK_SCRIPT = `
+  if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+  end
+  return 0
+`;
+
+function getReconciliationLockTtlMs(): number {
+  const configuredTtl = Number(process.env.DRAFT_RECONCILIATION_LOCK_TTL_MS);
+  return Number.isFinite(configuredTtl) && configuredTtl > 0
+    ? Math.floor(configuredTtl)
+    : DEFAULT_RECONCILIATION_LOCK_TTL_MS;
+}
+
+async function reconcileLiveDraftPickExpiryJobsAsLockOwner(): Promise<number> {
   const schedules = await draftRepository.transaction((tx) =>
     draftRepository.listLiveDraftPickExpirySchedules(tx)
   );
@@ -93,6 +110,44 @@ export async function reconcileLiveDraftPickExpiryJobs(): Promise<number> {
     skippedCount,
   });
   return scheduledCount;
+}
+
+export async function reconcileLiveDraftPickExpiryJobs(): Promise<number> {
+  const redis = getRedisConnection();
+  const lockToken = randomUUID();
+  const lockTtlMs = getReconciliationLockTtlMs();
+  const acquired = await redis.set(RECONCILIATION_LOCK_KEY, lockToken, 'PX', lockTtlMs, 'NX');
+
+  if (acquired !== 'OK') {
+    logger.info('Skipped live draft timer reconciliation because another worker owns the lease', {
+      lockKey: RECONCILIATION_LOCK_KEY,
+    });
+    return 0;
+  }
+
+  try {
+    return await reconcileLiveDraftPickExpiryJobsAsLockOwner();
+  } finally {
+    try {
+      const released = await redis.eval(
+        RELEASE_RECONCILIATION_LOCK_SCRIPT,
+        1,
+        RECONCILIATION_LOCK_KEY,
+        lockToken
+      );
+
+      if (released !== 1 && released !== '1') {
+        logger.warn('Draft timer reconciliation lease was no longer owned at release', {
+          lockKey: RECONCILIATION_LOCK_KEY,
+        });
+      }
+    } catch (error) {
+      logger.warn('Failed to release draft timer reconciliation lease', {
+        lockKey: RECONCILIATION_LOCK_KEY,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 class EnhancedDraftWorker {
@@ -403,11 +458,17 @@ class EnhancedDraftWorker {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = undefined;
     }
-    await Promise.all([this.worker.close(), this.queueEvents.close()]).catch((err) => {
-      logger.warn('Error during worker shutdown', {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+    const shutdownResults = await Promise.allSettled([
+      this.worker.close(),
+      this.queueEvents.close(),
+    ]);
+    for (const result of shutdownResults) {
+      if (result.status === 'rejected') {
+        logger.warn('Error during worker shutdown', {
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    }
     this.started = false;
     this.metrics.ready = false;
     logger.info('Enhanced Draft Worker shutdown complete', { workerId: this.metrics.workerId });
@@ -424,7 +485,11 @@ async function shutdownDirectWorker(
   worker: EnhancedDraftWorker
 ): Promise<void> {
   logger.info('Enhanced Draft Worker received shutdown signal', { signal });
-  await worker.shutdown();
+  try {
+    await worker.shutdown();
+  } finally {
+    await ScalableRedisConnection.shutdownInstance();
+  }
   process.exit(0);
 }
 

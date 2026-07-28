@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
+import { isSameOriginRequest } from '@/lib/requestOrigin';
 
 const COOKIE_NAME = 'statly_session';
 const isProduction = process.env.NODE_ENV === 'production';
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+  }
+
   try {
     const { idToken, expiresInDays = 7 } = await request.json();
     if (!idToken || typeof idToken !== 'string') {
@@ -32,7 +37,11 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+  }
+
   try {
     const res = NextResponse.json({ ok: true });
     res.cookies.set(COOKIE_NAME, '', {

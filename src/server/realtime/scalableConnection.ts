@@ -40,10 +40,6 @@ interface ConnectionHealth {
   error?: string;
 }
 
-// Unique Symbol used to mark shutdown handler registration on globalThis to avoid
-// name collisions and ensure safety across module reloads and worker contexts.
-const SHUTDOWN_HANDLERS_SYMBOL = Symbol.for('scalableRedisShutdownHandlersRegistered');
-
 function isNextProductionBuild(): boolean {
   return shouldDisableRedisClients();
 }
@@ -65,7 +61,7 @@ function createDisabledRedisClient(): IORedisClient {
 }
 
 class ScalableRedisConnection {
-  private static instance: ScalableRedisConnection;
+  private static instance: ScalableRedisConnection | undefined;
 
   // Per-role ioredis clients (created lazily)
   private publisherClient?: IORedisClient | IORedisCluster;
@@ -181,9 +177,20 @@ class ScalableRedisConnection {
   static getInstance(): ScalableRedisConnection {
     if (!ScalableRedisConnection.instance) {
       ScalableRedisConnection.instance = new ScalableRedisConnection();
-      registerShutdownHandlersOnce();
     }
     return ScalableRedisConnection.instance;
+  }
+
+  static async shutdownInstance(): Promise<void> {
+    const instance = ScalableRedisConnection.instance;
+    if (!instance) {
+      return;
+    }
+
+    await instance.shutdown();
+    if (ScalableRedisConnection.instance === instance) {
+      ScalableRedisConnection.instance = undefined;
+    }
   }
 
   private createClientInstance(
@@ -444,31 +451,6 @@ class ScalableRedisConnection {
     ]);
 
     logger.info('Redis connection manager shutdown complete');
-  }
-}
-
-// Register shutdown handlers once per process
-function registerShutdownHandlersOnce() {
-  const __g = globalThis as unknown as Record<symbol, unknown>;
-  if (!__g[SHUTDOWN_HANDLERS_SYMBOL]) {
-    const handler = (signal: string) => {
-      ScalableRedisConnection.getInstance()
-        .shutdown()
-        .then(() => {
-          logger.info(`Redis connection shutdown complete on ${signal}`);
-          process.exit(0);
-        })
-        .catch((error) => {
-          logger.error(`Redis shutdown failed on ${signal}`, { error });
-          process.exit(1);
-        });
-    };
-
-    process.on('SIGTERM', () => handler('SIGTERM'));
-    process.on('SIGINT', () => handler('SIGINT'));
-
-    // Store the Symbol itself as a marker to indicate handlers are registered
-    __g[SHUTDOWN_HANDLERS_SYMBOL] = SHUTDOWN_HANDLERS_SYMBOL;
   }
 }
 

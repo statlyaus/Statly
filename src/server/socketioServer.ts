@@ -5,12 +5,13 @@
 
 import 'dotenv/config';
 
-import { createServer } from 'http';
+import { createServer, type IncomingMessage } from 'http';
 
 import express from 'express';
 import { Server, type Socket as SocketIOSocket } from 'socket.io';
 
 import { buildAuthoritativeDraftState, buildLegacyDraftUpdate } from '@/lib/draftRealtime';
+import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { redisClient } from '@/lib/redis';
@@ -34,6 +35,11 @@ import {
   startLeagueSocialRealtime,
 } from '@/server/leagues/social/socialSocket';
 import { draftRoomStore } from '@/server/roomStore';
+import {
+  installSocketRedisAdapter,
+  type SocketRedisAdapterLifecycle,
+} from '@/server/socketRedisAdapter';
+import { getRedisConnection, ScalableRedisConnection } from '@/server/realtime/scalableConnection';
 
 // Validate configuration before starting
 try {
@@ -43,24 +49,77 @@ try {
   process.exit(1);
 }
 
-// Import the persistence service (for now, we'll use in-memory storage and add Firestore later)
-interface DraftRoom {
-  id: string;
-  participants: Set<string>;
-  currentPick: number;
-  timer?: ReturnType<typeof setInterval>;
-  timeRemaining: number;
-  lastActivity: Date;
-  status: 'waiting' | 'active' | 'paused' | 'completed';
-  maxParticipants: number;
-  timePerPick: number;
-}
-
-// In-memory store for draft rooms (legacy/local)
-const draftRooms = new Map<string, DraftRoom>();
 // Timers tracked in-process; room state persists in Redis via room store
 const roomTimers = new Map<string, ReturnType<typeof setInterval> | undefined>();
+const socketRateLimitFallback = new Map<string, number[]>();
 let draftOutboxDrainInFlight = false;
+let socketRedisAdapterLifecycle: SocketRedisAdapterLifecycle | null = null;
+
+type SocketRequestDecision = {
+  error: string | null;
+  allowed: boolean;
+};
+
+async function evaluateSocketRequest(req: IncomingMessage): Promise<SocketRequestDecision> {
+  const start = Date.now();
+  const ip =
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket.remoteAddress ||
+    'unknown';
+  const windowSec = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_SEC || 60);
+  const subBucketSec = Number(process.env.SOCKET_RATE_LIMIT_SUB_BUCKET_SEC || 10);
+  const maxReq = Number(process.env.SOCKET_RATE_LIMIT_MAX || 100);
+  const nowMs = Date.now();
+  const currentBucket = Math.floor(nowMs / (subBucketSec * 1000));
+  const bucketsToCount = Math.ceil(windowSec / subBucketSec);
+
+  try {
+    const client = redisClient.getClient();
+    if (!client) throw new Error('Redis not initialized');
+
+    const curKey = `ratelimit:socketio:${ip}:${currentBucket}`;
+    const inc = await client.incr(curKey);
+    if (inc === 1) {
+      await client.expire(curKey, windowSec);
+    }
+
+    const keys: string[] = [];
+    for (let i = 0; i < bucketsToCount; i++) {
+      keys.push(`ratelimit:socketio:${ip}:${currentBucket - i}`);
+    }
+    const vals = await client.mget(keys);
+    const total = (vals || []).reduce((sum, value) => sum + (value ? parseInt(value, 10) : 0), 0);
+    if (total > maxReq) {
+      incCounter(METRICS.rateLimitRejections);
+      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+        outcome: 'ratelimited',
+      });
+      return { error: 'Rate limit exceeded', allowed: false };
+    }
+  } catch (error) {
+    logger.warn('Redis rate limiting failed, using in-memory fallback', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    const now = Date.now();
+    const windowMs = windowSec * 1000;
+    const recent = (socketRateLimitFallback.get(ip) || []).filter((time) => now - time < windowMs);
+    recent.push(now);
+    socketRateLimitFallback.set(ip, recent);
+    if (recent.length > maxReq) {
+      incCounter(METRICS.rateLimitRejections);
+      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+        outcome: 'ratelimited',
+      });
+      return { error: 'Rate limit exceeded', allowed: false };
+    }
+  }
+
+  observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+    outcome: 'ok',
+  });
+  return { error: null, allowed: true };
+}
 
 async function flushDraftOutboxBatch(): Promise<void> {
   if (draftOutboxDrainInFlight) {
@@ -246,7 +305,10 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
   await draftRoomStore.saveRoom(updated);
 
   const existing = roomTimers.get(draftId);
-  if (existing) clearInterval(existing);
+  if (existing) {
+    logger.warn('Replacing an existing local draft timer', { draftId });
+    clearInterval(existing);
+  }
 
   const renew = async (): Promise<boolean> => {
     if (!useLeader || !client) return true;
@@ -300,16 +362,29 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
 
 // Express app to serve health and potential aux endpoints
 const app = express();
-app.get('/health', (_req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    // io initialized below; safe to reference after server start too
-    activeConnections: (io as any)?.engine?.clientsCount ?? 0,
-    draftRooms: draftRooms.size,
-    memory: process.memoryUsage(),
-  });
+app.get('/health', async (_req, res) => {
+  try {
+    const draftRoomCount = await draftRoomStore.getRoomsCount();
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      // io initialized below; safe to reference after server start too
+      activeConnections: (io as any)?.engine?.clientsCount ?? 0,
+      draftRooms: draftRoomCount,
+      memory: process.memoryUsage(),
+    });
+  } catch (error) {
+    logger.error('Socket.IO health room-store check failed', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      activeConnections: (io as any)?.engine?.clientsCount ?? 0,
+      draftRooms: null,
+      memory: process.memoryUsage(),
+    });
+  }
 });
 
 // Prometheus metrics endpoint
@@ -363,79 +438,36 @@ const io = new Server(httpServer, {
   upgradeTimeout: socketIOConfig.server.upgradeTimeout,
   maxHttpBufferSize: socketIOConfig.server.maxHttpBufferSize,
   // Additional production settings
-  allowRequest: async (req, callback) => {
+  allowRequest: (req, callback) => {
     const start = Date.now();
-    try {
-      const ip =
-        (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-        req.socket.remoteAddress ||
-        'unknown';
-      const windowSec = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_SEC || 60); // default 60s window
-      const subBucketSec = Number(process.env.SOCKET_RATE_LIMIT_SUB_BUCKET_SEC || 10); // sub-buckets 10s
-      const maxReq = Number(process.env.SOCKET_RATE_LIMIT_MAX || 100);
-      const nowMs = Date.now();
-      const currentBucket = Math.floor(nowMs / (subBucketSec * 1000));
-      const bucketsToCount = Math.ceil(windowSec / subBucketSec);
-
-      // Try Redis-based limiting first (cluster/scaling friendly)
-      try {
-        const client = redisClient.getClient();
-        if (!client) throw new Error('Redis not initialized');
-        // Increment current sub-bucket and set TTL
-        const curKey = `ratelimit:socketio:${ip}:${currentBucket}`;
-        const inc = await client.incr(curKey);
-        if (inc === 1) {
-          await client.expire(curKey, windowSec);
-        }
-        // Sum recent sub-buckets within the window
-        const keys: string[] = [];
-        for (let i = 0; i < bucketsToCount; i++) {
-          keys.push(`ratelimit:socketio:${ip}:${currentBucket - i}`);
-        }
-        const vals = await client.mget(keys);
-        const total = (vals || []).reduce((sum, v) => sum + (v ? parseInt(v, 10) : 0), 0);
-        if (total > maxReq) {
-          incCounter(METRICS.rateLimitRejections);
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-            outcome: 'ratelimited',
-          });
-          return callback('Rate limit exceeded', false);
-        }
-      } catch (error) {
-        logger.warn('Redis rate limiting failed, using in-memory fallback', {
-          error: error instanceof Error ? error.message : String(error),
+    void evaluateSocketRequest(req)
+      .then(({ error, allowed }) => callback(error, allowed))
+      .catch((error) => {
+        logger.error('Socket.IO request evaluation failed', error);
+        incCounter(METRICS.authFailures);
+        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+          outcome: 'error',
         });
-        // Fallback to in-memory limiter if Redis is unavailable
-        const now = Date.now();
-        const windowMs = windowSec * 1000;
-        const store: Map<string, number[]> = (io as any)._allowReqLimiter || new Map();
-        (io as any)._allowReqLimiter = store;
-        const arr = store.get(ip) || [];
-        const recent = arr.filter((t) => now - t < windowMs);
-        recent.push(now);
-        store.set(ip, recent);
-        if (recent.length > maxReq) {
-          incCounter(METRICS.rateLimitRejections);
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-            outcome: 'ratelimited',
-          });
-          return callback('Rate limit exceeded', false);
-        }
-      }
-
-      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-        outcome: 'ok',
+        callback('Authentication error', false);
       });
-      return callback(null, true);
-    } catch (_e) {
-      incCounter(METRICS.authFailures);
-      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-        outcome: 'error',
-      });
-      return callback('Authentication error', false);
-    }
   },
 });
+
+async function configureSocketRedisAdapter(): Promise<void> {
+  try {
+    const redis = getRedisConnection();
+    socketRedisAdapterLifecycle = await installSocketRedisAdapter(io, redis);
+    logger.info('Socket.IO Redis adapter ready');
+  } catch (error) {
+    if (process.env.NODE_ENV === 'production') {
+      throw error;
+    }
+
+    logger.warn('Socket.IO is using the in-memory adapter outside production', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 async function authenticateSocketConnection(
   socket: SocketIOSocket,
@@ -464,7 +496,7 @@ async function authenticateSocketConnection(
     }
 
     if (token.startsWith('dev:')) {
-      if (process.env.NODE_ENV === 'production') {
+      if (!isServerDevelopmentAuthEnabled()) {
         incCounter(METRICS.authFailures);
         return next(new Error('Authentication required'));
       }
@@ -499,7 +531,13 @@ async function authenticateSocketConnection(
 
 // Middleware for authentication and logging
 io.use((socket, next) => {
-  void authenticateSocketConnection(socket, next);
+  authenticateSocketConnection(socket, next).catch((error) => {
+    incCounter(METRICS.authFailures);
+    logger.error('Unexpected Socket.IO authentication middleware failure', error, {
+      socketId: socket.id,
+    });
+    next(new Error('Authentication system error'));
+  });
 });
 
 attachLeagueSocialSocketHandlers(io);
@@ -780,21 +818,6 @@ io.on('connection', (socket) => {
 
       const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
 
-      // Clean up legacy local room state if it exists.
-      const room = draftRooms.get(draftId);
-      if (room) {
-        room.participants.delete(socket.id);
-
-        if (room.participants.size === 0) {
-          if (room.timer) {
-            clearInterval(room.timer);
-            room.timer = undefined;
-          }
-          draftRooms.delete(draftId);
-          logger.info('🗑️ Draft room cleaned up', { draftId });
-        }
-      }
-
       if (participantCount > 0) {
         socket.to(draftId).emit('participant:leave', {
           socketId: socket.id,
@@ -838,21 +861,6 @@ io.on('connection', (socket) => {
 
       try {
         const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
-        const room = draftRooms.get(draftId);
-        if (room) {
-          room.participants.delete(socket.id);
-
-          if (room.participants.size === 0) {
-            if (room.timer) {
-              clearInterval(room.timer);
-              room.timer = undefined;
-            }
-            draftRooms.delete(draftId);
-            logger.info('🗑️ Draft room cleaned up after disconnect', {
-              draftId,
-            });
-          }
-        }
 
         if (participantCount > 0) {
           socket.to(draftId).emit('participant:disconnect', {
@@ -936,6 +944,20 @@ httpServer.on('error', (error) => {
 });
 
 // Graceful shutdown handling
+const closeRedisConnections = async (): Promise<void> => {
+  const results = await Promise.allSettled([
+    socketRedisAdapterLifecycle?.close(),
+    ScalableRedisConnection.shutdownInstance(),
+    redisClient.disconnect(),
+  ]);
+  socketRedisAdapterLifecycle = null;
+
+  const failure = results.find((result) => result.status === 'rejected');
+  if (failure?.status === 'rejected') {
+    throw failure.reason;
+  }
+};
+
 const gracefulShutdown = (signal: string) => {
   logger.info(`🔄 ${signal} received, shutting down gracefully`);
 
@@ -943,11 +965,24 @@ const gracefulShutdown = (signal: string) => {
   void io.close(() => {
     logger.info('📡 Socket.IO server closed');
 
-    // Close HTTP server
-    httpServer.close(() => {
-      logger.info('🌐 HTTP server closed');
-      process.exit(0);
-    });
+    void closeRedisConnections()
+      .catch((error) => {
+        logger.warn('Failed to close Redis connections cleanly', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        if (!httpServer.listening) {
+          logger.info('🌐 HTTP server already closed');
+          process.exit(0);
+          return;
+        }
+
+        httpServer.close(() => {
+          logger.info('🌐 HTTP server closed');
+          process.exit(0);
+        });
+      });
   });
 
   // Force exit after timeout
@@ -985,22 +1020,31 @@ process.on('unhandledRejection', (reason, promise) => {
   gracefulShutdown('unhandledRejection');
 });
 
-// Start the server
-httpServer.listen(PORT, () => {
-  logger.info('🚀 Enhanced Socket.IO server started', {
-    port: PORT,
-    environment: socketIOConfig.environment,
-    cors: socketIOConfig.server.cors.origin,
-    transports: socketIOConfig.server.transports,
-    timestamp: new Date().toISOString(),
-  });
+// Start the server only after the cross-instance broadcast adapter is ready.
+void configureSocketRedisAdapter()
+  .then(() => {
+    httpServer.listen(PORT, () => {
+      logger.info('🚀 Enhanced Socket.IO server started', {
+        port: PORT,
+        environment: socketIOConfig.environment,
+        cors: socketIOConfig.server.cors.origin,
+        transports: socketIOConfig.server.transports,
+        timestamp: new Date().toISOString(),
+      });
 
-  console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
-  console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);
-  console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
-  console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
-});
+      console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
+      console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
+      console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);
+      console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
+      console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
+    });
+  })
+  .catch((error) => {
+    logger.error('❌ Socket.IO startup failed', error, {
+      timestamp: new Date().toISOString(),
+    });
+    process.exit(1);
+  });
 
 // (Health handled by Express above)
 

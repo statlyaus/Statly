@@ -1,5 +1,7 @@
 # AFL ETL Pipeline Implementation Summary
 
+> Historical implementation record. See `etl/README.md` for the current executable pipeline and operating instructions.
+
 ## 📋 Overview
 
 Successfully implemented a comprehensive real-time ETL pipeline for AFL player statistics using fitzRoy (R), Node.js, Firebase, and Next.js. The system automatically monitors for live matches and ingests player data with intelligent polling, validation, and client-side live updates.

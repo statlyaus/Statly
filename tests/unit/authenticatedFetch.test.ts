@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const firebaseMocks = vi.hoisted(() => ({
   getIdToken: vi.fn(),
@@ -21,6 +21,10 @@ describe('authenticatedFetch', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}')));
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('uses a Firebase ID token for internal API requests when available', async () => {
     firebaseMocks.hasCurrentUser = true;
     const firebaseToken = ['firebase', 'token'].join('-');
@@ -40,6 +44,7 @@ describe('authenticatedFetch', () => {
   });
 
   it('uses a dev bearer token for internal API requests without Firebase auth', async () => {
+    vi.stubEnv('NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH', 'true');
     const { authenticatedFetch } = await import('@/lib/authenticatedFetch');
 
     await authenticatedFetch('/api/leagues/user/statly-dev-tester', {}, 'statly-dev-tester');

@@ -48,17 +48,21 @@ class WorkerPool {
     if (this.shutdownInProgress) return;
     this.shutdownInProgress = true;
 
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-      this.healthCheckInterval = undefined;
-    }
+    try {
+      if (this.healthCheckInterval) {
+        clearInterval(this.healthCheckInterval);
+        this.healthCheckInterval = undefined;
+      }
 
-    await Promise.all(
-      Array.from(this.workers.values()).map((w) => this.shutdownWorkerWithTimeout(w))
-    );
-    this.workers.clear();
-    logger.info('Worker pool stopped');
-    this.shutdownInProgress = false;
+      await Promise.all(
+        Array.from(this.workers.values()).map((w) => this.shutdownWorkerWithTimeout(w))
+      );
+      this.workers.clear();
+      await ScalableRedisConnection.shutdownInstance();
+      logger.info('Worker pool stopped');
+    } finally {
+      this.shutdownInProgress = false;
+    }
   }
 
   async addWorker(): Promise<string> {

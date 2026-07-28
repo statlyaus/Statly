@@ -2,11 +2,19 @@ import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import {
+  developmentToolsNotFoundResponse,
+  isDevelopmentToolsEnabled,
+} from '@/server/developmentTools';
 
 /**
  * Debug endpoint to check draft data structure
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!isDevelopmentToolsEnabled()) {
+    return developmentToolsNotFoundResponse();
+  }
+
   try {
     const { id: draftId } = await params;
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FormEvent } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,18 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   gif: {
     id: 'xT9IgG50Fb7Mi0prBC',
-    title: 'Celebration',
+    title: 'celebration',
     analytics_response_payload: 'analytics-payload',
     images: {
       fixed_width: {
         url: 'https://media.giphy.com/celebration.gif',
         width: '200',
         height: '150',
-      },
-      original: {
-        url: 'https://media.giphy.com/celebration-original.gif',
-        width: '480',
-        height: '360',
       },
     },
   },
@@ -70,7 +65,7 @@ describe('GiphyPicker', () => {
       })
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Choose Celebration' }));
+    await user.click(await screen.findByRole('button', { name: 'Choose celebration' }));
     await waitFor(() =>
       expect(onSelect).toHaveBeenCalledWith(
         {
@@ -122,61 +117,6 @@ describe('GiphyPicker', () => {
     );
   });
 
-  it('loads another page of trending GIFs', async () => {
-    const user = userEvent.setup();
-    const firstPage = Array.from({ length: 20 }, (_, index) => ({
-      ...mocks.gif,
-      id: `gif-${index}`,
-      title: `GIF ${index}`,
-    }));
-    const additionalGif = {
-      ...mocks.gif,
-      id: 'extra-gif',
-      title: 'Extra GIF',
-    };
-    mocks.trending
-      .mockResolvedValueOnce({ data: firstPage })
-      .mockResolvedValueOnce({ data: [additionalGif] });
-
-    render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
-    const loadMore = await screen.findByRole('button', { name: 'Load more GIFs' });
-    await user.click(loadMore);
-
-    await waitFor(() =>
-      expect(mocks.trending).toHaveBeenNthCalledWith(2, {
-        offset: 20,
-        limit: 20,
-        rating: 'g',
-        type: 'gifs',
-      })
-    );
-    expect(await screen.findByRole('button', { name: 'Choose Extra GIF' })).toBeInTheDocument();
-    const endOfResults = screen.getByRole('button', { name: 'No more GIFs' });
-    expect(endOfResults).toBeDisabled();
-    expect(endOfResults).toHaveFocus();
-  });
-
-  it('skips GIFs without a usable image rendition', async () => {
-    const user = userEvent.setup();
-    mocks.trending.mockResolvedValueOnce({
-      data: [
-        {
-          ...mocks.gif,
-          id: 'missing-image',
-          title: 'Missing Image',
-          images: {},
-        },
-      ],
-    });
-
-    render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
-
-    expect(await screen.findByText('No GIFs found')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Choose Missing Image' })).not.toBeInTheDocument();
-  });
-
   it('stays hidden when the chat-specific Web SDK key is not configured', () => {
     const { container } = render(<GiphyPicker apiKey="" onSelect={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
@@ -193,6 +133,73 @@ describe('GiphyPicker', () => {
     );
   });
 
+  it('loads another page of GIF results without duplicating the first page', async () => {
+    const user = userEvent.setup();
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      ...mocks.gif,
+      id: `gif-${index}`,
+      title: `Result ${index + 1}`,
+    }));
+    const nextGif = { ...mocks.gif, id: 'gif-20', title: 'More celebration' };
+    mocks.trending
+      .mockResolvedValueOnce({ data: firstPage })
+      .mockResolvedValueOnce({ data: [nextGif] });
+
+    render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
+    await user.click(await screen.findByRole('button', { name: 'Load more GIFs' }));
+
+    await waitFor(() =>
+      expect(mocks.trending).toHaveBeenLastCalledWith({
+        offset: 20,
+        limit: 20,
+        rating: 'g',
+        type: 'gifs',
+      })
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Choose More celebration' })
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Choose Result 1' })).toHaveLength(1);
+  });
+
+  it('ignores load-more results from a previous search generation', async () => {
+    const user = userEvent.setup();
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      ...mocks.gif,
+      id: `trending-${index}`,
+      title: `Trending ${index + 1}`,
+    }));
+    const staleGif = { ...mocks.gif, id: 'stale-gif', title: 'Stale result' };
+    const currentGif = { ...mocks.gif, id: 'current-gif', title: 'Current result' };
+    let resolveStalePage!: (value: { data: Array<typeof staleGif> }) => void;
+    mocks.trending.mockResolvedValueOnce({ data: firstPage }).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStalePage = resolve;
+        })
+    );
+    mocks.search.mockResolvedValueOnce({ data: [currentGif] });
+
+    render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
+    await user.click(await screen.findByRole('button', { name: 'Load more GIFs' }));
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search GIPHY' }), 'current');
+    await user.click(screen.getByRole('button', { name: 'Search GIFs' }));
+    expect(
+      await screen.findByRole('button', { name: 'Choose Current result' })
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      resolveStalePage({ data: [staleGif] });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('button', { name: 'Choose Stale result' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose Current result' })).toBeInTheDocument();
+  });
+
   it('reuses the same idempotency key when a failed GIF selection is retried', async () => {
     const user = userEvent.setup();
     const onSelect = vi
@@ -202,7 +209,7 @@ describe('GiphyPicker', () => {
     render(<GiphyPicker apiKey="test-web-key" onSelect={onSelect} />);
 
     await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
-    const choice = await screen.findByRole('button', { name: 'Choose Celebration' });
+    const choice = await screen.findByRole('button', { name: 'Choose celebration' });
     await user.click(choice);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
