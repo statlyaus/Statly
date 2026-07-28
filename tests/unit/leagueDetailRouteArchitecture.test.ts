@@ -34,9 +34,11 @@ describe('league detail route architecture', () => {
     expect(routeSource).not.toContain('prisma.league.findUnique');
     expect(routeSource).not.toContain("adminDb.collection('leagues').doc(leagueId)");
 
-    expect(pageSource).toContain("from 'next/headers'");
-    expect(pageSource).toContain('cookies()');
-    expect(pageSource).toContain('headers()');
+    expect(pageSource).toContain(
+      "import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth'"
+    );
+    expect(pageSource).toContain('await getAuthenticatedUserIdFromServerContext()');
+    expect(pageSource).not.toContain("from 'next/headers'");
     expect(pageSource).toContain(
       "import { loadAuthorizedLeagueDetail } from '@/server/leagues/leagueDetail'"
     );

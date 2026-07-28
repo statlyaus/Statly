@@ -1,6 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+  connectAuthEmulator,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+} from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
@@ -31,18 +38,37 @@ let auth: ReturnType<typeof getAuth> | null = null;
 let analytics: ReturnType<typeof getAnalytics> | null = null;
 let authEmulatorReady: Promise<void> = Promise.resolve();
 
+function getOrInitializeBrowserAuth(
+  app: Parameters<typeof initializeAuth>[0]
+): ReturnType<typeof initializeAuth> {
+  if (typeof window === 'undefined') {
+    return getAuth(app);
+  }
+
+  try {
+    return initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'auth/already-initialized'
+    ) {
+      return getAuth(app);
+    }
+
+    throw error;
+  }
+}
+
 if (firebaseConfig.apiKey && firebaseConfig.projectId) {
   try {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    auth = getOrInitializeBrowserAuth(app);
     db = getFirestore(app);
-    auth = getAuth(app);
-    // Ensure session persists across tabs/reloads for predictable UX
-    try {
-      void setPersistence(auth, browserLocalPersistence);
-    } catch (e) {
-      // Non-fatal; persistence may not be available in some environments
-      console.warn('Failed to set Firebase auth persistence:', e);
-    }
 
     if (typeof window !== 'undefined' && firebaseConfig.measurementId && !useFirebaseEmulators) {
       analytics = getAnalytics(app);
@@ -54,18 +80,14 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
       const fsPort = Number(process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT ?? '8080');
       const authUrl = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL ?? 'http://127.0.0.1:9099';
 
-      const emulatorAuth = auth;
-      authEmulatorReady = import('firebase/auth')
-        .then(({ connectAuthEmulator }) => {
-          try {
-            connectAuthEmulator(emulatorAuth, authUrl, { disableWarnings: true });
-          } catch {
-            /* ignore already-connected/unsupported */
-          }
-        })
-        .catch(() => {
-          /* ignore unavailable emulator connector during dev HMR */
-        });
+      try {
+        if (!auth.emulatorConfig) {
+          connectAuthEmulator(auth, authUrl, { disableWarnings: true });
+        }
+      } catch (error) {
+        console.error('Firebase Auth emulator connection failed; disabling client auth.', error);
+        auth = null;
+      }
 
       try {
         connectFirestoreEmulator(db, fsHost, fsPort);

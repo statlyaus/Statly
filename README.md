@@ -165,16 +165,17 @@ export FIREBASE_SERVICE_ACCOUNT_JSON_BASE64="$(base64 -w 0 secrets/serviceAccoun
 
 ## Firebase Setup
 
-See docs/firebase-setup.md for complete setup, environment variables, session cookie flow, and web vitals ingestion details.
+See docs/firebase-setup.md for complete setup, environment variables, authentication transport, and web vitals ingestion details.
 
-### Authentication flow (session cookies)
+### Authentication flow (Firebase token transport)
 
-1. The client signs in with Firebase Web SDK and obtains an `idToken`.
-2. POST `{ idToken }` to `POST /api/auth/session`.
-3. The API validates the token with `adminAuth`, then sets a `statly_session` HTTP-only cookie.
-4. Protected server routes (e.g., draft pick) verify this cookie with `adminAuth.verifySessionCookie`.
+1. The client signs in with Firebase Web SDK and waits for Statly's auth service worker to control the page.
+2. The worker adds a current Firebase ID token only to eligible same-origin app requests.
+3. Protected server routes resolve identity through the shared server auth boundary and verify the token with revocation checking.
+4. Authorization remains at the protected data boundary; middleware is an optimistic routing check only.
 
-To sign out, call `DELETE /api/auth/session` which clears the cookie.
+Existing `statly_session` cookies remain a temporary migration fallback when no bearer is present;
+new sign-ins do not create them, and sign-out clears them before ending the Firebase session.
 
 ### Web Vitals ingestion (Firestore by default)
 

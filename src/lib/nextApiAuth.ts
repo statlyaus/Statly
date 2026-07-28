@@ -1,6 +1,7 @@
 import type { NextApiRequest } from 'next';
-import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
-import { adminAuth } from '@/lib/firebaseAdmin';
+import { SESSION_COOKIE_NAME } from '@/lib/authConstants';
+import { DEVELOPMENT_AUTH_COOKIE } from '@/lib/devAuth';
+import { resolveAuthenticatedUserId } from '@/lib/serverAuth';
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -9,28 +10,10 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
 export async function getAuthenticatedUserIdFromApiRequest(
   req: NextApiRequest
 ): Promise<string | null> {
-  if (isServerDevelopmentAuthEnabled()) {
-    const devUser = firstHeaderValue(req.headers['x-auth-user']);
-    if (devUser) return devUser;
-  }
-
-  const authorization = firstHeaderValue(req.headers.authorization);
-  if (authorization?.startsWith('Bearer ')) {
-    try {
-      const decoded = await adminAuth.verifyIdToken(authorization.slice('Bearer '.length), true);
-      return decoded.uid ?? null;
-    } catch {
-      return null;
-    }
-  }
-
-  const sessionCookie = req.cookies?.statly_session;
-  if (!sessionCookie) return null;
-
-  try {
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    return decoded.uid ?? null;
-  } catch {
-    return null;
-  }
+  return resolveAuthenticatedUserId({
+    authorization: firstHeaderValue(req.headers.authorization),
+    developmentHeaderUserId: firstHeaderValue(req.headers['x-auth-user']),
+    developmentCookieUserId: req.cookies?.[DEVELOPMENT_AUTH_COOKIE],
+    sessionCookie: req.cookies?.[SESSION_COOKIE_NAME],
+  });
 }

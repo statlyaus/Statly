@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { cookies, headers } from 'next/headers';
+import { SESSION_COOKIE_NAME } from '@/lib/authConstants';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import {
   DEVELOPMENT_AUTH_COOKIE,
@@ -7,37 +8,83 @@ import {
   isServerDevelopmentAuthEnabled,
 } from '@/lib/devAuth';
 
-/**
- * Resolve the authenticated user id from the request.
- * - In development: trusts x-auth-user header injected by middleware (Bearer dev:<userId>)
- * - In production: verifies Firebase session cookie (statly_session)
- */
-export async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
-  if (isServerDevelopmentAuthEnabled()) {
-    const devUser = request.headers.get('x-auth-user');
-    if (devUser) return devUser;
+export interface ServerAuthCredentials {
+  authorization?: string | null;
+  developmentHeaderUserId?: string | null;
+  developmentCookieUserId?: string | null;
+  sessionCookie?: string | null;
+}
 
-    const devCookieUser = request.cookies.get(DEVELOPMENT_AUTH_COOKIE)?.value;
-    if (devCookieUser) return devCookieUser;
+function getBearerToken(authorization: string | null | undefined): string | null {
+  const match = authorization?.trim().match(/^Bearer\s+(\S+)$/i);
+  return match?.[1] ?? null;
+}
 
-    return process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID ?? DEVELOPMENT_AUTH_USER_ID;
+function getDevelopmentUserId(credentials: ServerAuthCredentials): string | null {
+  if (!isServerDevelopmentAuthEnabled()) return null;
+
+  if (credentials.developmentHeaderUserId === DEVELOPMENT_AUTH_USER_ID) {
+    return DEVELOPMENT_AUTH_USER_ID;
+  }
+  if (credentials.developmentCookieUserId === DEVELOPMENT_AUTH_USER_ID) {
+    return DEVELOPMENT_AUTH_USER_ID;
   }
 
-  const sessionCookie = request.cookies.get('statly_session')?.value;
-  if (!sessionCookie) return null;
+  const token = getBearerToken(credentials.authorization);
+  if (token?.startsWith('dev:')) {
+    return token.slice('dev:'.length) === DEVELOPMENT_AUTH_USER_ID
+      ? DEVELOPMENT_AUTH_USER_ID
+      : null;
+  }
+
+  const hasSuppliedCredential = Boolean(
+    credentials.authorization ||
+      credentials.sessionCookie ||
+      credentials.developmentHeaderUserId ||
+      credentials.developmentCookieUserId
+  );
+  if (hasSuppliedCredential) return null;
+
+  const configuredUserId = process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID;
+  return configuredUserId === DEVELOPMENT_AUTH_USER_ID
+    ? configuredUserId
+    : DEVELOPMENT_AUTH_USER_ID;
+}
+
+/**
+ * Resolve a server identity from normalized request credentials.
+ *
+ * Firebase ID tokens are the primary production credential. The session cookie is retained as a
+ * migration fallback until every authenticated browser request uses the same-origin token transport.
+ * Expected missing, expired, invalid, and revoked credentials resolve to null without noisy logging.
+ */
+export async function resolveAuthenticatedUserId(
+  credentials: ServerAuthCredentials
+): Promise<string | null> {
+  const developmentUserId = getDevelopmentUserId(credentials);
+  if (developmentUserId) return developmentUserId;
+
+  const token = getBearerToken(credentials.authorization);
+  if (token) {
+    return validateAuthToken(token);
+  }
+
+  if (!credentials.sessionCookie) return null;
 
   try {
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+    const decoded = await adminAuth.verifySessionCookie(credentials.sessionCookie, true);
     return decoded.uid ?? null;
   } catch {
     return null;
   }
 }
 
-// Verify a Firebase ID token from an Authorization: Bearer <token> header
+/** Verify one Firebase ID token, including revocation, without consulting fallback credentials. */
 export async function validateAuthToken(token: string): Promise<string | null> {
   if (isServerDevelopmentAuthEnabled() && token.startsWith('dev:')) {
-    return token.slice('dev:'.length) || null;
+    return token.slice('dev:'.length) === DEVELOPMENT_AUTH_USER_ID
+      ? DEVELOPMENT_AUTH_USER_ID
+      : null;
   }
 
   try {
@@ -48,42 +95,29 @@ export async function validateAuthToken(token: string): Promise<string | null> {
   }
 }
 
-// Convenience: resolve user from Authorization header or session cookie
-export async function getAuthenticatedUserId(request: NextRequest): Promise<string | null> {
-  const bearer = request.headers.get('authorization');
-  if (bearer?.startsWith('Bearer ')) {
-    const token = bearer.slice('Bearer '.length);
-    const uid = await validateAuthToken(token);
-    if (uid) return uid;
-  }
-  return getUserIdFromRequest(request);
+/** Resolve identity for an App Router request. */
+export async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
+  return resolveAuthenticatedUserId({
+    authorization: request.headers.get('authorization'),
+    developmentHeaderUserId: request.headers.get('x-auth-user'),
+    developmentCookieUserId: request.cookies.get(DEVELOPMENT_AUTH_COOKIE)?.value,
+    sessionCookie: request.cookies.get(SESSION_COOKIE_NAME)?.value,
+  });
 }
 
+export const getAuthenticatedUserId = getUserIdFromRequest;
+
 /**
- * Resolve the authenticated user id from an App Router server component context.
- * Returns null for expected unauthenticated states so pages can choose their own redirect/fallback.
+ * Resolve identity from an App Router server component context.
+ * Returns null for expected unauthenticated states so callers own redirect or fallback behavior.
  */
 export async function getAuthenticatedUserIdFromServerContext(): Promise<string | null> {
-  const headerStore = await headers();
-  const cookieStore = await cookies();
+  const [headerStore, cookieStore] = await Promise.all([headers(), cookies()]);
 
-  if (isServerDevelopmentAuthEnabled()) {
-    const devUser = headerStore.get('x-auth-user');
-    if (devUser) return devUser;
-
-    const devCookieUser = cookieStore.get(DEVELOPMENT_AUTH_COOKIE)?.value;
-    if (devCookieUser) return devCookieUser;
-
-    return process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID ?? DEVELOPMENT_AUTH_USER_ID;
-  }
-
-  const sessionCookie = cookieStore.get('statly_session')?.value;
-  if (!sessionCookie) return null;
-
-  try {
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    return decoded.uid ?? null;
-  } catch {
-    return null;
-  }
+  return resolveAuthenticatedUserId({
+    authorization: headerStore.get('authorization'),
+    developmentHeaderUserId: headerStore.get('x-auth-user'),
+    developmentCookieUserId: cookieStore.get(DEVELOPMENT_AUTH_COOKIE)?.value,
+    sessionCookie: cookieStore.get(SESSION_COOKIE_NAME)?.value,
+  });
 }

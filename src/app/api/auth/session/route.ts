@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
+import { SESSION_COOKIE_NAME } from '@/lib/authConstants';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { isSameOriginRequest } from '@/lib/requestOrigin';
 
-const COOKIE_NAME = 'statly_session';
 const isProduction = process.env.NODE_ENV === 'production';
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<NextResponse> {
   if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
   }
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
     const res = NextResponse.json({ ok: true, uid: decoded.uid });
-    res.cookies.set(COOKIE_NAME, sessionCookie, {
+    res.cookies.set(SESSION_COOKIE_NAME, sessionCookie, {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'lax',
@@ -37,14 +37,14 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: Request): Promise<NextResponse> {
   if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
   }
 
   try {
     const res = NextResponse.json({ ok: true });
-    res.cookies.set(COOKIE_NAME, '', {
+    res.cookies.set(SESSION_COOKIE_NAME, '', {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'lax',
