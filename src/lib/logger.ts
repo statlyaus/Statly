@@ -42,11 +42,6 @@ class Logger {
 
   constructor() {
     this.sessionId = this.generateSessionId();
-
-    // Flush logs periodically in production (browser only)
-    if (!this.isDevelopment && typeof (globalThis as { window?: unknown }).window !== 'undefined') {
-      setInterval(() => this.flushLogs(), 30000); // Every 30 seconds
-    }
   }
 
   private generateSessionId(): string {
@@ -78,10 +73,8 @@ class Logger {
     return entry;
   }
 
-  private formatMessage(entry: LogEntry): string {
-    const contextStr = entry.context ? ` ${JSON.stringify(entry.context)}` : '';
-    const errorStr = entry.error ? ` ERROR: ${entry.error.message}` : '';
-    return `[${entry.timestamp}] ${entry.level.toUpperCase()}: ${entry.message}${contextStr}${errorStr}`;
+  private serializeEntry(entry: LogEntry): string {
+    return JSON.stringify(entry);
   }
 
   private addToBuffer(entry: LogEntry): void {
@@ -90,27 +83,6 @@ class Logger {
     // Keep buffer size manageable
     if (this.logBuffer.length > this.maxBufferSize) {
       this.logBuffer = this.logBuffer.slice(-this.maxBufferSize);
-    }
-  }
-
-  private async flushLogs(): Promise<void> {
-    if (this.logBuffer.length === 0) return;
-
-    try {
-      const logs = [...this.logBuffer];
-      this.logBuffer = [];
-
-      // Send logs to server in production
-      if (!this.isDevelopment) {
-        await fetch('/api/logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ logs }),
-        });
-      }
-    } catch (error) {
-      // Silently fail - don't impact user experience
-      console.warn('Failed to flush logs:', error);
     }
   }
 
@@ -127,7 +99,7 @@ class Logger {
   debug(message: string, context?: LogContext): void {
     if (this.shouldLog('debug')) {
       const entry = this.createLogEntry('debug', message, context);
-      console.log(this.formatMessage(entry));
+      console.log(this.serializeEntry(entry));
       this.addToBuffer(entry);
     }
   }
@@ -135,7 +107,7 @@ class Logger {
   info(message: string, context?: LogContext): void {
     if (this.shouldLog('info')) {
       const entry = this.createLogEntry('info', message, context);
-      console.info(this.formatMessage(entry));
+      console.info(this.serializeEntry(entry));
       this.addToBuffer(entry);
     }
   }
@@ -143,7 +115,7 @@ class Logger {
   warn(message: string, context?: LogContext): void {
     if (this.shouldLog('warn')) {
       const entry = this.createLogEntry('warn', message, context);
-      console.warn(this.formatMessage(entry));
+      console.warn(this.serializeEntry(entry));
       this.addToBuffer(entry);
     }
   }
@@ -151,7 +123,7 @@ class Logger {
   error(message: string, error?: Error | unknown, context?: LogContext): void {
     if (this.shouldLog('error')) {
       const entry = this.createLogEntry('error', message, context, error);
-      console.error(this.formatMessage(entry));
+      console.error(this.serializeEntry(entry));
       this.addToBuffer(entry);
     }
   }
@@ -260,11 +232,6 @@ class Logger {
   // Clear logs
   clearLogs(): void {
     this.logBuffer = [];
-  }
-
-  // Force flush logs
-  async forceFLush(): Promise<void> {
-    await this.flushLogs();
   }
 }
 
