@@ -14,7 +14,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth }));
 
 import { DELETE, POST } from '@/app/api/auth/session/route';
 import { isSameOriginRequest } from '@/lib/requestOrigin';
-import { proxy } from '@/proxy';
+import { middleware } from '@/middleware';
 
 const originalAppOrigin = process.env.NEXT_PUBLIC_APP_ORIGIN;
 const originalAppUrl = process.env.APP_URL;
@@ -113,7 +113,7 @@ describe('session request security', () => {
   });
 
   it('preserves a protected deep link and query when redirecting to login', () => {
-    const response = proxy(
+    const response = middleware(
       new NextRequest('https://statly.test/leagues/league-1/social?view=board&post=post-1')
     );
     const redirectUrl = new URL(response.headers.get('location')!);
@@ -125,12 +125,26 @@ describe('session request security', () => {
     );
   });
 
+  it('passes a token-transported protected navigation to the server verification boundary', () => {
+    const response = middleware(
+      new NextRequest('https://statly.test/dashboard?view=overview', {
+        headers: { authorization: 'Bearer current-firebase-token' },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(response.headers.get('x-middleware-request-x-statly-request-path')).toBe(
+      '/dashboard?view=overview'
+    );
+  });
+
   it('carries the original request into the invalid-session server guard', () => {
-    const proxySource = readFileSync(join(process.cwd(), 'src/proxy.ts'), 'utf8');
+    const middlewareSource = readFileSync(join(process.cwd(), 'src/middleware.ts'), 'utf8');
     const layoutSource = readFileSync(join(process.cwd(), 'src/app/(app)/layout.tsx'), 'utf8');
 
-    expect(proxySource).toContain(
-      "requestHeaders.set('x-statly-request-path', `${pathname}${req.nextUrl.search}`)"
+    expect(middlewareSource).toContain(
+      "requestHeaders.set('x-statly-request-path', `${pathname}${request.nextUrl.search}`)"
     );
     expect(layoutSource).toContain(".get('x-statly-request-path')");
     expect(layoutSource).toContain('encodeURIComponent(safeRequestPath)');

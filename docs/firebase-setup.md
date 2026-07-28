@@ -96,14 +96,27 @@ The code in `src/lib/firebaseAdmin.ts` reads FIREBASE_SERVICE_ACCOUNT_JSON_BASE6
 - Normalizes private key newlines (replaces `\\n` literal with actual newlines)
 - Exposes `adminAuth` and `adminDb`
 
-## Authentication (Session Cookies)
+## Authentication Transport
 
-1. Client signs in with Firebase Web SDK and gets an `idToken`.
-2. POST `{ idToken }` to `POST /api/auth/session`.
-3. Server sets `statly_session` HTTP-only cookie on success.
-4. Protected routes verify the cookie with `adminAuth.verifySessionCookie`.
+Firebase Web SDK persistence is the browser identity source of truth. Statly uses Firebase's
+service-worker session pattern so server rendering and client Firebase features observe the same
+persisted user:
 
-Sign out via `DELETE /api/auth/session`.
+1. `predev` and `prebuild` generate `public/auth-service-worker.js` from the public Firebase config.
+2. `AuthProvider` signs in with Firebase, then waits until that worker controls the page.
+3. The worker obtains a current Firebase ID token and adds it only to eligible same-origin
+   navigation, API, React Server Component, and Server Action requests.
+4. Middleware performs an optimistic credential-presence check. The shared server auth resolver
+   performs the authoritative, revocation-checked token verification at the data boundary.
+
+The worker never adds tokens to cross-origin requests, static assets, insecure non-loopback origins,
+or requests that already have an `Authorization` header. Production must use HTTPS; localhost and
+loopback addresses are allowed for development.
+
+New sign-ins no longer mint a `statly_session` cookie. The server temporarily accepts an existing
+legacy cookie only when no bearer token is supplied, so deployed sessions can age out without an
+abrupt cutover. Explicit invalid or revoked bearer tokens fail closed and never fall back to a
+cookie. Sign out clears any legacy cookie before signing out of Firebase.
 
 ## Service Account Key Rotation
 
@@ -112,7 +125,7 @@ Use overlapping credentials for planned rotation so the current deployment stays
 1. Create a new key for the existing least-privilege Statly service account. Keep the old key active.
 2. Encode the new JSON locally with the platform-specific command above. Never paste the decoded JSON into logs, tickets, or source control.
 3. Update `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` in preview or staging and deploy that environment.
-4. Verify `/api/auth/health`, `/api/health`, sign-in/session creation, and one authenticated Firestore read.
+4. Verify `/api/auth/health`, `/api/health`, worker-controlled sign-in/navigation, and one authenticated Firestore read.
 5. Update the production secret and perform a rolling deployment so old instances can finish while new instances use the new key.
 6. Repeat the health and authenticated smoke checks in production.
 7. Disable and delete the old key only after every production instance is on the new deployment.
@@ -131,6 +144,11 @@ If a key may be compromised, revoke it immediately, rotate the secret, deploy, a
 - Invalid private key/ASN.1: ensure FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 is set to the raw JSON; newline normalization is handled.
 - 403 on analytics: ensure METRICS_ALLOWED_ORIGINS includes the exact origin.
 - Missing NEXT_PUBLIC_API_BASE_URL: set it to your app origin, or omit to use relative URLs.
+- Sign-in remains on the login page: verify `/auth-service-worker.js` returns JavaScript, the page is
+  HTTPS or loopback, and the browser reports that worker as the current controller. Registration and
+  controller failures are shown as authentication errors instead of redirecting into a login loop.
+- Protected requests return 401 after a deployment: rebuild the worker with the same public Firebase
+  project configuration as the client and confirm the server Admin SDK is configured for that project.
 
 ## Local Firebase Emulators
 

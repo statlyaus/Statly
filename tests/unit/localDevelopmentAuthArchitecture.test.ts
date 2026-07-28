@@ -10,7 +10,7 @@ describe('local development auth architecture', () => {
     const authenticatedFetch = read('src/lib/authenticatedFetch.ts');
     const serverAuth = read('src/lib/serverAuth.ts');
     const nextApiAuth = read('src/lib/nextApiAuth.ts');
-    const proxy = read('src/proxy.ts');
+    const middleware = read('src/middleware.ts');
     const socketServer = read('src/server/socketioServer.ts');
     const pickCommand = read('src/server/draft/api/handlePickCommand.ts');
     const leaguePage = read('src/app/(app)/leagues/[id]/page.tsx');
@@ -32,13 +32,12 @@ describe('local development auth architecture', () => {
     expect(serverAuth).toContain("token.startsWith('dev:')");
     expect(serverAuth).toContain('isServerDevelopmentAuthEnabled()');
     expect(serverAuth).toContain('request.cookies.get(DEVELOPMENT_AUTH_COOKIE)');
-    expect(nextApiAuth).toContain('isServerDevelopmentAuthEnabled()');
-    expect(proxy).toContain('isServerDevelopmentAuthEnabled()');
+    expect(nextApiAuth).toContain('resolveAuthenticatedUserId');
+    expect(middleware).toContain('isServerDevelopmentAuthEnabled()');
     expect(socketServer).toContain('isServerDevelopmentAuthEnabled()');
     expect(pickCommand).toContain('isServerDevelopmentAuthEnabled()');
-    expect(leaguePage).toContain('cookieStore.get(DEVELOPMENT_AUTH_COOKIE)');
-    expect(leaguePage).toContain('isServerDevelopmentAuthEnabled()');
-    expect(teamPage).toContain('isServerDevelopmentAuthEnabled()');
+    expect(leaguePage).toContain('getAuthenticatedUserIdFromServerContext()');
+    expect(teamPage).toContain('getAuthenticatedUserIdFromServerContext()');
   });
 
   it('aligns the test draft creator human participant with the shared dev user', () => {

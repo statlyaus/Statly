@@ -1,8 +1,6 @@
 export const runtime = 'nodejs';
 
 import type { NextRequest } from 'next/server';
-import { cookies } from 'next/headers';
-import { adminAuth } from '@/lib/firebaseAdmin';
 import { z } from 'zod';
 
 import { successResponse, errorResponse } from '@/lib/apiResponse';
@@ -32,16 +30,6 @@ export async function GET(
       return errorResponse('Invalid draft id', 400);
     }
     draftId = parsed.data.id;
-
-    // Optional auth check
-    try {
-      const sessionCookie = (await cookies()).get('statly_session')?.value;
-      if (sessionCookie) {
-        await adminAuth.verifySessionCookie(sessionCookie, true);
-      }
-    } catch (authErr) {
-      logger.debug('Lobby request auth verification failed', { error: authErr });
-    }
 
     logger.info('Lobby API called', { draftId });
 

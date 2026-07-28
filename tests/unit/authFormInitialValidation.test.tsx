@@ -8,6 +8,7 @@ import { useAuth } from '@/AuthContext';
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
+  showNotification: vi.fn(),
 }));
 
 vi.mock('@/AuthContext', () => ({
@@ -24,7 +25,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/hooks/useNotification', () => ({
   useNotification: () => ({
     notification: null,
-    showNotification: vi.fn(),
+    showNotification: mocks.showNotification,
   }),
   NotificationToast: () => null,
 }));
@@ -83,6 +84,25 @@ describe('AuthForm initial validation state', () => {
       expect(mocks.replace).toHaveBeenCalledTimes(1);
     });
     expect(screen.queryByText('Welcome back!')).not.toBeInTheDocument();
+  });
+
+  it('keeps the user on the login form when the server auth handoff fails', async () => {
+    const user = userEvent.setup();
+    const error = new Error('Unable to establish a secure session (503).');
+    vi.mocked(useAuth).mockReturnValue({
+      ...mockAuthContext,
+      login: vi.fn().mockRejectedValue(error),
+    });
+
+    render(<AuthForm initialMode="login" nextUrl="/dashboard" showModeSwitch={false} />);
+
+    await user.type(screen.getByLabelText('Email Address'), 'test@example.com');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.click(screen.getByRole('button', { name: 'Sign In' }));
+
+    expect(await screen.findByText(error.message)).toBeInTheDocument();
+    expect(mocks.showNotification).toHaveBeenCalledWith('error', error.message);
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it('does not render the authenticated profile card while redirecting an existing session', async () => {

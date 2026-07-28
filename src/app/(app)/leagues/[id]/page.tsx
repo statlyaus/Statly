@@ -1,11 +1,6 @@
 import type React from 'react';
 import LeaguePageClient from './LeaguePageClient';
-import { adminAuth } from '@/lib/firebaseAdmin';
-import {
-  DEVELOPMENT_AUTH_COOKIE,
-  DEVELOPMENT_AUTH_USER_ID,
-  isServerDevelopmentAuthEnabled,
-} from '@/lib/devAuth';
+import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 import { loadAuthorizedLeagueDetail } from '@/server/leagues/leagueDetail';
 import {
   loadAuthorizedLeagueTradeCentre,
@@ -16,7 +11,6 @@ import {
   TradeServiceError,
   type TradeView,
 } from '@/server/leagues/trades/tradeContracts';
-import { cookies, headers } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +23,7 @@ export default async function LeaguePage({
 }): Promise<React.ReactElement> {
   const { id } = await params;
   const query = searchParams ? await searchParams : {};
-  const userId = await getLeaguePageUserId();
+  const userId = await getAuthenticatedUserIdFromServerContext();
   const result = await loadAuthorizedLeagueDetail(id, userId);
 
   if (!result.ok) {
@@ -103,31 +97,6 @@ async function loadTradeDigest(leagueId: string, userId: string | null) {
       });
     }
     return { data: null };
-  }
-}
-
-async function getLeaguePageUserId(): Promise<string | null> {
-  const headerStore = await headers();
-  const cookieStore = await cookies();
-
-  if (isServerDevelopmentAuthEnabled()) {
-    const devUser = headerStore.get('x-auth-user');
-    if (devUser) return devUser;
-
-    const devCookieUser = cookieStore.get(DEVELOPMENT_AUTH_COOKIE)?.value;
-    if (devCookieUser) return devCookieUser;
-
-    return process.env.BYPASS_UID || process.env.NEXT_PUBLIC_BYPASS_UID || DEVELOPMENT_AUTH_USER_ID;
-  }
-
-  const sessionCookie = cookieStore.get('statly_session')?.value;
-  if (!sessionCookie) return null;
-
-  try {
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    return decoded.uid ?? null;
-  } catch {
-    return null;
   }
 }
 

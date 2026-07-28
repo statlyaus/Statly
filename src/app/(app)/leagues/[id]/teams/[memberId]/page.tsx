@@ -1,15 +1,9 @@
 import type React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { cookies, headers } from 'next/headers';
 
 import { AppLayout } from '@/components/navigation';
-import { adminAuth } from '@/lib/firebaseAdmin';
-import {
-  DEVELOPMENT_AUTH_COOKIE,
-  DEVELOPMENT_AUTH_USER_ID,
-  isServerDevelopmentAuthEnabled,
-} from '@/lib/devAuth';
+import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 import { loadAuthorizedLeagueTeamRoster } from '@/server/leagues/teamRosterReadModel';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +17,7 @@ export default async function LeagueTeamRosterPage({
   const result = await loadAuthorizedLeagueTeamRoster({
     leagueId,
     memberId,
-    viewerUserId: await getLeaguePageUserId(),
+    viewerUserId: await getAuthenticatedUserIdFromServerContext(),
   });
 
   if (!result.ok) notFound();
@@ -96,29 +90,4 @@ export default async function LeagueTeamRosterPage({
       </main>
     </AppLayout>
   );
-}
-
-async function getLeaguePageUserId(): Promise<string | null> {
-  const headerStore = await headers();
-  const cookieStore = await cookies();
-
-  if (isServerDevelopmentAuthEnabled()) {
-    const devUser = headerStore.get('x-auth-user');
-    if (devUser) return devUser;
-
-    const devCookieUser = cookieStore.get(DEVELOPMENT_AUTH_COOKIE)?.value;
-    if (devCookieUser) return devCookieUser;
-
-    return process.env.BYPASS_UID || process.env.NEXT_PUBLIC_BYPASS_UID || DEVELOPMENT_AUTH_USER_ID;
-  }
-
-  const sessionCookie = cookieStore.get('statly_session')?.value;
-  if (!sessionCookie) return null;
-
-  try {
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    return decoded.uid ?? null;
-  } catch {
-    return null;
-  }
 }

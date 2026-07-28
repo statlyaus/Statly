@@ -2,7 +2,6 @@
 
 import type { ReactElement, ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
-import type { User as FirebaseUser } from 'firebase/auth';
 import {
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -14,6 +13,7 @@ import {
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { auth, authEmulatorReady } from '@/lib/firebaseClient';
+import { ensureAuthServiceWorkerReady } from '@/lib/authServiceWorker';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import {
   clearDevelopmentAuthUser,
@@ -62,19 +62,6 @@ function toDevelopmentAuthUser(): AuthUser {
   };
 }
 
-async function createServerSessionForUser(user: FirebaseUser): Promise<void> {
-  const idToken = await user.getIdToken();
-  const response = await fetch('/api/auth/session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Server session creation failed with status ${response.status}`);
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }): ReactElement {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
           return;
         }
 
-        void createServerSessionForUser(firebaseUser)
+        void ensureAuthServiceWorkerReady()
           .then(() => {
             if (!cancelled && version === authStateVersion) {
               setUser(firebaseUser);
@@ -114,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
           .catch((error) => {
             if (!cancelled && version === authStateVersion) {
               setUser(null);
-              console.error('Failed to restore server session:', error);
+              console.error('Failed to prepare authenticated navigation:', error);
             }
           })
           .finally(() => {
@@ -131,34 +118,11 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
     };
   }, []);
 
-  // Create/clear server session cookie via API
-  const createServerSession = async () => {
-    if (!auth || !auth.currentUser) return;
-    try {
-      await createServerSessionForUser(auth.currentUser);
-    } catch (error) {
-      // Non-fatal: client remains signed in, but server-side protection may redirect
-      console.error('Failed to create server session:', error);
-    }
-  };
-
-  const clearServerSession = async () => {
-    try {
-      const response = await fetch('/api/auth/session', { method: 'DELETE' });
-      if (!response.ok) {
-        console.warn(`Failed to clear server session: ${response.status} ${response.statusText}`);
-        try {
-          const errorData = await response.text();
-          if (errorData) {
-            console.warn('Server response:', errorData);
-          }
-        } catch {
-          // Ignore errors reading response body
-        }
-      }
-    } catch (error) {
-      // Non-fatal - network errors
-      console.warn('Failed to clear server session:', error);
+  // Remove cookies minted by the previous transport while its migration fallback remains readable.
+  const clearLegacyServerSession = async () => {
+    const response = await fetch('/api/auth/session', { method: 'DELETE' });
+    if (!response.ok) {
+      throw new Error(`Unable to clear the secure session (${response.status}).`);
     }
   };
 
@@ -176,27 +140,27 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
       }
       await authEmulatorReady;
       await signInWithEmailAndPassword(auth, email, pass);
-      await createServerSession();
+      await ensureAuthServiceWorkerReady();
     },
     signup: async (email: string, pass: string) => {
       if (!auth) throw new Error('Firebase Auth not available');
       await authEmulatorReady;
       await createUserWithEmailAndPassword(auth, email, pass);
-      await createServerSession();
+      await ensureAuthServiceWorkerReady();
     },
     loginWithGoogle: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
       await authEmulatorReady;
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      await createServerSession();
+      await ensureAuthServiceWorkerReady();
     },
     loginWithFacebook: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
       await authEmulatorReady;
       const provider = new FacebookAuthProvider();
       await signInWithPopup(auth, provider);
-      await createServerSession();
+      await ensureAuthServiceWorkerReady();
     },
     loginWithApple: async () => {
       if (!auth) throw new Error('Firebase Auth not available');
@@ -205,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
       provider.addScope('email');
       provider.addScope('name');
       await signInWithPopup(auth, provider);
-      await createServerSession();
+      await ensureAuthServiceWorkerReady();
     },
     logout: async () => {
       if (!auth && isDevelopmentAuthEnabled()) {
@@ -214,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
         return;
       }
       if (!auth) throw new Error('Firebase Auth not available');
-      await clearServerSession();
+      await clearLegacyServerSession();
       return signOut(auth);
     },
   };

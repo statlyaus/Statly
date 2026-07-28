@@ -26,6 +26,7 @@ out/
 dist/
 *.tsbuildinfo
 .cache/
+public/auth-service-worker.js
 
 # --- Firebase ---
 .firebase/
