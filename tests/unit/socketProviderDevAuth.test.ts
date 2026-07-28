@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getIdToken: vi.fn(async () => 'firebase-id-token'),
@@ -19,7 +19,13 @@ vi.mock('@sentry/react', () => ({
 import { resolveSocketAuthToken } from '@/providers/SocketProvider';
 
 describe('SocketProvider development auth', () => {
-  it('uses the development socket token in non-production even when Firebase auth exists', async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('uses the development socket token when explicitly enabled even when Firebase auth exists', async () => {
+    vi.stubEnv('NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH', 'true');
+
     await expect(resolveSocketAuthToken('statly-dev-tester')).resolves.toBe(
       'dev:statly-dev-tester'
     );

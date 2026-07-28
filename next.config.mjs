@@ -56,6 +56,7 @@ const nextConfig = {
 
   // Production optimizations
   output: 'standalone',
+  serverExternalPackages: ['bullmq'],
   poweredByHeader: false,
   generateEtags: false,
 
