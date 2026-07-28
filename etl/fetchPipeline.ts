@@ -1,5 +1,6 @@
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import * as path from 'path';
+import { pipeline } from 'stream/promises';
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -45,10 +46,28 @@ function waitForSuccessfulExit(child: ChildProcess, label: string): Promise<void
   });
 }
 
+function ensureRscriptAvailable(): void {
+  const result = spawnSync('Rscript', ['--version'], { stdio: 'ignore' });
+
+  if ((result.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+    throw new Error(
+      'Rscript is not installed or is not available on PATH. Install R and ensure Rscript is available.'
+    );
+  }
+
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      `Unable to run Rscript: ${result.error?.message ?? `exit code ${result.status ?? 'unknown'}`}`
+    );
+  }
+}
+
 async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
   const { etlRoot, fetcher, processor } = resolveEtlRuntimePaths();
   const round = options.round === undefined ? '' : String(options.round);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  ensureRscriptAvailable();
 
   const fetchProcess = spawn('Rscript', [fetcher, String(options.season), round], {
     cwd: etlRoot,
@@ -63,15 +82,24 @@ async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  fetchProcess.stdout?.pipe(processorProcess.stdin!);
+  const processorInput = pipeline(fetchProcess.stdout!, processorProcess.stdin!).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code === 'EPIPE') {
+      return;
+    }
+
+    throw new Error(
+      `Footywire fetcher output pipe failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+  });
   fetchProcess.stderr?.pipe(process.stderr);
   processorProcess.stdout?.pipe(process.stdout);
   processorProcess.stderr?.pipe(process.stderr);
 
-  processorProcess.stdin?.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.code !== 'EPIPE') {
-      console.error('ETL processor input failed:', error);
-    }
+  fetchProcess.stdout?.on('error', (error) => {
+    console.error('Footywire fetcher output failed:', error);
+  });
+  processorProcess.stdout?.on('error', (error) => {
+    console.error('Footywire processor output failed:', error);
   });
 
   let timeout: NodeJS.Timeout | undefined;
@@ -86,6 +114,7 @@ async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
       Promise.all([
         waitForSuccessfulExit(fetchProcess, 'Footywire R fetcher'),
         waitForSuccessfulExit(processorProcess, 'Footywire Node processor'),
+        processorInput,
       ]),
       timeoutPromise,
     ]);

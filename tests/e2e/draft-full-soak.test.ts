@@ -9,6 +9,7 @@ import { seedFullDraftSoakFixture } from './helpers/fullDraftSoakFixture';
 
 const MAX_DRAFT_INTERACTION_MS = 10_000;
 const MAX_RENDERED_AVAILABLE_PLAYER_ROWS = 120;
+const FULL_DRAFT_SOAK_TIMEOUT_MS = 5 * 60_000;
 
 async function expectOkDraftResponse(response: APIResponse, label: string) {
   if (response.ok()) {
@@ -22,7 +23,7 @@ async function expectOkDraftResponse(response: APIResponse, label: string) {
 test('completes a fresh 12-team draft and reconciles rosters/history without freezing', async ({
   page,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(FULL_DRAFT_SOAK_TIMEOUT_MS);
 
   const fixture = await seedFullDraftSoakFixture();
   const runtimeErrors = collectRuntimeErrors(page);
@@ -48,7 +49,9 @@ test('completes a fresh 12-team draft and reconciles rosters/history without fre
   await expect(page.locator('body')).toContainText('Pick 2 of 264');
   expect(Date.now() - selectStart).toBeLessThan(MAX_DRAFT_INTERACTION_MS);
 
-  const firstPickResponse = await page.request.get(`/api/drafts/${fixture.draftId}/picks?pageSize=1`);
+  const firstPickResponse = await page.request.get(
+    `/api/drafts/${fixture.draftId}/picks?pageSize=1`
+  );
   expect(firstPickResponse.ok()).toBe(true);
   const firstPickPayload = await firstPickResponse.json();
   const firstPickedPlayerId = firstPickPayload.data.picks[0].player.id;

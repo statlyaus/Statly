@@ -11,7 +11,7 @@ export async function checkRelationalDatabase(): Promise<RelationalDatabaseHealt
   const start = Date.now();
 
   try {
-    await prisma.$queryRawUnsafe('SELECT 1');
+    await prisma.$queryRaw`SELECT 1`;
     const responseTime = Date.now() - start;
 
     return {

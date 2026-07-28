@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { prisma } = vi.hoisted(() => ({
   prisma: {
-    $queryRawUnsafe: vi.fn(),
+    $queryRaw: vi.fn(),
   },
 }));
 
@@ -26,18 +26,19 @@ describe('health relational database probe', () => {
   });
 
   it('reports a successful read-only Prisma probe', async () => {
-    prisma.$queryRawUnsafe.mockResolvedValue([{ result: 1 }]);
+    prisma.$queryRaw.mockResolvedValue([{ result: 1 }]);
 
     await expect(checkRelationalDatabase()).resolves.toMatchObject({
       status: 'healthy',
       responseTime: expect.any(Number),
       lastChecked: expect.any(String),
     });
-    expect(prisma.$queryRawUnsafe).toHaveBeenCalledWith('SELECT 1');
+    expect(prisma.$queryRaw).toHaveBeenCalledOnce();
+    expect(Array.from(prisma.$queryRaw.mock.calls[0][0])).toEqual(['SELECT 1']);
   });
 
   it('reports failures and redacts the production error', async () => {
-    prisma.$queryRawUnsafe.mockRejectedValue(new Error('password leaked by driver'));
+    prisma.$queryRaw.mockRejectedValue(new Error('password leaked by driver'));
 
     await expect(checkRelationalDatabase()).resolves.toMatchObject({
       status: 'unhealthy',
@@ -59,5 +60,7 @@ describe('health relational database probe', () => {
       'const criticalServices = [database, relationalDatabase, metricsCheck]'
     );
     expect(source).toContain('relationalDatabase: relationalDatabase.status');
+    expect(source).toContain("adminDb.collection('_health').doc('ping').get()");
+    expect(source).not.toContain("doc('health_check')");
   });
 });

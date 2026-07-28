@@ -77,12 +77,13 @@ export function errorResponse(
   message: string,
   status = 500,
   code?: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
+  cause?: Error
 ): NextResponse<ApiErrorResponse> {
   const response = createErrorResponse(message, code, details);
 
   if (status >= 500) {
-    logger.error(`API Error (${status}): ${message}`, undefined, { code, details });
+    logger.error(`API Error (${status}): ${message}`, cause, { code, details });
   }
 
   return NextResponse.json(response, { status });
@@ -109,8 +110,11 @@ export const commonErrors = {
 
   tooManyRequests: (message = 'Too Many Requests') => errorResponse(message, 429, 'RATE_LIMIT'),
 
-  internalServerError: (message = 'Internal Server Error', error?: Record<string, unknown>) =>
-    errorResponse(message, 500, 'INTERNAL_ERROR', error),
+  internalServerError: (
+    message = 'Internal Server Error',
+    details?: Record<string, unknown>,
+    cause?: Error
+  ) => errorResponse(message, 500, 'INTERNAL_ERROR', details, cause),
 
   serviceUnavailable: (message = 'Service Unavailable') =>
     errorResponse(message, 503, 'SERVICE_UNAVAILABLE'),
@@ -129,9 +133,13 @@ export function withApiHandler<T>(
       logger.apiError('unknown', operation, error);
 
       if (error instanceof Error) {
-        return commonErrors.internalServerError(error.message, {
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-        });
+        return commonErrors.internalServerError(
+          error.message,
+          {
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+          },
+          error
+        );
       }
 
       return commonErrors.internalServerError('An unexpected error occurred');

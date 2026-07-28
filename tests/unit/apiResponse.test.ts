@@ -25,9 +25,11 @@ describe('errorResponse observability', () => {
   });
 
   it('logs unexpected server failures with structured context', () => {
-    errorResponse('Database unavailable', 503, 'SERVICE_UNAVAILABLE');
+    const cause = new Error('connection refused');
 
-    expect(logger.error).toHaveBeenCalledWith('API Error (503): Database unavailable', undefined, {
+    errorResponse('Database unavailable', 503, 'SERVICE_UNAVAILABLE', undefined, cause);
+
+    expect(logger.error).toHaveBeenCalledWith('API Error (503): Database unavailable', cause, {
       code: 'SERVICE_UNAVAILABLE',
       details: undefined,
     });

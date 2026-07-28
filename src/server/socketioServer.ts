@@ -305,7 +305,10 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
   await draftRoomStore.saveRoom(updated);
 
   const existing = roomTimers.get(draftId);
-  if (existing) clearInterval(existing);
+  if (existing) {
+    logger.warn('Replacing an existing local draft timer', { draftId });
+    clearInterval(existing);
+  }
 
   const renew = async (): Promise<boolean> => {
     if (!useLeader || !client) return true;
@@ -533,7 +536,13 @@ async function authenticateSocketConnection(
 
 // Middleware for authentication and logging
 io.use((socket, next) => {
-  void authenticateSocketConnection(socket, next);
+  authenticateSocketConnection(socket, next).catch((error) => {
+    incCounter(METRICS.authFailures);
+    logger.error('Unexpected Socket.IO authentication middleware failure', error, {
+      socketId: socket.id,
+    });
+    next(new Error('Authentication system error'));
+  });
 });
 
 attachLeagueSocialSocketHandlers(io);

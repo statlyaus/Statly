@@ -62,17 +62,7 @@ function redisFailureStatus(error: string, responseTime: number): ServiceStatus 
 async function checkDatabase(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
-    // Enhanced database check - test both read and write capabilities
-    const healthCollection = adminDb.collection('_health');
-
-    // Test read
-    await healthCollection.limit(1).get();
-
-    // Test write (with immediate cleanup)
-    const testDoc = healthCollection.doc('health_check');
-    const testData = { timestamp: new Date(), check: 'health' };
-    await testDoc.set(testData);
-    await testDoc.delete(); // Clean up immediately
+    await adminDb.collection('_health').doc('ping').get();
 
     const responseTime = Date.now() - start;
 

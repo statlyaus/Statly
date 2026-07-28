@@ -36,6 +36,8 @@ describe('Sentry client initialization', () => {
     expect(serverSource).toContain('process.env.SENTRY_TRACES_SAMPLE_RATE');
     expect(serverSource).toContain('enabled: Boolean(dsn)');
     expect(serverSource).toContain('debug: false');
+    expect(serverSource).toContain("console.error('Failed to initialize Sentry:'");
+    expect(serverSource).toContain("console.error('Failed to report request error to Sentry:'");
 
     expect(clientSource).toContain('process.env.NEXT_PUBLIC_SENTRY_DSN');
     expect(clientSource).toContain('process.env.NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE');

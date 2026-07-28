@@ -29,6 +29,7 @@ describe('ETL source-of-truth architecture', () => {
   it('routes live and historical ingestion through the shared pipeline', () => {
     const liveGuard = read('etl/liveGuard.ts');
     const backfill = read('etl/backfill.ts');
+    const fetchPipeline = read('etl/fetchPipeline.ts');
     const processor = read('etl/processFootywireData.ts');
 
     expect(liveGuard).toContain("import { runFetchPipeline } from './fetchPipeline'");
@@ -37,6 +38,10 @@ describe('ETL source-of-truth architecture', () => {
     expect(backfill).toContain('backfillMode: true');
     expect(backfill).toContain('Backfill failed for ${failures.length} round(s)');
     expect(backfill).toContain('process.exitCode = 1');
+    expect(fetchPipeline).toContain("spawnSync('Rscript', ['--version']");
+    expect(fetchPipeline).toContain("from 'stream/promises'");
+    expect(fetchPipeline).toContain('processorInput');
+    expect(fetchPipeline).toContain('Footywire fetcher output pipe failed');
     expect(processor).toContain('process.exitCode = 1');
   });
 

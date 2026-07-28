@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const adapterMocks = vi.hoisted(() => ({
   createAdapter: vi.fn(),
@@ -13,6 +13,10 @@ import { installSocketRedisAdapter } from '@/server/socketRedisAdapter';
 describe('installSocketRedisAdapter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('installs the adapter and closes both duplicate clients', async () => {
@@ -40,6 +44,7 @@ describe('installSocketRedisAdapter', () => {
   });
 
   it('disconnects both duplicate clients when initialization fails', async () => {
+    vi.stubEnv('SOCKET_REDIS_ADAPTER_RETRY_DELAY_MS', '0');
     const publishClient = client();
     const subscribeClient = client();
     subscribeClient.ping.mockRejectedValue(new Error('subscription failed'));
@@ -50,8 +55,29 @@ describe('installSocketRedisAdapter', () => {
     await expect(
       installSocketRedisAdapter({ adapter: vi.fn() } as never, redis as never)
     ).rejects.toThrow('subscription failed');
+    expect(publishClient.ping).toHaveBeenCalledTimes(3);
+    expect(subscribeClient.ping).toHaveBeenCalledTimes(3);
     expect(publishClient.disconnect).toHaveBeenCalledOnce();
     expect(subscribeClient.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('recovers from a transient adapter connection failure', async () => {
+    vi.stubEnv('SOCKET_REDIS_ADAPTER_RETRY_DELAY_MS', '0');
+    const publishClient = client();
+    const subscribeClient = client();
+    subscribeClient.ping.mockRejectedValueOnce(new Error('temporary outage'));
+    const redis = {
+      duplicate: vi.fn().mockReturnValueOnce(publishClient).mockReturnValueOnce(subscribeClient),
+    };
+    const io = { adapter: vi.fn() };
+
+    await expect(installSocketRedisAdapter(io as never, redis as never)).resolves.toBeDefined();
+
+    expect(publishClient.ping).toHaveBeenCalledTimes(2);
+    expect(subscribeClient.ping).toHaveBeenCalledTimes(2);
+    expect(io.adapter).toHaveBeenCalledOnce();
+    expect(publishClient.disconnect).not.toHaveBeenCalled();
+    expect(subscribeClient.disconnect).not.toHaveBeenCalled();
   });
 });
 

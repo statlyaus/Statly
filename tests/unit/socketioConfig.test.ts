@@ -40,6 +40,10 @@ describe('getSocketIoConfig', () => {
     expect(socketServerSource).toContain('socket.handshake.auth.token');
     expect(socketServerSource).toContain('validateAuthToken(token)');
     expect(socketServerSource).toContain("token.startsWith('dev:')");
+    expect(socketServerSource).toContain(
+      'authenticateSocketConnection(socket, next).catch((error) =>'
+    );
+    expect(socketServerSource).toContain("next(new Error('Authentication system error'))");
     expect(socketServerSource).not.toContain("req.headers['authorization']");
     expect(socketServerSource).not.toContain('socket.data.userId = userId');
     expect(socketServerSource).not.toContain("userId: userId || 'anonymous'");
@@ -52,6 +56,13 @@ describe('getSocketIoConfig', () => {
     expect(socketServerSource).toContain('createdAt: { gt: new Date(since) }');
     expect(socketServerSource).not.toContain('getRedis');
     expect(socketServerSource).not.toContain('zrangebyscore');
+  });
+
+  it('makes duplicate local draft timers observable before replacement', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+
+    expect(socketServerSource).toContain("logger.warn('Replacing an existing local draft timer'");
+    expect(socketServerSource).toContain('clearInterval(existing)');
   });
 
   it('settles asynchronous request authorization through the Socket.IO callback contract', () => {
