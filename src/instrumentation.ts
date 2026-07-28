@@ -1,18 +1,23 @@
+function readSampleRate(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
+}
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs' && process.env.SENTRY_DISABLED !== 'true') {
     const Sentry = await import('@sentry/node');
+    const isProduction = process.env.NODE_ENV === 'production';
+    const dsn = process.env.SENTRY_DSN;
 
     Sentry.init({
-      dsn: 'https://6ffbb0f42b9432dc3e0ef0aff3c60f94@o4509945105481728.ingest.us.sentry.io/4509945108299776',
-
-      // Performance monitoring
-      tracesSampleRate: 1.0,
-
-      // Environment
-      environment: process.env.NODE_ENV || 'development',
-
-      // Enable debug mode in development
-      debug: process.env.NODE_ENV === 'development',
+      dsn,
+      enabled: Boolean(dsn),
+      tracesSampleRate: readSampleRate(
+        process.env.SENTRY_TRACES_SAMPLE_RATE,
+        isProduction ? 0.1 : 1
+      ),
+      environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
+      debug: false,
     });
   }
 }
