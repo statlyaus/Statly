@@ -8,12 +8,11 @@ import { motion } from 'framer-motion';
 
 import { fetchApi } from '@/lib/api';
 import { computeSnakeState } from '@/lib/snakeDraft';
-
-import type { User } from 'firebase/auth';
+import type { AuthUser } from '@/AuthContext';
 
 interface LiveDraftModuleProps {
   refreshTrigger: number;
-  user: User;
+  user: AuthUser;
 }
 
 interface DraftMeta {

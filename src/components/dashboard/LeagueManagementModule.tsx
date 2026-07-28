@@ -5,11 +5,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 import { motion } from 'framer-motion';
-
-import type { User } from 'firebase/auth';
+import type { AuthUser } from '@/AuthContext';
 
 interface LeagueManagementModuleProps {
-  user: User;
+  user: AuthUser;
   refreshTrigger?: number;
 }
 

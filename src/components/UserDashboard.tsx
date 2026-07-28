@@ -1,8 +1,8 @@
-import type { User } from 'firebase/auth';
+import type { AuthUser } from '@/AuthContext';
 import ModularDashboard from './ModularDashboard';
 
 interface UserDashboardProps {
-  user: User;
+  user: AuthUser;
 }
 
 export default function UserDashboard({ user }: UserDashboardProps) {

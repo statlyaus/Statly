@@ -18,11 +18,10 @@ import { getLeagueOverview, type ActivityItem, type Membership } from '@/lib/dat
 import { db } from '@/lib/firebaseClient';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { logger } from '@/lib/logger';
-
-import type { User } from 'firebase/auth';
+import type { AuthUser } from '@/AuthContext';
 
 interface ModularDashboardProps {
-  user: User;
+  user: AuthUser;
 }
 
 interface UserLeague {
