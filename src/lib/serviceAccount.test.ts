@@ -29,6 +29,16 @@ describe('serviceAccount helpers', () => {
     expect(decoded).toEqual(sample);
   });
 
+  it('normalizes escaped private key newlines', () => {
+    const json = JSON.stringify({
+      project_id: sample.projectId,
+      client_email: sample.clientEmail,
+      private_key: sample.privateKey?.replace(/\n/g, '\\n'),
+    });
+
+    expect(decodeServiceAccount(json).privateKey).toBe(sample.privateKey);
+  });
+
   it('loads service account from env', () => {
     const orig = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = encodeServiceAccount(sample);
@@ -47,6 +57,24 @@ describe('serviceAccount helpers', () => {
     expect(() => getServiceAccountFromEnv()).toThrow(
       'Missing FIREBASE_SERVICE_ACCOUNT_JSON_BASE64'
     );
+    if (orig === undefined) {
+      delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    } else {
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = orig;
+    }
+  });
+
+  it('rejects a non-PEM private key without exposing its value', () => {
+    const orig = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 = encodeServiceAccount({
+      ...sample,
+      privateKey: 'not-a-private-key',
+    });
+
+    expect(() => getServiceAccountFromEnv()).toThrow(
+      'Invalid service account private key PEM format'
+    );
+
     if (orig === undefined) {
       delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
     } else {

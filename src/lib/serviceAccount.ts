@@ -23,7 +23,7 @@ export function decodeServiceAccount(value: string): ServiceAccount {
   return {
     projectId: data.projectId ?? data.project_id,
     clientEmail: data.clientEmail ?? data.client_email,
-    privateKey: data.privateKey ?? data.private_key,
+    privateKey: (data.privateKey ?? data.private_key)?.replace(/\\n/g, '\n'),
   } as ServiceAccount;
 }
 
@@ -41,6 +41,12 @@ export function getServiceAccountFromEnv(): ServiceAccount {
   const { projectId, clientEmail, privateKey } = sa;
   if (!projectId || !clientEmail || !privateKey) {
     throw new Error('Missing required service account fields');
+  }
+  if (
+    !privateKey.startsWith('-----BEGIN PRIVATE KEY-----') ||
+    !privateKey.trimEnd().endsWith('-----END PRIVATE KEY-----')
+  ) {
+    throw new Error('Invalid service account private key PEM format');
   }
   return sa;
 }

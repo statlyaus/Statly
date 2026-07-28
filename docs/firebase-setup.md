@@ -105,6 +105,20 @@ The code in `src/lib/firebaseAdmin.ts` reads FIREBASE_SERVICE_ACCOUNT_JSON_BASE6
 
 Sign out via `DELETE /api/auth/session`.
 
+## Service Account Key Rotation
+
+Use overlapping credentials for planned rotation so the current deployment stays available:
+
+1. Create a new key for the existing least-privilege Statly service account. Keep the old key active.
+2. Encode the new JSON locally with the platform-specific command above. Never paste the decoded JSON into logs, tickets, or source control.
+3. Update `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` in preview or staging and deploy that environment.
+4. Verify `/api/auth/health`, `/api/health`, sign-in/session creation, and one authenticated Firestore read.
+5. Update the production secret and perform a rolling deployment so old instances can finish while new instances use the new key.
+6. Repeat the health and authenticated smoke checks in production.
+7. Disable and delete the old key only after every production instance is on the new deployment.
+
+If a key may be compromised, revoke it immediately, rotate the secret, deploy, and verify. Accept the brief credential interruption rather than preserving overlap with a suspected key.
+
 ## Web Vitals (Firestore by default)
 
 - Endpoint: `POST /api/analytics/performance`
