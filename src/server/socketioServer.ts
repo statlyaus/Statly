@@ -35,6 +35,11 @@ import {
   startLeagueSocialRealtime,
 } from '@/server/leagues/social/socialSocket';
 import { draftRoomStore } from '@/server/roomStore';
+import {
+  installSocketRedisAdapter,
+  type SocketRedisAdapterLifecycle,
+} from '@/server/socketRedisAdapter';
+import { ScalableRedisConnection } from '@/server/realtime/scalableConnection';
 
 // Validate configuration before starting
 try {
@@ -48,6 +53,7 @@ try {
 const roomTimers = new Map<string, ReturnType<typeof setInterval> | undefined>();
 const socketRateLimitFallback = new Map<string, number[]>();
 let draftOutboxDrainInFlight = false;
+let socketRedisAdapterLifecycle: SocketRedisAdapterLifecycle | null = null;
 
 type SocketRequestDecision = {
   error: string | null;
@@ -443,6 +449,27 @@ const io = new Server(httpServer, {
       });
   },
 });
+
+async function configureSocketRedisAdapter(): Promise<void> {
+  try {
+    await redisClient.connect();
+    const redis = redisClient.getClient();
+    if (!redis) {
+      throw new Error('Redis client is not initialized');
+    }
+
+    socketRedisAdapterLifecycle = await installSocketRedisAdapter(io, redis);
+    logger.info('Socket.IO Redis adapter ready');
+  } catch (error) {
+    if (process.env.NODE_ENV === 'production') {
+      throw error;
+    }
+
+    logger.warn('Socket.IO is using the in-memory adapter outside production', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 async function authenticateSocketConnection(
   socket: SocketIOSocket,
@@ -913,6 +940,20 @@ httpServer.on('error', (error) => {
 });
 
 // Graceful shutdown handling
+const closeRedisConnections = async (): Promise<void> => {
+  const results = await Promise.allSettled([
+    socketRedisAdapterLifecycle?.close(),
+    ScalableRedisConnection.shutdownInstance(),
+    redisClient.disconnect(),
+  ]);
+  socketRedisAdapterLifecycle = null;
+
+  const failure = results.find((result) => result.status === 'rejected');
+  if (failure?.status === 'rejected') {
+    throw failure.reason;
+  }
+};
+
 const gracefulShutdown = (signal: string) => {
   logger.info(`🔄 ${signal} received, shutting down gracefully`);
 
@@ -920,11 +961,24 @@ const gracefulShutdown = (signal: string) => {
   void io.close(() => {
     logger.info('📡 Socket.IO server closed');
 
-    // Close HTTP server
-    httpServer.close(() => {
-      logger.info('🌐 HTTP server closed');
-      process.exit(0);
-    });
+    void closeRedisConnections()
+      .catch((error) => {
+        logger.warn('Failed to close Redis connections cleanly', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => {
+        if (!httpServer.listening) {
+          logger.info('🌐 HTTP server already closed');
+          process.exit(0);
+          return;
+        }
+
+        httpServer.close(() => {
+          logger.info('🌐 HTTP server closed');
+          process.exit(0);
+        });
+      });
   });
 
   // Force exit after timeout
@@ -962,22 +1016,32 @@ process.on('unhandledRejection', (reason, promise) => {
   gracefulShutdown('unhandledRejection');
 });
 
-// Start the server
-httpServer.listen(PORT, () => {
-  logger.info('🚀 Enhanced Socket.IO server started', {
-    port: PORT,
-    environment: socketIOConfig.environment,
-    cors: socketIOConfig.server.cors.origin,
-    transports: socketIOConfig.server.transports,
-    timestamp: new Date().toISOString(),
-  });
+// Start the server only after the cross-instance broadcast adapter is ready.
+void configureSocketRedisAdapter()
+  .then(() => {
+    httpServer.listen(PORT, () => {
+      logger.info('🚀 Enhanced Socket.IO server started', {
+        port: PORT,
+        environment: socketIOConfig.environment,
+        cors: socketIOConfig.server.cors.origin,
+        transports: socketIOConfig.server.transports,
+        timestamp: new Date().toISOString(),
+      });
 
-  console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
-  console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);
-  console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
-  console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
-});
+      console.log(`🚀 Enhanced Socket.IO server running on port ${PORT}`);
+      console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
+      console.log(`🌐 CORS enabled for: ${socketIOConfig.server.cors.origin.join(', ')}`);
+      console.log(`⚙️ Environment: ${socketIOConfig.environment}`);
+      console.log(`🔄 Transports: ${socketIOConfig.server.transports.join(', ')}`);
+    });
+  })
+  .catch((error) => {
+    logger.error('❌ Socket.IO startup failed', {
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+    process.exit(1);
+  });
 
 // (Health handled by Express above)
 

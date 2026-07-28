@@ -63,6 +63,29 @@ describe('getSocketIoConfig', () => {
     expect(socketServerSource).toContain("callback('Authentication error', false)");
   });
 
+  it('requires the Redis adapter before production starts accepting connections', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+
+    expect(socketServerSource).toContain('await installSocketRedisAdapter(io, redis)');
+    expect(socketServerSource).toContain("if (process.env.NODE_ENV === 'production')");
+    expect(socketServerSource).toContain('void configureSocketRedisAdapter()');
+    expect(socketServerSource.indexOf('void configureSocketRedisAdapter()')).toBeLessThan(
+      socketServerSource.lastIndexOf('httpServer.listen(PORT')
+    );
+    expect(socketServerSource).toContain('socketRedisAdapterLifecycle?.close()');
+    expect(socketServerSource).toContain('ScalableRedisConnection.shutdownInstance()');
+    expect(socketServerSource).toContain('if (!httpServer.listening)');
+  });
+
+  it('keeps process shutdown ownership out of the shared Redis connection manager', () => {
+    const scalableConnectionSource = read('src/server/realtime/scalableConnection.ts');
+
+    expect(scalableConnectionSource).toContain('static async shutdownInstance()');
+    expect(scalableConnectionSource).not.toContain("process.on('SIGTERM'");
+    expect(scalableConnectionSource).not.toContain("process.on('SIGINT'");
+    expect(scalableConnectionSource).not.toContain('process.exit(');
+  });
+
   it('does not expose fake Socket.IO success semantics from the Next route', () => {
     const socketRouteSource = read('src/app/api/socketio/route.ts');
 

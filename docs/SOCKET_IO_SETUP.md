@@ -261,13 +261,17 @@ The underlying Socket.IO instance.
 
 1. **Build application**: `npm run build`
 2. **Build Socket.IO server**: `npm run worker:build`
-3. **Deploy with PM2**: Use the production deployment script
+3. **Provide private Redis connectivity**: Set `REDIS_URL`, or the corresponding host, port, password, and database variables.
+4. **Configure load-balancer affinity**: Enable sticky sessions for Socket.IO polling connections.
+5. **Deploy with PM2**: Use the production deployment script.
+
+The production server installs the official Socket.IO Redis adapter before it starts listening. Startup fails if Redis or the adapter is unavailable so a multi-node deployment cannot silently split broadcasts. Redis must remain on trusted private networking with authentication/TLS and application-specific credentials; adapter Pub/Sub traffic is not independently signed or encrypted.
 
 ### Docker
 
 ```dockerfile
 # Dockerfile for Socket.IO server
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -456,11 +460,13 @@ export const productionConfig: SocketIOConfig = {
 
 #### Horizontal Scaling
 
-For high-traffic scenarios, consider:
+Horizontal scaling requires:
 
-1. **Redis Adapter**: Share Socket.IO state across multiple instances
-2. **Load Balancer**: Distribute connections across Socket.IO servers
-3. **Sticky Sessions**: Ensure WebSocket connections stay on the same server
+1. **Redis Adapter**: Installed during Socket.IO startup to forward broadcasts across instances.
+2. **Load Balancer**: Distributes connections across Socket.IO servers.
+3. **Sticky Sessions**: Keeps polling requests for a Socket.IO session on the same server.
+
+Local development may fall back to the in-memory adapter with a warning when Redis is unavailable. Production never does.
 
 ## Security Considerations
 
@@ -575,6 +581,7 @@ For feature requests:
 - Comprehensive client manager with automatic reconnection
 - Centralized configuration management
 - Health monitoring and graceful shutdown
+- Redis-backed cross-instance broadcasting
 - Production deployment scripts
 
 ### v1.0.0 (Previous)
