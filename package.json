@@ -30,6 +30,7 @@
     "typecheck:tests": "tsc -p tsconfig.test.json --noEmit",
     "pretest": "npm run typecheck:tests",
     "lint": "cross-env STATLY_LINT_ADVISORY=1 eslint src",
+    "lint:changed": "node Scripts/ci/lint-changed.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",

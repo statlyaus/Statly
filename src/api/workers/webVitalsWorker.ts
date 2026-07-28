@@ -1,4 +1,3 @@
- 
 import type { Job } from 'bullmq';
 import { Worker } from 'bullmq';
 import { URL } from 'node:url';
@@ -60,7 +59,7 @@ async function processWebVital(job: Job<WebVitalsPayload>) {
   return { ok: true };
 }
 
-export function createWebVitalsWorker() {
+export function createWebVitalsWorker(): Worker<WebVitalsPayload> {
   const worker = new Worker<WebVitalsPayload>(QUEUE_NAME, processWebVital, {
     connection: redisConnFromEnv(),
     // You can tune concurrency if needed (default is #cores)
