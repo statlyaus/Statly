@@ -1,7 +1,13 @@
 /// <reference lib="webworker" />
 
 import { initializeApp, type FirebaseOptions } from 'firebase/app';
-import { connectAuthEmulator, getAuth, getIdToken, onAuthStateChanged } from 'firebase/auth';
+import {
+  connectAuthEmulator,
+  getIdToken,
+  indexedDBLocalPersistence,
+  initializeAuth,
+  onAuthStateChanged,
+} from 'firebase/auth';
 
 import { isAuthServiceWorkerRequestEligible } from '@/lib/authServiceWorker';
 
@@ -10,7 +16,7 @@ declare const __FIREBASE_AUTH_EMULATOR_URL__: string | null;
 
 const worker = globalThis as unknown as ServiceWorkerGlobalScope;
 const firebaseApp = initializeApp(__FIREBASE_CONFIG__);
-const auth = getAuth(firebaseApp);
+const auth = initializeAuth(firebaseApp, { persistence: indexedDBLocalPersistence });
 
 if (__FIREBASE_AUTH_EMULATOR_URL__) {
   connectAuthEmulator(auth, __FIREBASE_AUTH_EMULATOR_URL__, { disableWarnings: true });
