@@ -1,4 +1,5 @@
 import type { NextApiRequest } from 'next';
+import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { adminAuth } from '@/lib/firebaseAdmin';
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
@@ -8,7 +9,7 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
 export async function getAuthenticatedUserIdFromApiRequest(
   req: NextApiRequest
 ): Promise<string | null> {
-  if (process.env.NODE_ENV !== 'production') {
+  if (isServerDevelopmentAuthEnabled()) {
     const devUser = firstHeaderValue(req.headers['x-auth-user']);
     if (devUser) return devUser;
   }

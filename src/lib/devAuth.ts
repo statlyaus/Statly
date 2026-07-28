@@ -4,6 +4,8 @@ export const DEVELOPMENT_AUTH_DISPLAY_NAME = 'Statly Dev Tester';
 export const DEVELOPMENT_AUTH_STORAGE_KEY = 'statly.devAuth.user';
 export const DEVELOPMENT_AUTH_COOKIE = 'statly_dev_user';
 export const DEVELOPMENT_AUTH_CREDENTIAL_ENV = 'STATLY_LOCAL_AUTH_PHRASE';
+export const DEVELOPMENT_AUTH_CLIENT_ENABLE_ENV = 'NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH';
+export const DEVELOPMENT_AUTH_SERVER_ENABLE_ENV = 'STATLY_ENABLE_DEV_AUTH';
 
 const DEVELOPMENT_AUTH_CREDENTIAL_SUFFIX = 'local-only';
 
@@ -14,7 +16,14 @@ export interface DevelopmentAuthUser {
 }
 
 export function isDevelopmentAuthEnabled(): boolean {
-  return process.env.NODE_ENV !== 'production';
+  return (
+    process.env.NODE_ENV !== 'production' &&
+    process.env.NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH === 'true'
+  );
+}
+
+export function isServerDevelopmentAuthEnabled(): boolean {
+  return isDevelopmentAuthEnabled() && process.env.STATLY_ENABLE_DEV_AUTH === 'true';
 }
 
 export function createDevelopmentAuthUser(): DevelopmentAuthUser {
@@ -41,7 +50,9 @@ export function resolveLocalDevelopmentAuthPhrase(): string {
   const configuredPhrase =
     typeof process !== 'undefined' ? process.env[DEVELOPMENT_AUTH_CREDENTIAL_ENV]?.trim() : '';
 
-  return configuredPhrase || [DEVELOPMENT_AUTH_USER_ID, DEVELOPMENT_AUTH_CREDENTIAL_SUFFIX].join('-');
+  return (
+    configuredPhrase || [DEVELOPMENT_AUTH_USER_ID, DEVELOPMENT_AUTH_CREDENTIAL_SUFFIX].join('-')
+  );
 }
 
 export function persistDevelopmentAuthUser(user = createDevelopmentAuthUser()): void {

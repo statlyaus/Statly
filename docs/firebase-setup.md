@@ -34,6 +34,12 @@ Note: We use relative URLs for internal API calls, so `NEXT_PUBLIC_API_BASE_URL`
 - `METRICS_BACKEND`: leave unset or `firestore` (default)
 - `METRICS_ALLOWED_ORIGINS`: comma-separated list of allowed origins for analytics ingestion
 
+The legacy development-auth fallback is disabled by default. To opt into it for an isolated local
+process, set both `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true` and
+`STATLY_ENABLE_DEV_AUTH=true`. The public flag allows the browser to emit a development credential;
+the server flag separately authorizes local servers to trust it. Neither flag enables the fallback
+when `NODE_ENV=production`.
+
 Note: `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST` are for local/dev servers only. Do not set them in production.
 
 ### Where to put them
@@ -173,5 +179,13 @@ The app already connects the client SDK to the emulators when `NEXT_PUBLIC_USE_E
 The Admin SDK auto-targets the emulators when `FIRESTORE_EMULATOR_HOST` and
 `FIREBASE_AUTH_EMULATOR_HOST` are set.
 
-The legacy development-auth fallback remains available only when Firebase client config is absent.
-For full-stack testing, prefer the Auth emulator path above.
+The legacy development-auth fallback remains available only when Firebase client config is absent
+and both explicit development-auth flags are enabled. For full-stack testing, prefer the Auth
+emulator path above. For an isolated fallback session, add these local-only values:
+
+```dotenv
+NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true
+STATLY_ENABLE_DEV_AUTH=true
+# Optional override for the generated local-only phrase
+STATLY_LOCAL_AUTH_PHRASE=replace-with-a-local-only-phrase
+```

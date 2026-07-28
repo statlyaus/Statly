@@ -1,4 +1,5 @@
 import { auth } from '@/lib/firebaseClient';
+import { isDevelopmentAuthEnabled } from '@/lib/devAuth';
 
 function isInternalApiRequest(input: RequestInfo | URL): boolean {
   if (typeof input === 'string') {
@@ -24,7 +25,7 @@ async function getAuthHeader(userId?: string): Promise<string | null> {
     return `Bearer ${token}`;
   }
 
-  if (process.env.NODE_ENV !== 'production' && userId) {
+  if (isDevelopmentAuthEnabled() && userId) {
     return `Bearer dev:${userId}`;
   }
 

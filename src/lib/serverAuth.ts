@@ -4,7 +4,7 @@ import { adminAuth } from '@/lib/firebaseAdmin';
 import {
   DEVELOPMENT_AUTH_COOKIE,
   DEVELOPMENT_AUTH_USER_ID,
-  isDevelopmentAuthEnabled,
+  isServerDevelopmentAuthEnabled,
 } from '@/lib/devAuth';
 
 /**
@@ -13,18 +13,14 @@ import {
  * - In production: verifies Firebase session cookie (statly_session)
  */
 export async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
-  if (isDevelopmentAuthEnabled()) {
+  if (isServerDevelopmentAuthEnabled()) {
     const devUser = request.headers.get('x-auth-user');
     if (devUser) return devUser;
 
     const devCookieUser = request.cookies.get(DEVELOPMENT_AUTH_COOKIE)?.value;
     if (devCookieUser) return devCookieUser;
 
-    return (
-      process.env.BYPASS_UID ??
-      process.env.NEXT_PUBLIC_BYPASS_UID ??
-      DEVELOPMENT_AUTH_USER_ID
-    );
+    return process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID ?? DEVELOPMENT_AUTH_USER_ID;
   }
 
   const sessionCookie = request.cookies.get('statly_session')?.value;
@@ -40,7 +36,7 @@ export async function getUserIdFromRequest(request: NextRequest): Promise<string
 
 // Verify a Firebase ID token from an Authorization: Bearer <token> header
 export async function validateAuthToken(token: string): Promise<string | null> {
-  if (isDevelopmentAuthEnabled() && token.startsWith('dev:')) {
+  if (isServerDevelopmentAuthEnabled() && token.startsWith('dev:')) {
     return token.slice('dev:'.length) || null;
   }
 
@@ -71,18 +67,14 @@ export async function getAuthenticatedUserIdFromServerContext(): Promise<string 
   const headerStore = await headers();
   const cookieStore = await cookies();
 
-  if (isDevelopmentAuthEnabled()) {
+  if (isServerDevelopmentAuthEnabled()) {
     const devUser = headerStore.get('x-auth-user');
     if (devUser) return devUser;
 
     const devCookieUser = cookieStore.get(DEVELOPMENT_AUTH_COOKIE)?.value;
     if (devCookieUser) return devCookieUser;
 
-    return (
-      process.env.BYPASS_UID ??
-      process.env.NEXT_PUBLIC_BYPASS_UID ??
-      DEVELOPMENT_AUTH_USER_ID
-    );
+    return process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID ?? DEVELOPMENT_AUTH_USER_ID;
   }
 
   const sessionCookie = cookieStore.get('statly_session')?.value;
