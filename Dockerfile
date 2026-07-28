@@ -1,5 +1,5 @@
-# Use Node 20 for parity with local/CI
-FROM node:20-alpine AS base
+# Use the same Node major required by package metadata and CI
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
