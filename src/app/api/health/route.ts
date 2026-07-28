@@ -5,6 +5,7 @@ import { withRequestTracing } from '@/lib/requestTracing';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { redisClient } from '@/lib/redis';
 import { metricsCollector, type ApplicationMetrics } from '@/lib/metrics';
+import { checkRelationalDatabase } from '@/server/health/relationalDatabaseHealth';
 
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -13,6 +14,7 @@ interface HealthCheck {
   uptime: number;
   services: {
     database: ServiceStatus;
+    relationalDatabase: ServiceStatus;
     memory: ServiceStatus;
     redis?: ServiceStatus;
     metrics: ServiceStatus;
@@ -194,8 +196,9 @@ export async function GET(req: NextRequest) {
 
   try {
     // Run all health checks in parallel
-    const [database, memory, redis, metricsCheck] = await Promise.all([
+    const [database, relationalDatabase, memory, redis, metricsCheck] = await Promise.all([
       checkDatabase(),
+      checkRelationalDatabase(),
       Promise.resolve(checkMemory()),
       checkRedis(),
       checkMetrics(),
@@ -206,6 +209,7 @@ export async function GET(req: NextRequest) {
 
     const services = {
       database,
+      relationalDatabase,
       memory,
       redis,
       metrics: metricsCheck,
@@ -298,14 +302,15 @@ export async function PATCH(req: NextRequest) {
 
   try {
     // More comprehensive checks for readiness
-    const [database, redis, metricsCheck] = await Promise.all([
+    const [database, relationalDatabase, redis, metricsCheck] = await Promise.all([
       checkDatabase(),
+      checkRelationalDatabase(),
       checkRedis(),
       checkMetrics(),
     ]);
 
     // For readiness, we require all critical services to be healthy
-    const criticalServices = [database, metricsCheck];
+    const criticalServices = [database, relationalDatabase, metricsCheck];
     const redisReady = isRedisRequired()
       ? redis.status === 'healthy'
       : redis.status !== 'unhealthy';
@@ -323,6 +328,7 @@ export async function PATCH(req: NextRequest) {
         timestamp: new Date().toISOString(),
         services: {
           database: database.status,
+          relationalDatabase: relationalDatabase.status,
           redis: redis.status,
           metrics: metricsCheck.status,
         },
