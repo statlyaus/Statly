@@ -81,8 +81,9 @@ export function errorResponse(
 ): NextResponse<ApiErrorResponse> {
   const response = createErrorResponse(message, code, details);
 
-  // Log the error
-  logger.error(`API Error (${status}): ${message}`, undefined, { code, details });
+  if (status >= 500) {
+    logger.error(`API Error (${status}): ${message}`, undefined, { code, details });
+  }
 
   return NextResponse.json(response, { status });
 }

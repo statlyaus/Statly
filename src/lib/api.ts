@@ -1,6 +1,36 @@
 export interface ApiErrorShape {
-  error?: string;
+  error?: string | { message?: unknown; code?: unknown; details?: unknown };
   message?: string;
+  details?: unknown;
+}
+
+export function getApiErrorMessage(errorData: unknown, status: number, statusText: string): string {
+  const body =
+    typeof errorData === 'object' && errorData !== null
+      ? (errorData as Record<string, unknown>)
+      : {};
+  const errorField = body.error;
+  const nestedError =
+    typeof errorField === 'object' && errorField !== null
+      ? (errorField as Record<string, unknown>)
+      : undefined;
+  const nestedMessage =
+    typeof nestedError?.message === 'string'
+      ? nestedError.message
+      : typeof errorField === 'string'
+        ? errorField
+        : undefined;
+  const topLevelMessage = typeof body.message === 'string' ? body.message : undefined;
+  const topLevelDetails = typeof body.details === 'string' ? body.details : undefined;
+  const nestedCode = typeof nestedError?.code === 'string' ? nestedError.code : undefined;
+  const messages = [
+    nestedMessage,
+    topLevelMessage !== nestedMessage ? topLevelMessage : undefined,
+    topLevelDetails,
+    nestedCode ? `code=${nestedCode}` : undefined,
+  ].filter((message): message is string => Boolean(message));
+
+  return Array.from(new Set(messages)).join(' - ') || `HTTP ${status}: ${statusText}`;
 }
 
 interface FetchJsonInit extends RequestInit {
@@ -14,9 +44,7 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: FetchJsonIni
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
     try {
-      const body = (await response.json()) as ApiErrorShape;
-      if (typeof body?.error === 'string') message = body.error;
-      else if (typeof body?.message === 'string') message = body.message;
+      message = getApiErrorMessage(await response.json(), response.status, response.statusText);
     } catch {
       // ignore parse error; use default message
     }
@@ -85,38 +113,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}${suffix}`);
     }
 
-    const messages: string[] = [];
-    const body = (errorData ?? {}) as Record<string, unknown>;
-    const topLevelMessage = typeof body.message === 'string' ? body.message : undefined;
-    const topLevelDetails = typeof body.details === 'string' ? body.details : undefined;
-    const errorField = body.error as unknown;
-    const nestedMessage =
-      typeof errorField === 'object' &&
-      errorField !== null &&
-      typeof (errorField as any).message === 'string'
-        ? String((errorField as any).message)
-        : typeof errorField === 'string'
-          ? errorField
-          : undefined;
-    const nestedCode =
-      typeof errorField === 'object' &&
-      errorField !== null &&
-      typeof (errorField as any).code === 'string'
-        ? String((errorField as any).code)
-        : undefined;
-
-    if (nestedMessage) messages.push(nestedMessage);
-    if (topLevelMessage && topLevelMessage !== nestedMessage) messages.push(topLevelMessage);
-    if (topLevelDetails) messages.push(topLevelDetails);
-    if (nestedCode) messages.push(`code=${nestedCode}`);
-
-    // De-duplicate and stabilize message order
-    const uniqueMessages = Array.from(new Set(messages));
-    const finalMessage =
-      uniqueMessages.length > 0
-        ? uniqueMessages.join(' - ')
-        : `HTTP ${response.status}: ${response.statusText}`;
-    throw new Error(finalMessage);
+    throw new Error(getApiErrorMessage(errorData, response.status, response.statusText));
   }
 
   // Check if response has content
