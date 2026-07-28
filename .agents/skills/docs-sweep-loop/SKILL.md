@@ -1,68 +1,53 @@
 ---
 name: docs-sweep-loop
-description: Use when reviewing Statly documentation, source-of-truth drift, historical complete notes, stale plans, or docs-only cleanup.
+description: Use for Statly documentation source-of-truth drift, historical reports, stale plans, broken links, or documentation-only cleanup.
 ---
 
-# Docs Sweep Loop
+# Statly documentation sweep
 
-## Purpose
+Use this skill when the task is primarily documentation classification, consolidation, or validation.
+It does not authorize runtime product changes or reading protected local data.
 
-Use this skill to review Statly docs without confusing current source-of-truth instructions with historical completion notes. It is for docs-only cleanup, consolidation, and drift reporting.
+## Sources
 
-## When To Use
-
-- Auditing docs after feature or PR cleanup.
-- Finding stale "complete" markdown that should not drive implementation.
-- Preparing docs-only PRs.
-- Reconciling specs, plans, and agent-loop docs.
-
-## When Not To Use
-
-- Runtime implementation.
-- Product decisions that need new specs.
-- Treating historical docs as current requirements without validation.
-
-## Required Inputs
+Read:
 
 - `AGENTS.md`
-- Named docs/specs/plans
-- Current `git status --short --branch`
-- User's docs-sweep scope
+- `docs/README.md`
+- the named documents and their inbound links
+- current source/configuration only where needed to verify a claim
+- `git status --short --branch`
 
-## Protected Files
+## Classify
 
-Never touch `prisma/dev.db`, `.env`, secrets, `serviceAccountKey.json`, Firebase exports, generated `functions/lib` files, dataconnect local data, `node_modules`, `dist`, `coverage`, or `test-results`.
+Account for every scoped document as:
 
-## Permission Model
+- Keep
+- Rewrite
+- Merge
+- Move
+- Extract enduring content, then delete
+- Delete
 
-| Action    | Allowed Without Approval                                             | Requires Explicit Approval         | Never Automatic                                 |
-| --------- | -------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------- |
-| Observe   | Read scoped docs and related current code references                 | Broad repo-wide sweeps             | Reading secrets/local data                      |
-| Plan      | Classify docs as current, historical, stale, or needs owner decision | Changing source-of-truth hierarchy | Declaring product direction alone               |
-| Implement | Docs-only edits after plan approval                                  | Moving/deleting docs               | Runtime edits                                   |
-| Push      | If docs PR is in scope and checks pass                               | Any push outside docs branch       | Pushing runtime changes                         |
-| Merge     | Only with explicit merge instruction and passing checks              | Docs merge after approval          | Self-merging broad docs changes                 |
-| Close     | Only doc-related PRs explicitly scoped                               | Any unscoped PR                    | Closing product PRs from docs sweep             |
-| Delete    | Not allowed                                                          | Explicit approval only             | Deleting branches/stashes/docs history casually |
+Prefer current ownership boundaries, decisions, and executable runbooks. Completed plans, dated status
+reports, screenshots, and implementation narration belong in merged pull requests and Git history.
 
-## Loop
+## Protected state
 
-1. Identify current source-of-truth docs.
-2. Identify historical notes, completed plans, and stale reports.
-3. Compare claims against current code only when needed.
-4. Propose minimal docs changes or a no-edit report.
-5. For docs edits, run markdown formatting and diff review.
+Never read or modify `prisma/dev.db`, `.env*`, `.Renviron`, secrets, service-account files, Firebase
+exports, generated `functions/lib`, local Data Connect state, `node_modules`, `dist`, `coverage`,
+`test-results`, or unrelated output.
 
-## Stop Conditions
+## Sweep
 
-- A doc implies runtime behavior that is unverified.
-- The sweep requires product direction decisions.
-- The change would delete historical context without approval.
-- Local status becomes dirty outside scoped docs.
+1. Identify the canonical destination before deleting or moving a source.
+2. Verify operative claims from current code/configuration.
+3. Extract only enduring content; do not preserve redundant prose in an archive directory.
+4. Update inbound links and tests that read document paths in the same change.
+5. Run `npm run docs:check` and focused tests for changed document contracts.
+6. Review `git diff --check`, changed-path metadata, safe diffs that explicitly exclude protected
+   state, and Markdown counts before/after. Never print a complete diff that could contain `.env*`,
+   credentials, local databases, or generated output.
 
-## Verification Expectations
-
-- `npm exec -- prettier --check` for touched markdown.
-- `git diff --check`.
-- `git diff` review for docs-only scope.
-- Council Decision 2 before commit when committing.
+Stop for owner input when a document encodes unresolved product direction, deletion would remove an
+unverified operational decision, or the needed change expands into runtime behavior.

@@ -1,157 +1,90 @@
-# AGENTS.md
+# Statly Codex Guide
 
-## Goal
+## Product
 
-Build Statly through durable, root-cause engineering. The best solution is the one that makes the next related change safer, clearer, and less likely to resurrect old behavior.
+Statly is an AFL fantasy platform built around category head-to-head leagues. Teams compare selected
+stat categories each matchup; leagues can record every category result or award one matchup result to
+the team winning the most categories. The default real-data preset is goals, tackles, inside 50s,
+intercepts, contested marks, rebound 50s, contested possessions, effective disposals, and score
+involvements.
 
-Prefer the smallest change that fully solves the underlying problem. Do not confuse "small" with "local" when the real fault crosses auth, routing, data loading, caching, state, schema, or UI boundaries.
+## Repository map
 
-## Loop-First Operating Rule
+- `src/app`: Next.js pages and HTTP transport routes.
+- `src/server`: shared domain services, repositories, workers, and read models.
+- `src/types`: cross-boundary domain and API types.
+- `prisma`: relational schema and migrations.
+- `etl`: Footywire/fitzRoy ingestion into the live-stat boundary.
+- `tests` and colocated `*.test.*`: regression and browser coverage.
+- `docs`: canonical architecture, domain, development, product, and runbook documentation.
 
-Every Codex session should make the active loop visible before substantive work starts. The loop is the working frame that turns a prompt into an evidence-backed outcome; it is not a side reference to check at the end.
+## Sources of truth
 
-Default to this sequence:
+- Prisma services own protected league, season, membership, draft, pick, roster, lineup, matchup,
+  trade, and waiver state.
+- Firebase Authentication owns identity. Verified Firebase UIDs must still pass league- and
+  season-scoped authorization at the server/data boundary.
+- Firestore is an ingestion or compatibility projection surface; it must not silently become the
+  authority for protected fantasy state.
+- Redis coordinates ephemeral queues, locks, caches, and Socket.IO delivery. Durable domain state
+  belongs in Prisma.
+- `src/types/fantasyCategories.ts` defines valid categories and the default preset.
+- `src/server/leagues` owns league scoring, standings, fixtures, and competition rules.
+- `src/server/draft` owns draft commands, persisted picks, projections, and realtime publication.
 
-1. Select the loop that fits the request.
-2. Run the required council gate for substantive work.
-3. State the active loop, ownership boundary, protected files, and verification path.
-4. Implement within that loop.
-5. Review, fix, re-review, and report with concrete evidence.
+See [documentation index](docs/README.md), [runtime boundaries](docs/architecture/data-platform.md),
+and [fantasy model](docs/domain/fantasy-model.md). Draft-room reliability work may use
+`.agents/skills/draft-reliability-loop/SKILL.md`.
 
-For every non-trivial task, the first assistant update after reading the prompt must include this visible contract:
+## Setup and verification
 
-```md
-Active loop:
-Boundary:
-Protected files:
-Verification:
+Use Node 22 and npm:
+
+```sh
+npm ci
+if [ ! -e .env ]; then cp .env.example .env; fi
+npm run dev
 ```
 
-For trivial prompts, use an internal loop check and answer directly unless a named skill or repo loop clearly applies.
+Run checks relevant to the changed boundary. Before a pull request, run the full supported set:
 
-Use these loops deliberately:
-
-| Work type                                                                            | Primary loop                                       |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| Draft room realtime, picks, queue, watchlist, roster projection, waiver availability | `.agents/skills/draft-reliability-loop/SKILL.md`   |
-| PR status, CI follow-up, stale PR triage                                             | `.agents/skills/pr-babysitter/SKILL.md`            |
-| Turning a prompt, issue, or stale PR intent into narrow PR-ready scope               | `.agents/skills/ticket-to-pr-ready-loop/SKILL.md`  |
-| Final done checks, residual risk, evidence-backed reporting                          | `.agents/skills/completion-contract-loop/SKILL.md` |
-| Fresh clone, bootstrap, setup, or environment verification                           | `.agents/skills/fresh-clone-loop/SKILL.md`         |
-| Docs source-of-truth drift, stale plans, historical completion notes                 | `.agents/skills/docs-sweep-loop/SKILL.md`          |
-| Repeated safe verification runs and quality streaks                                  | `.agents/skills/quality-streak-loop/SKILL.md`      |
-| Repository hygiene, stale branches, protected-file triage                            | `.agents/skills/repository-cleanup-loop/SKILL.md`  |
-
-If no specialized loop fits, use `docs/codex/agent-loop-operating-model.md` as the base loop: plan, implement, review, fix, re-review, and report.
-
-## Decision Standard
-
-For every non-trivial bug or feature, choose the solution that best satisfies these criteria, in order:
-
-1. Correctness at the source of truth.
-2. Coherent behavior across server rendering, API routes, client navigation, and browser refresh.
-3. Clear ownership of data, authorization, and presentation responsibilities.
-4. Regression coverage at the boundary where the failure appeared.
-5. Reviewable scope with no unrelated cleanup.
-
-If a local fix fails any of the first three criteria, it is not the long-term solution.
-
-## Required Working Style
-
-Before editing a non-trivial bug or feature:
-
-1. Reproduce or identify the failing path.
-2. Trace where the bad state originates.
-3. Compare against nearby working patterns.
-4. Decide whether the correct fix is local or architectural.
-5. State the chosen boundary for the fix.
-6. Identify relevant tests, lint, type checks, and browser verification.
-
-For complex work, use this exact plan format:
-
-```md
-## PROPOSED EDIT PLAN
-
-Working with: [filename(s)]
-Total planned edits: [number]
-
-### Edit sequence:
-
-1. [Specific change] - Purpose: [why]
-2. [Specific change] - Purpose: [why]
-3. [Specific change] - Purpose: [why]
-
-Dependencies:
-
-- [What depends on what]
-
-Verification:
-
-- [Tests/checks/browser flows]
+```sh
+npm run docs:check
+npm run lint:ci
+npm run typecheck
+npm run test:unit
+npm run test:int
+npm run test:e2e
+npm run build
 ```
 
-For files larger than 300 lines or refactors spanning multiple concerns, present the plan before editing and wait for approval.
+Use disposable databases or fixtures for verification. Never use `prisma/dev.db` as a test target.
 
-## LLM Council
+## Safety boundaries
 
-Statly uses a repo-local adaptation of [karpathy/llm-council](https://github.com/karpathy/llm-council) for multi-perspective implementation review in Codex sessions. Use the logical council provider by default so council review does not incur API cost and does not require a local model server.
+- Never read, print, stage, or commit `.env*`, `.Renviron`, credentials, service-account JSON,
+  Firebase exports, local databases, or generated test/build output. Only clearly named examples
+  belong in Git.
+- Do not mutate shared or production data without an explicit, reviewed runbook and authorization.
+- API routes are transport adapters. Authenticate there, then call shared server logic that enforces
+  membership, role, league, and active-season ownership.
+- Draft picks, roster projection, queue/watchlist state, and waiver availability must converge from
+  one persisted command boundary and survive refresh/reconnect.
+- ETL uses Footywire through fitzRoy and fails closed; do not add mock fallback to production paths or
+  normalize weak external identities inside rendering code.
 
-- Treat `npm run codex:council` as the default council hook for substantive Statly work in every session, worktree, and chat.
-- After each user prompt, include the logical council members in decision making before choosing an edit boundary, plan, implementation approach, or verification path. For trivial prompts, this can be an internal role check; for substantive prompts, run `npm run codex:council:logical -- --prompt "<user prompt>"` or the diff variant before acting.
-- The council must produce a visible debate before the chairman decides. The required order is `Committee Debate`, then `Chairman Decision`.
-- The logical provider uses named council members:
-  - The Contrarian - hunts for what will fail. Not pessimism, just the friend asking the questions you're avoiding.
-  - First Principles - strips assumptions, asks if you're solving the right problem.
-  - The Expansionist - ignores risk, hunts for hidden upside.
-  - The Outsider - zero context, catches the curse of knowledge.
-  - The Executor - what do you do Monday morning?
-- The chairman synthesizes the verdict: where the council agrees, where it clashes, blind spots it caught, the best long-term recommendation, and one concrete next step.
-- The chairman must reject short-term patches. Decision 1 and Decision 2 can proceed only when the solution is long-term, optimal for the current constraints, scalable, maintainable, and addresses the root cause at the correct ownership boundary.
-- Do not treat "council review ran", "no objection", or a successful council command exit as approval. Approval requires the explicit line `CHAIRMAN DECISION 1: PROCEED` before work starts, or `CHAIRMAN DECISION 2: COMMIT` before commit.
-- The chairman owns two explicit gates:
-  1. Decision 1: proceed or do not proceed with the requested work. If proceed, start the automated workflow from the chairman's one concrete next step, keep the verdict visible as the decision frame, and do not stop at a recommendation or ask for confirmation.
-  2. Decision 2: commit or do not commit after completed work and checks. If commit, use only the reviewed commit path below.
-- For substantive work, deploy sub-agents when the active Codex session exposes multi-agent tools. Delegate outstanding supporting work and bounded, non-blocking sidecar tasks with disjoint write scopes; keep immediate blocking work local; integrate and verify sub-agent output before finalizing.
-- After Decision 1 is proceed, work continues automatically into implementation: complete the approved change, carry out supporting changes through sub-agents where available, integrate their output, complete verification, stage only the intended files, then run a commit-readiness review with `npm run codex:council:logical -- --staged --prompt "Chairman Decision 2: decide whether this completed work should be committed."` plus relevant checks.
-- If Decision 2 is commit and checks pass, commit through `npm run codex:commit:reviewed -- "commit message"`. Do not use blanket staging or `npm run codex:commit` for this automated path. Do not commit unrelated dirty files, user changes, local databases, or env files.
-- Use `npm run codex:council:ollama -- --prompt "..."` when a free local model-backed council is explicitly desired; the Ollama provider expects `OLLAMA_BASE_URL` or `http://127.0.0.1:11434`.
-- Use `npm run codex:council:openrouter -- --prompt "..."` only when a paid OpenRouter council is explicitly desired; OpenRouter requires its API key environment variable.
-- If the logical scaffold is insufficient and Ollama/OpenRouter are unavailable, state that model-backed council review was skipped and continue with the best local review path; do not block urgent or trivial work solely on council availability.
-- Do not paste secrets into council prompts. The council is an engineering review aid, not product runtime code.
+## Review rules
 
-## Architecture Rules
+1. Reject changes that authorize only in UI or route code while leaving the data boundary open.
+2. Reject cross-league or cross-season queries, cache keys, events, and writes without explicit scope.
+3. Reject realtime success that is not backed by persisted state and reconnect/catch-up behavior.
+4. Reject Firestore or fallback data becoming canonical through an error path.
+5. For UI work, preserve semantic tokens, keyboard access, accessible names, focus visibility, and
+   mobile reflow; use `.agents/skills/product-design-review/SKILL.md` for product-level reviews.
 
-- Server Components should load protected server data through server-side loaders, services, or repositories.
-- Do not make a Server Component fetch this app's own API route when shared server code can be called directly.
-- API routes are transport adapters. They should authenticate, call shared server logic, and translate the result to HTTP.
-- Client Components should fetch through client-aware APIs only when browser auth/session state or interaction requires it.
-- Authorization belongs at the data boundary, not only in page components or UI affordances.
-- Normalize external, optional, or legacy data before it reaches rendering components.
-- Expected 401, 403, and 404 states should be returned or rendered deliberately. Do not log them as unexpected failures.
-- Unexpected failures should be logged with useful context and without leaking secrets.
-- Navigation components must not silently rewrite the user's route unless that redirect is explicit product behavior.
-- Next.js prefetching must not trigger noisy unauthorized server work. If protected routes are prefetched, the server auth/session path must handle that cleanly.
+## Done
 
-## UI And shadcn Standards
-
-- Follow existing shadcn/ui-style composition and open-code patterns.
-- Prefer small composed primitives over monolithic custom wrappers.
-- Use semantic theme tokens such as `bg-background`, `text-foreground`, `border-border`, and established project CSS variables.
-- Preserve light/dark support where the surrounding feature supports it.
-- Preserve keyboard support, focus visibility, labels, and screen-reader clarity.
-- Every interactive element needs a semantic element or accessible name.
-- Prefer existing primitives and local patterns over new abstractions.
-- Do not add dependencies unless clearly justified and approved.
-- Avoid unrelated visual redesign while fixing behavior.
-
-## Done Means
-
-A task is done only when:
-
-- The requested behavior is implemented.
-- The root cause is addressed at the correct boundary.
-- The diff is reviewable and avoids unrelated cleanup.
-- Relevant regression tests pass.
-- Relevant lint, type, and build checks pass, or any remaining warnings are explicitly reported.
-- Browser behavior is verified for route, hydration, navigation, or visual changes.
-- The final summary states what changed, why, what was verified, and any residual risk.
+A change is done when the requested behavior and owning boundary are correct, focused regression
+coverage passes, relevant lint/type/test/build checks pass, browser behavior is verified when user
+flows changed, documentation matches the result, and the diff contains no protected or unrelated
+files. Delivery follows [the pull-request runbook](docs/development/delivery.md).

@@ -1,76 +1,83 @@
-# League Competition Rules
+# League competition rules
 
-## Purpose
+This document records the intended competition contract. Implemented rules are owned by
+`src/server/leagues`, `src/types/leagues.ts`, and the Prisma schema; a product change must update code,
+tests, and this document together.
 
-These rules define how a Statly fantasy AFL league is configured, published, played, and audited. They are the source of truth for league settings, fixture generation, lineup locking, interchange autosubs, standings, finals, and commissioner overrides.
+## Publication and scope
 
-## Roles and Publication
+- Competition state is scoped to a league and `LeagueSeason`.
+- Commissioners configure scoring, fixtures, lineup slots, locks, and finals before publication.
+- Publication records the rules/version used to calculate the competition.
+- Commissioner overrides are authorized at the server boundary and retained in the competition audit
+  history.
+- Missing official AFL fixture data is represented as pending state; the UI must not invent a reliable
+  lock time.
 
-- A league supports 4 to 18 teams.
-- The owner can appoint up to three co-commissioners. Commissioners have the same competition-management authority as the owner.
-- Commissioners configure a competition before publication. Publication records an immutable rules snapshot and fixture version.
-- Members can prepare lineups before official AFL fixture data is complete. The competition is shown as **Published but pending** until the missing data arrives.
-- A commissioner override is recorded in the league activity log and notifies members in-app. Email is sent only to members who have enabled league email notifications.
+## Category scoring
 
-## Fantasy Calendar and Fixtures
+Each matchup aggregates the selected categories for active lineup players. Category direction decides
+whether higher or lower wins; equal values are draws.
 
-- The commissioner selects the AFL round that starts the fantasy season, the number of regular-season fantasy rounds, and the finals structure.
-- Fantasy rounds are distinct from AFL rounds. A commissioner can exclude an AFL round, which remains a numbered fantasy **no-matchup week**. No matchup or scoring is produced for that week, and the next playable fixture keeps its original fantasy-round number.
-- Automatic fixtures use the circle-method round robin. With an even number of teams, every selected fantasy round contains a matchup for every team. With an odd number of teams, every team receives one fantasy bye per complete cycle.
-- The system rejects an odd-team regular-season length that cannot distribute byes equally and explains the valid lengths to commissioners.
-- For a partial even-team season, the generator uses the requested number of sequential fixture sets from the round-robin cycle. Repeated cycles repeat the same opponent sequence.
-- A fantasy bye is a no-matchup week. It is not a win, draw, or loss.
-- An AFL club bye is separate: the fantasy matchup continues, but players from the club are marked **No game**.
-- Commissioners can inspect and edit every fixture. An edit to a published fixture invalidates affected lineups and results, recalculates standings, reseeds finals, rewrites unplayed finals fixtures, and records the override. Completed finals remain in the audit history.
+- `H2H_EACH_CATEGORY` adds each category win/loss/draw to standings.
+- `H2H_MOST_CATEGORIES` awards the weekly matchup to the team winning more categories; equal category
+  wins produce a matchup draw.
 
-## Finals
+The default preset and valid category registry live in `src/types/fantasyCategories.ts`. See
+[fantasy model](../domain/fantasy-model.md).
 
-- Commissioners can enable 4, 6, or 8-team finals.
-- Four-team finals: `1 v 4` and `2 v 3`; winners play in the final.
-- Six-team finals: Week 1 is `3 v 6` and `4 v 5`. Week 2 is `1 v winner of 4 v 5` and `2 v winner of 3 v 6`; winners play in the final.
-- Eight-team finals follow the AFL-style top-eight structure. Week 1 is `1 v 4`, `2 v 3`, `5 v 8`, and `6 v 7`. The qualifying-final winners receive a week off; qualifying-final losers meet elimination-final winners in Week 2; Week 3 determines the finalists.
-- A drawn final is decided by the higher regular-season seed. There is no drawn premiership.
+## Calendar and fixtures
 
-## Standings and Tie-Breaks
+- Fantasy rounds are distinct from AFL rounds and retain stable fantasy-round identities.
+- An excluded AFL round can be a fantasy no-matchup week. It is not a win, loss, or draw.
+- An AFL club bye does not cancel the fantasy matchup; affected players have no game.
+- Automatic fixtures use deterministic round-robin generation. Odd-team leagues require a schedule
+  that distributes fantasy byes fairly.
+- Manual or commissioner fixture changes invalidate/recalculate affected future competition state and
+  create an audit entry. Completed finals remain historical records.
 
-- Weekly draws are recorded in both the matchup record and category record.
-- Commissioners choose one enabled fantasy category as the standings tie-break metric.
-- Teams are ranked by matchup record, then the chosen season-long category total, then original draft seed. This gives every published competition a deterministic order.
+## Lineups and locks
 
-## Lineups, Locks, and Saving
+Active scoring slots are `DEF`, `MID`, `RUC`, `FWD`, and optional `UTIL`. `INTERCHANGE` and legacy
+`BENCH` state do not score unless a persisted lineup/autosub transition makes the player active.
 
-- Active scoring slots are `DEF`, `MID`, `RUC`, `FWD`, and optional `UTIL` slots.
-- `INTERCHANGE` is separate from active scoring and is commissioner-configurable. Interchange players are ordered autosub candidates.
-- A lineup can be incomplete. Each insert, move, or removal autosaves. The UI exposes `Saving`, `Saved`, `Unsaved changes`, `Save failed`, and `Locked` states as applicable.
-- The latest saved lineup carries into the next playable fantasy round. It also carries across a no-matchup week until changed.
-- The default lock policy is **Individual AFL game start**. A player locks at the official start time of their AFL match; locked players cannot be moved, removed, or replaced manually.
-- The alternative policy is a Thursday 7:00 pm AEST round deadline. Commissioners can select an alternate league timezone.
-- Official fixture changes automatically update an unlocked player lock time. A player with no reliable official game start remains unlocked and the round remains published but pending.
-- If fixture data has been pending for 24 hours, all commissioners are notified. Before the first scheduled AFL game, they can set a round-wide fallback deadline. Individual manual player deadlines are not supported.
+Lineups autosave through authenticated, league-scoped server commands and expose saving, saved,
+unsaved, failed, and locked states. The latest saved lineup may carry to the next playable round under
+the current competition rules.
 
-## Interchange Autosubs
+The default lock policy is the official start of each player's AFL match. A configured round deadline
+is the alternative. Locked players cannot be moved, removed, or replaced manually. Official fixture
+updates can change an unlocked player's lock time; an unknown start time remains explicitly pending.
 
-- An AFL club bye and a player confirmed not to have participated in a completed AFL match both qualify as non-playing.
-- Autosubs resolve only after the whole AFL round is complete.
-- Candidates are considered in `INTERCHANGE 1`, `INTERCHANGE 2`, then `INTERCHANGE 3` order. A non-playing interchange candidate is skipped. If no candidate is available, the active slot remains a zero.
-- The first eligible interchange player replaces the next eligible non-playing active player using the stable active-slot order `DEF`, `MID`, `RUC`, `FWD`, then `UTIL`.
-- The replacement moves into the active slot and contributes their score once. The non-playing player moves to the interchange slot. Interchange players lock at their own AFL game start.
-- A manager can manually place an unlocked interchange player in an active slot; doing so removes that player from autosub priority.
-- Autosub decisions are persisted and shown in the activity log with the original slot, replacement, rule reason, and resolution time.
+## Interchange autosubs
 
-## AFL Fixture Data
+- Autosubs resolve from official participation evidence after the applicable AFL round is complete.
+- Candidates are considered in persisted interchange order and must be eligible for the vacated slot.
+- A non-playing candidate is skipped. If no candidate qualifies, the active slot scores zero.
+- Each replacement contributes once; active/interchange state and the decision reason are persisted.
+- Manual movement of an unlocked interchange player changes the later autosub candidates.
 
-The AFL fixture integration must provide, for the configured season window:
+Autosub results must be deterministic and auditable from saved lineup state, fixture/participation
+evidence, slot eligibility, and candidate order.
 
-- AFL round and match identifier;
-- participating clubs;
-- scheduled start time in UTC;
-- match status and finality;
-- player participation or a definitive no-participation signal; and
-- last-updated timestamp.
+## Standings and finals
 
-Publication is allowed while this information is outstanding. The commissioner preflight must show what is configured, what is pending, and the applicable lock behavior.
+Standings preserve matchup and category wins/losses/draws plus totals used for deterministic ordering.
+The selected standings tie-break category must be one of the league's enabled categories; its configured
+direction applies to ordering. Remaining ties use stable competition data rather than browser order.
 
-## Member-Facing Rules
+Supported finals sizes are 4, 6, and 8 teams. Seeding comes from finalized regular-season standings.
+Finals progression is persisted and recalculated only through the competition service. A drawn final is
+resolved by the higher qualifying seed unless the published rules explicitly change before play.
 
-Every league exposes a read-only League Rules page with the published configuration, fixture version, lock policy, finals bracket, tie-break metric, override history, and worked examples for an autosub, fantasy bye, AFL club bye, drawn final, and commissioner override.
+## Commissioner changes
+
+Commissioner authority never bypasses authentication, league membership, or the published-rules
+boundary. Consequential overrides record the actor, time, reason, prior/new values, and affected state.
+The UI must explain recalculation or invalidation before confirmation.
+
+## Required regression coverage
+
+Changes to these rules need focused tests for normalization, category direction/draws, standings,
+round-robin/byes, locks, autosubs, finals progression, authorization, and audit records. User-visible
+changes also require direct-load and responsive browser verification.

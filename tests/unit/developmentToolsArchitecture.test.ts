@@ -49,7 +49,7 @@ describe('development tools architecture', () => {
   it('opts in only the canonical local and Playwright harnesses', () => {
     const localStack = read('Scripts/dev/full-local-stack.sh');
     const playwrightConfig = read('playwright.config.ts');
-    const docs = read('docs/firebase-setup.md');
+    const docs = read('docs/development/setup.md');
 
     expect(localStack).toContain('export STATLY_ENABLE_DEV_TOOLS="true"');
     expect(playwrightConfig).toContain("'STATLY_ENABLE_DEV_TOOLS=true'");

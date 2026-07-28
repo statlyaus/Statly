@@ -158,14 +158,19 @@ describe('local full stack development architecture', () => {
   });
 
   it('documents the canonical local stack and dev-auth fallback policy', () => {
-    const docs = read('docs/firebase-setup.md');
+    const docs = read('docs/development/setup.md');
+    const localStack = read('Scripts/dev/full-local-stack.sh');
 
+    expect(docs).toContain('cp .env.example .env');
+    expect(docs).toContain('both Next.js and the Prisma CLI');
     expect(docs).toContain('npm run dev:full:local');
     expect(docs).toContain('npm run dev:smoke:local');
     expect(docs).toContain('admin@statly.dev');
     expect(docs).toContain('STATLY_LOCAL_AUTH_PHRASE');
-    expect(docs).toContain('Use the local password printed by `npm run dev:full:local`');
+    expect(docs).toMatch(/Use the local password printed by\s+`npm run dev:full:local`/);
     expect(docs).not.toContain(deprecatedEmulatorKeyLiteral);
-    expect(docs).toContain('The legacy development-auth fallback remains available only');
+    expect(docs).toContain('The legacy development-auth fallback is not enabled by that harness');
+    expect(localStack).not.toContain('export NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=');
+    expect(localStack).not.toContain('export STATLY_ENABLE_DEV_AUTH=');
   });
 });

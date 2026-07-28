@@ -1,6 +1,8 @@
 # --- Environment Files ---
 .env*
 !.env.example
+.Renviron
+.Rhistory
 
 # --- Service Account Credentials (NEVER COMMIT) ---
 serviceAccountKey.json

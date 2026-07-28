@@ -28,11 +28,22 @@ describe('dependency and runtime hygiene', () => {
   it('keeps the dead API placeholder absent and override policy documented', () => {
     expect(existsSync(join(process.cwd(), 'src/app/api/api.ts'))).toBe(false);
 
-    const policy = read('docs/dependency-overrides.md');
+    const policy = read('docs/development/dependency-overrides.md');
     for (const dependency of ['zod', '@google-cloud/firestore', 'node-forge', 'jws']) {
       expect(policy).toContain(dependency);
     }
     expect(policy).toContain('Do not use a forced audit fix');
+  });
+
+  it('guards credential-like service-account filenames without blocking examples', () => {
+    const docsCheck = read('Scripts/check-docs.mjs');
+
+    expect(docsCheck).toContain('service[-_.]?account');
+    expect(docsCheck).toContain('firebase[-_.]?(?:admin|credential)');
+    expect(docsCheck).toContain('google[-_.]?(?:application[-_.]?)?credentials?');
+    expect(docsCheck.indexOf('if (isExample) return false')).toBeLessThan(
+      docsCheck.indexOf('const hasCredentialLikeName')
+    );
   });
 });
 

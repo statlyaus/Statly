@@ -32,16 +32,14 @@ describe('draft room runtime source of truth', () => {
     expect(roomSource).not.toMatch(/\bDraftLobby\b/);
   });
 
-  it('documents the deployment, archive, and close-out requirements', () => {
-    const sourceOfTruth = read('docs/superpowers/specs/2026-06-13-draft-room-source-of-truth.md');
+  it('documents the live route, room shell, and persisted command authority', () => {
+    const sourceOfTruth = read('docs/domain/draft-and-waivers.md');
 
     expect(sourceOfTruth).toContain('Live draft room route: `src/app/(app)/drafts/[id]/page.tsx`');
     expect(sourceOfTruth).toContain('Live room shell: `src/components/draft/UnifiedDraftRoom.tsx`');
-    expect(sourceOfTruth).toContain('Mandatory Close-Out Checklist');
-    expect(sourceOfTruth).toContain('Deployment surface check');
-    expect(sourceOfTruth).toContain('Archive/deprecation audit');
-    expect(sourceOfTruth).toContain('Dirty-file callout');
-    expect(sourceOfTruth).toContain('Do not deploy or commit `prisma/dev.db`');
+    expect(sourceOfTruth).toContain('An accepted pick is persisted before it is broadcast');
+    expect(sourceOfTruth).toContain('Roster projection after a pick');
+    expect(sourceOfTruth).toContain('waiver/free-agent surfaces');
   });
 
   it('marks older available-player tables as reference-only surfaces', () => {

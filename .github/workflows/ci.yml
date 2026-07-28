@@ -2,17 +2,67 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main]
   push:
-    branches: [main, master]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  build-and-test:
+  documentation:
+    name: Documentation
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:check
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:ci
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./ci-typecheck.db
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run typecheck
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
     services:
       redis:
         image: redis:7-alpine
@@ -23,70 +73,59 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
-
     env:
       NODE_ENV: test
-      DATABASE_URL: 'file:./ci-test.db'
-      DATABASE_URL_TEST: 'file:./ci-test.db'
+      DATABASE_URL: file:./ci-test.db
+      DATABASE_URL_TEST: file:./ci-test.db
       REDIS_URL: redis://localhost:6379
-
+      NEXT_PUBLIC_FIREBASE_API_KEY: ci-emulator-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: statly-ci.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: statly-e2e
+      NEXT_PUBLIC_FIREBASE_APP_ID: 1:1234567890:web:ci
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '22'
-          cache: 'npm'
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium firefox webkit
-
-      - name: Prisma migrate (test DB)
-        run: npx prisma migrate deploy
-
-      - name: Run full test suite
-        run: npm run test:all
-
-      - name: Upload coverage (if produced)
-        if: always()
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npx prisma migrate deploy
+      - run: npm run test:unit
+      - run: npm run test:int
+      - run: npm run test:e2e
+      - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: coverage
+          name: test-artifacts
           path: |
             coverage/**
-            coverage/unit/**
+            playwright-report/**
+            test-results/**
           if-no-files-found: ignore
 
-  # Optional: comment a concise status on the PR
-  pr-status:
-    if: ${{ always() && github.event_name == 'pull_request' }}
-    needs: [build-and-test]
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: read
+    env:
+      DATABASE_URL: file:./ci-build.db
+      FIREBASE_ADMIN_DISABLED: 'true'
+      NEXT_PHASE: phase-production-build
+      REDIS_DISABLED: '1'
+      NEXT_PUBLIC_FIREBASE_API_KEY: ci-build-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: statly-ci.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: statly-ci
+      NEXT_PUBLIC_FIREBASE_APP_ID: 1:1234567890:web:ci
     steps:
-      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          script: |
-            const conclusion = "${{ needs.build-and-test.result }}";
-            const ok = conclusion === "success";
-            const body = ok
-              ? "✅ CI passed. Ready to review/merge."
-              : "❌ CI failed. Please check logs in the CI run.";
-            try {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                body
-              });
-            } catch (error) {
-              core.warning(`Unable to post CI status comment: ${error.message}`);
-            }
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build

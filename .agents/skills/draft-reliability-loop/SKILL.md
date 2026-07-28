@@ -1,104 +1,66 @@
 ---
 name: draft-reliability-loop
-description: Use when improving, verifying, or babysitting Statly draft-room reliability, realtime draft behavior, pick flow, roster projection, waiver availability, or draft-room regressions.
+description: Use for Statly draft-room picks, queue/watchlist, timers, reconnects, roster projection, waiver availability, and realtime regressions.
 ---
 
-# Draft Reliability Loop
+# Statly draft reliability
 
-## Purpose
+Use this skill for recurring draft behavior where persisted commands, realtime delivery, browser state,
+and roster/waiver projections must converge.
 
-Use this skill to run repeatable Codex loops for Statly draft-room reliability work. Keep the loop evidence-driven: identify the failing path, fix the owning boundary, verify the browser/API behavior, then re-review before reporting or committing.
-
-This skill is documentation and workflow only. It must not be used as permission to change product runtime code without the normal Statly planning, council, implementation, and verification gates.
-
-## Required Inputs
+## Read first
 
 - `AGENTS.md`
-- The current draft-room source-of-truth spec or plan under `docs/superpowers/`
-- The user's requested draft-room issue, PR, or reliability target
-- Current `git status --short --branch`
+- `docs/domain/draft-and-waivers.md`
+- `docs/architecture/realtime.md`
+- the affected services, transports, read models, and focused tests
+- `git status --short --branch`
 
-## Loop
+## Trace the failing path
 
-1. Plan the boundary.
-   - Read the relevant source-of-truth docs before editing.
-   - Run the logical council for substantive work.
-   - Continue only after `CHAIRMAN DECISION 1: PROCEED`.
-   - State the owning boundary: auth, API route, shared server service, client state, realtime sync, browser UI, tests, or docs.
+Identify the owning boundary before editing:
 
-2. Reproduce or prove the path.
-   - Prefer browser verification for route, hydration, realtime, navigation, and visual behavior.
-   - Prefer API checks for command/read-model boundaries.
-   - Prefer focused tests for regressions that can be made deterministic.
-   - Record concrete IDs, URLs, commands, and observed state.
+1. authentication and league/draft authorization;
+2. persisted command/repository transaction;
+3. snake order, availability, capacity, or timer rule;
+4. event/outbox publication and Socket.IO delivery;
+5. snapshot, sequence, reconnect, or client reconciliation;
+6. roster projection and waiver/free-agent availability; or
+7. presentation/accessibility only.
 
-3. Implement the smallest durable fix.
-   - Fix the source of truth, not only the visible symptom.
-   - Preserve Prisma as canonical for protected fantasy data unless the current source-of-truth doc says otherwise.
-   - Treat API routes as transport adapters over shared logic.
-   - Keep client state catch-up paths consistent with persisted server state.
-   - Do not add dependencies for loop mechanics.
+Do not fix a browser symptom until the persisted state and event sequence are known.
 
-4. Review and fix.
-   - Run relevant tests, type checks, lint, and browser/API checks.
-   - Review `git diff` before staging.
-   - Run council Decision 2 on the staged or final diff when committing is in scope.
-   - If review finds defects, fix them and repeat verification.
+## Invariants
 
-5. Re-review.
-   - Re-run the checks that failed or guarded the edited boundary.
-   - Re-run browser/API verification when behavior changed.
-   - Re-run Decision 2 before committing after material fixes.
+- An accepted pick is persisted before it is broadcast.
+- The actor, current turn, draft version, player availability, and roster capacity are checked together.
+- Duplicate, concurrent, late, or stale commands cannot create a second ownership result.
+- Queue/auto-pick uses the same command boundary as a manual pick.
+- Timer jobs have idempotent identities and revalidate persisted draft state when they run.
+- Refresh/reconnect loads a canonical snapshot and catches up sequenced events.
+- Roster projection and waiver availability use canonical league-scoped ownership/player identity.
+- Firestore or browser state never becomes draft authority through a fallback.
 
-6. Report.
-   - Summarize what changed, why it changed, what was verified, and residual risk.
-   - Include concrete evidence rather than broad claims.
-   - Do not claim done if checks or browser verification were skipped; state the gap.
+## Verification matrix
 
-## Draft-Room Reliability Checklist
+Choose the rows affected by the change and record concrete evidence:
 
-- [ ] Source-of-truth docs read.
-- [ ] Council Decision 1 returned `CHAIRMAN DECISION 1: PROCEED`.
-- [ ] Failing or risky path identified with concrete route/API/state.
-- [ ] Owning boundary stated before editing.
-- [ ] Runtime code changes, if any, stayed inside the approved boundary.
-- [ ] Protected files were not touched: `prisma/dev.db`, `.env`, secrets, `serviceAccountKey.json`, Firebase exports, `node_modules`, `dist`, `coverage`, and `test-results`.
-- [ ] Regression coverage or explicit verification evidence exists.
-- [ ] `git diff` reviewed.
-- [ ] Council Decision 2 completed before commit when commit is in scope.
+- direct load and refresh;
+- disconnect/reconnect, duplicate event, and sequence gap;
+- manual pick and queue/auto-pick;
+- two concurrent/stale pick attempts;
+- pause/resume, late timer, completion, and commissioner intervention;
+- roster capacity/projection; and
+- drafted/owned player removal from waiver/free-agent views.
 
-## Prompt Template
+Use focused service/race tests for deterministic concurrency and browser/API verification for transport,
+hydration, navigation, and accessible interaction. Run relevant lint/typecheck plus the broader tests
+guarding the changed boundary.
 
-Use this template when starting a draft-room reliability loop:
+## Protected state
 
-```text
-Use the draft-reliability-loop skill.
+Never use `prisma/dev.db`, `.env*`, `.Renviron`, secrets, service-account files, shared Firebase data,
+or generated output for verification. Use safe fixtures, emulators, or an explicit disposable database.
 
-Target:
-[draft-room reliability issue, PR, stale behavior, or verification target]
-
-Read:
-- AGENTS.md
-- [current source-of-truth spec/plan]
-
-Constraints:
-- Preserve Statly council gates.
-- Fix the source of truth, not just the visible symptom.
-- Do not touch protected files or unrelated runtime code.
-
-Done when:
-- The failing path is reproduced or concretely identified.
-- The owning boundary is fixed or documented as out of scope.
-- Relevant tests/checks/browser or API verification are complete.
-- The final report includes evidence and residual risk.
-```
-
-## Common Mistakes
-
-| Mistake                                               | Correction                                                                          |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Treating a browser symptom as the owning boundary     | Trace to auth, API, persistence, realtime delivery, or client state before editing. |
-| Using council output as a substitute for verification | Council gates decide whether to proceed or commit; they do not prove behavior.      |
-| Fixing only the open tab state                        | Verify refresh, direct load, and persisted server state when draft data changes.    |
-| Letting local databases or env files enter the diff   | Check `git status --short` before and after verification.                           |
-| Reporting "done" with skipped checks                  | State skipped checks and why, then name the residual risk.                          |
+Report the owning cause, change, checks, observed flow, and any state not reproduced. Do not claim the
+draft path is reliable from a component test or successful socket emission alone.
