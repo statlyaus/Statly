@@ -1,16 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-vi.mock('firebase-admin', () => ({
-  apps: [{}],
-  credential: { cert: vi.fn() },
-  initializeApp: vi.fn(),
-  firestore: Object.assign(
-    vi.fn(() => ({ collection: vi.fn() })),
-    { FieldValue: { serverTimestamp: vi.fn() } }
-  ),
-}));
-
-import { normalizePlayerRow } from '../../etl/processFootywireData';
+import { normalizePlayerRow } from '../../etl/normalizePlayerRow';
 
 describe('Footywire row normalization', () => {
   it('converts numeric strings before identifiers, checksums, and persistence use the row', () => {

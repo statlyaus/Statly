@@ -25,13 +25,13 @@ export default [
     },
   },
 
-  // 1) Ignore junk and build outputs
+  // 1) Ignore independently linted packages, junk, and build outputs
   {
     ignores: [
+      'functions/**',
+      'etl/**',
       '**/node_modules/**',
       '**/dist/**',
-      'functions/lib/**',
-      '**/functions/lib/**',
       '.next/**',
       '**/.next/**',
       '.turbo/**',
@@ -52,7 +52,8 @@ export default [
       '**/.vibe/**',
       '**/build/**',
       '**/coverage/**',
-      '**/functions/lib/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
       '**/public/**',
       '**/out/**',
       '**/Statly.worktrees/**',

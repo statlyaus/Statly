@@ -26,6 +26,7 @@ pnpm-lock.yaml
 .next/
 out/
 dist/
+/functions/lib/
 *.tsbuildinfo
 .cache/
 public/auth-service-worker.js

@@ -3,9 +3,14 @@
   "version": "1.0.0",
   "description": "Serverless functions for Statly fantasy football league management",
   "scripts": {
-    "lint": "eslint --ext .js,.ts .",
-    "build": "tsc",
+    "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\"",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prebuild": "npm run clean",
+    "build": "tsc -p tsconfig.json",
     "build:watch": "tsc --watch",
+    "test": "npm run build && npm run test:compiled",
+    "test:compiled": "node --test",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
@@ -13,7 +18,7 @@
     "logs": "firebase functions:log"
   },
   "engines": {
-    "node": "18"
+    "node": ">=22 <23"
   },
   "main": "lib/index.js",
   "dependencies": {
@@ -21,11 +26,13 @@
     "firebase-functions": "^4.5.0"
   },
   "devDependencies": {
+    "@eslint/js": "^8.57.1",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.45.0",
     "eslint-plugin-import": "^2.28.0",
     "firebase-functions-test": "^3.1.0",
+    "globals": "^13.24.0",
     "typescript": "^5.1.6"
   },
   "private": true

@@ -4,7 +4,15 @@
   "description": "ETL pipeline for AFL data ingestion using fitzRoy",
   "main": "dist/liveGuard.js",
   "scripts": {
-    "build": "tsc",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "lint": "npm run lint:node && npm run lint:r",
+    "lint:node": "eslint . --max-warnings=0",
+    "lint:r": "Rscript -e \"invisible(parse(file = 'fetch_fw_round.R'))\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prebuild": "npm run clean",
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && npm run test:compiled",
+    "test:compiled": "node --test",
     "start": "node dist/liveGuard.js",
     "dev": "npm run build && ts-node liveGuard.ts",
     "backfill": "npm run build && node dist/backfill.js",
@@ -22,11 +30,16 @@
     "firebase-admin": "^12.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "8.57.1",
+    "@typescript-eslint/eslint-plugin": "6.21.0",
+    "@typescript-eslint/parser": "6.21.0",
     "@types/node": "^20.0.0",
+    "eslint": "8.57.1",
+    "globals": "13.24.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22 <23"
   }
 }
