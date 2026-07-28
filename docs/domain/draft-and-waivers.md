@@ -24,9 +24,10 @@ An accepted pick is persisted before it is broadcast. A pick command must:
 1. authenticate the actor and authorize league/draft participation;
 2. read the current persisted draft version and turn;
 3. validate status, player availability, roster capacity, and pick authority;
-4. commit the pick, next turn, roster projection, and event/outbox state atomically where supported;
+4. commit the pick, next turn, roster projection, and event/outbox state in one
+   `DraftRepository.transaction` Prisma transaction;
 5. schedule or reconcile the next timer with an idempotent identity; and
-6. publish the committed result for connected clients.
+6. publish or enqueue external effects only after commit, using the outbox retry/reconciliation path.
 
 Stale, duplicate, or concurrent commands must be rejected or converge to the same committed result.
 Client success is never inferred from a local timer reaching zero or an optimistic row update.

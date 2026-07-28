@@ -12,7 +12,7 @@
 
 ```sh
 npm ci
-cp .env.example .env
+if [ ! -e .env ]; then cp .env.example .env; fi
 npm run prisma:generate
 ```
 
@@ -20,6 +20,9 @@ Use the ignored `.env` file for the canonical local stack because both Next.js a
 load it. A Next.js-only override may live in `.env.local`, but values needed by Prisma commands must
 also be exported or present in `.env`. Only `.env.example` and clearly named credential-free examples
 may be tracked.
+
+To intentionally regenerate the local file, back up any required values first, then copy
+`.env.example` to `.env` explicitly.
 
 ## Environment boundaries
 

@@ -42,7 +42,7 @@ Use Node 22 and npm:
 
 ```sh
 npm ci
-cp .env.example .env.local
+if [ ! -e .env ]; then cp .env.example .env; fi
 npm run dev
 ```
 
@@ -54,7 +54,6 @@ npm run lint:ci
 npm run typecheck
 npm run test:unit
 npm run test:int
-npm run test:race
 npm run test:e2e
 npm run build
 ```

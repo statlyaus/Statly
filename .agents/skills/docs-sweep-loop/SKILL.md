@@ -45,7 +45,9 @@ exports, generated `functions/lib`, local Data Connect state, `node_modules`, `d
 3. Extract only enduring content; do not preserve redundant prose in an archive directory.
 4. Update inbound links and tests that read document paths in the same change.
 5. Run `npm run docs:check` and focused tests for changed document contracts.
-6. Review `git diff --check`, the complete diff, and Markdown counts before/after.
+6. Review `git diff --check`, changed-path metadata, safe diffs that explicitly exclude protected
+   state, and Markdown counts before/after. Never print a complete diff that could contain `.env*`,
+   credentials, local databases, or generated output.
 
 Stop for owner input when a document encodes unresolved product direction, deletion would remove an
 unverified operational decision, or the needed change expands into runtime behavior.

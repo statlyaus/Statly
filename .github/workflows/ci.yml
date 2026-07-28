@@ -82,7 +82,6 @@ jobs:
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: statly-ci.firebaseapp.com
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: statly-e2e
       NEXT_PUBLIC_FIREBASE_APP_ID: 1:1234567890:web:ci
-      NEXT_PUBLIC_USE_EMULATORS: 'true'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -96,7 +95,6 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npm run test:unit
       - run: npm run test:int
-      - run: npm run test:race
       - run: npm run test:e2e
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

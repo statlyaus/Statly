@@ -11,12 +11,11 @@ npm run lint:ci
 npm run typecheck
 npm run test:unit
 npm run test:int
-npm run test:race
 npm run test:e2e
 npm run build
 ```
 
-`npm run test:all` runs lint, typecheck, unit, integration, race, and browser tests. CI exposes these
+`npm run test:all` runs lint, typecheck, unit, integration, and browser tests. CI exposes these
 boundaries as stable merge checks so a failure identifies its owning verification stage.
 
 ## Database isolation
@@ -28,7 +27,9 @@ Integration tests use `DATABASE_URL_TEST` and then assign that value to `DATABAS
 test setup. For an ad hoc Prisma verification, create a disposable path outside the repository:
 
 ```sh
-STATLY_VERIFY_DB="$(mktemp -u /tmp/statly-verify.XXXXXX.db)"
+STATLY_VERIFY_DIR="$(mktemp -d /tmp/statly-verify.XXXXXX)"
+STATLY_VERIFY_DB="$(mktemp "${STATLY_VERIFY_DIR}/verify.XXXXXX.db")"
+export STATLY_VERIFY_DIR
 export STATLY_VERIFY_DB
 export DATABASE_URL="file:${STATLY_VERIFY_DB}"
 npm run prisma:generate
@@ -49,11 +50,14 @@ for cleanup.
 
 - Unit tests cover pure domain rules, normalization, read-model projection, and component behavior.
 - Integration tests cover Prisma/service boundaries with an isolated database and Redis where needed.
-- Race tests exercise concurrency-sensitive draft, roster, queue, and waiver paths.
 - Playwright tests cover direct load, navigation, hydration, responsive layout, authentication fixtures,
   and end-to-end interactions.
 - Focused architecture tests assert durable source-of-truth and safety rules that are cheaper and more
   reliable than prose review.
+
+`npm run test:race` is reserved for a future focused concurrency suite. It currently fails when
+`tests/race` has no test files, so it must not be advertised as coverage or added to aggregate CI until
+real race specifications exist.
 
 ## Browser fixtures
 

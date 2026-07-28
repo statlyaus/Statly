@@ -56,7 +56,7 @@
     "test:unit": "vitest run --config vitest.config.unit.ts",
     "test:int": "vitest run --config vitest.config.int.ts",
     "test:race": "vitest run --config vitest.config.race.ts",
-    "test:all": "npm run lint:ci && npm run typecheck && npm run test:unit && npm run test:int && npm run test:race && npm run test:e2e",
+    "test:all": "npm run lint:ci && npm run typecheck && npm run test:unit && npm run test:int && npm run test:e2e",
     "lint:ci": "eslint . --quiet",
     "lint:strict": "eslint . --max-warnings=0",
     "pretest:e2e": "npm run auth-worker:build",

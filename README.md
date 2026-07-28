@@ -43,7 +43,7 @@ See [runtime and data ownership](docs/architecture/data-platform.md) for the com
 git clone https://github.com/statlyaus/Statly.git
 cd Statly
 npm ci
-cp .env.example .env.local
+if [ ! -e .env ]; then cp .env.example .env; fi
 npm run prisma:generate
 ```
 
@@ -81,7 +81,6 @@ and must never be enabled in production.
 | TypeScript               | `npm run typecheck`    |
 | Unit tests               | `npm run test:unit`    |
 | Integration tests        | `npm run test:int`     |
-| Race tests               | `npm run test:race`    |
 | Browser tests            | `npm run test:e2e`     |
 | Production build         | `npm run build`        |
 
