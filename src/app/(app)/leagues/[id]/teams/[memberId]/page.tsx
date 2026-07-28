@@ -8,7 +8,7 @@ import { adminAuth } from '@/lib/firebaseAdmin';
 import {
   DEVELOPMENT_AUTH_COOKIE,
   DEVELOPMENT_AUTH_USER_ID,
-  isDevelopmentAuthEnabled,
+  isServerDevelopmentAuthEnabled,
 } from '@/lib/devAuth';
 import { loadAuthorizedLeagueTeamRoster } from '@/server/leagues/teamRosterReadModel';
 
@@ -102,7 +102,7 @@ async function getLeaguePageUserId(): Promise<string | null> {
   const headerStore = await headers();
   const cookieStore = await cookies();
 
-  if (isDevelopmentAuthEnabled()) {
+  if (isServerDevelopmentAuthEnabled()) {
     const devUser = headerStore.get('x-auth-user');
     if (devUser) return devUser;
 

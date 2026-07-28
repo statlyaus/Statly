@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
+import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
@@ -28,7 +29,7 @@ export async function handlePickCommand(
     let userId = await getAuthenticatedUserId(request);
     requestContext.hasSessionCookie = Boolean(request.cookies.get('statly_session')?.value);
 
-    if (!userId && process.env.NODE_ENV !== 'production') {
+    if (!userId && isServerDevelopmentAuthEnabled()) {
       const devUser = request.headers.get('x-dev-user-id');
       if (devUser) {
         userId = devUser;
@@ -59,10 +60,9 @@ export async function handlePickCommand(
       return commonErrors.badRequest('Invalid request body');
     }
 
-    const devOverrideUserId =
-      process.env.NODE_ENV !== 'production'
-        ? request.headers.get('x-dev-user-id') || undefined
-        : undefined;
+    const devOverrideUserId = isServerDevelopmentAuthEnabled()
+      ? request.headers.get('x-dev-user-id') || undefined
+      : undefined;
     const effectiveUserId = devOverrideUserId || userId;
     const canonicalPlayerId = await resolveCanonicalPlayerId(parsed.data.playerId);
     if (!canonicalPlayerId) {

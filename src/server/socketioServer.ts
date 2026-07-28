@@ -11,6 +11,7 @@ import express from 'express';
 import { Server, type Socket as SocketIOSocket } from 'socket.io';
 
 import { buildAuthoritativeDraftState, buildLegacyDraftUpdate } from '@/lib/draftRealtime';
+import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { redisClient } from '@/lib/redis';
@@ -464,7 +465,7 @@ async function authenticateSocketConnection(
     }
 
     if (token.startsWith('dev:')) {
-      if (process.env.NODE_ENV === 'production') {
+      if (!isServerDevelopmentAuthEnabled()) {
         incCounter(METRICS.authFailures);
         return next(new Error('Authentication required'));
       }

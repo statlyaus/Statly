@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 
 // Example protected route enforcement placeholder.
 // If you move to server-verified Firebase sessions, replace the stub with real checks.
@@ -25,7 +26,7 @@ export function proxy(req: NextRequest): NextResponse {
     }
 
     // Dev-only token format: dev:<userId>
-    if (process.env.NODE_ENV !== 'production' && token && token.startsWith('dev:')) {
+    if (isServerDevelopmentAuthEnabled() && token && token.startsWith('dev:')) {
       const userId = token.slice(4);
       const requestHeaders = new Headers(req.headers);
       requestHeaders.set('x-auth-user', userId);
