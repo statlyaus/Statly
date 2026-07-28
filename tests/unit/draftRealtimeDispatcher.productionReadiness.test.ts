@@ -152,6 +152,25 @@ describe('draft realtime dispatcher production readiness', () => {
     ).toBeNull();
   });
 
+  it('rejects draft state envelopes that route a payload to another draft', () => {
+    const payload = DraftRealtimeStatePayloadSchema.parse(
+      JSON.parse(JSON.stringify(buildLiveDraftState()))
+    );
+
+    expect(
+      parseAndValidateEnvelope(
+        JSON.stringify({
+          v: 1,
+          event: 'draft:state',
+          draftId: 'draft-2',
+          payload,
+          instanceId: 'another-instance',
+          ts: Date.now(),
+        })
+      )
+    ).toBeNull();
+  });
+
   it('surfaces next pick metadata on pick deltas so the client clock advances', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/server/draft/services/DraftRealtimeDispatcher.ts'),

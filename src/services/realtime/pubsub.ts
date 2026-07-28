@@ -65,6 +65,14 @@ export function parseAndValidateEnvelope(raw: string): DraftRealtimeEnvelope | n
         return null;
       }
 
+      if (stateResult.data.draftId !== res.data.draftId) {
+        logger.warn('Draft realtime state envelope draftId mismatch', {
+          envelopeDraftId: res.data.draftId,
+          payloadDraftId: stateResult.data.draftId,
+        });
+        return null;
+      }
+
       return {
         ...res.data,
         payload: stateResult.data,
