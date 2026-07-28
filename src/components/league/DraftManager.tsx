@@ -30,11 +30,7 @@ import {
   type PositionLimitKey,
 } from '@/lib/draftSettings';
 import type { League, LeagueMember } from '@/types/leagues';
-import {
-  isConnectivityError,
-  getConnectivityErrorMessage,
-  isExpectedTestLeague404,
-} from '@/utils/errorHandling';
+import { isConnectivityError, getConnectivityErrorMessage } from '@/utils/errorHandling';
 
 interface DraftParticipant {
   userId: string;
@@ -202,7 +198,9 @@ function getOrderedDraftMembers(input: {
   draftOrderRandomized: boolean;
 }): LeagueMember[] {
   const orderedMembers =
-    input.draftOrderMembers.length === input.members.length ? input.draftOrderMembers : input.members;
+    input.draftOrderMembers.length === input.members.length
+      ? input.draftOrderMembers
+      : input.members;
 
   if (input.draftSettings.pickOrder === 'random' && !input.draftOrderRandomized) {
     return shuffleMembers(orderedMembers);
@@ -214,38 +212,13 @@ function getOrderedDraftMembers(input: {
 function buildDraftParticipants(input: {
   orderedMembers: LeagueMember[];
   league: League;
-  currentUserId?: string;
 }): DraftParticipant[] {
-  let participants = input.orderedMembers.map((member, index) => ({
+  return input.orderedMembers.map((member, index) => ({
     userId: member.userId,
     memberId: member.id,
     displayName: member.teamName || `Team ${index + 1}`,
     draftOrder: index + 1,
     isOwner: member.userId === input.league.ownerId,
-  }));
-
-  if (input.league.id !== 'test-league-id' || !input.currentUserId) {
-    return participants;
-  }
-
-  const alreadyIncluded = participants.some((participant) => participant.userId === input.currentUserId);
-  if (!alreadyIncluded) {
-    const lastIndex = participants.length - 1;
-    const replacement = {
-      userId: input.currentUserId,
-      memberId: 'self',
-      displayName: 'Your Team',
-      draftOrder: participants[lastIndex]?.draftOrder || participants.length,
-      isOwner: true,
-    };
-
-    if (lastIndex >= 0) participants[lastIndex] = replacement;
-    else participants.push(replacement);
-  }
-
-  return participants.map((participant) => ({
-    ...participant,
-    isOwner: participant.userId === input.currentUserId,
   }));
 }
 
@@ -254,10 +227,10 @@ function buildDraftCreatePayload(input: {
   members: LeagueMember[];
   draftSettings: DraftSettings;
   participants: DraftParticipant[];
-  currentUserId?: string;
 }) {
-  const draftPayloadBase = {
+  return {
     name: `${input.league.name} Draft`,
+    leagueId: input.league.id,
     leagueSize: input.members.length,
     draftType: input.draftSettings.draftType,
     timePerPick: input.draftSettings.timePerPick,
@@ -273,25 +246,14 @@ function buildDraftCreatePayload(input: {
       name: input.league.name,
       maxTeams: input.league.maxTeams,
       categories: input.league.categories,
-      ownerId:
-        input.league.id === 'test-league-id' && input.currentUserId
-          ? input.currentUserId
-          : input.league.ownerId,
+      ownerId: input.league.ownerId,
     },
     participants: input.participants,
   } as const;
-
-  return input.league.id === 'test-league-id'
-    ? { ...draftPayloadBase }
-    : { ...draftPayloadBase, leagueId: input.league.id };
 }
 
 function isDraftLinkedToLeague(league: League, createdDraft: DraftResponseShape): boolean {
-  return (
-    league.id === 'test-league-id' ||
-    createdDraft.leagueId === league.id ||
-    createdDraft.league?.id === league.id
-  );
+  return createdDraft.leagueId === league.id || createdDraft.league?.id === league.id;
 }
 
 export default function DraftManager({
@@ -322,11 +284,9 @@ export default function DraftManager({
     autoPickRules: { ...DEFAULT_DRAFT_AUTO_PICK_RULES },
   });
 
-  const effectiveOwnerId =
-    league.id === 'test-league-id' && currentUserId ? currentUserId : league.ownerId;
   const currentMember = members.find((member) => member.userId === currentUserId);
   const isCommissioner =
-    currentUserId === effectiveOwnerId ||
+    currentUserId === league.ownerId ||
     currentMember?.role === 'owner' ||
     currentMember?.role === 'manager';
   const hasEnoughMembers = members.length >= 4;
@@ -350,9 +310,6 @@ export default function DraftManager({
         if (isConnectivityError(error)) {
           console.warn('Development server not running or API unreachable');
           setError(getConnectivityErrorMessage());
-        } else if (isExpectedTestLeague404(error, league.id)) {
-          // Expected for test leagues, don't show error
-          console.debug('Test league draft check - 404 expected');
         } else {
           console.error('Error checking existing draft:', error);
           setError(`Failed to check draft status: ${error.message}`);
@@ -471,45 +428,44 @@ export default function DraftManager({
     }));
   };
 
-	  const createDraft = async () => {
-	    if (!canCreateDraft) return;
+  const createDraft = async () => {
+    if (!canCreateDraft) return;
 
-	    setSavingDraft(true);
-	    setError(null);
+    setSavingDraft(true);
+    setError(null);
 
-	    try {
-	      const validationError = validateDraftScheduledTime(draftSettings.scheduledTime);
-	      if (validationError) {
-	        setError(validationError);
-	        return;
-	      }
+    try {
+      const validationError = validateDraftScheduledTime(draftSettings.scheduledTime);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
 
-	      const orderedMembers = getOrderedDraftMembers({
-	        members,
-	        draftOrderMembers,
-	        draftSettings,
-	        draftOrderRandomized,
-	      });
-	      const participants = buildDraftParticipants({ orderedMembers, league, currentUserId });
-	      const draftPayload = buildDraftCreatePayload({
-	        league,
-	        members,
-	        draftSettings,
-	        participants,
-	        currentUserId,
-	      });
+      const orderedMembers = getOrderedDraftMembers({
+        members,
+        draftOrderMembers,
+        draftSettings,
+        draftOrderRandomized,
+      });
+      const participants = buildDraftParticipants({ orderedMembers, league });
+      const draftPayload = buildDraftCreatePayload({
+        league,
+        members,
+        draftSettings,
+        participants,
+      });
 
-	      const response = await fetchApi('drafts', {
-	        method: 'POST',
-	        body: JSON.stringify(draftPayload),
-	      });
+      const response = await fetchApi('drafts', {
+        method: 'POST',
+        body: JSON.stringify(draftPayload),
+      });
 
-	      if (response.success) {
-	        const createdDraft = response.data as DraftResponseShape;
+      if (response.success) {
+        const createdDraft = response.data as DraftResponseShape;
 
-	        if (!isDraftLinkedToLeague(league, createdDraft)) {
-	          throw new Error('Draft was created without the expected league link');
-	        }
+        if (!isDraftLinkedToLeague(league, createdDraft)) {
+          throw new Error('Draft was created without the expected league link');
+        }
 
         setExistingDraft(toExistingDraft(createdDraft));
         await refreshDraftState();

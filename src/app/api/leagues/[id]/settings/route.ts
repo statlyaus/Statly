@@ -8,8 +8,6 @@ import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
 import {
-  DEFAULT_DRAFT_AUTO_PICK_RULES,
-  DEFAULT_DRAFT_POSITION_LIMITS,
   getBenchSizeFromPositionLimits,
   getRosterSizeFromPositionLimits,
   isValidPickSeconds,
@@ -37,12 +35,6 @@ import { getLeagueMembershipAccess } from '@/server/leagues/membership';
 
 type DraftTypeValue = 'SNAKE' | 'LINEAR';
 type WaiverRuleValue = 'WEEKLY' | 'ROLLING';
-
-const TEST_LEAGUE_ID = 'test-league-id';
-const TEST_LEAGUE_OWNER_ID = '2qlfdHSCFTPlxoKFSUfNLSlCDRe2';
-function isDevelopmentTestLeague(leagueId: string) {
-  return process.env.NODE_ENV !== 'production' && leagueId === TEST_LEAGUE_ID;
-}
 
 async function authorizeLeagueSettingsRead(request: NextRequest, leagueId: string) {
   const userId = await getAuthenticatedUserId(request);
@@ -215,97 +207,6 @@ function parseTradeSettingsUpdate(tradeInput: Record<string, unknown>): TradeSet
   };
 }
 
-function toTestLeagueSettingsResponse(body: Record<string, unknown> = {}) {
-  const leagueInput = (body.league && typeof body.league === 'object' ? body.league : {}) as Record<
-    string,
-    unknown
-  >;
-  const draftInput = (body.draft && typeof body.draft === 'object' ? body.draft : {}) as Record<
-    string,
-    unknown
-  >;
-  const rosterInput = (body.roster && typeof body.roster === 'object' ? body.roster : {}) as Record<
-    string,
-    unknown
-  >;
-  const scoringInput = (
-    body.scoring && typeof body.scoring === 'object' ? body.scoring : {}
-  ) as Record<string, unknown>;
-  const waiverInput = (body.waiver && typeof body.waiver === 'object' ? body.waiver : {}) as Record<
-    string,
-    unknown
-  >;
-  const tradeInput = (body.trade && typeof body.trade === 'object' ? body.trade : {}) as Record<
-    string,
-    unknown
-  >;
-  const draftDate =
-    typeof draftInput.draftDate === 'string' && draftInput.draftDate.trim()
-      ? draftInput.draftDate
-      : new Date('2026-06-07T09:00:00.000Z').toISOString();
-  const timePerPick = parseOptionalInteger(draftInput.timePerPick) ?? 120;
-  const maxTeams = parseOptionalInteger(leagueInput.maxTeams) ?? 12;
-  const positionLimits = normalizeDraftPositionLimits(
-    rosterInput.positionLimits ?? DEFAULT_DRAFT_POSITION_LIMITS
-  );
-  const autoPickRules = normalizeDraftAutoPickRules(
-    draftInput.autoPickRules ?? DEFAULT_DRAFT_AUTO_PICK_RULES
-  );
-  const categories = normalizeLeagueCategories(scoringInput.categories);
-
-  return {
-    league: {
-      id: TEST_LEAGUE_ID,
-      name:
-        typeof leagueInput.name === 'string' && leagueInput.name.trim()
-          ? leagueInput.name.trim()
-          : 'Test Fantasy League',
-      code: 'TEST2026',
-      maxTeams,
-      locked: false,
-    },
-    scoring: {
-      scoringFormat: 'nine-category',
-      categories,
-      scoringMode: normalizeLeagueScoringMode(scoringInput.scoringMode, 'H2H_EACH_CATEGORY'),
-      fixtureGenerationMode: normalizeFixtureGenerationMode(scoringInput.fixtureGenerationMode),
-      lineupSlots: normalizeLineupSlots(scoringInput.lineupSlots),
-      categoryDirections: normalizeCategoryDirections(
-        categories,
-        scoringInput.categoryDirections as Partial<Record<FantasyCategoryKey, CategoryDirection>>
-      ),
-      scoringSettingsLockedAt: null,
-    },
-    roster: {
-      rosterSize: getRosterSizeFromPositionLimits(positionLimits),
-      benchSize: getBenchSizeFromPositionLimits(positionLimits),
-      positionLimits,
-    },
-    draft: {
-      draftDate,
-      draftType: String(draftInput.draftType ?? 'snake').toLowerCase(),
-      timePerPick,
-      pickOrder: normalizeDraftPickOrderMode(draftInput.pickOrder),
-      timeZone:
-        typeof draftInput.timeZone === 'string' && draftInput.timeZone.trim()
-          ? draftInput.timeZone
-          : 'Australia/Melbourne',
-      autoPickRules,
-    },
-    waiver: {
-      waiverRule: String(waiverInput.waiverRule ?? 'weekly').toLowerCase(),
-    },
-    trade: {
-      tradeLimit: parseOptionalInteger(tradeInput.tradeLimit) ?? 10,
-      tradeReview: normalizeTradeReview(tradeInput.tradeReview),
-      tradeDeadline: typeof tradeInput.tradeDeadline === 'string' ? tradeInput.tradeDeadline : null,
-      offerExpiryHours: parseOptionalInteger(tradeInput.offerExpiryHours) ?? 72,
-      reviewHours: parseOptionalInteger(tradeInput.reviewHours) ?? 24,
-      vetoThreshold: parseOptionalInteger(tradeInput.vetoThreshold) ?? 3,
-    },
-  };
-}
-
 function toSettingsResponse(league: {
   id: string;
   name: string;
@@ -396,13 +297,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
     }
 
-    if (isDevelopmentTestLeague(id)) {
-      return NextResponse.json({
-        success: true,
-        data: toTestLeagueSettingsResponse(),
-      });
-    }
-
     const authError = await authorizeLeagueSettingsRead(request, id);
     if (authError) {
       return authError;
@@ -488,23 +382,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     if (!id) {
       return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
-    }
-
-    if (isDevelopmentTestLeague(id)) {
-      const userId = await getAuthenticatedUserId(request);
-      if (!userId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-
-      if (userId !== TEST_LEAGUE_OWNER_ID) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-
-      const testBody = (await request.json()) as Record<string, unknown>;
-      return NextResponse.json({
-        success: true,
-        data: toTestLeagueSettingsResponse(testBody),
-      });
     }
 
     const authError = await authorizeLeagueSettingsWrite(request, id);
