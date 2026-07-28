@@ -42,6 +42,7 @@ console.log(
   `Linting ${changedSourceFiles.length} changed source file(s) with zero warnings allowed.`
 );
 const lintResult = spawnSync('eslint', [...changedSourceFiles, '--max-warnings=0'], {
+  env: { ...process.env, STATLY_LINT_ADVISORY: '1' },
   stdio: 'inherit',
 });
 
