@@ -73,7 +73,7 @@ describe('AuthProvider server session restoration', () => {
       photoURL: null,
       emailVerified: true,
       metadata: {},
-      getIdToken: vi.fn().mockResolvedValue('fresh-id-token'),
+      getIdToken: vi.fn().mockResolvedValue('mock-identity-value'),
     };
     mocks.auth.currentUser = firebaseUser;
 
@@ -92,7 +92,7 @@ describe('AuthProvider server session restoration', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken: 'fresh-id-token' }),
+        body: JSON.stringify({ idToken: 'mock-identity-value' }),
       })
     );
 
