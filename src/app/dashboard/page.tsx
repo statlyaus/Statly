@@ -1,7 +1,15 @@
+import { redirect } from 'next/navigation';
+
 import { AuthProvider } from '@/AuthContext';
+import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 import DashboardClient from './DashboardClient';
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const userId = await getAuthenticatedUserIdFromServerContext();
+  if (!userId) {
+    redirect('/login');
+  }
+
   return (
     <AuthProvider>
       <DashboardClient />
