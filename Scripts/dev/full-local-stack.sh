@@ -79,7 +79,7 @@ elif port_is_open "127.0.0.1" "8080" || port_is_open "127.0.0.1" "9099"; then
   echo "local stack: only one Firebase emulator port is available; stop stale Firebase processes and retry" >&2
   exit 1
 else
-  npx firebase emulators:start --only auth,firestore --project "$STATLY_LOCAL_PROJECT_ID" &
+  npm run dev:firebase -- --project "$STATLY_LOCAL_PROJECT_ID" &
   FIREBASE_PID="$!"
 fi
 

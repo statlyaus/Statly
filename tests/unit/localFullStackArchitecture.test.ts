@@ -25,10 +25,17 @@ describe('local full stack development architecture', () => {
   });
 
   it('exposes one canonical local full-stack command plus seed and smoke commands', () => {
-    const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> };
+    const packageJson = JSON.parse(read('package.json')) as {
+      scripts?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
     const scripts = packageJson.scripts ?? {};
 
-    expect(scripts['dev:firebase']).toContain('emulators:start --only auth,firestore');
+    expect(packageJson.devDependencies?.['firebase-tools']).toBeUndefined();
+    expect(scripts['dev:firebase']).toBe(
+      'npx --yes --package=firebase-tools@15.24.0 firebase emulators:start --only auth,firestore'
+    );
+    expect(scripts['dev:firebase']).not.toContain('npx firebase');
     expect(scripts['dev:seed:local']).toBe('tsx Scripts/dev/seed-local-stack.ts');
     expect(scripts['dev:smoke:local']).toBe('tsx Scripts/dev/smoke-local-stack.ts');
     expect(scripts['dev:full:local']).toBe('bash Scripts/dev/full-local-stack.sh');
@@ -51,7 +58,8 @@ describe('local full stack development architecture', () => {
     expect(source).not.toContain(deprecatedEmulatorKeyLiteral);
     expect(source).toContain('port_is_open()');
     expect(source).toContain('reusing existing Firebase emulators');
-    expect(source).toContain('npx firebase emulators:start --only auth,firestore');
+    expect(source).toContain('npm run dev:firebase -- --project "$STATLY_LOCAL_PROJECT_ID"');
+    expect(source).not.toContain('npx firebase');
     expect(source).toContain('npm run prisma:generate');
     expect(source).toContain('npx prisma migrate deploy');
     expect(source).toContain('npm run dev:seed:local');
