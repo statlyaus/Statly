@@ -1,9 +1,15 @@
+import { pathToFileURL } from 'node:url';
+
 import { Worker, QueueEvents } from 'bullmq';
 import { z } from 'zod';
 
 import { logger } from '../../lib/logger';
 import { getWebVitalsWriter, createWebVitalsBatcher } from '../../services/webVitalsPersistence';
-import { getWorkerClient, getQueueEventsClient } from '../realtime/scalableConnection';
+import {
+  getWorkerClient,
+  getQueueEventsClient,
+  ScalableRedisConnection,
+} from '../realtime/scalableConnection';
 
 export interface WebVitalJobData {
   name: 'CLS' | 'FID' | 'FCP' | 'INP' | 'LCP' | 'TTFB';
@@ -95,12 +101,21 @@ export function createWebVitalsWorker({
 
 export default createWebVitalsWorker;
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+function isDirectWorkerEntrypoint(): boolean {
+  const entrypoint = process.argv[1];
+  return Boolean(entrypoint && pathToFileURL(entrypoint).href === import.meta.url);
+}
+
+if (isDirectWorkerEntrypoint()) {
   const { worker, events } = createWebVitalsWorker();
 
   const shutdown = async (signal: string) => {
     logger.info('WebVitals worker shutting down', { signal });
-    await Promise.allSettled([worker.close(), events.close()]);
+    await Promise.allSettled([
+      worker.close(),
+      events.close(),
+      ScalableRedisConnection.shutdownInstance(),
+    ]);
     process.exit(0);
   };
 

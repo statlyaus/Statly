@@ -458,11 +458,18 @@ class EnhancedDraftWorker {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = undefined;
     }
-    await Promise.all([this.worker.close(), this.queueEvents.close()]).catch((err) => {
-      logger.warn('Error during worker shutdown', {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+    const shutdownResults = await Promise.allSettled([
+      this.worker.close(),
+      this.queueEvents.close(),
+      ScalableRedisConnection.shutdownInstance(),
+    ]);
+    for (const result of shutdownResults) {
+      if (result.status === 'rejected') {
+        logger.warn('Error during worker shutdown', {
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    }
     this.started = false;
     this.metrics.ready = false;
     logger.info('Enhanced Draft Worker shutdown complete', { workerId: this.metrics.workerId });
