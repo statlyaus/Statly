@@ -10,22 +10,27 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
       - run: npm install
       - run: npm run build
-      - run: npm run lint
+      - name: Lint changed source with zero warnings
+        env:
+          STATLY_LINT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run lint:changed
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: 'npm'

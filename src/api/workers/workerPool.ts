@@ -10,6 +10,29 @@ interface WorkerPoolConfig {
   healthCheckInactivityMs?: number;
 }
 
+type WorkerMetrics = ReturnType<EnhancedDraftWorker['getMetrics']>;
+
+interface WorkerPoolStats {
+  workerCount: number;
+  totalJobsProcessed: number;
+  totalJobsFailed: number;
+  averageProcessingTime: number;
+  successRate: number;
+  workers: WorkerMetrics[];
+}
+
+interface WorkerHealth {
+  id: string;
+  healthy: boolean;
+  status: 'ready' | 'idle' | 'error';
+  error?: string;
+}
+
+interface WorkerPoolHealth {
+  healthy: boolean;
+  workers: WorkerHealth[];
+}
+
 class WorkerPool {
   private workers: Map<string, EnhancedDraftWorker> = new Map();
   private config: WorkerPoolConfig;
@@ -103,7 +126,7 @@ class WorkerPool {
   /**
    * Get pool statistics
    */
-  getPoolStats() {
+  getPoolStats(): WorkerPoolStats {
     const workerStats = Array.from(this.workers.values()).map((worker) => worker.getMetrics());
 
     const totalJobs = workerStats.reduce((sum, stats) => sum + stats.jobsProcessed, 0);
@@ -161,15 +184,7 @@ class WorkerPool {
   /**
    * Check health of all workers
    */
-  async checkHealth(): Promise<{
-    healthy: boolean;
-    workers: Array<{
-      id: string;
-      healthy: boolean;
-      status: 'ready' | 'idle' | 'error';
-      error?: string;
-    }>;
-  }> {
+  async checkHealth(): Promise<WorkerPoolHealth> {
     const workerHealthChecks = await Promise.all(
       Array.from(this.workers.entries()).map(async ([id, worker]) => {
         try {
@@ -237,7 +252,10 @@ class WorkerPool {
           if (this.stopping) return;
 
           if (!health.healthy) {
-            logger.warn('Worker pool health check failed:', health);
+            logger.warn('Worker pool health check failed:', {
+              healthy: health.healthy,
+              workers: health.workers,
+            });
 
             // Attempt to restart unhealthy workers
             for (const workerHealth of health.workers) {
@@ -327,7 +345,7 @@ const defaultConfig: WorkerPoolConfig = {
 let _workerPoolInstance: WorkerPool | null = null;
 
 export const workerPool = {
-  get instance() {
+  get instance(): WorkerPool {
     if (!_workerPoolInstance) {
       _workerPoolInstance = new WorkerPool(defaultConfig);
     }
@@ -335,27 +353,27 @@ export const workerPool = {
   },
 
   // Delegate methods to the singleton instance with arrow functions for proper `this` binding
-  getPoolStats: () => {
+  getPoolStats: (): WorkerPoolStats => {
     return workerPool.instance.getPoolStats();
   },
 
-  checkHealth: async () => {
+  checkHealth: async (): Promise<WorkerPoolHealth> => {
     return workerPool.instance.checkHealth();
   },
 
-  start: async () => {
+  start: async (): Promise<void> => {
     return workerPool.instance.start();
   },
 
-  stop: async () => {
+  stop: async (): Promise<void> => {
     return workerPool.instance.stop();
   },
 
-  addWorker: async () => {
+  addWorker: async (): Promise<string> => {
     return workerPool.instance.addWorker();
   },
 
-  removeWorker: async (workerId: string) => {
+  removeWorker: async (workerId: string): Promise<boolean> => {
     return workerPool.instance.removeWorker(workerId);
   },
 };
