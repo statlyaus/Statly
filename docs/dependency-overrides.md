@@ -5,8 +5,6 @@ The root `package.json` uses npm overrides only where transitive dependency reso
 | Override                                       | Purpose                                                                                              | Remove when                                                                                                |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `openai > zod`                                 | Keep the OpenAI SDK on the same Zod major used by the application.                                   | The SDK's declared Zod range resolves to the application version without an override and typechecks pass.  |
-| `firebase-admin > @google-cloud/firestore`     | Hold the Firestore client to the version verified with the current Firebase Admin integration.       | A Firebase Admin upgrade resolves a newer compatible client and Firebase unit/integration checks pass.     |
-| `firebase-admin > node-forge`                  | Avoid older transitive cryptography implementations while Firebase Admin still accepts this version. | Firebase Admin resolves an equal or newer compatible release without the override.                         |
 | `google-auth-library > jws` and `gtoken > jws` | Keep Google authentication paths on the reviewed JWS major.                                          | Both parents resolve an equal or newer compatible JWS release and Firebase credential/session checks pass. |
 | `jsonwebtoken > jws`                           | Keep JSON Web Token signing and verification on the reviewed compatible JWS line.                    | `jsonwebtoken` resolves an equal or newer compatible release and authentication tests pass.                |
 
@@ -17,3 +15,8 @@ Before removing or changing an override:
 3. Run application and test typechecks plus focused Firebase/authentication tests.
 4. Review `npm audit` output manually. Do not use a forced audit fix that introduces unreviewed major upgrades.
 5. Build with the Node major declared in `package.json` and the production `Dockerfile`.
+
+The Firebase Admin `@google-cloud/firestore` and `node-forge` overrides were
+removed after the 13.10.0 upgrade. Firebase Admin now owns those optional
+dependency ranges, so the application no longer pins their transitive versions
+independently.
