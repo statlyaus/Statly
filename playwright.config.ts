@@ -83,5 +83,15 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'firefox-smoke',
+      testMatch: /.*\.smoke\.test\.ts/,
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit-smoke',
+      testMatch: /.*\.smoke\.test\.ts/,
+      use: { ...devices['Desktop Safari'] },
+    },
   ],
 });
