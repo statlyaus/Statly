@@ -53,6 +53,20 @@ describe('local development auth architecture', () => {
     expect(source).not.toMatch(/const userId = i === 1 \? 'test-user'/);
   });
 
+  it('uses an app-owned auth identity and keeps action errors at the form boundary', () => {
+    const authContext = read('src/AuthContext.tsx');
+    const authForm = read('src/components/AuthForm.tsx');
+
+    expect(authContext).toContain('export interface AuthUser');
+    expect(authContext).toContain('user: AuthUser | null');
+    expect(authContext).toContain('login: (email: string, pass: string) => Promise<void>');
+    expect(authContext).not.toContain('unknown as User');
+    expect(authContext).not.toContain('UserCredential');
+    expect(authContext).not.toContain('toFirebaseDevelopmentUser');
+    expect(authForm).toContain('const [error, setError] = useState<string | null>(null)');
+    expect(authForm).toContain("showNotification('error', message)");
+  });
+
   it('documents explicit opt-in and enables it only in the isolated browser harness', () => {
     const firebaseDocs = read('docs/firebase-setup.md');
     const playwrightConfig = read('playwright.config.ts');
