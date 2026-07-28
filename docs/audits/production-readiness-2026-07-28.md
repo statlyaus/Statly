@@ -54,7 +54,7 @@ that cannot be honestly completed without external infrastructure.
 | 8.2 Node engine range is too narrow                              | **Rejected**                     | `>=22 <23` is an intentional supported-production-major contract aligned with Docker and CI. Accepting unverified future majors would weaken reproducibility. Node 22.22.0 was used for final verification.                                                                                                                                                                                                                         |
 | 8.3 Overrides are undocumented                                   | **Implemented**                  | `docs/dependency-overrides.md` records purpose/removal gates. `02eb6e74` removes stale Firebase Admin overrides and updates the policy after dependency resolution and tests.                                                                                                                                                                                                                                                       |
 | 9.1 Draft domain has no unit tests                               | **Verified / premise disproved** | Tests cover snake sequencing, auto-pick selection, authoritative deadlines, stale scheduling versions, pause/completion projection, roster ownership, reconciliation, and full-draft soak behavior. The final unit run includes 787 passing tests.                                                                                                                                                                                  |
-| 9.2 E2E is Chromium-only                                         | **Implemented**                  | `ed194f6b` adds Firefox and WebKit smoke projects while keeping the full flow on Chromium. CI installs all three engines. Local browser mutation was deliberately not run against the protected developer database/output; CI remains the execution gate.                                                                                                                                                                           |
+| 9.2 E2E is Chromium-only                                         | **Implemented**                  | `ed194f6b` adds Firefox and WebKit smoke projects while keeping the full flow on Chromium. The Firefox/WebKit matrix passed locally against a disposable `/private/tmp` SQLite database: 8/8 tests, with Redis disabled, Socket.IO disabled, Firebase unable to reach a real project, and artifacts redirected outside the repository. CI must repeat the complete three-engine matrix.                                             |
 | 10.1 Service-account validation/rotation is missing              | **Implemented**                  | `667885ee` validates decoded credential structure, project identity, and PEM formatting. `docs/firebase-setup.md` documents planned and compromised-key rotation. `.env.template` contains dummy configuration rather than secrets.                                                                                                                                                                                                 |
 
 ## Additional readiness changes
@@ -98,6 +98,10 @@ Final local verification used Node `22.22.0`, the major declared by the reposito
 - focused Giphy component tests — 2 files, 7 tests passed
 - unit suite — 198 files, 787 tests passed
 - `npm run build` — passed with Next.js 15.5.22
+- fresh migration history — all 23 SQLite migrations applied to a disposable `/private/tmp` database;
+  `prisma migrate status` reported the schema current
+- Firefox/WebKit smoke matrix — 8/8 tests passed (4 per browser) in 1.2 minutes against disposable
+  state, with artifacts redirected to `/private/tmp`
 - production dependency audit — 28 total: 1 low, 14 moderate, 13 high, 0 critical
 - full dependency audit — 38 total: 2 low, 15 moderate, 21 high, 0 critical
 - `git diff --check` — passed for each reviewed commit
@@ -113,8 +117,8 @@ audit fix was used.
    production infrastructure.
 2. Prove pooled/direct connection budgets, automated backups, point-in-time recovery, and a restore
    drill.
-3. Run the Playwright Chromium/Firefox/WebKit matrix in isolated CI with its disposable database and
-   artifacts.
+3. Repeat the Playwright Chromium/Firefox/WebKit matrix in isolated CI with its disposable database and
+   artifacts; the local Firefox/WebKit smoke matrix passes 8/8.
 4. Verify production Redis private networking/TLS/authentication, queue retention, Socket.IO adapter
    health, and load-balancer affinity.
 5. Validate production secrets, Sentry destination/sampling, Firebase credential scope/rotation, cron
