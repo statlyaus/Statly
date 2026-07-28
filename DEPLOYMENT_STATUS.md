@@ -1,13 +1,15 @@
 # ETL Integration Deployment Status
 
+> Historical snapshot. This document records the original rollout state and is not an operator runbook. See `etl/README.md` for the current R + TypeScript pipeline, credential contract, and commands.
+
 ## 📊 **Current Status Overview**
 
 ### ✅ **Completed Tasks**
 
 1. **✅ ETL Pipeline Code**
-   - ✅ Python data fetcher (`etl/fetch_fw_round.py`)
-   - ✅ TypeScript ingestor (`etl/ingestFootywire.ts`)
-   - ✅ Firebase helpers (`etl/liveGuard.ts`)
+   - ✅ fitzRoy data fetcher (`etl/fetch_fw_round.R`)
+   - ✅ TypeScript stream processor (`etl/processFootywireData.ts`)
+   - ✅ Pipeline runner and live guard (`etl/fetchPipeline.ts`, `etl/liveGuard.ts`)
    - ✅ Historical backfill (`etl/backfill.ts`)
    - ✅ Docker configuration (`etl/Dockerfile`)
    - ✅ Deployment script (`etl/deploy.sh`)

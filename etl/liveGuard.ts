@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import * as admin from 'firebase-admin';
-import { spawn } from 'child_process';
+import { runFetchPipeline } from './fetchPipeline';
 
 // Initialize Firebase Admin using same pattern as main project
 if (!admin.apps.length) {
@@ -60,89 +60,14 @@ async function isLiveWindow(): Promise<boolean> {
  * Run one fetch/upsert cycle using R script + Node processor
  */
 async function runFetchCycle(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    console.log('🔄 Starting fetch cycle...');
+  console.log('🔄 Starting fetch cycle...');
 
-    const currentYear = new Date().getFullYear();
-    const currentSeason = process.env.SEASON || currentYear.toString();
-    const currentRound = process.env.ROUND || ''; // Let R script determine current round
-
-    // Start R script
-    const rScript = spawn('Rscript', ['fetch_fw_round.R', currentSeason, currentRound], {
-      cwd: __dirname,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    // Start Node processor to read R script output
-    const nodeProcessor = spawn('node', ['dist/processFootywireData.js'], {
-      cwd: __dirname,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    // Pipe R script STDOUT to Node processor STDIN
-    rScript.stdout.pipe(nodeProcessor.stdin);
-
-    let rError = '';
-    let nodeError = '';
-
-    rScript.stdout.on('data', () => {
-      // R script output is piped to Node processor, no need to collect
-    });
-
-    rScript.stderr.on('data', (data) => {
-      rError += data.toString();
-    });
-
-    nodeProcessor.stdout.on('data', (data) => {
-      console.log(data.toString().trim());
-    });
-
-    nodeProcessor.stderr.on('data', (data) => {
-      nodeError += data.toString();
-      console.error(data.toString().trim());
-    });
-
-    let rFinished = false;
-    let nodeFinished = false;
-
-    const checkComplete = () => {
-      if (rFinished && nodeFinished) {
-        if (rError || nodeError) {
-          console.error('❌ Fetch cycle failed');
-          if (rError) console.error('R Script Error:', rError);
-          if (nodeError) console.error('Node Processor Error:', nodeError);
-          reject(new Error('Fetch cycle failed'));
-        } else {
-          console.log('✅ Fetch cycle completed successfully');
-          resolve();
-        }
-      }
-    };
-
-    rScript.on('close', (code) => {
-      rFinished = true;
-      if (code !== 0) {
-        console.error(`R script exited with code ${code}`);
-      }
-      nodeProcessor.stdin.end(); // Signal end of input to Node processor
-      checkComplete();
-    });
-
-    nodeProcessor.on('close', (code) => {
-      nodeFinished = true;
-      if (code !== 0) {
-        console.error(`Node processor exited with code ${code}`);
-      }
-      checkComplete();
-    });
-
-    // Set timeout for the entire process
-    setTimeout(() => {
-      rScript.kill();
-      nodeProcessor.kill();
-      reject(new Error('Fetch cycle timed out'));
-    }, 300000); // 5 minutes timeout
+  await runFetchPipeline({
+    season: process.env.SEASON || new Date().getFullYear(),
+    round: process.env.ROUND || undefined,
   });
+
+  console.log('✅ Fetch cycle completed successfully');
 }
 
 /**

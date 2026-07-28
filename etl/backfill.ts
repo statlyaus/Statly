@@ -1,10 +1,5 @@
-import { initializeApp, cert } from 'firebase-admin/app';
-import { spawn } from 'child_process';
-import * as fs from 'fs';
-
-// Initialize Firebase Admin
-const svcKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT as string);
-initializeApp({ credential: cert(svcKey) });
+import 'dotenv/config';
+import { runFetchPipeline } from './fetchPipeline';
 
 type BackfillOptions = {
   startSeason: number;
@@ -16,6 +11,7 @@ type BackfillOptions = {
 
 async function backfillData(options: BackfillOptions): Promise<void> {
   const { startSeason, endSeason, startRound = 1, endRound = 24, delay = 2000 } = options;
+  const failures: string[] = [];
 
   console.log(`Starting backfill from ${startSeason} to ${endSeason}`);
 
@@ -26,50 +22,8 @@ async function backfillData(options: BackfillOptions): Promise<void> {
       console.log(`Processing Season ${season}, Round ${round}...`);
 
       try {
-        const outfile = `/tmp/backfill_${season}_${round}.json`;
-
-        // Try Python script first, fallback to R
-        let command: string;
-        let args: string[];
-
-        if (fs.existsSync('etl/fetch_fw_round.py')) {
-          command = 'python3';
-          args = ['etl/fetch_fw_round.py', season.toString(), round.toString(), outfile];
-        } else {
-          command = 'Rscript';
-          args = ['etl/fetch_fw_round.R', season.toString(), round.toString(), outfile];
-        }
-
-        // Run script
-        await new Promise<void>((resolve, reject) => {
-          const p = spawn(command, args);
-          p.on('exit', (code) => {
-            if (code === 0) {
-              resolve();
-            } else {
-              reject(new Error(`${command} failed for ${season}R${round} with code ${code}`));
-            }
-          });
-          p.on('error', reject);
-        });
-
-        // Process the output if file exists
-        if (fs.existsSync(outfile)) {
-          const { runOnce } = await import('./ingestFootywire');
-          // Set environment variables for this specific round
-          process.env.SEASON = season.toString();
-          process.env.ROUND = round.toString();
-          process.env.OUTFILE = outfile;
-
-          // Import and run the ingestion logic
-          await runOnce();
-
-          // Clean up temp file
-          fs.unlinkSync(outfile);
-          console.log(`✓ Completed Season ${season}, Round ${round}`);
-        } else {
-          console.log(`⚠ No data found for Season ${season}, Round ${round}`);
-        }
+        await runFetchPipeline({ season, round, backfillMode: true });
+        console.log(`✓ Completed Season ${season}, Round ${round}`);
 
         // Rate limiting delay
         if (delay > 0) {
@@ -77,12 +31,17 @@ async function backfillData(options: BackfillOptions): Promise<void> {
         }
       } catch (error) {
         console.error(`✗ Error processing Season ${season}, Round ${round}:`, error);
+        failures.push(`${season}R${round}`);
         // Continue with next round/season
       }
     }
   }
 
-  console.log(`\n=== Backfill completed ===`);
+  if (failures.length > 0) {
+    throw new Error(`Backfill failed for ${failures.length} round(s): ${failures.join(', ')}`);
+  }
+
+  console.log(`\n=== Backfill completed successfully ===`);
 }
 
 // Command line usage
@@ -105,7 +64,10 @@ if (require.main === module) {
     delay: args[4] ? parseInt(args[4]) : 2000,
   };
 
-  backfillData(options).catch(console.error);
+  backfillData(options).catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }
 
 export { backfillData };

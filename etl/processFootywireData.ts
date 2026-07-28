@@ -253,17 +253,12 @@ async function processPlayerRow(row: PlayerRow): Promise<void> {
     data_source: 'footywire_fitzroy',
   };
 
-  // Upsert document
-  try {
-    await docRef.set(documentData, { merge: true });
-    console.log(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
+  await docRef.set(documentData, { merge: true });
+  console.log(`✓ Updated ${docId} - ${row.player_name} (${row.team})`);
 
-    // Add jitter delay
-    const delay = addJitter(0, 6000);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-  } catch (error) {
-    console.error(`✗ Failed to update ${docId}:`, error);
-  }
+  // Add jitter delay
+  const delay = addJitter(0, 6000);
+  await new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 async function main(): Promise<void> {
@@ -293,6 +288,10 @@ async function main(): Promise<void> {
   }
 
   console.log(`\nETL Complete: ${processedCount} processed, ${errorCount} errors`);
+
+  if (errorCount > 0) {
+    process.exitCode = 1;
+  }
 }
 
 // Handle graceful shutdown
@@ -307,7 +306,10 @@ process.on('SIGTERM', () => {
 });
 
 if (require.main === module) {
-  main().catch(console.error);
+  main().catch((error) => {
+    console.error('Fatal ETL processor error:', error);
+    process.exitCode = 1;
+  });
 }
 
 export { processPlayerRow, checkMatchStatus };
