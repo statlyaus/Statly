@@ -17,6 +17,18 @@ interface PlayerLite {
   ownership?: number;
 }
 
+interface TeamRosterResponse {
+  success: boolean;
+  data?: {
+    roster?: {
+      players?: PlayerLite[];
+    };
+  };
+  error?: {
+    message?: string;
+  };
+}
+
 export function useTeamRoster(leagueId?: string, userId?: string) {
   const [players, setPlayers] = useState<PlayerLite[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,53 +48,14 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
       setError(null);
 
       try {
-        // Try Firebase roster first
         const rosterRes = await fetch(`/api/leagues/${leagueId}/roster/${userId}`, {
           signal: controller.signal,
-        }).catch(() => null);
-        if (rosterRes?.ok) {
-          const rosterData = await rosterRes.json();
-          setPlayers(rosterData.players || []);
-        } else {
-          // Fallback to draft data
-          const draftRes = await fetch(`/api/draft/${leagueId}/roster/${userId}`, {
-            signal: controller.signal,
-          }).catch(() => null);
-          if (draftRes?.ok) {
-            const draftData = await draftRes.json();
-            type DraftPickShape = {
-              playerId?: string;
-              playerName?: string;
-              position?: string;
-              team?: string;
-              averageScore?: number;
-              lastGameScore?: number;
-              projectedScore?: number;
-              form?: number[];
-              injuryStatus?: string;
-              priceChange?: number;
-              ownership?: number;
-            };
-
-            setPlayers(
-              (draftData.picks || []).map((p: DraftPickShape, i: number) => ({
-                id: p.playerId || `player-${i}`,
-                name: p.playerName || 'Unknown',
-                position: p.position || 'Unknown',
-                team: p.team || 'AFL',
-                averageScore: p.averageScore || 75,
-                lastGameScore: p.lastGameScore || 0,
-                projectedScore: p.projectedScore || 80,
-                form: p.form || [70, 75, 80, 85, 90],
-                injuryStatus: p.injuryStatus || 'healthy',
-                priceChange: p.priceChange || 0,
-                ownership: p.ownership || 10,
-              }))
-            );
-          } else {
-            setPlayers([]);
-          }
+        });
+        const rosterData = (await rosterRes.json()) as TeamRosterResponse;
+        if (!rosterRes.ok || !rosterData.success) {
+          throw new Error(rosterData.error?.message || 'Failed to load team roster');
         }
+        setPlayers(rosterData.data?.roster?.players || []);
 
         try {
           const monitor = getPerformanceMonitor();
