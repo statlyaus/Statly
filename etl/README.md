@@ -70,7 +70,7 @@ files. Prefer workload identity or deployment secret management when supported.
 # Lint JavaScript, TypeScript, tests, and package configuration, then parse the R fetcher
 npm run lint
 
-# Parse the R fetcher without loading packages or accessing FootyWire
+# Parse the R fetcher without loading packages or accessing Footywire
 npm run lint:r
 
 # Type-check without emitting build output
