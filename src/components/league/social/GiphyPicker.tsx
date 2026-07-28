@@ -1,6 +1,5 @@
 'use client';
 
-import { Grid } from '@giphy/react-components';
 import { ImagePlus, Search, X } from 'lucide-react';
 import {
   useCallback,
@@ -27,6 +26,17 @@ interface GiphyPickerProps {
 
 const PICKER_RESULT_LIMIT = 20;
 
+function getGifPreview(gif: GiphyGif): { url: string; width: number; height: number } | null {
+  const image = gif.images.fixed_width ?? gif.images.downsized_medium ?? gif.images.original;
+  if (!image?.url) return null;
+
+  return {
+    url: image.url,
+    width: Number(image.width) || 200,
+    height: Number(image.height) || 150,
+  };
+}
+
 export default function GiphyPicker({
   disabled = false,
   onSelect,
@@ -37,31 +47,16 @@ export default function GiphyPicker({
   const searchId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
   const selectionAttemptRef = useRef<{ gifId: string; idempotencyKey: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [gridWidth, setGridWidth] = useState(320);
   const [initialGifs, setInitialGifs] = useState<GiphyGif[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [selectionPending, setSelectionPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const element = gridRef.current;
-    if (!open || !element) return;
-
-    const updateWidth = () => {
-      setGridWidth(Math.max(240, Math.floor(element.getBoundingClientRect().width || 320)));
-    };
-    updateWidth();
-
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [open]);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -100,11 +95,15 @@ export default function GiphyPicker({
     setError(null);
     void fetchGifs(0)
       .then(({ data }) => {
-        if (!cancelled) setInitialGifs(data);
+        if (!cancelled) {
+          setInitialGifs(data);
+          setHasMore(data.length === PICKER_RESULT_LIMIT);
+        }
       })
       .catch(() => {
         if (!cancelled) {
           setInitialGifs([]);
+          setHasMore(false);
           setError('GIPHY is unavailable right now.');
         }
       })
@@ -116,6 +115,25 @@ export default function GiphyPicker({
       cancelled = true;
     };
   }, [fetchGifs, open]);
+
+  const loadMore = useCallback(async () => {
+    if (!fetchGifs || loading || loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const { data } = await fetchGifs(initialGifs.length);
+      setInitialGifs((current) => {
+        const existingIds = new Set(current.map((gif) => String(gif.id)));
+        return [...current, ...data.filter((gif) => !existingIds.has(String(gif.id)))];
+      });
+      setHasMore(data.length === PICKER_RESULT_LIMIT);
+    } catch {
+      setError('GIPHY is unavailable right now.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [fetchGifs, hasMore, initialGifs.length, loading, loadingMore]);
 
   const selectGif = useCallback(
     async (gif: GiphyGif) => {
@@ -227,7 +245,6 @@ export default function GiphyPicker({
           </p>
 
           <div
-            ref={gridRef}
             className="mt-2 max-h-80 min-h-48 overflow-y-auto rounded-lg bg-social-surface-subtle"
           >
             {loading ? (
@@ -237,28 +254,44 @@ export default function GiphyPicker({
             ) : initialGifs.length === 0 ? (
               <p className="py-16 text-center text-sm text-social-text-muted">No GIFs found</p>
             ) : (
-              <Grid
-                key={searchTerm || 'trending'}
-                width={gridWidth}
-                columns={gridWidth < 300 ? 2 : 3}
-                gutter={6}
-                fetchGifs={fetchGifs}
-                initialGifs={initialGifs}
-                noLink
-                tabIndex={selectionPending ? -1 : 0}
-                noResultsMessage="No GIFs found"
-                onGifsFetchError={() => setError('GIPHY is unavailable right now.')}
-                onGifClick={(gif, event) => {
-                  event.preventDefault();
-                  void selectGif(gif);
-                }}
-                onGifKeyPress={(gif, event) => {
-                  const key = (event.nativeEvent as KeyboardEvent).key;
-                  if (key !== 'Enter' && key !== ' ') return;
-                  event.preventDefault();
-                  void selectGif(gif);
-                }}
-              />
+              <div className="grid grid-cols-2 gap-1.5 p-1.5 sm:grid-cols-3">
+                {initialGifs.map((gif) => {
+                  const preview = getGifPreview(gif);
+                  if (!preview) return null;
+
+                  const label = gif.title?.trim() || 'GIF';
+                  return (
+                    <button
+                      key={String(gif.id)}
+                      type="button"
+                      disabled={selectionPending}
+                      aria-label={`Choose ${label}`}
+                      onClick={() => void selectGif(gif)}
+                      className="group relative min-h-24 overflow-hidden rounded-md bg-social-surface text-social-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <img
+                        src={preview.url}
+                        alt=""
+                        width={preview.width}
+                        height={preview.height}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full min-h-24 w-full object-cover transition-transform group-hover:scale-[1.02]"
+                      />
+                    </button>
+                  );
+                })}
+                {hasMore ? (
+                  <button
+                    type="button"
+                    disabled={loadingMore || selectionPending}
+                    onClick={() => void loadMore()}
+                    className="col-span-full min-h-10 rounded-lg border border-social-border bg-social-surface px-3 text-sm font-semibold text-social-text transition-colors hover:bg-social-brand-soft active:bg-social-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-social-focus disabled:cursor-wait disabled:text-social-text-muted"
+                  >
+                    {loadingMore ? 'Loading more GIFs…' : 'Load more GIFs'}
+                  </button>
+                ) : null}
+              </div>
             )}
           </div>
 

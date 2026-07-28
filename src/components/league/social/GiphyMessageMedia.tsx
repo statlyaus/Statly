@@ -1,6 +1,5 @@
 'use client';
 
-import { Gif } from '@giphy/react-components';
 import { Expand, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -12,32 +11,24 @@ interface GiphyMessageMediaProps {
   gif: SocialGif;
 }
 
+function getGifImage(gif: GiphyGif): { url: string; width: number; height: number } | null {
+  const image = gif.images.downsized_medium ?? gif.images.original;
+  if (!image?.url) return null;
+
+  return {
+    url: image.url,
+    width: Number(image.width) || 480,
+    height: Number(image.height) || 360,
+  };
+}
+
 export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): React.JSX.Element {
-  const containerRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const [resolvedGif, setResolvedGif] = useState<GiphyGif | null>(null);
-  const [width, setWidth] = useState(320);
   const [failed, setFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const giphyUrl = `https://giphy.com/gifs/${encodeURIComponent(gif.id)}`;
-
-  useEffect(() => {
-    const element = containerRef.current;
-    if (!element) return;
-
-    const updateWidth = () => {
-      setWidth(
-        Math.min(360, Math.max(200, Math.floor(element.getBoundingClientRect().width || 320)))
-      );
-    };
-    updateWidth();
-
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const client = getGiphyClient();
@@ -52,7 +43,12 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
     void client
       .gif(gif.id)
       .then(({ data }) => {
-        if (!cancelled) setResolvedGif(data);
+        if (cancelled) return;
+        if (getGifImage(data)) {
+          setResolvedGif(data);
+        } else {
+          setFailed(true);
+        }
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -73,14 +69,23 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
     }
   }, [expanded]);
 
+  const resolvedImage = resolvedGif ? getGifImage(resolvedGif) : null;
+  const imageAlt = resolvedGif?.title?.trim() || 'GIF';
+
   return (
-    <div ref={containerRef} className="mt-2 max-w-[22.5rem]">
-      {resolvedGif ? (
+    <div className="mt-2 max-w-[22.5rem]">
+      {resolvedGif && resolvedImage ? (
         <>
           <div className="relative max-h-60 overflow-hidden rounded-xl bg-social-surface-subtle">
-            <div className="max-h-60 overflow-hidden [&_img]:max-h-60 [&_img]:w-full [&_img]:object-cover">
-              <Gif gif={resolvedGif} width={width} percentWidth="100%" borderRadius={10} noLink />
-            </div>
+            <img
+              src={resolvedImage.url}
+              alt={imageAlt}
+              width={resolvedImage.width}
+              height={resolvedImage.height}
+              loading="lazy"
+              decoding="async"
+              className="max-h-60 w-full object-cover"
+            />
             <button
               ref={expandButtonRef}
               type="button"
@@ -117,12 +122,13 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
             </div>
             <div className="max-h-[calc(90dvh-3.5rem)] overflow-auto p-4">
               <div className="mx-auto max-w-2xl overflow-hidden rounded-xl bg-social-surface-subtle">
-                <Gif
-                  gif={resolvedGif}
-                  width={Math.min(640, Math.max(width, 480))}
-                  percentWidth="100%"
-                  borderRadius={10}
-                  noLink
+                <img
+                  src={resolvedImage.url}
+                  alt={imageAlt}
+                  width={resolvedImage.width}
+                  height={resolvedImage.height}
+                  decoding="async"
+                  className="h-auto w-full"
                 />
               </div>
               <a
@@ -153,7 +159,7 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
           Loading GIF…
         </div>
       )}
-      {resolvedGif ? (
+      {resolvedGif && resolvedImage ? (
         <a
           href="https://giphy.com/"
           target="_blank"

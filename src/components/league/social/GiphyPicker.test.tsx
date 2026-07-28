@@ -1,12 +1,20 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { FormEvent, MouseEvent } from 'react';
+import type { FormEvent } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   gif: {
     id: 'xT9IgG50Fb7Mi0prBC',
+    title: 'celebration',
     analytics_response_payload: 'analytics-payload',
+    images: {
+      fixed_width: {
+        url: 'https://media.giphy.com/celebration.gif',
+        width: '200',
+        height: '150',
+      },
+    },
   },
   search: vi.fn(),
   trending: vi.fn(),
@@ -24,25 +32,6 @@ vi.mock('@giphy/js-fetch-api', () => ({
 
 vi.mock('@giphy/js-analytics', () => ({
   pingback: mocks.pingback,
-}));
-
-vi.mock('@giphy/react-components', () => ({
-  Grid: ({
-    fetchGifs,
-    onGifClick,
-  }: {
-    fetchGifs: (offset: number) => Promise<unknown>;
-    onGifClick: (gif: typeof mocks.gif, event: MouseEvent<HTMLButtonElement>) => void;
-  }) => (
-    <div>
-      <button type="button" onClick={() => void fetchGifs(0)}>
-        Fetch GIFs
-      </button>
-      <button type="button" onClick={(event) => onGifClick(mocks.gif, event)}>
-        Choose celebration
-      </button>
-    </div>
-  ),
 }));
 
 import GiphyPicker from './GiphyPicker';
@@ -142,6 +131,36 @@ describe('GiphyPicker', () => {
       'text-social-text-muted',
       'hover:bg-social-brand-soft'
     );
+  });
+
+  it('loads another page of GIF results without duplicating the first page', async () => {
+    const user = userEvent.setup();
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      ...mocks.gif,
+      id: `gif-${index}`,
+      title: `Result ${index + 1}`,
+    }));
+    const nextGif = { ...mocks.gif, id: 'gif-20', title: 'More celebration' };
+    mocks.trending
+      .mockResolvedValueOnce({ data: firstPage })
+      .mockResolvedValueOnce({ data: [nextGif] });
+
+    render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
+    await user.click(await screen.findByRole('button', { name: 'Load more GIFs' }));
+
+    await waitFor(() =>
+      expect(mocks.trending).toHaveBeenLastCalledWith({
+        offset: 20,
+        limit: 20,
+        rating: 'g',
+        type: 'gifs',
+      })
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Choose More celebration' })
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Choose Result 1' })).toHaveLength(1);
   });
 
   it('reuses the same idempotency key when a failed GIF selection is retried', async () => {

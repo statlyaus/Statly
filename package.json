@@ -91,7 +91,6 @@
     "@clickhouse/client": "^1.12.1",
     "@giphy/js-analytics": "5.0.0",
     "@giphy/js-fetch-api": "5.8.0",
-    "@giphy/react-components": "10.1.2",
     "@headlessui/react": "^2.2.7",
     "@hello-pangea/dnd": "^18.0.1",
     "@heroicons/react": "^2.2.0",
