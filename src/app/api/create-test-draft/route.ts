@@ -16,16 +16,23 @@ import {
   getRosterSizeFromPositionLimits,
 } from '@/lib/draftSettings';
 import { calculateDraftCapacity } from '@/server/draft/domain/draftCapacity';
+import {
+  developmentToolsNotFoundResponse,
+  isDevelopmentToolsEnabled,
+} from '@/server/developmentTools';
 
 /**
  * Create a test draft for development/testing
  */
 export async function POST(request: NextRequest) {
+  if (!isDevelopmentToolsEnabled()) {
+    return developmentToolsNotFoundResponse();
+  }
+
   try {
     logger.info('Creating test draft');
     const body = await request.json().catch(() => ({}));
-    const quickCompletionMode =
-      process.env.NODE_ENV !== 'production' && body?.mode === 'quick-completion';
+    const quickCompletionMode = body?.mode === 'quick-completion';
 
     // Create test draft with lobby opening in 1 minute and draft starting in 6 minutes
     const now = new Date();
@@ -179,6 +186,10 @@ export async function POST(request: NextRequest) {
  * Get instructions for testing
  */
 export async function GET(_request: NextRequest) {
+  if (!isDevelopmentToolsEnabled()) {
+    return developmentToolsNotFoundResponse();
+  }
+
   return successResponse({
     message: 'Test Draft Creator',
     instructions: [

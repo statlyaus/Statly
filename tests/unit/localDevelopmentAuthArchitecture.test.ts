@@ -66,7 +66,7 @@ describe('local development auth architecture', () => {
   it('keeps quick-completion draft fixtures local while preserving a feasible full draft', () => {
     const source = read('src/app/api/create-test-draft/route.ts');
 
-    expect(source).toContain("process.env.NODE_ENV !== 'production'");
+    expect(source).toContain('if (!isDevelopmentToolsEnabled())');
     expect(source).toContain("body?.mode === 'quick-completion'");
     expect(source).toContain('const teamCount = quickCompletionMode ? 2 : 12');
     expect(source).toContain('const positionLimits = { ...LOCAL_TEST_DRAFT_POSITION_LIMITS }');

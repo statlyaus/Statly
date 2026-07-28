@@ -7,11 +7,14 @@ import {
   resolveLocalDevelopmentAuthPhrase,
 } from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
+import {
+  developmentToolsNotFoundResponse,
+  isDevelopmentToolsEnabled,
+} from '@/server/developmentTools';
 
 export async function POST(_request: NextRequest) {
-  // Only allow in development
-  if (process.env.NODE_ENV !== 'development') {
-    return errorResponse('Test accounts only available in development', 403);
+  if (!isDevelopmentToolsEnabled()) {
+    return developmentToolsNotFoundResponse();
   }
 
   try {

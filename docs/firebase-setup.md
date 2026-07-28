@@ -40,6 +40,10 @@ process, set both `NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true` and
 the server flag separately authorizes local servers to trust it. Neither flag enables the fallback
 when `NODE_ENV=production`.
 
+Development and debug routes are also disabled by default. The canonical local and Playwright
+harnesses set `STATLY_ENABLE_DEV_TOOLS=true`; set it manually only for an isolated local server that
+needs `/test-draft` or its supporting APIs. The flag has no effect when `NODE_ENV=production`.
+
 Note: `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST` are for local/dev servers only. Do not set them in production.
 
 ### Where to put them
@@ -167,6 +171,7 @@ NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=statly-4cbed.firebaseapp.com
 NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL=http://127.0.0.1:9099
 NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=127.0.0.1
 NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT=8080
+STATLY_ENABLE_DEV_TOOLS=true
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
 GOOGLE_CLOUD_PROJECT=statly-4cbed

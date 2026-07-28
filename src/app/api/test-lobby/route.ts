@@ -1,12 +1,20 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
+import {
+  developmentToolsNotFoundResponse,
+  isDevelopmentToolsEnabled,
+} from '@/server/developmentTools';
 import { loadLobbySchemaDiagnostic } from '@/server/diagnostics/lobbySchemaDiagnostic';
 
 /**
  * Test endpoint to check lobby setup without mutating the schema.
  */
 export async function GET(_request: NextRequest) {
+  if (!isDevelopmentToolsEnabled()) {
+    return developmentToolsNotFoundResponse();
+  }
+
   try {
     logger.info('Testing lobby setup');
 

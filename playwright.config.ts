@@ -12,6 +12,7 @@ const useSocketWebServer =
 const nextCommand = [
   'NODE_ENV=development',
   'STATLY_ENABLE_DEV_AUTH=true',
+  'STATLY_ENABLE_DEV_TOOLS=true',
   'NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true',
   'NEXT_PUBLIC_FIREBASE_API_KEY=',
   `GOOGLE_CLOUD_PROJECT=${firebaseProjectId}`,
