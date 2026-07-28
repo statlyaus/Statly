@@ -151,6 +151,14 @@ describe('league membership route Firestore architecture', () => {
     }
   });
 
+  it('routes every invite code through the canonical league lookup', () => {
+    const source = readFileSync(join(process.cwd(), 'src/app/api/leagues/join/route.ts'), 'utf8');
+
+    expect(source).toContain(".where('code', '==', normalizedCode)");
+    expect(source).not.toContain("normalizedCode === '123ABC'");
+    expect(source).not.toContain("id: 'test-league-id'");
+  });
+
   it('keeps development member fixtures quarantined from production reads', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/app/api/leagues/[id]/members/route.ts'),
