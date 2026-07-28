@@ -5,7 +5,7 @@
 
 import 'dotenv/config';
 
-import { createServer } from 'http';
+import { createServer, type IncomingMessage } from 'http';
 
 import express from 'express';
 import { Server, type Socket as SocketIOSocket } from 'socket.io';
@@ -46,7 +46,74 @@ try {
 
 // Timers tracked in-process; room state persists in Redis via room store
 const roomTimers = new Map<string, ReturnType<typeof setInterval> | undefined>();
+const socketRateLimitFallback = new Map<string, number[]>();
 let draftOutboxDrainInFlight = false;
+
+type SocketRequestDecision = {
+  error: string | null;
+  allowed: boolean;
+};
+
+async function evaluateSocketRequest(req: IncomingMessage): Promise<SocketRequestDecision> {
+  const start = Date.now();
+  const ip =
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket.remoteAddress ||
+    'unknown';
+  const windowSec = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_SEC || 60);
+  const subBucketSec = Number(process.env.SOCKET_RATE_LIMIT_SUB_BUCKET_SEC || 10);
+  const maxReq = Number(process.env.SOCKET_RATE_LIMIT_MAX || 100);
+  const nowMs = Date.now();
+  const currentBucket = Math.floor(nowMs / (subBucketSec * 1000));
+  const bucketsToCount = Math.ceil(windowSec / subBucketSec);
+
+  try {
+    const client = redisClient.getClient();
+    if (!client) throw new Error('Redis not initialized');
+
+    const curKey = `ratelimit:socketio:${ip}:${currentBucket}`;
+    const inc = await client.incr(curKey);
+    if (inc === 1) {
+      await client.expire(curKey, windowSec);
+    }
+
+    const keys: string[] = [];
+    for (let i = 0; i < bucketsToCount; i++) {
+      keys.push(`ratelimit:socketio:${ip}:${currentBucket - i}`);
+    }
+    const vals = await client.mget(keys);
+    const total = (vals || []).reduce((sum, value) => sum + (value ? parseInt(value, 10) : 0), 0);
+    if (total > maxReq) {
+      incCounter(METRICS.rateLimitRejections);
+      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+        outcome: 'ratelimited',
+      });
+      return { error: 'Rate limit exceeded', allowed: false };
+    }
+  } catch (error) {
+    logger.warn('Redis rate limiting failed, using in-memory fallback', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    const now = Date.now();
+    const windowMs = windowSec * 1000;
+    const recent = (socketRateLimitFallback.get(ip) || []).filter((time) => now - time < windowMs);
+    recent.push(now);
+    socketRateLimitFallback.set(ip, recent);
+    if (recent.length > maxReq) {
+      incCounter(METRICS.rateLimitRejections);
+      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+        outcome: 'ratelimited',
+      });
+      return { error: 'Rate limit exceeded', allowed: false };
+    }
+  }
+
+  observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+    outcome: 'ok',
+  });
+  return { error: null, allowed: true };
+}
 
 async function flushDraftOutboxBatch(): Promise<void> {
   if (draftOutboxDrainInFlight) {
@@ -362,77 +429,18 @@ const io = new Server(httpServer, {
   upgradeTimeout: socketIOConfig.server.upgradeTimeout,
   maxHttpBufferSize: socketIOConfig.server.maxHttpBufferSize,
   // Additional production settings
-  allowRequest: async (req, callback) => {
+  allowRequest: (req, callback) => {
     const start = Date.now();
-    try {
-      const ip =
-        (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-        req.socket.remoteAddress ||
-        'unknown';
-      const windowSec = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_SEC || 60); // default 60s window
-      const subBucketSec = Number(process.env.SOCKET_RATE_LIMIT_SUB_BUCKET_SEC || 10); // sub-buckets 10s
-      const maxReq = Number(process.env.SOCKET_RATE_LIMIT_MAX || 100);
-      const nowMs = Date.now();
-      const currentBucket = Math.floor(nowMs / (subBucketSec * 1000));
-      const bucketsToCount = Math.ceil(windowSec / subBucketSec);
-
-      // Try Redis-based limiting first (cluster/scaling friendly)
-      try {
-        const client = redisClient.getClient();
-        if (!client) throw new Error('Redis not initialized');
-        // Increment current sub-bucket and set TTL
-        const curKey = `ratelimit:socketio:${ip}:${currentBucket}`;
-        const inc = await client.incr(curKey);
-        if (inc === 1) {
-          await client.expire(curKey, windowSec);
-        }
-        // Sum recent sub-buckets within the window
-        const keys: string[] = [];
-        for (let i = 0; i < bucketsToCount; i++) {
-          keys.push(`ratelimit:socketio:${ip}:${currentBucket - i}`);
-        }
-        const vals = await client.mget(keys);
-        const total = (vals || []).reduce((sum, v) => sum + (v ? parseInt(v, 10) : 0), 0);
-        if (total > maxReq) {
-          incCounter(METRICS.rateLimitRejections);
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-            outcome: 'ratelimited',
-          });
-          return callback('Rate limit exceeded', false);
-        }
-      } catch (error) {
-        logger.warn('Redis rate limiting failed, using in-memory fallback', {
-          error: error instanceof Error ? error.message : String(error),
+    void evaluateSocketRequest(req)
+      .then(({ error, allowed }) => callback(error, allowed))
+      .catch((error) => {
+        logger.error('Socket.IO request evaluation failed', error);
+        incCounter(METRICS.authFailures);
+        observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
+          outcome: 'error',
         });
-        // Fallback to in-memory limiter if Redis is unavailable
-        const now = Date.now();
-        const windowMs = windowSec * 1000;
-        const store: Map<string, number[]> = (io as any)._allowReqLimiter || new Map();
-        (io as any)._allowReqLimiter = store;
-        const arr = store.get(ip) || [];
-        const recent = arr.filter((t) => now - t < windowMs);
-        recent.push(now);
-        store.set(ip, recent);
-        if (recent.length > maxReq) {
-          incCounter(METRICS.rateLimitRejections);
-          observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-            outcome: 'ratelimited',
-          });
-          return callback('Rate limit exceeded', false);
-        }
-      }
-
-      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-        outcome: 'ok',
+        callback('Authentication error', false);
       });
-      return callback(null, true);
-    } catch (_e) {
-      incCounter(METRICS.authFailures);
-      observeHistogram('socketio_allow_request_duration_seconds', (Date.now() - start) / 1000, {
-        outcome: 'error',
-      });
-      return callback('Authentication error', false);
-    }
   },
 });
 
