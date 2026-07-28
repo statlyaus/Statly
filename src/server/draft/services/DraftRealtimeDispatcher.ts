@@ -4,6 +4,10 @@ import {
   type DraftRealtimeEnvelope,
   type DraftRealtimeEventType,
 } from '@/services/realtime/pubsub';
+import {
+  toDraftRealtimeStatePayload,
+  type DraftRealtimeStatePayload,
+} from '@/services/realtime/draftStateWire';
 import type { LiveDraftState } from '@/services/liveDraftEngine';
 
 import type { DraftPickEventPayload } from '../domain/draftTypes';
@@ -78,8 +82,9 @@ export class DraftRealtimeDispatcher {
   }
 
   async publishState(state: LiveDraftState): Promise<void> {
-    this.dispatchToLocal(state.draftId, 'draft:state', state);
-    await draftPubSub.publish(state.draftId, 'draft:state', state);
+    const payload = toDraftRealtimeStatePayload(state);
+    this.dispatchToLocal(state.draftId, 'draft:state', payload);
+    await draftPubSub.publish(state.draftId, 'draft:state', payload);
   }
 
   async publishDraftEvent(
@@ -149,7 +154,7 @@ export class DraftRealtimeDispatcher {
 
     switch (event) {
       case 'draft:state': {
-        const state = payload as LiveDraftState;
+        const state = payload as DraftRealtimeStatePayload;
         this.emitToDraftRooms(draftId, 'draft:state', payload);
         this.emitToDraftRooms(draftId, 'draft:update', payload);
         this.emitCompatDelta(draftId, {
@@ -165,7 +170,7 @@ export class DraftRealtimeDispatcher {
                   : state.currentPick.round % 2 === 1
                     ? 'FORWARD'
                     : 'REVERSE',
-              pickDeadlineAt: state.currentPick.expiresAt.toISOString(),
+              pickDeadlineAt: state.currentPick.expiresAt,
             },
             liveState: {
               currentPick: state.currentPick.pickNumber,

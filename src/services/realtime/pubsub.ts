@@ -1,5 +1,6 @@
 import { getPublisherClient, getSubscriberClient } from '@/server/realtime/scalableConnection';
 import { logger } from '@/lib/logger';
+import { DraftRealtimeStatePayloadSchema } from '@/services/realtime/draftStateWire';
 import type { Redis as IORedisClient, Cluster as IORedisCluster } from 'ioredis';
 import { z } from 'zod';
 
@@ -39,7 +40,7 @@ const EnvelopeSchema = z.object({
   ts: z.number(),
 });
 
-function parseAndValidateEnvelope(raw: string): DraftRealtimeEnvelope | null {
+export function parseAndValidateEnvelope(raw: string): DraftRealtimeEnvelope | null {
   try {
     const json = JSON.parse(raw);
     const res = EnvelopeSchema.safeParse(json);
@@ -50,7 +51,27 @@ function parseAndValidateEnvelope(raw: string): DraftRealtimeEnvelope | null {
       });
       return null;
     }
-    return res.data as DraftRealtimeEnvelope;
+
+    if (res.data.event === 'draft:state') {
+      const stateResult = DraftRealtimeStatePayloadSchema.safeParse(res.data.payload);
+      if (!stateResult.success) {
+        logger.warn('Invalid draft realtime state payload received', {
+          issues: stateResult.error.issues.map((issue) => ({
+            path: issue.path,
+            code: issue.code,
+            message: issue.message,
+          })),
+        });
+        return null;
+      }
+
+      return {
+        ...res.data,
+        payload: stateResult.data,
+      };
+    }
+
+    return res.data;
   } catch (e) {
     logger.warn('Failed to parse JSON for realtime envelope', {
       error: e instanceof Error ? e.message : String(e),

@@ -1,6 +1,70 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import type { LiveDraftState } from '@/services/liveDraftEngine';
+import { DraftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
+import { DraftRealtimeStatePayloadSchema } from '@/services/realtime/draftStateWire';
+import { draftPubSub, parseAndValidateEnvelope } from '@/services/realtime/pubsub';
+import { describe, expect, it, vi } from 'vitest';
+
+function buildLiveDraftState(): LiveDraftState {
+  const startedAt = new Date('2026-07-28T12:00:00.000Z');
+  const expiresAt = new Date('2026-07-28T12:01:30.000Z');
+
+  return {
+    leagueId: 'league-1',
+    draftId: 'draft-1',
+    status: 'LIVE',
+    currentPick: {
+      userId: 'user-1',
+      memberId: 'member-1',
+      pickNumber: 1,
+      round: 1,
+      slot: 1,
+      expiresAt,
+      startedAt,
+    },
+    picks: [
+      {
+        playerId: 'player-1',
+        userId: 'user-2',
+        memberId: 'member-2',
+        pickNumber: 0,
+        round: 0,
+        slot: 0,
+        auto: false,
+        timestamp: startedAt,
+      },
+    ],
+    participants: [
+      {
+        userId: 'user-1',
+        memberId: 'member-1',
+        displayName: 'Member One',
+        draftOrder: 1,
+        isOnline: true,
+        queue: ['player-2'],
+        autoPickEnabled: false,
+        lastActivity: startedAt,
+      },
+    ],
+    timerSettings: {
+      durationSeconds: 90,
+      autopickAfterExpiry: true,
+      pausedAt: startedAt,
+      pausedTimeRemaining: 45,
+    },
+    draftSettings: {
+      totalRounds: 22,
+      totalTeams: 12,
+      draftType: 'SNAKE',
+      pickTimeLimit: 90,
+    },
+    paused: false,
+    createdAt: startedAt,
+    updatedAt: startedAt,
+    lastActivity: startedAt,
+  };
+}
 
 describe('draft realtime dispatcher production readiness', () => {
   it('does not warn for expected worker-side local emit skips', () => {
@@ -20,7 +84,72 @@ describe('draft realtime dispatcher production readiness', () => {
       'utf8'
     );
 
-    expect(source).toContain('pickDeadlineAt: state.currentPick.expiresAt.toISOString()');
+    expect(source).toContain('pickDeadlineAt: state.currentPick.expiresAt');
+    expect(source).not.toContain('state.currentPick.expiresAt.toISOString()');
+  });
+
+  it('uses one validated ISO timestamp payload for local and Redis state fanout', async () => {
+    const publishSpy = vi.spyOn(draftPubSub, 'publish').mockResolvedValue();
+    const emit = vi.fn();
+    const to = vi.fn(() => ({ emit }));
+    const dispatcher = new DraftRealtimeDispatcher();
+    dispatcher.attachSocketServer({ local: { to } } as never);
+
+    await dispatcher.publishState(buildLiveDraftState());
+
+    const publishedPayload = publishSpy.mock.calls[0]?.[2];
+    const wirePayload = DraftRealtimeStatePayloadSchema.parse(publishedPayload);
+    const jsonPayload = JSON.parse(JSON.stringify(wirePayload));
+    const parsedEnvelope = parseAndValidateEnvelope(
+      JSON.stringify({
+        v: 1,
+        event: 'draft:state',
+        draftId: 'draft-1',
+        payload: jsonPayload,
+        instanceId: 'another-instance',
+        ts: Date.now(),
+      })
+    );
+
+    expect(wirePayload.currentPick.expiresAt).toBe('2026-07-28T12:01:30.000Z');
+    expect(wirePayload.currentPick.startedAt).toBe('2026-07-28T12:00:00.000Z');
+    expect(wirePayload.picks[0]?.timestamp).toBe('2026-07-28T12:00:00.000Z');
+    expect(wirePayload.participants[0]?.lastActivity).toBe('2026-07-28T12:00:00.000Z');
+    expect(wirePayload.timerSettings.pausedAt).toBe('2026-07-28T12:00:00.000Z');
+    expect(parsedEnvelope?.payload).toEqual(jsonPayload);
+    expect(emit).toHaveBeenCalledWith('draft:state', wirePayload);
+    expect(emit).toHaveBeenCalledWith(
+      'draft:delta',
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          draft: expect.objectContaining({
+            pickDeadlineAt: '2026-07-28T12:01:30.000Z',
+          }),
+        }),
+      })
+    );
+  });
+
+  it('rejects draft state envelopes with invalid wire timestamps', () => {
+    const payload = DraftRealtimeStatePayloadSchema.parse(
+      JSON.parse(JSON.stringify(buildLiveDraftState()))
+    );
+
+    expect(
+      parseAndValidateEnvelope(
+        JSON.stringify({
+          v: 1,
+          event: 'draft:state',
+          draftId: 'draft-1',
+          payload: {
+            ...payload,
+            currentPick: { ...payload.currentPick, expiresAt: 'not-a-timestamp' },
+          },
+          instanceId: 'another-instance',
+          ts: Date.now(),
+        })
+      )
+    ).toBeNull();
   });
 
   it('surfaces next pick metadata on pick deltas so the client clock advances', () => {
