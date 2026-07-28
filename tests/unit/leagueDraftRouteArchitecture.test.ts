@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -38,6 +38,9 @@ describe('league draft route architecture', () => {
     expect(draftRouteSource).toContain('league: {');
     expect(draftRouteSource).toContain('id: result.league.id');
     expect(draftManagerSource).not.toContain('link-draft');
+    expect(existsSync(join(process.cwd(), 'src/app/api/leagues/[id]/link-draft/route.ts'))).toBe(
+      false
+    );
     expect(draftManagerSource).toContain('createdDraft.leagueId === league.id');
     expect(draftManagerSource).toContain('createdDraft.league?.id === league.id');
   });

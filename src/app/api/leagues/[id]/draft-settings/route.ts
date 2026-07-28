@@ -75,17 +75,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return authError;
     }
 
-    // For test league, just return success
-    if (id === 'test-league-id') {
-      logger.info(`Updated draft settings for test league: ${JSON.stringify(body)}`);
-
-      return NextResponse.json({
-        success: true,
-        message: 'Draft settings updated successfully',
-        data: body,
-      });
-    }
-
     const prismaLeague = await prisma.league.findUnique({
       where: { id },
       include: { settings: true },
@@ -119,7 +108,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const autoPickRules = normalizeDraftAutoPickRules(
         body.autoPickRules ?? prismaLeague.settings.autoPickRulesJson
       );
-      const pickOrder = normalizeDraftPickOrderMode(body.pickOrder ?? prismaLeague.settings.pickOrder);
+      const pickOrder = normalizeDraftPickOrderMode(
+        body.pickOrder ?? prismaLeague.settings.pickOrder
+      );
 
       await prisma.leagueSettings.update({
         where: { id: prismaLeague.settings.id },
@@ -219,23 +210,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const authError = await authorizeDraftSettingsRead(request, id);
     if (authError) {
       return authError;
-    }
-
-    // For test league
-    if (id === 'test-league-id') {
-      const testDraftSettings = {
-        draftDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        draftType: 'snake',
-        timePerPick: 120,
-        pickOrder: 'random',
-        positionLimits: normalizeDraftPositionLimits(undefined),
-        autoPickRules: normalizeDraftAutoPickRules(undefined),
-      };
-
-      return NextResponse.json({
-        success: true,
-        data: testDraftSettings,
-      });
     }
 
     const prismaLeague = await prisma.league.findUnique({

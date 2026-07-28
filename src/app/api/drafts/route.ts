@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
     const benchSize = getBenchSizeFromPositionLimits(positionLimits);
     const activePlayerCount = await prisma.player.count({ where: { active: true } });
 
-    if (body.leagueId && body.leagueId !== 'test-league-id') {
+    if (body.leagueId) {
       const existingLeague = await prisma.league.findUnique({
         where: { id: body.leagueId },
         select: { id: true },

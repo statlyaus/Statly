@@ -94,20 +94,13 @@ describe('league settings route architecture', () => {
     );
   });
 
-  it('keeps the local test league fixture explicit, normalized, and development-only', () => {
+  it('requires persisted league identity instead of a magic local fixture', () => {
     const source = readSource();
 
-    expect(source).toContain("const TEST_LEAGUE_ID = 'test-league-id'");
-    expect(source).toContain("const TEST_LEAGUE_OWNER_ID = '2qlfdHSCFTPlxoKFSUfNLSlCDRe2'");
-    expect(source).toContain("process.env.NODE_ENV !== 'production'");
-    expect(source).toContain('toTestLeagueSettingsResponse');
-    expect(source).toContain('DEFAULT_DRAFT_POSITION_LIMITS');
-    expect(source).toContain('DEFAULT_DRAFT_AUTO_PICK_RULES');
-    expect(source).toContain('if (isDevelopmentTestLeague(id))');
-    expect(source).toContain('userId !== TEST_LEAGUE_OWNER_ID');
-    expect(source).toContain('data: toTestLeagueSettingsResponse(testBody)');
-    expect(source.indexOf('if (isDevelopmentTestLeague(id))')).toBeLessThan(
-      source.indexOf('authorizeLeagueSettingsRead(request, id)')
+    expect(source).not.toContain('test-league-id');
+    expect(source).not.toContain('toTestLeagueSettingsResponse');
+    expect(source.indexOf('authorizeLeagueSettingsRead(request, id)')).toBeLessThan(
+      source.indexOf('prisma.league.findUnique')
     );
   });
 });

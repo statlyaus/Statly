@@ -90,9 +90,6 @@ export const useDraftManager = (
         if (isConnectivityError(error)) {
           console.warn('Development server not running or API unreachable');
           setError(getConnectivityErrorMessage());
-        } else if (error.message.includes('404') && league.id.includes('test')) {
-          // Expected for test leagues, don't show error
-          console.debug('Test league draft check - 404 expected');
         } else {
           console.error('Error checking existing draft:', error);
           setError(`Failed to check draft status: ${error.message}`);
@@ -144,14 +141,6 @@ export const useDraftManager = (
       });
 
       if (response.success) {
-        // Step 2: Update league with draft reference
-        await fetchApi(`leagues/${league.id}/link-draft`, {
-          method: 'POST',
-          body: JSON.stringify({
-            draftId: response.data.id,
-          }),
-        });
-
         setExistingDraft({
           id: response.data.id,
           status: response.data.status,

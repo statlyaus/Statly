@@ -86,22 +86,6 @@ export async function GET(req: NextRequest, { params }: DraftPageProps): Promise
       });
     }
 
-    // Development shortcut: support test league without requiring Firestore
-    if (leagueId === 'test-league-id') {
-      return NextResponse.json({
-        success: true,
-        data: {
-          leagueId,
-          draft: null,
-          canManage: true,
-          memberCount: 0,
-          maxTeams: 0,
-          league: { id: 'test-league-id', name: 'Test AFL Champions League' },
-          message: 'Test league: no draft exists yet',
-        },
-      });
-    }
-
     // Check league exists
     const leagueRef = adminDb.collection('leagues').doc(leagueId);
     const leagueSnap = await leagueRef.get();
