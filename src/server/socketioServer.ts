@@ -44,21 +44,6 @@ try {
   process.exit(1);
 }
 
-// Import the persistence service (for now, we'll use in-memory storage and add Firestore later)
-interface DraftRoom {
-  id: string;
-  participants: Set<string>;
-  currentPick: number;
-  timer?: ReturnType<typeof setInterval>;
-  timeRemaining: number;
-  lastActivity: Date;
-  status: 'waiting' | 'active' | 'paused' | 'completed';
-  maxParticipants: number;
-  timePerPick: number;
-}
-
-// In-memory store for draft rooms (legacy/local)
-const draftRooms = new Map<string, DraftRoom>();
 // Timers tracked in-process; room state persists in Redis via room store
 const roomTimers = new Map<string, ReturnType<typeof setInterval> | undefined>();
 let draftOutboxDrainInFlight = false;
@@ -301,16 +286,29 @@ async function startDraftTimer(draftId: string, opts?: { duration?: number; useL
 
 // Express app to serve health and potential aux endpoints
 const app = express();
-app.get('/health', (_req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    // io initialized below; safe to reference after server start too
-    activeConnections: (io as any)?.engine?.clientsCount ?? 0,
-    draftRooms: draftRooms.size,
-    memory: process.memoryUsage(),
-  });
+app.get('/health', async (_req, res) => {
+  try {
+    const draftRoomCount = await draftRoomStore.getRoomsCount();
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      // io initialized below; safe to reference after server start too
+      activeConnections: (io as any)?.engine?.clientsCount ?? 0,
+      draftRooms: draftRoomCount,
+      memory: process.memoryUsage(),
+    });
+  } catch (error) {
+    logger.error('Socket.IO health room-store check failed', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      activeConnections: (io as any)?.engine?.clientsCount ?? 0,
+      draftRooms: null,
+      memory: process.memoryUsage(),
+    });
+  }
 });
 
 // Prometheus metrics endpoint
@@ -781,21 +779,6 @@ io.on('connection', (socket) => {
 
       const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
 
-      // Clean up legacy local room state if it exists.
-      const room = draftRooms.get(draftId);
-      if (room) {
-        room.participants.delete(socket.id);
-
-        if (room.participants.size === 0) {
-          if (room.timer) {
-            clearInterval(room.timer);
-            room.timer = undefined;
-          }
-          draftRooms.delete(draftId);
-          logger.info('🗑️ Draft room cleaned up', { draftId });
-        }
-      }
-
       if (participantCount > 0) {
         socket.to(draftId).emit('participant:leave', {
           socketId: socket.id,
@@ -839,21 +822,6 @@ io.on('connection', (socket) => {
 
       try {
         const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
-        const room = draftRooms.get(draftId);
-        if (room) {
-          room.participants.delete(socket.id);
-
-          if (room.participants.size === 0) {
-            if (room.timer) {
-              clearInterval(room.timer);
-              room.timer = undefined;
-            }
-            draftRooms.delete(draftId);
-            logger.info('🗑️ Draft room cleaned up after disconnect', {
-              draftId,
-            });
-          }
-        }
 
         if (participantCount > 0) {
           socket.to(draftId).emit('participant:disconnect', {
