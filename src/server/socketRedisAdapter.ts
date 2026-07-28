@@ -1,5 +1,5 @@
 import { createAdapter } from '@socket.io/redis-adapter';
-import type { Redis } from 'ioredis';
+import type { Cluster, Redis } from 'ioredis';
 import type { Server as SocketIOServer } from 'socket.io';
 import { logger } from '@/lib/logger';
 
@@ -10,12 +10,17 @@ export interface SocketRedisAdapterLifecycle {
   close: () => Promise<void>;
 }
 
+type RedisAdapterClient = Redis | Cluster;
+
 function readNonNegativeInteger(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-async function pingWithRetry(publishClient: Redis, subscribeClient: Redis): Promise<void> {
+async function pingWithRetry(
+  publishClient: RedisAdapterClient,
+  subscribeClient: RedisAdapterClient
+): Promise<void> {
   const attempts = Math.max(
     1,
     readNonNegativeInteger(
@@ -51,7 +56,7 @@ async function pingWithRetry(publishClient: Redis, subscribeClient: Redis): Prom
 
 export async function installSocketRedisAdapter(
   io: SocketIOServer,
-  redis: Redis
+  redis: RedisAdapterClient
 ): Promise<SocketRedisAdapterLifecycle> {
   const publishClient = redis.duplicate();
   const subscribeClient = redis.duplicate();

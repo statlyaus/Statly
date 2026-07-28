@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
 
 const { adminAuth } = vi.hoisted(() => ({
   adminAuth: {
@@ -13,6 +14,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth }));
 
 import { DELETE, POST } from '@/app/api/auth/session/route';
 import { isSameOriginRequest } from '@/lib/requestOrigin';
+import { proxy } from '@/proxy';
 
 const originalAppOrigin = process.env.NEXT_PUBLIC_APP_ORIGIN;
 const originalAppUrl = process.env.APP_URL;
@@ -101,13 +103,37 @@ describe('session request security', () => {
     for (const path of ['src/app/(app)/layout.tsx', 'src/app/dashboard/page.tsx']) {
       const source = readFileSync(join(process.cwd(), path), 'utf8');
       const verificationIndex = source.indexOf('await getAuthenticatedUserIdFromServerContext()');
-      const redirectIndex = source.indexOf("redirect('/login')");
+      const redirectIndex = source.indexOf('redirect(');
       const renderIndex = source.indexOf('return (');
 
       expect(verificationIndex).toBeGreaterThan(-1);
       expect(redirectIndex).toBeGreaterThan(verificationIndex);
       expect(renderIndex).toBeGreaterThan(redirectIndex);
     }
+  });
+
+  it('preserves a protected deep link and query when redirecting to login', () => {
+    const response = proxy(
+      new NextRequest('https://statly.test/leagues/league-1/social?view=board&post=post-1')
+    );
+    const redirectUrl = new URL(response.headers.get('location')!);
+
+    expect(response.status).toBe(307);
+    expect(redirectUrl.pathname).toBe('/login');
+    expect(redirectUrl.searchParams.get('next')).toBe(
+      '/leagues/league-1/social?view=board&post=post-1'
+    );
+  });
+
+  it('carries the original request into the invalid-session server guard', () => {
+    const proxySource = readFileSync(join(process.cwd(), 'src/proxy.ts'), 'utf8');
+    const layoutSource = readFileSync(join(process.cwd(), 'src/app/(app)/layout.tsx'), 'utf8');
+
+    expect(proxySource).toContain(
+      "requestHeaders.set('x-statly-request-path', `${pathname}${req.nextUrl.search}`)"
+    );
+    expect(layoutSource).toContain(".get('x-statly-request-path')");
+    expect(layoutSource).toContain('encodeURIComponent(safeRequestPath)');
   });
 });
 

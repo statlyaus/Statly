@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
+import type { User as FirebaseUser } from 'firebase/auth';
 import {
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -61,6 +62,19 @@ function toDevelopmentAuthUser(): AuthUser {
   };
 }
 
+async function createServerSessionForUser(user: FirebaseUser): Promise<void> {
+  const idToken = await user.getIdToken();
+  const response = await fetch('/api/auth/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Server session creation failed with status ${response.status}`);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,12 +92,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentAuth = auth;
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
+    let authStateVersion = 0;
 
     void authEmulatorReady.finally(() => {
       if (cancelled) return;
-      unsubscribe = onAuthStateChanged(currentAuth, (user) => {
-        setUser(user);
-        setLoading(false);
+      unsubscribe = onAuthStateChanged(currentAuth, (firebaseUser) => {
+        const version = ++authStateVersion;
+
+        if (!firebaseUser) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        void createServerSessionForUser(firebaseUser)
+          .then(() => {
+            if (!cancelled && version === authStateVersion) {
+              setUser(firebaseUser);
+            }
+          })
+          .catch((error) => {
+            if (!cancelled && version === authStateVersion) {
+              setUser(null);
+              console.error('Failed to restore server session:', error);
+            }
+          })
+          .finally(() => {
+            if (!cancelled && version === authStateVersion) {
+              setLoading(false);
+            }
+          });
       });
     });
 
@@ -97,12 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const createServerSession = async () => {
     if (!auth || !auth.currentUser) return;
     try {
-      const idToken = await auth.currentUser.getIdToken();
-      await fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      });
+      await createServerSessionForUser(auth.currentUser);
     } catch (error) {
       // Non-fatal: client remains signed in, but server-side protection may redirect
       console.error('Failed to create server session:', error);

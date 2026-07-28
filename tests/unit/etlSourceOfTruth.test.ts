@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveEtlRuntimePaths } from '../../etl/fetchPipeline';
+import { resolveEtlRuntimePaths, resolveFetchPipelineTimeout } from '../../etl/fetchPipeline';
 
 const repositoryRoot = process.cwd();
 
@@ -42,7 +42,23 @@ describe('ETL source-of-truth architecture', () => {
     expect(fetchPipeline).toContain("from 'stream/promises'");
     expect(fetchPipeline).toContain('processorInput');
     expect(fetchPipeline).toContain('Footywire fetcher output pipe failed');
+    expect(resolveFetchPipelineTimeout({ season: 2026 })).toBe(300_000);
+    expect(resolveFetchPipelineTimeout({ season: 2026, backfillMode: true })).toBeNull();
+    expect(
+      resolveFetchPipelineTimeout({ season: 2026, backfillMode: true, timeoutMs: 60_000 })
+    ).toBe(60_000);
+    expect(processor).toContain('normalizePlayerRow(JSON.parse(line))');
     expect(processor).toContain('process.exitCode = 1');
+  });
+
+  it('preserves row types in R and normalizes numeric fields before processing', () => {
+    const fetcher = read('etl/fetch_fw_round.R');
+    const processor = read('etl/processFootywireData.ts');
+
+    expect(fetcher).toContain('df[row_index, , drop = FALSE]');
+    expect(fetcher).not.toContain('apply(df, 1');
+    expect(processor).toContain("toFiniteNumber(row.season, 'season', true)");
+    expect(processor).toContain('PLAYER_NUMERIC_FIELDS.map');
   });
 
   it('keeps deployment and operator guidance on the canonical contract', () => {

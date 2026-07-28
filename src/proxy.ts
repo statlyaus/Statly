@@ -38,10 +38,15 @@ export function proxy(req: NextRequest): NextResponse {
   }
 
   // List of protected route prefixes (customize to your app)
-  const protectedPrefixes = ['/dashboard', '/app', '/league'];
-  const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
+  const protectedPrefixes = ['/dashboard', '/app', '/league', '/leagues'];
+  const isProtected = protectedPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
 
-  if (!isProtected) return NextResponse.next();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-statly-request-path', `${pathname}${req.nextUrl.search}`);
+
+  if (!isProtected) return NextResponse.next({ request: { headers: requestHeaders } });
 
   // Read a session cookie set by server after verifying Firebase ID token
   const session = req.cookies.get('statly_session');
@@ -52,9 +57,9 @@ export function proxy(req: NextRequest): NextResponse {
   }
 
   // Optionally: verify/refresh session via a lightweight endpoint if needed
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/dashboard/:path*', '/app/:path*', '/league/:path*'],
+  matcher: ['/api/:path*', '/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };

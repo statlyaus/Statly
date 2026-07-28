@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { AuthProvider } from '@/AuthContext';
@@ -11,7 +12,10 @@ import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 export default async function AppRouteLayout({ children }: { readonly children: ReactNode }) {
   const userId = await getAuthenticatedUserIdFromServerContext();
   if (!userId) {
-    redirect('/login');
+    const requestPath = (await headers()).get('x-statly-request-path');
+    const safeRequestPath =
+      requestPath?.startsWith('/') && !requestPath.startsWith('//') ? requestPath : '/';
+    redirect(`/login?next=${encodeURIComponent(safeRequestPath)}`);
   }
 
   return (

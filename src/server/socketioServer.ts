@@ -39,7 +39,7 @@ import {
   installSocketRedisAdapter,
   type SocketRedisAdapterLifecycle,
 } from '@/server/socketRedisAdapter';
-import { ScalableRedisConnection } from '@/server/realtime/scalableConnection';
+import { getRedisConnection, ScalableRedisConnection } from '@/server/realtime/scalableConnection';
 
 // Validate configuration before starting
 try {
@@ -455,12 +455,7 @@ const io = new Server(httpServer, {
 
 async function configureSocketRedisAdapter(): Promise<void> {
   try {
-    await redisClient.connect();
-    const redis = redisClient.getClient();
-    if (!redis) {
-      throw new Error('Redis client is not initialized');
-    }
-
+    const redis = getRedisConnection();
     socketRedisAdapterLifecycle = await installSocketRedisAdapter(io, redis);
     logger.info('Socket.IO Redis adapter ready');
   } catch (error) {
@@ -1045,8 +1040,7 @@ void configureSocketRedisAdapter()
     });
   })
   .catch((error) => {
-    logger.error('❌ Socket.IO startup failed', {
-      error: error instanceof Error ? error.message : String(error),
+    logger.error('❌ Socket.IO startup failed', error, {
       timestamp: new Date().toISOString(),
     });
     process.exit(1);

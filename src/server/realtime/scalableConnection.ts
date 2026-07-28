@@ -61,7 +61,7 @@ function createDisabledRedisClient(): IORedisClient {
 }
 
 class ScalableRedisConnection {
-  private static instance: ScalableRedisConnection;
+  private static instance: ScalableRedisConnection | undefined;
 
   // Per-role ioredis clients (created lazily)
   private publisherClient?: IORedisClient | IORedisCluster;
@@ -182,11 +182,15 @@ class ScalableRedisConnection {
   }
 
   static async shutdownInstance(): Promise<void> {
-    if (!ScalableRedisConnection.instance) {
+    const instance = ScalableRedisConnection.instance;
+    if (!instance) {
       return;
     }
 
-    await ScalableRedisConnection.instance.shutdown();
+    await instance.shutdown();
+    if (ScalableRedisConnection.instance === instance) {
+      ScalableRedisConnection.instance = undefined;
+    }
   }
 
   private createClientInstance(

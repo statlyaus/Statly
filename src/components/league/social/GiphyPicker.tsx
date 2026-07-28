@@ -48,6 +48,7 @@ export default function GiphyPicker({
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const selectionAttemptRef = useRef<{ gifId: string; idempotencyKey: string } | null>(null);
+  const requestVersionRef = useRef(0);
   const [open, setOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,6 +60,10 @@ export default function GiphyPicker({
   const [error, setError] = useState<string | null>(null);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (!nextOpen) {
+      requestVersionRef.current += 1;
+      setLoadingMore(false);
+    }
     setOpen(nextOpen);
     window.requestAnimationFrame(() => {
       if (nextOpen) {
@@ -91,24 +96,26 @@ export default function GiphyPicker({
     if (!open || !fetchGifs) return;
 
     let cancelled = false;
+    const requestVersion = ++requestVersionRef.current;
     setLoading(true);
+    setLoadingMore(false);
     setError(null);
     void fetchGifs(0)
       .then(({ data }) => {
-        if (!cancelled) {
+        if (!cancelled && requestVersion === requestVersionRef.current) {
           setInitialGifs(data);
           setHasMore(data.length === PICKER_RESULT_LIMIT);
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && requestVersion === requestVersionRef.current) {
           setInitialGifs([]);
           setHasMore(false);
           setError('GIPHY is unavailable right now.');
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && requestVersion === requestVersionRef.current) setLoading(false);
       });
 
     return () => {
@@ -119,19 +126,25 @@ export default function GiphyPicker({
   const loadMore = useCallback(async () => {
     if (!fetchGifs || loading || loadingMore || !hasMore) return;
 
+    const requestVersion = requestVersionRef.current;
     setLoadingMore(true);
     setError(null);
     try {
       const { data } = await fetchGifs(initialGifs.length);
+      if (requestVersion !== requestVersionRef.current) return;
       setInitialGifs((current) => {
         const existingIds = new Set(current.map((gif) => String(gif.id)));
         return [...current, ...data.filter((gif) => !existingIds.has(String(gif.id)))];
       });
       setHasMore(data.length === PICKER_RESULT_LIMIT);
     } catch {
-      setError('GIPHY is unavailable right now.');
+      if (requestVersion === requestVersionRef.current) {
+        setError('GIPHY is unavailable right now.');
+      }
     } finally {
-      setLoadingMore(false);
+      if (requestVersion === requestVersionRef.current) {
+        setLoadingMore(false);
+      }
     }
   }, [fetchGifs, hasMore, initialGifs.length, loading, loadingMore]);
 
@@ -166,6 +179,8 @@ export default function GiphyPicker({
   if (!client || !fetchGifs) return null;
 
   function handleSearch(): void {
+    requestVersionRef.current += 1;
+    setLoadingMore(false);
     setError(null);
     setSearchTerm(searchDraft.trim().slice(0, 50));
   }
@@ -228,6 +243,8 @@ export default function GiphyPicker({
                 type="button"
                 aria-label="Clear GIF search"
                 onClick={() => {
+                  requestVersionRef.current += 1;
+                  setLoadingMore(false);
                   setSearchDraft('');
                   setSearchTerm('');
                   setError(null);
@@ -244,9 +261,7 @@ export default function GiphyPicker({
             {searchTerm ? `Results for “${searchTerm}”` : 'Trending GIFs'}
           </p>
 
-          <div
-            className="mt-2 max-h-80 min-h-48 overflow-y-auto rounded-lg bg-social-surface-subtle"
-          >
+          <div className="mt-2 max-h-80 min-h-48 overflow-y-auto rounded-lg bg-social-surface-subtle">
             {loading ? (
               <p role="status" className="py-16 text-center text-sm text-social-text-muted">
                 Loading GIFs…

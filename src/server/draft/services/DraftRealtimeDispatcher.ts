@@ -130,8 +130,8 @@ export class DraftRealtimeDispatcher {
   }
 
   private emitToDraftRooms(draftId: string, event: string, payload: unknown): void {
-    this.io?.to(draftId).emit(event, payload);
-    this.io?.to(`draft:${draftId}`).emit(event, payload);
+    this.io?.local.to(draftId).emit(event, payload);
+    this.io?.local.to(`draft:${draftId}`).emit(event, payload);
   }
 
   private emitCompatDelta(draftId: string, delta: DraftDelta): void {

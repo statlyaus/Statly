@@ -51,11 +51,15 @@ describe('getSocketIoConfig', () => {
 
   it('sources reconnect backfill from persisted draft events', () => {
     const socketServerSource = read('src/server/socketioServer.ts');
+    const backfillSource = socketServerSource.slice(
+      socketServerSource.indexOf('async function getDeltasSince'),
+      socketServerSource.indexOf('async function runAutoPickForExpiredTimer')
+    );
 
-    expect(socketServerSource).toContain('prisma.draftEvent.findMany');
-    expect(socketServerSource).toContain('createdAt: { gt: new Date(since) }');
-    expect(socketServerSource).not.toContain('getRedis');
-    expect(socketServerSource).not.toContain('zrangebyscore');
+    expect(backfillSource).toContain('prisma.draftEvent.findMany');
+    expect(backfillSource).toContain('createdAt: { gt: new Date(since) }');
+    expect(backfillSource).not.toContain('getRedis');
+    expect(backfillSource).not.toContain('zrangebyscore');
   });
 
   it('makes duplicate local draft timers observable before replacement', () => {
@@ -77,6 +81,8 @@ describe('getSocketIoConfig', () => {
   it('requires the Redis adapter before production starts accepting connections', () => {
     const socketServerSource = read('src/server/socketioServer.ts');
 
+    expect(socketServerSource).toContain('const redis = getRedisConnection()');
+    expect(socketServerSource).not.toContain('await redisClient.connect()');
     expect(socketServerSource).toContain('await installSocketRedisAdapter(io, redis)');
     expect(socketServerSource).toContain("if (process.env.NODE_ENV === 'production')");
     expect(socketServerSource).toContain('void configureSocketRedisAdapter()');
@@ -86,6 +92,12 @@ describe('getSocketIoConfig', () => {
     expect(socketServerSource).toContain('socketRedisAdapterLifecycle?.close()');
     expect(socketServerSource).toContain('ScalableRedisConnection.shutdownInstance()');
     expect(socketServerSource).toContain('if (!httpServer.listening)');
+  });
+
+  it('records startup failures as logger errors with structured context', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+
+    expect(socketServerSource).toContain("logger.error('❌ Socket.IO startup failed', error, {");
   });
 
   it('keeps process shutdown ownership out of the shared Redis connection manager', () => {

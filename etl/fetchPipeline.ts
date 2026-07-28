@@ -8,7 +8,7 @@ type FetchPipelineOptions = {
   season: number | string;
   round?: number | string;
   backfillMode?: boolean;
-  timeoutMs?: number;
+  timeoutMs?: number | null;
 };
 
 type EtlRuntimePaths = {
@@ -62,10 +62,25 @@ function ensureRscriptAvailable(): void {
   }
 }
 
+function resolveFetchPipelineTimeout(options: FetchPipelineOptions): number | null {
+  const configuredTimeout =
+    options.timeoutMs !== undefined
+      ? options.timeoutMs
+      : options.backfillMode
+        ? null
+        : DEFAULT_TIMEOUT_MS;
+
+  if (configuredTimeout === null || configuredTimeout === 0) return null;
+  if (!Number.isFinite(configuredTimeout) || configuredTimeout < 0) {
+    throw new Error('ETL fetch pipeline timeout must be a non-negative finite number or null');
+  }
+  return configuredTimeout;
+}
+
 async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
   const { etlRoot, fetcher, processor } = resolveEtlRuntimePaths();
   const round = options.round === undefined ? '' : String(options.round);
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = resolveFetchPipelineTimeout(options);
 
   ensureRscriptAvailable();
 
@@ -103,21 +118,25 @@ async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
   });
 
   let timeout: NodeJS.Timeout | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => {
-      reject(new Error(`ETL fetch pipeline timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-  });
+  const pipelineCompletion = Promise.all([
+    waitForSuccessfulExit(fetchProcess, 'Footywire R fetcher'),
+    waitForSuccessfulExit(processorProcess, 'Footywire Node processor'),
+    processorInput,
+  ]);
 
   try {
-    await Promise.race([
-      Promise.all([
-        waitForSuccessfulExit(fetchProcess, 'Footywire R fetcher'),
-        waitForSuccessfulExit(processorProcess, 'Footywire Node processor'),
-        processorInput,
-      ]),
-      timeoutPromise,
-    ]);
+    if (timeoutMs === null) {
+      await pipelineCompletion;
+    } else {
+      await Promise.race([
+        pipelineCompletion,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            reject(new Error(`ETL fetch pipeline timed out after ${timeoutMs}ms`));
+          }, timeoutMs);
+        }),
+      ]);
+    }
   } finally {
     if (timeout) {
       clearTimeout(timeout);
@@ -132,5 +151,5 @@ async function runFetchPipeline(options: FetchPipelineOptions): Promise<void> {
   }
 }
 
-export { resolveEtlRuntimePaths, runFetchPipeline };
+export { resolveEtlRuntimePaths, resolveFetchPipelineTimeout, runFetchPipeline };
 export type { EtlRuntimePaths, FetchPipelineOptions };

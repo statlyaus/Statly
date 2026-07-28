@@ -42,6 +42,7 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
 
     const controller = new AbortController();
     const start = Date.now();
+    setPlayers([]);
 
     async function fetchRoster() {
       setLoading(true);
@@ -55,6 +56,7 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
         if (!rosterRes.ok || !rosterData.success) {
           throw new Error(rosterData.error?.message || 'Failed to load team roster');
         }
+        if (controller.signal.aborted) return;
         setPlayers(rosterData.data?.roster?.players || []);
 
         try {
@@ -69,7 +71,9 @@ export function useTeamRoster(leagueId?: string, userId?: string) {
         logger.error('useTeamRoster: failed', err as Error, { leagueId, userId });
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 

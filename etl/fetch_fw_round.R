@@ -78,9 +78,11 @@ keep <- c(
 
 df <- df %>% select(any_of(keep))
 
-# Write newline-delimited JSON to STDOUT (not file)
-# Each row becomes one JSON line with original data preserved
-apply(df, 1, function(row) {
-  json_line <- jsonlite::toJSON(as.list(row), auto_unbox = TRUE)
+# Write newline-delimited JSON to STDOUT (not file).
+# Subset the data frame one row at a time so mixed columns retain their native
+# numeric/character types; matrix-style row application coerces mixed columns.
+for (row_index in seq_len(nrow(df))) {
+  row <- as.list(df[row_index, , drop = FALSE])
+  json_line <- jsonlite::toJSON(row, auto_unbox = TRUE, na = "null")
   cat(json_line, "\n", sep = "")
-})
+}

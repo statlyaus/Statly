@@ -461,7 +461,6 @@ class EnhancedDraftWorker {
     const shutdownResults = await Promise.allSettled([
       this.worker.close(),
       this.queueEvents.close(),
-      ScalableRedisConnection.shutdownInstance(),
     ]);
     for (const result of shutdownResults) {
       if (result.status === 'rejected') {
@@ -486,7 +485,11 @@ async function shutdownDirectWorker(
   worker: EnhancedDraftWorker
 ): Promise<void> {
   logger.info('Enhanced Draft Worker received shutdown signal', { signal });
-  await worker.shutdown();
+  try {
+    await worker.shutdown();
+  } finally {
+    await ScalableRedisConnection.shutdownInstance();
+  }
   process.exit(0);
 }
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FormEvent } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -161,6 +161,43 @@ describe('GiphyPicker', () => {
       await screen.findByRole('button', { name: 'Choose More celebration' })
     ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Choose Result 1' })).toHaveLength(1);
+  });
+
+  it('ignores load-more results from a previous search generation', async () => {
+    const user = userEvent.setup();
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      ...mocks.gif,
+      id: `trending-${index}`,
+      title: `Trending ${index + 1}`,
+    }));
+    const staleGif = { ...mocks.gif, id: 'stale-gif', title: 'Stale result' };
+    const currentGif = { ...mocks.gif, id: 'current-gif', title: 'Current result' };
+    let resolveStalePage!: (value: { data: Array<typeof staleGif> }) => void;
+    mocks.trending.mockResolvedValueOnce({ data: firstPage }).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStalePage = resolve;
+        })
+    );
+    mocks.search.mockResolvedValueOnce({ data: [currentGif] });
+
+    render(<GiphyPicker apiKey="test-web-key" onSelect={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Add a GIF' }));
+    await user.click(await screen.findByRole('button', { name: 'Load more GIFs' }));
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search GIPHY' }), 'current');
+    await user.click(screen.getByRole('button', { name: 'Search GIFs' }));
+    expect(
+      await screen.findByRole('button', { name: 'Choose Current result' })
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      resolveStalePage({ data: [staleGif] });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('button', { name: 'Choose Stale result' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose Current result' })).toBeInTheDocument();
   });
 
   it('reuses the same idempotency key when a failed GIF selection is retried', async () => {
