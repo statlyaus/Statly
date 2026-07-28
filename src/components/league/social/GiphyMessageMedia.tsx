@@ -11,6 +11,17 @@ interface GiphyMessageMediaProps {
   gif: SocialGif;
 }
 
+function getGifImage(gif: GiphyGif): { url: string; width: number; height: number } | null {
+  const image = gif.images.downsized_medium ?? gif.images.original;
+  if (!image?.url) return null;
+
+  return {
+    url: image.url,
+    width: Number(image.width) || 480,
+    height: Number(image.height) || 360,
+  };
+}
+
 export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): React.JSX.Element {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
@@ -32,7 +43,12 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
     void client
       .gif(gif.id)
       .then(({ data }) => {
-        if (!cancelled) setResolvedGif(data);
+        if (cancelled) return;
+        if (getGifImage(data)) {
+          setResolvedGif(data);
+        } else {
+          setFailed(true);
+        }
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -53,22 +69,21 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
     }
   }, [expanded]);
 
-  const timelineImage = resolvedGif?.images.fixed_width ?? resolvedGif?.images.original ?? null;
-  const expandedImage = resolvedGif?.images.original ?? timelineImage;
-  const mediaUnavailable = failed || (resolvedGif !== null && timelineImage === null);
-  const imageAlt = resolvedGif?.title?.trim() || 'GIF shared in chat';
+  const resolvedImage = resolvedGif ? getGifImage(resolvedGif) : null;
+  const imageAlt = resolvedGif?.title?.trim() || 'GIF';
 
   return (
     <div className="mt-2 max-w-[22.5rem]">
-      {timelineImage ? (
+      {resolvedGif && resolvedImage ? (
         <>
           <div className="relative max-h-60 overflow-hidden rounded-xl bg-social-surface-subtle">
             <img
-              src={timelineImage.url}
+              src={resolvedImage.url}
               alt={imageAlt}
-              width={Number(timelineImage.width) || 320}
-              height={Number(timelineImage.height) || 240}
+              width={resolvedImage.width}
+              height={resolvedImage.height}
               loading="lazy"
+              decoding="async"
               className="max-h-60 w-full object-cover"
             />
             <button
@@ -108,11 +123,12 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
             <div className="max-h-[calc(90dvh-3.5rem)] overflow-auto p-4">
               <div className="mx-auto max-w-2xl overflow-hidden rounded-xl bg-social-surface-subtle">
                 <img
-                  src={(expandedImage ?? timelineImage).url}
+                  src={resolvedImage.url}
                   alt={imageAlt}
-                  width={Number((expandedImage ?? timelineImage).width) || 640}
-                  height={Number((expandedImage ?? timelineImage).height) || 480}
-                  className="max-h-[calc(90dvh-8rem)] w-full object-contain"
+                  width={resolvedImage.width}
+                  height={resolvedImage.height}
+                  decoding="async"
+                  className="h-auto w-full"
                 />
               </div>
               <a
@@ -126,7 +142,7 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
             </div>
           </dialog>
         </>
-      ) : mediaUnavailable ? (
+      ) : failed ? (
         <a
           href={giphyUrl}
           target="_blank"
@@ -143,7 +159,7 @@ export default function GiphyMessageMedia({ gif }: GiphyMessageMediaProps): Reac
           Loading GIF…
         </div>
       )}
-      {timelineImage ? (
+      {resolvedGif && resolvedImage ? (
         <a
           href="https://giphy.com/"
           target="_blank"
