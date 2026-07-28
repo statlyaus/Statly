@@ -11,27 +11,35 @@ describe('Firebase auth persistence architecture', () => {
     const browserClient = read('src/lib/firebaseClient.ts');
     const authWorker = read('src/workers/firebase-auth-service-worker.ts');
 
-    expect(browserClient).toContain("if (typeof window === 'undefined')");
-    expect(browserClient).toContain('return getAuth(app)');
-    expect(browserClient).toContain('initializeAuth(app, {');
-    expect(browserClient).toContain(
-      'persistence: [indexedDBLocalPersistence, browserLocalPersistence]'
+    expect(browserClient).toMatch(/if\s*\(typeof window === ['"]undefined['"]\)/);
+    expect(browserClient).toMatch(/return\s+getAuth\(app\)/);
+    expect(browserClient).toMatch(
+      /initializeAuth\(app,\s*{[\s\S]*?persistence:\s*\[\s*indexedDBLocalPersistence,\s*browserLocalPersistence\s*\]/
     );
-    expect(browserClient).toContain('popupRedirectResolver: browserPopupRedirectResolver');
+    expect(browserClient).toMatch(/popupRedirectResolver:\s*browserPopupRedirectResolver/);
     expect(browserClient).not.toContain('setPersistence(');
 
-    expect(authWorker).toContain(
-      'initializeAuth(firebaseApp, { persistence: indexedDBLocalPersistence })'
+    expect(authWorker).toMatch(
+      /initializeAuth\(firebaseApp,\s*{\s*persistence:\s*indexedDBLocalPersistence\s*}\)/
     );
     expect(authWorker).not.toContain('getAuth(firebaseApp)');
+  });
+
+  it('bounds worker token resolution and awaits authenticated fetch failures', () => {
+    const authWorker = read('src/workers/firebase-auth-service-worker.ts');
+
+    expect(authWorker).toMatch(/AUTH_TOKEN_TIMEOUT_MS\s*=\s*5_000/);
+    expect(authWorker).toMatch(/unsubscribe\?\.\(\)/);
+    expect(authWorker).toMatch(/setTimeout\(\(\)\s*=>\s*finish\(null\),\s*AUTH_TOKEN_TIMEOUT_MS\)/);
+    expect(authWorker).toMatch(/return\s+await\s+fetch\(new Request\(request,\s*{\s*headers\s*}\)\)/);
   });
 
   it('fails production worker builds with incomplete Firebase configuration', () => {
     const workerBuild = read('Scripts/build-auth-service-worker.mjs');
 
-    expect(workerBuild).toContain("const requiredFirebaseConfigFields = ['apiKey'");
-    expect(workerBuild).toContain("if (process.env.NODE_ENV === 'production')");
-    expect(workerBuild).toContain('throw new Error(message)');
+    expect(workerBuild).toMatch(/requiredFirebaseConfigFields\s*=\s*\[\s*['"]apiKey['"]/);
+    expect(workerBuild).toMatch(/if\s*\(process\.env\.NODE_ENV === ['"]production['"]\)/);
+    expect(workerBuild).toMatch(/throw\s+new Error\(message\)/);
     expect(workerBuild).toContain('Building the Firebase-disabled development fallback.');
   });
 });

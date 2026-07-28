@@ -1,4 +1,5 @@
 import type { NextApiRequest } from 'next';
+import { SESSION_COOKIE_NAME } from '@/lib/authConstants';
 import { DEVELOPMENT_AUTH_COOKIE } from '@/lib/devAuth';
 import { resolveAuthenticatedUserId } from '@/lib/serverAuth';
 
@@ -13,6 +14,6 @@ export async function getAuthenticatedUserIdFromApiRequest(
     authorization: firstHeaderValue(req.headers.authorization),
     developmentHeaderUserId: firstHeaderValue(req.headers['x-auth-user']),
     developmentCookieUserId: req.cookies?.[DEVELOPMENT_AUTH_COOKIE],
-    sessionCookie: req.cookies?.statly_session,
+    sessionCookie: req.cookies?.[SESSION_COOKIE_NAME],
   });
 }

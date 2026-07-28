@@ -17,6 +17,7 @@ declare const __FIREBASE_AUTH_EMULATOR_URL__: string | null;
 const worker = globalThis as unknown as ServiceWorkerGlobalScope;
 const firebaseApp = initializeApp(__FIREBASE_CONFIG__);
 const auth = initializeAuth(firebaseApp, { persistence: indexedDBLocalPersistence });
+const AUTH_TOKEN_TIMEOUT_MS = 5_000;
 
 if (__FIREBASE_AUTH_EMULATOR_URL__) {
   connectAuthEmulator(auth, __FIREBASE_AUTH_EMULATOR_URL__, { disableWarnings: true });
@@ -24,20 +25,35 @@ if (__FIREBASE_AUTH_EMULATOR_URL__) {
 
 function getCurrentIdToken(): Promise<string | null> {
   return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(
+    let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: (() => void) | undefined;
+
+    const finish = (token: string | null) => {
+      if (settled) return;
+
+      settled = true;
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      unsubscribe?.();
+      resolve(token);
+    };
+
+    unsubscribe = onAuthStateChanged(
       auth,
       (user) => {
-        unsubscribe();
-
         if (!user) {
-          resolve(null);
+          finish(null);
           return;
         }
 
-        void getIdToken(user).then(resolve, () => resolve(null));
+        void getIdToken(user).then(finish, () => finish(null));
       },
-      () => resolve(null)
+      () => finish(null)
     );
+
+    if (!settled) {
+      timeoutId = setTimeout(() => finish(null), AUTH_TOKEN_TIMEOUT_MS);
+    }
   });
 }
 
@@ -51,7 +67,7 @@ async function fetchWithCurrentIdentity(request: Request): Promise<Response> {
   headers.set('Authorization', `Bearer ${idToken}`);
 
   try {
-    return fetch(new Request(request, { headers }));
+    return await fetch(new Request(request, { headers }));
   } catch {
     return fetch(request);
   }

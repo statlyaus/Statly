@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   ensureAuthServiceWorkerReady: vi.fn(),
   onAuthStateChanged: vi.fn(),
   signInWithEmailAndPassword: vi.fn(),
+  signOut: vi.fn(),
 }));
 
 vi.mock('firebase/auth', () => ({
@@ -16,7 +17,7 @@ vi.mock('firebase/auth', () => ({
     addScope() {}
   },
   signInWithPopup: vi.fn(),
-  signOut: vi.fn(),
+  signOut: mocks.signOut,
   createUserWithEmailAndPassword: vi.fn(),
   signInWithEmailAndPassword: mocks.signInWithEmailAndPassword,
 }));
@@ -137,7 +138,34 @@ describe('AuthProvider authenticated navigation readiness', () => {
     await waitFor(() => expect(authListener).toBeTypeOf('function'));
     act(() => authListener?.(firebaseUser));
 
+    await waitFor(() => expect(mocks.ensureAuthServiceWorkerReady).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(console.error).toHaveBeenCalled());
     expect(await screen.findByText('signed-out')).toBeInTheDocument();
+  });
+
+  it('signs out even when legacy session cleanup fails', async () => {
+    let authListener: ((user: unknown) => void) | undefined;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network unavailable')));
+    mocks.signOut.mockResolvedValue(undefined);
+    mocks.onAuthStateChanged.mockImplementation((_auth, listener) => {
+      authListener = listener;
+      return vi.fn();
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => expect(authListener).toBeTypeOf('function'));
+    act(() => authListener?.(null));
+    await screen.findByText('signed-out');
+
+    await expect(latestAuth!.logout()).resolves.toBeUndefined();
+    expect(mocks.signOut).toHaveBeenCalledWith(mocks.auth);
+    await waitFor(() => expect(console.warn).toHaveBeenCalled());
   });
 
   it('does not resolve interactive login before the shared token transport is ready', async () => {

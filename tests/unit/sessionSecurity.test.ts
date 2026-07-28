@@ -63,6 +63,28 @@ describe('session request security', () => {
     ).toBe(true);
   });
 
+  it('allows same-origin API preflights without reflecting untrusted origins', () => {
+    const allowedResponse = middleware(
+      new NextRequest('https://statly.test/api/leagues', {
+        method: 'OPTIONS',
+        headers: { origin: 'https://statly.test' },
+      })
+    );
+    const rejectedResponse = middleware(
+      new NextRequest('https://statly.test/api/leagues', {
+        method: 'OPTIONS',
+        headers: { origin: 'https://attacker.example' },
+      })
+    );
+
+    expect(allowedResponse.status).toBe(204);
+    expect(allowedResponse.headers.get('access-control-allow-origin')).toBe(
+      'https://statly.test'
+    );
+    expect(rejectedResponse.status).toBe(403);
+    expect(rejectedResponse.headers.has('access-control-allow-origin')).toBe(false);
+  });
+
   it('rejects cross-origin session creation before reading or verifying the token', async () => {
     const response = await POST(
       new Request('https://statly.test/api/auth/session', {

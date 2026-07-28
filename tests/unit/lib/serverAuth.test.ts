@@ -108,13 +108,37 @@ describe('server authentication boundary', () => {
     await expect(
       resolveAuthenticatedUserId({
         authorization: 'Bearer production-token',
-        developmentHeaderUserId: 'local-user',
+        developmentHeaderUserId: 'statly-dev-tester',
         sessionCookie: 'legacy-session',
       })
-    ).resolves.toBe('local-user');
+    ).resolves.toBe('statly-dev-tester');
 
     expect(mocks.verifyIdToken).not.toHaveBeenCalled();
     expect(mocks.verifySessionCookie).not.toHaveBeenCalled();
+  });
+
+  it('validates real credentials when development auth has no explicit dev identity', async () => {
+    mocks.isServerDevelopmentAuthEnabled.mockReturnValue(true);
+    mocks.verifyIdToken.mockResolvedValue({ uid: 'verified-development-user' });
+
+    await expect(
+      resolveAuthenticatedUserId({ authorization: 'Bearer real-firebase-token' })
+    ).resolves.toBe('verified-development-user');
+
+    expect(mocks.verifyIdToken).toHaveBeenCalledWith('real-firebase-token', true);
+  });
+
+  it('rejects arbitrary development identities instead of trusting request input', async () => {
+    mocks.isServerDevelopmentAuthEnabled.mockReturnValue(true);
+
+    await expect(
+      resolveAuthenticatedUserId({ developmentHeaderUserId: 'attacker-selected-user' })
+    ).resolves.toBeNull();
+    await expect(
+      resolveAuthenticatedUserId({ authorization: 'Bearer dev:attacker-selected-user' })
+    ).resolves.toBeNull();
+
+    expect(mocks.verifyIdToken).not.toHaveBeenCalled();
   });
 
   it('applies the same precedence to an App Router request', async () => {

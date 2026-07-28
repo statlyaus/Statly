@@ -94,6 +94,7 @@ describe('ensureAuthServiceWorkerReady', () => {
 
   function installServiceWorkerContainer(options?: {
     controlled?: boolean;
+    registrationDelayMs?: number;
     registrationError?: Error;
     registrationPending?: boolean;
   }) {
@@ -108,7 +109,14 @@ describe('ensureAuthServiceWorkerReady', () => {
         ? vi.fn().mockRejectedValue(options.registrationError)
         : options?.registrationPending
           ? vi.fn().mockReturnValue(new Promise(() => undefined))
-          : vi.fn().mockResolvedValue(registration),
+          : options?.registrationDelayMs
+            ? vi.fn().mockImplementation(
+                () =>
+                  new Promise((resolve) => {
+                    setTimeout(() => resolve(registration), options.registrationDelayMs);
+                  })
+              )
+            : vi.fn().mockResolvedValue(registration),
       addEventListener: eventTarget.addEventListener.bind(eventTarget),
       removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
       dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
@@ -156,7 +164,7 @@ describe('ensureAuthServiceWorkerReady', () => {
     const second = ensureAuthServiceWorkerReady();
     expect(first).toBe(second);
 
-    await Promise.resolve();
+    await vi.waitFor(() => expect(container.register).toHaveBeenCalledTimes(1));
     Object.assign(container, {
       controller: { scriptURL: new URL('/auth-service-worker.js', window.location.href).href },
     });
@@ -190,6 +198,22 @@ describe('ensureAuthServiceWorkerReady', () => {
     const outcome = ready.catch((reason: unknown) => reason);
 
     await vi.advanceTimersByTimeAsync(10_000);
+    const error = await outcome;
+
+    expect(error).toBeInstanceOf(AuthServiceWorkerError);
+    expect(error).toMatchObject({ code: 'controller-timeout', recoverable: true });
+  });
+
+  it('shares one timeout budget across registration and controller ownership', async () => {
+    vi.useFakeTimers();
+    installServiceWorkerContainer({ registrationDelayMs: 6_000 });
+    const { AuthServiceWorkerError, ensureAuthServiceWorkerReady } = await import(
+      '@/lib/authServiceWorker'
+    );
+    const outcome = ensureAuthServiceWorkerReady().catch((reason: unknown) => reason);
+
+    await vi.advanceTimersByTimeAsync(6_000);
+    await vi.advanceTimersByTimeAsync(4_000);
     const error = await outcome;
 
     expect(error).toBeInstanceOf(AuthServiceWorkerError);

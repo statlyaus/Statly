@@ -1,13 +1,12 @@
 import type { NextRequest } from 'next/server';
 import { cookies, headers } from 'next/headers';
+import { SESSION_COOKIE_NAME } from '@/lib/authConstants';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import {
   DEVELOPMENT_AUTH_COOKIE,
   DEVELOPMENT_AUTH_USER_ID,
   isServerDevelopmentAuthEnabled,
 } from '@/lib/devAuth';
-
-const SESSION_COOKIE_NAME = 'statly_session';
 
 export interface ServerAuthCredentials {
   authorization?: string | null;
@@ -24,13 +23,32 @@ function getBearerToken(authorization: string | null | undefined): string | null
 function getDevelopmentUserId(credentials: ServerAuthCredentials): string | null {
   if (!isServerDevelopmentAuthEnabled()) return null;
 
-  if (credentials.developmentHeaderUserId) return credentials.developmentHeaderUserId;
-  if (credentials.developmentCookieUserId) return credentials.developmentCookieUserId;
+  if (credentials.developmentHeaderUserId === DEVELOPMENT_AUTH_USER_ID) {
+    return DEVELOPMENT_AUTH_USER_ID;
+  }
+  if (credentials.developmentCookieUserId === DEVELOPMENT_AUTH_USER_ID) {
+    return DEVELOPMENT_AUTH_USER_ID;
+  }
 
   const token = getBearerToken(credentials.authorization);
-  if (token?.startsWith('dev:')) return token.slice('dev:'.length) || null;
+  if (token?.startsWith('dev:')) {
+    return token.slice('dev:'.length) === DEVELOPMENT_AUTH_USER_ID
+      ? DEVELOPMENT_AUTH_USER_ID
+      : null;
+  }
 
-  return process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID ?? DEVELOPMENT_AUTH_USER_ID;
+  const hasSuppliedCredential = Boolean(
+    credentials.authorization ||
+      credentials.sessionCookie ||
+      credentials.developmentHeaderUserId ||
+      credentials.developmentCookieUserId
+  );
+  if (hasSuppliedCredential) return null;
+
+  const configuredUserId = process.env.BYPASS_UID ?? process.env.NEXT_PUBLIC_BYPASS_UID;
+  return configuredUserId === DEVELOPMENT_AUTH_USER_ID
+    ? configuredUserId
+    : DEVELOPMENT_AUTH_USER_ID;
 }
 
 /**
@@ -64,7 +82,9 @@ export async function resolveAuthenticatedUserId(
 /** Verify one Firebase ID token, including revocation, without consulting fallback credentials. */
 export async function validateAuthToken(token: string): Promise<string | null> {
   if (isServerDevelopmentAuthEnabled() && token.startsWith('dev:')) {
-    return token.slice('dev:'.length) || null;
+    return token.slice('dev:'.length) === DEVELOPMENT_AUTH_USER_ID
+      ? DEVELOPMENT_AUTH_USER_ID
+      : null;
   }
 
   try {

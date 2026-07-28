@@ -81,9 +81,12 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
       const authUrl = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL ?? 'http://127.0.0.1:9099';
 
       try {
-        connectAuthEmulator(auth, authUrl, { disableWarnings: true });
-      } catch {
-        /* ignore already-connected/unsupported during dev HMR */
+        if (!auth.emulatorConfig) {
+          connectAuthEmulator(auth, authUrl, { disableWarnings: true });
+        }
+      } catch (error) {
+        console.error('Firebase Auth emulator connection failed; disabling client auth.', error);
+        auth = null;
       }
 
       try {

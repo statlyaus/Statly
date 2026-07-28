@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { SESSION_COOKIE_NAME } from '@/lib/authConstants';
 import {
   DEVELOPMENT_AUTH_COOKIE,
   DEVELOPMENT_AUTH_USER_ID,
   isServerDevelopmentAuthEnabled,
 } from '@/lib/devAuth';
+import { isSameOriginRequest } from '@/lib/requestOrigin';
 
 function getBearerToken(request: NextRequest): string | null {
   const authorization = request.headers.get('authorization');
@@ -21,9 +23,13 @@ export function middleware(request: NextRequest): NextResponse {
 
   if (pathname.startsWith('/api/')) {
     if (request.method === 'OPTIONS') {
-      const origin = request.headers.get('origin') || '*';
+      const origin = request.headers.get('origin');
+      if (!origin || !isSameOriginRequest(request)) {
+        return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+      }
+
       const headers = new Headers({
-        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Origin': new URL(origin).origin,
         Vary: 'Origin',
         'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization,Content-Type',
@@ -35,7 +41,7 @@ export function middleware(request: NextRequest): NextResponse {
     const token = getBearerToken(request);
     if (isServerDevelopmentAuthEnabled() && token?.startsWith('dev:')) {
       const userId = token.slice('dev:'.length);
-      if (userId) {
+      if (userId === DEVELOPMENT_AUTH_USER_ID) {
         const requestHeaders = new Headers(request.headers);
         requestHeaders.set('x-auth-user', userId);
         return NextResponse.next({ request: { headers: requestHeaders } });
@@ -56,7 +62,7 @@ export function middleware(request: NextRequest): NextResponse {
   if (!isProtected) return NextResponse.next({ request: { headers: requestHeaders } });
 
   const hasBearerToken = Boolean(getBearerToken(request));
-  const hasLegacySession = Boolean(request.cookies.get('statly_session')?.value);
+  const hasLegacySession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   const hasDevelopmentSession =
     isServerDevelopmentAuthEnabled() &&
     request.cookies.get(DEVELOPMENT_AUTH_COOKIE)?.value === DEVELOPMENT_AUTH_USER_ID;

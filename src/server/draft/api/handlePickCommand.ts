@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
+import { SESSION_COOKIE_NAME } from '@/lib/authConstants';
 import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
@@ -27,7 +28,7 @@ export async function handlePickCommand(
     requestContext.draftId = draftId;
 
     let userId = await getAuthenticatedUserId(request);
-    requestContext.hasSessionCookie = Boolean(request.cookies.get('statly_session')?.value);
+    requestContext.hasSessionCookie = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 
     if (!userId && isServerDevelopmentAuthEnabled()) {
       const devUser = request.headers.get('x-dev-user-id');

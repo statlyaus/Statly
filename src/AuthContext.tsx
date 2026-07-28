@@ -119,10 +119,14 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
   }, []);
 
   // Remove cookies minted by the previous transport while its migration fallback remains readable.
-  const clearLegacyServerSession = async () => {
-    const response = await fetch('/api/auth/session', { method: 'DELETE' });
-    if (!response.ok) {
-      throw new Error(`Unable to clear the secure session (${response.status}).`);
+  const clearLegacyServerSession = async (): Promise<void> => {
+    try {
+      const response = await fetch('/api/auth/session', { method: 'DELETE', keepalive: true });
+      if (!response.ok) {
+        console.warn('Legacy session cookie cleanup failed.', { status: response.status });
+      }
+    } catch (error) {
+      console.warn('Legacy session cookie cleanup failed.', error);
     }
   };
 
@@ -178,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }): ReactElemen
         return;
       }
       if (!auth) throw new Error('Firebase Auth not available');
-      await clearLegacyServerSession();
+      void clearLegacyServerSession();
       return signOut(auth);
     },
   };

@@ -112,7 +112,10 @@ function hasExpectedController(container: ServiceWorkerContainer): boolean {
   return container.controller?.scriptURL === expectedControllerUrl();
 }
 
-function waitForExpectedController(container: ServiceWorkerContainer): Promise<void> {
+function waitForExpectedController(
+  container: ServiceWorkerContainer,
+  timeoutMs: number
+): Promise<void> {
   return new Promise((resolve, reject) => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -141,14 +144,15 @@ function waitForExpectedController(container: ServiceWorkerContainer): Promise<v
           'The authentication service worker did not take control of this page in time.'
         )
       );
-    }, AUTH_SERVICE_WORKER_READY_TIMEOUT_MS);
+    }, timeoutMs);
 
     onControllerChange();
   });
 }
 
 function registerServiceWorker(
-  container: ServiceWorkerContainer
+  container: ServiceWorkerContainer,
+  timeoutMs: number
 ): Promise<ServiceWorkerRegistration> {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
@@ -158,7 +162,7 @@ function registerServiceWorker(
           'The authentication service worker registration did not complete in time.'
         )
       );
-    }, AUTH_SERVICE_WORKER_READY_TIMEOUT_MS);
+    }, timeoutMs);
 
     void container.register(AUTH_SERVICE_WORKER_PATH, { scope: AUTH_SERVICE_WORKER_SCOPE }).then(
       (registration) => {
@@ -206,7 +210,11 @@ async function registerAndWaitForController(): Promise<void> {
     return;
   }
 
-  const registration = await registerServiceWorker(container);
+  const deadline = Date.now() + AUTH_SERVICE_WORKER_READY_TIMEOUT_MS;
+  const registration = await registerServiceWorker(
+    container,
+    Math.max(0, deadline - Date.now())
+  );
 
   if (hasExpectedController(container)) {
     return;
@@ -215,7 +223,7 @@ async function registerAndWaitForController(): Promise<void> {
   // An already-active worker normally claimed clients during activation. Ask
   // it to claim again to recover deterministically from an uncontrolled tab.
   registration.active?.postMessage({ type: 'statly:claim-auth-clients' });
-  await waitForExpectedController(container);
+  await waitForExpectedController(container, Math.max(0, deadline - Date.now()));
 }
 
 /**
