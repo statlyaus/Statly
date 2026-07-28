@@ -54,6 +54,15 @@ describe('getSocketIoConfig', () => {
     expect(socketServerSource).not.toContain('zrangebyscore');
   });
 
+  it('settles asynchronous request authorization through the Socket.IO callback contract', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+
+    expect(socketServerSource).toContain('allowRequest: (req, callback) =>');
+    expect(socketServerSource).not.toContain('allowRequest: async');
+    expect(socketServerSource).toContain('void evaluateSocketRequest(req)');
+    expect(socketServerSource).toContain("callback('Authentication error', false)");
+  });
+
   it('does not expose fake Socket.IO success semantics from the Next route', () => {
     const socketRouteSource = read('src/app/api/socketio/route.ts');
 
