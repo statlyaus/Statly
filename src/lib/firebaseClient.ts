@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import {
+  browserLocalPersistence,
   browserPopupRedirectResolver,
   connectAuthEmulator,
   getAuth,
@@ -46,7 +47,7 @@ function getOrInitializeBrowserAuth(
 
   try {
     return initializeAuth(app, {
-      persistence: indexedDBLocalPersistence,
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
       popupRedirectResolver: browserPopupRedirectResolver,
     });
   } catch (error) {

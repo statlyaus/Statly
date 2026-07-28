@@ -24,6 +24,21 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID ?? '',
 };
 
+const requiredFirebaseConfigFields = ['apiKey', 'authDomain', 'projectId', 'appId'];
+const missingFirebaseConfigFields = requiredFirebaseConfigFields.filter(
+  (field) => !firebaseConfig[field]?.trim()
+);
+
+if (missingFirebaseConfigFields.length > 0) {
+  const message = `Firebase auth worker config is missing: ${missingFirebaseConfigFields.join(', ')}.`;
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(message);
+  }
+
+  console.warn(`[auth-worker] ${message} Building the Firebase-disabled development fallback.`);
+}
+
 const useAuthEmulator =
   process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_USE_EMULATORS === 'true';
 const authEmulatorUrl = useAuthEmulator
