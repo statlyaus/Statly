@@ -9,14 +9,16 @@ There is one supported source path and there is no mock-data fallback.
 ## Pipeline
 
 ```text
-fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → processFootywireData.ts → Firestore
+fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.ts → processFootywireData.ts → Firestore
 ```
 
 - `fetch_fw_round.R` loads Footywire data through fitzRoy and emits one JSON row per line.
 - `fetchPipeline.ts` resolves the same assets from source and compiled runtimes. It **streams the R
   fetcher output directly** into the compiled processor and propagates process/pipe failures.
-- `processFootywireData.ts` validates numeric fields, normalizes team/player identifiers, adds checksums,
-  and writes match/player-stat documents.
+- `normalizePlayerRow.ts` validates required identity fields and converts supported numeric values into
+  the canonical row shape without initializing Firebase or performing writes.
+- `processFootywireData.ts` consumes normalized rows, adds deterministic identifiers and checksums, and
+  writes match/player-stat documents.
 - `liveGuard.ts` runs the shared pipeline only while Firestore reports a live match window.
 - `backfill.ts` uses the same shared pipeline for bounded historical seasons/rounds and fails the command
   if any requested round fails.
@@ -24,8 +26,8 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → processFootywireData
 
 ## Requirements
 
-- Node.js and npm (the package currently declares Node 18+, while the root repository standard is Node 22)
-- R with `fitzRoy`, `jsonlite`, `janitor`, `dplyr`, and `stringr`
+- Node.js 22 and npm
+- R 4.3 or a newer compatible release, with `fitzRoy`, `jsonlite`, `janitor`, `dplyr`, and `stringr`
 - an authorized Firebase project and server-only service-account credential for remote writes
 
 Install the package:
@@ -33,6 +35,9 @@ Install the package:
 ```sh
 cd etl
 npm ci
+npm run lint
+npm run typecheck
+npm test
 npm run build
 ```
 
@@ -62,6 +67,18 @@ files. Prefer workload identity or deployment secret management when supported.
 ## Commands
 
 ```sh
+# Lint JavaScript, TypeScript, tests, and package configuration, then parse the R fetcher
+npm run lint
+
+# Parse the R fetcher without loading packages or accessing Footywire
+npm run lint:r
+
+# Type-check without emitting build output
+npm run typecheck
+
+# Build and run deterministic tests that do not require R or Firebase credentials
+npm test
+
 # Compile TypeScript
 npm run build
 
@@ -120,6 +137,9 @@ For ETL code or documentation changes, run:
 ```sh
 cd etl
 npm ci
+npm run lint
+npm run typecheck
+npm test
 npm run build
 cd ..
 npm run test:unit -- tests/unit/etlSourceOfTruth.test.ts
@@ -127,4 +147,6 @@ npm run docs:check
 ```
 
 External fetch/Firestore verification requires explicit target and credential authorization. Report it
-as skipped when those prerequisites are unavailable; do not replace it with fabricated evidence.
+as skipped when those prerequisites are unavailable; do not replace it with fabricated evidence. The
+required `lint:r` check is intentionally limited to deterministic source parsing, while `test-r` and
+`test-pipeline` remain opt-in external checks.

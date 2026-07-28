@@ -47,18 +47,22 @@ describe('ETL source-of-truth architecture', () => {
     expect(
       resolveFetchPipelineTimeout({ season: 2026, backfillMode: true, timeoutMs: 60_000 })
     ).toBe(60_000);
+    expect(processor).toContain("from './normalizePlayerRow'");
     expect(processor).toContain('normalizePlayerRow(JSON.parse(line))');
     expect(processor).toContain('process.exitCode = 1');
   });
 
   it('preserves row types in R and normalizes numeric fields before processing', () => {
     const fetcher = read('etl/fetch_fw_round.R');
+    const normalizer = read('etl/normalizePlayerRow.ts');
     const processor = read('etl/processFootywireData.ts');
 
     expect(fetcher).toContain('df[row_index, , drop = FALSE]');
     expect(fetcher).not.toContain('apply(df, 1');
-    expect(processor).toContain("toFiniteNumber(row.season, 'season', true)");
-    expect(processor).toContain('PLAYER_NUMERIC_FIELDS.map');
+    expect(normalizer).toContain("requiredFiniteNumber(row.season, 'season')");
+    expect(normalizer).toContain('PLAYER_NUMERIC_FIELDS.flatMap');
+    expect(normalizer).toContain('value === undefined ? []');
+    expect(processor).not.toContain('function normalizePlayerRow');
   });
 
   it('keeps deployment and operator guidance on the canonical contract', () => {

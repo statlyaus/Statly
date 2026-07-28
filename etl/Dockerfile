@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
 RUN R -e "install.packages(c('fitzRoy', 'jsonlite', 'janitor', 'dplyr', 'stringr'), repos='https://cran.rstudio.com/')"
 
 # Stage 2: Node.js Environment
-FROM node:18-alpine as node-stage
+FROM node:22-alpine as node-stage
 
 # Install dependencies including dev dependencies for build
 WORKDIR /etl
@@ -32,7 +32,7 @@ RUN npm run build
 RUN npm ci --only=production
 
 # Stage 3: Production Image
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Install R runtime
 RUN apk add --no-cache R R-dev

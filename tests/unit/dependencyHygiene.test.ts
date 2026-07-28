@@ -16,13 +16,110 @@ describe('dependency and runtime hygiene', () => {
     expect(dependencies).toHaveProperty('lucide-react');
   });
 
-  it('aligns the production container with the declared Node major', () => {
+  it('aligns active application, Functions, Firebase, and ETL runtimes on Node 22', () => {
     const packageJson = JSON.parse(read('package.json')) as {
       engines?: { node?: string };
     };
+    const functionsPackageJson = JSON.parse(read('functions/package.json')) as {
+      engines?: { node?: string };
+    };
+    const etlPackageJson = JSON.parse(read('etl/package.json')) as {
+      engines?: { node?: string };
+    };
+    const firebaseJson = JSON.parse(read('firebase.json')) as {
+      functions?: Array<{ predeploy?: string[]; runtime?: string }>;
+    };
+    const functionsConfig = firebaseJson.functions?.[0];
+    const etlDockerfile = read('etl/Dockerfile');
 
     expect(packageJson.engines?.node).toBe('>=22 <23');
     expect(read('Dockerfile')).toContain('FROM node:22-alpine AS base');
+    expect(functionsPackageJson.engines?.node).toBe('>=22 <23');
+    expect(functionsConfig?.runtime).toBe('nodejs22');
+    expect(functionsConfig?.predeploy).toEqual([
+      'npm --prefix "$RESOURCE_DIR" run lint',
+      'npm --prefix "$RESOURCE_DIR" run build',
+    ]);
+    expect(etlPackageJson.engines?.node).toBe('>=22 <23');
+    expect(etlDockerfile.match(/FROM node:22-alpine/g)).toHaveLength(2);
+    expect(etlDockerfile).not.toContain('node:18-alpine');
+  });
+
+  it('keeps independent nested-package quality scripts available', () => {
+    for (const packagePath of ['functions/package.json', 'etl/package.json']) {
+      const nestedPackageJson = JSON.parse(read(packagePath)) as {
+        scripts?: Record<string, string>;
+      };
+
+      expect(nestedPackageJson.scripts).toMatchObject({
+        build: expect.any(String),
+        lint: expect.any(String),
+        test: expect.any(String),
+        typecheck: expect.any(String),
+      });
+      expect(nestedPackageJson.scripts?.lint).not.toContain('--ext');
+    }
+
+    const functionsPackageJson = JSON.parse(read('functions/package.json')) as {
+      scripts?: Record<string, string>;
+    };
+    const etlPackageJson = JSON.parse(read('etl/package.json')) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(functionsPackageJson.scripts?.lint).toBe('eslint . --max-warnings=0');
+    expect(functionsPackageJson.scripts?.clean).toContain("rmSync('lib'");
+    expect(read('.gitignore')).toContain('/functions/lib/');
+    expect(etlPackageJson.scripts).toMatchObject({
+      lint: 'npm run lint:node && npm run lint:r',
+      'lint:node': 'eslint . --max-warnings=0',
+      'lint:r': `Rscript -e "invisible(parse(file = 'fetch_fw_round.R'))"`,
+    });
+  });
+
+  it('delegates nested linting to package-local flat configurations', () => {
+    const rootEslintConfig = read('eslint.config.js');
+
+    for (const directory of ['functions', 'etl']) {
+      expect(rootEslintConfig).toContain(`'${directory}/**'`);
+      expect(existsSync(join(process.cwd(), directory, 'eslint.config.mjs'))).toBe(true);
+    }
+
+    for (const generatedOutput of ['coverage', 'playwright-report', 'test-results']) {
+      expect(rootEslintConfig).toContain(`'**/${generatedOutput}/**'`);
+    }
+  });
+
+  it('keeps every workspace behind a pinned, fail-closed CI gate', () => {
+    const workflow = read('.github/workflows/ci.yml');
+    const gate = workflow.slice(workflow.indexOf('  ci-gate:'));
+
+    expect(workflow).toContain('name: Functions');
+    expect(workflow).toContain('name: ETL');
+    expect(workflow).toContain('r-lib/actions/setup-r@b7484da46de19a964f8831f505d2fcf84d1663ec');
+    expect(workflow).toContain("r-version: '4.3.0'");
+    expect(workflow).toContain('name: Unit tests');
+    expect(workflow).toContain('name: Integration tests');
+    expect(workflow).toContain('name: Browser tests');
+    expect(gate).toContain('name: CI Gate');
+    expect(gate).toContain('if: ${{ always() }}');
+    expect(gate).toContain(`all(.[]; .result == "success")`);
+
+    for (const job of [
+      'documentation',
+      'lint',
+      'typecheck',
+      'functions',
+      'etl',
+      'tests',
+      'build',
+    ]) {
+      expect(gate).toContain(`      - ${job}`);
+    }
+
+    for (const match of workflow.matchAll(/uses:\s+[^@\s]+@([^\s]+)/g)) {
+      expect(match[1]).toMatch(/^[a-f0-9]{40}$/);
+    }
   });
 
   it('keeps the dead API placeholder absent and override policy documented', () => {
