@@ -1,15 +1,33 @@
 import * as Sentry from '@sentry/nextjs';
 
+function readSampleRate(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
+}
+
+const isProduction = process.env.NODE_ENV === 'production';
+const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const sentryDebugEnabled =
-  process.env.NEXT_PUBLIC_SENTRY_DEBUG === 'true' || process.env.NEXT_PUBLIC_SENTRY_DEBUG === '1';
+  !isProduction &&
+  (process.env.NEXT_PUBLIC_SENTRY_DEBUG === 'true' || process.env.NEXT_PUBLIC_SENTRY_DEBUG === '1');
 
 Sentry.init({
-  dsn: 'https://6ffbb0f42b9432dc3e0ef0aff3c60f94@o4509945105481728.ingest.us.sentry.io/4509945108299776',
-  sendDefaultPii: true,
-  tracesSampleRate: 1.0,
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1.0,
-  environment: process.env.NODE_ENV || 'development',
+  dsn: sentryDsn,
+  enabled: Boolean(sentryDsn),
+  sendDefaultPii: process.env.NEXT_PUBLIC_SENTRY_SEND_DEFAULT_PII === 'true',
+  tracesSampleRate: readSampleRate(
+    process.env.NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE,
+    isProduction ? 0.1 : 1
+  ),
+  replaysSessionSampleRate: readSampleRate(
+    process.env.NEXT_PUBLIC_SENTRY_REPLAYS_SESSION_SAMPLE_RATE,
+    isProduction ? 0.01 : 0.1
+  ),
+  replaysOnErrorSampleRate: readSampleRate(
+    process.env.NEXT_PUBLIC_SENTRY_REPLAYS_ERROR_SAMPLE_RATE,
+    1
+  ),
+  environment: process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.NODE_ENV || 'development',
   debug: sentryDebugEnabled,
 });
 
