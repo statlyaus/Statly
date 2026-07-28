@@ -60,7 +60,8 @@ describe('ETL source-of-truth architecture', () => {
     expect(fetcher).toContain('df[row_index, , drop = FALSE]');
     expect(fetcher).not.toContain('apply(df, 1');
     expect(normalizer).toContain("requiredFiniteNumber(row.season, 'season')");
-    expect(normalizer).toContain('PLAYER_NUMERIC_FIELDS.map');
+    expect(normalizer).toContain('PLAYER_NUMERIC_FIELDS.flatMap');
+    expect(normalizer).toContain('value === undefined ? []');
     expect(processor).not.toContain('function normalizePlayerRow');
   });
 

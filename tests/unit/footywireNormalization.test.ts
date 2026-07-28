@@ -14,6 +14,7 @@ describe('Footywire row normalization', () => {
       disposals: '27',
       tog_pct: '81.5',
       goals: null,
+      behinds: 0,
     });
 
     expect(row).toMatchObject({
@@ -22,8 +23,11 @@ describe('Footywire row normalization', () => {
       kicks: 14,
       disposals: 27,
       tog_pct: 81.5,
+      behinds: 0,
     });
     expect(row.goals).toBeUndefined();
+    expect(row).not.toHaveProperty('goals');
+    expect(row).toHaveProperty('behinds', 0);
   });
 
   it('rejects invalid required and numeric fields', () => {

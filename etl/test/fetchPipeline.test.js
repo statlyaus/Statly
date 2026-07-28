@@ -48,6 +48,7 @@ test('compiled ETL normalizes required identity fields and supported numeric val
     disposals: '27',
     tog_pct: '81.5',
     goals: null,
+    behinds: 0,
   });
 
   assert.deepEqual(
@@ -61,6 +62,7 @@ test('compiled ETL normalizes required identity fields and supported numeric val
       disposals: normalized.disposals,
       tog_pct: normalized.tog_pct,
       goals: normalized.goals,
+      behinds: normalized.behinds,
     },
     {
       season: 2026,
@@ -72,8 +74,11 @@ test('compiled ETL normalizes required identity fields and supported numeric val
       disposals: 27,
       tog_pct: 81.5,
       goals: undefined,
+      behinds: 0,
     }
   );
+  assert.equal(Object.hasOwn(normalized, 'goals'), false);
+  assert.equal(Object.hasOwn(normalized, 'behinds'), true);
 });
 
 test('compiled ETL rejects malformed player rows before persistence', () => {

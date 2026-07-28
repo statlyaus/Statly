@@ -98,7 +98,10 @@ function normalizePlayerRow(input: unknown): PlayerRow {
 
   const row = input as Record<string, unknown>;
   const numericStats = Object.fromEntries(
-    PLAYER_NUMERIC_FIELDS.map((field) => [field, toFiniteNumber(row[field], field)])
+    PLAYER_NUMERIC_FIELDS.flatMap((field) => {
+      const value = toFiniteNumber(row[field], field);
+      return value === undefined ? [] : [[field, value] as const];
+    })
   ) as Partial<Pick<PlayerRow, PlayerNumericField>>;
 
   return {
