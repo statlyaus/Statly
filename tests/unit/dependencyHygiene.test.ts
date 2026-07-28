@@ -34,6 +34,17 @@ describe('dependency and runtime hygiene', () => {
     }
     expect(policy).toContain('Do not use a forced audit fix');
   });
+
+  it('guards credential-like service-account filenames without blocking examples', () => {
+    const docsCheck = read('Scripts/check-docs.mjs');
+
+    expect(docsCheck).toContain('service[-_.]?account');
+    expect(docsCheck).toContain('firebase[-_.]?(?:admin|credential)');
+    expect(docsCheck).toContain('google[-_.]?(?:application[-_.]?)?credentials?');
+    expect(docsCheck.indexOf('if (isExample) return false')).toBeLessThan(
+      docsCheck.indexOf('const hasCredentialLikeName')
+    );
+  });
 });
 
 function read(relativePath: string): string {

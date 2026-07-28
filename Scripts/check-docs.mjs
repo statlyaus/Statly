@@ -131,9 +131,16 @@ function isProhibitedTrackedEnvironment(file) {
   if (name.startsWith('ENV.') && /^[A-Z0-9._-]+$/.test(name) && !isExample) return true;
 
   if (isExample) return false;
-  return /^(?:serviceaccountkey\.json|service-account\.json|serviceaccount\.local\.json|sa\.b64|sa\.dec\.json|key\.txt)$/i.test(
-    name
-  );
+
+  if (/^(?:sa\.b64|sa\.dec\.json|key\.txt)$/i.test(name)) return true;
+
+  const hasCredentialExtension = /\.(?:json|b64|txt|pem|p12|key)$/i.test(name);
+  const hasCredentialLikeName =
+    /(?:service[-_.]?account|firebase[-_.]?(?:admin|credential)|google[-_.]?(?:application[-_.]?)?credentials?|private[-_.]?key)/i.test(
+      name
+    );
+
+  return hasCredentialExtension && hasCredentialLikeName;
 }
 
 function stripFencedCode(content, file) {

@@ -12,12 +12,14 @@
 
 ```sh
 npm ci
-cp .env.example .env.local
+cp .env.example .env
 npm run prisma:generate
 ```
 
-Use `.env.local` for developer values. Next.js loads it automatically, and the repository ignores it.
-Only `.env.example` and clearly named credential-free examples may be tracked.
+Use the ignored `.env` file for the canonical local stack because both Next.js and the Prisma CLI
+load it. A Next.js-only override may live in `.env.local`, but values needed by Prisma commands must
+also be exported or present in `.env`. Only `.env.example` and clearly named credential-free examples
+may be tracked.
 
 ## Environment boundaries
 
@@ -79,18 +81,19 @@ emulator hosts. They must not receive production credentials.
 Development authentication requires both client and server opt-in and a non-production environment.
 Use it only with local fixtures. Production code must fail closed when those conditions are absent.
 
-The full local harness exports:
+The full local harness enables development tools:
 
 ```sh
-NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true
-STATLY_ENABLE_DEV_AUTH=true
 STATLY_ENABLE_DEV_TOOLS=true
 ```
 
-Its shared fixture identity is `admin@statly.dev`. Use the local password printed by
+Its shared Firebase Auth fixture identity is `admin@statly.dev`. Use the local password printed by
 `npm run dev:full:local`; it is derived from the local-only `STATLY_LOCAL_AUTH_PHRASE` boundary and is
-not a production credential. The legacy development-auth fallback remains available only when both
-opt-ins are true and `NODE_ENV` is not `production`.
+not a production credential.
+
+The legacy development-auth fallback is not enabled by that harness. It remains available only when
+`NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true` and `STATLY_ENABLE_DEV_AUTH=true` are both set explicitly and
+`NODE_ENV` is not `production`.
 
 ## Ordinary development
 
