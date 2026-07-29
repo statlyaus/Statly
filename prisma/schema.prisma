@@ -42,6 +42,8 @@ model League {
   settingsId              String                   @unique
   activeSeasonId          String?                  @unique
   categoriesJson          String?
+  visibility              String                   @default("PRIVATE")
+  description             String?
   members                 LeagueMember[]
   settings                LeagueSettings           @relation(fields: [settingsId], references: [id])
   seasons                 LeagueSeason[]           @relation("LeagueSeasons")
@@ -150,6 +152,7 @@ model LeagueSeason {
   updatedAt               DateTime                 @updatedAt
   league                  League                   @relation("LeagueSeasons", fields: [leagueId], references: [id], onDelete: Cascade)
   activeForLeague         League?                  @relation("ActiveLeagueSeason")
+  competitionRounds       LeagueCompetitionRound[]
   socialMessages          SocialMessage[]
   socialBoardCategories   SocialBoardCategory[]
   socialPosts             SocialPost[]
@@ -185,7 +188,7 @@ model LeagueSettings {
   draftType               DraftType
   pickOrder               PickOrder                   @default(RANDOM)
   waiverRule              WaiverRule                  @default(WEEKLY)
-  startAt                 DateTime
+  startAt                 DateTime?
   timeZone                String                      @default("UTC")
   locked                  Boolean                     @default(false)
   scoringMode             LeagueScoringMode           @default(H2H_EACH_CATEGORY)
@@ -623,6 +626,7 @@ model LeagueLineupPlayer {
 model LeagueCompetitionRound {
   id                       String                       @id @default(cuid())
   leagueId                 String
+  seasonId                 String?
   fixtureVersion           Int
   round                    Int
   aflRound                 Int?
@@ -638,9 +642,11 @@ model LeagueCompetitionRound {
   updatedAt                DateTime                     @updatedAt
 
   league   League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season   LeagueSeason?   @relation(fields: [seasonId], references: [id], onDelete: SetNull)
   matchups LeagueMatchup[]
 
   @@unique([leagueId, fixtureVersion, round])
+  @@index([seasonId, fixtureVersion, phase])
   @@index([leagueId, fixtureVersion, phase])
   @@index([leagueId, status])
 }

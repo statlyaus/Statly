@@ -11,6 +11,8 @@ export type DraftReadinessBlockerCode =
   | 'draft_completed';
 
 export interface DraftReadinessBlocker {
+  /** Stable instance identity. Older persisted/API payloads may omit this during migration. */
+  id?: string;
   code: DraftReadinessBlockerCode;
   message: string;
 }

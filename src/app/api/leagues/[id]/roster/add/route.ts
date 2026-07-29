@@ -98,8 +98,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     await Promise.allSettled([
       new WaiverAvailabilityProjectionService().projectLeague({ leagueId }),
-      revalidateTag(tags.league(leagueId)),
-      revalidateTag(tags.waivers(leagueId)),
+      revalidateTag(tags.league(leagueId), { expire: 0 }),
+      revalidateTag(tags.waivers(leagueId), { expire: 0 }),
     ]);
 
     return successResponse({

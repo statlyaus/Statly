@@ -42,7 +42,7 @@ type LifecycleCommandData = {
   resumedAt?: string;
   lobbyStatus?: 'CLOSED' | 'OPEN' | 'COUNTDOWN' | 'LIVE';
   lobbyOpenAt?: string | null;
-  scheduledStartAt?: string;
+  scheduledStartAt?: string | null;
   noOp?: boolean;
   pickDeadlineAt?: string | null;
   schedulingVersion?: number;
@@ -94,7 +94,10 @@ async function selectHighestStatlyZAvailablePlayer(
     selectedCategories: readonly string[];
   }
 ): Promise<DraftPlayerSnapshot | null> {
-  const candidates = await draftRepository.listAvailableAutoPickCandidates(tx, input.excludedPlayerIds);
+  const candidates = await draftRepository.listAvailableAutoPickCandidates(
+    tx,
+    input.excludedPlayerIds
+  );
   if (candidates.length === 0) {
     return null;
   }
@@ -271,6 +274,7 @@ export class DraftApplicationService {
       if (!draft?.league?.settings) {
         throw new Error('not_found:Draft not found');
       }
+      const scheduledStartAt = draft.league.settings.startAt;
 
       if (draft.status !== DraftStatus.SCHEDULED) {
         return {
@@ -288,7 +292,7 @@ export class DraftApplicationService {
                 ? 'LIVE'
                 : ((draft.lobbyStatus as LifecycleCommandData['lobbyStatus']) ?? 'CLOSED'),
             lobbyOpenAt: draft.lobbyOpenAt?.toISOString() ?? null,
-            scheduledStartAt: draft.league.settings.startAt.toISOString(),
+            scheduledStartAt: scheduledStartAt?.toISOString() ?? null,
             noOp: true,
           },
         };
@@ -307,10 +311,14 @@ export class DraftApplicationService {
             status: draft.status,
             lobbyStatus: draft.lobbyStatus as LifecycleCommandData['lobbyStatus'],
             lobbyOpenAt: draft.lobbyOpenAt?.toISOString() ?? null,
-            scheduledStartAt: draft.league.settings.startAt.toISOString(),
+            scheduledStartAt: scheduledStartAt?.toISOString() ?? null,
             noOp: true,
           },
         };
+      }
+
+      if (!scheduledStartAt) {
+        throw new Error('conflict:Draft start time has not been scheduled');
       }
 
       const lobbyOpenAt = new Date();
@@ -338,7 +346,7 @@ export class DraftApplicationService {
           status: DraftStatus.SCHEDULED,
           lobbyStatus: 'COUNTDOWN',
           lobbyOpenAt: lobbyOpenAt.toISOString(),
-          scheduledStartAt: draft.league.settings.startAt.toISOString(),
+          scheduledStartAt: scheduledStartAt.toISOString(),
         },
       };
     });

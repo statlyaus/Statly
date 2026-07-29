@@ -3,19 +3,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 import { getUserIdFromRequest } from '@/lib/serverAuth';
 import { adminDb } from '@/lib/firebaseAdmin';
-import type { League, CreateLeagueRequest, LeagueMember } from '@/types/leagues';
-import { queueLeagueMembershipSet } from '@/lib/leagueMembership';
-import { normalizeCreateLeagueInput } from '@/server/leagues/createLeagueContract';
-
-// Generate unique league code
-function generateLeagueCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
+import type { CreateLeagueRequest } from '@/types/leagues';
+import { createLeague, LeagueCreationError } from '@/server/leagues/createLeagueService';
 
 // GET /api/leagues - List leagues
 export async function GET(_req: NextRequest) {
@@ -43,109 +32,32 @@ export async function GET(_req: NextRequest) {
 
 // POST /api/leagues - Create new league
 export async function POST(req: NextRequest) {
-  console.log('🎯 League creation API called');
-
   try {
-    const body = (await req.json()) as CreateLeagueRequest;
-    const normalized = normalizeCreateLeagueInput(body);
     const userId = await getUserIdFromRequest(req);
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    console.log('📝 Received data:', { body, userId });
-
-    // Basic validation
-    if (normalized.name.length < 3) {
-      console.log('❌ Validation failed: League name too short');
-      return NextResponse.json(
-        { success: false, error: 'League name must be at least 3 characters' },
-        { status: 400 }
-      );
-    }
-
-    if (normalized.categories.length < 3) {
-      console.log('❌ Validation failed: Not enough categories');
-      return NextResponse.json(
-        { success: false, error: 'Must select at least 3 categories' },
-        { status: 400 }
-      );
-    }
-
-    // Generate unique league code
-    let code: string;
-    let attempts = 0;
-    do {
-      code = generateLeagueCode();
-      const existingLeague = await adminDb
-        .collection('leagues')
-        .where('code', '==', code)
-        .limit(1)
-        .get();
-      attempts++;
-      if (existingLeague.empty) break;
-    } while (attempts < 10);
-
-    // Create league object
-    const now = new Date().toISOString();
-    const league: Omit<League, 'id'> = {
-      name: normalized.name,
-      code,
-      type: normalized.visibility === 'PUBLIC' ? 'public' : 'private',
-      ownerId: userId,
-      maxTeams: normalized.maxTeams,
-      categories: normalized.categories,
-      tradeSettings: {
-        tradeLimit: body.tradeSettings?.tradeLimit || 10,
-        tradeReview: body.tradeSettings?.tradeReview || 'none',
-        ...(body.tradeSettings?.tradeDeadline && {
-          tradeDeadline: body.tradeSettings.tradeDeadline,
-        }),
-      },
-      waiverWire: {
-        waiverOrder: [],
-        waiverPeriodHours: body.waiverWire?.waiverPeriodHours || 24,
-        waiverResetPolicy: body.waiverRule || body.waiverWire?.waiverResetPolicy || 'weekly',
-      },
-      createdAt: now,
-      status: 'preseason',
-      timeZone: normalized.timeZone,
-      ...(body.description && { description: body.description }),
-      ...(body.draftDate && { draftDate: body.draftDate }),
-      ...(body.draftType && { draftType: body.draftType }),
-      ...(body.pickOrder && { pickOrder: body.pickOrder }),
-      ...(body.waiverRule && { waiverRule: body.waiverRule }),
-    };
-
-    // Save to database atomically with owner member via batch
-    const leagueRef = adminDb.collection('leagues').doc();
-    const batch = adminDb.batch();
-    batch.set(leagueRef, league);
-
-    // Add creator as owner member
-    const ownerMember: Omit<LeagueMember, 'id'> = {
-      leagueId: leagueRef.id,
-      userId,
-      role: 'owner',
-      teamName: `${normalized.name} Owner`,
-      joinedAt: now,
-      isActive: true,
-    };
-
-    queueLeagueMembershipSet(batch, ownerMember);
-    await batch.commit();
-
-    const createdLeague: League = {
-      id: leagueRef.id,
-      ...league,
-    };
+    const body = (await req.json()) as CreateLeagueRequest;
+    const creation = await createLeague({ userId, input: body });
 
     return NextResponse.json(
       {
         success: true,
-        data: createdLeague,
+        data: creation.league,
       },
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof LeagueCreationError) {
+      return NextResponse.json(
+        { success: false, error: error.message, code: error.code },
+        { status: error.status }
+      );
+    }
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { success: false, error: 'Request body must be valid JSON' },
+        { status: 400 }
+      );
+    }
     console.error('Error creating league:', error);
     return NextResponse.json({ success: false, error: 'Failed to create league' }, { status: 500 });
   }

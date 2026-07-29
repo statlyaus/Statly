@@ -138,6 +138,13 @@ export async function scheduleDraftStart(
   );
 }
 
+export async function cancelDraftStart(leagueId: string): Promise<void> {
+  await Promise.all([
+    draftQueue.remove(getDraftLobbyJobId(leagueId)),
+    draftQueue.remove(getDraftStartJobId(leagueId)),
+  ]);
+}
+
 export async function scheduleDraftPickExpiry(
   input: DraftPickExpiryJobData,
   runAt: Date

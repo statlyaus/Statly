@@ -398,8 +398,8 @@ async function processDropPlayerAction(actionId: string): Promise<void> {
     await new WaiverAvailabilityProjectionService().projectLeague({ leagueId });
 
     await Promise.allSettled([
-      revalidateTag(tags.league(leagueId)),
-      revalidateTag(tags.waivers(leagueId)),
+      revalidateTag(tags.league(leagueId), { expire: 0 }),
+      revalidateTag(tags.waivers(leagueId), { expire: 0 }),
     ]);
 
     logger.info('Processed drop player action into pending waiver hold', {

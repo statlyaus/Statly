@@ -194,10 +194,6 @@ describe('leagueMembership architecture helpers', () => {
       userId: 'user-1',
       role: 'owner',
       teamName: 'Owner Team',
-      teamLogoUrl: undefined,
-      teamLogoPositionX: undefined,
-      teamLogoPositionY: undefined,
-      teamLogoZoom: undefined,
       isActive: true,
       status: 'ACTIVE',
       draftPreferences: {
@@ -207,6 +203,29 @@ describe('leagueMembership architecture helpers', () => {
         priorityPositions: ['MID', 'FWD', 'DEF', 'RUC'],
         maxDraftTime: 90,
       },
+    });
+    expect(data).not.toHaveProperty('teamLogoUrl');
+    expect(data).not.toHaveProperty('teamLogoPositionX');
+    expect(data).not.toHaveProperty('teamLogoPositionY');
+    expect(data).not.toHaveProperty('teamLogoZoom');
+    expect(Object.values(data)).not.toContain(undefined);
+  });
+
+  it('preserves explicit nulls and zero values in canonical member documents', () => {
+    const data = toCanonicalLeagueMembershipData({
+      leagueId: 'league-1',
+      userId: 'user-1',
+      teamLogoUrl: null,
+      teamLogoPositionX: 0,
+      teamLogoPositionY: null,
+      teamLogoZoom: 0,
+    });
+
+    expect(data).toMatchObject({
+      teamLogoUrl: null,
+      teamLogoPositionX: 0,
+      teamLogoPositionY: null,
+      teamLogoZoom: 0,
     });
   });
 

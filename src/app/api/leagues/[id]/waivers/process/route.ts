@@ -32,8 +32,8 @@ export const POST = withMetrics(
       logger.info('waivers processed', { leagueId, processed: result.processed });
 
       const revalidation = await Promise.allSettled([
-        revalidateTag(tags.waivers(leagueId)),
-        revalidateTag(tags.league(leagueId)),
+        revalidateTag(tags.waivers(leagueId), { expire: 0 }),
+        revalidateTag(tags.league(leagueId), { expire: 0 }),
       ]);
       const failedRevalidations = revalidation.filter((item) => item.status === 'rejected');
       if (failedRevalidations.length) {

@@ -59,6 +59,14 @@ export interface TradeCommandResult {
   version: number;
 }
 
+export async function authorizeLeagueTradeAccess(
+  leagueId: string,
+  userId: string
+): Promise<string> {
+  const access = await requireTradeAccess(leagueId, userId);
+  return access.leagueId;
+}
+
 const activeThreadStatuses = ['OPEN', 'PENDING_ADMIN_REVIEW', 'PENDING_VETO_REVIEW'] as const;
 
 export async function createLeagueTrade(

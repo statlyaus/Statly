@@ -40,7 +40,7 @@ describe('draft manager design architecture', () => {
     expect(draftManagerSource).toContain('Prepare the league draft room');
     expect(draftManagerSource).toContain('Prepare draft settings');
     expect(draftManagerSource).toContain('Join Draft Room');
-    expect(draftManagerSource).toContain('Draft Start Time');
+    expect(draftManagerSource).toContain('Draft start time');
     expect(draftManagerSource).toContain('Format and Clock');
     expect(draftManagerSource).toContain('Draft Order');
     expect(draftManagerSource).toContain('Position Limits');

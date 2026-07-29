@@ -145,6 +145,8 @@ export async function publishCompetition({
     },
   });
   if (!league?.settings) return { ok: false, errors: ['League settings were not found.'] };
+  if (!league.activeSeasonId)
+    return { ok: false, errors: ['An active league season is required.'] };
 
   const categories = normalizeFantasyCategoryKeys(parseStoredCategories(league.categoriesJson), [
     'goals',
@@ -212,6 +214,7 @@ export async function publishCompetition({
         const competitionRound = await tx.leagueCompetitionRound.create({
           data: {
             leagueId,
+            seasonId: league.activeSeasonId,
             fixtureVersion,
             round: generatedRound.round,
             aflRound: generatedRound.aflRound,

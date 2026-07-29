@@ -1,72 +1,117 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, ChevronLeft, Loader2, Settings2, ShieldCheck, Trophy } from 'lucide-react';
+import {
+  AlertCircle,
+  CalendarClock,
+  ChevronLeft,
+  Loader2,
+  Settings2,
+  ShieldCheck,
+  Trophy,
+} from 'lucide-react';
 
 import { useAuth } from '@/AuthContext';
+import { DraftScheduleField } from '@/components/draft/DraftScheduleField';
+import { AppLayout } from '@/components/navigation';
 import { fetchApi } from '@/lib/api';
 import {
-  COMMON_TIMEZONES,
-  datetimeLocalToUtc,
-  getBrowserTimeZone,
-  isValidTimeZone,
-} from '@/lib/timezone';
-import { AppLayout } from '@/components/navigation';
+  formatDraftScheduleSummary,
+  resolveDraftSchedule,
+  type DraftScheduleValue,
+} from '@/lib/draftSchedule';
+import { getBrowserTimeZone, isValidTimeZone } from '@/lib/timezone';
+import { cn } from '@/lib/utils';
 import { normalizeCreateLeagueResponse } from '@/server/leagues/createLeagueContract';
 import { REAL_DATA_NINE_CATEGORY_PRESET } from '@/types/fantasyCategories';
 
 const teamCounts = [8, 10, 12, 14, 16, 18];
 
+function getLeagueNameError(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Enter a league name.';
+  if (trimmed.length < 3) return 'League name must be at least 3 characters.';
+  return null;
+}
+
 export default function NewLeaguePage() {
   const [leagueName, setLeagueName] = useState('');
   const [teamCount, setTeamCount] = useState(12);
   const [scoringFormat, setScoringFormat] = useState('nine-category');
-  const [draftDate, setDraftDate] = useState('');
-  const [timeZone, setTimeZone] = useState('UTC');
+  const [draftSchedule, setDraftSchedule] = useState<DraftScheduleValue>({
+    date: '',
+    time: '',
+    timeZone: 'UTC',
+  });
   const [draftType, setDraftType] = useState('snake');
   const [pickOrder, setPickOrder] = useState('random');
   const [waiverRule, setWaiverRule] = useState('weekly');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasTouchedLeagueName, setHasTouchedLeagueName] = useState(false);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  const [validationIssue, setValidationIssue] = useState<'leagueName' | 'draftSchedule' | null>(
+    null
+  );
+  const formRef = useRef<HTMLFormElement>(null);
+  const leagueNameInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { user } = useAuth();
+
+  const leagueNameError = getLeagueNameError(leagueName);
+  const visibleLeagueNameError =
+    hasTouchedLeagueName || hasAttemptedSubmit ? leagueNameError : null;
 
   useEffect(() => {
     const browserTimeZone = getBrowserTimeZone();
     if (isValidTimeZone(browserTimeZone)) {
-      setTimeZone(browserTimeZone);
+      setDraftSchedule((current) => ({ ...current, timeZone: browserTimeZone }));
     }
   }, []);
 
-  const timeZoneOptions = useMemo(() => {
-    if (COMMON_TIMEZONES.some((option) => option.value === timeZone)) {
-      return COMMON_TIMEZONES;
-    }
-
-    return [{ value: timeZone, label: `${timeZone} (detected)`, offset: '' }, ...COMMON_TIMEZONES];
-  }, [timeZone]);
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setHasAttemptedSubmit(true);
+    setError(null);
+
     if (!user) {
       setError('You must be logged in to create a league.');
       return;
     }
+
+    if (leagueNameError) {
+      setValidationIssue('leagueName');
+      leagueNameInputRef.current?.focus();
+      return;
+    }
+
+    const scheduleResolution = resolveDraftSchedule(draftSchedule);
+    if (scheduleResolution.status === 'invalid') {
+      setValidationIssue('draftSchedule');
+      formRef.current
+        ?.querySelector<HTMLElement>('input[aria-invalid="true"], select[aria-invalid="true"]')
+        ?.focus();
+      return;
+    }
+
+    setValidationIssue(null);
     setIsLoading(true);
-    setError(null);
 
     try {
       const response = await fetchApi('leagues', {
         method: 'POST',
         body: JSON.stringify({
-          name: leagueName,
+          name: leagueName.trim(),
           maxTeams: teamCount,
           privacy: 'private',
           scoringFormat,
           categories: [...REAL_DATA_NINE_CATEGORY_PRESET],
-          draftDate: draftDate ? datetimeLocalToUtc(draftDate, timeZone).toISOString() : undefined,
-          timeZone,
+          draftDate:
+            scheduleResolution.status === 'valid'
+              ? scheduleResolution.instant.toISOString()
+              : undefined,
+          timeZone: draftSchedule.timeZone,
           draftType,
           pickOrder,
           waiverRule,
@@ -109,23 +154,58 @@ export default function NewLeaguePage() {
               </p>
             </header>
 
-            <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+            <form ref={formRef} onSubmit={handleSubmit} noValidate className="mt-8 space-y-6">
               <div>
                 <label
                   htmlFor="leagueName"
-                  className="text-sm font-semibold text-[color:var(--league-text)]"
+                  className="flex items-center gap-2 text-sm font-semibold text-[color:var(--league-text)]"
                 >
                   League name
+                  <span className="text-xs font-medium text-[color:var(--league-text-muted)]">
+                    Required
+                  </span>
                 </label>
                 <input
+                  ref={leagueNameInputRef}
                   id="leagueName"
                   type="text"
                   value={leagueName}
-                  onChange={(e) => setLeagueName(e.target.value)}
+                  onChange={(e) => {
+                    const nextName = e.target.value;
+                    setLeagueName(nextName);
+                    if (validationIssue === 'leagueName' && !getLeagueNameError(nextName)) {
+                      setValidationIssue(null);
+                    }
+                  }}
+                  onBlur={() => setHasTouchedLeagueName(true)}
                   required
+                  minLength={3}
+                  aria-invalid={Boolean(visibleLeagueNameError)}
+                  aria-describedby={
+                    visibleLeagueNameError ? 'leagueName-help leagueName-error' : 'leagueName-help'
+                  }
                   placeholder="e.g. Statly Premier League"
-                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
+                  className={cn(
+                    'mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition placeholder:text-[color:var(--league-text-muted)] focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20',
+                    visibleLeagueNameError &&
+                      'border-[color:var(--league-danger)] focus:border-[color:var(--league-danger)] focus:ring-[color:var(--league-danger)]/20'
+                  )}
                 />
+                <p
+                  id="leagueName-help"
+                  className="mt-2 text-xs leading-5 text-[color:var(--league-text-muted)]"
+                >
+                  Use at least 3 characters so managers can recognise the league.
+                </p>
+                {visibleLeagueNameError && (
+                  <p
+                    id="leagueName-error"
+                    role="alert"
+                    className="mt-1 text-sm font-medium text-[color:var(--league-danger)]"
+                  >
+                    {visibleLeagueNameError}
+                  </p>
+                )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -168,42 +248,20 @@ export default function NewLeaguePage() {
                 </div>
               </div>
 
-              <div>
-                <label
-                  htmlFor="draftDate"
-                  className="text-sm font-semibold text-[color:var(--league-text)]"
-                >
-                  Draft date and time
-                </label>
-                <input
-                  id="draftDate"
-                  type="datetime-local"
-                  value={draftDate}
-                  onChange={(e) => setDraftDate(e.target.value)}
-                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-medium text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="timeZone"
-                  className="text-sm font-semibold text-[color:var(--league-text)]"
-                >
-                  Time zone
-                </label>
-                <select
-                  id="timeZone"
-                  value={timeZone}
-                  onChange={(e) => setTimeZone(e.target.value)}
-                  className="mt-2 h-11 w-full rounded-2xl border border-[color:var(--league-border)] bg-[color:var(--league-page)] px-3 text-sm font-semibold text-[color:var(--league-text)] outline-none transition focus:border-[color:var(--league-primary)] focus:ring-2 focus:ring-[color:var(--league-primary)]/20"
-                >
-                  {timeZoneOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <DraftScheduleField
+                value={draftSchedule}
+                onChange={(nextSchedule) => {
+                  setDraftSchedule(nextSchedule);
+                  if (
+                    validationIssue === 'draftSchedule' &&
+                    resolveDraftSchedule(nextSchedule).status !== 'invalid'
+                  ) {
+                    setValidationIssue(null);
+                  }
+                }}
+                heading="Draft date and time"
+                description="Schedule the draft now, or leave it open and choose a time after managers join."
+              />
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
@@ -261,8 +319,28 @@ export default function NewLeaguePage() {
                 </div>
               </div>
 
+              {validationIssue && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-3 rounded-2xl border border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] px-4 py-3 text-sm text-[color:var(--league-danger)]"
+                >
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold">Complete the highlighted field</p>
+                    <p className="mt-1">
+                      {validationIssue === 'leagueName'
+                        ? 'Enter a league name with at least 3 characters.'
+                        : 'Review the draft date, time, and time zone before continuing.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {error && (
-                <div className="rounded-2xl border border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] px-4 py-3 text-sm font-medium text-[color:var(--league-danger)]">
+                <div
+                  role="alert"
+                  className="rounded-2xl border border-[color:var(--league-danger)]/30 bg-[color:var(--league-danger-soft)] px-4 py-3 text-sm font-medium text-[color:var(--league-danger)]"
+                >
                   {error}
                 </div>
               )}
@@ -270,7 +348,7 @@ export default function NewLeaguePage() {
               <div className="flex flex-col gap-3 border-t border-[color:var(--league-border)] pt-5 sm:flex-row">
                 <button
                   type="submit"
-                  disabled={isLoading || !leagueName.trim()}
+                  disabled={isLoading}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[color:var(--league-primary)] px-5 text-sm font-semibold text-[color:var(--league-primary-foreground)] transition hover:bg-[color:var(--league-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--league-primary)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -294,7 +372,8 @@ export default function NewLeaguePage() {
               {
                 icon: CalendarClock,
                 label: 'Draft',
-                value: draftDate ? 'Scheduled' : 'Unscheduled',
+                value: formatDraftScheduleSummary(draftSchedule) ?? 'Unscheduled',
+                preserveCase: true,
               },
               { icon: ShieldCheck, label: 'Waivers', value: waiverRule },
             ].map((item) => {
@@ -312,7 +391,12 @@ export default function NewLeaguePage() {
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--league-text-muted)]">
                         {item.label}
                       </p>
-                      <p className="mt-1 text-sm font-semibold capitalize text-[color:var(--league-text)]">
+                      <p
+                        className={cn(
+                          'mt-1 text-sm font-semibold text-[color:var(--league-text)]',
+                          !item.preserveCase && 'capitalize'
+                        )}
+                      >
                         {item.value}
                       </p>
                     </div>

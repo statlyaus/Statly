@@ -10,7 +10,7 @@ describe('local development auth architecture', () => {
     const authenticatedFetch = read('src/lib/authenticatedFetch.ts');
     const serverAuth = read('src/lib/serverAuth.ts');
     const nextApiAuth = read('src/lib/nextApiAuth.ts');
-    const middleware = read('src/middleware.ts');
+    const proxy = read('src/proxy.ts');
     const socketServer = read('src/server/socketioServer.ts');
     const pickCommand = read('src/server/draft/api/handlePickCommand.ts');
     const leaguePage = read('src/app/(app)/leagues/[id]/page.tsx');
@@ -33,7 +33,7 @@ describe('local development auth architecture', () => {
     expect(serverAuth).toContain('isServerDevelopmentAuthEnabled()');
     expect(serverAuth).toContain('request.cookies.get(DEVELOPMENT_AUTH_COOKIE)');
     expect(nextApiAuth).toContain('resolveAuthenticatedUserId');
-    expect(middleware).toContain('isServerDevelopmentAuthEnabled()');
+    expect(proxy).toContain('isServerDevelopmentAuthEnabled()');
     expect(socketServer).toContain('isServerDevelopmentAuthEnabled()');
     expect(pickCommand).toContain('isServerDevelopmentAuthEnabled()');
     expect(leaguePage).toContain('getAuthenticatedUserIdFromServerContext()');

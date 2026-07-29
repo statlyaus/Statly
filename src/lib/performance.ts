@@ -1,6 +1,6 @@
 'use client';
 
-import { onCLS, onFID, onFCP, onLCP, onTTFB } from 'web-vitals';
+import { onCLS, onFID, onFCP, onINP, onLCP, onTTFB } from 'web-vitals';
 
 interface PerformanceMetric {
   name: string;
@@ -9,6 +9,12 @@ interface PerformanceMetric {
   delta: number;
   id: string;
   navigationType: string;
+}
+
+const WEB_VITAL_METRIC_NAMES = new Set(['CLS', 'FID', 'FCP', 'INP', 'LCP', 'TTFB']);
+
+export function isWebVitalMetricName(name: string): boolean {
+  return WEB_VITAL_METRIC_NAMES.has(name);
 }
 
 interface PerformanceConfig {
@@ -51,6 +57,7 @@ class PerformanceMonitor {
     onCLS(this.handleMetric.bind(this));
     onFID(this.handleMetric.bind(this));
     onFCP(this.handleMetric.bind(this));
+    onINP(this.handleMetric.bind(this));
     onLCP(this.handleMetric.bind(this));
     onTTFB(this.handleMetric.bind(this));
   }
@@ -119,8 +126,10 @@ class PerformanceMonitor {
       });
     }
 
-    // Send to custom analytics endpoint
-    this.sendToCustomEndpoint(metric);
+    // The custom endpoint persists Web Vitals only. Application timings remain local/GA metrics.
+    if (isWebVitalMetricName(metric.name)) {
+      this.sendToCustomEndpoint(metric);
+    }
   }
 
   private async sendToCustomEndpoint(metric: PerformanceMetric): Promise<void> {

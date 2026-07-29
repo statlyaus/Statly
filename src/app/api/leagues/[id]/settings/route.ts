@@ -131,6 +131,10 @@ function parseOptionalDate(value: unknown): Date | undefined | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function firstDefinedValue(...values: unknown[]): unknown {
+  return values.find((value) => value !== undefined);
+}
+
 function parseOptionalInteger(value: unknown): number | undefined {
   if (value === undefined) return undefined;
   const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
@@ -223,7 +227,7 @@ function toSettingsResponse(league: {
     draftType: string;
     pickOrder: string;
     waiverRule: string;
-    startAt: Date;
+    startAt: Date | null;
     timeZone: string;
     locked: boolean;
     scoringMode: string;
@@ -269,7 +273,7 @@ function toSettingsResponse(league: {
       positionLimits,
     },
     draft: {
-      draftDate: league.settings.startAt.toISOString(),
+      draftDate: league.settings.startAt?.toISOString() ?? null,
       draftType: league.settings.draftType.toLowerCase(),
       timePerPick: league.settings.pickSeconds,
       pickOrder: league.settings.pickOrder.toLowerCase(),
@@ -351,7 +355,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           positionLimits: normalizeDraftPositionLimits(data.positionLimits),
         },
         draft: {
-          draftDate: data.draftDate ?? new Date().toISOString(),
+          draftDate: data.draftDate ?? null,
           draftType: String(data.draftType ?? 'snake').toLowerCase(),
           timePerPick: Number(data.timePerPick ?? 120),
           pickOrder: normalizeDraftPickOrderMode(data.pickOrder),
@@ -416,6 +420,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     const { tradeLimit, tradeReview, tradeDeadline, offerExpiryHours, reviewHours, vetoThreshold } =
       tradeSettingsResult.data;
+    const draftDateInput = firstDefinedValue(
+      draftInput.draftDate,
+      draftInput.scheduledTime,
+      body.draftDate,
+      body.startAt
+    );
+    const draftDateShouldClear =
+      draftDateInput === null ||
+      (typeof draftDateInput === 'string' && draftDateInput.trim().length === 0);
+    const draftDate = draftDateShouldClear ? null : parseOptionalDate(draftDateInput);
+    if (draftDate === null && !draftDateShouldClear) {
+      return NextResponse.json({ error: 'Invalid draft date' }, { status: 400 });
+    }
 
     const prismaLeague = await prisma.league.findUnique({
       where: { id },
@@ -475,13 +492,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         categoriesInput !== undefined;
       if (scoringSettingsChanged && prismaLeague.settings.scoringSettingsLockedAt) {
         return NextResponse.json({ error: 'Scoring settings are locked' }, { status: 409 });
-      }
-
-      const draftDate = parseOptionalDate(
-        draftInput.draftDate ?? draftInput.scheduledTime ?? body.draftDate ?? body.startAt
-      );
-      if (draftDate === null) {
-        return NextResponse.json({ error: 'Invalid draft date' }, { status: 400 });
       }
 
       const timePerPickInput =
@@ -556,7 +566,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           where: { id: prismaLeague.settings.id },
           data: {
             maxTeams: maxTeams ?? prismaLeague.settings.maxTeams,
-            ...(draftDate ? { startAt: draftDate } : {}),
+            ...(draftDate !== undefined ? { startAt: draftDate } : {}),
             pickSeconds: timePerPick ?? prismaLeague.settings.pickSeconds,
             draftType,
             pickOrder: pickOrder === 'manual' ? 'MANUAL' : 'RANDOM',
@@ -654,9 +664,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         : {}),
       ...(maxTeamsInput !== undefined ? { maxTeams } : {}),
       categories,
-      ...(body.draftDate || draftInput.draftDate
-        ? { draftDate: body.draftDate ?? draftInput.draftDate }
-        : {}),
+      ...(draftDate !== undefined ? { draftDate: draftDate?.toISOString() ?? null } : {}),
       scoringMode: firestoreScoringMode,
       fixtureGenerationMode: firestoreFixtureGenerationMode,
       lineupSlots: firestoreLineupSlots,
@@ -715,7 +723,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           positionLimits: normalizeDraftPositionLimits(data.positionLimits),
         },
         draft: {
-          draftDate: data.draftDate ?? new Date().toISOString(),
+          draftDate: data.draftDate ?? null,
           draftType: String(data.draftType ?? 'snake').toLowerCase(),
           timePerPick: Number(data.timePerPick ?? 120),
           pickOrder: normalizeDraftPickOrderMode(data.pickOrder),

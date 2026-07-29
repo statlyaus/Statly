@@ -38,4 +38,14 @@ describe('league draft-settings route architecture', () => {
     expect(source).toContain("pickOrder: pickOrder === 'manual' ? 'MANUAL' : 'RANDOM'");
     expect(source).toContain('allowAutoPick: autoPickRules.enabled');
   });
+
+  it('cancels queued start jobs when the commissioner clears the schedule', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/app/api/leagues/[id]/draft-settings/route.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('if (isClearingDraftDate)');
+    expect(source).toContain('await cancelDraftStart(id);');
+  });
 });

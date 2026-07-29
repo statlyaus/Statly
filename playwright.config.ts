@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 const socketPort = Number(process.env.PLAYWRIGHT_SOCKET_PORT ?? 4102);
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
 const socketURL = process.env.PLAYWRIGHT_SOCKET_URL ?? `http://localhost:${socketPort}`;
 const firebaseProjectId = process.env.PLAYWRIGHT_FIREBASE_PROJECT_ID ?? 'statly-e2e';
 const useSocketWebServer =

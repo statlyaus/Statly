@@ -143,10 +143,14 @@ export function toCanonicalLeagueMembershipData(
     userId: membership.userId,
     role: membership.role ?? 'member',
     teamName: membership.teamName ?? 'Team',
-    teamLogoUrl: membership.teamLogoUrl ?? undefined,
-    teamLogoPositionX: membership.teamLogoPositionX ?? undefined,
-    teamLogoPositionY: membership.teamLogoPositionY ?? undefined,
-    teamLogoZoom: membership.teamLogoZoom ?? undefined,
+    ...(membership.teamLogoUrl !== undefined && { teamLogoUrl: membership.teamLogoUrl }),
+    ...(membership.teamLogoPositionX !== undefined && {
+      teamLogoPositionX: membership.teamLogoPositionX,
+    }),
+    ...(membership.teamLogoPositionY !== undefined && {
+      teamLogoPositionY: membership.teamLogoPositionY,
+    }),
+    ...(membership.teamLogoZoom !== undefined && { teamLogoZoom: membership.teamLogoZoom }),
     joinedAt: membership.joinedAt ?? new Date().toISOString(),
     isActive,
     status: isActive ? 'ACTIVE' : 'REMOVED',
