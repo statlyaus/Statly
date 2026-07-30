@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import { initializeFirebaseAnalytics } from '@/lib/firebase/clientAnalytics';
 import { initializePerformanceMonitoring } from '@/lib/performance';
 
 interface PerformanceMonitorProps {
@@ -25,10 +24,6 @@ export function PerformanceMonitor({
   sampleRate = 1.0,
 }: PerformanceMonitorProps) {
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production' || enableAnalytics) {
-      void initializeFirebaseAnalytics();
-    }
-
     // Initialize performance monitoring on the client side
     initializePerformanceMonitoring({
       enableAnalytics,
