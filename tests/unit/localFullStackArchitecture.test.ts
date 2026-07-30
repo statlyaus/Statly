@@ -44,7 +44,10 @@ describe('local full stack development architecture', () => {
 
   it('starts the app stack with Firebase emulator environment variables', () => {
     const source = read('Scripts/dev/full-local-stack.sh');
-    const firebaseClient = read('src/lib/firebaseClient.ts');
+    const firebaseConfig = read('src/lib/firebase/clientConfig.ts');
+    const firebaseAuth = read('src/lib/firebase/clientAuth.ts');
+    const firebaseFirestore = read('src/lib/firebase/clientFirestore.ts');
+    const firebaseAnalytics = read('src/lib/firebase/clientAnalytics.ts');
     const executableLines = source
       .split('\n')
       .map((line) => line.trim())
@@ -76,9 +79,11 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('export SOCKETIO_PORT="3002"');
     expect(source).toContain('export SOCKET_IO_PORT="3002"');
     expect(source).toContain('export NEXT_PUBLIC_SOCKET_URL="http://localhost:3002"');
-    expect(firebaseClient).toContain('const useFirebaseEmulators');
-    expect(firebaseClient).toContain('firebaseConfig.measurementId && !useFirebaseEmulators');
-    expect(firebaseClient).toContain('useFirebaseEmulators && db && auth');
+    expect(firebaseConfig).toContain('const useFirebaseEmulators');
+    expect(firebaseAuth).toContain('if (!useFirebaseEmulators || !authInstance)');
+    expect(firebaseFirestore).toContain('if (useFirebaseEmulators)');
+    expect(firebaseAnalytics).toContain('!firebaseClientConfig.measurementId');
+    expect(firebaseAnalytics).toContain('useFirebaseEmulators');
   });
 
   it('does not require clipboard permission to recover from invite copy failures', () => {

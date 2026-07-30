@@ -15,6 +15,7 @@ test('league roster pulls through completed team data into the review table', as
   await page.goto(`/leagues/${leagueId}?tab=roster`);
 
   await expect(page.getByRole('heading', { name: 'Robbo Rockers' })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/leagues/${leagueId}\\?tab=roster$`));
   await expect(page.getByText('Statly Z Coverage')).toBeVisible();
   await expect(page.getByText('League Categories')).toBeVisible();
   await expect(page.getByText('Position Mix')).toBeVisible();
@@ -22,6 +23,15 @@ test('league roster pulls through completed team data into the review table', as
   await expect(page.getByText('No Team Selected')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Propose Trade' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Waiver Claims' })).toHaveCount(0);
+
+  await page.reload();
+
+  await expect(page.getByRole('heading', { name: 'Robbo Rockers' })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Robbo Rockers roster table' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'My Roster' })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
   await expectNoAppErrorBoundary(page);
   expect(runtimeErrors).toEqual([]);
 });

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import TradeCentreShell from '@/components/TradeCentreShell';
 import { useAuth } from '@/AuthContext';
-import { db } from '@/lib/firebaseClient';
+import { db } from '@/lib/firebase/clientFirestore';
 import { doc, getDoc } from 'firebase/firestore';
 import type { PlayerLite } from '@/types/players';
 import { logger } from '@/lib/logger';

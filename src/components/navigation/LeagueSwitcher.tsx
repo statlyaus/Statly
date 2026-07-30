@@ -13,10 +13,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui';
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { buildPreferenceCookie, LAST_LEAGUE_ID_COOKIE, readCookieValue } from '@/lib/uiPreferences';
 
 interface LeagueLite {

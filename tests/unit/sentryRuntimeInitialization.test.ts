@@ -14,6 +14,9 @@ describe('Sentry runtime initialization', () => {
     expect(instrumentation).toContain("import('./sentry.server.config')");
     expect(instrumentation).toContain("process.env.NEXT_RUNTIME === 'edge'");
     expect(instrumentation).toContain("import('./sentry.edge.config')");
+    expect(instrumentation).toContain('Boolean(process.env.SENTRY_DSN)');
+    expect(instrumentation).toContain("import('@sentry/nextjs')");
+    expect(instrumentation).not.toContain("import * as Sentry from '@sentry/nextjs'");
     expect(instrumentation).toContain('Sentry.captureRequestError');
     expect(instrumentation).not.toContain("import('@sentry/node')");
   });

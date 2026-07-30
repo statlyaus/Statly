@@ -52,7 +52,7 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/ui/Modal', () => ({
   useConfirmation: () => ({
     confirm: vi.fn(),
     ConfirmationModal: null,

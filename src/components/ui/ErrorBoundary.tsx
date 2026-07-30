@@ -4,14 +4,24 @@ import React, { Component } from 'react';
 import type { ReactNode } from 'react';
 import { ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { logger } from '@/lib/logger';
+import { captureError } from '@/lib/sentry-utils';
+
+export interface ErrorFallbackContext {
+  error?: Error;
+  resetError: () => void;
+  errorId?: string;
+  retryCount: number;
+  maxRetries: number;
+}
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
+  fallback?: ReactNode | ((context: ErrorFallbackContext) => ReactNode);
   onError?: (error: Error, errorInfo: React.ErrorInfo, errorId: string) => void;
   maxRetries?: number;
   level?: 'page' | 'section' | 'component';
   name?: string;
+  resetKeys?: readonly unknown[];
 }
 
 interface State {
@@ -54,6 +64,7 @@ export class ErrorBoundary extends Component<Props, State> {
       ...errorDetails,
       errorBoundary: true,
     });
+    captureError(error, { ...errorDetails, errorBoundary: true });
 
     // Call custom error handler if provided
     if (onError) {
@@ -66,6 +77,17 @@ export class ErrorBoundary extends Component<Props, State> {
         description: error.message,
         fatal: level === 'page',
         custom_map: { error_id: errorId },
+      });
+    }
+  }
+
+  componentDidUpdate(previousProps: Props) {
+    if (this.state.hasError && resetKeysChanged(previousProps.resetKeys, this.props.resetKeys)) {
+      this.setState({
+        hasError: false,
+        error: undefined,
+        errorId: undefined,
+        retryCount: 0,
       });
     }
   }
@@ -86,15 +108,26 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const maxRetries = this.props.maxRetries ?? 3;
+      const fallbackContext: ErrorFallbackContext = {
+        error: this.state.error,
+        resetError: this.resetError,
+        errorId: this.state.errorId,
+        retryCount: this.state.retryCount,
+        maxRetries,
+      };
+
       return (
-        this.props.fallback || (
+        (typeof this.props.fallback === 'function'
+          ? this.props.fallback(fallbackContext)
+          : this.props.fallback) || (
           <DefaultErrorFallback
             error={this.state.error}
             resetError={this.resetError}
             errorId={this.state.errorId}
             level={this.props.level}
             retryCount={this.state.retryCount}
-            maxRetries={this.props.maxRetries}
+            maxRetries={maxRetries}
           />
         )
       );
@@ -102,6 +135,18 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return this.props.children;
   }
+}
+
+function resetKeysChanged(
+  previousKeys: readonly unknown[] | undefined,
+  nextKeys: readonly unknown[] | undefined
+): boolean {
+  const previous = previousKeys ?? [];
+  const next = nextKeys ?? [];
+  return (
+    previous.length !== next.length ||
+    previous.some((value, index) => !Object.is(value, next[index]))
+  );
 }
 
 interface ErrorFallbackProps {

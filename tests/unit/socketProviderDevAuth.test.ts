@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   getIdToken: vi.fn(async () => 'firebase-id-token'),
 }));
 
-vi.mock('@/lib/firebaseClient', () => ({
+vi.mock('@/lib/firebase/clientAuth', () => ({
   auth: {
     currentUser: {
       getIdToken: mocks.getIdToken,

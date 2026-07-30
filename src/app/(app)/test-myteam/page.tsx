@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { AppLayout } from '@/components/navigation';
 import MyTeamPanel from '@/components/MyTeamPanel';
 import type { Player, Team } from '@/types/players';
 
@@ -79,7 +78,6 @@ export default function TestMyTeamPage() {
   };
 
   return (
-    <AppLayout>
       <div className="p-6 max-w-7xl mx-auto">
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2">MyTeamPanel Integration Test</h1>
@@ -130,6 +128,5 @@ export default function TestMyTeamPage() {
           </div>
         )}
       </div>
-    </AppLayout>
   );
 }

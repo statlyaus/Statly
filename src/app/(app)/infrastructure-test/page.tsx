@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/AuthContext';
-import { AppLayout } from '@/components/navigation';
 import { usePerformanceMonitor } from '@/lib/performance';
 import { useLiveData } from '@/hooks/useLiveData';
 import { logger } from '@/lib/logger';
@@ -214,7 +213,6 @@ export default function InfrastructureTestPage() {
   const warningCount = testResults.filter((r) => r.status === 'warning').length;
 
   return (
-    <AppLayout>
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-8">
@@ -298,7 +296,6 @@ export default function InfrastructureTestPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
 }
 

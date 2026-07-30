@@ -12,7 +12,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { auth, authEmulatorReady } from '@/lib/firebaseClient';
+import { auth, authEmulatorReady } from '@/lib/firebase/clientAuth';
 import { ensureAuthServiceWorkerReady } from '@/lib/authServiceWorker';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import {

@@ -1,7 +1,7 @@
 # Runtime and data platform
 
 - Status: accepted ownership model; PostgreSQL production cutover is not complete
-- Last verified against source: 2026-07-28
+- Last verified against source: 2026-07-30
 
 ## Current state
 
@@ -49,6 +49,26 @@ PostgreSQL; the cutover requires a reviewed baseline and transfer process.
 Firebase Authentication remains the identity provider. Firebase Admin credentials are server-only,
 must come from the deployment secret manager or local ignored environment, and must be validated
 against the expected project.
+
+Browser Firebase code is split by capability instead of passing through a combined SDK entry point:
+
+- the app boundary owns configuration validation and the single default Firebase app;
+- the authentication boundary initializes Auth synchronously so session restoration can subscribe
+  immediately, preferring IndexedDB persistence before browser-local persistence and preserving the
+  popup/redirect resolver;
+- the Firestore boundary owns the browser database instance and optional emulator connection;
+- the analytics boundary initializes asynchronously after hydration, only when supported and when a
+  measurement ID is configured, and never while emulators are active.
+
+Authentication emulator setup must finish before auth listeners or sign-in commands run. The
+authentication service worker is a separate JavaScript realm and intentionally performs its own Auth
+initialization with IndexedDB persistence; it must not import the browser boundary.
+
+`src/lib/etlIntegration.ts` is a documented transitional exception: browser live-data consumers and
+server competition/read-model consumers currently share its Firestore client implementation. The
+client boundary split must preserve this behavior, not disguise it with a `client-only` marker. Moving
+server ETL reads to an Admin, Prisma, or repository-owned boundary requires a separate data-ownership
+migration with parity evidence.
 
 Firestore is not the long-term authority for transactional fantasy state. Every remaining fallback or
 dual-write path needs an owner, parity check, removal condition, and failure policy. A projection

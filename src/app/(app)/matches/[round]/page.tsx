@@ -1,5 +1,4 @@
 import { RoundMatches } from '@/components/RoundMatches';
-import { AppLayout } from '@/components/navigation';
 import Link from 'next/link';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { mapMatchEventToDTO } from '@/lib/matchMapper';
@@ -15,11 +14,9 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
 
   if (!isValidRound) {
     return (
-      <AppLayout>
         <main className="mx-auto max-w-5xl p-4">
           <h1 className="mb-4 text-2xl font-semibold text-red-600">Invalid round parameter.</h1>
         </main>
-      </AppLayout>
     );
   }
 
@@ -57,7 +54,6 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
   }
 
   return (
-    <AppLayout>
       <main className="mx-auto max-w-5xl p-4">
         <div className="flex items-center justify-between mb-4 gap-2">
           <h1 className="text-2xl font-semibold">Round {roundNumber} Matches</h1>
@@ -93,6 +89,5 @@ export default async function RoundMatchesPage({ params }: { params: Promise<{ r
 
         <RoundMatches round={roundNumber} initialMatches={initialMatches} />
       </main>
-    </AppLayout>
   );
 }

@@ -3,8 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { collection, getDocs } from 'firebase/firestore';
-import { AppLayout } from '@/components/navigation';
-import { db } from '@/lib/firebaseClient';
+import { db } from '@/lib/firebase/clientFirestore';
 import { useAuth } from '@/AuthContext';
 import { useTeamContext } from '@/contexts/TeamContext';
 import type { Player } from '@/types/players';
@@ -103,7 +102,6 @@ export default function RostersPage() {
   };
 
   return (
-    <AppLayout>
       <main className="p-6 space-y-8">
         <section>
           <h1 className="text-2xl font-bold mb-4">My Roster</h1>
@@ -159,6 +157,5 @@ export default function RostersPage() {
           </div>
         </section>
       </main>
-    </AppLayout>
   );
 }

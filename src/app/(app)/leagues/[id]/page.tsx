@@ -55,6 +55,7 @@ export default async function LeaguePage({
       initialTradeCentre={tradeCentreResult.data}
       initialTradeCentreError={tradeCentreResult.error}
       initialTradeDigest={tradeDigestResult.data}
+      initialTab={query.tab}
     />
   );
 }

@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/AuthContext';
-import { AppLayout } from '@/components/navigation';
 import { fetchApi } from '@/lib/api';
 import {
   buildPreferenceCookie,
@@ -149,7 +148,6 @@ export default function DraftHistoryPage() {
 
   if (!user) {
     return (
-      <AppLayout>
         <main className="min-h-screen bg-background px-4 py-10 text-foreground">
           <section className="mx-auto max-w-md rounded-lg border border-border bg-card p-6 text-center shadow-sm">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -167,7 +165,6 @@ export default function DraftHistoryPage() {
             </Link>
           </section>
         </main>
-      </AppLayout>
     );
   }
 
@@ -180,7 +177,6 @@ export default function DraftHistoryPage() {
   };
 
   return (
-    <AppLayout>
       <main className="min-h-screen bg-background text-foreground">
         <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
           <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
@@ -286,7 +282,6 @@ export default function DraftHistoryPage() {
           )}
         </div>
       </main>
-    </AppLayout>
   );
 }
 

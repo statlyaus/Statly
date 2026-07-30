@@ -7,7 +7,6 @@ import { CalendarPlus, CheckCircle2, ChevronLeft, KeyRound, Loader2, UserPlus } 
 
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
-import { AppLayout } from '@/components/navigation';
 import { LEAGUE_CONSTRAINTS } from '@/types/leagues';
 
 function normalizeInviteCode(value: string): string {
@@ -113,7 +112,6 @@ export default function JoinLeaguePage() {
 
   if (!user) {
     return (
-      <AppLayout>
         <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-10 text-[color:var(--league-text)]">
           <section className="mx-auto max-w-md rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 text-center shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)]">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--league-primary-soft)] text-[color:var(--league-primary)]">
@@ -131,13 +129,11 @@ export default function JoinLeaguePage() {
             </Link>
           </section>
         </main>
-      </AppLayout>
     );
   }
 
   if (joinedLeague) {
     return (
-      <AppLayout>
         <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-10 text-[color:var(--league-text)]">
           <section className="mx-auto max-w-lg rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-6 text-center shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)]">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[color:var(--league-success-soft)] text-[color:var(--league-success)]">
@@ -171,12 +167,10 @@ export default function JoinLeaguePage() {
             </div>
           </section>
         </main>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
       <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
         <div className="mx-auto grid w-full max-w-[1180px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
           <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
@@ -292,6 +286,5 @@ export default function JoinLeaguePage() {
           </aside>
         </div>
       </main>
-    </AppLayout>
   );
 }

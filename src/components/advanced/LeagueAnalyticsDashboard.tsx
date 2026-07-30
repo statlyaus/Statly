@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Badge } from '@/components/ui';
+import Badge from '@/components/ui/Badge';
 
 // Types
 interface LeagueAnalytics {

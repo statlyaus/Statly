@@ -2,13 +2,13 @@
 
 import { MessageCircle, Minus, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 
 import { useSocket } from '@/contexts/SocketContext';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import type { LeagueSocialSummary, SocialMessage, SocialRealtimeEnvelope } from '@/types/social';
 
-import LeagueSocialShell from './LeagueSocialShell';
 import { useLeagueSocialWidget } from './LeagueSocialWidgetProvider';
 
 type ConnectionNotice = 'hidden' | 'offline' | 'reconnecting';
@@ -16,6 +16,27 @@ type UnreadCounts = { chat: number; board: number; activity: number };
 
 const leagueNameCache = new Map<string, string>();
 const EMPTY_UNREAD: UnreadCounts = { chat: 0, board: 0, activity: 0 };
+
+function LeagueSocialShellLoading(): React.JSX.Element {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex h-full min-h-0 flex-1 items-center justify-center gap-2 bg-social-canvas px-4 text-sm text-social-text-muted"
+    >
+      <MessageCircle
+        className="size-5 animate-pulse motion-reduce:animate-none"
+        aria-hidden="true"
+      />
+      <span>Loading league social…</span>
+    </div>
+  );
+}
+
+const LeagueSocialShell = dynamic(() => import('./LeagueSocialShell'), {
+  ssr: false,
+  loading: LeagueSocialShellLoading,
+});
 
 export function getDraftIdFromPathname(pathname: string | null): string | null {
   const match = pathname?.match(/^\/drafts\/([^/]+)\/?$/);

@@ -34,9 +34,8 @@ describe('tradecentre gateway route ownership', () => {
 
     expect(panel).toContain('/api/leagues/${encodeURIComponent(leagueId)}/trades');
     expect(panel).not.toContain("postCommand('/api/trades");
-    expect(leagueTabs).toContain(
-      "import { LeagueTradeCentrePanel } from './trades/LeagueTradeCentrePanel'"
-    );
+    expect(leagueTabs).toContain("import('./trades/LeagueTradeCentrePanel')");
+    expect(leagueTabs).toContain('module.LeagueTradeCentrePanel');
     expect(leagueTabs).not.toContain('LeagueTradeProposalForm');
   });
 });

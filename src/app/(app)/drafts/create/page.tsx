@@ -11,7 +11,6 @@ import {
   Loader2,
 } from 'lucide-react';
 
-import { AppLayout } from '@/components/navigation';
 import { TIME_PER_PICK_OPTIONS } from '@/lib/draftSettings';
 
 interface CreateDraftForm {
@@ -79,7 +78,6 @@ export default function CreateDraftPage() {
   };
 
   return (
-    <AppLayout>
       <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] text-[color:var(--league-text)]">
         <div className="mx-auto grid w-full max-w-[1180px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
           <section className="rounded-[28px] border border-[color:var(--league-border)] bg-[color:var(--league-surface)] p-5 shadow-[0_22px_70px_-46px_rgba(23,34,48,0.35)] sm:p-6">
@@ -309,6 +307,5 @@ export default function CreateDraftPage() {
           </aside>
         </div>
       </main>
-    </AppLayout>
   );
 }

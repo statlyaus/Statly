@@ -22,7 +22,7 @@ vi.mock('firebase/firestore', () => ({
   onSnapshot: vi.fn(() => () => {}),
 }));
 
-vi.mock('@/lib/firebaseClient', () => ({ db: {} }));
+vi.mock('@/lib/firebase/clientFirestore', () => ({ db: {} }));
 
 describe('useDashboardSettings', () => {
   it('optimistically updates settings', async () => {

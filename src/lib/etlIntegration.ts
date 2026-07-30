@@ -1,7 +1,7 @@
 // Integration layer between ETL pipeline and Next.js API routes
 // Place this in src/lib/etlIntegration.ts
 
-import { db } from '@/lib/firebaseClient';
+import { db } from '@/lib/firebase/clientFirestore';
 import { logger } from '@/lib/logger';
 import {
   collection,

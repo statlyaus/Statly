@@ -22,7 +22,7 @@ vi.mock('firebase/auth', () => ({
   signInWithEmailAndPassword: mocks.signInWithEmailAndPassword,
 }));
 
-vi.mock('@/lib/firebaseClient', () => ({
+vi.mock('@/lib/firebase/clientAuth', () => ({
   auth: mocks.auth,
   authEmulatorReady: Promise.resolve(),
 }));

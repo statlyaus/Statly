@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
-import { LoadingSpinner } from '@/components/ui';
-import { AppLayout } from '@/components/navigation';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import CommissionerTools from '@/components/commissioner/CommissionerTools';
 import type { League } from '@/types/leagues';
 
@@ -39,30 +38,25 @@ export default function CommissionerPage() {
 
   if (loading || leaguesLoading) {
     return (
-      <AppLayout>
         <div className="flex justify-center items-center h-64">
           <LoadingSpinner />
         </div>
-      </AppLayout>
     );
   }
 
   if (!user) {
     return (
-      <AppLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
             <p className="text-gray-600">Please sign in to access commissioner tools.</p>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   if (leagues.length === 0) {
     return (
-      <AppLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Leagues Found</h2>
@@ -71,12 +65,10 @@ export default function CommissionerPage() {
             </p>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
       <div className="space-y-6">
         {/* League Selector */}
         {leagues.length > 1 && (
@@ -109,6 +101,5 @@ export default function CommissionerPage() {
           />
         )}
       </div>
-    </AppLayout>
   );
 }

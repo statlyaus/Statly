@@ -6,8 +6,7 @@ import { useParams, notFound } from 'next/navigation';
 import type { Player } from '@/types/players';
 import type { ApiSuccessResponse } from '@/lib/apiResponse';
 import { PlayerDetail } from '@/components/PlayerDetail';
-import { AppLayout } from '@/components/navigation';
-import { LoadingSpinner } from '@/components/ui';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 function isPlayerResponse(value: unknown): value is ApiSuccessResponse<Player> {
   return (
@@ -51,19 +50,15 @@ export default function PlayerPage() {
 
   if (loading) {
     return (
-      <AppLayout>
         <div className="flex justify-center items-center h-64">
           <LoadingSpinner />
         </div>
-      </AppLayout>
     );
   }
 
   if (error) {
     return (
-      <AppLayout>
         <p className="text-red-500 text-center">{error}</p>
-      </AppLayout>
     );
   }
 
@@ -72,8 +67,6 @@ export default function PlayerPage() {
   }
 
   return (
-    <AppLayout>
       <PlayerDetail player={player} />
-    </AppLayout>
   );
 }

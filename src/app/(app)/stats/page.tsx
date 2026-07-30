@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import PlayerStatsTable from '@/components/stats/PlayerStatsTable';
 import StatFilters from '@/components/StatFilters';
-import { LoadingSpinner } from '@/components/ui';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { usePlayerStats } from '@/hooks/usePlayerStats';
 
 export default function StatsPage() {

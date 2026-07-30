@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
-import { AlertContainer, useAlert } from '@/components/ui';
+import { AlertContainer, useAlert } from '@/components/ui/Alert';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import { GripVertical, ListPlus, Pencil, Trash2, X } from 'lucide-react';
 import type { DraftPlayer } from '@/types/draft';

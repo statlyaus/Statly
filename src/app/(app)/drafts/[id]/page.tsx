@@ -9,7 +9,7 @@ import { useAuth } from '@/AuthContext';
 import { DraftProvider } from '@/contexts/DraftContext';
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
-import { AppLayout } from '@/components/navigation';
+import AppLayout from '@/components/navigation/AppLayout';
 
 function DraftAccessState({
   title,

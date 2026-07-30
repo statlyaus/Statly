@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from 'vitest';
 import LeagueChat from '@/components/league/LeagueChat';
 
 // Mock Firebase to avoid connection issues in test
-vi.mock('@/lib/firebaseClient', () => ({
+vi.mock('@/lib/firebase/clientFirestore', () => ({
   db: {
     // Mock Firestore db
   },

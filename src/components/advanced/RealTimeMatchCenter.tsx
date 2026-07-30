@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Badge } from '@/components/ui';
+import Badge from '@/components/ui/Badge';
 import { useLiveData } from '@/hooks/useLiveData';
 import { formatInTimezone, getBrowserTimeZone } from '@/lib/timezone';
 

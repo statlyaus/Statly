@@ -2,7 +2,7 @@
 
 import { useState, useCallback, memo, useRef, useEffect } from 'react';
 
-import { useConfirmation } from '@/components/ui';
+import { useConfirmation } from '@/components/ui/Modal';
 import { useNotification } from '@/hooks/useNotification';
 import type { DraftStatus } from '@/types/draft';
 

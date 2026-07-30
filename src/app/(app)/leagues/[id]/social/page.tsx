@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
-import { AppLayout } from '@/components/navigation';
 import { getAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 import { loadAuthorizedLeagueDetail } from '@/server/leagues/leagueDetail';
 
@@ -27,7 +26,6 @@ export default async function LeagueSocialPage({
   if (!result.ok) {
     if (result.status === 404) notFound();
     return (
-      <AppLayout>
         <main className="min-h-screen bg-background px-4 py-10 text-foreground">
           <section className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-6 text-center">
             <h1 className="text-xl font-semibold">League social is unavailable</h1>
@@ -42,7 +40,6 @@ export default async function LeagueSocialPage({
             </Link>
           </section>
         </main>
-      </AppLayout>
     );
   }
   if (!result.league) notFound();

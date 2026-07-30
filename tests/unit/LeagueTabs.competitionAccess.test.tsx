@@ -126,4 +126,63 @@ describe('LeagueTabs co-commissioner competition access', () => {
     expect(screen.queryByRole('button', { name: 'League Settings' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('competition-settings-panel')).not.toBeInTheDocument();
   });
+
+  it('uses the server-observed tab for the initial render before client URL reconciliation', async () => {
+    mocks.tab = null as unknown as string;
+
+    render(
+      <LeagueTabs
+        league={league}
+        members={[coCommissioner]}
+        currentUserId="co-user"
+        initialTab="league-settings"
+      />
+    );
+
+    expect(await screen.findByTestId('competition-settings-panel')).toBeInTheDocument();
+  });
+
+  it('returns to overview when browser history removes or invalidates the tab query', async () => {
+    const view = render(
+      <LeagueTabs
+        league={league}
+        members={[coCommissioner]}
+        currentUserId="co-user"
+        initialTab="league-settings"
+      />
+    );
+
+    expect(await screen.findByTestId('competition-settings-panel')).toBeInTheDocument();
+
+    mocks.tab = null as unknown as string;
+    view.rerender(
+      <LeagueTabs
+        league={league}
+        members={[coCommissioner]}
+        currentUserId="co-user"
+        initialTab="league-settings"
+      />
+    );
+
+    expect(await screen.findByRole('heading', { name: league.name })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+
+    mocks.tab = 'not-a-league-tab';
+    view.rerender(
+      <LeagueTabs
+        league={league}
+        members={[coCommissioner]}
+        currentUserId="co-user"
+        initialTab="league-settings"
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+  });
 });
