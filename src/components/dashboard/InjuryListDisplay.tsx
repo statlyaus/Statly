@@ -2,7 +2,7 @@
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
 import type { InjuryData } from './InjuryListDisplay.client';
-import { GroupedListSkeleton, FlatListSkeleton } from '@/components/ui';
+import { GroupedListSkeleton, FlatListSkeleton } from '@/components/ui/skeletons/ListSkeletons';
 import { ComponentErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 interface InjuryListDisplayProps {

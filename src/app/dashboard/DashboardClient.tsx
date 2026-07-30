@@ -3,7 +3,7 @@
 import { useAuth } from '@/AuthContext';
 import DashboardLoading from '@/components/DashboardLoading';
 import UserDashboard from '@/components/UserDashboard';
-import { AppLayout } from '@/components/navigation';
+import AppLayout from '@/components/navigation/AppLayout';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 

@@ -1,33 +1,29 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  Badge,
+import Badge, {
   StatusBadge,
   NumberBadge,
   TeamBadge,
   PositionBadge,
   PriceChangeBadge,
   BadgeGroup,
-  useAlert,
-  AlertContainer,
-  DataTable,
-  LoadingSpinner,
+} from '@/components/ui/Badge';
+import { AlertContainer, useAlert } from '@/components/ui/Alert';
+import DataTable from '@/components/ui/DataTable';
+import LoadingSpinner, {
   InlineLoading,
   SectionLoading,
   SkeletonCard,
-  Modal,
-  useModal,
-  useConfirmation,
-  NotificationCenter,
+} from '@/components/ui/LoadingSpinner';
+import Modal, { useConfirmation, useModal } from '@/components/ui/Modal';
+import NotificationCenter, {
   NotificationBell,
   useNotifications,
-  Tooltip,
-  InfoTooltip,
-  PlayerStatTooltip,
-} from '@/components/ui';
+} from '@/components/ui/NotificationCenter';
+import Tooltip, { InfoTooltip, PlayerStatTooltip } from '@/components/ui/Tooltip';
 import { PlayerCard } from '@/components/player';
-import { MainSidebar, AppLayout } from '@/components/navigation';
+import MainSidebar from '@/components/navigation/MainSidebar';
 import { RosterManager } from '@/components/roster';
 import {
   RealTimeMatchCenter,
@@ -175,7 +171,6 @@ export default function ComponentDemoPage() {
   };
 
   return (
-    <AppLayout>
       <div className="min-h-screen bg-gray-50">
         {/* Demo Navigation */}
         <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
@@ -737,6 +732,5 @@ export default function ComponentDemoPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
 }

@@ -2,7 +2,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AppLayout } from '@/components/navigation';
 import NineCategoryRankingsTable, {
   type PlayerCategoryRanking,
 } from '@/components/rankings/NineCategoryRankingsTable';
@@ -53,7 +52,6 @@ export default function RankingsPage() {
 
   if (loading) {
     return (
-      <AppLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -65,25 +63,21 @@ export default function RankingsPage() {
             </div>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   if (error) {
     return (
-      <AppLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <h2 className="text-red-800 font-semibold">Error Loading Rankings</h2>
             <p className="text-red-600">{error}</p>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <header className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Player Rankings</h1>
@@ -136,6 +130,5 @@ export default function RankingsPage() {
         {/* Rankings table */}
         <NineCategoryRankingsTable players={players} />
       </div>
-    </AppLayout>
   );
 }

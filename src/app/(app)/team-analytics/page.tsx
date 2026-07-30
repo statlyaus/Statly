@@ -3,8 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/AuthContext';
-import { LoadingSpinner } from '@/components/ui';
-import { AppLayout } from '@/components/navigation';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import TeamAnalyticsDashboard from '@/components/team/TeamAnalyticsDashboard';
 
 export default function TeamAnalyticsPage() {
@@ -33,8 +32,7 @@ export default function TeamAnalyticsPage() {
 
   if (!user && process.env.NODE_ENV === 'production') {
     return (
-      <AppLayout>
-        <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
             <p className="text-gray-600">Please sign in to view your team analytics.</p>
@@ -47,13 +45,12 @@ export default function TeamAnalyticsPage() {
               </Link>
             </div>
           </div>
-        </div>
-      </AppLayout>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       {isTestMode && !user && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 mx-6">
           <div className="flex items-center">
@@ -76,6 +73,6 @@ export default function TeamAnalyticsPage() {
         </div>
       )}
       <TeamAnalyticsDashboard />
-    </AppLayout>
+    </>
   );
 }

@@ -19,8 +19,8 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-vi.mock('@/components/navigation', () => ({
-  AppLayout: ({ children }: { children: ReactNode }) => (
+vi.mock('@/components/navigation/AppLayout', () => ({
+  default: ({ children }: { children: ReactNode }) => (
     <div>
       <div>Legacy navigation</div>
       {children}

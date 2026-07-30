@@ -1,8 +1,8 @@
 'use client';
 
 import { useAuth } from '@/AuthContext';
-import { AppLayout } from '@/components/navigation';
-import { LoadingSpinner, Alert } from '@/components/ui';
+import Alert from '@/components/ui/Alert';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import LeagueTabs from '@/components/league/LeagueTabs';
 import type {
   LeagueTradeCentreSnapshot,
@@ -20,6 +20,7 @@ interface Props {
   initialTradeCentre?: LeagueTradeCentreSnapshot | null;
   initialTradeCentreError?: string | null;
   initialTradeDigest?: LeagueTradeDigest | null;
+  initialTab?: string;
 }
 
 export default function LeaguePageClient({
@@ -31,6 +32,7 @@ export default function LeaguePageClient({
   initialTradeCentre,
   initialTradeCentreError,
   initialTradeDigest,
+  initialTab,
 }: Props) {
   const { user } = useAuth();
   const currentUserId = user?.uid ?? initialUserId ?? undefined;
@@ -72,11 +74,9 @@ export default function LeaguePageClient({
 
   if (loading) {
     return (
-      <AppLayout>
         <div className="flex justify-center items-center h-64">
           <LoadingSpinner />
         </div>
-      </AppLayout>
     );
   }
 
@@ -110,7 +110,6 @@ export default function LeaguePageClient({
 
   if (error) {
     return (
-      <AppLayout>
         <div className="max-w-4xl mx-auto px-4 py-6">
           <Alert
             type="error"
@@ -129,13 +128,11 @@ export default function LeaguePageClient({
             {error}
           </Alert>
         </div>
-      </AppLayout>
     );
   }
 
   if (!curLeague) {
     return (
-      <AppLayout>
         <div className="max-w-4xl mx-auto px-4 py-6">
           <Alert
             type="warning"
@@ -155,12 +152,10 @@ export default function LeaguePageClient({
             access.
           </Alert>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
       <main className="min-h-screen bg-[linear-gradient(180deg,var(--league-surface)_0%,var(--league-page)_44%,var(--league-surface-muted)_100%)] px-4 py-6 text-[color:var(--league-text)] sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[var(--app-shell-max-width)]">
           <LeagueTabs
@@ -171,9 +166,9 @@ export default function LeaguePageClient({
             initialTradeCentre={initialTradeCentre}
             initialTradeCentreError={initialTradeCentreError}
             initialTradeDigest={initialTradeDigest}
+            initialTab={initialTab}
           />
         </div>
       </main>
-    </AppLayout>
   );
 }

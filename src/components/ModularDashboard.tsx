@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 import { getLeagueOverview, type ActivityItem, type Membership } from '@/lib/data/leagueApi';
-import { db } from '@/lib/firebaseClient';
+import { db } from '@/lib/firebase/clientFirestore';
 import { useUserLeagues } from '@/hooks/useUserLeagues';
 import { logger } from '@/lib/logger';
 import type { AuthUser } from '@/AuthContext';

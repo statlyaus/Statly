@@ -15,6 +15,7 @@ describe('league matchups UI architecture', () => {
     const lineupRosterPool = readRepoFile('src/components/league/matchups/LineupRosterPool.tsx');
     const lineupFieldBoard = readRepoFile('src/components/league/matchups/LineupFieldBoard.tsx');
     const standingsPanel = readRepoFile('src/components/league/matchups/LeagueStandingsPanel.tsx');
+    const settingsPanels = readRepoFile('src/components/league/LeagueSettingsPanels.tsx');
     const scoringSettings = readRepoFile('src/components/league/settings/ScoringSettingsPanel.tsx');
 
     expect(leagueTabs).toContain("'matchups'");
@@ -23,7 +24,8 @@ describe('league matchups UI architecture', () => {
     expect(leagueTabs).toContain('LeagueMatchupsPanel');
     expect(leagueTabs).toContain('LeagueLineupPanel');
     expect(leagueTabs).toContain('LeagueStandingsPanel');
-    expect(leagueTabs).toContain('ScoringSettingsPanel');
+    expect(leagueTabs).toContain("import('./LeagueSettingsPanels')");
+    expect(settingsPanels).toContain('ScoringSettingsPanel');
 
     expect(matchupsPanel).toContain('/api/leagues/${leagueId}/matchups');
     expect(matchupsPanel).not.toContain('Generate fixtures');

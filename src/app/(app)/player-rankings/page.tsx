@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AppLayout } from '@/components/navigation';
 import RankingsTable from '@/components/rankings/RankingsTable';
 import type { PlayerRankingRow } from '@/components/rankings/RankingsTable';
 import type { PlayerStat } from '@/hooks/usePlayerStats';
@@ -159,7 +158,6 @@ function RankingsContent() {
   const displayPlayers = players.length === 0 ? fallbackPlayers : players;
 
   return (
-    <AppLayout>
       <main className="mx-auto max-w-7xl p-6">
         <header className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Player Rankings</h1>
@@ -183,7 +181,6 @@ function RankingsContent() {
 
         <RankingsTable players={displayPlayers} />
       </main>
-    </AppLayout>
   );
 }
 

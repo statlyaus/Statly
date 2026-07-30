@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { AppLayout } from '@/components/navigation';
 
 export default function TestSocketPage() {
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
@@ -56,7 +55,6 @@ export default function TestSocketPage() {
   }, []);
 
   return (
-    <AppLayout>
       <div className="p-8">
         <h1 className="text-2xl font-bold mb-4">Socket.IO Connection Test</h1>
 
@@ -86,6 +84,5 @@ export default function TestSocketPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
 }

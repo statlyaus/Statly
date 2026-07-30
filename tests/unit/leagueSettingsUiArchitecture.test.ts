@@ -3,28 +3,34 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('league settings UI architecture', () => {
-  const source = () =>
+  const leagueTabsSource = () =>
     readFileSync(join(process.cwd(), 'src/components/league/LeagueTabs.tsx'), 'utf8');
+  const settingsPanelsSource = () =>
+    readFileSync(join(process.cwd(), 'src/components/league/LeagueSettingsPanels.tsx'), 'utf8');
+  const panelUtilsSource = () =>
+    readFileSync(join(process.cwd(), 'src/components/league/leagueTabPanelUtils.ts'), 'utf8');
 
   it('wires the league settings tab to the canonical league settings route', () => {
-    const leagueTabsSource = source();
+    const tabsSource = leagueTabsSource();
+    const settingsSource = settingsPanelsSource();
 
-    expect(leagueTabsSource).toContain('<LeagueSettingsPanel');
-    expect(leagueTabsSource).toContain("id: 'league-settings'");
-    expect(leagueTabsSource).toContain("isAdmin ? 'League Settings' : 'Competition Rules'");
-    expect(leagueTabsSource).toContain('memberCount={members.length}');
-    expect(leagueTabsSource).toContain('currentUserId={currentUserId}');
-    expect(leagueTabsSource).toContain(
+    expect(tabsSource).toContain('<LeagueSettingsPanel');
+    expect(tabsSource).toContain("id: 'league-settings'");
+    expect(tabsSource).toContain("isAdmin ? 'League Settings' : 'Competition Rules'");
+    expect(tabsSource).toContain('memberCount={members.length}');
+    expect(tabsSource).toContain('currentUserId={currentUserId}');
+    expect(settingsSource).toContain(
       "import { authenticatedFetch } from '@/lib/authenticatedFetch'"
     );
-    expect(leagueTabsSource).toContain('authenticatedFetch(');
-    expect(leagueTabsSource).toContain('`/api/leagues/${league.id}/settings`');
-    expect(leagueTabsSource).toContain("method: 'PUT'");
-    expect(leagueTabsSource).toContain('body: JSON.stringify(settings)');
+    expect(settingsSource).toContain('authenticatedFetch(');
+    expect(settingsSource).toContain('`/api/leagues/${league.id}/settings`');
+    expect(settingsSource).toContain("method: 'PUT'");
+    expect(settingsSource).toContain('body: JSON.stringify(settings)');
   });
 
   it('renders the canonical fantasy settings groups instead of the old fake trade form', () => {
-    const leagueTabsSource = source();
+    const settingsSource = settingsPanelsSource();
+    const utilsSource = panelUtilsSource();
     const scoringSettingsSource = readFileSync(
       join(process.cwd(), 'src/components/league/settings/ScoringSettingsPanel.tsx'),
       'utf8'
@@ -34,8 +40,8 @@ describe('league settings UI architecture', () => {
       'utf8'
     );
 
-    expect(leagueTabsSource).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
-    expect(leagueTabsSource).toContain('<ScoringSettingsPanel');
+    expect(utilsSource).toContain('REAL_DATA_NINE_CATEGORY_PRESET');
+    expect(settingsSource).toContain('<ScoringSettingsPanel');
     expect(scoringSettingsSource).toContain('Scoring Settings');
     expect(scoringSettingsSource).toContain('H2H Each Category');
     expect(scoringSettingsSource).toContain('H2H Most Categories');
@@ -45,65 +51,65 @@ describe('league settings UI architecture', () => {
     expect(competitionSettingsSource).toContain('Manual commissioner setup');
     expect(scoringSettingsSource).toContain('lineupSlots');
     expect(scoringSettingsSource).toContain('categoryDirections');
-    expect(leagueTabsSource).toContain('Draft Settings');
-    expect(leagueTabsSource).toContain('Roster Settings');
-    expect(leagueTabsSource).toContain('Auto-Pick And Waivers');
-    expect(leagueTabsSource).not.toContain('league.tradeSettings.tradeLimit');
-    expect(leagueTabsSource).not.toContain('Save Changes');
+    expect(settingsSource).toContain('Draft Settings');
+    expect(settingsSource).toContain('Roster Settings');
+    expect(settingsSource).toContain('Auto-Pick And Waivers');
+    expect(settingsSource).not.toContain('league.tradeSettings.tradeLimit');
+    expect(settingsSource).not.toContain('Save Changes');
   });
 
   it('keeps commissioner editing behind the existing league membership role check', () => {
-    const leagueTabsSource = source();
+    const tabsSource = leagueTabsSource();
+    const settingsSource = settingsPanelsSource();
 
-    expect(leagueTabsSource).toContain(
+    expect(tabsSource).toContain(
       'const isLeagueOwner = Boolean(currentUserId) && currentUserId === league.ownerId;'
     );
-    expect(leagueTabsSource).toContain(
+    expect(tabsSource).toContain(
       "isLeagueOwner || currentMember?.role === 'owner' || currentMember?.role === 'manager';"
     );
-    expect(leagueTabsSource).toContain('<fieldset disabled={!isAdmin || isSaving}');
-    expect(leagueTabsSource).toContain('if (!isAdmin) return;');
-    expect(leagueTabsSource).toContain('Save league settings');
+    expect(settingsSource).toContain('<fieldset disabled={!isAdmin || isSaving}');
+    expect(settingsSource).toContain('if (!isAdmin) return;');
+    expect(settingsSource).toContain('Save league settings');
   });
 
   it('keeps member-owned team settings available to ordinary league members', () => {
-    const leagueTabsSource = source();
+    const tabsSource = leagueTabsSource();
+    const settingsSource = settingsPanelsSource();
 
-    expect(leagueTabsSource).toContain('<TeamSettingsPanel');
-    expect(leagueTabsSource).toContain("{ id: 'team-settings', name: 'Team Settings' }");
-    expect(leagueTabsSource).toContain("value === 'settings'");
-    expect(leagueTabsSource).toContain(
+    expect(tabsSource).toContain('<TeamSettingsPanel');
+    expect(tabsSource).toContain("{ id: 'team-settings', name: 'Team Settings' }");
+    expect(tabsSource).toContain("value === 'settings'");
+    expect(tabsSource).toContain(
       "return canAccessCompetitionRules ? 'league-settings' : 'team-settings'"
     );
-    expect(leagueTabsSource).toContain('Team Settings');
-    expect(leagueTabsSource).toContain('Team details');
-    expect(leagueTabsSource).toContain('Team name');
-    expect(leagueTabsSource).toContain('Team identity');
-    expect(leagueTabsSource).toContain('Team symbol URL');
-    expect(leagueTabsSource).toContain('Upload team symbol');
-    expect(leagueTabsSource).toContain('Trade offers');
-    expect(leagueTabsSource).toContain('Waiver updates');
-    expect(leagueTabsSource).toContain('Draft reminders');
-    expect(leagueTabsSource).toContain('Scoring alerts');
-    expect(leagueTabsSource).toContain('Zoom');
-    expect(leagueTabsSource).toContain('Horizontal centre');
-    expect(leagueTabsSource).toContain('Vertical centre');
-    expect(leagueTabsSource).toContain('lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]');
-    expect(leagueTabsSource).toContain('aspect-square w-full max-w-sm');
-    expect(leagueTabsSource).toContain('mix-blend-difference');
-    expect(leagueTabsSource).toContain('teamLogoPositionX');
-    expect(leagueTabsSource).toContain('teamLogoPositionY');
-    expect(leagueTabsSource).toContain('teamLogoZoom');
-    expect(leagueTabsSource).toContain('notificationSettings');
-    expect(leagueTabsSource).toContain('`/api/leagues/${league.id}/members/me`');
-    expect(leagueTabsSource).toContain("method: 'PATCH'");
-    expect(leagueTabsSource.indexOf('function TeamSettingsPanel')).toBeLessThan(
-      leagueTabsSource.indexOf('function LeagueSettingsPanel')
+    expect(settingsSource).toContain('Team Settings');
+    expect(settingsSource).toContain('Team details');
+    expect(settingsSource).toContain('Team name');
+    expect(settingsSource).toContain('Team identity');
+    expect(settingsSource).toContain('Team symbol URL');
+    expect(settingsSource).toContain('Upload team symbol');
+    expect(settingsSource).toContain('Trade offers');
+    expect(settingsSource).toContain('Waiver updates');
+    expect(settingsSource).toContain('Draft reminders');
+    expect(settingsSource).toContain('Scoring alerts');
+    expect(settingsSource).toContain('Zoom');
+    expect(settingsSource).toContain('Horizontal centre');
+    expect(settingsSource).toContain('Vertical centre');
+    expect(settingsSource).toContain('lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]');
+    expect(settingsSource).toContain('aspect-square w-full max-w-sm');
+    expect(settingsSource).toContain('mix-blend-difference');
+    expect(settingsSource).toContain('teamLogoPositionX');
+    expect(settingsSource).toContain('teamLogoPositionY');
+    expect(settingsSource).toContain('teamLogoZoom');
+    expect(settingsSource).toContain('notificationSettings');
+    expect(settingsSource).toContain('`/api/leagues/${league.id}/members/me`');
+    expect(settingsSource).toContain("method: 'PATCH'");
+    expect(settingsSource.indexOf('function TeamSettingsPanel')).toBeLessThan(
+      settingsSource.indexOf('function LeagueSettingsPanel')
     );
     expect(
-      leagueTabsSource
-        .slice(leagueTabsSource.indexOf('function LeagueSettingsPanel'))
-        .includes('Team identity')
+      settingsSource.slice(settingsSource.indexOf('function LeagueSettingsPanel')).includes('Team identity')
     ).toBe(false);
   });
 });

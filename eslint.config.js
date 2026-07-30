@@ -105,6 +105,23 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': advisoryLintSeverity,
 
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/components/ui',
+              message: 'Import the required UI module directly to preserve route-level bundling.',
+            },
+            {
+              name: '@/components/navigation',
+              message:
+                'Import the required navigation module directly to preserve route-level bundling.',
+            },
+          ],
+        },
+      ],
+
       // Accessibility
       'jsx-a11y/scope': 'error',
     },

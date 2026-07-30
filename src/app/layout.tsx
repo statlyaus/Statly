@@ -4,7 +4,7 @@ import { Inter } from 'next/font/google';
 
 import '@/index.css';
 
-import ClientSentryWrapper from '@/components/ClientSentryWrapper';
+import FirebaseAnalyticsInitializer from '@/components/FirebaseAnalyticsInitializer';
 import { PageErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -18,9 +18,8 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
   return (
     <html lang="en" data-theme="light">
       <body className={inter.className} suppressHydrationWarning>
-        <ClientSentryWrapper>
-          <PageErrorBoundary name="RootLayout">{children}</PageErrorBoundary>
-        </ClientSentryWrapper>
+        <FirebaseAnalyticsInitializer />
+        <PageErrorBoundary name="RootLayout">{children}</PageErrorBoundary>
       </body>
     </html>
   );

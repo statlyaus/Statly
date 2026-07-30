@@ -4,9 +4,8 @@
 
 import React, { useMemo, useState, useEffect, useReducer, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+import { auth } from '@/lib/firebase/clientAuth';
 import type { Player } from '@/types/players';
 
 // Helper components & functions (should be moved to a separate file, e.g., src/components/ui/index.ts)
@@ -56,19 +55,6 @@ const fairnessScore = (outgoing: Player[], incoming: Player[]) => {
     tone,
     label: Math.abs(delta) < 10 ? 'Fair' : delta > 0 ? 'Favorable' : 'Unfavorable',
   };
-};
-
-// Extending the Window interface for global firebase app
-declare global {
-  interface Window {
-    _firebaseApp: ReturnType<typeof initializeApp> | undefined;
-  }
-}
-
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 };
 
 export type TradeConstraints = {
@@ -144,22 +130,14 @@ export default function TradeReview(props: TradeReviewProps) {
   const [_user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   useEffect(() => {
-    let firebaseApp: ReturnType<typeof initializeApp> | undefined;
-    if (typeof window !== 'undefined') {
-      if (!window._firebaseApp) {
-        firebaseApp = initializeApp(firebaseConfig);
-        window._firebaseApp = firebaseApp;
-      } else {
-        firebaseApp = window._firebaseApp;
-      }
-      const auth = getAuth(firebaseApp);
-      const unsub = onAuthStateChanged(auth, (u) => {
-        setUser(u);
-        setIsAdmin(Boolean(u && u.email && u.email.endsWith('admin.com')));
-      });
-      return () => unsub();
-    }
-    return undefined;
+    if (!auth) return undefined;
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setIsAdmin(Boolean(user?.email?.endsWith('admin.com')));
+    });
+
+    return unsubscribe;
   }, []);
 
   // Multi-trade support

@@ -28,11 +28,19 @@ describe('e2e fixture setup', () => {
     expect(source).not.toContain('where: { active: true },');
   });
 
-  it('disables performance analytics beacons during Playwright runs', () => {
+  it('keeps performance beacons off in ordinary development and enables them for tracing', () => {
     const playwrightConfig = read('playwright.config.ts');
     const performanceMonitor = read('src/components/PerformanceMonitor.tsx');
+    const packageJson = read('package.json');
 
     expect(playwrightConfig).toContain('NEXT_PUBLIC_DISABLE_PERFORMANCE_ANALYTICS=true');
     expect(performanceMonitor).toContain('NEXT_PUBLIC_DISABLE_PERFORMANCE_ANALYTICS');
+    expect(performanceMonitor).toContain("process.env.NODE_ENV === 'production'");
+    expect(performanceMonitor).toContain(
+      "NEXT_PUBLIC_ENABLE_DEVELOPMENT_PERFORMANCE_ANALYTICS === 'true'"
+    );
+    expect(packageJson).toContain(
+      'NEXT_PUBLIC_ENABLE_DEVELOPMENT_PERFORMANCE_ANALYTICS=true next dev'
+    );
   });
 });

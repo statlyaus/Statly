@@ -25,8 +25,8 @@ vi.mock('@/components/StatFilters', () => ({
   default: () => <div>Statistics filters</div>,
 }));
 
-vi.mock('@/components/ui', () => ({
-  LoadingSpinner: () => <div>Loading statistics</div>,
+vi.mock('@/components/ui/LoadingSpinner', () => ({
+  default: () => <div>Loading statistics</div>,
 }));
 
 describe('StatsPage', () => {

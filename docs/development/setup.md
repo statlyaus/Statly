@@ -104,6 +104,46 @@ The legacy development-auth fallback is not enabled by that harness. It remains 
 npm run dev
 ```
 
+The default development bundler is Turbopack. Use the Webpack path only to isolate a bundler-specific
+regression, and enable Turbopack tracing when a route still compiles unexpectedly slowly:
+
+```sh
+npm run dev:webpack
+npm run dev:trace
+```
+
+Ordinary development records Web Vitals in the console and browser storage without posting them to
+the analytics endpoint, avoiding an unrelated API compilation while profiling routes. `dev:trace`
+explicitly enables those development beacons so the complete telemetry path can be inspected.
+
+Stop the running server before switching bundlers. If a comparison has mixed both bundlers in the
+same `.next` directory, run `npm run clean` once before the next cold-start measurement; routine
+development should reuse the Turbopack cache.
+
+For a controlled investigation, collect at least three cold traces with the same services, fixture,
+machine load, and representative routes. Vary the route order between runs so shared compilation does
+not consistently benefit one route. Stop the server before copying each generated trace:
+
+```sh
+npm run clean
+npm run dev:trace
+cp .next/dev/trace /tmp/statly-route-trace-1
+npm run perf:dev:report -- /tmp/statly-route-trace-1
+```
+
+Pass multiple trace paths to aggregate their median, p95, maximum, and run counts. Add `--json` for a
+machine-readable report and `--all` to include internal compilation such as instrumentation and the
+proxy. Compare `compile-path` values rather than total request time; database, proxy, and application
+work are separate performance boundaries. Record a warm navigation control after every cold route
+sequence.
+
+Inspect the production client graph separately. This writes Turbopack analysis artifacts without
+starting the analyzer server and requires the same public build configuration as a production build:
+
+```sh
+npm run perf:bundle
+```
+
 Additional process commands:
 
 ```sh

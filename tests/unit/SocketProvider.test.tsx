@@ -27,7 +27,7 @@ const { authMock, getIdToken, io, isDevelopmentAuthEnabled, socketMock } = vi.ho
 });
 
 vi.mock('socket.io-client', () => ({ io }));
-vi.mock('@/lib/firebaseClient', () => ({ auth: authMock }));
+vi.mock('@/lib/firebase/clientAuth', () => ({ auth: authMock }));
 vi.mock('@/lib/devAuth', () => ({ isDevelopmentAuthEnabled }));
 
 const root = process.cwd();

@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/react';
+import { captureException, captureMessage } from '@/lib/sentry-utils';
 
 // Add this button component to your app to test Sentry's error tracking
 function ErrorButton() {
@@ -7,7 +7,7 @@ function ErrorButton() {
 
     try {
       // First, let's test if Sentry is working by sending a test message
-      Sentry.captureMessage('Testing Sentry before throwing error', 'info');
+      captureMessage('Testing Sentry before throwing error', 'info');
       console.log('✅ Test message sent to Sentry');
 
       // Now throw the error
@@ -16,7 +16,7 @@ function ErrorButton() {
       console.log('🚨 Error caught, sending to Sentry...');
 
       // Manually capture the error
-      Sentry.captureException(error);
+      captureException(error);
       console.log('✅ Error manually captured and sent to Sentry');
 
       // Re-throw to trigger the error boundary

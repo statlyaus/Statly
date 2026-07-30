@@ -3,9 +3,9 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
+import { db } from '@/lib/firebase/clientFirestore';
+import { captureError } from '@/lib/sentry-utils';
 import { z } from 'zod';
-import * as Sentry from '@sentry/react';
 
 export const dashboardSettingsSchema = z.object({
   layout: z.array(
@@ -60,13 +60,14 @@ export function useDashboardSettings(uid: string, initial?: DashboardSettings) {
         if (parsed.success) {
           queryClient.setQueryData(key, parsed.data);
         } else {
-          Sentry.captureMessage('Invalid dashboardSettings snapshot', {
-            extra: { issues: parsed.error.issues },
+          captureError(parsed.error, {
+            operation: 'dashboardSettings snapshot validation',
+            issues: parsed.error.issues,
           });
         }
       },
       (err) => {
-        Sentry.captureException(err);
+        captureError(err);
       }
     );
   }, [uid, queryClient]);

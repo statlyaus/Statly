@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { useAuth } from '@/AuthContext';
-import { LoadingSpinner } from '@/components/ui';
-import { AppLayout } from '@/components/navigation';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import LiveScoringMatchup from '@/components/matchup/LiveScoringMatchup';
 
 export default function LiveScoringPage() {
@@ -15,20 +14,16 @@ export default function LiveScoringPage() {
 
   if (!user) {
     return (
-      <AppLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
             <p className="text-gray-600">Please sign in to view live scoring.</p>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
       <LiveScoringMatchup isLive={true} />
-    </AppLayout>
   );
 }

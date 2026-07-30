@@ -2,10 +2,10 @@
 
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import * as Sentry from '@sentry/react';
 
 import { isDevelopmentAuthEnabled } from '@/lib/devAuth';
-import { auth } from '@/lib/firebaseClient';
+import { auth } from '@/lib/firebase/clientAuth';
+import { captureException } from '@/lib/sentry-utils';
 
 interface Props {
   uid: string;
@@ -77,7 +77,7 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
         }
 
         if (!token) {
-          Sentry.captureException(new Error('Socket auth token unavailable'));
+          captureException(new Error('Socket auth token unavailable'));
           return;
         }
 
@@ -90,15 +90,15 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
         setSocket(s);
 
         s.on('connect_error', (err) => {
-          Sentry.captureException(err);
+          captureException(err);
         });
 
         s.on('error', (err) => {
-          Sentry.captureException(err);
+          captureException(err);
         });
 
         s.on('disconnect', (reason) => {
-          Sentry.captureException(new Error(`Socket disconnected: ${reason}`));
+          captureException(new Error(`Socket disconnected: ${reason}`));
         });
 
         const handleVisibility = () => {
@@ -113,7 +113,7 @@ export function SocketProvider({ uid, children }: Props): React.JSX.Element {
           document.removeEventListener('visibilitychange', handleVisibility);
         };
       } catch (err) {
-        Sentry.captureException(err);
+        captureException(err);
       }
     };
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Button from '@/components/Button';
-import { Alert } from '@/components/ui';
+import Alert from '@/components/ui/Alert';
 
 interface Draft {
   id: string;

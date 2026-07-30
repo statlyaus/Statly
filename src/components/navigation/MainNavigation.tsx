@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import { useAuth } from '@/AuthContext';
 import PlayerSearch from '@/components/PlayerSearch';
-import { AlertContainer, useAlert } from '@/components/ui';
+import { AlertContainer, useAlert } from '@/components/ui/Alert';
 import { logger } from '@/lib/logger';
 
 import LeagueSwitcher from './LeagueSwitcher';

@@ -15,10 +15,6 @@ vi.mock('next/font/google', () => ({
   Inter: () => ({ className: 'font-inter' }),
 }));
 
-vi.mock('@/components/ClientSentryWrapper', () => ({
-  default: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
-
 vi.mock('@/components/PerformanceMonitor', () => ({
   default: () => null,
 }));

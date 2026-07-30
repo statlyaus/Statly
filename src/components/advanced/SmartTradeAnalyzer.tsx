@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Badge, Modal, useModal } from '@/components/ui';
+import Badge from '@/components/ui/Badge';
+import Modal, { useModal } from '@/components/ui/Modal';
 
 // Types
 interface Player {

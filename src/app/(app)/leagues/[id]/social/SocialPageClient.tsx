@@ -3,7 +3,6 @@
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
-import { AppLayout } from '@/components/navigation';
 import { LeagueSocialShell, type LeagueSocialView } from '@/components/league/social';
 
 export default function SocialPageClient({
@@ -20,7 +19,6 @@ export default function SocialPageClient({
   initialPostId?: string;
 }): React.JSX.Element {
   return (
-    <AppLayout>
       <main className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl">
           <Link
@@ -39,6 +37,5 @@ export default function SocialPageClient({
           />
         </div>
       </main>
-    </AppLayout>
   );
 }

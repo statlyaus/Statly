@@ -1,4 +1,4 @@
-import { auth } from '@/lib/firebaseClient';
+import { auth } from '@/lib/firebase/clientAuth';
 import { isDevelopmentAuthEnabled } from '@/lib/devAuth';
 
 function isInternalApiRequest(input: RequestInfo | URL): boolean {

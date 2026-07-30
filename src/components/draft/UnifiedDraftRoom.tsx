@@ -9,7 +9,7 @@ import DraftWatchlist from '@/components/DraftWatchlist';
 import LivePickHeader from '@/components/LivePickHeader';
 import PickFeed from '@/components/PickFeed';
 import { useLeagueSocialWidget } from '@/components/league/social';
-import { useConfirmation } from '@/components/ui';
+import { useConfirmation } from '@/components/ui/Modal';
 import DraftErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useDraft } from '@/contexts/DraftContext';
 import {

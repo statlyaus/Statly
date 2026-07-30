@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/AuthContext';
-import { LoadingSpinner } from '@/components/ui';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { authenticatedFetch } from '@/lib/authenticatedFetch';
 import WaiverFAABSystem from '@/components/waivers/WaiverFAABSystem';
 import type {

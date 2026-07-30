@@ -5,7 +5,7 @@ const firebaseMocks = vi.hoisted(() => ({
   hasCurrentUser: false,
 }));
 
-vi.mock('@/lib/firebaseClient', () => ({
+vi.mock('@/lib/firebase/clientAuth', () => ({
   auth: {
     get currentUser() {
       return firebaseMocks.hasCurrentUser ? { getIdToken: firebaseMocks.getIdToken } : null;

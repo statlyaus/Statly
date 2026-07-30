@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AppLayout } from '@/components/navigation';
 import { useAuth } from '@/AuthContext';
 import { fetchApi } from '@/lib/api';
 
@@ -107,19 +106,16 @@ export default function DraftSettingsPage() {
 
   if (!user) {
     return (
-      <AppLayout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign in Required</h1>
             <p className="text-gray-600">Please sign in to manage your draft settings.</p>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
       <main className="mx-auto max-w-4xl p-6">
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Draft Settings</h1>
@@ -336,6 +332,5 @@ export default function DraftSettingsPage() {
           </div>
         )}
       </main>
-    </AppLayout>
   );
 }

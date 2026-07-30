@@ -1,21 +1,36 @@
-import * as Sentry from '@sentry/react';
+import {
+  getSentryClient,
+  type SentryClient,
+} from '@/lib/sentry/clientInstrumentation';
 
-// Utility functions for Sentry operations
+type SentryLevel = 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
+
+function withSentryClient(operation: (sentry: SentryClient) => void): void {
+  const sentryClient = getSentryClient();
+  if (!sentryClient) return;
+  operation(sentryClient);
+}
 
 /**
  * Capture an error manually
  */
-export const captureError = (error: Error, context?: Record<string, any>) => {
-  Sentry.captureException(error, {
-    contexts: context ? { custom: context } : undefined,
+export const captureError = (error: unknown, context?: Record<string, unknown>): void => {
+  withSentryClient((sentry) => {
+    sentry.captureException(error, {
+      contexts: context ? { custom: context } : undefined,
+    });
   });
 };
+
+export const captureException = captureError;
 
 /**
  * Capture a message
  */
-export const captureMessage = (message: string, level: Sentry.SeverityLevel = 'info') => {
-  Sentry.captureMessage(message, level);
+export const captureMessage = (message: string, level: SentryLevel = 'info'): void => {
+  withSentryClient((sentry) => {
+    sentry.captureMessage(message, level);
+  });
 };
 
 /**
@@ -25,16 +40,20 @@ export const setUser = (user: {
   id: string;
   email?: string;
   username?: string;
-  [key: string]: any;
-}) => {
-  Sentry.setUser(user);
+  [key: string]: unknown;
+}): void => {
+  withSentryClient((sentry) => {
+    sentry.setUser(user);
+  });
 };
 
 /**
  * Clear user context
  */
-export const clearUser = () => {
-  Sentry.setUser(null);
+export const clearUser = (): void => {
+  withSentryClient((sentry) => {
+    sentry.setUser(null);
+  });
 };
 
 /**
@@ -43,29 +62,33 @@ export const clearUser = () => {
 export const addBreadcrumb = (
   message: string,
   category: string = 'ui',
-  level: Sentry.SeverityLevel = 'info',
-  data?: Record<string, any>
-) => {
-  Sentry.addBreadcrumb({
-    message,
-    category,
-    level,
-    data,
+  level: SentryLevel = 'info',
+  data?: Record<string, unknown>
+): void => {
+  withSentryClient((sentry) => {
+    sentry.addBreadcrumb({
+      message,
+      category,
+      level,
+      data,
+    });
   });
 };
 
 /**
  * Set tag for better filtering in Sentry dashboard
  */
-export const setTag = (key: string, value: string) => {
-  Sentry.setTag(key, value);
+export const setTag = (key: string, value: string): void => {
+  withSentryClient((sentry) => {
+    sentry.setTag(key, value);
+  });
 };
 
 /**
  * Set extra context data
  */
-export const setExtra = (key: string, value: any) => {
-  Sentry.setExtra(key, value);
+export const setExtra = (key: string, value: unknown): void => {
+  withSentryClient((sentry) => {
+    sentry.setExtra(key, value);
+  });
 };
-
-export default Sentry;
