@@ -158,8 +158,8 @@ export const POST = withMetrics(
       });
       try {
         const results = await Promise.allSettled([
-          revalidateTag(tags.waivers(leagueId)),
-          revalidateTag(tags.league(leagueId)),
+          revalidateTag(tags.waivers(leagueId), { expire: 0 }),
+          revalidateTag(tags.league(leagueId), { expire: 0 }),
         ]);
         const failed = results.filter((r) => r.status === 'rejected').length;
         if (failed) {

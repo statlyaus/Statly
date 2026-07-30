@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import { logger } from '@/lib/logger';
-import { commonErrors, successResponse } from '@/lib/apiResponse';
+import { commonErrors, errorResponse, successResponse } from '@/lib/apiResponse';
 import { revalidateTag } from 'next/cache';
 import { tags } from '@/lib/cacheTags';
+import { TradeServiceError } from '@/server/leagues/trades/tradeContracts';
+import { authorizeLeagueTradeAccess } from '@/server/leagues/trades/tradeService';
 
 const playerSchema = z.object({
   id: z.string(),
@@ -22,7 +24,15 @@ export async function POST(request: Request) {
     if (!token) {
       return commonErrors.unauthorized();
     }
-    await adminAuth.verifyIdToken(token);
+    let userId: string | undefined;
+    try {
+      userId = (await adminAuth.verifyIdToken(token)).uid;
+    } catch {
+      return commonErrors.unauthorized();
+    }
+    if (!userId) {
+      return commonErrors.unauthorized();
+    }
 
     const json = await request.json();
     const parsed = bodySchema.safeParse(json);
@@ -32,23 +42,29 @@ export async function POST(request: Request) {
       });
     }
 
-    const leagueId = request.headers.get('x-league-id') || undefined;
+    const requestedLeagueId = request.headers.get('x-league-id')?.trim() || undefined;
+    const authorizedLeagueId = requestedLeagueId
+      ? await authorizeLeagueTradeAccess(requestedLeagueId, userId)
+      : undefined;
     try {
-      if (leagueId) {
+      if (authorizedLeagueId) {
         const results = await Promise.allSettled([
-          revalidateTag(tags.trades(leagueId)),
-          revalidateTag(tags.league(leagueId)),
+          revalidateTag(tags.trades(authorizedLeagueId), { expire: 0 }),
+          revalidateTag(tags.league(authorizedLeagueId), { expire: 0 }),
         ]);
         const failed = results.filter((r) => r.status === 'rejected').length;
         if (failed) {
-          logger.warn('Trades revalidation failed', { leagueId, failed });
+          logger.warn('Trades revalidation failed', { leagueId: authorizedLeagueId, failed });
         }
       }
     } catch (e) {
-      logger.warn('Trades revalidation error', { leagueId, error: e });
+      logger.warn('Trades revalidation error', { leagueId: authorizedLeagueId, error: e });
     }
     return successResponse({ message: 'Trade offer processed successfully' });
   } catch (err) {
+    if (err instanceof TradeServiceError) {
+      return errorResponse(err.message, err.status, err.code);
+    }
     logger.error('Error processing trade offer', err);
     return commonErrors.internalServerError('Server error');
   }

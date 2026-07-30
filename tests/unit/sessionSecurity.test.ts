@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
 
 const { adminAuth } = vi.hoisted(() => ({
   adminAuth: {
@@ -14,7 +15,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({ adminAuth }));
 
 import { DELETE, POST } from '@/app/api/auth/session/route';
 import { isSameOriginRequest } from '@/lib/requestOrigin';
-import { middleware } from '@/middleware';
+import { config as proxyConfig, proxy } from '@/proxy';
 
 const originalAppOrigin = process.env.NEXT_PUBLIC_APP_ORIGIN;
 const originalAppUrl = process.env.APP_URL;
@@ -64,13 +65,13 @@ describe('session request security', () => {
   });
 
   it('allows same-origin API preflights without reflecting untrusted origins', () => {
-    const allowedResponse = middleware(
+    const allowedResponse = proxy(
       new NextRequest('https://statly.test/api/leagues', {
         method: 'OPTIONS',
         headers: { origin: 'https://statly.test' },
       })
     );
-    const rejectedResponse = middleware(
+    const rejectedResponse = proxy(
       new NextRequest('https://statly.test/api/leagues', {
         method: 'OPTIONS',
         headers: { origin: 'https://attacker.example' },
@@ -78,9 +79,7 @@ describe('session request security', () => {
     );
 
     expect(allowedResponse.status).toBe(204);
-    expect(allowedResponse.headers.get('access-control-allow-origin')).toBe(
-      'https://statly.test'
-    );
+    expect(allowedResponse.headers.get('access-control-allow-origin')).toBe('https://statly.test');
     expect(rejectedResponse.status).toBe(403);
     expect(rejectedResponse.headers.has('access-control-allow-origin')).toBe(false);
   });
@@ -135,7 +134,7 @@ describe('session request security', () => {
   });
 
   it('preserves a protected deep link and query when redirecting to login', () => {
-    const response = middleware(
+    const response = proxy(
       new NextRequest('https://statly.test/leagues/league-1/social?view=board&post=post-1')
     );
     const redirectUrl = new URL(response.headers.get('location')!);
@@ -148,7 +147,7 @@ describe('session request security', () => {
   });
 
   it('passes a token-transported protected navigation to the server verification boundary', () => {
-    const response = middleware(
+    const response = proxy(
       new NextRequest('https://statly.test/dashboard?view=overview', {
         headers: { authorization: 'Bearer current-firebase-token' },
       })
@@ -162,14 +161,23 @@ describe('session request security', () => {
   });
 
   it('carries the original request into the invalid-session server guard', () => {
-    const middlewareSource = readFileSync(join(process.cwd(), 'src/middleware.ts'), 'utf8');
+    const proxySource = readFileSync(join(process.cwd(), 'src/proxy.ts'), 'utf8');
     const layoutSource = readFileSync(join(process.cwd(), 'src/app/(app)/layout.tsx'), 'utf8');
 
-    expect(middlewareSource).toContain(
+    expect(proxySource).toContain(
       "requestHeaders.set('x-statly-request-path', `${pathname}${request.nextUrl.search}`)"
     );
     expect(layoutSource).toContain(".get('x-statly-request-path')");
     expect(layoutSource).toContain('encodeURIComponent(safeRequestPath)');
+  });
+
+  it('keeps framework-internal requests outside the application proxy', () => {
+    expect(
+      unstable_doesMiddlewareMatch({ config: proxyConfig, url: '/_next/static/chunks/app.js' })
+    ).toBe(false);
+    expect(unstable_doesMiddlewareMatch({ config: proxyConfig, url: '/favicon.ico' })).toBe(false);
+    expect(unstable_doesMiddlewareMatch({ config: proxyConfig, url: '/dashboard' })).toBe(true);
+    expect(unstable_doesMiddlewareMatch({ config: proxyConfig, url: '/api/leagues' })).toBe(true);
   });
 });
 

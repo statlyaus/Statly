@@ -4,6 +4,18 @@ import { withSentryConfig } from '@sentry/nextjs';
 const nextConfig = {
   reactStrictMode: true,
 
+  images: {
+    localPatterns: [
+      {
+        pathname: '/Assets/statly-stadium-hero.png',
+        search: '?v=20260705b',
+      },
+      {
+        pathname: '/brand/**',
+      },
+    ],
+  },
+
   async headers() {
     return [
       {

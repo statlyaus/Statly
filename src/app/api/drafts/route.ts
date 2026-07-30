@@ -584,7 +584,7 @@ export async function POST(request: NextRequest) {
       draftType: body.draftType,
       timePerPick: body.timePerPick,
       status: result.draft.status,
-      startAt: result.settings.startAt.toISOString(),
+      startAt: result.settings.startAt?.toISOString() ?? null,
       scheduledTime: body.scheduledTime,
       createdAt: result.draft.createdAt.toISOString(),
       currentPick: result.draft.currentPick,

@@ -65,7 +65,7 @@ describe('DraftManager calendar UX', () => {
     vi.clearAllMocks();
   });
 
-  it('uses separate date and time controls with friendly quick start actions', async () => {
+  it('uses the shared accessible schedule workspace', async () => {
     const { container } = render(
       <DraftManager league={league} members={buildMembers()} currentUserId={league.ownerId} />
     );
@@ -82,11 +82,19 @@ describe('DraftManager calendar UX', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Prepare draft settings' }));
 
     expect(screen.getByText('Format and Clock')).toBeInTheDocument();
-    expect(screen.getByLabelText('Draft date')).toBeInTheDocument();
-    expect(screen.getByLabelText('Draft time')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start in 10 minutes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start tonight' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start tomorrow' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Draft start time' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Start time')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'League time zone' })).toBeInTheDocument();
+    const tomorrowChoice = screen.getByRole('button', {
+      name: 'Schedule the draft for tomorrow at 7:00 pm',
+    });
+    expect(tomorrowChoice).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Schedule the draft for next Saturday at 2:00 pm' })
+    ).toBeInTheDocument();
+    fireEvent.click(tomorrowChoice);
+    expect(screen.getByLabelText('Start time')).toHaveValue('19:00');
+    expect(screen.getByText('Draft starts').parentElement).toHaveTextContent('7:00 pm');
     expect(screen.getByText(/Draft starts/i)).toBeInTheDocument();
     expect(container.querySelector('input[type="datetime-local"]')).not.toBeInTheDocument();
   });

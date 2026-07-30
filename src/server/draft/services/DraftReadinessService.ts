@@ -49,7 +49,7 @@ function buildMissingLeagueReadiness(leagueId: string): DraftOperationalReadines
       isRunning: false,
       isComplete: false,
     },
-    blockers: [{ code: 'league_not_found', message: 'League not found.' }],
+    blockers: [{ id: 'league_not_found', code: 'league_not_found', message: 'League not found.' }],
   };
 }
 
@@ -63,6 +63,7 @@ function buildBlockers(input: {
 
   if (!league.settings) {
     blockers.push({
+      id: 'settings_missing',
       code: 'settings_missing',
       message: 'Draft settings must be saved before the room can open.',
     });
@@ -71,6 +72,7 @@ function buildBlockers(input: {
 
   if (!league.settings.startAt) {
     blockers.push({
+      id: 'draft_time_missing',
       code: 'draft_time_missing',
       message: 'A draft date and time is required before the room can open.',
     });
@@ -78,6 +80,7 @@ function buildBlockers(input: {
 
   if (league.members.length < 2) {
     blockers.push({
+      id: 'insufficient_members',
       code: 'insufficient_members',
       message: 'At least two league members are required to run a draft.',
     });
@@ -85,11 +88,13 @@ function buildBlockers(input: {
 
   if (!draft) {
     blockers.push({
+      id: 'draft_room_missing',
       code: 'draft_room_missing',
       message: 'The draft room has not been created yet.',
     });
   } else if (draft.orders.length !== league.members.length) {
     blockers.push({
+      id: 'draft_order_missing',
       code: 'draft_order_missing',
       message: 'The draft order does not match the current league members.',
     });
@@ -97,6 +102,7 @@ function buildBlockers(input: {
 
   if (capacity.rosterSpotsPerTeam <= 0 || capacity.requestedTotalPicks <= 0) {
     blockers.push({
+      id: 'settings_missing',
       code: 'settings_missing',
       message: 'Roster and bench sizes must be configured before the draft can run.',
     });
@@ -104,6 +110,7 @@ function buildBlockers(input: {
 
   if (capacity.activePlayerCount === 0) {
     blockers.push({
+      id: 'player_pool_empty',
       code: 'player_pool_empty',
       message: 'No active players are available for this draft.',
     });
@@ -111,6 +118,7 @@ function buildBlockers(input: {
 
   if (capacity.cappedByPlayerPool && capacity.activePlayerCount > 0) {
     blockers.push({
+      id: 'player_pool_shortage',
       code: 'player_pool_shortage',
       message: `Only ${capacity.activePlayerCount} active players are available for ${capacity.requestedTotalPicks} requested draft picks.`,
     });
@@ -118,6 +126,7 @@ function buildBlockers(input: {
 
   for (const shortage of capacity.positionShortages) {
     blockers.push({
+      id: `position_pool_shortage:${shortage.position}`,
       code: 'position_pool_shortage',
       message: `${shortage.position} roster settings require ${shortage.required} players, but only ${shortage.available} active ${shortage.position} players are available.`,
     });
@@ -125,6 +134,7 @@ function buildBlockers(input: {
 
   if (draft?.status === DraftStatus.COMPLETED) {
     blockers.push({
+      id: 'draft_completed',
       code: 'draft_completed',
       message: 'This draft has already completed.',
     });

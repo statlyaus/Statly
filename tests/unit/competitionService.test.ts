@@ -64,6 +64,7 @@ describe('publishCompetition', () => {
     prismaMocks.league.findUnique.mockResolvedValue({
       id: 'league-1',
       settingsId: 'settings-1',
+      activeSeasonId: 'season-1',
       categoriesJson: JSON.stringify(['goals']),
       settings: {
         competitionRulesVersion: 4,
@@ -148,6 +149,7 @@ describe('publishCompetition', () => {
     expect(txMocks.leagueCompetitionRound.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         fixtureVersion: 5,
+        seasonId: 'season-1',
         round: 1,
         phase: 'REGULAR',
       }),

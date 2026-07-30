@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { getLeagueMembership, isLeagueManagerRole } from '@/lib/leagueMembership';
-import { scheduleDraftStart } from '@/server/queue/draftQueue';
+import { cancelDraftStart, scheduleDraftStart } from '@/server/queue/draftQueue';
 import { ensureLeagueDraftSetupConverged } from '@/server/draft/services/DraftSetupConvergenceService';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import {
@@ -81,11 +81,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
 
     if (prismaLeague?.settings) {
-      const draftDate = parseDraftDate(body.draftDate ?? body.scheduledTime ?? body.startAt);
+      const draftDateField = ['draftDate', 'scheduledTime', 'startAt'].find((field) =>
+        Object.prototype.hasOwnProperty.call(body, field)
+      );
+      const draftDateValue = draftDateField ? body[draftDateField] : undefined;
+      const draftDate = parseDraftDate(draftDateValue);
+      const isClearingDraftDate =
+        draftDateField !== undefined &&
+        (draftDateValue === null ||
+          (typeof draftDateValue === 'string' && draftDateValue.trim().length === 0));
       const timePerPick = parsePickSeconds(body.timePerPick ?? body.pickSeconds);
       const draftType = String(body.draftType ?? prismaLeague.settings.draftType).toUpperCase();
 
-      if ((body.draftDate || body.scheduledTime || body.startAt) && !draftDate) {
+      if (draftDateField && !draftDate && !isClearingDraftDate) {
         return NextResponse.json({ error: 'Invalid draft date' }, { status: 400 });
       }
 
@@ -115,7 +123,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       await prisma.leagueSettings.update({
         where: { id: prismaLeague.settings.id },
         data: {
-          ...(draftDate ? { startAt: draftDate } : {}),
+          ...(draftDateField ? { startAt: draftDate ?? null } : {}),
           ...(timePerPick !== undefined ? { pickSeconds: timePerPick } : {}),
           draftType: draftType as 'SNAKE' | 'LINEAR',
           pickOrder: pickOrder === 'manual' ? 'MANUAL' : 'RANDOM',
@@ -132,8 +140,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         leagueId: id,
       });
       const effectivePickSeconds = timePerPick ?? prismaLeague.settings.pickSeconds;
+      const effectiveDraftDate = draftDateField ? draftDate : prismaLeague.settings.startAt;
 
-      if (draftDate && draftDate.getTime() > Date.now()) {
+      if (isClearingDraftDate) {
+        await cancelDraftStart(id);
+      } else if (draftDate && draftDate.getTime() > Date.now()) {
         try {
           await scheduleDraftStart(id, draftDate, effectivePickSeconds * 1000, true);
         } catch (error) {
@@ -156,7 +167,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         success: true,
         message: 'Draft settings updated successfully',
         data: {
-          draftDate: draftDate?.toISOString() ?? prismaLeague.settings.startAt.toISOString(),
+          draftDate: effectiveDraftDate?.toISOString() ?? null,
           draftType: draftType.toLowerCase(),
           timePerPick: effectivePickSeconds,
           pickOrder,
@@ -223,7 +234,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({
         success: true,
         data: {
-          draftDate: prismaLeague.settings.startAt.toISOString(),
+          draftDate: prismaLeague.settings.startAt?.toISOString() ?? null,
           draftType: prismaLeague.settings.draftType.toLowerCase(),
           timePerPick: prismaLeague.settings.pickSeconds,
           pickOrder: prismaLeague.settings.pickOrder.toLowerCase(),

@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3100';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3100';
 
 export const DEVELOPMENT_USER = {
   uid: 'statly-dev-tester',
@@ -63,7 +63,6 @@ export async function expectNoPageLevelHorizontalOverflow(page: Page): Promise<v
 function isExpectedDevelopmentNoise(message: string) {
   return [
     'Download the React DevTools',
-    'Next.js 15.4.10 (outdated)',
     'Failed to load resource: the server responded with a status of 404',
   ].some((expected) => message.includes(expected));
 }

@@ -15,7 +15,7 @@ supported categories and whether higher or lower values win.
 
 ## Architecture
 
-Statly is a Next.js 15 and React 19 application written in TypeScript.
+Statly is a Next.js 16 and React 19 application written in TypeScript.
 
 - Prisma with SQLite currently owns protected relational state. Managed PostgreSQL is the accepted
   production target, but that cutover is not complete.

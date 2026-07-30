@@ -146,28 +146,6 @@ function PlayerCard({
           }
         }
 
-        // Best-effort: fire analytics endpoint (non-blocking)
-        try {
-          if (typeof window !== 'undefined') {
-            void fetch('/api/analytics/performance', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              keepalive: true,
-              body: JSON.stringify({
-                name: 'player_image_load_error',
-                value: 1,
-                id: player.id,
-                playerName: player.name,
-                src,
-                timestamp: Date.now(),
-              }),
-            });
-          }
-        } catch (fetchErr) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('Failed to send image error analytic', fetchErr);
-          }
-        }
       } catch (err) {
         // Fallback: ensure we still set image error and do not crash the component
         console.error('Unexpected error in handleImageError', err);

@@ -1019,7 +1019,9 @@ export default function LeagueTabs({
                     {!draftRoomPath && draftReadiness.blockers.length > 1 && (
                       <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600">
                         {draftReadiness.blockers.slice(1).map((blocker) => (
-                          <li key={blocker.code}>{blocker.message}</li>
+                          <li key={blocker.id ?? `${blocker.code}:${blocker.message}`}>
+                            {blocker.message}
+                          </li>
                         ))}
                       </ul>
                     )}

@@ -165,9 +165,39 @@ describe('getLeagueDraftOperationalReadiness', () => {
     expect(readiness.status).toBe('blocked');
     expect(readiness.lifecycle.canStartClock).toBe(false);
     expect(readiness.blockers).toContainEqual({
+      id: 'player_pool_empty',
       code: 'player_pool_empty',
       message: 'No active players are available for this draft.',
     });
+  });
+
+  it('assigns stable identities to repeated positional shortage blockers', async () => {
+    const client = buildClient({
+      startAt: new Date('2026-05-02T00:00:00.000Z'),
+      availablePlayers: 100,
+    });
+    client.player.groupBy.mockResolvedValue([
+      { position: 'DEF', _count: { _all: 1 } },
+      { position: 'MID', _count: { _all: 1 } },
+      { position: 'RUC', _count: { _all: 1 } },
+      { position: 'FWD', _count: { _all: 1 } },
+    ]);
+
+    const readiness = await getLeagueDraftOperationalReadiness(client as any, {
+      leagueId: 'league-1',
+      now: new Date('2026-05-02T00:05:00.000Z'),
+    });
+    const positionBlockers = readiness.blockers.filter(
+      (blocker) => blocker.code === 'position_pool_shortage'
+    );
+
+    expect(positionBlockers).toHaveLength(4);
+    expect(positionBlockers.map((blocker) => blocker.id)).toEqual([
+      'position_pool_shortage:DEF',
+      'position_pool_shortage:MID',
+      'position_pool_shortage:RUC',
+      'position_pool_shortage:FWD',
+    ]);
   });
 
   it('keeps lobby read paths free of lifecycle writes', () => {

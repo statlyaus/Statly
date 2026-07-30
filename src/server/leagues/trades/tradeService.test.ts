@@ -184,6 +184,24 @@ describe.sequential('league trade service transactions', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
   });
 
+  it('authorizes cache invalidation only for active members in the active season', async () => {
+    await expect(service.authorizeLeagueTradeAccess(ids.league, ids.firstUser)).resolves.toBe(
+      ids.league
+    );
+    await expect(
+      service.authorizeLeagueTradeAccess(ids.league, 'not-a-league-member')
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
+
+    await prisma.league.update({
+      where: { id: ids.league },
+      data: { activeSeasonId: null },
+    });
+
+    await expect(
+      service.authorizeLeagueTradeAccess(ids.league, ids.firstUser)
+    ).rejects.toMatchObject({ code: 'INVALID_STATE', status: 409 });
+  });
+
   it('rejects malformed pagination cursors deliberately', async () => {
     await expect(
       readModel.loadAuthorizedLeagueTradeCentre({

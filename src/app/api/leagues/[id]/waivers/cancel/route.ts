@@ -75,8 +75,8 @@ export const POST = withMetrics(
 
       logger.info('waiver cancelled', { leagueId, callerId, claimId });
       try {
-        revalidateTag(tags.waivers(leagueId));
-        revalidateTag(tags.league(leagueId));
+        revalidateTag(tags.waivers(leagueId), { expire: 0 });
+        revalidateTag(tags.league(leagueId), { expire: 0 });
       } catch (revalErr) {
         logger.warn('Failed to revalidate tags after waiver cancel', {
           leagueId,

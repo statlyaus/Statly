@@ -193,7 +193,7 @@ export function invalidateUserCache(userId: string): void {
 export async function revalidateTags(tags: string[]): Promise<void> {
   try {
     const { revalidateTag } = await import('next/cache');
-    await Promise.all(tags.map((tag) => revalidateTag(tag)));
+    await Promise.all(tags.map((tag) => revalidateTag(tag, { expire: 0 })));
   } catch {
     // Swallow errors when next/cache is unavailable
   }

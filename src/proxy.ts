@@ -17,7 +17,7 @@ function getBearerToken(request: NextRequest): string | null {
  * Perform optimistic routing checks only. Protected server loaders and API handlers remain
  * responsible for verifying the credential before reading or mutating data.
  */
-export function middleware(request: NextRequest): NextResponse {
+export function proxy(request: NextRequest): NextResponse {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 
@@ -77,5 +77,5 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/api/:path*', '/((?!api|_next/|favicon.ico).*)'],
 };

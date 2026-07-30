@@ -28,13 +28,18 @@ interface RedisIncrExpire {
 // Minimal commands needed for distributed de-dup
 interface RedisKV {
   set: (key: string, value: string, ...args: unknown[]) => Promise<string | null>;
+  eval: (
+    script: string,
+    numKeys: number,
+    ...keysAndArgs: Array<string | number>
+  ) => Promise<number>;
 }
 
 // Runtime type guard for RedisKV
 function isRedisKVClient(client: unknown): client is RedisKV {
   if (typeof client !== 'object' || client === null) return false;
-  const c = client as { set?: unknown };
-  return typeof c.set === 'function';
+  const c = client as { set?: unknown; eval?: unknown };
+  return typeof c.set === 'function' && typeof c.eval === 'function';
 }
 
 function isRedisIncrExpire(client: unknown): client is RedisIncrExpire {
@@ -139,6 +144,10 @@ class DeduplicationManager {
     this.recentIds.set(key, now + this.ttlMs);
   }
 
+  releaseLocal(key: string): void {
+    this.recentIds.delete(key);
+  }
+
   getRedisKey(key: string): string {
     return `${this.redisPrefix}${key}`;
   }
@@ -160,21 +169,31 @@ function _createDeduplicationManager(
 }
 
 // Cross-instance de-dup using Redis SET NX PX. Falls back to local cache on Redis issues.
-async function isDuplicate(key: string): Promise<boolean> {
+type DuplicateClaim = { duplicate: true; token: null } | { duplicate: false; token: string | null };
+
+const RELEASE_DUPLICATE_CLAIM_SCRIPT = `
+if redis.call('get', KEYS[1]) == ARGV[1] then
+  return redis.call('del', KEYS[1])
+end
+return 0
+`;
+
+async function claimDuplicateKey(key: string): Promise<DuplicateClaim> {
   // Fast-path: local cache hit
-  if (dedupManager.isDuplicateLocal(key)) return true;
+  if (dedupManager.isDuplicateLocal(key)) return { duplicate: true, token: null };
 
   try {
     const rawClient = getPublisherClient();
     if (!isRedisKVClient(rawClient)) {
       // No compatible Redis client; rely on local only
       logger.warn('Distributed de-dup Redis client missing SET; using local-only de-dup');
-      return false;
+      return { duplicate: false, token: null };
     }
 
+    const token = crypto.randomUUID();
     const resp = await rawClient.set(
       dedupManager.getRedisKey(key),
-      '1',
+      token,
       'PX',
       dedupManager.getTTLms(),
       'NX'
@@ -182,17 +201,32 @@ async function isDuplicate(key: string): Promise<boolean> {
     if (resp === null) {
       // Already exists globally; mark local to avoid repeated remote checks during TTL
       dedupManager.markLocal(key);
-      return true;
+      return { duplicate: true, token: null };
     }
 
     // Newly recorded globally; ensure local cache contains it too
     dedupManager.markLocal(key);
-    return false;
+    return { duplicate: false, token };
   } catch (e) {
     logger.warn('Distributed de-dup unavailable; falling back to local', {
       error: e instanceof Error ? e.message : String(e),
     });
-    return false;
+    return { duplicate: false, token: null };
+  }
+}
+
+async function releaseDuplicateClaim(key: string, token: string | null): Promise<void> {
+  dedupManager.releaseLocal(key);
+  if (!token) return;
+
+  try {
+    const rawClient = getPublisherClient();
+    if (!isRedisKVClient(rawClient)) return;
+    await rawClient.eval(RELEASE_DUPLICATE_CLAIM_SCRIPT, 1, dedupManager.getRedisKey(key), token);
+  } catch (error) {
+    logger.warn('Failed to release performance metric de-duplication claim', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -287,6 +321,10 @@ function cleanUrl(raw: string): string {
   }
 }
 
+function createMetricsJobId(dedupKey: string): string {
+  return crypto.createHash('sha256').update(dedupKey).digest('hex');
+}
+
 function noStore(json: unknown, init?: ResponseInit) {
   return NextResponse.json(json, {
     ...init,
@@ -320,70 +358,71 @@ function isOriginAllowed(req: NextRequest): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const contentType = request.headers.get('content-type') || '';
-    if (!contentType.toLowerCase().includes('application/json')) {
-      return noStore({ success: false, error: 'Unsupported Media Type' }, { status: 415 });
-    }
+  const contentType = request.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return noStore({ success: false, error: 'Unsupported Media Type' }, { status: 415 });
+  }
 
-    if (!isOriginAllowed(request)) {
-      return noStore({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
+  if (!isOriginAllowed(request)) {
+    return noStore({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
 
-    const body = await request.json();
-    const parsed = performanceMetricSchema.safeParse(body);
-    if (!parsed.success) {
-      logger.warn('Invalid performance metric payload', { issues: parsed.error.issues });
-      return noStore(
-        { success: false, error: 'Invalid metric data', issues: parsed.error.issues },
-        { status: 400 }
-      );
-    }
-    const metric = parsed.data;
+  const body = await request.json().catch(() => null);
+  const parsed = performanceMetricSchema.safeParse(body);
+  if (!parsed.success) {
+    logger.warn('Invalid performance metric payload', { issues: parsed.error.issues });
+    return noStore(
+      { success: false, error: 'Invalid metric data', issues: parsed.error.issues },
+      { status: 400 }
+    );
+  }
+  const metric = parsed.data;
 
-    // Compute hashed session id for logs (privacy-friendly)
-    const sessionIdHash = crypto
-      .createHash('sha256')
-      .update(metric.sessionId)
-      .digest('hex')
-      .slice(0, 12);
+  // Compute hashed session id for logs (privacy-friendly)
+  const sessionIdHash = crypto
+    .createHash('sha256')
+    .update(metric.sessionId)
+    .digest('hex')
+    .slice(0, 12);
 
-    // Apply rate limiting per session (fallback to UA/IP hash if needed)
-    const xff = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-    const ua = request.headers.get('user-agent') ?? 'unknown';
-    const identifier = metric.sessionId || xff || ua;
-    const idHash = crypto.createHash('sha1').update(identifier).digest('hex').slice(0, 16);
-    const rl = await rateLimit(`metrics:rl:${idHash}`, 60, 60); // 60 req/min
-    if (!rl.allowed) {
-      return noStore({ success: false, error: 'Too Many Requests' }, { status: 429 });
-    }
+  // Apply rate limiting per session (fallback to UA/IP hash if needed)
+  const xff = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const ua = request.headers.get('user-agent') ?? 'unknown';
+  const identifier = metric.sessionId || xff || ua;
+  const idHash = crypto.createHash('sha256').update(identifier).digest('hex').slice(0, 16);
+  const rl = await rateLimit(`metrics:rl:${idHash}`, 60, 60); // 60 req/min
+  if (!rl.allowed) {
+    return noStore({ success: false, error: 'Too Many Requests' }, { status: 429 });
+  }
 
-    // De-dup by (sessionId, id)
-    const dedupKey = `${metric.sessionId}:${metric.id}`;
-    if (await isDuplicate(dedupKey)) {
-      logger.info('Duplicate performance metric ignored', {
-        metric: metric.name,
-        id: metric.id,
-        sessionIdHash,
-      });
-      return noStore({ success: true, message: 'Duplicate metric ignored' }, { status: 202 });
-    }
-
-    const sanitizedUrl = cleanUrl(metric.url);
-
-    // Log the performance metric (sanitized)
-    logger.info('Performance metric received', {
+  // De-dup by (sessionId, id)
+  const dedupKey = `${metric.sessionId}:${metric.id}`;
+  const duplicateClaim = await claimDuplicateKey(dedupKey);
+  if (duplicateClaim.duplicate) {
+    logger.info('Duplicate performance metric ignored', {
       metric: metric.name,
-      value: metric.value,
-      rating: metric.rating,
-      navigationType: metric.navigationType,
-      url: sanitizedUrl,
+      id: metric.id,
       sessionIdHash,
-      userAgent: ua,
-      timestamp: new Date(metric.timestamp).toISOString(),
     });
+    return noStore({ success: true, message: 'Duplicate metric ignored' }, { status: 202 });
+  }
 
-    // Enqueue to BullMQ for async processing/storage
+  const sanitizedUrl = cleanUrl(metric.url);
+
+  // Log the performance metric (sanitized)
+  logger.info('Performance metric received', {
+    metric: metric.name,
+    value: metric.value,
+    rating: metric.rating,
+    navigationType: metric.navigationType,
+    url: sanitizedUrl,
+    sessionIdHash,
+    userAgent: ua,
+    timestamp: new Date(metric.timestamp).toISOString(),
+  });
+
+  try {
+    // BullMQ reserves colons in custom job IDs, so hash the semantic de-duplication key.
     await getMetricsQueue().add(
       'metric',
       {
@@ -393,18 +432,22 @@ export async function POST(request: NextRequest) {
         userAgent: ua,
       },
       {
-        jobId: dedupKey, // deterministic for idempotency
+        jobId: createMetricsJobId(dedupKey),
       }
     );
-
-    return noStore({ success: true, message: 'Performance metric recorded' });
   } catch (error) {
-    logger.error('Failed to process performance metric', {
-      error: error instanceof Error ? error.message : String(error),
+    await releaseDuplicateClaim(dedupKey, duplicateClaim.token);
+    logger.error('Failed to enqueue performance metric', error, {
+      metric: metric.name,
+      sessionIdHash,
     });
-
-    return noStore({ success: false, error: 'Invalid metric data' }, { status: 400 });
+    return noStore(
+      { success: false, error: 'Performance metric service unavailable' },
+      { status: 503 }
+    );
   }
+
+  return noStore({ success: true, message: 'Performance metric recorded' });
 }
 
 // Optional: GET endpoint to retrieve performance metrics summary

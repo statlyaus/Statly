@@ -13,7 +13,13 @@ import {
   ArrowDownIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { DraftScheduleField } from '@/components/draft/DraftScheduleField';
 import { fetchApi } from '@/lib/api';
+import {
+  draftScheduleFromInstant,
+  resolveDraftSchedule,
+  type DraftScheduleValue,
+} from '@/lib/draftSchedule';
 import {
   DEFAULT_DRAFT_AUTO_PICK_RULES,
   DEFAULT_DRAFT_POSITION_LIMITS,
@@ -85,68 +91,20 @@ const MINIMUM_DRAFT_START_OFFSET_MS = 5 * 60 * 1000;
 
 const DRAFT_STATUSES = new Set(['SCHEDULED', 'LOBBY', 'COUNTDOWN', 'LIVE', 'PAUSED', 'COMPLETED']);
 
-function toDateTimeLocalInputValue(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
-}
-
 function getMinimumDraftStartDate(): Date {
   return new Date(Date.now() + MINIMUM_DRAFT_START_OFFSET_MS);
 }
 
-function getDraftStartDatePart(value: string): string {
-  return value.split('T')[0] ?? '';
+function toDraftScheduleValue(settings: Pick<DraftSettings, 'scheduledTime' | 'timeZone'>) {
+  return {
+    date: settings.scheduledTime.split('T')[0] ?? '',
+    time: settings.scheduledTime.split('T')[1]?.slice(0, 5) ?? '',
+    timeZone: settings.timeZone,
+  } satisfies DraftScheduleValue;
 }
 
-function getDraftStartTimePart(value: string): string {
-  return value.split('T')[1]?.slice(0, 5) ?? '';
-}
-
-function toScheduledTimeValue(datePart: string, timePart: string): string {
-  if (!datePart || !timePart) return '';
-  return `${datePart}T${timePart}`;
-}
-
-function getTonightDraftStartDate(): Date {
-  const candidate = new Date();
-  candidate.setHours(20, 0, 0, 0);
-
-  const minimum = getMinimumDraftStartDate();
-  if (candidate.getTime() <= minimum.getTime()) {
-    return minimum;
-  }
-
-  return candidate;
-}
-
-function getTomorrowDraftStartDate(): Date {
-  const candidate = new Date();
-  candidate.setDate(candidate.getDate() + 1);
-  candidate.setHours(19, 0, 0, 0);
-  return candidate;
-}
-
-function formatDraftStartDateTime(value: string): string {
-  const date = new Date(value);
-
-  return new Intl.DateTimeFormat('en-AU', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-}
-
-function formatDraftStartSummary(value: string, timeZone: string): string {
-  const date = new Date(value);
-  if (!value || Number.isNaN(date.getTime())) {
-    return 'Choose a draft start time.';
-  }
-
-  return `Draft starts ${formatDraftStartDateTime(value)} (${timeZone})`;
+function toScheduledTime(value: DraftScheduleValue): string {
+  return value.date && value.time ? `${value.date}T${value.time}` : '';
 }
 
 function normalizeExistingDraftStatus(status: string | null | undefined): ExistingDraft['status'] {
@@ -175,20 +133,6 @@ function shuffleMembers(orderedMembers: LeagueMember[]): LeagueMember[] {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
-}
-
-function validateDraftScheduledTime(scheduledTime: string): string | null {
-  const selected = new Date(scheduledTime);
-
-  if (Number.isNaN(selected.getTime())) {
-    return 'Please choose a valid draft start time.';
-  }
-
-  if (selected.getTime() <= Date.now()) {
-    return 'Scheduled time must be in the future.';
-  }
-
-  return null;
 }
 
 function getOrderedDraftMembers(input: {
@@ -336,9 +280,13 @@ export default function DraftManager({
       }
 
       if (!next.scheduledTime) {
+        const defaultSchedule = draftScheduleFromInstant(
+          new Date(Date.now() + DRAFT_START_OFFSET_MS),
+          next.timeZone
+        );
         next = {
           ...next,
-          scheduledTime: toDateTimeLocalInputValue(new Date(Date.now() + DRAFT_START_OFFSET_MS)),
+          scheduledTime: toScheduledTime(defaultSchedule),
         };
       }
 
@@ -407,24 +355,11 @@ export default function DraftManager({
     }));
   };
 
-  const updateScheduledDate = (datePart: string) => {
+  const updateDraftSchedule = (value: DraftScheduleValue) => {
     setDraftSettings((prev) => ({
       ...prev,
-      scheduledTime: toScheduledTimeValue(datePart, getDraftStartTimePart(prev.scheduledTime)),
-    }));
-  };
-
-  const updateScheduledClockTime = (timePart: string) => {
-    setDraftSettings((prev) => ({
-      ...prev,
-      scheduledTime: toScheduledTimeValue(getDraftStartDatePart(prev.scheduledTime), timePart),
-    }));
-  };
-
-  const applyScheduledTimePreset = (date: Date) => {
-    setDraftSettings((prev) => ({
-      ...prev,
-      scheduledTime: toDateTimeLocalInputValue(date),
+      scheduledTime: toScheduledTime(value),
+      timeZone: value.timeZone,
     }));
   };
 
@@ -435,9 +370,16 @@ export default function DraftManager({
     setError(null);
 
     try {
-      const validationError = validateDraftScheduledTime(draftSettings.scheduledTime);
-      if (validationError) {
-        setError(validationError);
+      const scheduleResolution = resolveDraftSchedule(
+        toDraftScheduleValue(draftSettings),
+        getMinimumDraftStartDate()
+      );
+      if (scheduleResolution.status !== 'valid') {
+        setError(
+          scheduleResolution.status === 'invalid'
+            ? scheduleResolution.error.message
+            : 'Choose a draft date and start time.'
+        );
         return;
       }
 
@@ -535,30 +477,7 @@ export default function DraftManager({
     });
   };
 
-  const minimumDraftStartValue = toDateTimeLocalInputValue(getMinimumDraftStartDate());
-  const scheduledDatePart = getDraftStartDatePart(draftSettings.scheduledTime);
-  const scheduledTimePart = getDraftStartTimePart(draftSettings.scheduledTime);
-  const draftStartSummary = formatDraftStartSummary(
-    draftSettings.scheduledTime,
-    draftSettings.timeZone
-  );
-  const draftStartPresets = [
-    {
-      label: 'In 10 min',
-      ariaLabel: 'Start in 10 minutes',
-      date: new Date(Date.now() + DRAFT_START_OFFSET_MS),
-    },
-    {
-      label: 'Tonight',
-      ariaLabel: 'Start tonight',
-      date: getTonightDraftStartDate(),
-    },
-    {
-      label: 'Tomorrow',
-      ariaLabel: 'Start tomorrow',
-      date: getTomorrowDraftStartDate(),
-    },
-  ];
+  const draftSchedule = toDraftScheduleValue(draftSettings);
   const rosterSize = getRosterSizeFromPositionLimits(draftSettings.positionLimits);
   const benchSize = getBenchSizeFromPositionLimits(draftSettings.positionLimits);
   const totalDraftPicks = members.length * rosterSize;
@@ -776,63 +695,14 @@ export default function DraftManager({
             </div>
 
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
-              {/* Scheduled Time */}
-              <section className="rounded-lg border border-border bg-background p-5">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h4 className="text-base font-semibold text-foreground">Draft Start Time</h4>
-                    <p className="mt-1 text-sm text-muted-foreground">{draftStartSummary}</p>
-                  </div>
-                  <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-                    Earliest {formatDraftStartDateTime(minimumDraftStartValue)}
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label
-                    htmlFor="scheduledDate"
-                    className="flex flex-col gap-1 text-sm font-medium text-foreground"
-                  >
-                    Draft date
-                    <input
-                      id="scheduledDate"
-                      type="date"
-                      value={scheduledDatePart}
-                      onChange={(e) => updateScheduledDate(e.target.value)}
-                      className="h-11 rounded-lg border border-input bg-card px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-                      min={getDraftStartDatePart(minimumDraftStartValue)}
-                    />
-                  </label>
-
-                  <label
-                    htmlFor="scheduledClockTime"
-                    className="flex flex-col gap-1 text-sm font-medium text-foreground"
-                  >
-                    Draft time
-                    <input
-                      id="scheduledClockTime"
-                      type="time"
-                      value={scheduledTimePart}
-                      onChange={(e) => updateScheduledClockTime(e.target.value)}
-                      className="h-11 rounded-lg border border-input bg-card px-3 text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {draftStartPresets.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      aria-label={preset.ariaLabel}
-                      onClick={() => applyScheduledTimePreset(preset.date)}
-                      className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </section>
+              <DraftScheduleField
+                value={draftSchedule}
+                onChange={updateDraftSchedule}
+                heading="Draft start time"
+                description="Set the league-local time when the draft room should open."
+                allowUnscheduled={false}
+                minimumInstant={getMinimumDraftStartDate()}
+              />
 
               <section className="rounded-lg border border-border bg-background p-5">
                 <div className="mb-4">
