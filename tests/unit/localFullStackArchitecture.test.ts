@@ -33,7 +33,7 @@ describe('local full stack development architecture', () => {
 
     expect(packageJson.devDependencies?.['firebase-tools']).toBeUndefined();
     expect(scripts['dev:firebase']).toBe(
-      'npx --yes --package=firebase-tools@15.24.0 firebase emulators:start --only auth,firestore'
+      'npx --yes --package=firebase-tools@15.25.0 firebase emulators:start --only auth,firestore'
     );
     expect(scripts['dev:firebase']).not.toContain('npx firebase');
     expect(scripts['dev:seed:local']).toBe('tsx Scripts/dev/seed-local-stack.ts');

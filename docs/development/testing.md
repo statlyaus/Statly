@@ -67,7 +67,7 @@ tests do not invoke R or write to Firestore; the external pipeline commands reta
 authorization and environment requirements.
 
 ETL `npm run lint` composes `lint:node` with `lint:r`. The R check parses `fetch_fw_round.R` without
-loading fitzRoy or contacting FootyWire. CI pins R 4.3 to match the ETL container's build stage; local
+loading fitzRoy or contacting FootyWire. CI pins R 4.6.1 to match the ETL container's build stage; local
 verification requires an available `Rscript` and may use a newer compatible R release.
 
 ## Database isolation

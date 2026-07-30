@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import * as admin from 'firebase-admin';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin using same pattern as main project
-if (!admin.apps.length) {
+if (getApps().length === 0) {
   try {
     const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64;
 
@@ -13,8 +14,8 @@ if (!admin.apps.length) {
     const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
     const serviceAccount = JSON.parse(serviceAccountJson);
 
-    admin.initializeApp({
-      credential: admin.credential.cert({
+    initializeApp({
+      credential: cert({
         projectId: serviceAccount.project_id,
         clientEmail: serviceAccount.client_email,
         privateKey: serviceAccount.private_key,
@@ -29,7 +30,7 @@ if (!admin.apps.length) {
   }
 }
 
-const db = admin.firestore();
+const db = getFirestore();
 
 interface ValidationResult {
   matchUid: string;
