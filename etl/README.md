@@ -27,7 +27,7 @@ fetch_fw_round.R → NDJSON stdout → fetchPipeline.ts → normalizePlayerRow.t
 ## Requirements
 
 - Node.js 22 and npm
-- R 4.3 or a newer compatible release, with `fitzRoy`, `jsonlite`, `janitor`, `dplyr`, and `stringr`
+- R 4.6.1 or a newer compatible release, with `fitzRoy`, `jsonlite`, `janitor`, `dplyr`, and `stringr`
 - an authorized Firebase project and server-only service-account credential for remote writes
 
 Install the package:

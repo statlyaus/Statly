@@ -1,6 +1,6 @@
 # Multi-stage Docker build for AFL ETL Pipeline
 # Stage 1: R Environment
-FROM r-base:4.3.0 as r-stage
+FROM r-base:4.6.1 as r-stage
 
 # Install R packages dependencies
 RUN apt-get update && apt-get install -y \

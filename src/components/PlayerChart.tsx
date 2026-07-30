@@ -125,7 +125,8 @@ const PlayerChart: React.FC<Props> = ({
                 tooltip: {
                   callbacks: {
                     title: (context) => fullLabels[context[0].dataIndex] ?? context[0].label,
-                    label: (context) => `Statly Value: ${context.parsed.y.toFixed(2)}`,
+                    label: (context) =>
+                      `Statly Value: ${context.parsed.y === null ? '-' : context.parsed.y.toFixed(2)}`,
                   },
                 },
               },
