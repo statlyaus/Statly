@@ -50,7 +50,16 @@ describe('Playwright browser matrix', () => {
     expect(integrationTest).toContain('teamCount: 12');
     expect(integrationTest).toContain('rosterSize: 22');
     expect(integrationTest).toContain('totalPicks: 264');
-    expect(integrationTest).toContain('new DraftApplicationService()');
+    expect(integrationTest).toMatch(/new DraftApplicationService\(\s*rosterProjectionService\s*\)/);
+    expect(integrationTest).toMatch(
+      /new RosterProjectionService\(\s*prisma,\s*waiverAvailabilityProjection\s*\)/
+    );
+    expect(integrationTest).toMatch(
+      /expect\(\s*waiverAvailabilityProjection\.projectLeague\s*\)\.toHaveBeenCalledTimes\(\s*1\s*\)/
+    );
+    expect(integrationTest).toMatch(
+      /expect\(\s*waiverAvailabilityProjection\.projectLeague\s*\)\.toHaveBeenCalledWith\(\{\s*leagueId:\s*FIXTURE\.leagueId,?\s*\}\)/
+    );
     expect(integrationTest).toContain('leagueRosterPlayer.findMany');
     expect(integrationTest).not.toContain('page.request');
 
