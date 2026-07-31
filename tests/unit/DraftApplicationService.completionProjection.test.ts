@@ -1,7 +1,7 @@
 import { DraftDirection, DraftStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { draftRepository, draftScheduler, statlyZStatsLookup } = vi.hoisted(() => ({
+const { draftRepository, statlyZStatsLookup } = vi.hoisted(() => ({
   draftRepository: {
     transaction: vi.fn(),
     getDraftAggregate: vi.fn(),
@@ -15,10 +15,6 @@ const { draftRepository, draftScheduler, statlyZStatsLookup } = vi.hoisted(() =>
     toEventPick: vi.fn(),
     createDraftEvents: vi.fn(),
     findPickByOverall: vi.fn(),
-  },
-  draftScheduler: {
-    cancelPickExpiry: vi.fn(),
-    schedulePickExpiry: vi.fn(),
   },
   statlyZStatsLookup: {
     byId: new Map([
@@ -54,10 +50,6 @@ vi.mock('@/server/draft/repository/DraftRepository', () => ({
   draftRepository,
 }));
 
-vi.mock('@/server/draft/services/DraftScheduler', () => ({
-  draftScheduler,
-}));
-
 vi.mock('@/server/rosters/RosterProjectionService', () => ({
   RosterProjectionService: class {
     projectDraft = vi.fn();
@@ -65,7 +57,8 @@ vi.mock('@/server/rosters/RosterProjectionService', () => ({
 }));
 
 vi.mock('@/server/draft/readModels/draftPlayerReadModel', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/server/draft/readModels/draftPlayerReadModel')>();
+  const actual =
+    await importOriginal<typeof import('@/server/draft/readModels/draftPlayerReadModel')>();
 
   return {
     ...actual,
@@ -123,7 +116,7 @@ describe('DraftApplicationService completion projection', () => {
     draftRepository.createDraftEvents.mockResolvedValue([{ id: 'event-1' }, { id: 'event-2' }]);
   });
 
-  it('projects canonical roster ownership and cancels pick expiry after the final auto-pick', async () => {
+  it('projects canonical roster ownership and persists completion for reconciliation after the final auto-pick', async () => {
     draftRepository.getDraftAggregate.mockResolvedValue({
       id: 'draft-1',
       leagueId: 'league-1',
@@ -198,8 +191,15 @@ describe('DraftApplicationService completion projection', () => {
       leagueId: 'league-1',
       draftId: 'draft-1',
     });
-    expect(draftScheduler.cancelPickExpiry).toHaveBeenCalledWith('draft-1');
-    expect(draftScheduler.schedulePickExpiry).not.toHaveBeenCalled();
+    expect(draftRepository.createDraftEvents).toHaveBeenCalledWith(
+      {},
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: 'draft:completed',
+          publishState: true,
+        }),
+      ])
+    );
   });
 
   it('auto-picks the highest Statly Z player when the current team has no valid queued player', async () => {
@@ -340,7 +340,10 @@ describe('DraftApplicationService completion projection', () => {
       ],
       picks: [],
     });
-    draftRepository.findQueuedPlayer.mockResolvedValue({ id: 'queue-1', playerId: 'queued-player' });
+    draftRepository.findQueuedPlayer.mockResolvedValue({
+      id: 'queue-1',
+      playerId: 'queued-player',
+    });
     draftRepository.findPlayer.mockResolvedValue({
       id: 'queued-player',
       name: 'Queued Player',

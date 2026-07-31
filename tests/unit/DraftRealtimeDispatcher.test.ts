@@ -71,7 +71,6 @@ describe('DraftRealtimeDispatcher canonical clock deltas', () => {
           displayName: 'Tester',
           draftOrder: 1,
           isOnline: true,
-          queue: [],
           autoPickEnabled: true,
           lastActivity: new Date('2026-06-07T00:01:00.000Z'),
         },

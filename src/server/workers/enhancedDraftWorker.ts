@@ -6,8 +6,8 @@ import { Worker, QueueEvents } from 'bullmq';
 import { logger } from '@/lib/logger';
 import { draftRepository } from '@/server/draft/repository/DraftRepository';
 import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
+import { draftExpiryReconciler } from '@/server/draft/services/DraftExpiryReconciler';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
-import { draftScheduler } from '@/server/draft/services/DraftScheduler';
 
 import {
   draftQueue,
@@ -34,6 +34,9 @@ interface WorkerMetrics {
 
 const RECONCILIATION_LOCK_KEY = 'draft:worker:reconcile-pick-expiry';
 const DEFAULT_RECONCILIATION_LOCK_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_RECONCILIATION_INTERVAL_MS = 30 * 1000;
+const MIN_RECONCILIATION_INTERVAL_MS = 5 * 1000;
+const MAX_RECONCILIATION_INTERVAL_MS = 5 * 60 * 1000;
 const RELEASE_RECONCILIATION_LOCK_SCRIPT = `
   if redis.call('get', KEYS[1]) == ARGV[1] then
     return redis.call('del', KEYS[1])
@@ -48,68 +51,21 @@ function getReconciliationLockTtlMs(): number {
     : DEFAULT_RECONCILIATION_LOCK_TTL_MS;
 }
 
-async function reconcileLiveDraftPickExpiryJobsAsLockOwner(): Promise<number> {
-  const schedules = await draftRepository.transaction((tx) =>
-    draftRepository.listLiveDraftPickExpirySchedules(tx)
-  );
-
-  let scheduledCount = 0;
-  let repairedCount = 0;
-  let skippedCount = 0;
-  for (const schedule of schedules) {
-    let pickDeadlineAt = schedule.pickDeadlineAt;
-    let schedulingVersion = schedule.schedulingVersion;
-
-    if (!pickDeadlineAt) {
-      const pickStartedAt = schedule.pickStartedAt ?? schedule.startedAt ?? new Date();
-      const repairedPickDeadlineAt = new Date(
-        pickStartedAt.getTime() + schedule.pickSeconds * 1000
-      );
-      const updated = await draftRepository.transaction((tx) =>
-        draftRepository.repairMissingLiveDraftPickDeadline(tx, {
-          draftId: schedule.draftId,
-          currentSchedulingVersion: schedule.schedulingVersion,
-          pickStartedAt,
-          pickDeadlineAt: repairedPickDeadlineAt,
-        })
-      );
-
-      if (updated.count !== 1) {
-        skippedCount++;
-        logger.warn('Skipped live draft timer repair because draft state changed', {
-          draftId: schedule.draftId,
-        });
-        continue;
-      }
-
-      repairedCount++;
-      schedulingVersion += 1;
-      pickDeadlineAt = repairedPickDeadlineAt;
-    }
-
-    if (!pickDeadlineAt) {
-      skippedCount++;
-      logger.warn('Skipped live draft timer reconciliation without a deadline', {
-        draftId: schedule.draftId,
-      });
-      continue;
-    }
-
-    await draftScheduler.schedulePickExpiry({
-      draftId: schedule.draftId,
-      leagueId: schedule.leagueId,
-      schedulingVersion,
-      pickDeadlineAt,
-    });
-    scheduledCount++;
+function getReconciliationIntervalMs(): number {
+  const configuredInterval = Number(process.env.DRAFT_RECONCILIATION_INTERVAL_MS);
+  if (!Number.isFinite(configuredInterval) || configuredInterval <= 0) {
+    return DEFAULT_RECONCILIATION_INTERVAL_MS;
   }
 
-  logger.info('Reconciled live draft pick expiry jobs', {
-    scheduledCount,
-    repairedCount,
-    skippedCount,
-  });
-  return scheduledCount;
+  return Math.max(
+    MIN_RECONCILIATION_INTERVAL_MS,
+    Math.min(MAX_RECONCILIATION_INTERVAL_MS, Math.floor(configuredInterval))
+  );
+}
+
+async function reconcileLiveDraftPickExpiryJobsAsLockOwner(): Promise<number> {
+  const result = await draftExpiryReconciler.reconcileAllLiveDrafts();
+  return result.scheduledCount + result.repairedCount;
 }
 
 export async function reconcileLiveDraftPickExpiryJobs(): Promise<number> {
@@ -155,6 +111,7 @@ class EnhancedDraftWorker {
   private queueEvents: QueueEvents;
   private metrics: WorkerMetrics;
   private cleanupInterval?: ReturnType<typeof setInterval>;
+  private reconciliationInterval?: ReturnType<typeof setInterval>;
   private started = false;
 
   constructor(workerId: string) {
@@ -192,6 +149,7 @@ class EnhancedDraftWorker {
     this.metrics.runtimeError = undefined;
     this.metrics.lastErrorAt = undefined;
     await reconcileLiveDraftPickExpiryJobs();
+    this.startReconciliationJob();
     this.startCleanupJob();
     logger.info('Enhanced Draft Worker started', {
       workerId: this.metrics.workerId,
@@ -473,7 +431,22 @@ class EnhancedDraftWorker {
     );
   }
 
+  private startReconciliationJob(): void {
+    this.reconciliationInterval = setInterval(() => {
+      void reconcileLiveDraftPickExpiryJobs().catch((error) => {
+        logger.error('Draft timer reconciliation failed', {
+          error: error instanceof Error ? error.message : String(error),
+          workerId: this.metrics.workerId,
+        });
+      });
+    }, getReconciliationIntervalMs());
+  }
+
   public async shutdown(): Promise<void> {
+    if (this.reconciliationInterval) {
+      clearInterval(this.reconciliationInterval);
+      this.reconciliationInterval = undefined;
+    }
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = undefined;

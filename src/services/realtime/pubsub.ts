@@ -16,7 +16,6 @@ export const DRAFT_REALTIME_EVENTS = [
   'draft:paused',
   'draft:resumed',
   'draft:completed',
-  'draft:queue-updated',
   'draft:admin-message',
 ] as const;
 export type DraftRealtimeEventType = (typeof DRAFT_REALTIME_EVENTS)[number];

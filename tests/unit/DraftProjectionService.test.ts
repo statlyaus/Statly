@@ -15,9 +15,6 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     findFirst: vi.fn(),
   },
-  preDraftQueue: {
-    findMany: vi.fn(),
-  },
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -68,7 +65,6 @@ describe('DraftProjectionService', () => {
         },
       ],
       picks: [],
-      preDraftQueues: [{ memberId: 'member-1', playerId: 'player-1' }],
     });
 
     const snapshot = await new DraftProjectionService().buildRoomSnapshot('draft-1', 'user-1');
@@ -98,9 +94,13 @@ describe('DraftProjectionService', () => {
           startedAt: '2026-06-14T12:00:00.000Z',
           deadlineAt: '2026-06-14T12:02:00.000Z',
         },
-        participants: [{ id: 'member-1', queue: ['player-1'] }],
+        participants: [{ id: 'member-1' }],
       },
     });
+    expect(prismaMock.draft.findFirst.mock.calls[0]?.[0]?.include).not.toHaveProperty(
+      'preDraftQueues'
+    );
+    expect(snapshot?.state.participants[0]).not.toHaveProperty('queue');
   });
 
   it('rejects a live room snapshot without persisted clock anchors', async () => {
@@ -138,7 +138,6 @@ describe('DraftProjectionService', () => {
         },
       ],
       picks: [],
-      preDraftQueues: [],
     });
 
     await expect(
@@ -200,7 +199,6 @@ describe('DraftProjectionService', () => {
   it('projects paused drafts with paused remaining time instead of a stale expired deadline', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-14T12:00:00.000Z'));
-    prismaMock.preDraftQueue.findMany.mockResolvedValue([]);
     prismaMock.draft.findUnique.mockResolvedValue({
       id: 'draft-1',
       leagueId: 'league-1',

@@ -439,7 +439,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
         revision: snapshot.revision,
         clockReceivedAt: Date.now(),
       },
-      includesParticipantQueues: true,
+      includesParticipantQueues: false,
       includesPicks: true,
       includesAvailablePlayers: false,
       ts: Date.parse(snapshot.serverNow),
@@ -628,7 +628,7 @@ function getExpectedPersistedPickCount(draft: DraftCore | null): number {
       : Math.max(0, currentPick - 1);
   }
 
-  if (status === 'LIVE' || status === 'IN_PROGRESS') {
+  if (status === 'LIVE' || status === 'IN_PROGRESS' || status === 'PAUSED') {
     const completedPicks = Math.max(0, currentPick - 1);
     return Number.isFinite(totalPicks) && totalPicks > 0
       ? Math.min(completedPicks, totalPicks)
@@ -652,9 +652,13 @@ function buildPersistedPickBackfillEndpoint(draftId: string, sinceMs?: number): 
   )}&pageSize=100`;
 }
 
-function isLiveDraftStatus(status: unknown): boolean {
+function isDraftReconciliationStatus(status: unknown): boolean {
   const normalizedStatus = String(status ?? '').toUpperCase();
-  return normalizedStatus === 'LIVE' || normalizedStatus === 'IN_PROGRESS';
+  return (
+    normalizedStatus === 'LIVE' ||
+    normalizedStatus === 'IN_PROGRESS' ||
+    normalizedStatus === 'PAUSED'
+  );
 }
 
 function getPersistedPickBackfillSinceMs(input: {
@@ -1241,15 +1245,25 @@ function useDraftSocket(opts: {
   onSnapshot: (snap: DraftSnapshot) => void;
   onDelta: (delta: DraftDelta) => void;
   setStatus: (s: ConnectionStatus) => void;
+  onReconnect: () => void;
 }) {
-  const { socket, draftId, onSnapshot, onDelta, setStatus } = opts;
+  const { socket, draftId, onSnapshot, onDelta, setStatus, onReconnect } = opts;
+  const joinedDraftIdRef = useRef<string | null>(null);
+  const onReconnectRef = useRef(onReconnect);
+
+  useEffect(() => {
+    onReconnectRef.current = onReconnect;
+  }, [onReconnect]);
 
   useEffect(() => {
     if (!socket) return;
 
     const join = () => {
+      const isReconnect = joinedDraftIdRef.current === draftId;
+      joinedDraftIdRef.current = draftId;
       setStatus('connected');
       socket.emit('draft:join', { draftId });
+      if (isReconnect) onReconnectRef.current();
     };
 
     const onConnect = join;
@@ -1318,6 +1332,10 @@ export function DraftProvider({
   const initialHydrateStartedRef = useRef(Boolean(initialSnapshot));
   const availablePlayersHydratingRef = useRef(false);
   const persistedPickHydratingRef = useRef(false);
+  const privateStateHydrationRef = useRef<{
+    generation: number;
+    controller: AbortController | null;
+  }>({ generation: 0, controller: null });
 
   const initial = useMemo<DraftState>(() => {
     const snap = normalizeSnapshot(initialSnapshot ?? null);
@@ -1358,6 +1376,9 @@ export function DraftProvider({
     isMounted.current = true;
     return () => {
       isMounted.current = false;
+      privateStateHydrationRef.current.generation += 1;
+      privateStateHydrationRef.current.controller?.abort();
+      privateStateHydrationRef.current.controller = null;
     };
   }, []);
 
@@ -1390,15 +1411,6 @@ export function DraftProvider({
     dispatch({ type: 'SET_CONNECTION', status: s });
   }, []);
 
-  // Socket join + backfill
-  useDraftSocket({
-    socket,
-    draftId,
-    onSnapshot: handleSnapshot,
-    onDelta: handleDelta,
-    setStatus: handleStatusChange,
-  });
-
   const hydrateAvailablePlayers = useCallback(
     async (statSeason?: number | null, force = false) => {
       if (availablePlayersHydratingRef.current && !force) return;
@@ -1426,61 +1438,101 @@ export function DraftProvider({
     [draftId]
   );
 
-  const hydrateMyQueue = useCallback(
+  const loadMyQueue = useCallback(
+    async (signal: AbortSignal): Promise<string[]> => {
+      const res = await fetchApi(`drafts/${draftId}/pre-queue`, { signal });
+      return toArray<any>(res?.data?.queue ?? res?.queue)
+        .slice()
+        .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0))
+        .map((item) => String(item?.playerId))
+        .filter(Boolean);
+    },
+    [draftId]
+  );
+
+  const loadMyWatchlist = useCallback(
+    async (signal: AbortSignal): Promise<DraftWatchlistItem[]> => {
+      const res = await fetchApi(`drafts/${draftId}/watchlist`, { signal });
+      const items = toArray<
+        Omit<DraftWatchlistItem, 'rank' | 'addedAt'> & {
+          rank?: number;
+          addedAt?: string;
+        }
+      >(res?.data?.watchlist ?? res?.watchlist).flatMap((item) => {
+        const normalized = normalizeWatchlistItem(item);
+        return normalized ? [normalized] : [];
+      });
+
+      return sortWatchlistItems(items);
+    },
+    [draftId]
+  );
+
+  const invalidatePrivateStateHydration = useCallback(() => {
+    privateStateHydrationRef.current.generation += 1;
+    privateStateHydrationRef.current.controller?.abort();
+    privateStateHydrationRef.current.controller = null;
+  }, []);
+
+  const hydratePrivateDraftState = useCallback(
     async (targetMemberId: string) => {
-      try {
-        const res = await fetchApi(
-          `drafts/${draftId}/pre-queue?memberId=${encodeURIComponent(targetMemberId)}`
-        );
-        const persistedQueue = toArray<any>(res?.data?.queue ?? res?.queue)
-          .slice()
-          .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0))
-          .map((item) => String(item?.playerId))
-          .filter(Boolean);
+      invalidatePrivateStateHydration();
+      const generation = privateStateHydrationRef.current.generation;
+      const controller = new AbortController();
+      privateStateHydrationRef.current.controller = controller;
 
-        if (!isMounted.current) return;
+      const [queueResult, watchlistResult] = await Promise.allSettled([
+        loadMyQueue(controller.signal),
+        loadMyWatchlist(controller.signal),
+      ]);
 
+      if (
+        !isMounted.current ||
+        privateStateHydrationRef.current.generation !== generation ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
+
+      if (queueResult.status === 'fulfilled') {
         dispatch({
           type: 'APPLY_DELTAS',
           deltas: [
             {
               type: 'QUEUE_UPDATED',
-              payload: { memberId: targetMemberId, queue: persistedQueue },
+              payload: { memberId: targetMemberId, queue: queueResult.value },
               ts: Date.now(),
             },
           ],
         });
-      } catch {
-        // Queue hydration is best-effort; keep the room usable if it fails.
+      }
+
+      if (watchlistResult.status === 'fulfilled') {
+        dispatch({ type: 'SET_WATCHLIST', items: watchlistResult.value });
+      }
+
+      if (privateStateHydrationRef.current.controller === controller) {
+        privateStateHydrationRef.current.controller = null;
       }
     },
-    [draftId]
+    [invalidatePrivateStateHydration, loadMyQueue, loadMyWatchlist]
   );
 
-  const hydrateMyWatchlist = useCallback(
-    async (targetMemberId: string) => {
-      try {
-        const res = await fetchApi(
-          `drafts/${draftId}/watchlist?memberId=${encodeURIComponent(targetMemberId)}`
-        );
-        const items = toArray<
-          Omit<DraftWatchlistItem, 'rank' | 'addedAt'> & {
-            rank?: number;
-            addedAt?: string;
-          }
-        >(res?.data?.watchlist ?? res?.watchlist).flatMap((item) => {
-          const normalized = normalizeWatchlistItem(item);
-          return normalized ? [normalized] : [];
-        });
+  const handlePrivateStateReconnect = useCallback(() => {
+    if (!memberId) return;
+    void hydratePrivateDraftState(memberId);
+  }, [hydratePrivateDraftState, memberId]);
 
-        if (!isMounted.current) return;
-        dispatch({ type: 'SET_WATCHLIST', items: sortWatchlistItems(items) });
-      } catch {
-        // Watchlist hydration is best-effort; keep the room usable if it fails.
-      }
-    },
-    [draftId]
-  );
+  // Socket join + backfill. Shared snapshots intentionally omit private strategy state, so every
+  // rejoin refreshes the authenticated member's queue and watchlist through their scoped routes.
+  useDraftSocket({
+    socket,
+    draftId,
+    onSnapshot: handleSnapshot,
+    onDelta: handleDelta,
+    setStatus: handleStatusChange,
+    onReconnect: handlePrivateStateReconnect,
+  });
 
   const hydratePersistedPickPages = useCallback(async () => {
     if (!state.draft || persistedPickHydratingRef.current) return;
@@ -1552,8 +1604,8 @@ export function DraftProvider({
     if (hydratedQueueMemberIdRef.current === hydrationKey) return;
 
     hydratedQueueMemberIdRef.current = hydrationKey;
-    void Promise.all([hydrateMyQueue(memberId), hydrateMyWatchlist(memberId)]);
-  }, [draftId, memberId, hydrateMyQueue, hydrateMyWatchlist]);
+    void hydratePrivateDraftState(memberId);
+  }, [draftId, hydratePrivateDraftState, memberId]);
 
   /* ------------------------------- Action APIs ------------------------------ */
 
@@ -1574,7 +1626,7 @@ export function DraftProvider({
         await hydrateAvailablePlayers(state.statSeason);
       }
       if (memberId) {
-        await Promise.all([hydrateMyQueue(memberId), hydrateMyWatchlist(memberId)]);
+        await hydratePrivateDraftState(memberId);
       }
     } catch (err: any) {
       if (!isMounted.current) return;
@@ -1585,14 +1637,7 @@ export function DraftProvider({
     } finally {
       if (isMounted.current) dispatch({ type: 'SET_LOADING', loading: false });
     }
-  }, [
-    draftId,
-    hydrateAvailablePlayers,
-    hydrateMyQueue,
-    hydrateMyWatchlist,
-    memberId,
-    state.statSeason,
-  ]);
+  }, [draftId, hydrateAvailablePlayers, hydratePrivateDraftState, memberId, state.statSeason]);
 
   useEffect(() => {
     if (!state.connection.needsResync) return;
@@ -1612,7 +1657,7 @@ export function DraftProvider({
   const fetchPersistedPickBackfill = useCallback(async () => {
     if (!state.draft) return;
 
-    if (!isLiveDraftStatus(state.draft.status)) return;
+    if (!isDraftReconciliationStatus(state.draft.status)) return;
 
     const shouldLoadInitialPersistedPicks =
       state.picks.length === 0 && Number(state.draft.currentPick ?? 0) > 1;
@@ -1671,7 +1716,7 @@ export function DraftProvider({
     if (!state.draft) return;
 
     const status = String(state.draft.status ?? '').toUpperCase();
-    if (status !== 'LIVE' && status !== 'IN_PROGRESS') return;
+    if (!isDraftReconciliationStatus(status)) return;
 
     const intervalId = window.setInterval(() => {
       void fetchPersistedPickBackfill();
@@ -1720,6 +1765,7 @@ export function DraftProvider({
       }
 
       dispatch({ type: 'SET_SAVING', saving: true });
+      invalidatePrivateStateHydration();
       try {
         const res = await fetchApi(`drafts/${draftId}/picks`, {
           method: 'POST',
@@ -1766,7 +1812,7 @@ export function DraftProvider({
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
       }
     },
-    [draftId, state.availablePlayers, state.participants]
+    [draftId, invalidatePrivateStateHydration, state.availablePlayers, state.participants]
   );
 
   const updateQueue = useCallback(
@@ -1800,6 +1846,7 @@ export function DraftProvider({
       }
 
       dispatch({ type: 'SET_SAVING', saving: true });
+      invalidatePrivateStateHydration();
       try {
         const queuePayload = queue.map((playerId, index) => ({
           playerId,
@@ -1810,7 +1857,6 @@ export function DraftProvider({
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            memberId,
             queue: queuePayload,
           }),
         });
@@ -1838,7 +1884,7 @@ export function DraftProvider({
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
       }
     },
-    [draftId, state.participants, userId, state.availablePlayers]
+    [draftId, invalidatePrivateStateHydration, state.participants, userId, state.availablePlayers]
   );
 
   const addToWatchlist = useCallback(
@@ -1882,6 +1928,7 @@ export function DraftProvider({
       );
 
       dispatch({ type: 'SET_WATCHLIST_PENDING', playerId: normalizedPlayerId, pending: true });
+      invalidatePrivateStateHydration();
       if (optimisticItem) {
         dispatch({ type: 'MERGE_WATCHLIST_ITEM', item: optimisticItem });
       }
@@ -1891,7 +1938,6 @@ export function DraftProvider({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            memberId,
             playerId,
             priority: nextPriority,
           }),
@@ -1909,7 +1955,7 @@ export function DraftProvider({
             item: persistedItem,
           });
         } else {
-          await hydrateMyWatchlist(memberId);
+          await hydratePrivateDraftState(memberId);
         }
       } catch (err: any) {
         if (isMounted.current) {
@@ -1931,7 +1977,8 @@ export function DraftProvider({
     },
     [
       draftId,
-      hydrateMyWatchlist,
+      hydratePrivateDraftState,
+      invalidatePrivateStateHydration,
       memberId,
       state.availablePlayers,
       state.pendingWatchlistPlayerIds,
@@ -1960,12 +2007,12 @@ export function DraftProvider({
       if (!existingItem) return;
 
       dispatch({ type: 'SET_WATCHLIST_PENDING', playerId: normalizedPlayerId, pending: true });
+      invalidatePrivateStateHydration();
       dispatch({ type: 'REMOVE_WATCHLIST_ITEM', playerId: normalizedPlayerId });
       try {
-        await fetchApi(
-          `drafts/${draftId}/watchlist?memberId=${encodeURIComponent(memberId)}&playerId=${encodeURIComponent(playerId)}`,
-          { method: 'DELETE' }
-        );
+        await fetchApi(`drafts/${draftId}/watchlist?playerId=${encodeURIComponent(playerId)}`, {
+          method: 'DELETE',
+        });
       } catch (err: any) {
         if (isMounted.current) {
           dispatch({
@@ -1984,7 +2031,13 @@ export function DraftProvider({
         }
       }
     },
-    [draftId, memberId, state.pendingWatchlistPlayerIds, state.watchlistItems]
+    [
+      draftId,
+      invalidatePrivateStateHydration,
+      memberId,
+      state.pendingWatchlistPlayerIds,
+      state.watchlistItems,
+    ]
   );
 
   const toggleWatchlist = useCallback(

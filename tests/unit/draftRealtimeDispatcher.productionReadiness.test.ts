@@ -6,7 +6,11 @@ import {
   toDraftRealtimeStatePayload,
   type CanonicalLiveDraftState,
 } from '@/services/realtime/draftStateWire';
-import { draftPubSub, parseAndValidateEnvelope } from '@/services/realtime/pubsub';
+import {
+  DRAFT_REALTIME_EVENTS,
+  draftPubSub,
+  parseAndValidateEnvelope,
+} from '@/services/realtime/pubsub';
 import { describe, expect, it, vi } from 'vitest';
 
 function buildLiveDraftState(): CanonicalLiveDraftState {
@@ -53,7 +57,6 @@ function buildLiveDraftState(): CanonicalLiveDraftState {
         displayName: 'Member One',
         draftOrder: 1,
         isOnline: true,
-        queue: ['player-2'],
         autoPickEnabled: false,
         lastActivity: startedAt,
       },
@@ -131,6 +134,7 @@ describe('draft realtime dispatcher production readiness', () => {
     expect(wirePayload.clock).toEqual(buildLiveDraftState().clock);
     expect(wirePayload.picks[0]?.timestamp).toBe('2026-07-28T12:00:00.000Z');
     expect(wirePayload.participants[0]?.lastActivity).toBe('2026-07-28T12:00:00.000Z');
+    expect(wirePayload.participants[0]).not.toHaveProperty('queue');
     expect(wirePayload.timerSettings.pausedAt).toBe('2026-07-28T12:00:00.000Z');
     expect(parsedEnvelope?.payload).toEqual(jsonPayload);
     expect(emit).toHaveBeenCalledWith('draft:state', wirePayload);
@@ -144,6 +148,10 @@ describe('draft realtime dispatcher production readiness', () => {
         }),
       })
     );
+  });
+
+  it('keeps private queue updates outside the shared draft event protocol', () => {
+    expect(DRAFT_REALTIME_EVENTS).not.toContain('draft:queue-updated');
   });
 
   it('rejects draft state envelopes with invalid wire timestamps', () => {

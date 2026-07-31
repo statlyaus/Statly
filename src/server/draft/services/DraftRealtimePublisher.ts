@@ -4,6 +4,7 @@ import { tags } from '@/lib/cacheTags';
 import { publishLeagueSystemMessage } from '@/server/leagues/social/socialSystemEvents';
 
 import { draftRepository } from '../repository/DraftRepository';
+import { draftExpiryReconciler } from './DraftExpiryReconciler';
 import { draftRealtimeDispatcher } from './DraftRealtimeDispatcher';
 import { draftProjectionService } from './DraftProjectionService';
 
@@ -195,6 +196,7 @@ export class DraftRealtimePublisher {
         }
 
         await draftRealtimeDispatcher.publishState(state);
+        await draftExpiryReconciler.reconcileDraft(event.draftId);
         publishedState = state;
       }
     }

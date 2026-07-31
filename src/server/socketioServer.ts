@@ -141,8 +141,7 @@ async function flushDraftOutboxBatch(): Promise<void> {
 }
 
 type DraftDelta = {
-  type:
-    'SNAPSHOT' | 'PICK_MADE' | 'PLAYER_REMOVED' | 'PLAYER_ADDED' | 'QUEUE_UPDATED' | 'STATE_PATCH';
+  type: 'SNAPSHOT' | 'PICK_MADE' | 'PLAYER_REMOVED' | 'PLAYER_ADDED' | 'STATE_PATCH';
   payload: unknown;
   ts?: number;
   revision?: number;
@@ -224,12 +223,6 @@ function toBackfillDelta(event: {
         payload: { pick: payload },
         ts,
         revision,
-      };
-    case 'draft:queue-updated':
-      return {
-        type: 'QUEUE_UPDATED',
-        payload,
-        ts,
       };
     case 'draft:paused':
       return (

@@ -37,9 +37,11 @@ rejected command. Browser state must not become a second draft authority.
 
 ## Timers and workers
 
-BullMQ owns delayed auto-pick and background execution. Jobs use stable/idempotent identifiers and are
-reconciled from persisted draft state during startup. Cron and Firebase Functions may wake or enqueue
-work, but they do not decide which player is selected.
+BullMQ owns delayed auto-pick and background execution. Expiry jobs use immutable identities scoped by
+draft scheduling revision. Outbox delivery reconciles the latest Prisma clock immediately, and workers
+repeat that reconciliation at startup and on a bounded interval under a distributed lease. Stale jobs
+are harmless because execution revalidates persisted status, deadline, and revision. Cron and Firebase
+Functions may wake or enqueue work, but they do not decide which player is selected.
 
 Production startup fails closed when required Redis connectivity is unavailable. Tests and production
 builds may use explicit repository-supported disabled modes; they must not silently carry into a real
@@ -49,7 +51,13 @@ deployment.
 
 - Authenticate connections before joining protected rooms.
 - Authorize every command again at the domain boundary; room membership is not authorization.
+- Authenticate private queue and watchlist transports before parsing their payloads, then resolve the
+  active draft member from the authenticated actor inside the server service boundary. Legacy
+  `memberId` input is ignored and never selects another member's state.
 - Include league and season scope in room names, cache keys, locks, and events.
+- Keep user-scoped queue and watchlist contents out of shared room snapshots and Pub/Sub payloads.
+- Mark private strategy responses `private, no-store`; Prisma is their only authority. Do not retain
+  an in-memory or browser-local shadow store as a fallback.
 - Restrict production origins and transports through environment configuration.
 - Do not log tokens, full service-account values, or private payloads.
 

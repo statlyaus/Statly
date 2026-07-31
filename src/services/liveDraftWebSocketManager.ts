@@ -393,16 +393,6 @@ export class LiveDraftWebSocketManager {
       });
     });
 
-    // Queue updates (non-critical, potentially frequent) - log errors but do not retry
-    getLiveDraftEngine().on(
-      'draft:queue-updated',
-      (draftId: string, userId: string, queue: string[]) => {
-        const payload = { userId, queue };
-        this.broadcastToDraft(draftId, 'draft:queue-updated', payload);
-        this.publishFireAndForget(draftId, 'draft:queue-updated', payload);
-      }
-    );
-
     logger.info('Draft engine event listeners configured');
   }
 
@@ -451,7 +441,6 @@ export class LiveDraftWebSocketManager {
         displayName: p.displayName,
         draftOrder: p.draftOrder,
         isOnline: p.isOnline,
-        queueSize: p.queue.length,
       })),
       settings: draft.draftSettings,
       timerSettings: draft.timerSettings,

@@ -180,6 +180,51 @@ export class DraftRepository {
       }));
   }
 
+  async getLiveDraftPickExpirySchedule(
+    tx: TxClient,
+    draftId: string
+  ): Promise<LiveDraftPickExpirySchedule | null> {
+    const draft = await tx.draft.findFirst({
+      where: {
+        id: draftId,
+        status: DraftStatus.LIVE,
+      },
+      select: {
+        id: true,
+        leagueId: true,
+        currentPick: true,
+        totalPicks: true,
+        schedulingVersion: true,
+        pickStartedAt: true,
+        pickDeadlineAt: true,
+        startedAt: true,
+        league: {
+          select: {
+            settings: {
+              select: {
+                pickSeconds: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!draft || draft.currentPick > draft.totalPicks || !draft.league.settings) {
+      return null;
+    }
+
+    return {
+      draftId: draft.id,
+      leagueId: draft.leagueId,
+      schedulingVersion: draft.schedulingVersion,
+      pickDeadlineAt: draft.pickDeadlineAt,
+      pickStartedAt: draft.pickStartedAt,
+      startedAt: draft.startedAt,
+      pickSeconds: draft.league.settings.pickSeconds,
+    };
+  }
+
   async repairMissingLiveDraftPickDeadline(
     tx: TxClient,
     input: {

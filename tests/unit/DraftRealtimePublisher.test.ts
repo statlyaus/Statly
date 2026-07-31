@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const {
   draftRepository,
+  draftExpiryReconciler,
   draftRealtimeDispatcher,
   draftProjectionService,
   revalidateTags,
@@ -19,6 +20,9 @@ const {
   draftRealtimeDispatcher: {
     publishDraftEvent: vi.fn(),
     publishState: vi.fn(),
+  },
+  draftExpiryReconciler: {
+    reconcileDraft: vi.fn(),
   },
   draftProjectionService: {
     buildAuthoritativeDraftState: vi.fn(),
@@ -54,6 +58,10 @@ vi.mock('@/server/draft/services/DraftRealtimeDispatcher', () => ({
   draftRealtimeDispatcher,
 }));
 
+vi.mock('@/server/draft/services/DraftExpiryReconciler', () => ({
+  draftExpiryReconciler,
+}));
+
 vi.mock('@/server/draft/services/DraftProjectionService', () => ({
   draftProjectionService,
 }));
@@ -68,6 +76,11 @@ describe('DraftRealtimePublisher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     draftRepository.transaction.mockImplementation((work) => work({}));
+    draftExpiryReconciler.reconcileDraft.mockResolvedValue({
+      scheduledCount: 1,
+      repairedCount: 0,
+      skippedCount: 0,
+    });
     revalidateTags.mockResolvedValue(undefined);
     publishLeagueSystemMessage.mockResolvedValue({});
   });
@@ -182,7 +195,7 @@ describe('DraftRealtimePublisher', () => {
       leagueId: 'league-1',
       event: 'draft:paused',
       payload: lifecyclePayload,
-      publishState: false,
+      publishState: true,
       attempts: 0,
       lastError: null,
       lockedAt: null,
@@ -194,6 +207,9 @@ describe('DraftRealtimePublisher', () => {
     draftRepository.listPendingDraftEventsBatch.mockResolvedValue([event]);
     draftRepository.claimDraftEvents.mockResolvedValue(1);
     draftRepository.listClaimedDraftEvents.mockResolvedValue([event]);
+    draftProjectionService.buildAuthoritativeDraftState.mockResolvedValue({
+      draftId: 'draft-1',
+    });
 
     const publisher = new DraftRealtimePublisher();
     await expect(publisher.flushPendingDraftEventsBatch(1)).resolves.toBe(1);
@@ -202,6 +218,42 @@ describe('DraftRealtimePublisher', () => {
       'draft-1',
       'draft:paused',
       lifecyclePayload
+    );
+    expect(draftExpiryReconciler.reconcileDraft).toHaveBeenCalledWith('draft-1');
+    expect(draftRepository.markDraftEventsPublished).toHaveBeenCalledWith({}, ['event-pause']);
+  });
+
+  it('leaves outbox work retryable when expiry reconciliation is temporarily unavailable', async () => {
+    const event = {
+      id: 'event-resume',
+      draftId: 'draft-1',
+      leagueId: 'league-1',
+      event: 'draft:resumed',
+      payload: null,
+      publishState: true,
+      attempts: 0,
+      lastError: null,
+      lockedAt: null,
+      lockedBy: null,
+      publishedAt: null,
+      createdAt: new Date('2026-06-05T00:00:23.000Z'),
+    } as any;
+    draftRepository.listPendingDraftEventsBatch.mockResolvedValue([event]);
+    draftRepository.claimDraftEvents.mockResolvedValue(1);
+    draftRepository.listClaimedDraftEvents.mockResolvedValue([event]);
+    draftProjectionService.buildAuthoritativeDraftState.mockResolvedValue({
+      draftId: 'draft-1',
+    });
+    draftExpiryReconciler.reconcileDraft.mockRejectedValueOnce(new Error('redis unavailable'));
+
+    const publisher = new DraftRealtimePublisher();
+    await expect(publisher.flushPendingDraftEventsBatch(1)).rejects.toThrow('redis unavailable');
+
+    expect(draftRepository.markDraftEventsPublished).not.toHaveBeenCalled();
+    expect(draftRepository.markDraftEventsFailed).toHaveBeenCalledWith(
+      {},
+      ['event-resume'],
+      'redis unavailable'
     );
   });
 });

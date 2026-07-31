@@ -172,13 +172,6 @@ export class DraftProjectionService {
             },
           },
         },
-        preDraftQueues: {
-          orderBy: [{ rank: 'asc' }, { createdAt: 'asc' }],
-          select: {
-            memberId: true,
-            playerId: true,
-          },
-        },
       },
     });
 
@@ -188,12 +181,6 @@ export class DraftProjectionService {
 
     const status = mapDraftStatus(draft.status, draft.lobbyStatus);
     const serverNow = snapshotBoundary;
-    const queueByMemberId = new Map<string, string[]>();
-    for (const item of draft.preDraftQueues) {
-      const queue = queueByMemberId.get(item.memberId) ?? [];
-      queue.push(item.playerId);
-      queueByMemberId.set(item.memberId, queue);
-    }
 
     const turnParticipants = draft.orders.map((order) => ({
       userId: order.member.userId,
@@ -242,7 +229,6 @@ export class DraftProjectionService {
           displayName: order.member.user.displayName || order.member.user.email || 'Unknown',
           teamName: order.member.teamName,
           draftOrder: order.slot,
-          queue: queueByMemberId.get(order.memberId) ?? [],
         })),
         picks: draft.picks.map((pick) => ({
           id: pick.id,
@@ -269,76 +255,59 @@ export class DraftProjectionService {
   }
 
   async buildAuthoritativeDraftState(draftId: string): Promise<CanonicalLiveDraftState | null> {
-    const [draft, queueItems] = await Promise.all([
-      prisma.draft.findUnique({
-        where: { id: draftId },
-        include: {
-          league: {
-            include: {
-              settings: true,
-            },
+    const draft = await prisma.draft.findUnique({
+      where: { id: draftId },
+      include: {
+        league: {
+          include: {
+            settings: true,
           },
-          orders: {
-            orderBy: { slot: 'asc' },
-            include: {
-              member: {
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      displayName: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          picks: {
-            orderBy: { overall: 'asc' },
-            include: {
-              player: {
-                select: {
-                  id: true,
-                  name: true,
-                  position: true,
-                  club: true,
-                },
-              },
-              member: {
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      displayName: true,
-                      email: true,
-                    },
+        },
+        orders: {
+          orderBy: { slot: 'asc' },
+          include: {
+            member: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    displayName: true,
+                    email: true,
                   },
                 },
               },
             },
           },
         },
-      }),
-      prisma.preDraftQueue.findMany({
-        where: { draftId },
-        orderBy: [{ rank: 'asc' }, { createdAt: 'asc' }],
-        select: {
-          memberId: true,
-          playerId: true,
+        picks: {
+          orderBy: { overall: 'asc' },
+          include: {
+            player: {
+              select: {
+                id: true,
+                name: true,
+                position: true,
+                club: true,
+              },
+            },
+            member: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    displayName: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
         },
-      }),
-    ]);
+      },
+    });
 
     if (!draft?.league?.settings) {
       return null;
-    }
-
-    const queueByMemberId = new Map<string, string[]>();
-    for (const item of queueItems) {
-      const existing = queueByMemberId.get(item.memberId) ?? [];
-      existing.push(item.playerId);
-      queueByMemberId.set(item.memberId, existing);
     }
 
     const participants = draft.orders.map((order) => ({
@@ -403,7 +372,6 @@ export class DraftProjectionService {
         displayName: participant.displayName,
         draftOrder: participant.slot,
         isOnline: false,
-        queue: queueByMemberId.get(participant.memberId) ?? [],
         autoPickEnabled: draft.league.settings.allowAutoPick,
         lastActivity: timerAnchor,
       })),

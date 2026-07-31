@@ -46,14 +46,22 @@ ownership uses the canonical ID.
 
 Queues and watchlists are user- and draft-scoped. Server commands validate membership, player identity,
 duplicates, and visibility. Auto-pick consumes the current eligible priority list and records the same
-command path as a manual pick; it must not write a separate roster shortcut.
+command path as a manual pick; it must not write a separate roster shortcut. Shared room snapshots,
+state broadcasts, and Pub/Sub events never contain queue contents or queue size. The authenticated
+actor-scoped queue and watchlist APIs are the only browser hydration boundaries for that private
+strategy. `DraftPrivateStateService` resolves the active draft member from the authenticated user;
+transport payloads cannot select a member. Legacy `memberId` input is tolerated only for migration and
+is ignored. Private responses are non-cacheable, and Prisma remains the only authority—local or
+in-memory shadow stores must not restore stale strategy state.
 
 ## Scheduling
 
 Draft start times are stored as instants with an explicit league timezone for display and scheduling.
-BullMQ delayed jobs use stable IDs and persisted draft scheduling/version data. Startup reconciliation
-repairs missing or stale jobs from canonical state. Cron may enqueue reconciliation, but is not a
-second source of truth for turn expiry.
+Clock commands commit Prisma timing state and an outbox event without depending on Redis. Outbox
+delivery and the worker's startup/periodic repair loop both reconcile the latest persisted LIVE clock
+into an immutable, revision-addressed BullMQ job. They never schedule from stale event data. Missing
+jobs are recreated, while older revision jobs may wake but must fail the worker's persisted-version
+guard. Cron may wake reconciliation, but is not a second source of truth for turn expiry.
 
 Pause, resume, commissioner intervention, and completion must cancel or replace stale timers. A late
 timer job validates the current draft version and turn before doing anything.
@@ -83,7 +91,12 @@ persisted snapshot.
 On direct load, refresh, or reconnect, the client loads a persisted read model, joins the authorized
 room, and applies sequenced events after that snapshot. Gaps trigger resynchronization; duplicates are
 ignored. Current turn, drafted players, roster projection, queue state, and readiness must converge
-without relying on the previously open tab.
+without relying on the previously open tab. Persisted reconciliation remains active in both LIVE and
+PAUSED states so a missed resume event cannot strand the room on a frozen clock. Because shared
+snapshots omit private strategy state, every socket rejoin also refreshes the authenticated member's
+queue and watchlist through their scoped HTTP routes. Hydration requests are generation-ordered and
+cancellable: an older response cannot overwrite a newer reconnect, visibility refresh, or successful
+mutation.
 
 ## Waivers
 

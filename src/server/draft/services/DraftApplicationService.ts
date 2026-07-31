@@ -1,7 +1,6 @@
 import { DraftStatus, Prisma as PrismaNS } from '@prisma/client';
 
 import { draftRepository } from '../repository/DraftRepository';
-import { draftScheduler } from './DraftScheduler';
 import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
 import {
   buildAvailableDraftPlayer,
@@ -57,12 +56,16 @@ function buildPickDeadline(startedAt: Date, pickSeconds: number): Date {
   return new Date(startedAt.getTime() + pickSeconds * 1000);
 }
 
-function calculatePausedRemainingSeconds(deadline: Date | null, fallbackSeconds: number): number {
+function calculatePausedRemainingSeconds(
+  deadline: Date | null,
+  fallbackSeconds: number,
+  pausedAt: Date
+): number {
   if (!deadline) {
     return fallbackSeconds;
   }
 
-  return Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / 1000));
+  return Math.max(0, Math.ceil((deadline.getTime() - pausedAt.getTime()) / 1000));
 }
 
 function buildCommandEvents(...events: DraftCommandEventType[]): DraftCommandEventType[] {
@@ -260,13 +263,6 @@ export class DraftApplicationService {
           schedulingVersion: draft.schedulingVersion + 1,
         },
       };
-    });
-
-    await draftScheduler.schedulePickExpiry({
-      draftId: result.draftId,
-      leagueId: result.leagueId,
-      schedulingVersion: result.data.schedulingVersion!,
-      pickDeadlineAt: new Date(result.data.pickDeadlineAt!),
     });
 
     return result;
@@ -549,14 +545,6 @@ export class DraftApplicationService {
         leagueId: result.leagueId,
         draftId: result.draftId,
       });
-      await draftScheduler.cancelPickExpiry(result.draftId);
-    } else if (result.data.pickDeadlineAt) {
-      await draftScheduler.schedulePickExpiry({
-        draftId: result.draftId,
-        leagueId: result.leagueId,
-        schedulingVersion: result.data.schedulingVersion,
-        pickDeadlineAt: new Date(result.data.pickDeadlineAt),
-      });
     }
 
     return result;
@@ -780,14 +768,6 @@ export class DraftApplicationService {
         leagueId: result.leagueId,
         draftId: result.draftId,
       });
-      await draftScheduler.cancelPickExpiry(result.draftId);
-    } else if (result.data.pickDeadlineAt) {
-      await draftScheduler.schedulePickExpiry({
-        draftId: result.draftId,
-        leagueId: result.leagueId,
-        schedulingVersion: result.data.schedulingVersion,
-        pickDeadlineAt: new Date(result.data.pickDeadlineAt),
-      });
     }
 
     return result;
@@ -811,9 +791,11 @@ export class DraftApplicationService {
         throw new Error('bad_request:Only live drafts can be paused');
       }
 
+      const pausedAt = new Date();
       const pausedRemainingSeconds = calculatePausedRemainingSeconds(
         draft.pickDeadlineAt,
-        draft.settings.pickSeconds
+        draft.settings.pickSeconds,
+        pausedAt
       );
 
       const updated = await draftRepository.updateDraftStatus(tx, {
@@ -839,7 +821,7 @@ export class DraftApplicationService {
         throw new Error('conflict:Draft scheduling changed');
       }
 
-      const serverNow = new Date().toISOString();
+      const serverNow = pausedAt.toISOString();
       const schedulingVersion = draft.schedulingVersion + 1;
       const lifecyclePayload: DraftLifecycleEventPayload = {
         status: DraftStatus.PAUSED,
@@ -876,7 +858,6 @@ export class DraftApplicationService {
       };
     });
 
-    await draftScheduler.cancelPickExpiry(result.draftId);
     return result;
   }
 
@@ -960,13 +941,6 @@ export class DraftApplicationService {
           schedulingVersion,
         },
       };
-    });
-
-    await draftScheduler.schedulePickExpiry({
-      draftId: result.draftId,
-      leagueId: result.leagueId,
-      schedulingVersion: result.data.schedulingVersion!,
-      pickDeadlineAt: new Date(result.data.pickDeadlineAt!),
     });
 
     return result;

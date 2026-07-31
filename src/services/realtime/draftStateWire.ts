@@ -53,7 +53,6 @@ const DraftRoomSnapshotParticipantSchema = z.object({
   displayName: z.string(),
   teamName: z.string().optional(),
   draftOrder: z.number().int().positive(),
-  queue: z.array(z.string()).optional(),
 });
 
 const DraftRoomSnapshotPickSchema = z.object({
@@ -166,7 +165,6 @@ export const DraftRealtimeStatePayloadSchema = z.object({
       displayName: z.string(),
       draftOrder: z.number(),
       isOnline: z.boolean(),
-      queue: z.array(z.string()),
       autoPickEnabled: z.boolean(),
       lastActivity: IsoTimestampSchema,
     })
@@ -191,7 +189,14 @@ export const DraftRealtimeStatePayloadSchema = z.object({
 
 export type DraftRealtimeStatePayload = z.infer<typeof DraftRealtimeStatePayloadSchema>;
 
-export type CanonicalLiveDraftState = LiveDraftState & {
+type PublicDraftParticipant = Omit<LiveDraftState['participants'][number], 'queue'>;
+
+/**
+ * Shared room state is intentionally incapable of carrying a member's private queue.
+ * Queue hydration uses the authenticated, member-scoped HTTP boundary instead.
+ */
+export type CanonicalLiveDraftState = Omit<LiveDraftState, 'participants'> & {
+  participants: PublicDraftParticipant[];
   clock: DraftClockPayload;
 };
 
@@ -212,7 +217,12 @@ export function toDraftRealtimeStatePayload(
       timestamp: pick.timestamp.toISOString(),
     })),
     participants: state.participants.map((participant) => ({
-      ...participant,
+      userId: participant.userId,
+      memberId: participant.memberId,
+      displayName: participant.displayName,
+      draftOrder: participant.draftOrder,
+      isOnline: participant.isOnline,
+      autoPickEnabled: participant.autoPickEnabled,
       lastActivity: participant.lastActivity.toISOString(),
     })),
     timerSettings: {

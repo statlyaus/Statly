@@ -1,9 +1,11 @@
 import type { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { handlePickCommand } from '@/server/draft/api/handlePickCommand';
 import { buildDraftClockPayload } from '@/server/draft/services/DraftProjectionService';
+import { getDraftMembershipAccess } from '@/server/leagues/membership';
 import { z } from 'zod';
 import { createHash } from 'crypto';
 
@@ -29,6 +31,16 @@ export async function GET(
 
     if (!id || typeof id !== 'string' || id.length < 10) {
       return errorResponse('Invalid draft id', 400);
+    }
+
+    const authenticatedUserId = await getAuthenticatedUserId(request);
+    if (!authenticatedUserId) {
+      return commonErrors.unauthorized();
+    }
+
+    const access = await getDraftMembershipAccess(id, authenticatedUserId);
+    if (!access.isMember) {
+      return commonErrors.forbidden('Not a member of this draft');
     }
 
     const url = new URL(request.url);

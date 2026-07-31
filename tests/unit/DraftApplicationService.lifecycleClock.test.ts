@@ -1,7 +1,7 @@
 import { DraftDirection, DraftStatus } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { draftRepository, draftScheduler } = vi.hoisted(() => ({
+const { draftRepository } = vi.hoisted(() => ({
   draftRepository: {
     transaction: vi.fn(),
     getDraftAggregate: vi.fn(),
@@ -9,14 +9,9 @@ const { draftRepository, draftScheduler } = vi.hoisted(() => ({
     updateDraftTiming: vi.fn(),
     createDraftEvents: vi.fn(),
   },
-  draftScheduler: {
-    cancelPickExpiry: vi.fn(),
-    schedulePickExpiry: vi.fn(),
-  },
 }));
 
 vi.mock('@/server/draft/repository/DraftRepository', () => ({ draftRepository }));
-vi.mock('@/server/draft/services/DraftScheduler', () => ({ draftScheduler }));
 vi.mock('@/server/rosters/RosterProjectionService', () => ({
   RosterProjectionService: class {
     projectDraft = vi.fn();
@@ -73,10 +68,11 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
     draftRepository.updateDraftStatus.mockResolvedValue({ count: 1 });
     draftRepository.updateDraftTiming.mockResolvedValue({ count: 1 });
     draftRepository.createDraftEvents.mockImplementation(async (_tx, events) =>
-      events.map((event: unknown, index: number) => ({ id: `event-${index + 1}`, ...event }))
+      events.map((event: Record<string, unknown>, index: number) => ({
+        id: `event-${index + 1}`,
+        ...event,
+      }))
     );
-    draftScheduler.cancelPickExpiry.mockResolvedValue(undefined);
-    draftScheduler.schedulePickExpiry.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -85,6 +81,10 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
 
   it('persists the exact paused remainder and next scheduling revision', async () => {
     draftRepository.getDraftAggregate.mockResolvedValue(aggregate());
+    draftRepository.updateDraftStatus.mockImplementation(async () => {
+      vi.advanceTimersByTime(5_000);
+      return { count: 1 };
+    });
     const service = new DraftApplicationService();
 
     const result = await service.pauseDraft({ draftId: 'draft-1', actorUserId: 'owner-1' });
@@ -110,10 +110,9 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
         },
       }),
     ]);
-    expect(draftScheduler.cancelPickExpiry).toHaveBeenCalledWith('draft-1');
   });
 
-  it('persists and schedules the resumed deadline from the frozen remainder', async () => {
+  it('persists the resumed deadline from the frozen remainder without a Redis dependency', async () => {
     draftRepository.getDraftAggregate.mockResolvedValue(
       aggregate({
         status: DraftStatus.PAUSED,
@@ -148,11 +147,5 @@ describe('DraftApplicationService lifecycle clock outbox', () => {
         },
       }),
     ]);
-    expect(draftScheduler.schedulePickExpiry).toHaveBeenCalledWith({
-      draftId: 'draft-1',
-      leagueId: 'league-1',
-      schedulingVersion: 6,
-      pickDeadlineAt: new Date('2026-06-07T00:01:07.000Z'),
-    });
   });
 });

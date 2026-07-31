@@ -149,11 +149,11 @@ export async function scheduleDraftPickExpiry(
   input: DraftPickExpiryJobData,
   runAt: Date
 ): Promise<void> {
-  await removeDraftPickExpiryJobs(input.draftId);
-
   const delay = Math.max(0, runAt.getTime() - Date.now());
   await draftQueue.add('draft:pick-expiry', input, {
     delay,
+    // Every persisted clock revision owns an immutable job identity. Older jobs are allowed to
+    // wake and will fail the worker's persisted-version guard; they must never delete a newer job.
     jobId: getDraftPickExpiryVersionedJobId(input.draftId, input.schedulingVersion),
     ...DRAFT_JOB_OPTIONS,
   });

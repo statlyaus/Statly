@@ -31,22 +31,12 @@ type DraftAdminMessagePayload = {
   userId: string;
 };
 
-type DraftQueueUpdatedPayload = {
-  userId: string;
-  queue: string[];
-};
-
 type DraftDelta =
   | {
       type: 'PICK_MADE';
       payload: { pick: DraftPickEventPayload };
       ts: number;
       revision?: number;
-    }
-  | {
-      type: 'QUEUE_UPDATED';
-      payload: { userId: string; queue: string[] };
-      ts: number;
     }
   | {
       type: 'STATE_PATCH';
@@ -115,12 +105,6 @@ export class DraftRealtimeDispatcher {
     const payload = { draftId, timestamp: new Date().toISOString() };
     this.dispatchToLocal(draftId, 'draft:timer-expired', payload);
     await draftPubSub.publish(draftId, 'draft:timer-expired', payload);
-  }
-
-  async publishQueueUpdated(draftId: string, userId: string, queue: string[]): Promise<void> {
-    const payload = { userId, queue };
-    this.dispatchToLocal(draftId, 'draft:queue-updated', payload);
-    await draftPubSub.publish(draftId, 'draft:queue-updated', payload);
   }
 
   async publishAdminMessage(
@@ -242,16 +226,6 @@ export class DraftRealtimeDispatcher {
           'draft:status',
           this.buildStatusPayload(draftId, 'COMPLETED')
         );
-        return;
-      }
-      case 'draft:queue-updated': {
-        const queuePayload = payload as DraftQueueUpdatedPayload;
-        this.emitToDraftRooms(draftId, 'draft:queue-updated', { draftId, ...queuePayload });
-        this.emitCompatDelta(draftId, {
-          type: 'QUEUE_UPDATED',
-          payload: queuePayload,
-          ts: Date.now(),
-        });
         return;
       }
       case 'draft:admin-message': {

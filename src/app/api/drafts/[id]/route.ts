@@ -4,11 +4,13 @@ import type { NextRequest } from 'next/server';
 
 import { z } from 'zod';
 
-import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { buildDraftClockPayload } from '@/server/draft/services/DraftProjectionService';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
+import { getDraftMembershipAccess } from '@/server/leagues/membership';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
@@ -39,6 +41,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Strict id validation (Draft IDs are CUIDs per Prisma schema)
     if (!z.string().cuid().safeParse(id).success) {
       return errorResponse('Invalid draft id', 400);
+    }
+
+    const authenticatedUserId = await getAuthenticatedUserId(request);
+    if (!authenticatedUserId) {
+      return commonErrors.unauthorized();
+    }
+
+    const access = await getDraftMembershipAccess(id, authenticatedUserId);
+    if (!access.isMember) {
+      return commonErrors.forbidden('Not a member of this draft');
     }
 
     // Parse query params (lean meta only cares about updatedSince)
