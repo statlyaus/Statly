@@ -96,7 +96,18 @@ export interface DraftPickEventPayload {
   nextDirection?: DraftDirection;
   pickStartedAt?: string | null;
   pickDeadlineAt?: string | null;
+  schedulingVersion?: number;
   isComplete?: boolean;
+}
+
+export interface DraftLifecycleEventPayload {
+  status: DraftStatus;
+  schedulingVersion: number;
+  durationSeconds: number;
+  serverNow: string;
+  pickStartedAt: string | null;
+  pickDeadlineAt: string | null;
+  pausedRemainingSeconds: number | null;
 }
 
 export type DraftCommandEventType =
@@ -108,7 +119,7 @@ export type DraftCommandEventType =
   | 'draft:completed'
   | 'draft:queue-updated';
 
-export type DraftOutboxPayload = DraftPickEventPayload | null;
+export type DraftOutboxPayload = DraftPickEventPayload | DraftLifecycleEventPayload | null;
 
 export interface DraftOutboxEventRecord {
   id: string;

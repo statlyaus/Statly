@@ -92,19 +92,74 @@ describe('getDraftRoomTimerState', () => {
     vi.useRealTimers();
   });
 
-  it('freezes the clock for paused and completed states', () => {
+  it('freezes a paused clock at its persisted remainder', () => {
     expect(
       getDraftRoomTimerState({
         status: 'PAUSED',
         timePerPick: 120,
-        pickDeadlineAt: '2026-06-13T10:00:45.000Z',
+        pausedRemainingSeconds: 37,
       })
     ).toMatchObject({
-      remainingSeconds: 120,
-      percentRemaining: 100,
+      phase: 'PAUSED',
+      remainingSeconds: 37,
+      percentRemaining: 31,
       tone: 'neutral',
       label: 'Paused',
       isRunning: false,
+    });
+  });
+
+  it('syncs instead of inventing a full clock when a live deadline is absent', () => {
+    expect(
+      getDraftRoomTimerState({
+        status: 'LIVE',
+        timePerPick: 120,
+        pickDeadlineAt: null,
+      })
+    ).toMatchObject({
+      phase: 'SYNCING',
+      remainingSeconds: 0,
+      label: 'Syncing clock',
+      isRunning: false,
+    });
+  });
+
+  it('moves an expired client display into finalizing without running a domain action', () => {
+    expect(
+      getDraftRoomTimerState({
+        status: 'LIVE',
+        timePerPick: 120,
+        pickDeadlineAt: '2026-06-13T10:00:00.000Z',
+        nowMs: Date.parse('2026-06-13T10:00:01.000Z'),
+      })
+    ).toMatchObject({
+      phase: 'FINALIZING',
+      remainingSeconds: 0,
+      label: 'Finalizing pick',
+      isRunning: false,
+    });
+  });
+
+  it('interpolates from the server anchor without trusting browser wall-clock skew', () => {
+    expect(
+      getDraftRoomTimerState({
+        status: 'LIVE',
+        timePerPick: 120,
+        clock: {
+          status: 'LIVE',
+          revision: 4,
+          durationSeconds: 120,
+          serverNow: '2026-06-13T10:00:00.000Z',
+          startedAt: '2026-06-13T10:00:00.000Z',
+          deadlineAt: '2026-06-13T10:02:00.000Z',
+        },
+        clockReceivedAt: 1_000,
+        nowMs: 31_000,
+      })
+    ).toMatchObject({
+      phase: 'LIVE',
+      remainingSeconds: 90,
+      isRunning: true,
     });
   });
 });

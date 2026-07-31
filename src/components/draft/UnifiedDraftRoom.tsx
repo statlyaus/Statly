@@ -33,12 +33,7 @@ interface UnifiedDraftRoomProps {
 }
 
 type PlayerSortKey =
-  | 'statlyZ'
-  | 'name'
-  | 'position'
-  | 'club'
-  | 'adp'
-  | `category:${FantasyCategoryKey}`;
+  'statlyZ' | 'name' | 'position' | 'club' | 'adp' | `category:${FantasyCategoryKey}`;
 
 function getPositiveInteger(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
@@ -561,7 +556,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
 
           {/* Draft Pick Header */}
           <LivePickHeader
-            draftData={toLivePickHeaderData(activeDraft, participants, picks)}
+            draftData={toLivePickHeaderData(activeDraft, participants, picks, draft.liveState)}
             timePerPick={timePerPick}
             isYourTurn={Boolean(draft.liveState?.isYourTurn)}
             yourSlot={yourSlot}

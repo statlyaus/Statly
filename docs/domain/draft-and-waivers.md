@@ -58,6 +58,26 @@ second source of truth for turn expiry.
 Pause, resume, commissioner intervention, and completion must cancel or replace stale timers. A late
 timer job validates the current draft version and turn before doing anything.
 
+### Live clock contract
+
+Prisma `pickStartedAt`, `pickDeadlineAt`, `pausedRemainingSeconds`, and `schedulingVersion` are the
+durable clock state. BullMQ is a wake-up mechanism: an expiry job must pass its scheduling version and
+`requireExpired` guard into the transactional auto-pick command. Socket.IO must not run a second
+countdown or accept a client request to start one.
+
+HTTP hydration and Socket.IO reconnects expose the same discriminated clock payload:
+
+- `LIVE` includes an absolute persisted start and deadline;
+- `PAUSED` includes the persisted remaining seconds;
+- non-running states carry no synthetic deadline; and
+- every payload includes the scheduling revision and a server-time anchor.
+
+The browser interpolates a LIVE deadline once per second for display. Missing clock anchors render as
+syncing, local zero renders as finalizing, and neither state initiates an auto-pick. Pause freezes the
+persisted remainder. A reconnect snapshot is applied by revision without clearing an already hydrated
+player catalogue, then events after the snapshot boundary are replayed. Revision gaps force a fresh
+persisted snapshot.
+
 ## Reconnect and recovery
 
 On direct load, refresh, or reconnect, the client loads a persisted read model, joins the authorized

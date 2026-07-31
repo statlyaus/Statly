@@ -1,5 +1,7 @@
 import type { DraftState, DraftParticipant, DraftPick } from '@/types/draft';
 import { buildDraftRoomSequence } from '@/lib/draftRoomSequencing';
+import type { DraftLiveState } from '@/contexts/DraftContext';
+import type { DraftClockPayload } from '@/services/realtime/draftStateWire';
 
 function formatDateToIso(value: unknown): string {
   // Handle Date instances
@@ -42,6 +44,8 @@ export type LivePickHeaderData = {
   direction: string;
   status: string;
   pickDeadlineAt?: string | null;
+  clock?: DraftClockPayload;
+  clockReceivedAt?: number;
   participants: Array<{
     slot: number;
     member: { id: string; userId: string; displayName: string; email: string; teamName?: string };
@@ -109,7 +113,8 @@ type DraftPickTrainPick = {
 export function toLivePickHeaderData(
   draft: DraftState,
   participants: DraftParticipant[],
-  picks: DraftPick[]
+  picks: DraftPick[],
+  liveState?: DraftLiveState
 ): LivePickHeaderData {
   return {
     id: draft.id,
@@ -119,6 +124,8 @@ export function toLivePickHeaderData(
     direction: draft.direction,
     status: draft.status,
     pickDeadlineAt: draft.pickDeadlineAt ? formatDateToIso(draft.pickDeadlineAt) : null,
+    clock: liveState?.clock,
+    clockReceivedAt: liveState?.clockReceivedAt,
     participants: participants.map((p) => ({
       slot: p.draftOrder,
       member: {
@@ -195,7 +202,8 @@ function buildDraftPickTrainState(params: {
   picks: DraftPickTrainPick[];
   yourSlot?: number;
 }): DraftPickTrainState {
-  const { currentPick, totalPicks, round, direction, status, participants, picks, yourSlot } = params;
+  const { currentPick, totalPicks, round, direction, status, participants, picks, yourSlot } =
+    params;
   const isComplete =
     String(status ?? '').toUpperCase() === 'COMPLETED' ||
     (Number.isFinite(totalPicks) && totalPicks > 0 && currentPick > totalPicks);

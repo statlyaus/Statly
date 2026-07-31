@@ -10,10 +10,32 @@ import { draftProjectionService } from './DraftProjectionService';
 import type {
   DraftCommandEventType,
   DraftCommandResult,
+  DraftLifecycleEventPayload,
   DraftOutboxEventRecord,
   DraftPickEventPayload,
 } from '../domain/draftTypes';
-import type { LiveDraftState } from '@/services/liveDraftEngine';
+import type { CanonicalLiveDraftState } from '@/services/realtime/draftStateWire';
+
+function isDraftPickEventPayload(payload: unknown): payload is DraftPickEventPayload {
+  return Boolean(
+    payload &&
+    typeof payload === 'object' &&
+    'player' in payload &&
+    'member' in payload &&
+    'overall' in payload
+  );
+}
+
+function isDraftLifecycleEventPayload(payload: unknown): payload is DraftLifecycleEventPayload {
+  return Boolean(
+    payload &&
+    typeof payload === 'object' &&
+    'status' in payload &&
+    'schedulingVersion' in payload &&
+    'durationSeconds' in payload &&
+    'serverNow' in payload
+  );
+}
 
 export class DraftRealtimePublisher {
   private readonly lockerId = `${process.pid}-${Math.random().toString(36).slice(2)}`;
@@ -25,7 +47,7 @@ export class DraftRealtimePublisher {
     switch (event) {
       case 'draft:pick-made':
       case 'draft:auto-pick':
-        if (payload) {
+        if (isDraftPickEventPayload(payload)) {
           await draftRealtimeDispatcher.publishDraftEvent(draftId, event, payload);
         } else {
           logger.warn('Skipping draft pick event without payload', { draftId, event });
@@ -33,6 +55,12 @@ export class DraftRealtimePublisher {
         return;
       case 'draft:paused':
       case 'draft:resumed':
+        await draftRealtimeDispatcher.publishDraftEvent(
+          draftId,
+          event,
+          isDraftLifecycleEventPayload(payload) ? payload : undefined
+        );
+        return;
       case 'draft:completed':
         await draftRealtimeDispatcher.publishDraftEvent(draftId, event);
         return;
@@ -132,7 +160,7 @@ export class DraftRealtimePublisher {
         payload: DraftPickEventPayload;
       } =>
         (event.event === 'draft:pick-made' || event.event === 'draft:auto-pick') &&
-        Boolean(event.payload)
+        isDraftPickEventPayload(event.payload)
     );
     if (pickEvents.length === 0) return;
 
@@ -150,12 +178,12 @@ export class DraftRealtimePublisher {
 
   private async drainOutboxEvents(
     events: DraftOutboxEventRecord[]
-  ): Promise<LiveDraftState | null> {
+  ): Promise<CanonicalLiveDraftState | null> {
     if (events.length === 0) {
       return null;
     }
 
-    let publishedState: LiveDraftState | null = null;
+    let publishedState: CanonicalLiveDraftState | null = null;
 
     for (const event of events) {
       await this.emitEvent(event);
@@ -176,10 +204,10 @@ export class DraftRealtimePublisher {
 
   async publishCommandResult<TData>(
     result: DraftCommandResult<TData>
-  ): Promise<LiveDraftState | null> {
+  ): Promise<CanonicalLiveDraftState | null> {
     const outboxEvents = await this.claimDraftEventsByIds(result.outboxEventIds);
 
-    let state: LiveDraftState | null = null;
+    let state: CanonicalLiveDraftState | null = null;
     try {
       state = await this.drainOutboxEvents(outboxEvents);
       await this.publishSocialDraftActivity(outboxEvents);
@@ -205,7 +233,7 @@ export class DraftRealtimePublisher {
     return state;
   }
 
-  async flushPendingDraftEvents(draftId: string): Promise<LiveDraftState | null> {
+  async flushPendingDraftEvents(draftId: string): Promise<CanonicalLiveDraftState | null> {
     const outboxEvents = await this.claimPendingDraftEvents(draftId);
     if (outboxEvents.length === 0) {
       return null;
@@ -245,7 +273,7 @@ export class DraftRealtimePublisher {
     }
   }
 
-  async publishDraftState(draftId: string): Promise<LiveDraftState | null> {
+  async publishDraftState(draftId: string): Promise<CanonicalLiveDraftState | null> {
     const state = await draftProjectionService.buildAuthoritativeDraftState(draftId);
     if (!state) {
       logger.warn('Unable to publish authoritative draft state', { draftId });
@@ -259,14 +287,20 @@ export class DraftRealtimePublisher {
   async publishDraftEvent(
     draftId: string,
     event: Exclude<DraftCommandEventType, 'draft:started' | 'draft:queue-updated'>,
-    payload?: DraftPickEventPayload
-  ): Promise<LiveDraftState | null> {
+    payload?: DraftPickEventPayload | DraftLifecycleEventPayload
+  ): Promise<CanonicalLiveDraftState | null> {
     if (event === 'draft:pick-made' || event === 'draft:auto-pick') {
-      if (payload) {
+      if (isDraftPickEventPayload(payload)) {
         await draftRealtimeDispatcher.publishDraftEvent(draftId, event, payload);
       } else {
         logger.warn('Skipping compatibility draft pick event without payload', { draftId, event });
       }
+    } else if (event === 'draft:paused' || event === 'draft:resumed') {
+      await draftRealtimeDispatcher.publishDraftEvent(
+        draftId,
+        event,
+        isDraftLifecycleEventPayload(payload) ? payload : undefined
+      );
     } else {
       await draftRealtimeDispatcher.publishDraftEvent(draftId, event);
     }

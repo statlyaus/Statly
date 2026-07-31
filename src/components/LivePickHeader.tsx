@@ -23,7 +23,6 @@
  * @param timePerPick - Seconds allowed per pick (default: 120)
  * @param isYourTurn - Whether current user is actively picking
  * @param yourSlot - Current user's draft slot position
- * @param onTimeExpired - Callback when pick timer expires
  * @param onAudioAlert - Callback for audio notifications
  * @param className - Additional CSS classes for styling
  *
@@ -39,58 +38,21 @@ import { useState, useEffect, useMemo, useRef, type ReactElement } from 'react';
 import { ClockIcon } from '@heroicons/react/24/outline';
 
 import DraftPickTrain from '@/components/draft/DraftPickTrain';
-import { toDraftPickTrainStateFromHeaderData } from '@/lib/mappers/draftUiMappers';
+import {
+  toDraftPickTrainStateFromHeaderData,
+  type LivePickHeaderData,
+} from '@/lib/mappers/draftUiMappers';
 import {
   buildDraftRoomSequence,
   getDraftRoomTimerState,
   type DraftRoomStatus,
 } from '@/lib/draftRoomSequencing';
 
-interface DraftParticipant {
-  slot: number;
-  member: {
-    id: string;
-    userId: string;
-    displayName: string;
-    email: string;
-    teamName?: string;
-  };
-}
-
 interface LivePickHeaderProps {
-  draftData: {
-    id: string;
-    currentPick: number;
-    totalPicks: number;
-    round: number;
-    direction: string;
-    status: string; // Accept any string, validate internally
-    pickDeadlineAt?: string | null;
-    participants: DraftParticipant[];
-    picks: Array<{
-      id: string;
-      overall: number;
-      round: number;
-      slot: number;
-      player: {
-        id: string;
-        name: string;
-        position: string;
-        club: string;
-      };
-      member: {
-        id: string;
-        displayName: string;
-        teamName?: string;
-      };
-      auto: boolean;
-      madeAt: string;
-    }>;
-  };
+  draftData: LivePickHeaderData;
   timePerPick?: number; // seconds
   isYourTurn: boolean;
   yourSlot?: number;
-  onTimeExpired?: () => void;
   onAudioAlert?: (type: 'warning' | 'your-turn' | 'next-up') => void;
   className?: string;
 }
@@ -100,7 +62,6 @@ export default function LivePickHeader({
   timePerPick = 120,
   isYourTurn,
   yourSlot,
-  onTimeExpired,
   onAudioAlert,
   className = '',
 }: LivePickHeaderProps): ReactElement {
@@ -108,13 +69,7 @@ export default function LivePickHeader({
   const [isFlashing, setIsFlashing] = useState(false);
   const [hasAlerted, setHasAlerted] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const onTimeExpiredRef = useRef(onTimeExpired);
   const onAudioAlertRef = useRef(onAudioAlert);
-  const hasExpiredRef = useRef(false);
-
-  useEffect(() => {
-    onTimeExpiredRef.current = onTimeExpired;
-  }, [onTimeExpired]);
 
   useEffect(() => {
     onAudioAlertRef.current = onAudioAlert;
@@ -163,59 +118,63 @@ export default function LivePickHeader({
   const picksUntilYourTurn = nextUserPick?.picksUntil ?? 0;
   const estimatedTimeUntilYourTurn = nextUserPick?.estimatedSecondsUntil ?? 0;
 
-  const getRemainingSeconds = useMemo(
+  const getTimerState = useMemo(
     () => () => {
       return getDraftRoomTimerState({
         status: normalizedStatus,
         timePerPick,
         pickDeadlineAt: draftData.pickDeadlineAt,
-      }).remainingSeconds;
+        clock: draftData.clock,
+        clockReceivedAt: draftData.clockReceivedAt,
+      });
     },
-    [draftData.pickDeadlineAt, normalizedStatus, timePerPick]
+    [
+      draftData.clock,
+      draftData.clockReceivedAt,
+      draftData.pickDeadlineAt,
+      normalizedStatus,
+      timePerPick,
+    ]
   );
+  const timerState = getTimerState();
 
-  // Timer effect with proper cleanup and callbacks
+  // The browser interpolates a persisted deadline for display only. Expiry actions remain server-owned.
   useEffect(() => {
-    if (normalizedStatus !== 'LIVE') {
-      setTimeLeft(getRemainingSeconds());
-      hasExpiredRef.current = false;
+    const initialTimerState = getTimerState();
+    setTimeLeft(initialTimerState.remainingSeconds);
+
+    if (!initialTimerState.isRunning) {
       return;
     }
-
-    const nextRemaining = getRemainingSeconds();
-    setTimeLeft(nextRemaining);
-    hasExpiredRef.current = false;
 
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
 
     intervalRef.current = setInterval(() => {
-      const remaining = getRemainingSeconds();
-      setTimeLeft(remaining);
-
-      if (remaining <= 0 && !hasExpiredRef.current) {
-        hasExpiredRef.current = true;
-        onTimeExpiredRef.current?.();
-      } else if (remaining > 0) {
-        hasExpiredRef.current = false;
+      const nextTimerState = getTimerState();
+      setTimeLeft(nextTimerState.remainingSeconds);
+      if (!nextTimerState.isRunning && intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     }, 1000);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [draftData.currentPick, getRemainingSeconds, normalizedStatus]);
+  }, [draftData.currentPick, getTimerState]);
 
   useEffect(() => {
-    setTimeLeft(getRemainingSeconds());
-  }, [getRemainingSeconds]);
+    setTimeLeft(getTimerState().remainingSeconds);
+  }, [getTimerState]);
 
   // Alert effects for upcoming turn
   useEffect(() => {
-    if (normalizedStatus !== 'LIVE') return;
+    if (timerState.phase !== 'LIVE') return;
 
     if (picksUntilYourTurn === 1 && !hasAlerted) {
       setIsFlashing(true);
@@ -235,7 +194,7 @@ export default function LivePickHeader({
       setHasAlerted(false);
       setIsFlashing(false);
     }
-  }, [picksUntilYourTurn, isYourTurn, hasAlerted, normalizedStatus]);
+  }, [picksUntilYourTurn, isYourTurn, hasAlerted, timerState.phase]);
 
   const pickTrainState = useMemo(
     () => toDraftPickTrainStateFromHeaderData({ draftData, yourSlot }),
@@ -268,11 +227,6 @@ export default function LivePickHeader({
     }
   };
 
-  const timerState = getDraftRoomTimerState({
-    status: normalizedStatus,
-    timePerPick,
-    pickDeadlineAt: draftData.pickDeadlineAt,
-  });
   const timerPercent = timerState.percentRemaining;
   const timerTone =
     timerState.tone === 'urgent'
@@ -314,7 +268,7 @@ export default function LivePickHeader({
                 rail: 'bg-[color:var(--draft-broadcast-red-soft)]',
                 label: timerState.label,
               };
-  const statusCopy = {
+  const statusCopyByStatus = {
     SCHEDULED: {
       title: 'Draft scheduled',
       detail:
@@ -356,6 +310,26 @@ export default function LivePickHeader({
     title: 'Draft room',
     detail: 'The room is loading the latest draft state.',
   };
+  const statusCopy =
+    timerState.phase === 'FINALIZING'
+      ? {
+          title: 'Finalizing pick',
+          detail: 'The deadline has passed. Waiting for the server to persist the selection.',
+        }
+      : timerState.phase === 'SYNCING'
+        ? {
+            title: 'Syncing clock',
+            detail: 'Refreshing the authoritative draft clock before showing a countdown.',
+          }
+        : statusCopyByStatus;
+  const timerDisplay = timerState.phase === 'SYNCING' ? '—' : formatTime(timeLeft);
+  const timerAriaLabel =
+    timerState.phase === 'SYNCING'
+      ? 'Draft clock is syncing'
+      : timerState.phase === 'FINALIZING'
+        ? 'Draft pick is being finalized'
+        : `Time remaining: ${formatTime(timeLeft)}`;
+  const effectiveDuration = draftData.clock?.durationSeconds ?? timePerPick;
 
   return (
     <section
@@ -406,15 +380,17 @@ export default function LivePickHeader({
               <div
                 className="mt-2 flex items-baseline gap-2 font-mono text-5xl font-semibold tracking-normal text-[color:var(--draft-broadcast-text)]"
                 role="timer"
-                aria-label={`Time remaining: ${formatTime(timeLeft)}`}
+                aria-label={timerAriaLabel}
                 aria-live="polite"
               >
                 <ClockIcon
-                  className={`h-6 w-6 ${timeLeft <= 10 ? 'animate-spin text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
+                  className={`h-6 w-6 ${timerState.phase === 'LIVE' && timeLeft <= 10 ? 'animate-spin text-[color:var(--draft-broadcast-red)]' : 'text-[color:var(--draft-broadcast-muted)]'}`}
                   aria-hidden="true"
                 />
-                <span className={timeLeft <= 10 ? 'animate-pulse' : ''}>
-                  {formatTime(timeLeft)}
+                <span
+                  className={timerState.phase === 'LIVE' && timeLeft <= 10 ? 'animate-pulse' : ''}
+                >
+                  {timerDisplay}
                 </span>
               </div>
             </div>
@@ -449,7 +425,7 @@ export default function LivePickHeader({
               role="progressbar"
               aria-valuenow={timeLeft}
               aria-valuemin={0}
-              aria-valuemax={timePerPick}
+              aria-valuemax={effectiveDuration}
               aria-label={`Pick timer: ${timerPercent}% remaining`}
             />
           </div>

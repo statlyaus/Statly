@@ -10,7 +10,6 @@ import { createServer, type IncomingMessage } from 'http';
 import express from 'express';
 import { Server, type Socket as SocketIOSocket } from 'socket.io';
 
-import { buildAuthoritativeDraftState, buildLegacyDraftUpdate } from '@/lib/draftRealtime';
 import { isServerDevelopmentAuthEnabled } from '@/lib/devAuth';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -25,8 +24,7 @@ import {
   observeHistogram,
   renderHistograms,
 } from '@/server/metrics';
-import { draftRepository } from '@/server/draft/repository/DraftRepository';
-import { draftApplicationService } from '@/server/draft/services/DraftApplicationService';
+import { draftProjectionService } from '@/server/draft/services/DraftProjectionService';
 import { draftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
 import { flushSocialOutboxBatch } from '@/server/leagues/social/socialPublisher';
@@ -40,6 +38,7 @@ import {
   type SocketRedisAdapterLifecycle,
 } from '@/server/socketRedisAdapter';
 import { getRedisConnection, ScalableRedisConnection } from '@/server/realtime/scalableConnection';
+import { DraftClockPayloadSchema } from '@/services/realtime/draftStateWire';
 
 // Validate configuration before starting
 try {
@@ -49,8 +48,6 @@ try {
   process.exit(1);
 }
 
-// Timers tracked in-process; room state persists in Redis via room store
-const roomTimers = new Map<string, ReturnType<typeof setInterval> | undefined>();
 const socketRateLimitFallback = new Map<string, number[]>();
 let draftOutboxDrainInFlight = false;
 let socketRedisAdapterLifecycle: SocketRedisAdapterLifecycle | null = null;
@@ -145,14 +142,10 @@ async function flushDraftOutboxBatch(): Promise<void> {
 
 type DraftDelta = {
   type:
-    | 'SNAPSHOT'
-    | 'PICK_MADE'
-    | 'PLAYER_REMOVED'
-    | 'PLAYER_ADDED'
-    | 'QUEUE_UPDATED'
-    | 'STATE_PATCH';
+    'SNAPSHOT' | 'PICK_MADE' | 'PLAYER_REMOVED' | 'PLAYER_ADDED' | 'QUEUE_UPDATED' | 'STATE_PATCH';
   payload: unknown;
   ts?: number;
+  revision?: number;
 };
 
 type SocketMiddlewareNext = (err?: Error) => void;
@@ -178,7 +171,50 @@ function toBackfillDelta(event: {
   createdAt: Date;
 }): DraftDelta | null {
   const payload = parseDraftEventPayload(event.payload);
+  const payloadRecord =
+    payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+  const schedulingVersion = Number(payloadRecord.schedulingVersion);
+  const revision =
+    Number.isInteger(schedulingVersion) && schedulingVersion >= 0 ? schedulingVersion : undefined;
   const ts = event.createdAt.getTime();
+
+  const buildLifecycleDelta = (status: 'LIVE' | 'PAUSED'): DraftDelta | null => {
+    const clockResult = DraftClockPayloadSchema.safeParse(
+      status === 'LIVE'
+        ? {
+            status,
+            revision: schedulingVersion,
+            durationSeconds: payloadRecord.durationSeconds,
+            serverNow: payloadRecord.serverNow,
+            startedAt: payloadRecord.pickStartedAt,
+            deadlineAt: payloadRecord.pickDeadlineAt,
+          }
+        : {
+            status,
+            revision: schedulingVersion,
+            durationSeconds: payloadRecord.durationSeconds,
+            serverNow: payloadRecord.serverNow,
+            remainingSeconds: payloadRecord.pausedRemainingSeconds,
+          }
+    );
+    if (!clockResult.success) return null;
+
+    return {
+      type: 'STATE_PATCH',
+      payload: {
+        draft: {
+          status,
+          pickDeadlineAt: clockResult.data.status === 'LIVE' ? clockResult.data.deadlineAt : null,
+        },
+        liveState: {
+          clock: clockResult.data,
+          revision: clockResult.data.revision,
+        },
+      },
+      ts: Date.parse(clockResult.data.serverNow),
+      revision: clockResult.data.revision,
+    };
+  };
 
   switch (event.event) {
     case 'draft:pick-made':
@@ -187,6 +223,7 @@ function toBackfillDelta(event: {
         type: 'PICK_MADE',
         payload: { pick: payload },
         ts,
+        revision,
       };
     case 'draft:queue-updated':
       return {
@@ -195,17 +232,21 @@ function toBackfillDelta(event: {
         ts,
       };
     case 'draft:paused':
-      return {
-        type: 'STATE_PATCH',
-        payload: { draft: { status: 'PAUSED' } },
-        ts,
-      };
+      return (
+        buildLifecycleDelta('PAUSED') ?? {
+          type: 'STATE_PATCH',
+          payload: { draft: { status: 'PAUSED' } },
+          ts,
+        }
+      );
     case 'draft:resumed':
-      return {
-        type: 'STATE_PATCH',
-        payload: { draft: { status: 'LIVE' } },
-        ts,
-      };
+      return (
+        buildLifecycleDelta('LIVE') ?? {
+          type: 'STATE_PATCH',
+          payload: { draft: { status: 'LIVE' } },
+          ts,
+        }
+      );
     case 'draft:completed':
       return {
         type: 'STATE_PATCH',
@@ -228,136 +269,6 @@ async function getDeltasSince(draftId: string, since: number): Promise<DraftDelt
     const delta = toBackfillDelta(event);
     return delta ? [delta] : [];
   });
-}
-
-async function runAutoPickForExpiredTimer(draftId: string): Promise<void> {
-  const draft = await draftRepository.transaction((tx) =>
-    draftRepository.getDraftAggregate(tx, draftId)
-  );
-  if (!draft) {
-    logger.warn('Skipping timer auto-pick for missing draft', { draftId });
-    return;
-  }
-  if (draft.status !== 'LIVE') {
-    logger.info('Skipping timer auto-pick for non-live draft', { draftId, status: draft.status });
-    return;
-  }
-  if (!draft.pickDeadlineAt || draft.pickDeadlineAt.getTime() > Date.now()) {
-    logger.info('Skipping timer auto-pick before authoritative deadline', {
-      draftId,
-      pickDeadlineAt: draft.pickDeadlineAt?.toISOString() ?? null,
-    });
-    return;
-  }
-
-  try {
-    const result = await draftApplicationService.autoPick({
-      draftId,
-      expectedSchedulingVersion: draft.schedulingVersion,
-      requireExpired: true,
-    });
-    await draftRealtimePublisher.publishCommandResult(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.startsWith('conflict:')) {
-      logger.info('Skipping stale timer auto-pick after draft state changed', {
-        draftId,
-        error: message,
-      });
-      return;
-    }
-    logger.error('Failed to auto-pick after timer expiry', { draftId, error: message });
-  }
-}
-
-// Start or restart a draft timer and broadcast ticks/expiry
-async function startDraftTimer(draftId: string, opts?: { duration?: number; useLeader?: boolean }) {
-  const useLeader = !!opts?.useLeader;
-  const duration = opts?.duration;
-  // Optional leader election (for start events)
-  let leaderToken: string | null = null;
-  let lockKey = '';
-  const client = redisClient.getClient();
-  const lockMs = Number(process.env.SOCKET_TIMER_LOCK_MS || 10_000);
-  if (useLeader) {
-    leaderToken = `${process.pid}-${Math.random().toString(36).slice(2)}`;
-    lockKey = `draftroom:${draftId}:timerlock`;
-    const acquire = async (): Promise<boolean> => {
-      if (!client) return true;
-      const ok = await client.set(lockKey, leaderToken!, 'PX', lockMs, 'NX');
-      return ok === 'OK';
-    };
-    const got = await acquire();
-    if (!got) {
-      logger.info('⏱️ Timer leadership not acquired; skipping local timer', { draftId });
-      return;
-    }
-  }
-
-  const state =
-    (await draftRoomStore.getRoom(draftId)) || (await draftRoomStore.initRoomIfMissing(draftId));
-  const updated = {
-    ...state,
-    timeRemaining: duration ?? state.timePerPick ?? 120,
-    status: 'active' as const,
-    lastActivity: new Date().toISOString(),
-  };
-  await draftRoomStore.saveRoom(updated);
-
-  const existing = roomTimers.get(draftId);
-  if (existing) {
-    logger.warn('Replacing an existing local draft timer', { draftId });
-    clearInterval(existing);
-  }
-
-  const renew = async (): Promise<boolean> => {
-    if (!useLeader || !client) return true;
-    // Atomic check-and-extend via Lua EVAL
-    const script = `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end`;
-    try {
-      const res = await (client as any).eval(script, 1, lockKey, leaderToken!, String(lockMs));
-      return res === 1 || res === '1' || res === 'OK';
-    } catch {
-      return false;
-    }
-  };
-
-  const timer = setInterval(async () => {
-    if (!(await renew())) {
-      clearInterval(timer);
-      roomTimers.delete(draftId);
-      incCounter(METRICS.leadershipLost);
-      return;
-    }
-    const cur = await draftRoomStore.getRoom(draftId);
-    if (!cur) {
-      clearInterval(timer);
-      roomTimers.delete(draftId);
-      return;
-    }
-    if (cur.timeRemaining > 0) {
-      const next = {
-        ...cur,
-        timeRemaining: cur.timeRemaining - 1,
-        lastActivity: new Date().toISOString(),
-      };
-      await draftRoomStore.saveRoom(next);
-      incCounter(METRICS.timerTicks);
-      await draftRealtimeDispatcher.publishTimerTick(draftId, next.timeRemaining);
-    } else {
-      clearInterval(timer);
-      roomTimers.delete(draftId);
-      await draftRoomStore.saveRoom({
-        ...cur,
-        status: 'waiting' as const,
-        lastActivity: new Date().toISOString(),
-      });
-      incCounter(METRICS.timerExpired);
-      await draftRealtimeDispatcher.publishTimerExpired(draftId);
-      await runAutoPickForExpiredTimer(draftId);
-    }
-  }, 1000);
-  roomTimers.set(draftId, timer);
 }
 
 // Express app to serve health and potential aux endpoints
@@ -605,7 +516,7 @@ io.on('connection', (socket) => {
     displayName?: string;
     authToken?: string;
   }) => {
-    const { draftId, memberId, displayName } = data;
+    const { draftId } = data;
     const startJoin = Date.now();
     let acceptedDraftId: string | null = null;
 
@@ -627,6 +538,20 @@ io.on('connection', (socket) => {
         userId: authenticatedUserId,
         timestamp: new Date().toISOString(),
       });
+
+      // Authorize against durable league membership before creating or mutating any room state.
+      const snapshot = await draftProjectionService.buildRoomSnapshot(draftId, authenticatedUserId);
+      if (!snapshot) {
+        socket.emit('draft:error', {
+          error: 'You do not have access to this draft',
+          code: 'FORBIDDEN',
+          timestamp: new Date().toISOString(),
+        });
+        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+          outcome: 'forbidden',
+        });
+        return;
+      }
 
       // Initialize or update draft room in Redis-backed store
       const state = await draftRoomStore.initRoomIfMissing(draftId);
@@ -660,11 +585,15 @@ io.on('connection', (socket) => {
       socket.data.draftId = draftId;
       socket.data.joinedAt = new Date();
 
-      // Store richer participant metadata if available
+      const authorizedParticipant = snapshot.state.participants.find(
+        (participant) => participant.userId === authenticatedUserId
+      );
+
+      // Store only server-resolved participant metadata; join payload identity is untrusted.
       await draftRoomStore.setParticipantData(draftId, socket.id, {
         userId: authenticatedUserId,
-        memberId,
-        displayName,
+        memberId: authorizedParticipant?.id,
+        displayName: authorizedParticipant?.displayName,
         socketId: socket.id,
         joinedAt: new Date().toISOString(),
       });
@@ -672,74 +601,10 @@ io.on('connection', (socket) => {
       if (!room) throw new Error('Room state unavailable');
       await draftRoomStore.saveRoom({ ...room, lastActivity: new Date().toISOString() });
 
-      const [authoritativeState, legacyUpdate] = await Promise.all([
-        buildAuthoritativeDraftState(draftId),
-        buildLegacyDraftUpdate(draftId),
-      ]);
-
-      if (authoritativeState) {
-        socket.emit('draft:snapshot', {
-          draft: legacyUpdate
-            ? {
-                id: legacyUpdate.draftId,
-                name: legacyUpdate.name,
-                leagueId: legacyUpdate.leagueId,
-                status: legacyUpdate.status,
-                currentPick: legacyUpdate.currentPick,
-                totalPicks: legacyUpdate.totalPicks,
-                round: legacyUpdate.round,
-                direction: legacyUpdate.direction,
-                participants: legacyUpdate.participants,
-              }
-            : null,
-          participants: legacyUpdate?.participants ?? [],
-          picks: legacyUpdate?.picks ?? [],
-          availablePlayers: [],
-          liveState: {
-            currentPick: authoritativeState.currentPick.pickNumber,
-            onClockTeamId: authoritativeState.currentPick.memberId,
-          },
-          ts: Date.now(),
-        });
-        socket.emit('draft:state', authoritativeState);
-        socket.emit(
-          'draft:update',
-          legacyUpdate ?? {
-            draftId,
-            currentPick: authoritativeState.currentPick.pickNumber,
-            totalPicks:
-              authoritativeState.draftSettings.totalRounds *
-              authoritativeState.draftSettings.totalTeams,
-            round: authoritativeState.currentPick.round,
-            direction: authoritativeState.currentPick.round % 2 === 1 ? 'FORWARD' : 'REVERSE',
-            status: authoritativeState.status,
-            picks: [],
-            participants: authoritativeState.participants.map((participant) => ({
-              slot: participant.draftOrder,
-              member: {
-                id: participant.memberId,
-                userId: participant.userId,
-                displayName: participant.displayName,
-                email: '',
-              },
-            })),
-            completedAt:
-              authoritativeState.status === 'COMPLETED'
-                ? authoritativeState.updatedAt.toISOString()
-                : undefined,
-          }
-        );
-      } else {
-        socket.emit('draft:update', {
-          draftId,
-          currentPick: room.currentPick,
-          totalPicks: room.maxParticipants * 22,
-          participantCount,
-          timeRemaining: room.timeRemaining,
-          status: room.status,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Establish a complete revisioned baseline before replaying anything that raced the read.
+      socket.emit('draft:snapshot', snapshot);
+      const deltas = await getDeltasSince(draftId, Date.parse(snapshot.serverNow));
+      socket.emit('draft:backfill', deltas);
 
       // Notify other participants that someone joined
       socket.to(draftId).emit('participant:join', {
@@ -794,6 +659,9 @@ io.on('connection', (socket) => {
     try {
       if (!draftId || typeof draftId !== 'string') {
         throw new Error('Invalid draftId');
+      }
+      if (socket.data.draftId !== draftId) {
+        throw new Error('Draft room membership required');
       }
       const deltas = await getDeltasSince(draftId, Number(since ?? 0));
       socket.emit('draft:backfill', deltas);
@@ -893,19 +761,16 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Handle draft timer events with leader election
-  socket.on('draft:timer:start', async ({ draftId, duration }) => {
-    try {
-      await startDraftTimer(draftId, { duration, useLeader: true });
-
-      logger.info('⏰ Draft timer started', { draftId, duration, socketId: socket.id });
-    } catch (error) {
-      logger.error('❌ Error starting draft timer', {
-        socketId: socket.id,
-        draftId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  // The durable draft command boundary and BullMQ worker exclusively own clock progression.
+  socket.on('draft:timer:start', ({ draftId }) => {
+    logger.warn('Rejected client-started draft timer to avoid split-brain state', {
+      socketId: socket.id,
+      draftId,
+    });
+    socket.emit('draft:error', {
+      error: 'Direct socket timers are disabled. Use the Prisma-backed draft commands.',
+      code: 'TIMER_AUTHORITY_VIOLATION',
+    });
   });
 
   // Handle draft pause/resume

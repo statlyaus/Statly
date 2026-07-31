@@ -30,6 +30,13 @@ function DraftStateProbe() {
       <div data-testid="pick-deadline">
         {draft.draft?.pickDeadlineAt?.toISOString?.() ?? 'missing'}
       </div>
+      <div data-testid="clock-status">{draft.liveState.clock?.status ?? 'missing'}</div>
+      <div data-testid="clock-revision">{draft.liveState.clock?.revision ?? 'missing'}</div>
+      <div data-testid="clock-remaining">
+        {draft.liveState.clock?.status === 'PAUSED'
+          ? draft.liveState.clock.remainingSeconds
+          : 'missing'}
+      </div>
       <div data-testid="player-count">{draft.availablePlayers.length}</div>
       <div data-testid="pick-count">{draft.picks.length}</div>
       <div data-testid="pick-order">{draft.picks.map((pick) => pick.id).join(',')}</div>
@@ -198,23 +205,36 @@ describe('DraftProvider initial hydration', () => {
       expect(screen.getByTestId('player-count')).toHaveTextContent('1');
     });
 
-    const joinCountBeforeSnapshot = emit.mock.calls.filter((call) => call[0] === 'draft:join').length;
+    const joinCountBeforeSnapshot = emit.mock.calls.filter(
+      (call) => call[0] === 'draft:join'
+    ).length;
 
     act(() => {
       handlers.get('draft:snapshot')?.({
-        draft: {
-          id: 'cmevh14aq001lux1gottrhp3a',
+        schemaVersion: 1,
+        draftId: 'cmevh14aq001lux1gottrhp3a',
+        leagueId: 'league-1',
+        revision: 3,
+        serverNow: '2026-06-13T10:00:00.000Z',
+        state: {
           name: 'Test AFL Champions League - LIVE',
           status: 'LIVE',
           currentPick: 1,
           totalPicks: 264,
           round: 1,
           direction: 'FORWARD',
+          clock: {
+            status: 'LIVE',
+            revision: 3,
+            durationSeconds: 120,
+            serverNow: '2026-06-13T10:00:00.000Z',
+            startedAt: '2026-06-13T10:00:00.000Z',
+            deadlineAt: '2026-06-13T10:02:00.000Z',
+          },
+          onClockMemberId: 'member-1',
+          participants: [],
+          picks: [],
         },
-        participants: [],
-        picks: [],
-        liveState: { currentPick: 1 },
-        ts: 123,
       });
     });
 
@@ -541,9 +561,7 @@ describe('DraftProvider initial hydration', () => {
     });
 
     expect(screen.getByTestId('watchlist-count')).toHaveTextContent('3');
-    expect(screen.getByTestId('watchlist-order')).toHaveTextContent(
-      'player-1,player-2,player-3'
-    );
+    expect(screen.getByTestId('watchlist-order')).toHaveTextContent('player-1,player-2,player-3');
 
     act(() => {
       resolvePlayer2Add?.();
@@ -552,9 +570,7 @@ describe('DraftProvider initial hydration', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('watchlist-count')).toHaveTextContent('3');
-      expect(screen.getByTestId('watchlist-order')).toHaveTextContent(
-        'player-1,player-2,player-3'
-      );
+      expect(screen.getByTestId('watchlist-order')).toHaveTextContent('player-1,player-2,player-3');
     });
   });
 
@@ -1028,10 +1044,7 @@ describe('DraftProvider initial hydration', () => {
     vi.useFakeTimers();
 
     fetchApi.mockImplementation(async (endpoint: string) => {
-      if (
-        endpoint ===
-        'drafts/draft-1/picks?since=2026-06-07T00%3A00%3A00.000Z&pageSize=100'
-      ) {
+      if (endpoint === 'drafts/draft-1/picks?since=2026-06-07T00%3A00%3A00.000Z&pageSize=100') {
         return {
           success: true,
           data: {
@@ -1175,10 +1188,7 @@ describe('DraftProvider initial hydration', () => {
     vi.useFakeTimers();
 
     fetchApi.mockImplementation(async (endpoint: string) => {
-      if (
-        endpoint ===
-        'drafts/draft-1/picks?since=2026-06-07T00%3A00%3A00.000Z&pageSize=100'
-      ) {
+      if (endpoint === 'drafts/draft-1/picks?since=2026-06-07T00%3A00%3A00.000Z&pageSize=100') {
         return {
           success: true,
           data: {
@@ -1187,28 +1197,18 @@ describe('DraftProvider initial hydration', () => {
               status: 'LIVE',
               round: 1,
               direction: 'FORWARD',
+              schedulingVersion: 2,
               pickDeadlineAt: '2026-06-07T00:02:00.000Z',
-            },
-            picks: [
-              {
-                id: 'pick-1',
-                overall: 1,
-                round: 1,
-                slot: 1,
-                player: {
-                  id: 'player-1',
-                  name: 'First Player',
-                  position: 'MID',
-                  club: 'Sydney',
-                },
-                member: {
-                  id: 'member-1',
-                  displayName: 'Tester',
-                },
-                auto: false,
-                madeAt: '2026-06-07T00:00:05.000Z',
+              clock: {
+                status: 'LIVE',
+                revision: 2,
+                durationSeconds: 120,
+                serverNow: '2026-06-07T00:00:10.000Z',
+                startedAt: '2026-06-07T00:00:10.000Z',
+                deadlineAt: '2026-06-07T00:02:00.000Z',
               },
-            ],
+            },
+            picks: [],
           },
         };
       }
@@ -1270,7 +1270,7 @@ describe('DraftProvider initial hydration', () => {
       'drafts/draft-1/picks?since=2026-06-07T00%3A00%3A00.000Z&pageSize=100'
     );
     expect(fetchApi).not.toHaveBeenCalledWith('drafts/draft-1');
-    expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
+    expect(screen.getByTestId('pick-order')).toHaveTextContent('');
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
     expect(screen.getByTestId('pick-deadline')).toHaveTextContent('2026-06-07T00:02:00.000Z');
   });
@@ -1394,5 +1394,140 @@ describe('DraftProvider initial hydration', () => {
     expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-1');
     expect(screen.getByTestId('player-count')).toHaveTextContent('1');
     expect(screen.getByTestId('current-pick')).toHaveTextContent('2');
+  });
+
+  it('applies revisioned pause and resume clocks immediately and ignores a stale lifecycle delta', async () => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    socketState.current = {
+      connected: true,
+      emit: vi.fn(),
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        handlers.set(event, handler);
+      }),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+    fetchApi.mockResolvedValue({
+      success: true,
+      data: { players: [], pagination: { hasMore: false }, watchlist: [], queue: [] },
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          schemaVersion: 1,
+          draftId: 'draft-1',
+          leagueId: 'league-1',
+          revision: 4,
+          serverNow: '2026-06-07T00:00:00.000Z',
+          state: {
+            name: 'Lifecycle Draft',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+            clock: {
+              status: 'LIVE',
+              revision: 4,
+              durationSeconds: 120,
+              serverNow: '2026-06-07T00:00:00.000Z',
+              startedAt: '2026-06-07T00:00:00.000Z',
+              deadlineAt: '2026-06-07T00:02:00.000Z',
+            },
+            onClockMemberId: 'member-1',
+            participants: [
+              {
+                id: 'member-1',
+                userId: 'user-1',
+                displayName: 'Tester',
+                draftOrder: 1,
+                queue: [],
+              },
+            ],
+            picks: [],
+          },
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    act(() => {
+      handlers.get('draft:delta')?.({
+        type: 'STATE_PATCH',
+        revision: 5,
+        ts: Date.parse('2026-06-07T00:00:30.000Z'),
+        payload: {
+          draft: { status: 'PAUSED', pickDeadlineAt: null },
+          liveState: {
+            revision: 5,
+            clock: {
+              status: 'PAUSED',
+              revision: 5,
+              durationSeconds: 120,
+              serverNow: '2026-06-07T00:00:30.000Z',
+              remainingSeconds: 37,
+            },
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('clock-status')).toHaveTextContent('PAUSED');
+      expect(screen.getByTestId('clock-revision')).toHaveTextContent('5');
+      expect(screen.getByTestId('clock-remaining')).toHaveTextContent('37');
+      expect(screen.getByTestId('pick-deadline')).toHaveTextContent('missing');
+    });
+
+    act(() => {
+      handlers.get('draft:delta')?.({
+        type: 'STATE_PATCH',
+        revision: 6,
+        ts: Date.parse('2026-06-07T00:01:00.000Z'),
+        payload: {
+          draft: { status: 'LIVE', pickDeadlineAt: '2026-06-07T00:01:37.000Z' },
+          liveState: {
+            revision: 6,
+            clock: {
+              status: 'LIVE',
+              revision: 6,
+              durationSeconds: 120,
+              serverNow: '2026-06-07T00:01:00.000Z',
+              startedAt: '2026-06-07T00:01:00.000Z',
+              deadlineAt: '2026-06-07T00:01:37.000Z',
+            },
+          },
+        },
+      });
+      handlers.get('draft:delta')?.({
+        type: 'STATE_PATCH',
+        revision: 5,
+        ts: Date.parse('2026-06-07T00:01:01.000Z'),
+        payload: {
+          draft: { status: 'PAUSED', pickDeadlineAt: null },
+          liveState: {
+            revision: 5,
+            clock: {
+              status: 'PAUSED',
+              revision: 5,
+              durationSeconds: 120,
+              serverNow: '2026-06-07T00:01:01.000Z',
+              remainingSeconds: 12,
+            },
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('clock-status')).toHaveTextContent('LIVE');
+      expect(screen.getByTestId('clock-revision')).toHaveTextContent('6');
+      expect(screen.getByTestId('clock-remaining')).toHaveTextContent('missing');
+      expect(screen.getByTestId('pick-deadline')).toHaveTextContent('2026-06-07T00:01:37.000Z');
+    });
   });
 });

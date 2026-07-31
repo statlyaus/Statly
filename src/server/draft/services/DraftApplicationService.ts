@@ -22,6 +22,8 @@ import type {
   DraftAggregate,
   DraftCommandEventType,
   DraftCommandResult,
+  DraftLifecycleEventPayload,
+  DraftOutboxPayload,
   DraftPickEventPayload,
   DraftPlayerSnapshot,
 } from '../domain/draftTypes';
@@ -32,6 +34,7 @@ type PickCommandData = {
   idempotent?: boolean;
   wasQueued?: boolean;
   pickDeadlineAt?: string | null;
+  pausedRemainingSeconds?: number | null;
   schedulingVersion?: number;
 };
 
@@ -144,7 +147,7 @@ async function createCommandOutboxEvents(
     leagueId: string;
     events: DraftCommandEventType[];
     publishState: boolean;
-    payload?: DraftPickEventPayload;
+    payload?: Exclude<DraftOutboxPayload, null>;
   }
 ): Promise<string[]> {
   if (input.events.length === 0) {
@@ -158,7 +161,12 @@ async function createCommandOutboxEvents(
       leagueId: input.leagueId,
       event,
       payload:
-        event === 'draft:pick-made' || event === 'draft:auto-pick' ? (input.payload ?? null) : null,
+        event === 'draft:pick-made' ||
+        event === 'draft:auto-pick' ||
+        event === 'draft:paused' ||
+        event === 'draft:resumed'
+          ? (input.payload ?? null)
+          : null,
       publishState: input.publishState && index === input.events.length - 1,
     }))
   );
@@ -463,6 +471,7 @@ export class DraftApplicationService {
           nextDirection: nextState.nextDirection,
           pickStartedAt: nextState.isComplete ? null : nextPickStartedAt?.toISOString(),
           pickDeadlineAt: pickDeadlineAt?.toISOString() ?? null,
+          schedulingVersion: nextSchedulingVersion,
           isComplete: nextState.isComplete,
         };
         const events = nextState.isComplete
@@ -698,6 +707,7 @@ export class DraftApplicationService {
           nextDirection: nextState.nextDirection,
           pickStartedAt: nextState.isComplete ? null : nextPickStartedAt?.toISOString(),
           pickDeadlineAt: pickDeadlineAt?.toISOString() ?? null,
+          schedulingVersion: nextSchedulingVersion,
           isComplete: nextState.isComplete,
         };
         const events = nextState.isComplete
@@ -829,12 +839,24 @@ export class DraftApplicationService {
         throw new Error('conflict:Draft scheduling changed');
       }
 
+      const serverNow = new Date().toISOString();
+      const schedulingVersion = draft.schedulingVersion + 1;
+      const lifecyclePayload: DraftLifecycleEventPayload = {
+        status: DraftStatus.PAUSED,
+        schedulingVersion,
+        durationSeconds: draft.settings.pickSeconds,
+        serverNow,
+        pickStartedAt: null,
+        pickDeadlineAt: null,
+        pausedRemainingSeconds,
+      };
       const events = buildCommandEvents('draft:paused');
       const outboxEventIds = await createCommandOutboxEvents(tx, {
         draftId,
         leagueId: draft.leagueId,
         events,
         publishState: true,
+        payload: lifecyclePayload,
       });
 
       return {
@@ -847,8 +869,9 @@ export class DraftApplicationService {
         outboxEventIds,
         data: {
           status: DraftStatus.PAUSED,
-          pausedAt: new Date().toISOString(),
-          schedulingVersion: draft.schedulingVersion + 1,
+          pausedAt: serverNow,
+          pausedRemainingSeconds,
+          schedulingVersion,
         },
       };
     });
@@ -902,12 +925,24 @@ export class DraftApplicationService {
         throw new Error('conflict:Draft scheduling changed');
       }
 
+      const schedulingVersion = draft.schedulingVersion + 1;
+      const serverNow = resumedAt.toISOString();
+      const lifecyclePayload: DraftLifecycleEventPayload = {
+        status: DraftStatus.LIVE,
+        schedulingVersion,
+        durationSeconds: draft.settings.pickSeconds,
+        serverNow,
+        pickStartedAt: resumedAt.toISOString(),
+        pickDeadlineAt: pickDeadlineAt.toISOString(),
+        pausedRemainingSeconds: null,
+      };
       const events = buildCommandEvents('draft:resumed');
       const outboxEventIds = await createCommandOutboxEvents(tx, {
         draftId,
         leagueId: draft.leagueId,
         events,
         publishState: true,
+        payload: lifecyclePayload,
       });
 
       return {
@@ -922,7 +957,7 @@ export class DraftApplicationService {
           status: DraftStatus.LIVE,
           resumedAt: resumedAt.toISOString(),
           pickDeadlineAt: pickDeadlineAt.toISOString(),
-          schedulingVersion: draft.schedulingVersion + 1,
+          schedulingVersion,
         },
       };
     });

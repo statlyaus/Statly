@@ -1,12 +1,7 @@
+import type { DraftClockPayload } from '@/services/realtime/draftStateWire';
+
 export type DraftRoomStatus =
-  | 'SCHEDULED'
-  | 'LOBBY'
-  | 'COUNTDOWN'
-  | 'LIVE'
-  | 'PAUSED'
-  | 'COMPLETED'
-  | 'CANCELLED'
-  | string;
+  'SCHEDULED' | 'LOBBY' | 'COUNTDOWN' | 'LIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | string;
 
 export type DraftRoomParticipant = {
   id?: string;
@@ -64,6 +59,7 @@ export type DraftRoomSequence = {
 };
 
 export type DraftRoomTimerState = {
+  phase: 'LIVE' | 'PAUSED' | 'FINALIZING' | 'SYNCING' | 'COMPLETED' | 'WAITING';
   remainingSeconds: number;
   percentRemaining: number;
   tone: 'neutral' | 'healthy' | 'warning' | 'urgent' | 'complete';
@@ -123,31 +119,33 @@ export function buildDraftRoomSequence(input: {
     }
   }
 
-  const slots = [...pickWindow].sort((a, b) => a - b).map((overall) => {
-    const slot = getSlotForOverallPick(overall, teamCount);
-    const participant = participantsBySlot.get(slot);
-    const pick = picksByOverall.get(overall);
-    const status: DraftRoomSequenceSlot['status'] =
-      overall === safeCurrent && !isComplete
-        ? 'current'
-        : overall < safeCurrent || Boolean(pick)
-          ? 'completed'
-          : 'upcoming';
-    const member = participant?.member;
+  const slots = [...pickWindow]
+    .sort((a, b) => a - b)
+    .map((overall) => {
+      const slot = getSlotForOverallPick(overall, teamCount);
+      const participant = participantsBySlot.get(slot);
+      const pick = picksByOverall.get(overall);
+      const status: DraftRoomSequenceSlot['status'] =
+        overall === safeCurrent && !isComplete
+          ? 'current'
+          : overall < safeCurrent || Boolean(pick)
+            ? 'completed'
+            : 'upcoming';
+      const member = participant?.member;
 
-    return {
-      overall,
-      round: teamCount > 0 ? Math.ceil(overall / teamCount) : 1,
-      slot,
-      status,
-      isUserPick: slot === input.yourSlot,
-      displayName: member?.displayName ?? participant?.displayName ?? `Team ${slot}`,
-      teamName: member?.teamName ?? participant?.teamName,
-      picksUntil: Math.max(0, overall - safeCurrent),
-      estimatedSecondsUntil: Math.max(0, overall - safeCurrent) * timePerPick,
-      player: pick?.player,
-    };
-  });
+      return {
+        overall,
+        round: teamCount > 0 ? Math.ceil(overall / teamCount) : 1,
+        slot,
+        status,
+        isUserPick: slot === input.yourSlot,
+        displayName: member?.displayName ?? participant?.displayName ?? `Team ${slot}`,
+        teamName: member?.teamName ?? participant?.teamName,
+        picksUntil: Math.max(0, overall - safeCurrent),
+        estimatedSecondsUntil: Math.max(0, overall - safeCurrent) * timePerPick,
+        player: pick?.player,
+      };
+    });
 
   return {
     phase,
@@ -163,12 +161,17 @@ export function getDraftRoomTimerState(input: {
   status: DraftRoomStatus;
   timePerPick: number;
   pickDeadlineAt?: string | Date | null;
+  pausedRemainingSeconds?: number | null;
+  clock?: DraftClockPayload | null;
+  clockReceivedAt?: number;
   nowMs?: number;
 }): DraftRoomTimerState {
-  const timePerPick = Math.max(1, Math.floor(input.timePerPick));
+  const status = input.clock?.status ?? input.status;
+  const timePerPick = Math.max(1, Math.floor(input.clock?.durationSeconds ?? input.timePerPick));
 
-  if (input.status === 'COMPLETED') {
+  if (status === 'COMPLETED') {
     return {
+      phase: 'COMPLETED',
       remainingSeconds: 0,
       percentRemaining: 0,
       tone: 'complete',
@@ -177,18 +180,60 @@ export function getDraftRoomTimerState(input: {
     };
   }
 
-  if (input.status === 'PAUSED') {
+  if (status === 'PAUSED') {
+    const remainingSeconds =
+      input.clock?.status === 'PAUSED'
+        ? input.clock.remainingSeconds
+        : input.pausedRemainingSeconds;
+    if (remainingSeconds === null || remainingSeconds === undefined) {
+      return {
+        phase: 'SYNCING',
+        remainingSeconds: 0,
+        percentRemaining: 0,
+        tone: 'neutral',
+        label: 'Syncing clock',
+        isRunning: false,
+      };
+    }
+    const safeRemainingSeconds = Math.max(0, Math.floor(remainingSeconds));
     return {
-      remainingSeconds: timePerPick,
-      percentRemaining: 100,
+      phase: 'PAUSED',
+      remainingSeconds: safeRemainingSeconds,
+      percentRemaining: Math.max(
+        0,
+        Math.min(100, Math.round((safeRemainingSeconds / timePerPick) * 100))
+      ),
       tone: 'neutral',
       label: 'Paused',
       isRunning: false,
     };
   }
 
-  if (input.status !== 'LIVE') {
+  if (status === 'FINALIZING') {
     return {
+      phase: 'FINALIZING',
+      remainingSeconds: 0,
+      percentRemaining: 0,
+      tone: 'urgent',
+      label: 'Finalizing pick',
+      isRunning: false,
+    };
+  }
+
+  if (status === 'SYNCING') {
+    return {
+      phase: 'SYNCING',
+      remainingSeconds: 0,
+      percentRemaining: 0,
+      tone: 'neutral',
+      label: 'Syncing clock',
+      isRunning: false,
+    };
+  }
+
+  if (status !== 'LIVE') {
+    return {
+      phase: 'WAITING',
       remainingSeconds: timePerPick,
       percentRemaining: 100,
       tone: 'neutral',
@@ -197,17 +242,47 @@ export function getDraftRoomTimerState(input: {
     };
   }
 
-  const deadlineMs = input.pickDeadlineAt ? new Date(input.pickDeadlineAt).getTime() : Number.NaN;
-  const remainingSeconds = Number.isFinite(deadlineMs)
-    ? Math.max(0, Math.ceil((deadlineMs - (input.nowMs ?? Date.now())) / 1000))
-    : timePerPick;
+  const nowMs = input.nowMs ?? Date.now();
+  const deadlineValue =
+    input.clock?.status === 'LIVE' ? input.clock.deadlineAt : input.pickDeadlineAt;
+  const deadlineMs = deadlineValue ? new Date(deadlineValue).getTime() : Number.NaN;
+  if (!Number.isFinite(deadlineMs)) {
+    return {
+      phase: 'SYNCING',
+      remainingSeconds: 0,
+      percentRemaining: 0,
+      tone: 'neutral',
+      label: 'Syncing clock',
+      isRunning: false,
+    };
+  }
+
+  const serverNowMs =
+    input.clock?.status === 'LIVE' ? new Date(input.clock.serverNow).getTime() : Number.NaN;
+  const remainingMs =
+    Number.isFinite(serverNowMs) && input.clockReceivedAt !== undefined
+      ? deadlineMs - serverNowMs - Math.max(0, nowMs - input.clockReceivedAt)
+      : deadlineMs - nowMs;
+  const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
   const percentRemaining = Math.max(
     0,
     Math.min(100, Math.round((remainingSeconds / timePerPick) * 100))
   );
 
+  if (remainingSeconds === 0) {
+    return {
+      phase: 'FINALIZING',
+      remainingSeconds,
+      percentRemaining,
+      tone: 'urgent',
+      label: 'Finalizing pick',
+      isRunning: false,
+    };
+  }
+
   if (remainingSeconds <= 15) {
     return {
+      phase: 'LIVE',
       remainingSeconds,
       percentRemaining,
       tone: 'urgent',
@@ -218,6 +293,7 @@ export function getDraftRoomTimerState(input: {
 
   if (remainingSeconds <= 60) {
     return {
+      phase: 'LIVE',
       remainingSeconds,
       percentRemaining,
       tone: 'warning',
@@ -227,6 +303,7 @@ export function getDraftRoomTimerState(input: {
   }
 
   return {
+    phase: 'LIVE',
     remainingSeconds,
     percentRemaining,
     tone: 'healthy',

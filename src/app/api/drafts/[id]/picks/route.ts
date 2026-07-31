@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { handlePickCommand } from '@/server/draft/api/handlePickCommand';
+import { buildDraftClockPayload } from '@/server/draft/services/DraftProjectionService';
 import { z } from 'zod';
 import { createHash } from 'crypto';
 
@@ -65,11 +66,20 @@ export async function GET(
           completedAt: true,
           currentPick: true,
           status: true,
+          lobbyStatus: true,
           round: true,
           direction: true,
           pickStartedAt: true,
           pickDeadlineAt: true,
+          pausedRemainingSeconds: true,
           schedulingVersion: true,
+          league: {
+            select: {
+              settings: {
+                select: { pickSeconds: true },
+              },
+            },
+          },
         },
       }),
     ]);
@@ -81,11 +91,26 @@ export async function GET(
     const timestamps: number[] = [draftMeta.createdAt.getTime()];
     if (draftMeta.startedAt) timestamps.push(draftMeta.startedAt.getTime());
     if (draftMeta.completedAt) timestamps.push(draftMeta.completedAt.getTime());
+    if (draftMeta.pickStartedAt) timestamps.push(draftMeta.pickStartedAt.getTime());
+    if (draftMeta.pickDeadlineAt) timestamps.push(draftMeta.pickDeadlineAt.getTime());
     if (latestPick?.madeAt) timestamps.push(latestPick.madeAt.getTime());
     const lastUpdated = new Date(Math.max(...timestamps));
 
-    // ETag includes pagination window and since filter
-    const etagBase = `${id}|picks|${lastUpdated.toISOString()}|${page}|${pageSize}|${since || ''}`;
+    // Timer state is part of the representation even when this page contains no new picks.
+    const etagBase = [
+      id,
+      'picks',
+      lastUpdated.toISOString(),
+      draftMeta.status,
+      draftMeta.lobbyStatus ?? '',
+      draftMeta.schedulingVersion,
+      draftMeta.pickStartedAt?.toISOString() ?? '',
+      draftMeta.pickDeadlineAt?.toISOString() ?? '',
+      draftMeta.pausedRemainingSeconds ?? '',
+      page,
+      pageSize,
+      since || '',
+    ].join('|');
     const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
 
     const ifNoneMatch = request.headers.get('if-none-match');
@@ -101,7 +126,7 @@ export async function GET(
     }
 
     const conditionalSince = updatedSince || since;
-    if (conditionalSince) {
+    if (conditionalSince && draftMeta.status !== 'LIVE' && draftMeta.status !== 'PAUSED') {
       const sinceDate = new Date(conditionalSince);
       if (!Number.isNaN(sinceDate.getTime()) && lastUpdated <= sinceDate) {
         const notModified = new Response(null, { status: 304 });
@@ -132,8 +157,20 @@ export async function GET(
       prisma.pick.count({ where }),
     ]);
 
+    const serverNow = new Date().toISOString();
+    const clock = buildDraftClockPayload({
+      status: draftMeta.status,
+      lobbyStatus: draftMeta.lobbyStatus,
+      revision: draftMeta.schedulingVersion,
+      durationSeconds: draftMeta.league.settings.pickSeconds,
+      serverNow,
+      pickStartedAt: draftMeta.pickStartedAt,
+      pickDeadlineAt: draftMeta.pickDeadlineAt,
+      pausedRemainingSeconds: draftMeta.pausedRemainingSeconds,
+    });
     const data = {
       draftId: id,
+      serverNow,
       draftState: {
         currentPick: draftMeta.currentPick,
         status: draftMeta.status,
@@ -141,7 +178,9 @@ export async function GET(
         direction: draftMeta.direction,
         pickStartedAt: draftMeta.pickStartedAt?.toISOString() ?? null,
         pickDeadlineAt: draftMeta.pickDeadlineAt?.toISOString() ?? null,
+        pausedRemainingSeconds: draftMeta.pausedRemainingSeconds,
         schedulingVersion: draftMeta.schedulingVersion,
+        clock,
       },
       picks: picks.map((pick) => ({
         id: pick.id,

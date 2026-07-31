@@ -133,6 +133,8 @@ jobs:
       DATABASE_URL: file:./ci-test.db
       DATABASE_URL_TEST: file:./ci-test.db
       REDIS_URL: redis://localhost:6379
+      PLAYWRIGHT_WITH_SOCKET: 'true'
+      PLAYWRIGHT_WITH_DRAFT_WORKER: 'true'
       NEXT_PUBLIC_FIREBASE_API_KEY: ci-emulator-key
       NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: statly-ci.firebaseapp.com
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: statly-e2e

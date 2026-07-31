@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { successResponse, errorResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { buildDraftClockPayload } from '@/server/draft/services/DraftProjectionService';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
@@ -53,7 +54,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const [draftTimes, latestPick] = await Promise.all([
       prisma.draft.findUnique({
         where: { id },
-        select: { createdAt: true, startedAt: true, completedAt: true, leagueId: true },
+        select: {
+          createdAt: true,
+          startedAt: true,
+          completedAt: true,
+          pickStartedAt: true,
+          pickDeadlineAt: true,
+          pausedRemainingSeconds: true,
+          schedulingVersion: true,
+          status: true,
+          lobbyStatus: true,
+          leagueId: true,
+        },
       }),
       prisma.pick.findFirst({
         where: { draftId: id },
@@ -73,11 +85,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const timestamps: number[] = [draftTimes.createdAt.getTime()];
     if (draftTimes.startedAt) timestamps.push(draftTimes.startedAt.getTime());
     if (draftTimes.completedAt) timestamps.push(draftTimes.completedAt.getTime());
+    if (draftTimes.pickStartedAt) timestamps.push(draftTimes.pickStartedAt.getTime());
+    if (draftTimes.pickDeadlineAt) timestamps.push(draftTimes.pickDeadlineAt.getTime());
     if (latestPick?.madeAt) timestamps.push(latestPick.madeAt.getTime());
     const lastUpdated = new Date(Math.max(...timestamps));
 
-    // Build weak ETag from minimal state
-    const etagBase = `${id}|meta|${lastUpdated.toISOString()}|${draftReadiness.playerPool.availableCount}|${draftReadiness.status}`;
+    // Include every durable clock discriminator so timer-only transitions cannot return 304.
+    const etagBase = [
+      id,
+      'meta',
+      lastUpdated.toISOString(),
+      draftTimes.status,
+      draftTimes.lobbyStatus ?? '',
+      draftTimes.schedulingVersion,
+      draftTimes.pickStartedAt?.toISOString() ?? '',
+      draftTimes.pickDeadlineAt?.toISOString() ?? '',
+      draftTimes.pausedRemainingSeconds ?? '',
+      draftReadiness.playerPool.availableCount,
+      draftReadiness.status,
+    ].join('|');
     const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
 
     // Conditional: If-None-Match (supports comma-separated ETags and wildcard "*")
@@ -113,7 +139,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Conditional: updatedSince
-    if (updatedSince) {
+    if (updatedSince && draftTimes.status !== 'LIVE' && draftTimes.status !== 'PAUSED') {
       const sinceDate = new Date(updatedSince);
       if (!Number.isNaN(sinceDate.getTime()) && lastUpdated <= sinceDate) {
         const notModified = new Response(null, { status: 304 });
@@ -160,6 +186,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const picksCount = await prisma.pick.count({ where: { draftId: id } });
     const selectedCategories = parseSelectedCategories(draft.league?.categoriesJson);
+    const serverNow = new Date().toISOString();
+    const clock = buildDraftClockPayload({
+      status: draft.status,
+      lobbyStatus: draft.lobbyStatus,
+      revision: draft.schedulingVersion,
+      durationSeconds: draft.league?.settings?.pickSeconds || 120,
+      serverNow,
+      pickStartedAt: draft.pickStartedAt,
+      pickDeadlineAt: draft.pickDeadlineAt,
+      pausedRemainingSeconds: draft.pausedRemainingSeconds,
+    });
 
     const draftData = {
       id: draft.id,
@@ -173,7 +210,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       totalPicks: draft.totalPicks,
       round: draft.round,
       direction: draft.direction,
+      schedulingVersion: draft.schedulingVersion,
+      serverNow,
+      clock,
+      pickStartedAt: draft.pickStartedAt?.toISOString() ?? null,
       pickDeadlineAt: draft.pickDeadlineAt?.toISOString() ?? null,
+      pausedRemainingSeconds: draft.pausedRemainingSeconds,
       createdAt: draft.createdAt.toISOString(),
       startedAt: draft.startedAt?.toISOString(),
       completedAt: draft.completedAt?.toISOString(),

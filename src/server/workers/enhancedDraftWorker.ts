@@ -278,8 +278,28 @@ class EnhancedDraftWorker {
             break;
           }
 
-          const result = await draftApplicationService.autoPick({ draftId });
-          await draftRealtimePublisher.publishCommandResult(result);
+          try {
+            const result = await draftApplicationService.autoPick({
+              draftId,
+              expectedSchedulingVersion: schedulingVersion,
+              requireExpired: true,
+            });
+            await draftRealtimePublisher.publishCommandResult(result);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (
+              message === 'conflict:Draft scheduling changed' ||
+              message === 'conflict:Pick clock has not expired'
+            ) {
+              logger.info('Skipping pick expiry after concurrent clock change', {
+                draftId,
+                schedulingVersion,
+                reason: message,
+              });
+              break;
+            }
+            throw error;
+          }
           break;
         }
         case 'draft:start-lobby': {

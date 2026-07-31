@@ -53,7 +53,7 @@ describe('getSocketIoConfig', () => {
     const socketServerSource = read('src/server/socketioServer.ts');
     const backfillSource = socketServerSource.slice(
       socketServerSource.indexOf('async function getDeltasSince'),
-      socketServerSource.indexOf('async function runAutoPickForExpiredTimer')
+      socketServerSource.indexOf('// Express app to serve health')
     );
 
     expect(backfillSource).toContain('prisma.draftEvent.findMany');
@@ -62,11 +62,13 @@ describe('getSocketIoConfig', () => {
     expect(backfillSource).not.toContain('zrangebyscore');
   });
 
-  it('makes duplicate local draft timers observable before replacement', () => {
+  it('keeps local socket timers disabled so BullMQ remains the only clock authority', () => {
     const socketServerSource = read('src/server/socketioServer.ts');
 
-    expect(socketServerSource).toContain("logger.warn('Replacing an existing local draft timer'");
-    expect(socketServerSource).toContain('clearInterval(existing)');
+    expect(socketServerSource).not.toContain('roomTimers');
+    expect(socketServerSource).not.toContain('startDraftTimer');
+    expect(socketServerSource).toContain('Direct socket timers are disabled');
+    expect(socketServerSource).toContain('BullMQ worker exclusively own clock progression');
   });
 
   it('settles asynchronous request authorization through the Socket.IO callback contract', () => {

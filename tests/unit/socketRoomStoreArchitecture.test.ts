@@ -23,13 +23,37 @@ describe('Socket.IO room state architecture', () => {
     expect(source).toContain('draftRooms: null');
   });
 
-  it('retains per-process timer handles without using them as room state', () => {
+  it('does not retain a per-process timer authority', () => {
     const source = readSocketServer();
 
-    expect(source).toContain(
-      'const roomTimers = new Map<string, ReturnType<typeof setInterval> | undefined>()'
+    expect(source).not.toContain('roomTimers');
+    expect(source).not.toContain('startDraftTimer');
+    expect(source).toContain('Direct socket timers are disabled');
+    expect(source).toContain('draftProjectionService.buildRoomSnapshot');
+  });
+
+  it('authorizes and snapshots before joining or replaying a draft room', () => {
+    const source = readSocketServer();
+
+    expect(source.indexOf('draftProjectionService.buildRoomSnapshot')).toBeLessThan(
+      source.indexOf('draftRoomStore.initRoomIfMissing')
     );
-    expect(source).toContain('if (!(await renew()))');
+    expect(source.indexOf("socket.emit('draft:snapshot', snapshot)")).toBeLessThan(
+      source.indexOf("socket.emit('draft:backfill', deltas)")
+    );
+    expect(source).toContain('socket.data.draftId !== draftId');
+  });
+
+  it('replays persisted lifecycle events as revisioned canonical clock deltas', () => {
+    const source = readSocketServer();
+
+    expect(source).toContain('DraftClockPayloadSchema.safeParse');
+    expect(source).toContain("buildLifecycleDelta('PAUSED')");
+    expect(source).toContain("buildLifecycleDelta('LIVE')");
+    expect(source).toContain('revision: clockResult.data.revision');
+    expect(source).toContain(
+      "pickDeadlineAt: clockResult.data.status === 'LIVE' ? clockResult.data.deadlineAt : null"
+    );
   });
 });
 

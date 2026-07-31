@@ -5,12 +5,15 @@ import {
   type DraftRealtimeEventType,
 } from '@/services/realtime/pubsub';
 import {
+  DraftClockPayloadSchema,
   toDraftRealtimeStatePayload,
+  type CanonicalLiveDraftState,
+  type DraftClockPayload,
   type DraftRealtimeStatePayload,
 } from '@/services/realtime/draftStateWire';
 import type { LiveDraftState } from '@/services/liveDraftEngine';
 
-import type { DraftPickEventPayload } from '../domain/draftTypes';
+import type { DraftLifecycleEventPayload, DraftPickEventPayload } from '../domain/draftTypes';
 import type { Server as SocketIOServer } from 'socket.io';
 
 type DraftStatusPayload = {
@@ -38,6 +41,7 @@ type DraftDelta =
       type: 'PICK_MADE';
       payload: { pick: DraftPickEventPayload };
       ts: number;
+      revision?: number;
     }
   | {
       type: 'QUEUE_UPDATED';
@@ -52,14 +56,17 @@ type DraftDelta =
           currentPick?: number;
           round?: number;
           direction?: 'FORWARD' | 'REVERSE';
-          pickDeadlineAt?: string;
+          pickDeadlineAt?: string | null;
         };
         liveState?: {
           currentPick?: number;
           onClockTeamId?: string;
+          clock?: DraftClockPayload;
+          revision?: number;
         };
       };
       ts: number;
+      revision?: number;
     };
 
 export class DraftRealtimeDispatcher {
@@ -81,7 +88,7 @@ export class DraftRealtimeDispatcher {
     });
   }
 
-  async publishState(state: LiveDraftState): Promise<void> {
+  async publishState(state: CanonicalLiveDraftState): Promise<void> {
     const payload = toDraftRealtimeStatePayload(state);
     this.dispatchToLocal(state.draftId, 'draft:state', payload);
     await draftPubSub.publish(state.draftId, 'draft:state', payload);
@@ -90,12 +97,8 @@ export class DraftRealtimeDispatcher {
   async publishDraftEvent(
     draftId: string,
     event:
-      | 'draft:pick-made'
-      | 'draft:auto-pick'
-      | 'draft:paused'
-      | 'draft:resumed'
-      | 'draft:completed',
-    payload?: DraftPickEventPayload
+      'draft:pick-made' | 'draft:auto-pick' | 'draft:paused' | 'draft:resumed' | 'draft:completed',
+    payload?: DraftPickEventPayload | DraftLifecycleEventPayload
   ): Promise<void> {
     const eventPayload = payload ?? {};
     this.dispatchToLocal(draftId, event, eventPayload);
@@ -170,14 +173,17 @@ export class DraftRealtimeDispatcher {
                   : state.currentPick.round % 2 === 1
                     ? 'FORWARD'
                     : 'REVERSE',
-              pickDeadlineAt: state.currentPick.expiresAt,
+              pickDeadlineAt: state.clock.status === 'LIVE' ? state.clock.deadlineAt : null,
             },
             liveState: {
               currentPick: state.currentPick.pickNumber,
               onClockTeamId: state.currentPick.memberId,
+              clock: state.clock,
+              revision: state.revision,
             },
           },
-          ts: Date.now(),
+          ts: Date.parse(state.serverNow),
+          revision: state.revision,
         });
         return;
       }
@@ -201,6 +207,7 @@ export class DraftRealtimeDispatcher {
           type: 'PICK_MADE',
           payload: this.buildPickDeltaPayload(pickPayload),
           ts: Date.now(),
+          revision: pickPayload.schedulingVersion,
         });
         return;
       }
@@ -212,17 +219,20 @@ export class DraftRealtimeDispatcher {
           type: 'PICK_MADE',
           payload: this.buildPickDeltaPayload(pickPayload),
           ts: Date.now(),
+          revision: pickPayload.schedulingVersion,
         });
         return;
       }
       case 'draft:paused': {
         this.emitToDraftRooms(draftId, 'draft:paused', payload);
         this.emitToDraftRooms(draftId, 'draft:status', this.buildStatusPayload(draftId, 'PAUSED'));
+        this.emitLifecycleDelta(draftId, payload, 'PAUSED');
         return;
       }
       case 'draft:resumed': {
         this.emitToDraftRooms(draftId, 'draft:resumed', payload);
         this.emitToDraftRooms(draftId, 'draft:status', this.buildStatusPayload(draftId, 'LIVE'));
+        this.emitLifecycleDelta(draftId, payload, 'LIVE');
         return;
       }
       case 'draft:completed': {
@@ -267,6 +277,53 @@ export class DraftRealtimeDispatcher {
     };
   }
 
+  private emitLifecycleDelta(
+    draftId: string,
+    payload: unknown,
+    expectedStatus: 'LIVE' | 'PAUSED'
+  ): void {
+    if (!payload || typeof payload !== 'object') return;
+
+    const lifecycle = payload as Partial<DraftLifecycleEventPayload>;
+    if (lifecycle.status !== expectedStatus) return;
+
+    const clockResult = DraftClockPayloadSchema.safeParse(
+      expectedStatus === 'LIVE'
+        ? {
+            status: 'LIVE',
+            revision: lifecycle.schedulingVersion,
+            durationSeconds: lifecycle.durationSeconds,
+            serverNow: lifecycle.serverNow,
+            startedAt: lifecycle.pickStartedAt,
+            deadlineAt: lifecycle.pickDeadlineAt,
+          }
+        : {
+            status: 'PAUSED',
+            revision: lifecycle.schedulingVersion,
+            durationSeconds: lifecycle.durationSeconds,
+            serverNow: lifecycle.serverNow,
+            remainingSeconds: lifecycle.pausedRemainingSeconds,
+          }
+    );
+    if (!clockResult.success) return;
+
+    this.emitCompatDelta(draftId, {
+      type: 'STATE_PATCH',
+      payload: {
+        draft: {
+          status: expectedStatus,
+          pickDeadlineAt: clockResult.data.status === 'LIVE' ? clockResult.data.deadlineAt : null,
+        },
+        liveState: {
+          clock: clockResult.data,
+          revision: clockResult.data.revision,
+        },
+      },
+      ts: Date.parse(clockResult.data.serverNow),
+      revision: clockResult.data.revision,
+    });
+  }
+
   private buildPickDeltaPayload(pick: DraftPickEventPayload) {
     return {
       pick,
@@ -277,6 +334,7 @@ export class DraftRealtimeDispatcher {
       direction: pick.nextDirection,
       pickStartedAt: pick.pickStartedAt,
       pickDeadlineAt: pick.pickDeadlineAt,
+      schedulingVersion: pick.schedulingVersion,
     };
   }
 }

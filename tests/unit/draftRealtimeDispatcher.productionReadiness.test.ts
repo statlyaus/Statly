@@ -1,18 +1,29 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { LiveDraftState } from '@/services/liveDraftEngine';
 import { DraftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
-import { DraftRealtimeStatePayloadSchema } from '@/services/realtime/draftStateWire';
+import {
+  DraftRealtimeStatePayloadSchema,
+  toDraftRealtimeStatePayload,
+  type CanonicalLiveDraftState,
+} from '@/services/realtime/draftStateWire';
 import { draftPubSub, parseAndValidateEnvelope } from '@/services/realtime/pubsub';
 import { describe, expect, it, vi } from 'vitest';
 
-function buildLiveDraftState(): LiveDraftState {
+function buildLiveDraftState(): CanonicalLiveDraftState {
   const startedAt = new Date('2026-07-28T12:00:00.000Z');
   const expiresAt = new Date('2026-07-28T12:01:30.000Z');
 
   return {
     leagueId: 'league-1',
     draftId: 'draft-1',
+    clock: {
+      status: 'LIVE',
+      revision: 7,
+      durationSeconds: 90,
+      serverNow: '2026-07-28T12:00:05.000Z',
+      startedAt: '2026-07-28T12:00:00.000Z',
+      deadlineAt: '2026-07-28T12:01:30.000Z',
+    },
     status: 'LIVE',
     currentPick: {
       userId: 'user-1',
@@ -84,8 +95,10 @@ describe('draft realtime dispatcher production readiness', () => {
       'utf8'
     );
 
-    expect(source).toContain('pickDeadlineAt: state.currentPick.expiresAt');
-    expect(source).not.toContain('state.currentPick.expiresAt.toISOString()');
+    expect(source).toContain(
+      "pickDeadlineAt: state.clock.status === 'LIVE' ? state.clock.deadlineAt : null"
+    );
+    expect(source).not.toContain('pickDeadlineAt: state.currentPick.expiresAt');
   });
 
   it('uses one validated ISO timestamp payload for local and Redis state fanout', async () => {
@@ -113,6 +126,9 @@ describe('draft realtime dispatcher production readiness', () => {
 
     expect(wirePayload.currentPick.expiresAt).toBe('2026-07-28T12:01:30.000Z');
     expect(wirePayload.currentPick.startedAt).toBe('2026-07-28T12:00:00.000Z');
+    expect(wirePayload.revision).toBe(7);
+    expect(wirePayload.serverNow).toBe('2026-07-28T12:00:05.000Z');
+    expect(wirePayload.clock).toEqual(buildLiveDraftState().clock);
     expect(wirePayload.picks[0]?.timestamp).toBe('2026-07-28T12:00:00.000Z');
     expect(wirePayload.participants[0]?.lastActivity).toBe('2026-07-28T12:00:00.000Z');
     expect(wirePayload.timerSettings.pausedAt).toBe('2026-07-28T12:00:00.000Z');
@@ -131,9 +147,7 @@ describe('draft realtime dispatcher production readiness', () => {
   });
 
   it('rejects draft state envelopes with invalid wire timestamps', () => {
-    const payload = DraftRealtimeStatePayloadSchema.parse(
-      JSON.parse(JSON.stringify(buildLiveDraftState()))
-    );
+    const payload = toDraftRealtimeStatePayload(buildLiveDraftState());
 
     expect(
       parseAndValidateEnvelope(
@@ -153,9 +167,7 @@ describe('draft realtime dispatcher production readiness', () => {
   });
 
   it('rejects draft state envelopes that route a payload to another draft', () => {
-    const payload = DraftRealtimeStatePayloadSchema.parse(
-      JSON.parse(JSON.stringify(buildLiveDraftState()))
-    );
+    const payload = toDraftRealtimeStatePayload(buildLiveDraftState());
 
     expect(
       parseAndValidateEnvelope(

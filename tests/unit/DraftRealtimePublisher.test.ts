@@ -114,7 +114,8 @@ describe('DraftRealtimePublisher', () => {
     expect(flushedCount).toBe(2);
     expect(draftRealtimeDispatcher.publishDraftEvent).toHaveBeenCalledWith(
       'draft-1',
-      'draft:paused'
+      'draft:paused',
+      undefined
     );
     expect(draftRealtimeDispatcher.publishDraftEvent).toHaveBeenCalledWith(
       'draft-2',
@@ -135,6 +136,7 @@ describe('DraftRealtimePublisher', () => {
       event: 'draft:pick-made',
       payload: {
         id: 'pick-1',
+        overall: 1,
         member: { displayName: 'Alex' },
         player: { name: 'Taylor' },
       },
@@ -161,6 +163,45 @@ describe('DraftRealtimePublisher', () => {
       {},
       ['event-pick'],
       'social write unavailable'
+    );
+  });
+
+  it('forwards the persisted lifecycle clock through an outbox replay', async () => {
+    const lifecyclePayload = {
+      status: 'PAUSED',
+      schedulingVersion: 9,
+      durationSeconds: 120,
+      serverNow: '2026-06-05T00:00:23.000Z',
+      pickStartedAt: null,
+      pickDeadlineAt: null,
+      pausedRemainingSeconds: 37,
+    } as const;
+    const event = {
+      id: 'event-pause',
+      draftId: 'draft-1',
+      leagueId: 'league-1',
+      event: 'draft:paused',
+      payload: lifecyclePayload,
+      publishState: false,
+      attempts: 0,
+      lastError: null,
+      lockedAt: null,
+      lockedBy: null,
+      publishedAt: null,
+      createdAt: new Date('2026-06-05T00:00:23.000Z'),
+    } as any;
+
+    draftRepository.listPendingDraftEventsBatch.mockResolvedValue([event]);
+    draftRepository.claimDraftEvents.mockResolvedValue(1);
+    draftRepository.listClaimedDraftEvents.mockResolvedValue([event]);
+
+    const publisher = new DraftRealtimePublisher();
+    await expect(publisher.flushPendingDraftEventsBatch(1)).resolves.toBe(1);
+
+    expect(draftRealtimeDispatcher.publishDraftEvent).toHaveBeenCalledWith(
+      'draft-1',
+      'draft:paused',
+      lifecyclePayload
     );
   });
 });

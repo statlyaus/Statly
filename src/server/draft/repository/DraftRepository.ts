@@ -56,7 +56,7 @@ function parseOutboxPayload(payload: string | null): DraftOutboxPayload {
     return null;
   }
 
-  return JSON.parse(payload) as DraftPickEventPayload;
+  return JSON.parse(payload) as Exclude<DraftOutboxPayload, null>;
 }
 
 function toOutboxEventRecord(event: DraftEventRecord): DraftOutboxEventRecord {
@@ -141,9 +141,7 @@ export class DraftRepository {
     return prisma.$transaction((tx) => work(tx), { timeout });
   }
 
-  async listLiveDraftPickExpirySchedules(
-    tx: TxClient
-  ): Promise<LiveDraftPickExpirySchedule[]> {
+  async listLiveDraftPickExpirySchedules(tx: TxClient): Promise<LiveDraftPickExpirySchedule[]> {
     const drafts = await tx.draft.findMany({
       where: {
         status: DraftStatus.LIVE,
@@ -381,9 +379,7 @@ export class DraftRepository {
       nextPick: number;
       nextRound: number;
       nextDirection:
-        | PrismaNS.EnumDraftDirectionFieldUpdateOperationsInput['set']
-        | 'FORWARD'
-        | 'REVERSE';
+        PrismaNS.EnumDraftDirectionFieldUpdateOperationsInput['set'] | 'FORWARD' | 'REVERSE';
       isComplete: boolean;
     }
   ) {
