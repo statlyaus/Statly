@@ -9,7 +9,7 @@ const useSocketWebServer =
   process.env.PLAYWRIGHT_WITH_SOCKET === 'true' ||
   (process.env.PLAYWRIGHT_WITH_SOCKET !== 'false' && !process.env.CI);
 const useDraftWorkerWebServer =
-  useSocketWebServer && process.env.PLAYWRIGHT_WITH_DRAFT_WORKER !== 'false';
+  useSocketWebServer && process.env.PLAYWRIGHT_WITH_DRAFT_WORKER === 'true';
 
 const nextCommand = [
   'NODE_ENV=development',

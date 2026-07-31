@@ -32,12 +32,19 @@ type DraftExpiryJob = {
 
 function queueConnection() {
   const redisUrl = new URL(process.env.REDIS_URL ?? 'redis://127.0.0.1:6379');
+  const redisUrlDatabase = redisUrl.pathname.replace(/^\/+/, '');
+  const database = Number(process.env.REDIS_DB ?? (redisUrlDatabase || 0));
+
+  if (!Number.isInteger(database) || database < 0) {
+    throw new Error('Draft timer E2E requires a valid non-negative Redis database number');
+  }
 
   return {
     host: process.env.REDIS_HOST ?? redisUrl.hostname,
     port: Number((process.env.REDIS_PORT ?? redisUrl.port) || 6379),
     username: (process.env.REDIS_USERNAME ?? redisUrl.username) || undefined,
     password: (process.env.REDIS_PASSWORD ?? redisUrl.password) || undefined,
+    db: database,
   };
 }
 
@@ -289,61 +296,72 @@ async function seedLiveTimerFixture() {
   }
 }
 
-test('keeps one canonical clock through pause, resume, and worker expiry', async ({ page }) => {
-  test.setTimeout(60_000);
+test.skip(
+  process.env.PLAYWRIGHT_WITH_DRAFT_WORKER !== 'true',
+  'Requires the isolated draft-worker E2E topology'
+);
 
-  const runtimeErrors = collectRuntimeErrors(page);
-  await authenticateAsDevelopmentUser(page);
-  const { deadlineAt } = await seedLiveTimerFixture();
+test(
+  'keeps one canonical clock through pause, resume, and worker expiry',
+  { tag: '@draft-worker' },
+  async ({ page }) => {
+    test.setTimeout(60_000);
 
-  await page.goto(`/drafts/${FIXTURE.draftId}`);
-  await expect(page.locator('body')).toContainText('Pick 1 of 2');
-  await expectNoAppErrorBoundary(page);
+    const runtimeErrors = collectRuntimeErrors(page);
+    await authenticateAsDevelopmentUser(page);
+    const { deadlineAt } = await seedLiveTimerFixture();
 
-  const timer = page.getByRole('timer');
-  await expect(timer).toBeVisible();
-  await expect(timer).not.toContainText('Syncing clock');
+    await page.goto(`/drafts/${FIXTURE.draftId}`);
+    await expect(page.locator('body')).toContainText('Pick 1 of 2');
+    await expectNoAppErrorBoundary(page);
 
-  const firstTimerValue = timerTextToSeconds(await timer.innerText());
-  expect(firstTimerValue).toBeGreaterThan(0);
-  expect(firstTimerValue).toBeLessThanOrEqual(
-    Math.ceil((deadlineAt.getTime() - Date.now()) / 1000) + 1
-  );
+    const timer = page.getByRole('timer');
+    await expect(timer).toBeVisible();
+    await expect(timer).not.toContainText('Syncing clock');
 
-  await expect
-    .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 4_000 })
-    .toBeLessThan(firstTimerValue);
+    const firstTimerValue = timerTextToSeconds(await timer.innerText());
+    expect(firstTimerValue).toBeGreaterThan(0);
+    expect(firstTimerValue).toBeLessThanOrEqual(
+      Math.ceil((deadlineAt.getTime() - Date.now()) / 1000) + 1
+    );
 
-  const pauseResponse = await page.request.post(`/api/drafts/${FIXTURE.draftId}/pause`);
-  expect(pauseResponse.ok()).toBe(true);
-  await expect(page.locator('body')).toContainText('Draft paused');
+    await expect
+      .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 4_000 })
+      .toBeLessThan(firstTimerValue);
 
-  const pausedTimerValue = timerTextToSeconds(await timer.innerText());
-  expect(pausedTimerValue).toBeGreaterThan(0);
-  await page.waitForTimeout(1_500);
-  expect(timerTextToSeconds(await timer.innerText())).toBe(pausedTimerValue);
+    const pauseResponse = await page.request.post(`/api/drafts/${FIXTURE.draftId}/pause`);
+    expect(pauseResponse.ok()).toBe(true);
+    await expect(page.locator('body')).toContainText('Draft paused');
 
-  const resumeResponse = await page.request.post(`/api/drafts/${FIXTURE.draftId}/resume`);
-  expect(resumeResponse.ok()).toBe(true);
-  await expect(page.locator('body')).toContainText('Pick 1');
-  await expect
-    .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 4_000 })
-    .toBeLessThan(pausedTimerValue);
+    const pausedTimerValue = timerTextToSeconds(await timer.innerText());
+    expect(pausedTimerValue).toBeGreaterThan(0);
+    await page.waitForTimeout(1_500);
+    expect(timerTextToSeconds(await timer.innerText())).toBe(pausedTimerValue);
 
-  await expect(page.locator('body')).toContainText('Pick 2 of 2', { timeout: 25_000 });
-  await expectNoAppErrorBoundary(page);
+    const resumeResponse = await page.request.post(`/api/drafts/${FIXTURE.draftId}/resume`);
+    expect(resumeResponse.ok()).toBe(true);
+    await expect(page.locator('body')).toContainText('Pick 1');
+    await expect
+      .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 4_000 })
+      .toBeLessThan(pausedTimerValue);
 
-  const picksResponse = await page.request.get(`/api/drafts/${FIXTURE.draftId}/picks?pageSize=10`);
-  expect(picksResponse.ok()).toBe(true);
-  const picksPayload = await picksResponse.json();
-  expect(picksPayload.data.picks).toHaveLength(1);
-  expect(picksPayload.data.picks[0]).toMatchObject({
-    overall: 1,
-    auto: true,
-    player: { id: FIXTURE.queuedPlayerId },
-  });
-  expect(picksPayload.data.draftState.currentPick).toBe(2);
-  expect(picksPayload.data.draftState.clock.status).toBe('LIVE');
-  expect(picksPayload.data.draftState.clock.revision).toBe(4);
-  expect(runtimeErrors).toEqual([]);
-});
+    await expect(page.locator('body')).toContainText('Pick 2 of 2', { timeout: 25_000 });
+    await expectNoAppErrorBoundary(page);
+
+    const picksResponse = await page.request.get(
+      `/api/drafts/${FIXTURE.draftId}/picks?pageSize=10`
+    );
+    expect(picksResponse.ok()).toBe(true);
+    const picksPayload = await picksResponse.json();
+    expect(picksPayload.data.picks).toHaveLength(1);
+    expect(picksPayload.data.picks[0]).toMatchObject({
+      overall: 1,
+      auto: true,
+      player: { id: FIXTURE.queuedPlayerId },
+    });
+    expect(picksPayload.data.draftState.currentPick).toBe(2);
+    expect(picksPayload.data.draftState.clock.status).toBe('LIVE');
+    expect(picksPayload.data.draftState.clock.revision).toBe(4);
+    expect(runtimeErrors).toEqual([]);
+  }
+);

@@ -15,9 +15,12 @@ describe('e2e fixture setup', () => {
     expect(source).toContain('upsertCanonicalPlayer(tx');
   });
 
-  it('uses canonical player ids and ranks only the full-draft fixture pool', () => {
-    const source = read('tests/e2e/helpers/fullDraftSoakFixture.ts');
+  it('keeps the representative draft lifecycle fixture deterministic and scoped', () => {
+    const source = read('tests/e2e/helpers/draftLifecycleFixture.ts');
 
+    expect(source).toContain('teamCount: 2');
+    expect(source).toContain('rosterSize: 2');
+    expect(source).toContain('totalPicks: 4');
     expect(source).toContain('buildCanonicalPlayerId(`${player.name}|${club}`)');
     expect(source).toContain('provider: PLAYER_STATS_2025_PROVIDER');
     expect(source).toContain('const candidateIds = await upsertActivePlayerPool(prisma)');
