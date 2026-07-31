@@ -6,10 +6,11 @@ import {
   PickOrder,
   WaiverRule,
 } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { prisma } from '@/lib/prisma';
 import { DraftApplicationService } from '@/server/draft/services/DraftApplicationService';
+import { RosterProjectionService } from '@/server/rosters/RosterProjectionService';
 
 const FIXTURE = {
   leagueId: 'integration-full-draft-league',
@@ -174,7 +175,17 @@ describe('full draft persistence convergence', () => {
   });
 
   it('persists 264 ordered picks and projects one canonical 22-player roster per member', async () => {
-    const service = new DraftApplicationService();
+    const waiverAvailabilityProjection = {
+      projectLeague: vi.fn(async () => ({
+        owned: FIXTURE.totalPicks,
+        available: FIXTURE.playerCount - FIXTURE.totalPicks,
+      })),
+    };
+    const rosterProjectionService = new RosterProjectionService(
+      prisma,
+      waiverAvailabilityProjection
+    );
+    const service = new DraftApplicationService(rosterProjectionService);
     const selectedPlayerIds: string[] = [];
 
     for (let overall = 1; overall <= FIXTURE.totalPicks; overall += 1) {
@@ -194,6 +205,10 @@ describe('full draft persistence convergence', () => {
       );
     }
 
+    expect(waiverAvailabilityProjection.projectLeague).toHaveBeenCalledTimes(1);
+    expect(waiverAvailabilityProjection.projectLeague).toHaveBeenCalledWith({
+      leagueId: FIXTURE.leagueId,
+    });
     expect(selectedPlayerIds[0]).toBe(queuedPlayerId);
     expect(new Set(selectedPlayerIds)).toHaveLength(FIXTURE.totalPicks);
     expect(selectedPlayerIds.every((playerId) => playerIds.includes(playerId))).toBe(true);
