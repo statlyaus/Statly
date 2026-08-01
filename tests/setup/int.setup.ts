@@ -1,4 +1,4 @@
-import { beforeAll, afterAll } from 'vitest';
+import { afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 
 const testDatabaseUrl = process.env.DATABASE_URL_TEST;
@@ -11,12 +11,6 @@ process.env.DATABASE_URL = testDatabaseUrl;
 
 const prisma = new PrismaClient({
   datasources: { db: { url: testDatabaseUrl } },
-});
-
-beforeAll(async () => {
-  await import('child_process').then(({ execSync }) =>
-    execSync('npx prisma migrate deploy', { stdio: 'inherit' })
-  );
 });
 
 afterAll(async () => {
