@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import Tooltip from '@/components/ui/Tooltip';
 
@@ -81,7 +81,7 @@ describe('Tooltip accessibility', () => {
     expect(secondTrigger).toHaveAttribute('aria-describedby', secondTooltip?.id);
   });
 
-  it('preserves an existing description and dismisses the tooltip with Escape', async () => {
+  it('preserves an existing description and dismisses the tooltip immediately with Escape', () => {
     render(
       <>
         <span id="existing-help">Existing help</span>
@@ -94,14 +94,39 @@ describe('Tooltip accessibility', () => {
     );
 
     const trigger = screen.getByRole('button', { name: 'Help' });
-    fireEvent.focus(trigger);
+    act(() => trigger.focus());
 
     const tooltip = screen.getByRole('tooltip');
     expect(trigger).toHaveAttribute('aria-describedby', `existing-help ${tooltip.id}`);
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
-    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     expect(trigger).toHaveAttribute('aria-describedby', 'existing-help');
+    expect(trigger).toHaveFocus();
+  });
+
+  it('cancels delayed disclosure when Escape is pressed before the tooltip opens', () => {
+    vi.useFakeTimers();
+
+    try {
+      render(
+        <Tooltip content="Delayed help" delay={200} portal={false}>
+          <button type="button">Delayed trigger</button>
+        </Tooltip>
+      );
+
+      const trigger = screen.getByRole('button', { name: 'Delayed trigger' });
+      act(() => trigger.focus());
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      act(() => vi.advanceTimersByTime(200));
+
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(trigger).not.toHaveAttribute('aria-describedby');
+      expect(trigger).toHaveFocus();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -118,7 +118,7 @@ describe('PlayerGrid accessibility', () => {
     const statlyZInfo = screen.getByRole('button', { name: 'About Statly Z' });
     expect(statlyZSort).not.toHaveAttribute('title');
 
-    fireEvent.focus(statlyZInfo);
+    act(() => statlyZInfo.focus());
     const statlyZTooltip = await screen.findByRole('tooltip');
     expect(statlyZTooltip).toHaveTextContent(
       "Statly Z combines a player's results across your league's scoring categories. Higher is better."
@@ -127,7 +127,8 @@ describe('PlayerGrid accessibility', () => {
     expect(statlyZSort).not.toHaveAttribute('aria-describedby');
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(statlyZInfo).toHaveFocus();
 
     fireEvent.click(statlyZSort);
     expect(defaultProps.onSortChange).toHaveBeenCalledWith('statlyZ');
