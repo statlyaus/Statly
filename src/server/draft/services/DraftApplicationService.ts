@@ -382,7 +382,7 @@ export class DraftApplicationService {
           auto: false,
         });
 
-        await draftRepository.removeQueuedPlayer(tx, draftId, actingParticipant.memberId, playerId);
+        await draftRepository.removePlayerFromAllDraftQueues(tx, draftId, playerId);
 
         const nextState = buildNextDraftState(draft);
         const transitionedAt = new Date();
@@ -588,9 +588,7 @@ export class DraftApplicationService {
           auto: true,
         });
 
-        if (queueItem) {
-          await draftRepository.removeQueuedPlayerById(tx, queueItem.id);
-        }
+        await draftRepository.removePlayerFromAllDraftQueues(tx, draftId, selectedPlayer.id);
 
         const nextState = buildNextDraftState(draft);
         const transitionedAt = new Date();

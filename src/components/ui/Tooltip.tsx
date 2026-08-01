@@ -25,13 +25,7 @@ export type TooltipTrigger = 'hover' | 'click' | 'focus' | 'manual';
 
 // Tooltip variants
 export type TooltipVariant =
-  | 'default'
-  | 'dark'
-  | 'light'
-  | 'info'
-  | 'success'
-  | 'warning'
-  | 'error';
+  'default' | 'dark' | 'light' | 'info' | 'success' | 'warning' | 'error';
 
 // Tooltip size
 export type TooltipSize = 'sm' | 'md' | 'lg';
@@ -59,9 +53,9 @@ interface TooltipProps {
 // Variant configurations
 const VARIANT_CONFIG = {
   default: {
-    background: 'bg-gray-900',
-    text: 'text-white',
-    border: 'border-gray-900',
+    background: 'bg-popover',
+    text: 'text-popover-foreground',
+    border: 'border-border',
   },
   dark: {
     background: 'bg-black',
@@ -386,15 +380,25 @@ export default function Tooltip({
     </AnimatePresence>
   );
 
+  const hasElementTrigger = React.isValidElement<{ 'aria-describedby'?: string }>(children);
+  const describedChildren = hasElementTrigger
+    ? React.cloneElement(children, {
+        'aria-describedby':
+          [children.props['aria-describedby'], isVisible ? tooltipId : undefined]
+            .filter(Boolean)
+            .join(' ') || undefined,
+      })
+    : children;
+
   return (
     <>
       <div
         ref={triggerRef}
         className={`inline-block ${className}`}
         {...eventHandlers}
-        aria-describedby={isVisible ? tooltipId : undefined}
+        aria-describedby={!hasElementTrigger && isVisible ? tooltipId : undefined}
       >
-        {children}
+        {describedChildren}
       </div>
 
       {portal && typeof window !== 'undefined'

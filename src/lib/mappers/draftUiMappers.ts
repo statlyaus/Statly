@@ -1,4 +1,4 @@
-import type { DraftState, DraftParticipant, DraftPick } from '@/types/draft';
+import type { DraftState, DraftParticipant, DraftPick, DraftType } from '@/types/draft';
 import { buildDraftRoomSequence } from '@/lib/draftRoomSequencing';
 import type { DraftLiveState } from '@/contexts/DraftContext';
 import type { DraftClockPayload } from '@/services/realtime/draftStateWire';
@@ -42,6 +42,7 @@ export type LivePickHeaderData = {
   totalPicks: number;
   round: number;
   direction: string;
+  draftType: DraftType;
   status: string;
   pickDeadlineAt?: string | null;
   clock?: DraftClockPayload;
@@ -122,6 +123,7 @@ export function toLivePickHeaderData(
     totalPicks: draft.totalPicks,
     round: draft.round,
     direction: draft.direction,
+    draftType: draft.settings.draftType,
     status: draft.status,
     pickDeadlineAt: draft.pickDeadlineAt ? formatDateToIso(draft.pickDeadlineAt) : null,
     clock: liveState?.clock,
@@ -197,13 +199,23 @@ function buildDraftPickTrainState(params: {
   totalPicks: number;
   round: number;
   direction: string;
+  draftType: DraftType;
   status?: string;
   participants: DraftPickTrainParticipant[];
   picks: DraftPickTrainPick[];
   yourSlot?: number;
 }): DraftPickTrainState {
-  const { currentPick, totalPicks, round, direction, status, participants, picks, yourSlot } =
-    params;
+  const {
+    currentPick,
+    totalPicks,
+    round,
+    direction,
+    draftType,
+    status,
+    participants,
+    picks,
+    yourSlot,
+  } = params;
   const isComplete =
     String(status ?? '').toUpperCase() === 'COMPLETED' ||
     (Number.isFinite(totalPicks) && totalPicks > 0 && currentPick > totalPicks);
@@ -216,6 +228,7 @@ function buildDraftPickTrainState(params: {
     picks,
     yourSlot,
     status,
+    draftType,
   });
 
   return {
@@ -247,6 +260,7 @@ export function toDraftPickTrainState(params: {
     totalPicks: params.draft.totalPicks,
     round: params.draft.round,
     direction: params.draft.direction,
+    draftType: params.draft.settings.draftType,
     status: params.draft.status,
     participants: params.participants.map((participant) => ({
       slot: participant.draftOrder,
@@ -271,6 +285,7 @@ export function toDraftPickTrainStateFromHeaderData(params: {
     totalPicks: params.draftData.totalPicks,
     round: params.draftData.round,
     direction: params.draftData.direction,
+    draftType: params.draftData.draftType,
     status: params.draftData.status,
     participants: params.draftData.participants,
     picks: params.draftData.picks,
@@ -291,7 +306,7 @@ export type WatchlistEntry = {
   name: string;
   position: string;
   club: string;
-  avgPoints?: number;
+  statlyZScore?: number;
   drafted: boolean;
   watchlist: WatchlistItem;
 };
@@ -315,7 +330,7 @@ export function toWatchlistEntries(
       name: p.name,
       position: p.position,
       club: p.club,
-      avgPoints: p.avgPoints,
+      statlyZScore: p.statlyZScore,
       drafted: drafted.has(p.id),
       watchlist: w,
     });

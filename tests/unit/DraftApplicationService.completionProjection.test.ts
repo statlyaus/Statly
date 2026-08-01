@@ -9,7 +9,7 @@ const { draftRepository, statlyZStatsLookup } = vi.hoisted(() => ({
     findPlayer: vi.fn(),
     listAvailableAutoPickCandidates: vi.fn(),
     createPick: vi.fn(),
-    removeQueuedPlayerById: vi.fn(),
+    removePlayerFromAllDraftQueues: vi.fn(),
     advanceDraft: vi.fn(),
     updateDraftTiming: vi.fn(),
     transitionDraftClock: vi.fn(),
@@ -120,6 +120,79 @@ describe('DraftApplicationService completion projection', () => {
       overall: 2,
     });
     draftRepository.createDraftEvents.mockResolvedValue([{ id: 'event-1' }, { id: 'event-2' }]);
+  });
+
+  it('removes a manual selection from every queue inside the pick transaction', async () => {
+    draftRepository.getDraftAggregate.mockResolvedValue({
+      id: 'draft-1',
+      leagueId: 'league-1',
+      status: DraftStatus.LIVE,
+      currentPick: 1,
+      totalPicks: 3,
+      round: 1,
+      direction: DraftDirection.FORWARD,
+      startedAt: new Date('2026-06-07T00:00:00.000Z'),
+      completedAt: null,
+      pickStartedAt: new Date('2026-06-07T00:00:00.000Z'),
+      pickDeadlineAt: new Date('2026-06-07T00:02:00.000Z'),
+      pausedRemainingSeconds: null,
+      clockDurationSeconds: 120,
+      schedulingVersion: 3,
+      eventSequence: 0,
+      settings: {
+        rosterSize: 3,
+        benchSize: 0,
+        pickSeconds: 120,
+        allowAutoPick: true,
+        selectedCategories: ['goals', 'tackles'],
+        positionLimits: {},
+        autoPickRules: {},
+        draftType: 'SNAKE',
+      },
+      participants: [
+        {
+          memberId: 'member-1',
+          userId: 'user-1',
+          slot: 1,
+          displayName: 'Manager One',
+          role: 'OWNER',
+        },
+      ],
+      picks: [],
+    });
+    draftRepository.findPlayer.mockResolvedValue({
+      id: 'player-1',
+      name: 'Player One',
+      position: 'MID',
+      club: 'Carlton',
+      active: true,
+    });
+    draftRepository.createPick.mockResolvedValue({
+      id: 'pick-1',
+      draftId: 'draft-1',
+      overall: 1,
+      round: 1,
+      slot: 1,
+      memberId: 'member-1',
+      playerId: 'player-1',
+      auto: false,
+      player: { id: 'player-1', name: 'Player One', position: 'MID', club: 'Carlton' },
+      member: {
+        user: { id: 'user-1', displayName: 'Manager One', email: 'manager@example.com' },
+      },
+    });
+
+    const service = new DraftApplicationService({ projectDraft: vi.fn() } as never);
+    await service.makePick({ draftId: 'draft-1', actorUserId: 'user-1', playerId: 'player-1' });
+
+    expect(draftRepository.removePlayerFromAllDraftQueues).toHaveBeenCalledWith(
+      {},
+      'draft-1',
+      'player-1'
+    );
+    expect(draftRepository.removePlayerFromAllDraftQueues.mock.invocationCallOrder[0]).toBeLessThan(
+      draftRepository.transitionDraftClock.mock.invocationCallOrder[0]
+    );
   });
 
   it('projects canonical roster ownership and persists completion for reconciliation after the final auto-pick', async () => {
@@ -402,7 +475,11 @@ describe('DraftApplicationService completion projection', () => {
       {},
       expect.objectContaining({ playerId: 'queued-player', auto: true })
     );
-    expect(draftRepository.removeQueuedPlayerById).toHaveBeenCalledWith({}, 'queue-1');
+    expect(draftRepository.removePlayerFromAllDraftQueues).toHaveBeenCalledWith(
+      {},
+      'draft-1',
+      'queued-player'
+    );
     expect(result.data.wasQueued).toBe(true);
   });
 

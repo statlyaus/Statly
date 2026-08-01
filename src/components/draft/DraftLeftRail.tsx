@@ -95,15 +95,19 @@ function RosterPanel({ rosterSlots }: { rosterSlots: DraftLeftRailRosterSlot[] }
           {rosterSlots.map((slot) => (
             <li
               key={slot.id}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+              data-roster-state={slot.player ? 'filled' : 'empty'}
+              className={cn(
+                'rounded-md border border-border px-3 py-2 text-sm',
+                slot.player
+                  ? 'bg-[color:var(--draft-broadcast-roster-filled)]'
+                  : 'border-dashed bg-background'
+              )}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-medium text-foreground">{slot.label}</p>
                   {slot.position && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {slot.position}
-                    </p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{slot.position}</p>
                   )}
                 </div>
                 {!slot.player && (

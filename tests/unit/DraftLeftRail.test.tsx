@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -51,10 +51,7 @@ describe('DraftLeftRail', () => {
   it('defaults to the queue before the draft starts', () => {
     renderRail({ draftStatus: 'SCHEDULED' });
 
-    expect(screen.getByRole('tab', { name: /queue 2/i })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    expect(screen.getByRole('tab', { name: /queue 2/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Queue panel content')).toBeInTheDocument();
     expect(screen.queryByText('Caleb Daniel')).not.toBeInTheDocument();
   });
@@ -62,12 +59,20 @@ describe('DraftLeftRail', () => {
   it('defaults to the roster once the draft is live', () => {
     renderRail({ draftStatus: 'LIVE' });
 
-    expect(screen.getByRole('tab', { name: /roster/i })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(screen.getByText('Caleb Daniel')).toBeInTheDocument();
-    expect(screen.getByText('Empty slot')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /roster/i })).toHaveAttribute('aria-selected', 'true');
+    const filledSlot = screen.getByText('Caleb Daniel').closest('li');
+    const emptySlot = screen.getByText('Empty slot').closest('li');
+    if (!filledSlot || !emptySlot) throw new Error('Expected filled and empty roster slots');
+
+    expect(filledSlot).toHaveAttribute('data-roster-state', 'filled');
+    expect(filledSlot).toHaveClass('bg-[color:var(--draft-broadcast-roster-filled)]');
+    expect(within(filledSlot).getByText('Bench 1')).toBeInTheDocument();
+    expect(within(filledSlot).getByText('Caleb Daniel')).toBeInTheDocument();
+    expect(emptySlot).toHaveAttribute('data-roster-state', 'empty');
+    expect(emptySlot).toHaveClass('bg-background');
+    expect(emptySlot).toHaveClass('border-dashed');
+    expect(within(emptySlot).getByText('Bench 2')).toBeInTheDocument();
+    expect(within(emptySlot).getByText('Empty slot')).toBeInTheDocument();
     expect(screen.queryByText('Queue panel content')).not.toBeInTheDocument();
   });
 

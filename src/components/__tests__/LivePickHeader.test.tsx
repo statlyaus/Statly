@@ -8,6 +8,7 @@ const draftData = {
   totalPicks: 12,
   round: 1,
   direction: 'FORWARD',
+  draftType: 'SNAKE' as const,
   status: 'LIVE',
   pickDeadlineAt: new Date(Date.now() + 120_000).toISOString(),
   participants: [
@@ -56,6 +57,32 @@ describe('LivePickHeader', () => {
     expect(within(items[2]).getByText('Gamma')).toBeInTheDocument();
     expect(within(items[2]).getByText('Your next pick')).toBeInTheDocument();
     expect(within(draftOrder).queryAllByRole('button')).toHaveLength(0);
+    expect(screen.getByText('Your next pick: Pick 3')).toBeInTheDocument();
+  });
+
+  it('uses linear order for the compact next-pick notice and pick train', () => {
+    render(
+      <LivePickHeader
+        draftData={{
+          ...draftData,
+          currentPick: 4,
+          round: 2,
+          direction: 'FORWARD',
+          draftType: 'LINEAR',
+        }}
+        isYourTurn={false}
+        yourSlot={3}
+      />
+    );
+
+    const draftOrder = screen.getByRole('list', { name: 'Draft picks' });
+    const items = within(draftOrder).getAllByRole('listitem');
+
+    expect(screen.getByText('Your next pick: Pick 6')).toBeInTheDocument();
+    expect(within(items[0]).getByText('Gamma')).toBeInTheDocument();
+    expect(within(items[2]).getByText('Beta')).toBeInTheDocument();
+    expect(within(items[3]).getByText('Gamma')).toBeInTheDocument();
+    expect(within(items[3]).getByText('Your next pick')).toBeInTheDocument();
   });
 
   it('shows a syncing state instead of inventing a two-minute clock', () => {

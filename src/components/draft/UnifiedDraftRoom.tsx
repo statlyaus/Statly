@@ -35,6 +35,9 @@ interface UnifiedDraftRoomProps {
 type PlayerSortKey =
   'statlyZ' | 'name' | 'position' | 'club' | 'adp' | `category:${FantasyCategoryKey}`;
 
+type QueueMutationFeedback =
+  { kind: 'error'; message: string; retryQueue: string[] } | { kind: 'success'; message: string };
+
 function getPositiveInteger(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
@@ -202,12 +205,18 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<PlayerSortKey>('statlyZ');
   const [isPickFeedOpen, setIsPickFeedOpen] = useState(false);
+  const [isQueueMutationPending, setIsQueueMutationPending] = useState(false);
+  const [queueMutationFeedback, setQueueMutationFeedback] = useState<QueueMutationFeedback | null>(
+    null
+  );
+  const [queueAnnouncement, setQueueAnnouncement] = useState('');
 
   // Desktop FAB ref + modal focus mgmt refs
   const openFeedBtnRef = useRef<HTMLButtonElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
   const hasOpenedPickFeedRef = useRef(false);
+  const queueMutationInFlightRef = useRef(false);
 
   // Participants/picks/players are guaranteed arrays by DraftContext
   const participants = draft.participants as DraftParticipant[];
@@ -260,18 +269,47 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
     [draft]
   );
 
+  const commitQueue = useCallback(
+    async (queue: string[], options: { retry?: boolean } = {}): Promise<boolean> => {
+      if (queueMutationInFlightRef.current) return false;
+
+      queueMutationInFlightRef.current = true;
+      setIsQueueMutationPending(true);
+      setQueueAnnouncement('Saving queue…');
+      if (!options.retry) setQueueMutationFeedback(null);
+
+      try {
+        await draft.updateQueue(queue);
+        setQueueAnnouncement('Queue saved.');
+        setQueueMutationFeedback(
+          options.retry ? { kind: 'success', message: 'Queue saved.' } : null
+        );
+        return true;
+      } catch {
+        setQueueAnnouncement('');
+        setQueueMutationFeedback({
+          kind: 'error',
+          message:
+            'Your queue could not be saved. The draft is still live; review the current queue and retry.',
+          retryQueue: [...queue],
+        });
+        return false;
+      } finally {
+        queueMutationInFlightRef.current = false;
+        setIsQueueMutationPending(false);
+      }
+    },
+    [draft]
+  );
+
   const handleAddToQueue = useCallback(
-    async (player: DraftPlayer) => {
+    (player: DraftPlayer) => {
       const nextQueue = Array.isArray(me?.queue) ? me.queue : [];
       if (nextQueue.includes(player.id)) return;
 
-      try {
-        await draft.updateQueue([...nextQueue, player.id]);
-      } catch (error) {
-        console.error('Failed to add player to queue:', error);
-      }
+      void commitQueue([...nextQueue, player.id]);
     },
-    [draft, me?.queue]
+    [commitQueue, me?.queue]
   );
 
   const handleAddWatchlistPlayerToQueue = useCallback(
@@ -299,14 +337,15 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
   // Handle queue update
   const handleQueueUpdate = useCallback(
     async (queue: string[]) => {
-      try {
-        await draft.updateQueue(queue);
-      } catch (error) {
-        console.error('Failed to update queue:', error);
-      }
+      await commitQueue(queue);
     },
-    [draft]
+    [commitQueue]
   );
+
+  const handleRetryQueueUpdate = useCallback(async () => {
+    if (queueMutationFeedback?.kind !== 'error') return;
+    await commitQueue(queueMutationFeedback.retryQueue, { retry: true });
+  }, [commitQueue, queueMutationFeedback]);
 
   // Memoized feed props (perf + stability)
   const feedPicks = useMemo(() => toFeedPicks(picks), [picks]);
@@ -490,7 +529,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       queue={me?.queue || []}
       availablePlayers={playersList}
       onQueueUpdate={handleQueueUpdate}
-      isLoading={draft.isSaving}
+      isLoading={isQueueMutationPending}
       confirm={confirm}
     />
   );
@@ -508,6 +547,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
       pendingWatchlistPlayerIds={draft.pendingWatchlistPlayerIds}
       onRemoveFromWatchlist={draft.removeFromWatchlist}
       isLoading={draft.isSaving}
+      isQueueMutationPending={isQueueMutationPending}
     />
   );
   const pickFeedProps = {
@@ -674,6 +714,63 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
             </section>
           )}
 
+          {!isCompletedDraft && queueMutationFeedback ? (
+            <div
+              className={`mt-4 flex flex-col gap-3 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
+                queueMutationFeedback.kind === 'error'
+                  ? 'border-destructive/40 bg-destructive/10 text-foreground'
+                  : 'border-border bg-muted/30 text-foreground'
+              }`}
+            >
+              <p
+                role={
+                  queueMutationFeedback.kind === 'error' && !isQueueMutationPending
+                    ? 'alert'
+                    : 'status'
+                }
+                aria-live={
+                  queueMutationFeedback.kind === 'success' || isQueueMutationPending
+                    ? 'polite'
+                    : undefined
+                }
+                aria-atomic="true"
+              >
+                {queueMutationFeedback.kind === 'error' && isQueueMutationPending
+                  ? 'Retrying queue update…'
+                  : queueMutationFeedback.message}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isQueueMutationPending) return;
+                  if (queueMutationFeedback.kind === 'error') {
+                    void handleRetryQueueUpdate();
+                  } else {
+                    setQueueMutationFeedback(null);
+                    setQueueAnnouncement('');
+                  }
+                }}
+                aria-disabled={isQueueMutationPending}
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-4 font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-wait aria-disabled:opacity-60"
+              >
+                {queueMutationFeedback.kind === 'error' ? 'Retry queue update' : 'Dismiss'}
+              </button>
+            </div>
+          ) : !isCompletedDraft && isQueueMutationPending ? (
+            <div
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              className="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-foreground"
+            >
+              Saving queue…
+            </div>
+          ) : !isCompletedDraft && queueAnnouncement ? (
+            <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+              {queueAnnouncement}
+            </p>
+          ) : null}
+
           <section
             aria-label={isCompletedDraft ? 'Completed draft background' : undefined}
             className={isCompletedDraft ? 'opacity-45 pointer-events-none select-none' : undefined}
@@ -720,6 +817,7 @@ export default function UnifiedDraftRoom({ draftId, userId }: UnifiedDraftRoomPr
                     void draft.setStatSeason(season);
                   }}
                   isLoading={draft.isSaving}
+                  isQueueMutationPending={isQueueMutationPending}
                   emptyStateMessage={emptyPlayerMessage}
                 />
               </div>

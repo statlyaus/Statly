@@ -1,5 +1,4 @@
-import type { Prisma as PrismaNS } from '@prisma/client';
-import { DraftStatus } from '@prisma/client';
+import { DraftStatus, Prisma as PrismaNS } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { normalizeDraftAutoPickRules, normalizeDraftPositionLimits } from '@/lib/draftSettings';
@@ -18,6 +17,38 @@ import type {
 import { parseSelectedCategories } from '../readModels/draftPlayerReadModel';
 
 type TxClient = PrismaNS.TransactionClient;
+
+const MAX_TRANSACTION_ATTEMPTS = 3;
+const TRANSACTION_RETRY_BASE_DELAY_MS = 25;
+
+export type DraftTransactionOptions = {
+  timeout?: number;
+  retryPolicy?: 'default' | 'idempotent';
+};
+
+function isRetryableTransactionFailure(
+  error: unknown,
+  applicationWorkStarted: boolean,
+  retryPolicy: DraftTransactionOptions['retryPolicy']
+): boolean {
+  if (!(error instanceof PrismaNS.PrismaClientKnownRequestError)) {
+    return false;
+  }
+
+  if (error.code === 'P2034') {
+    return true;
+  }
+
+  // SQLite reports lock/acquisition and in-flight query timeouts as P1008. The default may replay
+  // only when Prisma never invoked application work. Callers that persist a desired state can opt
+  // into replay after callback entry; commands with non-idempotent effects must retain the default.
+  return error.code === 'P1008' && (!applicationWorkStarted || retryPolicy === 'idempotent');
+}
+
+async function waitForTransactionRetry(attempt: number): Promise<void> {
+  const delayMs = TRANSACTION_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+}
 
 export type LiveDraftPickExpirySchedule = {
   draftId: string;
@@ -153,8 +184,43 @@ function toPickSnapshot(pick: {
 }
 
 export class DraftRepository {
-  async transaction<T>(work: (tx: TxClient) => Promise<T>, timeout = 20000): Promise<T> {
-    return prisma.$transaction((tx) => work(tx), { timeout });
+  async transaction<T>(
+    work: (tx: TxClient) => Promise<T>,
+    timeoutOrOptions: number | DraftTransactionOptions = 20000
+  ): Promise<T> {
+    const options =
+      typeof timeoutOrOptions === 'number'
+        ? { timeout: timeoutOrOptions, retryPolicy: 'default' as const }
+        : {
+            timeout: timeoutOrOptions.timeout ?? 20000,
+            retryPolicy: timeoutOrOptions.retryPolicy ?? ('default' as const),
+          };
+
+    for (let attempt = 1; attempt <= MAX_TRANSACTION_ATTEMPTS; attempt += 1) {
+      let applicationWorkStarted = false;
+      try {
+        return await prisma.$transaction(
+          (tx) => {
+            applicationWorkStarted = true;
+            return work(tx);
+          },
+          {
+            timeout: options.timeout,
+            isolationLevel: PrismaNS.TransactionIsolationLevel.Serializable,
+          }
+        );
+      } catch (error) {
+        if (
+          !isRetryableTransactionFailure(error, applicationWorkStarted, options.retryPolicy) ||
+          attempt === MAX_TRANSACTION_ATTEMPTS
+        ) {
+          throw error;
+        }
+        await waitForTransactionRetry(attempt);
+      }
+    }
+
+    throw new Error('Draft transaction retry limit exceeded');
   }
 
   async listLiveDraftPickExpirySchedules(tx: TxClient): Promise<LiveDraftPickExpirySchedule[]> {
@@ -423,14 +489,10 @@ export class DraftRepository {
     });
   }
 
-  async removeQueuedPlayer(tx: TxClient, draftId: string, memberId: string, playerId: string) {
+  async removePlayerFromAllDraftQueues(tx: TxClient, draftId: string, playerId: string) {
     await tx.preDraftQueue.deleteMany({
-      where: { draftId, memberId, playerId },
+      where: { draftId, playerId },
     });
-  }
-
-  async removeQueuedPlayerById(tx: TxClient, queueItemId: string) {
-    await tx.preDraftQueue.delete({ where: { id: queueItemId } });
   }
 
   async advanceDraft(

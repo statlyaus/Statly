@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildDraftRoomSequence, getDraftRoomTimerState } from '@/lib/draftRoomSequencing';
+import {
+  buildDraftRoomSequence,
+  getDraftRoomTimerState,
+  getSlotForOverallPick,
+} from '@/lib/draftRoomSequencing';
 
 const participants = Array.from({ length: 6 }, (_, index) => ({
   id: `member-${index + 1}`,
@@ -11,7 +15,7 @@ const participants = Array.from({ length: 6 }, (_, index) => ({
 }));
 
 describe('buildDraftRoomSequence', () => {
-  it('returns current, completed, upcoming, and next user pick slots in snake order', () => {
+  it('keeps the visible snake-order window bounded while projecting the next user pick', () => {
     const sequence = buildDraftRoomSequence({
       currentPick: 7,
       totalPicks: 18,
@@ -45,13 +49,49 @@ describe('buildDraftRoomSequence', () => {
       displayName: 'Team 6',
       status: 'current',
     });
-    expect(sequence.slots.map((slot) => slot.overall)).toEqual([6, 7, 8, 9, 10, 11, 12]);
-    expect(sequence.slots.map((slot) => slot.slot)).toEqual([6, 6, 5, 4, 3, 2, 1]);
+    expect(sequence.slots.map((slot) => slot.overall)).toEqual([6, 7, 8, 9, 10, 11]);
+    expect(sequence.slots.map((slot) => slot.slot)).toEqual([6, 6, 5, 4, 3, 2]);
     expect(sequence.nextUserPick).toMatchObject({
       overall: 12,
       picksUntil: 5,
       estimatedSecondsUntil: 600,
     });
+  });
+
+  it('projects a linear-draft pick without appending it to the visible window', () => {
+    const sequence = buildDraftRoomSequence({
+      currentPick: 8,
+      totalPicks: 18,
+      participants,
+      picks: [],
+      yourSlot: 1,
+      draftType: 'LINEAR',
+      windowBefore: 1,
+      windowAfter: 2,
+    });
+
+    expect(sequence.current).toMatchObject({ overall: 8, round: 2, slot: 2 });
+    expect(sequence.slots.map((slot) => slot.overall)).toEqual([7, 8, 9, 10]);
+    expect(sequence.slots.map((slot) => slot.slot)).toEqual([1, 2, 3, 4]);
+    expect(sequence.nextUserPick).toMatchObject({
+      overall: 13,
+      round: 3,
+      slot: 1,
+      picksUntil: 5,
+    });
+  });
+
+  it('ignores a user slot that is not part of the persisted draft order', () => {
+    const sequence = buildDraftRoomSequence({
+      currentPick: 7,
+      totalPicks: 18,
+      participants,
+      picks: [],
+      yourSlot: 7,
+    });
+
+    expect(sequence.nextUserPick).toBeNull();
+    expect(sequence.slots.every((slot) => !slot.isUserPick)).toBe(true);
   });
 
   it('handles completed drafts without inventing a live current slot', () => {
@@ -67,6 +107,15 @@ describe('buildDraftRoomSequence', () => {
     expect(sequence.current).toBeNull();
     expect(sequence.nextUserPick).toBeNull();
     expect(sequence.phase).toBe('COMPLETED');
+  });
+});
+
+describe('getSlotForOverallPick', () => {
+  it('keeps the compatibility sentinel for invalid numeric input', () => {
+    expect(getSlotForOverallPick(0, 6)).toBe(0);
+    expect(getSlotForOverallPick(1.5, 6)).toBe(0);
+    expect(getSlotForOverallPick(1, 0)).toBe(0);
+    expect(getSlotForOverallPick(1, 6.5)).toBe(0);
   });
 });
 
