@@ -123,10 +123,10 @@ describe('canonical league creation', () => {
         },
         { prisma: client as never }
       )
-    ).rejects.toMatchObject<Partial<LeagueCreationError>>({
+    ).rejects.toMatchObject({
       status: 400,
       code: 'VALIDATION',
-    });
+    } satisfies Partial<LeagueCreationError>);
   });
 
   it('rejects malformed trade deadlines at the domain boundary', async () => {
@@ -140,11 +140,11 @@ describe('canonical league creation', () => {
         },
         { prisma: client as never }
       )
-    ).rejects.toMatchObject<Partial<LeagueCreationError>>({
+    ).rejects.toMatchObject({
       message: 'Trade deadline must be a valid ISO date',
       status: 400,
       code: 'VALIDATION',
-    });
+    } satisfies Partial<LeagueCreationError>);
 
     expect(tx.leagueSettings.create).not.toHaveBeenCalled();
     expect(client.$transaction).not.toHaveBeenCalled();
@@ -192,10 +192,10 @@ describe('canonical league creation', () => {
           generateInviteCode: () => 'TAKEN123',
         }
       )
-    ).rejects.toMatchObject<Partial<LeagueCreationError>>({
+    ).rejects.toMatchObject({
       status: 409,
       code: 'CONFLICT',
-    });
+    } satisfies Partial<LeagueCreationError>);
 
     expect(client.league.findUnique).toHaveBeenCalledTimes(10);
     expect(client.$transaction).not.toHaveBeenCalled();
@@ -216,10 +216,10 @@ describe('canonical league creation', () => {
           generateInviteCode: () => 'RACED123',
         }
       )
-    ).rejects.toMatchObject<Partial<LeagueCreationError>>({
+    ).rejects.toMatchObject({
       status: 409,
       code: 'CONFLICT',
-    });
+    } satisfies Partial<LeagueCreationError>);
   });
 
   it('projects the canonical result into all compatibility documents', async () => {

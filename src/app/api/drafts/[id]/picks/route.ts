@@ -1,8 +1,14 @@
 import type { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/apiResponse';
+import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import { handlePickCommand } from '@/server/draft/api/handlePickCommand';
+import {
+  draftAuthorizedReadService,
+  DraftReadAccessError,
+} from '@/server/draft/services/DraftAuthorizedReadService';
+import { buildDraftClockPayload } from '@/server/draft/services/DraftProjectionService';
 import { z } from 'zod';
 import { createHash } from 'crypto';
 
@@ -30,6 +36,13 @@ export async function GET(
       return errorResponse('Invalid draft id', 400);
     }
 
+    const authenticatedUserId = await getAuthenticatedUserId(request);
+    if (!authenticatedUserId) {
+      return commonErrors.unauthorized();
+    }
+
+    await draftAuthorizedReadService.authorizeMember(id, authenticatedUserId);
+
     const url = new URL(request.url);
     const queryObj = Object.fromEntries(url.searchParams.entries());
     const QuerySchema = z.object({
@@ -49,43 +62,102 @@ export async function GET(
     const { page, pageSize, since, updatedSince } = parsed.data;
 
     const skip = (page - 1) * pageSize;
+    const where = since ? { draftId: id, madeAt: { gt: new Date(since) } } : { draftId: id };
+    const readyRead = await draftAuthorizedReadService.readReadyForMember({
+      draftId: id,
+      authenticatedUserId,
+      load: (expectedStateRevision) =>
+        prisma.$transaction(async (tx) => {
+          const draftMeta = await tx.draft.findFirst({
+            where: {
+              id,
+              ...(expectedStateRevision !== undefined
+                ? { schedulingVersion: expectedStateRevision }
+                : {}),
+            },
+            select: {
+              createdAt: true,
+              startedAt: true,
+              completedAt: true,
+              currentPick: true,
+              status: true,
+              lobbyStatus: true,
+              round: true,
+              direction: true,
+              pickStartedAt: true,
+              pickDeadlineAt: true,
+              pausedRemainingSeconds: true,
+              clockDurationSeconds: true,
+              schedulingVersion: true,
+              eventSequence: true,
+              league: {
+                select: {
+                  settings: {
+                    select: { pickSeconds: true },
+                  },
+                },
+              },
+            },
+          });
+          if (!draftMeta) return null;
 
-    // Compute lastUpdated using latest pick and draft lifecycle
-    const [latestPick, draftMeta] = await Promise.all([
-      prisma.pick.findFirst({
-        where: { draftId: id },
-        select: { madeAt: true },
-        orderBy: { madeAt: 'desc' },
-      }),
-      prisma.draft.findUnique({
-        where: { id },
-        select: {
-          createdAt: true,
-          startedAt: true,
-          completedAt: true,
-          currentPick: true,
-          status: true,
-          round: true,
-          direction: true,
-          pickStartedAt: true,
-          pickDeadlineAt: true,
-          schedulingVersion: true,
-        },
-      }),
-    ]);
+          const [latestPick, picks, totalCount] = await Promise.all([
+            tx.pick.findFirst({
+              where: { draftId: id },
+              select: { madeAt: true },
+              orderBy: { madeAt: 'desc' },
+            }),
+            tx.pick.findMany({
+              where,
+              include: {
+                player: true,
+                member: { include: { user: { select: { id: true, displayName: true } } } },
+              },
+              orderBy: { overall: 'asc' },
+              skip,
+              take: pageSize,
+            }),
+            tx.pick.count({ where }),
+          ]);
 
-    if (!draftMeta) {
+          return { draftMeta, latestPick, picks, totalCount };
+        }),
+      getClockIdentity: ({ draftMeta }) => ({
+        status: draftMeta.status,
+        stateRevision: draftMeta.schedulingVersion,
+      }),
+    });
+
+    if (!readyRead) {
       return errorResponse('Draft not found', 404);
     }
+    const { draftMeta, latestPick, picks, totalCount } = readyRead;
 
     const timestamps: number[] = [draftMeta.createdAt.getTime()];
     if (draftMeta.startedAt) timestamps.push(draftMeta.startedAt.getTime());
     if (draftMeta.completedAt) timestamps.push(draftMeta.completedAt.getTime());
+    if (draftMeta.pickStartedAt) timestamps.push(draftMeta.pickStartedAt.getTime());
+    if (draftMeta.pickDeadlineAt) timestamps.push(draftMeta.pickDeadlineAt.getTime());
     if (latestPick?.madeAt) timestamps.push(latestPick.madeAt.getTime());
     const lastUpdated = new Date(Math.max(...timestamps));
 
-    // ETag includes pagination window and since filter
-    const etagBase = `${id}|picks|${lastUpdated.toISOString()}|${page}|${pageSize}|${since || ''}`;
+    // Timer state is part of the representation even when this page contains no new picks.
+    const etagBase = [
+      id,
+      'picks',
+      lastUpdated.toISOString(),
+      draftMeta.status,
+      draftMeta.lobbyStatus ?? '',
+      draftMeta.schedulingVersion,
+      draftMeta.eventSequence,
+      draftMeta.clockDurationSeconds ?? '',
+      draftMeta.pickStartedAt?.toISOString() ?? '',
+      draftMeta.pickDeadlineAt?.toISOString() ?? '',
+      draftMeta.pausedRemainingSeconds ?? '',
+      page,
+      pageSize,
+      since || '',
+    ].join('|');
     const etag = `W/"${createHash('sha1').update(etagBase).digest('hex')}"`;
 
     const ifNoneMatch = request.headers.get('if-none-match');
@@ -101,7 +173,7 @@ export async function GET(
     }
 
     const conditionalSince = updatedSince || since;
-    if (conditionalSince) {
+    if (conditionalSince && draftMeta.status !== 'LIVE' && draftMeta.status !== 'PAUSED') {
       const sinceDate = new Date(conditionalSince);
       if (!Number.isNaN(sinceDate.getTime()) && lastUpdated <= sinceDate) {
         const notModified = new Response(null, { status: 304 });
@@ -115,25 +187,20 @@ export async function GET(
       }
     }
 
-    const where = since ? { draftId: id, madeAt: { gt: new Date(since) } } : { draftId: id };
-
-    // Fetch list and total in parallel to avoid extra latency
-    const [picks, totalCount] = await Promise.all([
-      prisma.pick.findMany({
-        where,
-        include: {
-          player: true,
-          member: { include: { user: { select: { id: true, displayName: true } } } },
-        },
-        orderBy: { overall: 'asc' },
-        skip,
-        take: pageSize,
-      }),
-      prisma.pick.count({ where }),
-    ]);
-
+    const serverNow = new Date().toISOString();
+    const clock = buildDraftClockPayload({
+      status: draftMeta.status,
+      lobbyStatus: draftMeta.lobbyStatus,
+      revision: draftMeta.schedulingVersion,
+      durationSeconds: draftMeta.clockDurationSeconds ?? draftMeta.league.settings.pickSeconds,
+      serverNow,
+      pickStartedAt: draftMeta.pickStartedAt,
+      pickDeadlineAt: draftMeta.pickDeadlineAt,
+      pausedRemainingSeconds: draftMeta.pausedRemainingSeconds,
+    });
     const data = {
       draftId: id,
+      serverNow,
       draftState: {
         currentPick: draftMeta.currentPick,
         status: draftMeta.status,
@@ -141,7 +208,10 @@ export async function GET(
         direction: draftMeta.direction,
         pickStartedAt: draftMeta.pickStartedAt?.toISOString() ?? null,
         pickDeadlineAt: draftMeta.pickDeadlineAt?.toISOString() ?? null,
+        pausedRemainingSeconds: draftMeta.pausedRemainingSeconds,
         schedulingVersion: draftMeta.schedulingVersion,
+        eventSequence: draftMeta.eventSequence,
+        clock,
       },
       picks: picks.map((pick) => ({
         id: pick.id,
@@ -187,6 +257,10 @@ export async function GET(
     });
     return response;
   } catch (error) {
+    if (error instanceof DraftReadAccessError) {
+      return commonErrors.forbidden(error.message);
+    }
+
     logger.error('Failed to retrieve draft picks', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',

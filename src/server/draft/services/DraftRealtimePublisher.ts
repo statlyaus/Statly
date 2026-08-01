@@ -2,22 +2,60 @@ import { logger } from '@/lib/logger';
 import { revalidateTags } from '@/lib/cache';
 import { tags } from '@/lib/cacheTags';
 import { publishLeagueSystemMessage } from '@/server/leagues/social/socialSystemEvents';
+import { incCounter, METRICS } from '@/server/metrics';
+import type { CanonicalLiveDraftState } from '@/services/realtime/draftStateWire';
 
 import { draftRepository } from '../repository/DraftRepository';
+import { draftClockCoordinator } from './DraftClockCoordinator';
+import { buildDraftRealtimeV2Envelope } from './DraftRealtimeEnvelopeService';
 import { draftRealtimeDispatcher } from './DraftRealtimeDispatcher';
 import { draftProjectionService } from './DraftProjectionService';
 
 import type {
   DraftCommandEventType,
   DraftCommandResult,
+  DraftLifecycleEventPayload,
   DraftOutboxEventRecord,
   DraftPickEventPayload,
 } from '../domain/draftTypes';
-import type { LiveDraftState } from '@/services/liveDraftEngine';
+
+function isDraftPickEventPayload(payload: unknown): payload is DraftPickEventPayload {
+  return Boolean(
+    payload &&
+    typeof payload === 'object' &&
+    'player' in payload &&
+    'member' in payload &&
+    'overall' in payload
+  );
+}
+
+function isDraftLifecycleEventPayload(payload: unknown): payload is DraftLifecycleEventPayload {
+  return Boolean(
+    payload &&
+    typeof payload === 'object' &&
+    'status' in payload &&
+    'schedulingVersion' in payload &&
+    'durationSeconds' in payload &&
+    'serverNow' in payload
+  );
+}
 
 export class DraftRealtimePublisher {
   private readonly lockerId = `${process.pid}-${Math.random().toString(36).slice(2)}`;
   private readonly claimTtlMs = Number(process.env.DRAFT_EVENT_CLAIM_TTL_MS || 15000);
+
+  private recordFlush(
+    source: 'command' | 'draft' | 'batch',
+    outcome: 'empty' | 'success' | 'failed',
+    eventCount: number
+  ): void {
+    incCounter(METRICS.draftOutboxFlushes, 1, { source, outcome });
+    if (eventCount > 0 && outcome !== 'empty') {
+      incCounter(METRICS.draftOutboxEvents, eventCount, {
+        outcome: outcome === 'success' ? 'published' : 'failed',
+      });
+    }
+  }
 
   private async emitEvent(record: DraftOutboxEventRecord): Promise<void> {
     const { draftId, event, payload } = record;
@@ -25,7 +63,7 @@ export class DraftRealtimePublisher {
     switch (event) {
       case 'draft:pick-made':
       case 'draft:auto-pick':
-        if (payload) {
+        if (isDraftPickEventPayload(payload)) {
           await draftRealtimeDispatcher.publishDraftEvent(draftId, event, payload);
         } else {
           logger.warn('Skipping draft pick event without payload', { draftId, event });
@@ -33,10 +71,17 @@ export class DraftRealtimePublisher {
         return;
       case 'draft:paused':
       case 'draft:resumed':
+        await draftRealtimeDispatcher.publishDraftEvent(
+          draftId,
+          event,
+          isDraftLifecycleEventPayload(payload) ? payload : undefined
+        );
+        return;
       case 'draft:completed':
         await draftRealtimeDispatcher.publishDraftEvent(draftId, event);
         return;
       case 'draft:started':
+      case 'draft:clock-repaired':
       case 'draft:queue-updated':
         return;
       default: {
@@ -44,32 +89,6 @@ export class DraftRealtimePublisher {
         return exhaustiveCheck;
       }
     }
-  }
-
-  private async loadOutboxEvents(eventIds: string[]): Promise<DraftOutboxEventRecord[]> {
-    return draftRepository.transaction((tx) => draftRepository.listDraftEventsByIds(tx, eventIds));
-  }
-
-  private async claimDraftEventsByIds(eventIds: string[]): Promise<DraftOutboxEventRecord[]> {
-    if (eventIds.length === 0) {
-      return [];
-    }
-
-    return draftRepository.transaction(async (tx) => {
-      await draftRepository.releaseStaleDraftEventClaims(
-        tx,
-        new Date(Date.now() - this.claimTtlMs)
-      );
-      await draftRepository.claimDraftEvents(tx, {
-        eventIds,
-        lockerId: this.lockerId,
-        lockedAt: new Date(),
-      });
-      return draftRepository.listClaimedDraftEvents(tx, {
-        lockerId: this.lockerId,
-        eventIds,
-      });
-    });
   }
 
   private async claimPendingDraftEvents(draftId: string): Promise<DraftOutboxEventRecord[]> {
@@ -132,7 +151,7 @@ export class DraftRealtimePublisher {
         payload: DraftPickEventPayload;
       } =>
         (event.event === 'draft:pick-made' || event.event === 'draft:auto-pick') &&
-        Boolean(event.payload)
+        isDraftPickEventPayload(event.payload)
     );
     if (pickEvents.length === 0) return;
 
@@ -148,24 +167,72 @@ export class DraftRealtimePublisher {
     );
   }
 
+  private async buildSchedulingReadyState(
+    draftId: string
+  ): Promise<CanonicalLiveDraftState | null> {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const ready = await draftClockCoordinator.ensureReady(draftId);
+      const state = await draftProjectionService.buildAuthoritativeDraftState(draftId);
+      if (!state || state.status !== 'LIVE') {
+        return state;
+      }
+      if (ready.receipt?.token.stateRevision === state.clock.revision) {
+        return state;
+      }
+
+      logger.info('Retrying realtime state preparation after a concurrent clock transition', {
+        draftId,
+        attempt,
+        scheduledRevision: ready.receipt?.token.stateRevision,
+        projectedRevision: state.clock.revision,
+      });
+      incCounter(METRICS.draftRealtimeStatePreparationRetries, 1, {
+        reason: 'concurrent_clock_transition',
+      });
+    }
+
+    throw new Error(`Draft changed while preparing schedulable realtime state: ${draftId}`);
+  }
+
+  private async prepareStateIntent(
+    event: DraftOutboxEventRecord
+  ): Promise<CanonicalLiveDraftState | null> {
+    const state = await this.buildSchedulingReadyState(event.draftId);
+    if (!state) {
+      throw new Error(`Draft state unavailable for outbox publish: ${event.draftId}`);
+    }
+
+    if (event.clockRevision !== null && event.clockRevision !== state.clock.revision) {
+      logger.info('Skipping stale outbox state intent after coordinating the current clock', {
+        draftId: event.draftId,
+        sequence: event.sequence,
+        eventRevision: event.clockRevision,
+        currentRevision: state.clock.revision,
+      });
+      return null;
+    }
+
+    return state;
+  }
+
   private async drainOutboxEvents(
     events: DraftOutboxEventRecord[]
-  ): Promise<LiveDraftState | null> {
+  ): Promise<CanonicalLiveDraftState | null> {
     if (events.length === 0) {
       return null;
     }
 
-    let publishedState: LiveDraftState | null = null;
+    let publishedState: CanonicalLiveDraftState | null = null;
 
     for (const event of events) {
+      const state = event.publishState ? await this.prepareStateIntent(event) : null;
       await this.emitEvent(event);
+      const envelope = buildDraftRealtimeV2Envelope(event, state);
+      if (envelope) {
+        await draftRealtimeDispatcher.publishV2Event(envelope);
+      }
 
-      if (event.publishState) {
-        const state = await draftProjectionService.buildAuthoritativeDraftState(event.draftId);
-        if (!state) {
-          throw new Error(`Draft state unavailable for outbox publish: ${event.draftId}`);
-        }
-
+      if (state) {
         await draftRealtimeDispatcher.publishState(state);
         publishedState = state;
       }
@@ -176,15 +243,21 @@ export class DraftRealtimePublisher {
 
   async publishCommandResult<TData>(
     result: DraftCommandResult<TData>
-  ): Promise<LiveDraftState | null> {
-    const outboxEvents = await this.claimDraftEventsByIds(result.outboxEventIds);
+  ): Promise<CanonicalLiveDraftState | null> {
+    const outboxEvents = await this.claimPendingDraftEvents(result.draftId);
 
-    let state: LiveDraftState | null = null;
+    let state: CanonicalLiveDraftState | null = null;
     try {
       state = await this.drainOutboxEvents(outboxEvents);
       await this.publishSocialDraftActivity(outboxEvents);
       await this.markOutboxPublished(outboxEvents.map((event) => event.id));
+      this.recordFlush(
+        'command',
+        outboxEvents.length === 0 ? 'empty' : 'success',
+        outboxEvents.length
+      );
     } catch (error) {
+      this.recordFlush('command', 'failed', outboxEvents.length);
       await this.markOutboxFailed(
         outboxEvents.map((event) => event.id),
         error instanceof Error ? error.message : String(error)
@@ -205,9 +278,10 @@ export class DraftRealtimePublisher {
     return state;
   }
 
-  async flushPendingDraftEvents(draftId: string): Promise<LiveDraftState | null> {
+  async flushPendingDraftEvents(draftId: string): Promise<CanonicalLiveDraftState | null> {
     const outboxEvents = await this.claimPendingDraftEvents(draftId);
     if (outboxEvents.length === 0) {
+      this.recordFlush('draft', 'empty', 0);
       return null;
     }
 
@@ -215,8 +289,10 @@ export class DraftRealtimePublisher {
       const state = await this.drainOutboxEvents(outboxEvents);
       await this.publishSocialDraftActivity(outboxEvents);
       await this.markOutboxPublished(outboxEvents.map((event) => event.id));
+      this.recordFlush('draft', 'success', outboxEvents.length);
       return state;
     } catch (error) {
+      this.recordFlush('draft', 'failed', outboxEvents.length);
       await this.markOutboxFailed(
         outboxEvents.map((event) => event.id),
         error instanceof Error ? error.message : String(error)
@@ -228,6 +304,7 @@ export class DraftRealtimePublisher {
   async flushPendingDraftEventsBatch(limit = 50): Promise<number> {
     const outboxEvents = await this.claimPendingDraftEventsBatch(limit);
     if (outboxEvents.length === 0) {
+      this.recordFlush('batch', 'empty', 0);
       return 0;
     }
 
@@ -235,8 +312,10 @@ export class DraftRealtimePublisher {
       await this.drainOutboxEvents(outboxEvents);
       await this.publishSocialDraftActivity(outboxEvents);
       await this.markOutboxPublished(outboxEvents.map((event) => event.id));
+      this.recordFlush('batch', 'success', outboxEvents.length);
       return outboxEvents.length;
     } catch (error) {
+      this.recordFlush('batch', 'failed', outboxEvents.length);
       await this.markOutboxFailed(
         outboxEvents.map((event) => event.id),
         error instanceof Error ? error.message : String(error)
@@ -245,8 +324,8 @@ export class DraftRealtimePublisher {
     }
   }
 
-  async publishDraftState(draftId: string): Promise<LiveDraftState | null> {
-    const state = await draftProjectionService.buildAuthoritativeDraftState(draftId);
+  async publishDraftState(draftId: string): Promise<CanonicalLiveDraftState | null> {
+    const state = await this.buildSchedulingReadyState(draftId);
     if (!state) {
       logger.warn('Unable to publish authoritative draft state', { draftId });
       return null;
@@ -259,19 +338,33 @@ export class DraftRealtimePublisher {
   async publishDraftEvent(
     draftId: string,
     event: Exclude<DraftCommandEventType, 'draft:started' | 'draft:queue-updated'>,
-    payload?: DraftPickEventPayload
-  ): Promise<LiveDraftState | null> {
+    payload?: DraftPickEventPayload | DraftLifecycleEventPayload
+  ): Promise<CanonicalLiveDraftState | null> {
+    const state = await this.buildSchedulingReadyState(draftId);
+
     if (event === 'draft:pick-made' || event === 'draft:auto-pick') {
-      if (payload) {
+      if (isDraftPickEventPayload(payload)) {
         await draftRealtimeDispatcher.publishDraftEvent(draftId, event, payload);
       } else {
         logger.warn('Skipping compatibility draft pick event without payload', { draftId, event });
       }
-    } else {
+    } else if (event === 'draft:paused' || event === 'draft:resumed') {
+      await draftRealtimeDispatcher.publishDraftEvent(
+        draftId,
+        event,
+        isDraftLifecycleEventPayload(payload) ? payload : undefined
+      );
+    } else if (event !== 'draft:clock-repaired') {
       await draftRealtimeDispatcher.publishDraftEvent(draftId, event);
     }
 
-    return this.publishDraftState(draftId);
+    if (!state) {
+      logger.warn('Unable to publish authoritative draft state after event', { draftId, event });
+      return null;
+    }
+
+    await draftRealtimeDispatcher.publishState(state);
+    return state;
   }
 }
 

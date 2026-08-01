@@ -53,20 +53,39 @@ describe('getSocketIoConfig', () => {
     const socketServerSource = read('src/server/socketioServer.ts');
     const backfillSource = socketServerSource.slice(
       socketServerSource.indexOf('async function getDeltasSince'),
-      socketServerSource.indexOf('async function runAutoPickForExpiredTimer')
+      socketServerSource.indexOf('// Express app to serve health')
     );
 
     expect(backfillSource).toContain('prisma.draftEvent.findMany');
-    expect(backfillSource).toContain('createdAt: { gt: new Date(since) }');
+    expect(backfillSource).toContain('createdAt: { gte: boundary }');
+    expect(backfillSource).toContain("orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]");
+    expect(backfillSource).toContain('take: pageSize');
+    expect(backfillSource).toContain('cursor: { id: cursorId }, skip: 1');
+    expect(backfillSource).toContain('toDraftBackfillDelta(event)');
     expect(backfillSource).not.toContain('getRedis');
     expect(backfillSource).not.toContain('zrangebyscore');
   });
 
-  it('makes duplicate local draft timers observable before replacement', () => {
+  it('negotiates the legacy join path explicitly without advertising v2 readiness', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+    const legacyManagerSource = read('src/services/liveDraftWebSocketManager.ts');
+
+    expect(socketServerSource).toContain('DraftRealtimeJoinRequestSchema.safeParse(data)');
+    expect(socketServerSource).toContain('selectDraftRealtimeProtocol(realtimeProtocols, [2, 1])');
+    expect(socketServerSource).toContain("code: 'UNSUPPORTED_PROTOCOL'");
+    expect(socketServerSource).toContain('reply({ ok: true, draftId, protocol: 1 })');
+    expect(socketServerSource).toContain("socket.on('draft:join:v2'");
+    expect(legacyManagerSource).toContain('if (msg.v !== 1) return;');
+    expect(legacyManagerSource).not.toContain("emit('draft:event:v2'");
+  });
+
+  it('keeps local socket timers disabled so BullMQ remains the only clock authority', () => {
     const socketServerSource = read('src/server/socketioServer.ts');
 
-    expect(socketServerSource).toContain("logger.warn('Replacing an existing local draft timer'");
-    expect(socketServerSource).toContain('clearInterval(existing)');
+    expect(socketServerSource).not.toContain('roomTimers');
+    expect(socketServerSource).not.toContain('startDraftTimer');
+    expect(socketServerSource).toContain('Direct socket timers are disabled');
+    expect(socketServerSource).toContain('BullMQ worker exclusively own clock progression');
   });
 
   it('settles asynchronous request authorization through the Socket.IO callback contract', () => {

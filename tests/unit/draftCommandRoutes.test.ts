@@ -91,20 +91,20 @@ describe('draft command routes', () => {
     expect(service).toContain('actorUserId?: string');
     expect(service).toContain('assertCanManageDraftCommand');
     expect(service).toContain('input.actorUserId');
-    expect(worker).toContain('draftApplicationService.autoPick({ draftId })');
+    expect(worker).toContain('expectedSchedulingVersion: schedulingVersion');
+    expect(worker).toContain('requireExpired: true');
     expect(worker).toContain('draftApplicationService.startDraft({ draftId: scheduledDraft })');
+    expect(service).toContain('schedulingVersion: nextSchedulingVersion');
   });
 
-  it('advances the authoritative draft when the Socket.IO live timer expires', () => {
+  it('keeps timer expiry and auto-pick authority out of Socket.IO', () => {
     const socketServer = read('src/server/socketioServer.ts');
+    const worker = read('src/server/workers/enhancedDraftWorker.ts');
 
-    expect(socketServer).toContain('async function runAutoPickForExpiredTimer');
-    expect(socketServer).toContain('draftApplicationService.autoPick');
-    expect(socketServer).toContain('expectedSchedulingVersion: draft.schedulingVersion');
-    expect(socketServer).toContain('requireExpired: true');
-    expect(socketServer).toContain('draftRealtimePublisher.publishCommandResult(result)');
-    expect(socketServer.indexOf('publishTimerExpired(draftId)')).toBeLessThan(
-      socketServer.indexOf('runAutoPickForExpiredTimer(draftId)')
-    );
+    expect(socketServer).not.toContain('runAutoPickForExpiredTimer');
+    expect(socketServer).not.toContain('startDraftTimer');
+    expect(socketServer).toContain('TIMER_AUTHORITY_VIOLATION');
+    expect(worker).toContain("case 'draft:pick-expiry'");
+    expect(worker).toContain('draftApplicationService.autoPick({');
   });
 });

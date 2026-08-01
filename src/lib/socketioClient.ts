@@ -494,25 +494,6 @@ export class SocketIOClientManager {
   }
 
   /**
-   * Start draft timer
-   */
-  public startDraftTimer(draftId: string, duration: number): void {
-    if (!this.socket?.connected) {
-      logger.error('❌ Cannot start draft timer: socket not connected');
-      return;
-    }
-
-    logger.info('⏰ Starting draft timer', {
-      draftId,
-      duration,
-      socketId: this.socket.id,
-      timestamp: new Date().toISOString(),
-    });
-
-    this.socket.emit('draft:timer:start', { draftId, duration });
-  }
-
-  /**
    * Pause draft
    */
   public pauseDraft(draftId: string): void {

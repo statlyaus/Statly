@@ -57,4 +57,31 @@ describe('LivePickHeader', () => {
     expect(within(items[2]).getByText('Your next pick')).toBeInTheDocument();
     expect(within(draftOrder).queryAllByRole('button')).toHaveLength(0);
   });
+
+  it('shows a syncing state instead of inventing a two-minute clock', () => {
+    render(
+      <LivePickHeader
+        draftData={{ ...draftData, pickDeadlineAt: null }}
+        isYourTurn={false}
+        yourSlot={3}
+      />
+    );
+
+    expect(screen.getAllByText('Syncing clock')).toHaveLength(2);
+    expect(screen.getByRole('timer')).toHaveAccessibleName('Draft clock is syncing');
+    expect(screen.getByRole('timer')).toHaveTextContent('—');
+  });
+
+  it('shows finalizing after the deadline without invoking a client expiry command', () => {
+    render(
+      <LivePickHeader
+        draftData={{ ...draftData, pickDeadlineAt: '2026-01-01T00:00:00.000Z' }}
+        isYourTurn={false}
+        yourSlot={3}
+      />
+    );
+
+    expect(screen.getAllByText('Finalizing pick')).toHaveLength(2);
+    expect(screen.getByRole('timer')).toHaveAccessibleName('Draft pick is being finalized');
+  });
 });

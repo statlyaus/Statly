@@ -13,6 +13,17 @@ import React, {
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
 import { getSlotForOverallPick } from '@/lib/draftRoomSequencing';
+import {
+  DraftClockPayloadSchema,
+  DraftRoomSnapshotPayloadSchema,
+  type DraftClockPayload,
+  type DraftRoomSnapshotPayload,
+} from '@/services/realtime/draftStateWire';
+import {
+  DraftRealtimeV2Client,
+  toDraftRealtimeV2ClientDelta,
+  type DraftRealtimeV2ClientCommit,
+} from '@/services/realtime/draftRealtimeV2Client';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import type {
@@ -28,14 +39,15 @@ export interface DraftLiveState {
   onClockTeamId?: string;
   currentPick?: number;
   isYourTurn?: boolean;
+  clock?: DraftClockPayload;
+  revision?: number;
+  clockReceivedAt?: number;
 }
 
-export interface DraftSnapshot {
+export interface LegacyDraftSnapshot {
   draft: DraftCore | null;
   participants:
-    | DraftParticipant[]
-    | Record<string, DraftParticipant>
-    | Map<string, DraftParticipant>;
+    DraftParticipant[] | Record<string, DraftParticipant> | Map<string, DraftParticipant>;
   picks: DraftPick[] | Record<string, DraftPick> | Map<string, DraftPick>;
   availablePlayers?: DraftPlayer[] | Record<string, DraftPlayer> | Map<string, DraftPlayer>;
   draftReadiness?: DraftOperationalReadiness | null;
@@ -44,20 +56,19 @@ export interface DraftSnapshot {
   statSeasons?: number[] | null;
   liveState?: DraftLiveState | null;
   ts?: number; // server event time (ms)
+  throughSequence?: number;
 }
 
+export type DraftSnapshot = LegacyDraftSnapshot | DraftRoomSnapshotPayload;
+
 type DraftDeltaType =
-  | 'PICK_MADE'
-  | 'PLAYER_REMOVED'
-  | 'PLAYER_ADDED'
-  | 'QUEUE_UPDATED'
-  | 'STATE_PATCH'
-  | 'SNAPSHOT';
+  'PICK_MADE' | 'PLAYER_REMOVED' | 'PLAYER_ADDED' | 'QUEUE_UPDATED' | 'STATE_PATCH' | 'SNAPSHOT';
 
 export interface DraftDelta {
   type: DraftDeltaType;
   payload: any;
   ts?: number;
+  revision?: number;
 }
 
 export interface DraftWatchlistItem {
@@ -89,7 +100,17 @@ interface DraftState {
   watchlistItems: DraftWatchlistItem[];
   pendingWatchlistPlayerIds: string[];
   liveState: DraftLiveState;
-  connection: { status: ConnectionStatus; latencyMs?: number; lastEventAt?: number };
+  connection: {
+    status: ConnectionStatus;
+    latencyMs?: number;
+    lastEventAt?: number;
+    lastRevision?: number;
+    lastSequence?: number;
+    protocol?: 1 | 2;
+    generation?: number;
+    draftId?: string;
+    needsResync?: boolean;
+  };
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
@@ -133,10 +154,7 @@ function toArray<T>(v: unknown): T[] {
 }
 
 export function shouldHydrateAvailablePlayers(players: DraftPlayer[]): boolean {
-  return (
-    players.length === 0 ||
-    players.some((player) => typeof player.statlyZScore !== 'number')
-  );
+  return players.length === 0 || players.some((player) => typeof player.statlyZScore !== 'number');
 }
 
 export function shouldStartAvailablePlayerHydration(
@@ -167,7 +185,10 @@ function getParticipantDraftOrder(
   member: Record<string, any>,
   index: number
 ): number {
-  return Number(firstPresent(participant.draftOrder, participant.slot, member.draftOrder, index + 1)) || index + 1;
+  return (
+    Number(firstPresent(participant.draftOrder, participant.slot, member.draftOrder, index + 1)) ||
+    index + 1
+  );
 }
 
 function normalizeParticipant(participant: any, index: number): DraftParticipant {
@@ -180,12 +201,16 @@ function normalizeParticipant(participant: any, index: number): DraftParticipant
   return {
     id: String(firstPresent(member.id, participantRecord.id, `participant-${draftOrder}`)),
     userId: String(firstPresent(member.userId, participantRecord.userId, '')),
-    displayName: String(firstPresent(member.displayName, participantRecord.displayName, `Team ${draftOrder}`)),
+    displayName: String(
+      firstPresent(member.displayName, participantRecord.displayName, `Team ${draftOrder}`)
+    ),
     teamName: firstPresent(member.teamName, participantRecord.teamName),
     draftOrder,
     isOnline: Boolean(firstPresent(participantRecord.isOnline, member.isOnline, false)),
     lastSeen: new Date(firstPresent(participantRecord.lastSeen, member.lastSeen, 0)),
-    isCurrentTurn: Boolean(firstPresent(participantRecord.isCurrentTurn, member.isCurrentTurn, false)),
+    isCurrentTurn: Boolean(
+      firstPresent(participantRecord.isCurrentTurn, member.isCurrentTurn, false)
+    ),
     timeRemaining: typeof timeRemaining === 'number' ? Number(timeRemaining) : undefined,
     queue: Array.isArray(queue) ? queue : [],
   };
@@ -247,10 +272,7 @@ function mergeWatchlistItem(
   return sortWatchlistItems(Array.from(mergedByPlayerId.values()));
 }
 
-function removeWatchlistItem(
-  items: DraftWatchlistItem[],
-  playerId: string
-): DraftWatchlistItem[] {
+function removeWatchlistItem(items: DraftWatchlistItem[], playerId: string): DraftWatchlistItem[] {
   return items.filter((item) => String(item.playerId) !== String(playerId));
 }
 
@@ -364,6 +386,8 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   includesPicks: boolean;
   includesAvailablePlayers: boolean;
   ts?: number;
+  revision?: number;
+  throughSequence?: number;
 } {
   if (!raw) {
     return {
@@ -382,14 +406,69 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     };
   }
 
-  const draftLike = normalizeDraftCore(raw.draft ?? raw);
+  const canonicalResult = DraftRoomSnapshotPayloadSchema.safeParse(raw);
+  if (canonicalResult.success) {
+    const snapshot = canonicalResult.data;
+    const participants = normalizeParticipants(snapshot.state.participants);
+    const picks = snapshot.state.picks.flatMap((rawPick) => {
+      const pick = normalizeCommandPick(rawPick, participants);
+      return pick ? [pick] : [];
+    });
+    const clock = snapshot.state.clock;
+    const draft = normalizeDraftCore({
+      id: snapshot.draftId,
+      leagueId: snapshot.leagueId,
+      name: snapshot.state.name,
+      status: snapshot.state.status,
+      currentPick: snapshot.state.currentPick,
+      totalPicks: snapshot.state.totalPicks,
+      round: snapshot.state.round,
+      direction: snapshot.state.direction,
+      schedulingVersion: snapshot.revision,
+      serverNow: snapshot.serverNow,
+      clock,
+      pickStartedAt: clock.status === 'LIVE' ? clock.startedAt : null,
+      pickDeadlineAt: clock.status === 'LIVE' ? clock.deadlineAt : null,
+      pausedRemainingSeconds: clock.status === 'PAUSED' ? clock.remainingSeconds : null,
+      participants: snapshot.state.participants,
+      timePerPick: clock.durationSeconds,
+    });
 
-  const participants = normalizeParticipants((raw as any).participants);
-  const includesParticipantQueues = participantQueueIncluded((raw as any).participants);
-  const includesPicks = 'picks' in raw;
-  const includesAvailablePlayers = 'availablePlayers' in raw;
+    return {
+      draft,
+      participants,
+      picks,
+      availablePlayers: [],
+      draftReadiness: null,
+      selectedCategories: [],
+      statSeason: null,
+      statSeasons: [],
+      liveState: {
+        currentPick: snapshot.state.currentPick,
+        onClockTeamId: snapshot.state.onClockMemberId ?? undefined,
+        clock,
+        revision: snapshot.revision,
+        clockReceivedAt: Date.now(),
+      },
+      includesParticipantQueues: false,
+      includesPicks: true,
+      includesAvailablePlayers: false,
+      ts: Date.parse(snapshot.serverNow),
+      revision: snapshot.revision,
+      throughSequence: snapshot.throughSequence,
+    };
+  }
 
-  const picks = toArray<DraftPick>(raw.picks)
+  const legacyRaw = raw as LegacyDraftSnapshot;
+  const draftSource = asRecord(legacyRaw.draft ?? legacyRaw);
+  const draftLike = normalizeDraftCore(draftSource);
+
+  const participants = normalizeParticipants((legacyRaw as any).participants);
+  const includesParticipantQueues = participantQueueIncluded((legacyRaw as any).participants);
+  const includesPicks = 'picks' in legacyRaw;
+  const includesAvailablePlayers = 'availablePlayers' in legacyRaw;
+
+  const picks = toArray<DraftPick>(legacyRaw.picks)
     .slice()
     .sort((a, b) => {
       return getPickOrder(a) - getPickOrder(b);
@@ -399,19 +478,23 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     picks.map((pk) => String((pk as any).player?.id ?? (pk as any).playerId))
   );
 
-  const availablePlayers = toArray<DraftPlayer>(raw.availablePlayers).filter(
+  const availablePlayers = toArray<DraftPlayer>(legacyRaw.availablePlayers).filter(
     (pl) => !pickedIds.has(String(pl.id))
   );
-  const selectedCategories = toArray<FantasyCategoryKey>((raw as any).selectedCategories);
+  const selectedCategories = toArray<FantasyCategoryKey>((legacyRaw as any).selectedCategories);
   const statSeason =
-    typeof (raw as any).statSeason === 'number' && Number.isFinite((raw as any).statSeason)
-      ? (raw as any).statSeason
+    typeof (legacyRaw as any).statSeason === 'number' &&
+    Number.isFinite((legacyRaw as any).statSeason)
+      ? (legacyRaw as any).statSeason
       : null;
-  const statSeasons = toArray<number>((raw as any).statSeasons).filter(
+  const statSeasons = toArray<number>((legacyRaw as any).statSeasons).filter(
     (season) => typeof season === 'number' && Number.isFinite(season)
   );
   const draftReadiness =
-    ((raw as any).draftReadiness as DraftOperationalReadiness | null | undefined) ?? null;
+    ((legacyRaw as any).draftReadiness as DraftOperationalReadiness | null | undefined) ?? null;
+  const clockResult = DraftClockPayloadSchema.safeParse(draftSource.clock);
+  const revision = Number(draftSource.schedulingVersion ?? draftSource.revision);
+  const normalizedRevision = Number.isInteger(revision) && revision >= 0 ? revision : undefined;
 
   return {
     draft: draftLike,
@@ -422,11 +505,25 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     selectedCategories,
     statSeason,
     statSeasons,
-    liveState: raw.liveState ?? {},
+    liveState: {
+      ...(legacyRaw.liveState ?? {}),
+      ...(clockResult.success
+        ? {
+            clock: clockResult.data,
+            revision: clockResult.data.revision,
+            clockReceivedAt: Date.now(),
+          }
+        : {}),
+    },
     includesParticipantQueues,
     includesPicks,
     includesAvailablePlayers,
-    ts: raw.ts,
+    ts: legacyRaw.ts ?? (clockResult.success ? Date.parse(clockResult.data.serverNow) : undefined),
+    revision: clockResult.success ? clockResult.data.revision : normalizedRevision,
+    throughSequence:
+      typeof (legacyRaw as any).throughSequence === 'number'
+        ? (legacyRaw as any).throughSequence
+        : undefined,
   };
 }
 
@@ -502,6 +599,23 @@ function preserveDraftLeagueAffiliation(
   };
 }
 
+function mergeSnapshotDraft(
+  incomingDraft: DraftCore | null,
+  currentDraft: DraftCore | null
+): DraftCore | null {
+  const affiliatedDraft = preserveDraftLeagueAffiliation(incomingDraft, currentDraft);
+  if (!affiliatedDraft || !currentDraft) return affiliatedDraft;
+
+  return normalizeDraftCore({
+    ...currentDraft,
+    ...affiliatedDraft,
+    settings: {
+      ...currentDraft.settings,
+      ...affiliatedDraft.settings,
+    },
+  });
+}
+
 function getLatestPickMadeAtMs(picks: DraftPick[]): number | undefined {
   const latest = picks.reduce((max, pick) => {
     const madeAt = pick.madeAt instanceof Date ? pick.madeAt : new Date(pick.madeAt);
@@ -525,10 +639,12 @@ function getExpectedPersistedPickCount(draft: DraftCore | null): number {
   const status = String(draft.status ?? '').toUpperCase();
 
   if (status === 'COMPLETED') {
-    return Number.isFinite(totalPicks) && totalPicks > 0 ? totalPicks : Math.max(0, currentPick - 1);
+    return Number.isFinite(totalPicks) && totalPicks > 0
+      ? totalPicks
+      : Math.max(0, currentPick - 1);
   }
 
-  if (status === 'LIVE' || status === 'IN_PROGRESS') {
+  if (status === 'LIVE' || status === 'IN_PROGRESS' || status === 'PAUSED') {
     const completedPicks = Math.max(0, currentPick - 1);
     return Number.isFinite(totalPicks) && totalPicks > 0
       ? Math.min(completedPicks, totalPicks)
@@ -552,9 +668,13 @@ function buildPersistedPickBackfillEndpoint(draftId: string, sinceMs?: number): 
   )}&pageSize=100`;
 }
 
-function isLiveDraftStatus(status: unknown): boolean {
+function isDraftReconciliationStatus(status: unknown): boolean {
   const normalizedStatus = String(status ?? '').toUpperCase();
-  return normalizedStatus === 'LIVE' || normalizedStatus === 'IN_PROGRESS';
+  return (
+    normalizedStatus === 'LIVE' ||
+    normalizedStatus === 'IN_PROGRESS' ||
+    normalizedStatus === 'PAUSED'
+  );
 }
 
 function getPersistedPickBackfillSinceMs(input: {
@@ -587,16 +707,11 @@ function buildPersistedPickBackfillDeltas(input: {
     if (!pick || existingPickIds.has(String(pick.id))) return [];
 
     const madeAtMs = pick.madeAt.getTime();
-    const ts =
-      input.loadInitialPicks
-        ? Math.max(
-            Number.isFinite(madeAtMs) ? madeAtMs : 0,
-            input.lastEventAt ?? 0,
-            Date.now()
-          )
-        : Number.isFinite(madeAtMs)
-          ? madeAtMs
-          : Date.now();
+    const ts = input.loadInitialPicks
+      ? Math.max(Number.isFinite(madeAtMs) ? madeAtMs : 0, input.lastEventAt ?? 0, Date.now())
+      : Number.isFinite(madeAtMs)
+        ? madeAtMs
+        : Date.now();
 
     return [
       {
@@ -610,8 +725,12 @@ function buildPersistedPickBackfillDeltas(input: {
 
 function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null {
   const source = asRecord(rawDraftState);
-  const draftPatch: Partial<DraftCore> = {};
+  const draftPatch: Partial<DraftCore> & {
+    schedulingVersion?: number;
+    clock?: DraftClockPayload;
+  } = {};
   const livePatch: DraftLiveState = {};
+  const clockResult = DraftClockPayloadSchema.safeParse(source.clock);
 
   if (typeof source.currentPick === 'number' && Number.isFinite(source.currentPick)) {
     draftPatch.currentPick = source.currentPick;
@@ -636,6 +755,17 @@ function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null
       : null;
   }
 
+  if (clockResult.success) {
+    draftPatch.clock = clockResult.data;
+    draftPatch.schedulingVersion = clockResult.data.revision;
+    draftPatch.status = clockResult.data.status as DraftCore['status'];
+    draftPatch.pickDeadlineAt =
+      clockResult.data.status === 'LIVE' ? new Date(clockResult.data.deadlineAt) : null;
+    livePatch.clock = clockResult.data;
+    livePatch.revision = clockResult.data.revision;
+    livePatch.clockReceivedAt = Date.now();
+  }
+
   if (Object.keys(draftPatch).length === 0 && Object.keys(livePatch).length === 0) {
     return null;
   }
@@ -646,9 +776,10 @@ function buildDraftStateBackfillDelta(rawDraftState: unknown): DraftDelta | null
       draft: draftPatch,
       liveState: livePatch,
     },
-    ts: Date.now(),
-	  };
-	}
+    ts: clockResult.success ? Date.parse(clockResult.data.serverNow) : Date.now(),
+    revision: clockResult.success ? clockResult.data.revision : undefined,
+  };
+}
 
 type AvailablePlayersHydration = {
   players: DraftPlayer[];
@@ -734,6 +865,14 @@ type Action =
   | { type: 'SET_WATCHLIST_PENDING'; playerId: string; pending: boolean }
   | { type: 'SET_PERSISTED_PICKS'; picks: DraftPick[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
+  | {
+      type: 'APPLY_V2_COMMIT';
+      snapshot?: ReturnType<typeof normalizeSnapshot>;
+      deltas: DraftDelta[];
+      throughSequence: number;
+      draftId: string;
+      generation: number;
+    }
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_LOADING'; loading: boolean }
@@ -742,6 +881,11 @@ type Action =
 type NormalizedDraftSnapshot = ReturnType<typeof normalizeSnapshot>;
 
 function shouldIgnoreSnapshot(state: DraftState, snapshot: NormalizedDraftSnapshot): boolean {
+  const lastRevision = state.connection.lastRevision;
+  if (snapshot.revision !== undefined && lastRevision !== undefined) {
+    return snapshot.revision < lastRevision;
+  }
+
   const incomingTs = snapshot.ts;
   const lastEventAt = state.connection.lastEventAt ?? 0;
   return Boolean(incomingTs && incomingTs < lastEventAt);
@@ -752,19 +896,26 @@ function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
     return { ...state, isLoading: false };
   }
 
-  const draft = preserveDraftLeagueAffiliation(snapshot.draft, state.draft);
+  return mergeSnapshotState(state, snapshot);
+}
+
+function mergeSnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot): DraftState {
+  const draft = mergeSnapshotDraft(snapshot.draft, state.draft);
   const participants = snapshot.includesParticipantQueues
     ? snapshot.participants
     : mergeParticipantQueues(snapshot.participants, state.participants);
+  const picks = snapshot.includesPicks ? snapshot.picks : state.picks;
+  const availablePlayers = excludeDraftedAvailablePlayers(
+    snapshot.includesAvailablePlayers ? snapshot.availablePlayers : state.availablePlayers,
+    picks
+  );
 
   return {
     ...state,
     draft,
     participants,
-    picks: snapshot.includesPicks ? snapshot.picks : state.picks,
-    availablePlayers: snapshot.includesAvailablePlayers
-      ? snapshot.availablePlayers
-      : state.availablePlayers,
+    picks,
+    availablePlayers,
     draftReadiness: snapshot.draftReadiness ?? state.draftReadiness,
     selectedCategories:
       snapshot.selectedCategories.length > 0
@@ -772,12 +923,15 @@ function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
         : state.selectedCategories,
     statSeason: snapshot.statSeason ?? state.statSeason,
     statSeasons: snapshot.statSeasons.length > 0 ? snapshot.statSeasons : state.statSeasons,
-    liveState: snapshot.liveState,
+    liveState: { ...state.liveState, ...snapshot.liveState },
     isLoading: false,
     error: null,
     connection: {
       ...state.connection,
       lastEventAt: snapshot.ts ?? state.connection.lastEventAt,
+      lastRevision: snapshot.revision ?? state.connection.lastRevision,
+      lastSequence: snapshot.throughSequence ?? state.connection.lastSequence,
+      needsResync: false,
     },
   };
 }
@@ -810,28 +964,41 @@ function applyPersistedPicksState(state: DraftState, incomingPicks: DraftPick[])
 function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
   const ts = delta.ts ?? Date.now();
   const lastEventAt = state.connection.lastEventAt ?? 0;
-  if (ts < lastEventAt) {
+  const lastRevision = state.connection.lastRevision;
+  if (delta.revision !== undefined && lastRevision !== undefined && delta.revision < lastRevision) {
+    return state;
+  }
+  if (
+    delta.revision !== undefined &&
+    lastRevision !== undefined &&
+    delta.revision > lastRevision + 1
+  ) {
+    return {
+      ...state,
+      connection: {
+        ...state.connection,
+        status: 'reconnecting',
+        needsResync: true,
+      },
+    };
+  }
+  if (delta.revision === undefined && ts < lastEventAt) {
     return state;
   }
 
-  let next = { ...state, connection: { ...state.connection, lastEventAt: ts } };
+  let next = {
+    ...state,
+    connection: {
+      ...state.connection,
+      lastEventAt: Math.max(lastEventAt, ts),
+      lastRevision: delta.revision ?? state.connection.lastRevision,
+    },
+  };
 
   switch (delta.type) {
     case 'SNAPSHOT': {
       const snap = normalizeSnapshot(delta.payload as DraftSnapshot);
-      const draft = preserveDraftLeagueAffiliation(snap.draft, next.draft);
-      return {
-        ...next,
-        draft,
-        participants: snap.participants,
-        picks: snap.includesPicks ? snap.picks : next.picks,
-        availablePlayers: snap.includesAvailablePlayers ? snap.availablePlayers : next.availablePlayers,
-        draftReadiness: snap.draftReadiness,
-        liveState: snap.liveState,
-        error: null,
-        isLoading: false,
-        connection: { ...next.connection, lastEventAt: snap.ts ?? ts },
-      };
+      return applySnapshotState(next, snap);
     }
     case 'PICK_MADE': {
       const payload = delta.payload as {
@@ -843,6 +1010,9 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         direction?: unknown;
         pickStartedAt?: unknown;
         pickDeadlineAt?: unknown;
+        schedulingVersion?: unknown;
+        durationSeconds?: unknown;
+        serverNow?: unknown;
       };
       const rawPick = payload?.pick;
       const pick = normalizeCommandPick(rawPick, next.participants);
@@ -892,15 +1062,50 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
                   pickDeadlineAt:
                     payload.pickDeadlineAt === null
                       ? null
-                      : (toOptionalDate(payload.pickDeadlineAt) ?? next.draft.pickDeadlineAt ?? null),
+                      : (toOptionalDate(payload.pickDeadlineAt) ??
+                        next.draft.pickDeadlineAt ??
+                        null),
                 }
               : {}),
           }
         : next.draft;
-      const liveState =
-        nextCurrentPick !== undefined
-          ? { ...next.liveState, currentPick: nextCurrentPick }
-          : next.liveState;
+      const schedulingVersion = Number(delta.revision ?? payload.schedulingVersion);
+      const durationSeconds =
+        typeof payload.durationSeconds === 'number' && payload.durationSeconds > 0
+          ? payload.durationSeconds
+          : (next.liveState.clock?.durationSeconds ?? next.draft?.settings.timePerPick ?? 120);
+      const clockServerNow =
+        typeof payload.serverNow === 'string' ? payload.serverNow : new Date(ts).toISOString();
+      const clockResult = DraftClockPayloadSchema.safeParse(
+        nextStatus === 'COMPLETED'
+          ? {
+              status: 'COMPLETED',
+              revision: schedulingVersion,
+              durationSeconds,
+              serverNow: clockServerNow,
+            }
+          : payload.pickStartedAt && payload.pickDeadlineAt
+            ? {
+                status: 'LIVE',
+                revision: schedulingVersion,
+                durationSeconds,
+                serverNow: clockServerNow,
+                startedAt: payload.pickStartedAt,
+                deadlineAt: payload.pickDeadlineAt,
+              }
+            : null
+      );
+      const liveState = {
+        ...next.liveState,
+        ...(nextCurrentPick !== undefined ? { currentPick: nextCurrentPick } : {}),
+        ...(clockResult.success
+          ? {
+              clock: clockResult.data,
+              revision: clockResult.data.revision,
+              clockReceivedAt: Date.now(),
+            }
+          : {}),
+      };
       return { ...next, draft, liveState, picks, availablePlayers, participants };
     }
     case 'PLAYER_REMOVED': {
@@ -940,6 +1145,38 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
     case 'STATE_PATCH': {
       const { draft: draftPatch, liveState: livePatch } = (delta.payload ??
         {}) as Partial<DraftState>;
+      const includesClock = Boolean(
+        livePatch && Object.prototype.hasOwnProperty.call(livePatch, 'clock')
+      );
+      const clockResult = includesClock
+        ? DraftClockPayloadSchema.safeParse(livePatch?.clock)
+        : null;
+      if (
+        clockResult &&
+        (!clockResult.success ||
+          (delta.revision !== undefined && clockResult.data.revision !== delta.revision))
+      ) {
+        return {
+          ...next,
+          connection: {
+            ...next.connection,
+            status: 'reconnecting',
+            needsResync: true,
+          },
+        };
+      }
+      const incomingDeadline = draftPatch?.pickDeadlineAt
+        ? toOptionalDate(draftPatch.pickDeadlineAt)?.toISOString()
+        : draftPatch && 'pickDeadlineAt' in draftPatch
+          ? null
+          : undefined;
+      const currentClockDeadline =
+        next.liveState.clock?.status === 'LIVE' ? next.liveState.clock.deadlineAt : null;
+      const invalidatesClock = Boolean(
+        draftPatch &&
+        ((draftPatch.status && draftPatch.status !== next.liveState.clock?.status) ||
+          (incomingDeadline !== undefined && incomingDeadline !== currentClockDeadline))
+      );
       return {
         ...next,
         draft:
@@ -948,7 +1185,18 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
             : draftPatch
               ? normalizeDraftCore(draftPatch)
               : next.draft,
-        liveState: livePatch ? { ...(next.liveState ?? {}), ...livePatch } : next.liveState,
+        liveState: {
+          ...next.liveState,
+          ...(invalidatesClock ? { clock: undefined, clockReceivedAt: undefined } : {}),
+          ...(livePatch ?? {}),
+          ...(clockResult?.success
+            ? {
+                clock: clockResult.data,
+                revision: clockResult.data.revision,
+                clockReceivedAt: Date.now(),
+              }
+            : {}),
+        },
       };
     }
     default:
@@ -959,6 +1207,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
 function reducer(state: DraftState, action: Action): DraftState {
   switch (action.type) {
     case 'SET_SNAPSHOT':
+      if (state.connection.protocol === 2) return state;
       return applySnapshotState(state, action.snapshot);
     case 'SET_AVAILABLE_PLAYERS':
       return {
@@ -1008,8 +1257,72 @@ function reducer(state: DraftState, action: Action): DraftState {
       return applyPersistedPicksState(state, action.picks);
     case 'APPLY_DELTAS': {
       let next = state;
-      for (const d of action.deltas) next = applyDelta(next, d);
+      const deltas =
+        state.connection.protocol === 2
+          ? action.deltas.filter((delta) => delta.type === 'QUEUE_UPDATED')
+          : action.deltas;
+      for (const d of deltas) next = applyDelta(next, d);
       return next;
+    }
+    case 'APPLY_V2_COMMIT': {
+      if (state.draft?.id && String(state.draft.id) !== action.draftId) {
+        return {
+          ...state,
+          connection: { ...state.connection, status: 'reconnecting', needsResync: true },
+        };
+      }
+      if (
+        state.connection.protocol === 2 &&
+        state.connection.generation !== undefined &&
+        action.generation < state.connection.generation
+      ) {
+        return state;
+      }
+
+      let next = action.snapshot ? mergeSnapshotState(state, action.snapshot) : state;
+      for (const delta of action.deltas) {
+        if (
+          delta.revision !== undefined &&
+          next.connection.lastRevision !== undefined &&
+          delta.revision < next.connection.lastRevision
+        ) {
+          return {
+            ...state,
+            connection: { ...state.connection, status: 'reconnecting', needsResync: true },
+          };
+        }
+        const candidate = applyDelta(
+          {
+            ...next,
+            connection: {
+              ...next.connection,
+              lastEventAt: undefined,
+              lastRevision: undefined,
+              needsResync: false,
+            },
+          },
+          delta
+        );
+        if (candidate.connection.needsResync) {
+          return {
+            ...state,
+            connection: { ...state.connection, status: 'reconnecting', needsResync: true },
+          };
+        }
+        next = candidate;
+      }
+      return {
+        ...next,
+        connection: {
+          ...next.connection,
+          status: 'connected',
+          lastSequence: action.throughSequence,
+          protocol: 2,
+          generation: action.generation,
+          draftId: action.draftId,
+          needsResync: false,
+        },
+      };
     }
     case 'SET_CONNECTION':
       return {
@@ -1032,58 +1345,186 @@ function reducer(state: DraftState, action: Action): DraftState {
 function useDraftSocket(opts: {
   socket: ReturnType<typeof useSocket>;
   draftId: string;
-  lastEventAt?: number;
   onSnapshot: (snap: DraftSnapshot) => void;
   onDelta: (delta: DraftDelta) => void;
+  onV2Commit: (commit: DraftRealtimeV2ClientCommit) => void;
   setStatus: (s: ConnectionStatus) => void;
+  onReconnect: () => void;
 }) {
-  const { socket, draftId, lastEventAt, onSnapshot, onDelta, setStatus } = opts;
-  const lastEventAtRef = useRef(lastEventAt);
+  const { socket, draftId, onSnapshot, onDelta, onV2Commit, setStatus, onReconnect } = opts;
+  const joinedDraftIdRef = useRef<string | null>(null);
+  const onReconnectRef = useRef(onReconnect);
+  const onV2CommitRef = useRef(onV2Commit);
 
   useEffect(() => {
-    lastEventAtRef.current = lastEventAt;
-  }, [lastEventAt]);
+    onReconnectRef.current = onReconnect;
+  }, [onReconnect]);
+
+  useEffect(() => {
+    onV2CommitRef.current = onV2Commit;
+  }, [onV2Commit]);
 
   useEffect(() => {
     if (!socket) return;
 
-    const join = () => {
-      setStatus('connected');
-      socket.emit('draft:join', { draftId });
-      socket.emit('draft:backfill', { draftId, since: lastEventAtRef.current ?? 0 });
+    let disposed = false;
+    let v1Owned = false;
+    let refreshPrivateStateAfterBaseline = false;
+    let joinTimeout: ReturnType<typeof setTimeout> | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let requestV2Join = () => undefined;
+
+    const clearJoinTimeout = () => {
+      if (!joinTimeout) return;
+      clearTimeout(joinTimeout);
+      joinTimeout = null;
+    };
+    const scheduleRetry = () => {
+      if (retryTimeout || disposed) return;
+      retryTimeout = setTimeout(() => {
+        retryTimeout = null;
+        if (!disposed && socket.connected) requestV2Join();
+      }, 500);
+    };
+    const v2Client = new DraftRealtimeV2Client({
+      onCommit: (commit) => onV2CommitRef.current(commit),
+      onResyncRequired: () => {
+        setStatus('reconnecting');
+        scheduleRetry();
+      },
+    });
+
+    const joinV1 = () => {
+      v1Owned = true;
+      socket.emit('draft:join', { draftId, realtimeProtocols: [1] });
+    };
+    const fallbackToV1 = (generation: number) => {
+      const abandoned = v2Client.abandon(generation);
+      if (!abandoned) return;
+      socket.emit('draft:leave:v2', abandoned);
+      joinV1();
     };
 
-    const onConnect = join;
+    requestV2Join = () => {
+      clearJoinTimeout();
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+        retryTimeout = null;
+      }
+      const isReconnect = joinedDraftIdRef.current === draftId;
+      joinedDraftIdRef.current = draftId;
+      refreshPrivateStateAfterBaseline ||= isReconnect;
+      setStatus(isReconnect ? 'reconnecting' : 'disconnected');
+      if (v1Owned) {
+        joinV1();
+        return;
+      }
+      const generation = v2Client.begin(draftId);
+      v2Client.markJoinSent(generation);
+
+      joinTimeout = setTimeout(() => {
+        joinTimeout = null;
+        if (disposed || generation !== v2Client.getGeneration()) return;
+        if (!v2Client.isV2Owned()) {
+          fallbackToV1(generation);
+          return;
+        }
+        scheduleRetry();
+      }, 1500);
+
+      socket.emit('draft:join:v2', { draftId, generation }, (acknowledgement: unknown) => {
+        if (disposed) return;
+        const outcome = v2Client.acceptJoinAcknowledgement(acknowledgement, generation);
+        if (outcome.status !== 'stale' && generation === v2Client.getGeneration()) {
+          clearJoinTimeout();
+        }
+        if (outcome.status === 'ready') {
+          setStatus('connected');
+          if (refreshPrivateStateAfterBaseline) {
+            refreshPrivateStateAfterBaseline = false;
+            onReconnectRef.current();
+          }
+          return;
+        }
+        if (outcome.status === 'fallback') {
+          fallbackToV1(generation);
+          return;
+        }
+        if (outcome.status === 'resync') {
+          setStatus('reconnecting');
+          scheduleRetry();
+          return;
+        }
+        if (outcome.status === 'failed') {
+          setStatus(outcome.acknowledgement.retryable ? 'reconnecting' : 'disconnected');
+          if (outcome.acknowledgement.retryable) scheduleRetry();
+        }
+      });
+    };
+
+    const onConnect = requestV2Join;
     const onDisconnect = () => setStatus('disconnected');
     const onReconnecting = () => setStatus('reconnecting');
 
-    const handleSnapshot = (snap: DraftSnapshot) => onSnapshot(snap);
-    const handleDelta = (delta: DraftDelta) => onDelta(delta);
+    const handleV2Event = (value: unknown) => v2Client.receive(value);
+    const handleSnapshot = (snap: DraftSnapshot) => {
+      if (!v1Owned) return;
+      onSnapshot(snap);
+      setStatus('connected');
+      if (refreshPrivateStateAfterBaseline) {
+        refreshPrivateStateAfterBaseline = false;
+        onReconnectRef.current();
+      }
+    };
+    const handleDelta = (delta: DraftDelta) => {
+      if (v1Owned) onDelta(delta);
+    };
     const handleBackfill = (deltas: DraftDelta[] = []) => {
-      for (const d of deltas) onDelta(d);
+      if (!v1Owned) return;
+      for (const delta of deltas) onDelta(delta);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      setStatus('reconnecting');
+      if (socket.connected) requestV2Join();
     };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.io?.on?.('reconnect_attempt', onReconnecting);
 
+    // Register the live v2 listener before requesting a baseline so racing events are buffered.
+    socket.on('draft:event:v2', handleV2Event);
     socket.on('draft:snapshot', handleSnapshot);
     socket.on('draft:delta', handleDelta);
     socket.on('draft:backfill', handleBackfill);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    if (socket.connected) join();
+    if (socket.connected) requestV2Join();
 
     return () => {
+      disposed = true;
+      clearJoinTimeout();
+      if (retryTimeout) clearTimeout(retryTimeout);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.io?.off?.('reconnect_attempt', onReconnecting);
 
+      socket.off('draft:event:v2', handleV2Event);
       socket.off('draft:snapshot', handleSnapshot);
       socket.off('draft:delta', handleDelta);
       socket.off('draft:backfill', handleBackfill);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
 
       try {
-        socket.emit('draft:leave', { draftId });
+        if (v2Client.getPhase() !== 'idle') {
+          socket.emit('draft:leave:v2', {
+            draftId,
+            generation: v2Client.getGeneration(),
+          });
+        } else {
+          socket.emit('draft:leave', { draftId });
+        }
       } catch {
         /* noop */
       }
@@ -1112,6 +1553,10 @@ export function DraftProvider({
   const initialHydrateStartedRef = useRef(Boolean(initialSnapshot));
   const availablePlayersHydratingRef = useRef(false);
   const persistedPickHydratingRef = useRef(false);
+  const privateStateHydrationRef = useRef<{
+    generation: number;
+    controller: AbortController | null;
+  }>({ generation: 0, controller: null });
 
   const initial = useMemo<DraftState>(() => {
     const snap = normalizeSnapshot(initialSnapshot ?? null);
@@ -1127,7 +1572,13 @@ export function DraftProvider({
       watchlistItems: [],
       pendingWatchlistPlayerIds: [],
       liveState: snap.liveState,
-      connection: { status: 'disconnected', lastEventAt: snap.ts },
+      connection: {
+        status: 'disconnected',
+        lastEventAt: snap.ts,
+        lastRevision: snap.revision,
+        lastSequence: snap.throughSequence,
+        needsResync: false,
+      },
       isLoading: !initialSnapshot,
       isSaving: false,
       error: null,
@@ -1147,6 +1598,9 @@ export function DraftProvider({
     isMounted.current = true;
     return () => {
       isMounted.current = false;
+      privateStateHydrationRef.current.generation += 1;
+      privateStateHydrationRef.current.controller?.abort();
+      privateStateHydrationRef.current.controller = null;
     };
   }, []);
 
@@ -1175,99 +1629,152 @@ export function DraftProvider({
     [scheduleDeltaFlush]
   );
 
+  const handleV2Commit = useCallback((commit: DraftRealtimeV2ClientCommit) => {
+    const converted = commit.events.map(toDraftRealtimeV2ClientDelta);
+    if (converted.some((delta) => delta === null)) return false;
+    const deltas = converted as DraftDelta[];
+    const snapshot = commit.snapshot
+      ? normalizeSnapshot({ ...commit.snapshot, schemaVersion: 1 })
+      : undefined;
+
+    dispatch({
+      type: 'APPLY_V2_COMMIT',
+      snapshot,
+      deltas,
+      throughSequence: commit.throughSequence,
+      draftId: commit.draftId,
+      generation: commit.generation,
+    });
+    return true;
+  }, []);
+
   const handleStatusChange = useCallback((s: ConnectionStatus) => {
     dispatch({ type: 'SET_CONNECTION', status: s });
   }, []);
 
-  // Socket join + backfill
-  useDraftSocket({
-    socket,
-    draftId,
-    lastEventAt: state.connection.lastEventAt,
-    onSnapshot: handleSnapshot,
-    onDelta: handleDelta,
-    setStatus: handleStatusChange,
-  });
+  const hydrateAvailablePlayers = useCallback(
+    async (statSeason?: number | null, force = false) => {
+      if (availablePlayersHydratingRef.current && !force) return;
 
-	  const hydrateAvailablePlayers = useCallback(async (statSeason?: number | null, force = false) => {
-	    if (availablePlayersHydratingRef.current && !force) return;
+      availablePlayersHydratingRef.current = true;
 
-	    availablePlayersHydratingRef.current = true;
-
-	    try {
-	      const hydration = await loadAvailablePlayersHydration({
-	        draftId,
-	        statSeason,
-	        onFirstPage: (firstPage) => {
-	          if (!isMounted.current) return;
-	          dispatch({ type: 'SET_AVAILABLE_PLAYERS', ...firstPage });
-	        },
-	      });
-
-	      if (!isMounted.current) return;
-	      dispatch({ type: 'SET_AVAILABLE_PLAYERS', ...hydration });
-	    } catch {
-	      // Keep the draft usable even if the player pool hydrate fails.
-	    } finally {
-      availablePlayersHydratingRef.current = false;
-    }
-  }, [draftId]);
-
-  const hydrateMyQueue = useCallback(
-    async (targetMemberId: string) => {
       try {
-        const res = await fetchApi(
-          `drafts/${draftId}/pre-queue?memberId=${encodeURIComponent(targetMemberId)}`
-        );
-        const persistedQueue = toArray<any>(res?.data?.queue ?? res?.queue)
-          .slice()
-          .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0))
-          .map((item) => String(item?.playerId))
-          .filter(Boolean);
+        const hydration = await loadAvailablePlayersHydration({
+          draftId,
+          statSeason,
+          onFirstPage: (firstPage) => {
+            if (!isMounted.current) return;
+            dispatch({ type: 'SET_AVAILABLE_PLAYERS', ...firstPage });
+          },
+        });
 
         if (!isMounted.current) return;
+        dispatch({ type: 'SET_AVAILABLE_PLAYERS', ...hydration });
+      } catch {
+        // Keep the draft usable even if the player pool hydrate fails.
+      } finally {
+        availablePlayersHydratingRef.current = false;
+      }
+    },
+    [draftId]
+  );
 
+  const loadMyQueue = useCallback(
+    async (signal: AbortSignal): Promise<string[]> => {
+      const res = await fetchApi(`drafts/${draftId}/pre-queue`, { signal });
+      return toArray<any>(res?.data?.queue ?? res?.queue)
+        .slice()
+        .sort((a, b) => Number(a?.rank ?? 0) - Number(b?.rank ?? 0))
+        .map((item) => String(item?.playerId))
+        .filter(Boolean);
+    },
+    [draftId]
+  );
+
+  const loadMyWatchlist = useCallback(
+    async (signal: AbortSignal): Promise<DraftWatchlistItem[]> => {
+      const res = await fetchApi(`drafts/${draftId}/watchlist`, { signal });
+      const items = toArray<
+        Omit<DraftWatchlistItem, 'rank' | 'addedAt'> & {
+          rank?: number;
+          addedAt?: string;
+        }
+      >(res?.data?.watchlist ?? res?.watchlist).flatMap((item) => {
+        const normalized = normalizeWatchlistItem(item);
+        return normalized ? [normalized] : [];
+      });
+
+      return sortWatchlistItems(items);
+    },
+    [draftId]
+  );
+
+  const invalidatePrivateStateHydration = useCallback(() => {
+    privateStateHydrationRef.current.generation += 1;
+    privateStateHydrationRef.current.controller?.abort();
+    privateStateHydrationRef.current.controller = null;
+  }, []);
+
+  const hydratePrivateDraftState = useCallback(
+    async (targetMemberId: string) => {
+      invalidatePrivateStateHydration();
+      const generation = privateStateHydrationRef.current.generation;
+      const controller = new AbortController();
+      privateStateHydrationRef.current.controller = controller;
+
+      const [queueResult, watchlistResult] = await Promise.allSettled([
+        loadMyQueue(controller.signal),
+        loadMyWatchlist(controller.signal),
+      ]);
+
+      if (
+        !isMounted.current ||
+        privateStateHydrationRef.current.generation !== generation ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
+
+      if (queueResult.status === 'fulfilled') {
         dispatch({
           type: 'APPLY_DELTAS',
           deltas: [
             {
               type: 'QUEUE_UPDATED',
-              payload: { memberId: targetMemberId, queue: persistedQueue },
+              payload: { memberId: targetMemberId, queue: queueResult.value },
               ts: Date.now(),
             },
           ],
         });
-      } catch {
-        // Queue hydration is best-effort; keep the room usable if it fails.
+      }
+
+      if (watchlistResult.status === 'fulfilled') {
+        dispatch({ type: 'SET_WATCHLIST', items: watchlistResult.value });
+      }
+
+      if (privateStateHydrationRef.current.controller === controller) {
+        privateStateHydrationRef.current.controller = null;
       }
     },
-    [draftId]
+    [invalidatePrivateStateHydration, loadMyQueue, loadMyWatchlist]
   );
 
-  const hydrateMyWatchlist = useCallback(
-    async (targetMemberId: string) => {
-      try {
-        const res = await fetchApi(
-          `drafts/${draftId}/watchlist?memberId=${encodeURIComponent(targetMemberId)}`
-        );
-        const items = toArray<
-          Omit<DraftWatchlistItem, 'rank' | 'addedAt'> & {
-            rank?: number;
-            addedAt?: string;
-          }
-        >(res?.data?.watchlist ?? res?.watchlist).flatMap((item) => {
-          const normalized = normalizeWatchlistItem(item);
-          return normalized ? [normalized] : [];
-        });
+  const handlePrivateStateReconnect = useCallback(() => {
+    if (!memberId) return;
+    void hydratePrivateDraftState(memberId);
+  }, [hydratePrivateDraftState, memberId]);
 
-        if (!isMounted.current) return;
-        dispatch({ type: 'SET_WATCHLIST', items: sortWatchlistItems(items) });
-      } catch {
-        // Watchlist hydration is best-effort; keep the room usable if it fails.
-      }
-    },
-    [draftId]
-  );
+  // Socket join + backfill. Shared snapshots intentionally omit private strategy state, so every
+  // rejoin refreshes the authenticated member's queue and watchlist through their scoped routes.
+  useDraftSocket({
+    socket,
+    draftId,
+    onSnapshot: handleSnapshot,
+    onDelta: handleDelta,
+    onV2Commit: handleV2Commit,
+    setStatus: handleStatusChange,
+    onReconnect: handlePrivateStateReconnect,
+  });
 
   const hydratePersistedPickPages = useCallback(async () => {
     if (!state.draft || persistedPickHydratingRef.current) return;
@@ -1325,8 +1832,8 @@ export function DraftProvider({
     ) {
       return;
     }
-	    void hydrateAvailablePlayers(state.statSeason);
-	  }, [state.draft, state.availablePlayers, state.statSeason, hydrateAvailablePlayers]);
+    void hydrateAvailablePlayers(state.statSeason);
+  }, [state.draft, state.availablePlayers, state.statSeason, hydrateAvailablePlayers]);
 
   useEffect(() => {
     if (!shouldHydratePersistedPicks(state.draft, state.picks)) return;
@@ -1339,8 +1846,8 @@ export function DraftProvider({
     if (hydratedQueueMemberIdRef.current === hydrationKey) return;
 
     hydratedQueueMemberIdRef.current = hydrationKey;
-    void Promise.all([hydrateMyQueue(memberId), hydrateMyWatchlist(memberId)]);
-  }, [draftId, memberId, hydrateMyQueue, hydrateMyWatchlist]);
+    void hydratePrivateDraftState(memberId);
+  }, [draftId, hydratePrivateDraftState, memberId]);
 
   /* ------------------------------- Action APIs ------------------------------ */
 
@@ -1358,10 +1865,10 @@ export function DraftProvider({
           availablePlayersHydratingRef.current
         )
       ) {
-	        await hydrateAvailablePlayers(state.statSeason);
+        await hydrateAvailablePlayers(state.statSeason);
       }
       if (memberId) {
-        await Promise.all([hydrateMyQueue(memberId), hydrateMyWatchlist(memberId)]);
+        await hydratePrivateDraftState(memberId);
       }
     } catch (err: any) {
       if (!isMounted.current) return;
@@ -1372,29 +1879,27 @@ export function DraftProvider({
     } finally {
       if (isMounted.current) dispatch({ type: 'SET_LOADING', loading: false });
     }
-	  }, [
-	    draftId,
-	    hydrateAvailablePlayers,
-	    hydrateMyQueue,
-	    hydrateMyWatchlist,
-	    memberId,
-	    state.statSeason,
-	  ]);
+  }, [draftId, hydrateAvailablePlayers, hydratePrivateDraftState, memberId, state.statSeason]);
 
-	  const setStatSeason = useCallback(
-	    async (season: number) => {
-	      if (!Number.isFinite(season) || season === state.statSeason) return;
+  useEffect(() => {
+    if (!state.connection.needsResync) return;
+    void forceRefresh();
+  }, [forceRefresh, state.connection.needsResync]);
+
+  const setStatSeason = useCallback(
+    async (season: number) => {
+      if (!Number.isFinite(season) || season === state.statSeason) return;
 
       dispatch({ type: 'SET_STAT_SEASON', season });
       await hydrateAvailablePlayers(season, true);
     },
-	    [hydrateAvailablePlayers, state.statSeason]
-	  );
+    [hydrateAvailablePlayers, state.statSeason]
+  );
 
   const fetchPersistedPickBackfill = useCallback(async () => {
     if (!state.draft) return;
 
-    if (!isLiveDraftStatus(state.draft.status)) return;
+    if (!isDraftReconciliationStatus(state.draft.status)) return;
 
     const shouldLoadInitialPersistedPicks =
       state.picks.length === 0 && Number(state.draft.currentPick ?? 0) > 1;
@@ -1407,8 +1912,9 @@ export function DraftProvider({
     try {
       const res = await fetchApi(buildPersistedPickBackfillEndpoint(draftId, sinceMs));
       const persistedPicks = toArray<unknown>(res?.data?.picks ?? res?.picks);
-      const draftStateDelta = buildDraftStateBackfillDelta(res?.data?.draftState ?? res?.draftState);
-      if (persistedPicks.length === 0) return;
+      const draftStateDelta = buildDraftStateBackfillDelta(
+        res?.data?.draftState ?? res?.draftState
+      );
 
       const deltas = buildPersistedPickBackfillDeltas({
         rawPicks: persistedPicks,
@@ -1417,12 +1923,13 @@ export function DraftProvider({
         lastEventAt: state.connection.lastEventAt,
         loadInitialPicks: shouldLoadInitialPersistedPicks,
       });
+      const reconciledDeltas = draftStateDelta ? [...deltas, draftStateDelta] : deltas;
 
-      if (!isMounted.current || deltas.length === 0) return;
+      if (!isMounted.current || reconciledDeltas.length === 0) return;
 
       dispatch({
         type: 'APPLY_DELTAS',
-        deltas: draftStateDelta ? [...deltas, draftStateDelta] : deltas,
+        deltas: reconciledDeltas,
       });
 
       if (!draftStateDelta) {
@@ -1451,7 +1958,7 @@ export function DraftProvider({
     if (!state.draft) return;
 
     const status = String(state.draft.status ?? '').toUpperCase();
-    if (status !== 'LIVE' && status !== 'IN_PROGRESS') return;
+    if (!isDraftReconciliationStatus(status)) return;
 
     const intervalId = window.setInterval(() => {
       void fetchPersistedPickBackfill();
@@ -1500,6 +2007,7 @@ export function DraftProvider({
       }
 
       dispatch({ type: 'SET_SAVING', saving: true });
+      invalidatePrivateStateHydration();
       try {
         const res = await fetchApi(`drafts/${draftId}/picks`, {
           method: 'POST',
@@ -1546,7 +2054,7 @@ export function DraftProvider({
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
       }
     },
-    [draftId, state.availablePlayers, state.participants]
+    [draftId, invalidatePrivateStateHydration, state.availablePlayers, state.participants]
   );
 
   const updateQueue = useCallback(
@@ -1580,6 +2088,7 @@ export function DraftProvider({
       }
 
       dispatch({ type: 'SET_SAVING', saving: true });
+      invalidatePrivateStateHydration();
       try {
         const queuePayload = queue.map((playerId, index) => ({
           playerId,
@@ -1590,7 +2099,6 @@ export function DraftProvider({
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            memberId,
             queue: queuePayload,
           }),
         });
@@ -1618,7 +2126,7 @@ export function DraftProvider({
         if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
       }
     },
-    [draftId, state.participants, userId, state.availablePlayers]
+    [draftId, invalidatePrivateStateHydration, state.participants, userId, state.availablePlayers]
   );
 
   const addToWatchlist = useCallback(
@@ -1662,6 +2170,7 @@ export function DraftProvider({
       );
 
       dispatch({ type: 'SET_WATCHLIST_PENDING', playerId: normalizedPlayerId, pending: true });
+      invalidatePrivateStateHydration();
       if (optimisticItem) {
         dispatch({ type: 'MERGE_WATCHLIST_ITEM', item: optimisticItem });
       }
@@ -1671,7 +2180,6 @@ export function DraftProvider({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            memberId,
             playerId,
             priority: nextPriority,
           }),
@@ -1689,7 +2197,7 @@ export function DraftProvider({
             item: persistedItem,
           });
         } else {
-          await hydrateMyWatchlist(memberId);
+          await hydratePrivateDraftState(memberId);
         }
       } catch (err: any) {
         if (isMounted.current) {
@@ -1711,7 +2219,8 @@ export function DraftProvider({
     },
     [
       draftId,
-      hydrateMyWatchlist,
+      hydratePrivateDraftState,
+      invalidatePrivateStateHydration,
       memberId,
       state.availablePlayers,
       state.pendingWatchlistPlayerIds,
@@ -1740,12 +2249,12 @@ export function DraftProvider({
       if (!existingItem) return;
 
       dispatch({ type: 'SET_WATCHLIST_PENDING', playerId: normalizedPlayerId, pending: true });
+      invalidatePrivateStateHydration();
       dispatch({ type: 'REMOVE_WATCHLIST_ITEM', playerId: normalizedPlayerId });
       try {
-        await fetchApi(
-          `drafts/${draftId}/watchlist?memberId=${encodeURIComponent(memberId)}&playerId=${encodeURIComponent(playerId)}`,
-          { method: 'DELETE' }
-        );
+        await fetchApi(`drafts/${draftId}/watchlist?playerId=${encodeURIComponent(playerId)}`, {
+          method: 'DELETE',
+        });
       } catch (err: any) {
         if (isMounted.current) {
           dispatch({
@@ -1764,7 +2273,13 @@ export function DraftProvider({
         }
       }
     },
-    [draftId, memberId, state.pendingWatchlistPlayerIds, state.watchlistItems]
+    [
+      draftId,
+      invalidatePrivateStateHydration,
+      memberId,
+      state.pendingWatchlistPlayerIds,
+      state.watchlistItems,
+    ]
   );
 
   const toggleWatchlist = useCallback(

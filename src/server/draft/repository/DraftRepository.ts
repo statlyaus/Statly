@@ -22,11 +22,23 @@ type TxClient = PrismaNS.TransactionClient;
 export type LiveDraftPickExpirySchedule = {
   draftId: string;
   leagueId: string;
+  currentPick: number;
   schedulingVersion: number;
   pickDeadlineAt: Date | null;
   pickStartedAt: Date | null;
+  pausedRemainingSeconds: number | null;
+  clockDurationSeconds: number | null;
   startedAt: Date | null;
+  lastPickOverall: number | null;
+  lastPickMadeAt: Date | null;
   pickSeconds: number;
+};
+
+export type DraftEventReplayWindow = {
+  leagueId: string;
+  currentHeadSequence: number;
+  throughSequence: number;
+  events: DraftOutboxEventRecord[];
 };
 
 type DraftEventRecord = {
@@ -36,6 +48,8 @@ type DraftEventRecord = {
   event: string;
   payload: string | null;
   publishState: boolean;
+  sequence: number | null;
+  clockRevision: number | null;
   attempts: number;
   lastError: string | null;
   lockedAt: Date | null;
@@ -56,7 +70,7 @@ function parseOutboxPayload(payload: string | null): DraftOutboxPayload {
     return null;
   }
 
-  return JSON.parse(payload) as DraftPickEventPayload;
+  return JSON.parse(payload) as Exclude<DraftOutboxPayload, null>;
 }
 
 function toOutboxEventRecord(event: DraftEventRecord): DraftOutboxEventRecord {
@@ -67,6 +81,8 @@ function toOutboxEventRecord(event: DraftEventRecord): DraftOutboxEventRecord {
     event: event.event as DraftCommandEventType,
     payload: parseOutboxPayload(event.payload),
     publishState: event.publishState,
+    sequence: event.sequence,
+    clockRevision: event.clockRevision,
     attempts: event.attempts,
     lastError: event.lastError,
     lockedAt: event.lockedAt,
@@ -141,9 +157,7 @@ export class DraftRepository {
     return prisma.$transaction((tx) => work(tx), { timeout });
   }
 
-  async listLiveDraftPickExpirySchedules(
-    tx: TxClient
-  ): Promise<LiveDraftPickExpirySchedule[]> {
+  async listLiveDraftPickExpirySchedules(tx: TxClient): Promise<LiveDraftPickExpirySchedule[]> {
     const drafts = await tx.draft.findMany({
       where: {
         status: DraftStatus.LIVE,
@@ -156,7 +170,14 @@ export class DraftRepository {
         schedulingVersion: true,
         pickStartedAt: true,
         pickDeadlineAt: true,
+        pausedRemainingSeconds: true,
+        clockDurationSeconds: true,
         startedAt: true,
+        picks: {
+          orderBy: { overall: 'desc' },
+          take: 1,
+          select: { overall: true, madeAt: true },
+        },
         league: {
           select: {
             settings: {
@@ -174,37 +195,74 @@ export class DraftRepository {
       .map((draft) => ({
         draftId: draft.id,
         leagueId: draft.leagueId,
+        currentPick: draft.currentPick,
         schedulingVersion: draft.schedulingVersion,
         pickDeadlineAt: draft.pickDeadlineAt,
         pickStartedAt: draft.pickStartedAt,
+        pausedRemainingSeconds: draft.pausedRemainingSeconds,
+        clockDurationSeconds: draft.clockDurationSeconds,
         startedAt: draft.startedAt,
+        lastPickOverall: draft.picks[0]?.overall ?? null,
+        lastPickMadeAt: draft.picks[0]?.madeAt ?? null,
         pickSeconds: draft.league.settings!.pickSeconds,
       }));
   }
 
-  async repairMissingLiveDraftPickDeadline(
+  async getLiveDraftPickExpirySchedule(
     tx: TxClient,
-    input: {
-      draftId: string;
-      currentSchedulingVersion: number;
-      pickStartedAt: Date;
-      pickDeadlineAt: Date;
-    }
-  ) {
-    return tx.draft.updateMany({
+    draftId: string
+  ): Promise<LiveDraftPickExpirySchedule | null> {
+    const draft = await tx.draft.findFirst({
       where: {
-        id: input.draftId,
+        id: draftId,
         status: DraftStatus.LIVE,
-        schedulingVersion: input.currentSchedulingVersion,
-        pickDeadlineAt: null,
       },
-      data: {
-        pickStartedAt: input.pickStartedAt,
-        pickDeadlineAt: input.pickDeadlineAt,
-        pausedRemainingSeconds: null,
-        schedulingVersion: { increment: 1 },
+      select: {
+        id: true,
+        leagueId: true,
+        currentPick: true,
+        totalPicks: true,
+        schedulingVersion: true,
+        pickStartedAt: true,
+        pickDeadlineAt: true,
+        pausedRemainingSeconds: true,
+        clockDurationSeconds: true,
+        startedAt: true,
+        picks: {
+          orderBy: { overall: 'desc' },
+          take: 1,
+          select: { overall: true, madeAt: true },
+        },
+        league: {
+          select: {
+            settings: {
+              select: {
+                pickSeconds: true,
+              },
+            },
+          },
+        },
       },
     });
+
+    if (!draft || draft.currentPick > draft.totalPicks || !draft.league.settings) {
+      return null;
+    }
+
+    return {
+      draftId: draft.id,
+      leagueId: draft.leagueId,
+      currentPick: draft.currentPick,
+      schedulingVersion: draft.schedulingVersion,
+      pickDeadlineAt: draft.pickDeadlineAt,
+      pickStartedAt: draft.pickStartedAt,
+      pausedRemainingSeconds: draft.pausedRemainingSeconds,
+      clockDurationSeconds: draft.clockDurationSeconds,
+      startedAt: draft.startedAt,
+      lastPickOverall: draft.picks[0]?.overall ?? null,
+      lastPickMadeAt: draft.picks[0]?.madeAt ?? null,
+      pickSeconds: draft.league.settings.pickSeconds,
+    };
   }
 
   async getDraftAggregate(tx: TxClient, draftId: string): Promise<DraftAggregate | null> {
@@ -245,7 +303,9 @@ export class DraftRepository {
       pickStartedAt: draft.pickStartedAt,
       pickDeadlineAt: draft.pickDeadlineAt,
       pausedRemainingSeconds: draft.pausedRemainingSeconds,
+      clockDurationSeconds: draft.clockDurationSeconds,
       schedulingVersion: draft.schedulingVersion,
+      eventSequence: draft.eventSequence,
       settings: toSettingsSnapshot({
         ...draft.league.settings,
         selectedCategories: draft.league.categoriesJson,
@@ -381,9 +441,7 @@ export class DraftRepository {
       nextPick: number;
       nextRound: number;
       nextDirection:
-        | PrismaNS.EnumDraftDirectionFieldUpdateOperationsInput['set']
-        | 'FORWARD'
-        | 'REVERSE';
+        PrismaNS.EnumDraftDirectionFieldUpdateOperationsInput['set'] | 'FORWARD' | 'REVERSE';
       isComplete: boolean;
     }
   ) {
@@ -464,6 +522,7 @@ export class DraftRepository {
       pickDeadlineAt?: Date | null;
       pausedRemainingSeconds?: number | null;
       incrementSchedulingVersion?: boolean;
+      clockDurationSeconds?: number | null;
     }
   ) {
     return tx.draft.updateMany({
@@ -477,9 +536,114 @@ export class DraftRepository {
         ...(input.pausedRemainingSeconds !== undefined
           ? { pausedRemainingSeconds: input.pausedRemainingSeconds }
           : {}),
+        ...(input.clockDurationSeconds !== undefined
+          ? { clockDurationSeconds: input.clockDurationSeconds }
+          : {}),
         ...(input.incrementSchedulingVersion ? { schedulingVersion: { increment: 1 } } : {}),
       },
     });
+  }
+
+  /**
+   * Commits one complete clock revision and its authoritative outbox intent in the caller's
+   * Prisma transaction. A failed compare-and-swap writes neither the clock nor any events.
+   */
+  async transitionDraftClock(
+    tx: TxClient,
+    input: {
+      draftId: string;
+      leagueId: string;
+      currentSchedulingVersion: number;
+      expectedStatus?: DraftStatus;
+      expectedCurrentPick?: number;
+      expectedPickStartedAt?: Date | null;
+      expectedPickDeadlineAt?: Date | null;
+      expectedPausedRemainingSeconds?: number | null;
+      expectedClockDurationSeconds?: number | null;
+      status?: DraftStatus;
+      currentPick?: number;
+      round?: number;
+      direction?:
+        PrismaNS.EnumDraftDirectionFieldUpdateOperationsInput['set'] | 'FORWARD' | 'REVERSE';
+      startedAt?: Date | null;
+      completedAt?: Date | null;
+      pickStartedAt: Date | null;
+      pickDeadlineAt: Date | null;
+      pausedRemainingSeconds: number | null;
+      clockDurationSeconds: number;
+      events: Array<{
+        event: DraftCommandEventType;
+        payload: DraftOutboxPayload;
+        publishState: boolean;
+      }>;
+    }
+  ): Promise<{
+    count: number;
+    schedulingVersion: number;
+    events: DraftOutboxEventRecord[];
+  }> {
+    if (!Number.isInteger(input.clockDurationSeconds) || input.clockDurationSeconds <= 0) {
+      throw new Error('Clock duration must be a positive integer');
+    }
+
+    const authoritativeEvents = input.events.filter((event) => event.publishState);
+    if (authoritativeEvents.length !== 1) {
+      throw new Error('Clock transitions require exactly one authoritative outbox event');
+    }
+
+    const schedulingVersion = input.currentSchedulingVersion + 1;
+    const updated = await tx.draft.updateMany({
+      where: {
+        id: input.draftId,
+        leagueId: input.leagueId,
+        schedulingVersion: input.currentSchedulingVersion,
+        ...(input.expectedStatus ? { status: input.expectedStatus } : {}),
+        ...(input.expectedCurrentPick !== undefined
+          ? { currentPick: input.expectedCurrentPick }
+          : {}),
+        ...(input.expectedPickStartedAt !== undefined
+          ? { pickStartedAt: input.expectedPickStartedAt }
+          : {}),
+        ...(input.expectedPickDeadlineAt !== undefined
+          ? { pickDeadlineAt: input.expectedPickDeadlineAt }
+          : {}),
+        ...(input.expectedPausedRemainingSeconds !== undefined
+          ? { pausedRemainingSeconds: input.expectedPausedRemainingSeconds }
+          : {}),
+        ...(input.expectedClockDurationSeconds !== undefined
+          ? { clockDurationSeconds: input.expectedClockDurationSeconds }
+          : {}),
+      },
+      data: {
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.currentPick !== undefined ? { currentPick: input.currentPick } : {}),
+        ...(input.round !== undefined ? { round: input.round } : {}),
+        ...(input.direction !== undefined ? { direction: input.direction } : {}),
+        ...(input.startedAt !== undefined ? { startedAt: input.startedAt } : {}),
+        ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
+        pickStartedAt: input.pickStartedAt,
+        pickDeadlineAt: input.pickDeadlineAt,
+        pausedRemainingSeconds: input.pausedRemainingSeconds,
+        clockDurationSeconds: input.clockDurationSeconds,
+        schedulingVersion: { increment: 1 },
+      },
+    });
+
+    if (updated.count !== 1) {
+      return { count: updated.count, schedulingVersion, events: [] };
+    }
+
+    const events = await this.createDraftEvents(
+      tx,
+      input.events.map((event) => ({
+        draftId: input.draftId,
+        leagueId: input.leagueId,
+        ...event,
+        clockRevision: event.publishState ? schedulingVersion : null,
+      }))
+    );
+
+    return { count: updated.count, schedulingVersion, events };
   }
 
   async createDraftEvents(
@@ -490,11 +654,31 @@ export class DraftRepository {
       event: DraftCommandEventType;
       payload: DraftOutboxPayload;
       publishState: boolean;
+      clockRevision?: number | null;
     }>
   ): Promise<DraftOutboxEventRecord[]> {
+    if (input.length === 0) {
+      return [];
+    }
+
+    const [{ draftId, leagueId }] = input;
+    if (input.some((event) => event.draftId !== draftId || event.leagueId !== leagueId)) {
+      throw new Error('Draft events must be allocated for exactly one draft and league');
+    }
+
+    const sequencedDraft = await tx.draft.update({
+      where: { id: draftId },
+      data: { eventSequence: { increment: input.length } },
+      select: { leagueId: true, eventSequence: true },
+    });
+    if (sequencedDraft.leagueId !== leagueId) {
+      throw new Error('Draft event league does not match the persisted draft');
+    }
+
+    const firstSequence = sequencedDraft.eventSequence - input.length + 1;
     const created: DraftOutboxEventRecord[] = [];
 
-    for (const item of input) {
+    for (const [index, item] of input.entries()) {
       const event = await tx.draftEvent.create({
         data: {
           draftId: item.draftId,
@@ -502,6 +686,8 @@ export class DraftRepository {
           event: item.event,
           payload: item.payload ? JSON.stringify(item.payload) : null,
           publishState: item.publishState,
+          sequence: firstSequence + index,
+          clockRevision: item.clockRevision ?? null,
         },
       });
       created.push(toOutboxEventRecord(event));
@@ -517,10 +703,48 @@ export class DraftRepository {
 
     const events = await tx.draftEvent.findMany({
       where: { id: { in: eventIds } },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
 
     return events.map(toOutboxEventRecord);
+  }
+
+  async getDraftEventReplayWindow(
+    tx: TxClient,
+    input: {
+      draftId: string;
+      afterSequence: number;
+      throughSequence?: number;
+      limit: number;
+    }
+  ): Promise<DraftEventReplayWindow | null> {
+    const draft = await tx.draft.findUnique({
+      where: { id: input.draftId },
+      select: { leagueId: true, eventSequence: true },
+    });
+    if (!draft) {
+      return null;
+    }
+
+    const throughSequence = input.throughSequence ?? draft.eventSequence;
+    const events = await tx.draftEvent.findMany({
+      where: {
+        draftId: input.draftId,
+        sequence: {
+          gt: input.afterSequence,
+          lte: throughSequence,
+        },
+      },
+      orderBy: [{ sequence: 'asc' }, { id: 'asc' }],
+      take: input.limit + 1,
+    });
+
+    return {
+      leagueId: draft.leagueId,
+      currentHeadSequence: draft.eventSequence,
+      throughSequence,
+      events: events.map(toOutboxEventRecord),
+    };
   }
 
   async markDraftEventsPublished(tx: TxClient, eventIds: string[]): Promise<void> {
@@ -577,13 +801,25 @@ export class DraftRepository {
   }
 
   async listPendingDraftEvents(tx: TxClient, draftId: string): Promise<DraftOutboxEventRecord[]> {
+    const activeClaim = await tx.draftEvent.findFirst({
+      where: {
+        draftId,
+        publishedAt: null,
+        lockedAt: { not: null },
+      },
+      select: { id: true },
+    });
+    if (activeClaim) {
+      return [];
+    }
+
     const events = await tx.draftEvent.findMany({
       where: {
         draftId,
         publishedAt: null,
         lockedAt: null,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
 
     return events.map(toOutboxEventRecord);
@@ -593,12 +829,22 @@ export class DraftRepository {
     tx: TxClient,
     limit: number
   ): Promise<DraftOutboxEventRecord[]> {
+    const activeClaims = await tx.draftEvent.findMany({
+      where: {
+        publishedAt: null,
+        lockedAt: { not: null },
+      },
+      select: { draftId: true },
+      distinct: ['draftId'],
+    });
+    const blockedDraftIds = activeClaims.map((event) => event.draftId);
     const events = await tx.draftEvent.findMany({
       where: {
         publishedAt: null,
         lockedAt: null,
+        ...(blockedDraftIds.length > 0 ? { draftId: { notIn: blockedDraftIds } } : {}),
       },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       take: limit,
     });
 
@@ -647,7 +893,7 @@ export class DraftRepository {
         ...(input.draftId ? { draftId: input.draftId } : {}),
         ...(input.eventIds ? { id: { in: input.eventIds } } : {}),
       },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ sequence: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
 
     return events.map(toOutboxEventRecord);

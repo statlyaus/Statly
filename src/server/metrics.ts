@@ -104,6 +104,11 @@ export const METRICS = {
   pickFailures: 'socketio_pick_failures_total',
   leadershipAcquired: 'socketio_timer_leadership_acquired_total',
   leadershipLost: 'socketio_timer_leadership_lost_total',
+  draftClockConvergence: 'draft_clock_convergence_total',
+  draftOutboxFlushes: 'draft_outbox_flushes_total',
+  draftOutboxEvents: 'draft_outbox_events_total',
+  draftRealtimeStatePreparationRetries: 'draft_realtime_state_preparation_retries_total',
+  draftRealtimeV2Joins: 'draft_realtime_v2_joins_total',
 };
 
 // Optional histogram support (basic), with labeled series
@@ -185,3 +190,6 @@ export function renderHistograms(): string {
   }
   return lines.join('\n') + (lines.length ? '\n' : '');
 }
+
+registerHistogram('draft_realtime_v2_baseline_attempts', [1, 2, 3]);
+registerHistogram('draft_realtime_v2_replay_events', [0, 1, 5, 10, 25, 50, 100, 250]);

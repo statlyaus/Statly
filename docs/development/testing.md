@@ -12,18 +12,24 @@ npm run typecheck
 npm run test:unit
 npm run test:int
 npm run test:e2e
+npm run test:e2e:draft-worker
 npm run build
 ```
 
-`npm run test:all` runs lint, typecheck, unit, integration, and browser tests. CI exposes these
-boundaries as stable merge checks so a failure identifies its owning verification stage.
+`npm run test:all` runs lint, typecheck, unit, integration, and browser tests. Its integration stage
+includes the persisted 12-team, 22-player-roster, 264-pick draft convergence contract. CI exposes
+these boundaries as stable merge checks so a failure identifies its owning verification stage. The
+standard browser command excludes tests tagged `@draft-worker`; CI runs those separately with the real
+draft worker enabled.
 
 ## CI architecture
 
-The CI workflow has three explicit ownership boundaries:
+The CI workflow has four explicit ownership boundaries:
 
 - root jobs own documentation, root lint, root typecheck, unit/integration/browser tests, and the
   production build;
+- `Draft worker E2E` owns the isolated Chromium, Socket.IO, and BullMQ lifecycle against its own Redis
+  service and disposable SQLite database;
 - `Functions` owns its independent install, flat-ESLint config, typecheck, compiled smoke test, and
   build; and
 - `ETL` owns its independent install, Node/R static validation, typecheck, deterministic compiled
@@ -102,8 +108,12 @@ for cleanup.
 
 - Unit tests cover pure domain rules, normalization, read-model projection, and component behavior.
 - Integration tests cover Prisma/service boundaries with an isolated database and Redis where needed.
+  Full-scale draft persistence belongs here: the 12-team by 22-player, 264-pick contract exercises the
+  real `DraftApplicationService` and Prisma boundary without browser, dev-server, Redis, or retry noise.
 - Playwright tests cover direct load, navigation, hydration, responsive layout, authentication fixtures,
-  and end-to-end interactions.
+  and representative end-to-end interactions. Draft coverage uses a four-pick lifecycle for manual,
+  queued, fallback, completion, history, roster, and fresh-load behavior, plus a separately tagged real
+  worker clock lifecycle.
 - Focused architecture tests assert durable source-of-truth and safety rules that are cheaper and more
   reliable than prose review.
 
@@ -118,6 +128,16 @@ identifiers. Do not point it at a shared or production environment. Keep screens
 and reports in ignored output directories. The suite exercises the full flow in Chromium and a
 deliberately smaller smoke contract in Firefox and WebKit, so CI installs all three browsers; this is
 intentional cross-browser coverage rather than an unused browser download.
+
+`npm run test:e2e` keeps Socket.IO enabled, leaves the draft worker disabled, and excludes
+`@draft-worker` tests. The representative browser lifecycle intentionally stops at four picks: one
+manual pick, one queued auto-pick, one fallback auto-pick, and completion. The full 12-team by
+22-player, 264-pick contract runs through the persisted application boundary in integration tests so
+browser, dev-server, and SQLite transport pressure cannot masquerade as a product failure.
+
+Use `npm run test:e2e:draft-worker` for the real expiry-worker lifecycle; it requires an isolated Redis
+instance and a migrated disposable database. Never combine worker expiry with another progression
+authority against the same database or Redis namespace.
 
 For responsive changes, verify at least a phone viewport (390px) and the affected desktop layout.
 Realtime and routing changes also need direct-load/refresh evidence, not only client navigation.

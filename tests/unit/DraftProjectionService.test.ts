@@ -13,9 +13,7 @@ import { DraftProjectionService } from '@/server/draft/services/DraftProjectionS
 const prismaMock = vi.hoisted(() => ({
   draft: {
     findUnique: vi.fn(),
-  },
-  preDraftQueue: {
-    findMany: vi.fn(),
+    findFirst: vi.fn(),
   },
 }));
 
@@ -29,6 +27,139 @@ afterEach(() => {
 });
 
 describe('DraftProjectionService', () => {
+  it('builds a membership-scoped room snapshot with the persisted deadline and revision', async () => {
+    prismaMock.draft.findFirst.mockResolvedValue({
+      id: 'draft-1',
+      leagueId: 'league-1',
+      status: DraftStatus.LIVE,
+      currentPick: 1,
+      totalPicks: 22,
+      round: 1,
+      direction: DraftDirection.FORWARD,
+      schedulingVersion: 7,
+      eventSequence: 0,
+      lobbyStatus: null,
+      pickStartedAt: new Date('2026-06-14T12:00:00.000Z'),
+      pickDeadlineAt: new Date('2026-06-14T12:02:00.000Z'),
+      pausedRemainingSeconds: null,
+      clockDurationSeconds: 120,
+      league: {
+        name: 'Test AFL Champions League',
+        settings: {
+          pickSeconds: 120,
+          draftType: DraftType.SNAKE,
+        },
+      },
+      orders: [
+        {
+          slot: 1,
+          memberId: 'member-1',
+          member: {
+            userId: 'user-1',
+            role: LeagueRole.OWNER,
+            teamName: 'Robbo Rockers',
+            user: {
+              id: 'user-1',
+              displayName: 'Robert',
+              email: 'robert@example.com',
+            },
+          },
+        },
+      ],
+      picks: [],
+    });
+
+    const snapshot = await new DraftProjectionService().buildRoomSnapshot('draft-1', 'user-1');
+
+    expect(prismaMock.draft.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'draft-1',
+          league: {
+            members: {
+              some: { userId: 'user-1', isActive: true, status: 'ACTIVE' },
+            },
+          },
+        }),
+      })
+    );
+    expect(snapshot).toMatchObject({
+      schemaVersion: 1,
+      revision: 7,
+      state: {
+        status: 'LIVE',
+        onClockMemberId: 'member-1',
+        clock: {
+          status: 'LIVE',
+          revision: 7,
+          durationSeconds: 120,
+          startedAt: '2026-06-14T12:00:00.000Z',
+          deadlineAt: '2026-06-14T12:02:00.000Z',
+        },
+        participants: [{ id: 'member-1' }],
+      },
+    });
+    expect(prismaMock.draft.findFirst.mock.calls[0]?.[0]?.include).not.toHaveProperty(
+      'preDraftQueues'
+    );
+    expect(snapshot?.state.participants[0]).not.toHaveProperty('queue');
+  });
+
+  it('fails closed without mutating a live room snapshot that lacks persisted clock anchors', async () => {
+    const malformedDraft = {
+      id: 'draft-1',
+      leagueId: 'league-1',
+      status: DraftStatus.LIVE,
+      currentPick: 1,
+      totalPicks: 22,
+      round: 1,
+      direction: DraftDirection.FORWARD,
+      schedulingVersion: 7,
+      eventSequence: 0,
+      lobbyStatus: null,
+      pickStartedAt: null,
+      pickDeadlineAt: null,
+      pausedRemainingSeconds: null,
+      clockDurationSeconds: 120,
+      league: {
+        name: 'Test AFL Champions League',
+        settings: { pickSeconds: 120, draftType: DraftType.SNAKE },
+      },
+      orders: [
+        {
+          slot: 1,
+          memberId: 'member-1',
+          member: {
+            userId: 'user-1',
+            role: LeagueRole.OWNER,
+            teamName: 'Robbo Rockers',
+            user: {
+              id: 'user-1',
+              displayName: 'Robert',
+              email: 'robert@example.com',
+            },
+          },
+        },
+      ],
+      picks: [],
+    };
+    prismaMock.draft.findFirst.mockResolvedValue(malformedDraft);
+
+    await expect(
+      new DraftProjectionService().buildRoomSnapshot('draft-1', 'user-1')
+    ).rejects.toThrow('LIVE draft is missing its persisted clock anchors');
+    expect(prismaMock.draft.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('never mutates a draft clock before membership authorization succeeds', async () => {
+    prismaMock.draft.findFirst.mockResolvedValue(null);
+
+    await expect(
+      new DraftProjectionService().buildRoomSnapshot('draft-1', 'outsider')
+    ).resolves.toBeNull();
+    expect(prismaMock.draft.findFirst).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves draft identity metadata in legacy socket updates', async () => {
     prismaMock.draft.findUnique.mockResolvedValue({
       id: 'draft-1',
@@ -83,8 +214,7 @@ describe('DraftProjectionService', () => {
   it('projects paused drafts with paused remaining time instead of a stale expired deadline', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-14T12:00:00.000Z'));
-    prismaMock.preDraftQueue.findMany.mockResolvedValue([]);
-    prismaMock.draft.findUnique.mockResolvedValue({
+    prismaMock.draft.findFirst.mockResolvedValue({
       id: 'draft-1',
       leagueId: 'league-1',
       status: DraftStatus.PAUSED,
@@ -98,6 +228,9 @@ describe('DraftProjectionService', () => {
       pickStartedAt: null,
       pickDeadlineAt: null,
       pausedRemainingSeconds: 37,
+      clockDurationSeconds: 60,
+      schedulingVersion: 8,
+      eventSequence: 0,
       lobbyStatus: 'LIVE',
       league: {
         name: 'Test AFL Champions League',
@@ -148,6 +281,13 @@ describe('DraftProjectionService', () => {
     expect(state?.status).toBe('PAUSED');
     expect(state?.paused).toBe(true);
     expect(state?.timerSettings.pausedTimeRemaining).toBe(37);
-    expect(state?.currentPick.expiresAt.toISOString()).toBe('2026-06-14T12:00:37.000Z');
+    expect(state?.clock).toEqual({
+      status: 'PAUSED',
+      revision: 8,
+      durationSeconds: 60,
+      serverNow: '2026-06-14T12:00:00.000Z',
+      remainingSeconds: 37,
+    });
+    expect(state?.currentPick.expiresAt.toISOString()).toBe('2026-06-14T11:45:00.000Z');
   });
 });

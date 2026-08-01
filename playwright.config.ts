@@ -8,6 +8,8 @@ const firebaseProjectId = process.env.PLAYWRIGHT_FIREBASE_PROJECT_ID ?? 'statly-
 const useSocketWebServer =
   process.env.PLAYWRIGHT_WITH_SOCKET === 'true' ||
   (process.env.PLAYWRIGHT_WITH_SOCKET !== 'false' && !process.env.CI);
+const useDraftWorkerWebServer =
+  useSocketWebServer && process.env.PLAYWRIGHT_WITH_DRAFT_WORKER === 'true';
 
 const nextCommand = [
   'NODE_ENV=development',
@@ -37,21 +39,45 @@ const socketCommand = [
   'NODE_ENV=development',
   'STATLY_ENABLE_DEV_AUTH=true',
   'NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true',
+  'FIREBASE_ADMIN_DISABLED=true',
+  'SENTRY_DISABLED=true',
+  'NEXT_PUBLIC_SENTRY_DISABLED=true',
   `SOCKET_PORT=${socketPort}`,
   `SOCKET_IO_CORS_ORIGINS=${baseURL},http://localhost:${port}`,
   './node_modules/.bin/tsx -r dotenv/config ./src/server/socketioServer.ts',
 ].join(' ');
 
+const draftWorkerCommand = [
+  'NODE_ENV=development',
+  'STATLY_ENABLE_DEV_AUTH=true',
+  'NEXT_PUBLIC_STATLY_ENABLE_DEV_AUTH=true',
+  'FIREBASE_ADMIN_DISABLED=true',
+  'SENTRY_DISABLED=true',
+  'NEXT_PUBLIC_SENTRY_DISABLED=true',
+  './node_modules/.bin/tsx ./src/server/workers/enhancedDraftWorker.ts',
+].join(' ');
+
 const webServerCommand = useSocketWebServer
-  ? [
-      './node_modules/.bin/concurrently',
-      '-k',
-      '-s first',
-      '-n web,socket',
-      '-c blue,magenta',
-      `"${nextCommand}"`,
-      `"${socketCommand}"`,
-    ].join(' ')
+  ? useDraftWorkerWebServer
+    ? [
+        './node_modules/.bin/concurrently',
+        '-k',
+        '-s first',
+        '-n web,socket,draft-worker',
+        '-c blue,magenta,green',
+        `"${nextCommand}"`,
+        `"${socketCommand}"`,
+        `"${draftWorkerCommand}"`,
+      ].join(' ')
+    : [
+        './node_modules/.bin/concurrently',
+        '-k',
+        '-s first',
+        '-n web,socket',
+        '-c blue,magenta',
+        `"${nextCommand}"`,
+        `"${socketCommand}"`,
+      ].join(' ')
   : nextCommand;
 
 export default defineConfig({

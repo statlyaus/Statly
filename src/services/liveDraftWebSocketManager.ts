@@ -50,6 +50,10 @@ export class LiveDraftWebSocketManager {
     // Start cross-instance subscriber to rebroadcast incoming events
     void draftPubSub.start((msg) => {
       try {
+        // This legacy namespace remains v1-only. V2 delivery is owned by the authenticated root
+        // namespace so untrusted legacy handshake fields cannot opt a socket into canonical events.
+        if (msg.v !== 1) return;
+
         // Only handle events for which we have rooms (cheap filter)
         if (!this.draftRooms.has(msg.draftId)) return;
         this.io
@@ -393,16 +397,6 @@ export class LiveDraftWebSocketManager {
       });
     });
 
-    // Queue updates (non-critical, potentially frequent) - log errors but do not retry
-    getLiveDraftEngine().on(
-      'draft:queue-updated',
-      (draftId: string, userId: string, queue: string[]) => {
-        const payload = { userId, queue };
-        this.broadcastToDraft(draftId, 'draft:queue-updated', payload);
-        this.publishFireAndForget(draftId, 'draft:queue-updated', payload);
-      }
-    );
-
     logger.info('Draft engine event listeners configured');
   }
 
@@ -451,7 +445,6 @@ export class LiveDraftWebSocketManager {
         displayName: p.displayName,
         draftOrder: p.draftOrder,
         isOnline: p.isOnline,
-        queueSize: p.queue.length,
       })),
       settings: draft.draftSettings,
       timerSettings: draft.timerSettings,

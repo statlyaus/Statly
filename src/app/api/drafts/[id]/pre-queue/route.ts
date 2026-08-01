@@ -1,9 +1,15 @@
 import type { NextRequest } from 'next/server';
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import { updatePreDraftQueue, getPreDraftQueue } from '@/lib/draftLobby';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
-import { getDraftMembershipAccess } from '@/server/leagues/membership';
+import {
+  DraftPrivateStateAccessError,
+  draftPrivateStateService,
+} from '@/server/draft/services/DraftPrivateStateService';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface PreQueueRequest {
   queue: Array<{
@@ -13,21 +19,31 @@ interface PreQueueRequest {
   }>;
 }
 
-async function resolvePreQueueMember(
-  request: NextRequest,
-  draftId: string
-): Promise<{ memberId: string } | Response> {
-  const userId = await getAuthenticatedUserId(request);
-  if (!userId) {
+async function authenticate(request: NextRequest): Promise<string | Response> {
+  const actorUserId = await getAuthenticatedUserId(request);
+  if (!actorUserId) {
     return commonErrors.unauthorized('Authentication required');
   }
 
-  const access = await getDraftMembershipAccess(draftId, userId);
-  if (!access.isMember || !access.memberId) {
-    return commonErrors.forbidden('League membership required');
+  return actorUserId;
+}
+
+function privateResponse(data: unknown): Response {
+  const response = successResponse(data);
+  response.headers.set('Cache-Control', 'private, no-store');
+  return response;
+}
+
+function privateStateErrorResponse(error: unknown, operation: string, draftId: string): Response {
+  if (error instanceof DraftPrivateStateAccessError) {
+    return commonErrors.forbidden(error.message);
   }
 
-  return { memberId: access.memberId };
+  logger.error(`Failed to ${operation}`, {
+    draftId,
+    error: error instanceof Error ? error.message : String(error),
+  });
+  return errorResponse(`Failed to ${operation}`, 500);
 }
 
 /**
@@ -39,21 +55,16 @@ export async function GET(
 ): Promise<Response> {
   try {
     const { id: draftId } = await params;
-    const access = await resolvePreQueueMember(request, draftId);
-    if (access instanceof Response) {
-      return access;
+    const actorUserId = await authenticate(request);
+    if (actorUserId instanceof Response) {
+      return actorUserId;
     }
 
-    const queue = await getPreDraftQueue(draftId, access.memberId);
+    const queue = await draftPrivateStateService.getPreDraftQueue({ draftId, actorUserId });
 
-    return successResponse({ queue });
+    return privateResponse({ queue });
   } catch (error) {
-    logger.error('Failed to get pre-draft queue', {
-      draftId: (await params).id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
-    return errorResponse('Failed to get pre-draft queue', 500);
+    return privateStateErrorResponse(error, 'get pre-draft queue', (await params).id);
   }
 }
 
@@ -66,9 +77,9 @@ export async function PUT(
 ): Promise<Response> {
   try {
     const { id: draftId } = await params;
-    const access = await resolvePreQueueMember(request, draftId);
-    if (access instanceof Response) {
-      return access;
+    const actorUserId = await authenticate(request);
+    if (actorUserId instanceof Response) {
+      return actorUserId;
     }
 
     const body = (await request.json().catch(() => null)) as PreQueueRequest | null;
@@ -83,15 +94,14 @@ export async function PUT(
       }
     }
 
-    const updatedQueue = await updatePreDraftQueue(draftId, access.memberId, body.queue);
-
-    return successResponse({ queue: updatedQueue });
-  } catch (error) {
-    logger.error('Failed to update pre-draft queue', {
-      draftId: (await params).id,
-      error: error instanceof Error ? error.message : String(error),
+    const updatedQueue = await draftPrivateStateService.replacePreDraftQueue({
+      draftId,
+      actorUserId,
+      queue: body.queue,
     });
 
-    return errorResponse('Failed to update pre-draft queue', 500);
+    return privateResponse({ queue: updatedQueue });
+  } catch (error) {
+    return privateStateErrorResponse(error, 'update pre-draft queue', (await params).id);
   }
 }
