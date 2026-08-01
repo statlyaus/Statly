@@ -27,14 +27,14 @@ afterEach(() => {
 });
 
 describe('DraftProjectionService', () => {
-  it('builds a membership-scoped room snapshot with the persisted deadline and revision', async () => {
+  it('builds a membership-scoped linear room snapshot with persisted order and clock state', async () => {
     prismaMock.draft.findFirst.mockResolvedValue({
       id: 'draft-1',
       leagueId: 'league-1',
       status: DraftStatus.LIVE,
-      currentPick: 1,
+      currentPick: 3,
       totalPicks: 22,
-      round: 1,
+      round: 2,
       direction: DraftDirection.FORWARD,
       schedulingVersion: 7,
       eventSequence: 0,
@@ -47,7 +47,7 @@ describe('DraftProjectionService', () => {
         name: 'Test AFL Champions League',
         settings: {
           pickSeconds: 120,
-          draftType: DraftType.SNAKE,
+          draftType: DraftType.LINEAR,
         },
       },
       orders: [
@@ -62,6 +62,20 @@ describe('DraftProjectionService', () => {
               id: 'user-1',
               displayName: 'Robert',
               email: 'robert@example.com',
+            },
+          },
+        },
+        {
+          slot: 2,
+          memberId: 'member-2',
+          member: {
+            userId: 'user-2',
+            role: LeagueRole.MANAGER,
+            teamName: 'Second Team',
+            user: {
+              id: 'user-2',
+              displayName: 'Second Manager',
+              email: 'second@example.com',
             },
           },
         },
@@ -88,6 +102,7 @@ describe('DraftProjectionService', () => {
       revision: 7,
       state: {
         status: 'LIVE',
+        draftType: 'LINEAR',
         onClockMemberId: 'member-1',
         clock: {
           status: 'LIVE',
@@ -96,7 +111,7 @@ describe('DraftProjectionService', () => {
           startedAt: '2026-06-14T12:00:00.000Z',
           deadlineAt: '2026-06-14T12:02:00.000Z',
         },
-        participants: [{ id: 'member-1' }],
+        participants: [{ id: 'member-1' }, { id: 'member-2' }],
       },
     });
     expect(prismaMock.draft.findFirst.mock.calls[0]?.[0]?.include).not.toHaveProperty(

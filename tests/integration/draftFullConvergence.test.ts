@@ -146,13 +146,13 @@ async function seedFixture(): Promise<void> {
       })),
     });
 
-    await tx.preDraftQueue.create({
-      data: {
+    await tx.preDraftQueue.createMany({
+      data: [memberIds[0], memberIds[1]].map((memberId) => ({
         draftId: FIXTURE.draftId,
-        memberId: memberIds[0],
+        memberId,
         playerId: queuedPlayerId,
         rank: 1,
-      },
+      })),
     });
   });
 }

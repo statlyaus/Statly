@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 
 import Image from 'next/image';
-import { Clock3, Sparkles, User, Star, ChevronRight } from 'lucide-react';
+import { Clock3, Sparkles, User, Star } from 'lucide-react';
 
 import { getTeamLogo } from '@/lib/teamLogos';
 import { cn } from '@/lib/utils';
@@ -93,7 +93,7 @@ export default function PickFeed({
     }
 
     if (isWatchlistPick(pick)) {
-      return 'border-accent bg-accent/40';
+      return 'border-[color:var(--draft-broadcast-watchlist-border)] bg-[color:var(--draft-broadcast-watchlist-hit)]';
     }
 
     return 'border-border bg-card hover:bg-accent/50';
@@ -203,12 +203,7 @@ export default function PickFeed({
         </div>
 
         <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
-          <div>
-            <div className="text-xs font-medium text-card-foreground">Live rail</div>
-            <div className="text-[11px] text-muted-foreground">
-              {autoScroll ? 'Auto-scroll on new picks' : 'Manual scroll mode'}
-            </div>
-          </div>
+          <span className="text-xs font-medium text-card-foreground">Auto-scroll on new picks</span>
           <button
             type="button"
             onClick={() => setAutoScroll((value) => !value)}
@@ -216,8 +211,9 @@ export default function PickFeed({
               'inline-flex h-7 w-12 items-center rounded-full px-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               autoScroll ? 'bg-primary' : 'bg-muted'
             )}
-            aria-pressed={autoScroll}
-            aria-label="Toggle auto-scroll"
+            role="switch"
+            aria-checked={autoScroll}
+            aria-label="Auto-scroll on new picks"
           >
             <span
               className={cn(
@@ -249,6 +245,9 @@ export default function PickFeed({
             {filteredPicks.map((pick) => (
               <div
                 key={pick.id}
+                data-pick-state={
+                  isMyPick(pick) ? 'mine' : isWatchlistPick(pick) ? 'watchlist' : 'standard'
+                }
                 className={cn('rounded-lg border p-4 transition-colors', getPickCardClasses(pick))}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -280,19 +279,21 @@ export default function PickFeed({
                         )}
                         {isMyPick(pick) && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
-                            <User className="size-3" />
+                            <User className="size-3" aria-hidden="true" />
                             Mine
                           </span>
                         )}
                         {isWatchlistPick(pick) && !isMyPick(pick) && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground">
-                            <Star className="size-3" />
+                          <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--draft-broadcast-watchlist-border)] bg-[color:var(--draft-broadcast-watchlist-chip)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--draft-broadcast-watchlist-chip-text)]">
+                            <Star className="size-3" aria-hidden="true" />
                             Watchlist
                           </span>
                         )}
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">{getTeamName(pick.slot)}</span>
+                        <span className="font-medium text-foreground">
+                          {getTeamName(pick.slot)}
+                        </span>
                         <span>Round {pick.round}</span>
                         <span>{pick.player.club}</span>
                       </div>
@@ -310,15 +311,11 @@ export default function PickFeed({
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                <div className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
                   <span>
                     Slot {pick.slot}
                     <span className="mx-1.5 text-muted-foreground">/</span>
                     Pick {pick.overall}
-                  </span>
-                  <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                    View context
-                    <ChevronRight className="size-3.5" />
                   </span>
                 </div>
               </div>

@@ -5,18 +5,15 @@ import Image from 'next/image';
 
 import { CheckCircle2, Info, ListPlus, Star } from 'lucide-react';
 
+import Tooltip from '@/components/ui/Tooltip';
+import { getStatlyZPresentation, STATLY_Z_DESCRIPTION } from '@/lib/statlyZPresentation';
 import { cn } from '@/lib/utils';
 import { getTeamAbbreviation, getTeamLogo } from '@/lib/teamLogos';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 import type { DraftPlayer } from '@/types/draft';
 
 type PlayerGridSortKey =
-  | 'statlyZ'
-  | 'name'
-  | 'position'
-  | 'club'
-  | 'adp'
-  | `category:${FantasyCategoryKey}`;
+  'statlyZ' | 'name' | 'position' | 'club' | 'adp' | `category:${FantasyCategoryKey}`;
 
 interface PlayerGridProps {
   players: DraftPlayer[];
@@ -40,6 +37,7 @@ interface PlayerGridProps {
   statSeasons?: number[];
   onStatSeasonChange?: (season: number) => void;
   isLoading: boolean;
+  isQueueMutationPending?: boolean;
   emptyStateMessage?: string;
   className?: string;
 }
@@ -52,7 +50,6 @@ const FALLBACK_TABLE_VIEWPORT_HEIGHT = 680;
 const FALLBACK_VIRTUALIZED_ROW_HEIGHT = 112;
 const VIRTUALIZED_ROW_OVERSCAN = 6;
 const VIRTUALIZED_ROW_THRESHOLD = 120;
-const STATLY_Z_DESCRIPTION = "Combined Z score across this league's selected scoring categories.";
 const ACTION_BUTTON_BASE_CLASS =
   'inline-flex h-10 w-full justify-center items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 const ACTION_BUTTON_DISABLED_CLASS =
@@ -200,13 +197,23 @@ function getInjuryLabel(status: DraftPlayer['injuryStatus']): string {
 }
 
 function PlayerStatlyZCell({ player }: { player: DraftPlayer }): React.JSX.Element {
-  const statlyZScore = typeof player.statlyZScore === 'number' ? player.statlyZScore : null;
+  const statlyZ = getStatlyZPresentation(player);
 
   return (
     <td className="border-l border-border/60 px-4 py-4 text-center align-middle">
-      <span className="inline-flex min-w-16 justify-center text-lg font-semibold leading-none text-foreground tabular-nums">
-        {statlyZScore !== null ? statlyZScore.toFixed(2) : 'Pending'}
-      </span>
+      <div className="inline-flex min-w-16 flex-col items-center justify-center gap-1">
+        <span
+          className="text-lg font-semibold leading-none text-foreground tabular-nums"
+          aria-label={statlyZ.accessibleLabel}
+        >
+          {statlyZ.value}
+        </span>
+        {statlyZ.state === 'partial' && (
+          <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-medium uppercase text-muted-foreground">
+            Partial
+          </span>
+        )}
+      </div>
     </td>
   );
 }
@@ -250,6 +257,7 @@ interface PlayerRowActionsProps {
   isWatched: boolean;
   isQueued: boolean;
   isLoading: boolean;
+  isQueueMutationPending: boolean;
   isWatchlistPending: boolean;
   selectionInFlight: boolean;
   canMakePick: boolean;
@@ -264,6 +272,7 @@ function PlayerRowActions({
   isWatched,
   isQueued,
   isLoading,
+  isQueueMutationPending,
   isWatchlistPending,
   selectionInFlight,
   canMakePick,
@@ -274,7 +283,7 @@ function PlayerRowActions({
 }: PlayerRowActionsProps): React.JSX.Element {
   const actionDisabled = isLoading || selectionInFlight;
   const watchlistDisabled = isWatchlistPending;
-  const queueDisabled = actionDisabled || isQueued;
+  const queueDisabled = isQueueMutationPending || isQueued;
   const selectDisabled = !canMakePick || actionDisabled;
 
   return (
@@ -334,6 +343,7 @@ interface PlayerTableRowProps {
   isQueued: boolean;
   isWatched: boolean;
   isLoading: boolean;
+  isQueueMutationPending: boolean;
   isWatchlistPending: boolean;
   selectionInFlight: boolean;
   canMakePick: boolean;
@@ -355,6 +365,7 @@ function PlayerTableRow({
   isQueued,
   isWatched,
   isLoading,
+  isQueueMutationPending,
   isWatchlistPending,
   selectionInFlight,
   canMakePick,
@@ -402,6 +413,7 @@ function PlayerTableRow({
         isWatched={isWatched}
         isQueued={isQueued}
         isLoading={isLoading}
+        isQueueMutationPending={isQueueMutationPending}
         isWatchlistPending={isWatchlistPending}
         selectionInFlight={selectionInFlight}
         canMakePick={canMakePick}
@@ -627,6 +639,7 @@ interface PlayerGridTableProps {
   watchedIds: ReadonlySet<string>;
   pendingWatchlistIds: ReadonlySet<string>;
   isLoading: boolean;
+  isQueueMutationPending: boolean;
   selectionInFlight: boolean;
   canMakePick: boolean;
   pendingSelectionId: string | null;
@@ -656,6 +669,7 @@ function PlayerGridTable({
   watchedIds,
   pendingWatchlistIds,
   isLoading,
+  isQueueMutationPending,
   selectionInFlight,
   canMakePick,
   pendingSelectionId,
@@ -715,16 +729,31 @@ function PlayerGridTable({
                 aria-sort={sortBy === 'statlyZ' ? 'descending' : 'none'}
                 className="border-l border-border/70 px-3 py-3 text-center font-semibold"
               >
-                <button
-                  type="button"
-                  onClick={() => onSortChange('statlyZ')}
-                  className="mx-auto inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-semibold uppercase text-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  aria-label="Sort by Statly Z"
-                  title={STATLY_Z_DESCRIPTION}
-                >
-                  <span>Statly Z</span>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                </button>
+                <div className="flex items-center justify-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => onSortChange('statlyZ')}
+                    className="inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-semibold uppercase text-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-label="Sort by Statly Z"
+                  >
+                    Statly Z
+                  </button>
+                  <Tooltip
+                    content={STATLY_Z_DESCRIPTION}
+                    placement="bottom"
+                    size="sm"
+                    delay={150}
+                    contentClassName="leading-5"
+                  >
+                    <button
+                      type="button"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[color:var(--draft-broadcast-field)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      aria-label="About Statly Z"
+                    >
+                      <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </Tooltip>
+                </div>
               </th>
               <th
                 scope={visibleCategories.length > 0 ? 'colgroup' : 'col'}
@@ -793,6 +822,7 @@ function PlayerGridTable({
                   isWatched={watchedIds.has(player.id)}
                   isWatchlistPending={pendingWatchlistIds.has(player.id)}
                   isLoading={isLoading}
+                  isQueueMutationPending={isQueueMutationPending}
                   selectionInFlight={selectionInFlight}
                   canMakePick={canMakePick}
                   pendingSelectionId={pendingSelectionId}
@@ -856,6 +886,7 @@ export default function PlayerGrid({
   statSeasons,
   onStatSeasonChange,
   isLoading,
+  isQueueMutationPending = false,
   emptyStateMessage,
   className,
 }: PlayerGridProps): React.JSX.Element {
@@ -1133,6 +1164,7 @@ export default function PlayerGrid({
         watchedIds={watchedIds}
         pendingWatchlistIds={pendingWatchlistIds}
         isLoading={isLoading}
+        isQueueMutationPending={isQueueMutationPending}
         selectionInFlight={selectionInFlight}
         canMakePick={canMakePick}
         pendingSelectionId={pendingSelectionId}

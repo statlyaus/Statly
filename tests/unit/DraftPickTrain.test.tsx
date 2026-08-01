@@ -94,7 +94,7 @@ describe('DraftPickTrain', () => {
 });
 
 describe('toDraftPickTrainState', () => {
-  it('maps snake order, pick statuses, and user-next insertion across a round boundary', () => {
+  it('maps a bounded snake-order window without appending a distant user pick', () => {
     const participants = [
       {
         id: 'member-1',
@@ -146,6 +146,7 @@ describe('toDraftPickTrainState', () => {
       round: 2,
       direction: 'REVERSE',
       status: 'LIVE',
+      settings: { draftType: 'SNAKE' },
     } as DraftState;
     const picks = [
       {
@@ -176,12 +177,11 @@ describe('toDraftPickTrainState', () => {
       yourSlot: 1,
     });
 
-    expect(state.slots.map((slot) => slot.overall)).toEqual([6, 7, 8, 9, 10, 11, 12]);
-    expect(state.slots.map((slot) => slot.slot)).toEqual([6, 6, 5, 4, 3, 2, 1]);
+    expect(state.slots.map((slot) => slot.overall)).toEqual([6, 7, 8, 9, 10, 11]);
+    expect(state.slots.map((slot) => slot.slot)).toEqual([6, 6, 5, 4, 3, 2]);
     expect(state.slots.map((slot) => slot.status)).toEqual([
       'completed',
       'current',
-      'upcoming',
       'upcoming',
       'upcoming',
       'upcoming',
@@ -196,14 +196,7 @@ describe('toDraftPickTrainState', () => {
       teamName: 'Zeta FC',
       isUserPick: false,
     });
-    expect(state.slots[6]).toMatchObject({
-      overall: 12,
-      round: 2,
-      slot: 1,
-      isUserPick: true,
-      displayName: 'Alpha',
-      teamName: 'Alpha FC',
-    });
+    expect(state.slots.every((slot) => !slot.isUserPick)).toBe(true);
   });
 
   it('clamps completed drafts to the final pick and does not render a next user pick', () => {
@@ -230,6 +223,7 @@ describe('toDraftPickTrainState', () => {
       round: 2,
       direction: 'REVERSE',
       status: 'COMPLETED',
+      settings: { draftType: 'SNAKE' },
     } as DraftState;
     const picks = Array.from({ length: 4 }, (_, index) => ({
       id: `pick-${index + 1}`,
