@@ -50,6 +50,10 @@ export class LiveDraftWebSocketManager {
     // Start cross-instance subscriber to rebroadcast incoming events
     void draftPubSub.start((msg) => {
       try {
+        // This legacy namespace remains v1-only. V2 delivery is owned by the authenticated root
+        // namespace so untrusted legacy handshake fields cannot opt a socket into canonical events.
+        if (msg.v !== 1) return;
+
         // Only handle events for which we have rooms (cheap filter)
         if (!this.draftRooms.has(msg.draftId)) return;
         this.io

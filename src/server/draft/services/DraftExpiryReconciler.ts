@@ -1,7 +1,7 @@
 import { logger } from '@/lib/logger';
 
-import { draftRepository, type LiveDraftPickExpirySchedule } from '../repository/DraftRepository';
-import { draftScheduler } from './DraftScheduler';
+import { draftRepository } from '../repository/DraftRepository';
+import { draftClockCoordinator } from './DraftClockCoordinator';
 
 export type DraftExpiryReconciliationResult = {
   scheduledCount: number;
@@ -28,54 +28,14 @@ function summarize(outcomes: ReconciliationOutcome[]): DraftExpiryReconciliation
  * recreate an obsolete timer from stale event data.
  */
 export class DraftExpiryReconciler {
-  private async reconcileSchedule(
-    schedule: LiveDraftPickExpirySchedule
-  ): Promise<ReconciliationOutcome> {
-    let pickDeadlineAt = schedule.pickDeadlineAt;
-    let schedulingVersion = schedule.schedulingVersion;
-    let repaired = false;
-
-    if (!pickDeadlineAt) {
-      const pickStartedAt = schedule.pickStartedAt ?? schedule.startedAt ?? new Date();
-      const repairedPickDeadlineAt = new Date(
-        pickStartedAt.getTime() + schedule.pickSeconds * 1000
-      );
-      const updated = await draftRepository.transaction((tx) =>
-        draftRepository.repairMissingLiveDraftPickDeadline(tx, {
-          draftId: schedule.draftId,
-          currentSchedulingVersion: schedule.schedulingVersion,
-          pickStartedAt,
-          pickDeadlineAt: repairedPickDeadlineAt,
-        })
-      );
-
-      if (updated.count !== 1) {
-        logger.warn('Skipped live draft timer repair because draft state changed', {
-          draftId: schedule.draftId,
-        });
-        return 'skipped';
-      }
-
-      repaired = true;
-      schedulingVersion += 1;
-      pickDeadlineAt = repairedPickDeadlineAt;
-    }
-
-    await draftScheduler.schedulePickExpiry({
-      draftId: schedule.draftId,
-      leagueId: schedule.leagueId,
-      schedulingVersion,
-      pickDeadlineAt,
-    });
-
-    return repaired ? 'repaired' : 'scheduled';
+  private async reconcileDraftSchedule(draftId: string): Promise<ReconciliationOutcome> {
+    const { receipt, repaired } = await draftClockCoordinator.ensureReady(draftId);
+    if (repaired) return 'repaired';
+    return receipt ? 'scheduled' : 'skipped';
   }
 
   async reconcileDraft(draftId: string): Promise<DraftExpiryReconciliationResult> {
-    const schedule = await draftRepository.transaction((tx) =>
-      draftRepository.getLiveDraftPickExpirySchedule(tx, draftId)
-    );
-    const result = summarize(schedule ? [await this.reconcileSchedule(schedule)] : ['skipped']);
+    const result = summarize([await this.reconcileDraftSchedule(draftId)]);
 
     logger.info('Reconciled draft pick expiry job', { draftId, ...result });
     return result;
@@ -88,7 +48,7 @@ export class DraftExpiryReconciler {
     const outcomes: ReconciliationOutcome[] = [];
 
     for (const schedule of schedules) {
-      outcomes.push(await this.reconcileSchedule(schedule));
+      outcomes.push(await this.reconcileDraftSchedule(schedule.draftId));
     }
 
     const result = summarize(outcomes);

@@ -60,6 +60,24 @@ function mapDraftStatus(status: DraftStatus, lobbyStatus: string | null): LiveDr
   return 'SCHEDULED';
 }
 
+function resolveProjectedClockDuration(input: {
+  status: DraftStatus;
+  clockDurationSeconds: number | null;
+  fallbackSeconds: number;
+}): number {
+  if (
+    input.clockDurationSeconds &&
+    Number.isInteger(input.clockDurationSeconds) &&
+    input.clockDurationSeconds > 0
+  ) {
+    return input.clockDurationSeconds;
+  }
+  if (input.status === DraftStatus.LIVE) {
+    throw new Error('LIVE draft is missing its immutable clock duration');
+  }
+  return input.fallbackSeconds;
+}
+
 export function buildDraftClockPayload(input: {
   status: DraftStatus;
   lobbyStatus: string | null;
@@ -71,6 +89,9 @@ export function buildDraftClockPayload(input: {
   pausedRemainingSeconds: number | null;
 }): DraftClockPayload {
   const status = mapDraftStatus(input.status, input.lobbyStatus);
+  if (!Number.isInteger(input.durationSeconds) || input.durationSeconds <= 0) {
+    throw new Error('Draft clock is missing its immutable duration');
+  }
   const base = {
     revision: input.revision,
     durationSeconds: input.durationSeconds,
@@ -108,79 +129,83 @@ export function buildDraftClockPayload(input: {
 export class DraftProjectionService {
   async buildRoomSnapshot(
     draftId: string,
-    authenticatedUserId: string
+    authenticatedUserId: string,
+    expectedStateRevision?: number
   ): Promise<DraftRoomSnapshotPayload | null> {
-    // A pre-read boundary makes snapshot-then-backfill lossless: changes racing this read may be
-    // duplicated in the backfill, but cannot fall into a gap between the two operations.
-    const snapshotBoundary = new Date().toISOString();
-    const draft = await prisma.draft.findFirst({
-      where: {
-        id: draftId,
-        league: {
-          members: {
-            some: {
-              userId: authenticatedUserId,
-              isActive: true,
-              status: 'ACTIVE',
+    const loadDraft = () =>
+      prisma.draft.findFirst({
+        where: {
+          id: draftId,
+          ...(expectedStateRevision !== undefined
+            ? { schedulingVersion: expectedStateRevision }
+            : {}),
+          league: {
+            members: {
+              some: {
+                userId: authenticatedUserId,
+                isActive: true,
+                status: 'ACTIVE',
+              },
             },
           },
         },
-      },
-      include: {
-        league: {
-          include: {
-            settings: true,
+        include: {
+          league: {
+            include: {
+              settings: true,
+            },
           },
-        },
-        orders: {
-          orderBy: { slot: 'asc' },
-          include: {
-            member: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    email: true,
+          orders: {
+            orderBy: { slot: 'asc' },
+            include: {
+              member: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      displayName: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          picks: {
+            orderBy: { overall: 'asc' },
+            include: {
+              player: {
+                select: {
+                  id: true,
+                  name: true,
+                  position: true,
+                  club: true,
+                },
+              },
+              member: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      displayName: true,
+                      email: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-        picks: {
-          orderBy: { overall: 'asc' },
-          include: {
-            player: {
-              select: {
-                id: true,
-                name: true,
-                position: true,
-                club: true,
-              },
-            },
-            member: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    email: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
+      });
+
+    const draft = await loadDraft();
 
     if (!draft?.league.settings) {
       return null;
     }
 
     const status = mapDraftStatus(draft.status, draft.lobbyStatus);
-    const serverNow = snapshotBoundary;
+    const serverNow = new Date().toISOString();
 
     const turnParticipants = draft.orders.map((order) => ({
       userId: order.member.userId,
@@ -201,7 +226,11 @@ export class DraftProjectionService {
       status: draft.status,
       lobbyStatus: draft.lobbyStatus,
       revision: draft.schedulingVersion,
-      durationSeconds: draft.league.settings.pickSeconds,
+      durationSeconds: resolveProjectedClockDuration({
+        status: draft.status,
+        clockDurationSeconds: draft.clockDurationSeconds,
+        fallbackSeconds: draft.league.settings.pickSeconds,
+      }),
       serverNow,
       pickStartedAt: draft.pickStartedAt,
       pickDeadlineAt: draft.pickDeadlineAt,
@@ -213,6 +242,7 @@ export class DraftProjectionService {
       draftId: draft.id,
       leagueId: draft.leagueId,
       revision: draft.schedulingVersion,
+      throughSequence: draft.eventSequence,
       serverNow,
       state: {
         name: `${draft.league.name || 'Draft'} - ${draft.status}`,
@@ -254,57 +284,68 @@ export class DraftProjectionService {
     });
   }
 
-  async buildAuthoritativeDraftState(draftId: string): Promise<CanonicalLiveDraftState | null> {
-    const draft = await prisma.draft.findUnique({
-      where: { id: draftId },
-      include: {
-        league: {
-          include: {
-            settings: true,
-          },
+  async buildAuthoritativeDraftState(
+    draftId: string,
+    expectedStateRevision?: number
+  ): Promise<CanonicalLiveDraftState | null> {
+    const loadDraft = () =>
+      prisma.draft.findFirst({
+        where: {
+          id: draftId,
+          ...(expectedStateRevision !== undefined
+            ? { schedulingVersion: expectedStateRevision }
+            : {}),
         },
-        orders: {
-          orderBy: { slot: 'asc' },
-          include: {
-            member: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    email: true,
+        include: {
+          league: {
+            include: {
+              settings: true,
+            },
+          },
+          orders: {
+            orderBy: { slot: 'asc' },
+            include: {
+              member: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      displayName: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          picks: {
+            orderBy: { overall: 'asc' },
+            include: {
+              player: {
+                select: {
+                  id: true,
+                  name: true,
+                  position: true,
+                  club: true,
+                },
+              },
+              member: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      displayName: true,
+                      email: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-        picks: {
-          orderBy: { overall: 'asc' },
-          include: {
-            player: {
-              select: {
-                id: true,
-                name: true,
-                position: true,
-                club: true,
-              },
-            },
-            member: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    email: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
+      });
+
+    const draft = await loadDraft();
 
     if (!draft?.league?.settings) {
       return null;
@@ -325,7 +366,11 @@ export class DraftProjectionService {
     const draftType = draft.league.settings.draftType ?? DraftType.SNAKE;
     const turn = calculateDraftTurn(draftType, safePickNumber, participants);
     const timerAnchor = draft.pickStartedAt ?? draft.startedAt ?? draft.createdAt;
-    const pickTimeLimit = draft.league.settings.pickSeconds;
+    const pickTimeLimit = resolveProjectedClockDuration({
+      status: draft.status,
+      clockDurationSeconds: draft.clockDurationSeconds,
+      fallbackSeconds: draft.league.settings.pickSeconds,
+    });
     const pausedTimeRemaining =
       draft.status === DraftStatus.PAUSED
         ? (draft.pausedRemainingSeconds ?? pickTimeLimit)
@@ -345,6 +390,7 @@ export class DraftProjectionService {
     return {
       leagueId: draft.leagueId,
       draftId: draft.id,
+      throughSequence: draft.eventSequence,
       clock,
       status: mapDraftStatus(draft.status, draft.lobbyStatus),
       currentPick: {

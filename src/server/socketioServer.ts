@@ -24,21 +24,35 @@ import {
   observeHistogram,
   renderHistograms,
 } from '@/server/metrics';
-import { draftProjectionService } from '@/server/draft/services/DraftProjectionService';
+import {
+  DraftReadAccessError,
+  draftAuthorizedReadService,
+} from '@/server/draft/services/DraftAuthorizedReadService';
+import {
+  toDraftBackfillDelta,
+  type DraftRealtimeDelta,
+} from '@/server/draft/services/DraftRealtimeDelta';
 import { draftRealtimeDispatcher } from '@/server/draft/services/DraftRealtimeDispatcher';
 import { draftRealtimePublisher } from '@/server/draft/services/DraftRealtimePublisher';
+import {
+  DraftRealtimeJoinRequestSchema,
+  DraftRealtimeJoinV2RequestSchema,
+  DraftRealtimeLeaveV2RequestSchema,
+  selectDraftRealtimeProtocol,
+  type DraftRealtimeJoinAck,
+} from '@/services/realtime/draftRealtimeV2';
 import { flushSocialOutboxBatch } from '@/server/leagues/social/socialPublisher';
 import {
   attachLeagueSocialSocketHandlers,
   startLeagueSocialRealtime,
 } from '@/server/leagues/social/socialSocket';
 import { draftRoomStore } from '@/server/roomStore';
+import { DraftSocketV2Session } from '@/server/realtime/DraftSocketV2Session';
 import {
   installSocketRedisAdapter,
   type SocketRedisAdapterLifecycle,
 } from '@/server/socketRedisAdapter';
 import { getRedisConnection, ScalableRedisConnection } from '@/server/realtime/scalableConnection';
-import { DraftClockPayloadSchema } from '@/services/realtime/draftStateWire';
 
 // Validate configuration before starting
 try {
@@ -140,128 +154,34 @@ async function flushDraftOutboxBatch(): Promise<void> {
   }
 }
 
-type DraftDelta = {
-  type: 'SNAPSHOT' | 'PICK_MADE' | 'PLAYER_REMOVED' | 'PLAYER_ADDED' | 'STATE_PATCH';
-  payload: unknown;
-  ts?: number;
-  revision?: number;
-};
-
 type SocketMiddlewareNext = (err?: Error) => void;
+type DraftRealtimeJoinAckCallback = (response: DraftRealtimeJoinAck) => void;
 
-function parseDraftEventPayload(payload: string | null): unknown {
-  if (!payload) {
-    return {};
-  }
+async function getDeltasSince(draftId: string, since: number): Promise<DraftRealtimeDelta[]> {
+  const deltas: DraftRealtimeDelta[] = [];
+  const boundary = new Date(Number.isFinite(since) ? since : 0);
+  const pageSize = 100;
+  let cursorId: string | undefined;
 
-  try {
-    return JSON.parse(payload);
-  } catch (error) {
-    logger.warn('Failed to parse persisted draft event payload', {
-      error: error instanceof Error ? error.message : String(error),
+  while (true) {
+    const events = await prisma.draftEvent.findMany({
+      where: { draftId, createdAt: { gte: boundary } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: pageSize,
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
     });
-    return {};
+
+    for (const event of events) {
+      const delta = toDraftBackfillDelta(event);
+      if (delta) deltas.push(delta);
+    }
+
+    if (events.length < pageSize) break;
+    cursorId = events.at(-1)?.id;
+    if (!cursorId) break;
   }
-}
 
-function toBackfillDelta(event: {
-  event: string;
-  payload: string | null;
-  createdAt: Date;
-}): DraftDelta | null {
-  const payload = parseDraftEventPayload(event.payload);
-  const payloadRecord =
-    payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
-  const schedulingVersion = Number(payloadRecord.schedulingVersion);
-  const revision =
-    Number.isInteger(schedulingVersion) && schedulingVersion >= 0 ? schedulingVersion : undefined;
-  const ts = event.createdAt.getTime();
-
-  const buildLifecycleDelta = (status: 'LIVE' | 'PAUSED'): DraftDelta | null => {
-    const clockResult = DraftClockPayloadSchema.safeParse(
-      status === 'LIVE'
-        ? {
-            status,
-            revision: schedulingVersion,
-            durationSeconds: payloadRecord.durationSeconds,
-            serverNow: payloadRecord.serverNow,
-            startedAt: payloadRecord.pickStartedAt,
-            deadlineAt: payloadRecord.pickDeadlineAt,
-          }
-        : {
-            status,
-            revision: schedulingVersion,
-            durationSeconds: payloadRecord.durationSeconds,
-            serverNow: payloadRecord.serverNow,
-            remainingSeconds: payloadRecord.pausedRemainingSeconds,
-          }
-    );
-    if (!clockResult.success) return null;
-
-    return {
-      type: 'STATE_PATCH',
-      payload: {
-        draft: {
-          status,
-          pickDeadlineAt: clockResult.data.status === 'LIVE' ? clockResult.data.deadlineAt : null,
-        },
-        liveState: {
-          clock: clockResult.data,
-          revision: clockResult.data.revision,
-        },
-      },
-      ts: Date.parse(clockResult.data.serverNow),
-      revision: clockResult.data.revision,
-    };
-  };
-
-  switch (event.event) {
-    case 'draft:pick-made':
-    case 'draft:auto-pick':
-      return {
-        type: 'PICK_MADE',
-        payload: { pick: payload },
-        ts,
-        revision,
-      };
-    case 'draft:paused':
-      return (
-        buildLifecycleDelta('PAUSED') ?? {
-          type: 'STATE_PATCH',
-          payload: { draft: { status: 'PAUSED' } },
-          ts,
-        }
-      );
-    case 'draft:resumed':
-      return (
-        buildLifecycleDelta('LIVE') ?? {
-          type: 'STATE_PATCH',
-          payload: { draft: { status: 'LIVE' } },
-          ts,
-        }
-      );
-    case 'draft:completed':
-      return {
-        type: 'STATE_PATCH',
-        payload: { draft: { status: 'COMPLETED' } },
-        ts,
-      };
-    default:
-      return null;
-  }
-}
-
-async function getDeltasSince(draftId: string, since: number): Promise<DraftDelta[]> {
-  const events = await prisma.draftEvent.findMany({
-    where: { draftId, createdAt: { gt: new Date(since) } },
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    take: 100,
-  });
-
-  return events.flatMap((event) => {
-    const delta = toBackfillDelta(event);
-    return delta ? [delta] : [];
-  });
+  return deltas;
 }
 
 // Express app to serve health and potential aux endpoints
@@ -448,20 +368,29 @@ attachLeagueSocialSocketHandlers(io);
 
 draftRealtimeDispatcher.attachSocketServer(io);
 
-void (async () => {
+const draftOutboxDrainIntervalMs = Number(process.env.DRAFT_OUTBOX_DRAIN_INTERVAL_MS || 5000);
+const ensureDraftRealtimeSubscription = async (): Promise<void> => {
   try {
     await draftRealtimeDispatcher.startSubscription();
-    await flushDraftOutboxBatch();
-    setInterval(
-      () => {
-        void flushDraftOutboxBatch();
-      },
-      Number(process.env.DRAFT_OUTBOX_DRAIN_INTERVAL_MS || 5000)
-    );
-  } catch (e) {
-    logger.error('❌ Failed to start draft realtime dispatcher', { error: (e as Error).message });
+  } catch (error) {
+    logger.error('❌ Failed to start draft realtime dispatcher', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
-})();
+};
+const drainDraftOutbox = async (): Promise<void> => {
+  try {
+    await flushDraftOutboxBatch();
+  } catch (error) {
+    logger.error('Failed to drain draft realtime outbox', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+void ensureDraftRealtimeSubscription();
+setInterval(() => void ensureDraftRealtimeSubscription(), draftOutboxDrainIntervalMs);
+void drainDraftOutbox();
+setInterval(() => void drainDraftOutbox(), draftOutboxDrainIntervalMs);
 
 const socialRealtimeReady = startLeagueSocialRealtime(io);
 const drainSocialOutbox = async (): Promise<void> => {
@@ -484,6 +413,11 @@ setInterval(
 
 // Handle draft connections with enhanced error handling
 io.on('connection', (socket) => {
+  const draftSocketV2Session = new DraftSocketV2Session({
+    socket,
+    authenticatedUserId: String(socket.data.userId),
+  });
+
   incCounter(METRICS.connections);
   logger.info('✅ User connected', {
     socketId: socket.id,
@@ -501,29 +435,129 @@ io.on('connection', (socket) => {
     });
   });
 
+  const removeDraftSubscription = async (draftId: string): Promise<number> => {
+    const results = await Promise.allSettled([
+      socket.leave(draftId),
+      socket.leave(`draft:${draftId}`),
+      draftRoomStore.removeParticipant(draftId, socket.id),
+    ]);
+
+    if (socket.data.draftId === draftId) {
+      delete socket.data.draftId;
+      delete socket.data.joinedAt;
+      delete socket.data.draftRealtimeProtocol;
+    }
+
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') {
+      throw failure.reason;
+    }
+
+    const participantResult = results[2];
+    return participantResult?.status === 'fulfilled' ? participantResult.value : 0;
+  };
+
   // Join draft room with enhanced validation
-  const joinDraftRoom = async (data: {
-    draftId: string;
-    userId?: string;
-    memberId?: string;
-    displayName?: string;
-    authToken?: string;
-  }) => {
-    const { draftId } = data;
+  const joinDraftRoom = async (data: unknown, acknowledge?: DraftRealtimeJoinAckCallback) => {
+    const request = DraftRealtimeJoinRequestSchema.safeParse(data);
+    const requestDraftId =
+      typeof data === 'object' && data !== null && 'draftId' in data
+        ? String(data.draftId ?? '')
+        : '';
     const startJoin = Date.now();
     let acceptedDraftId: string | null = null;
+    let acknowledged = false;
+
+    const reply = (response: DraftRealtimeJoinAck): void => {
+      if (acknowledged) return;
+      acknowledged = true;
+      acknowledge?.(response);
+    };
+
+    if (!request.success) {
+      reply({
+        ok: false,
+        draftId: requestDraftId,
+        code: 'INVALID_REQUEST',
+        message: 'Invalid draft join request',
+        retryable: false,
+      });
+      socket.emit('draft:error', {
+        error: 'Invalid draftId',
+        code: 'INVALID_REQUEST',
+        timestamp: new Date().toISOString(),
+      });
+      observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+        outcome: 'invalid_request',
+      });
+      return;
+    }
+
+    const { draftId, realtimeProtocols } = request.data;
+    const selectedProtocol = selectDraftRealtimeProtocol(realtimeProtocols, [2, 1]);
+    if (selectedProtocol === null) {
+      reply({
+        ok: false,
+        draftId,
+        code: 'UNSUPPORTED_PROTOCOL',
+        message: 'No mutually supported draft realtime protocol',
+        retryable: false,
+      });
+      socket.emit('draft:error', {
+        error: 'Unsupported draft realtime protocol',
+        code: 'UNSUPPORTED_PROTOCOL',
+        timestamp: new Date().toISOString(),
+      });
+      observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+        outcome: 'unsupported_protocol',
+      });
+      return;
+    }
 
     try {
-      // Validate input
-      if (!draftId || typeof draftId !== 'string') {
-        throw new Error('Invalid draftId');
-      }
-
       const authenticatedUserId =
         typeof socket.data.userId === 'string' ? socket.data.userId : undefined;
       if (!authenticatedUserId) {
-        throw new Error('Authentication required');
+        reply({
+          ok: false,
+          draftId,
+          code: 'UNAUTHENTICATED',
+          message: 'Authentication required',
+          retryable: false,
+        });
+        socket.emit('draft:error', {
+          error: 'Authentication required',
+          code: 'UNAUTHENTICATED',
+          timestamp: new Date().toISOString(),
+        });
+        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+          outcome: 'unauthenticated',
+        });
+        return;
       }
+
+      if (selectedProtocol === 2) {
+        const v2Request = DraftRealtimeJoinV2RequestSchema.safeParse({
+          draftId,
+          generation: request.data.generation,
+        });
+        if (!v2Request.success) {
+          reply({
+            ok: false,
+            draftId,
+            code: 'INVALID_REQUEST',
+            message: 'A positive generation is required for draft realtime v2',
+            retryable: false,
+          });
+          return;
+        }
+        await draftSocketV2Session.join(v2Request.data, reply);
+        return;
+      }
+
+      // Complete any pending v2 rollback before the v1 fallback reserves the same socket.
+      // Otherwise a superseded v2 join can remove the participant established below.
+      await draftSocketV2Session.abandon();
 
       logger.info('👤 User joining draft', {
         socketId: socket.id,
@@ -533,8 +567,18 @@ io.on('connection', (socket) => {
       });
 
       // Authorize against durable league membership before creating or mutating any room state.
-      const snapshot = await draftProjectionService.buildRoomSnapshot(draftId, authenticatedUserId);
-      if (!snapshot) {
+      const authorizationSnapshot = await draftAuthorizedReadService.buildRoomSnapshot(
+        draftId,
+        authenticatedUserId
+      );
+      if (!authorizationSnapshot) {
+        reply({
+          ok: false,
+          draftId,
+          code: 'FORBIDDEN',
+          message: 'You do not have access to this draft',
+          retryable: false,
+        });
         socket.emit('draft:error', {
           error: 'You do not have access to this draft',
           code: 'FORBIDDEN',
@@ -555,6 +599,13 @@ io.on('connection', (socket) => {
       );
 
       if (!participantResult.accepted) {
+        reply({
+          ok: false,
+          draftId,
+          code: 'ROOM_FULL',
+          message: 'Draft room is full',
+          retryable: true,
+        });
         socket.emit('draft:error', {
           error: 'Draft room is full',
           code: 'ROOM_FULL',
@@ -570,13 +621,52 @@ io.on('connection', (socket) => {
       const participantCount = participantResult.count;
       incCounter(METRICS.joins);
 
+      const previousDraftId =
+        typeof socket.data.draftId === 'string' ? socket.data.draftId : undefined;
+      if (previousDraftId && previousDraftId !== draftId) {
+        const previousParticipantCount = await removeDraftSubscription(previousDraftId);
+        socket.to(previousDraftId).emit('participant:leave', {
+          socketId: socket.id,
+          timestamp: new Date().toISOString(),
+          participantCount: previousParticipantCount,
+        });
+      }
+
       // Join the room
       await socket.join(draftId);
       await socket.join(`draft:${draftId}`);
 
+      // Read the canonical baseline after subscription. A transition racing this read is either in
+      // the snapshot or delivered live; client revision guards prevent an older snapshot rollback.
+      const snapshot = await draftAuthorizedReadService.buildRoomSnapshot(
+        draftId,
+        authenticatedUserId
+      );
+      if (!snapshot) {
+        await removeDraftSubscription(draftId);
+        acceptedDraftId = null;
+        reply({
+          ok: false,
+          draftId,
+          code: 'FORBIDDEN',
+          message: 'You do not have access to this draft',
+          retryable: false,
+        });
+        socket.emit('draft:error', {
+          error: 'You do not have access to this draft',
+          code: 'FORBIDDEN',
+          timestamp: new Date().toISOString(),
+        });
+        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+          outcome: 'forbidden',
+        });
+        return;
+      }
+
       // Store user info in socket data
       socket.data.draftId = draftId;
       socket.data.joinedAt = new Date();
+      socket.data.draftRealtimeProtocol = selectedProtocol;
 
       const authorizedParticipant = snapshot.state.participants.find(
         (participant) => participant.userId === authenticatedUserId
@@ -615,10 +705,11 @@ io.on('connection', (socket) => {
       observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
         outcome: 'ok',
       });
+      reply({ ok: true, draftId, protocol: 1 });
     } catch (error) {
       if (acceptedDraftId) {
         try {
-          await draftRoomStore.removeParticipant(acceptedDraftId, socket.id);
+          await removeDraftSubscription(acceptedDraftId);
         } catch (cleanupError) {
           logger.warn('Failed to clean up participant after draft join error', {
             socketId: socket.id,
@@ -626,6 +717,25 @@ io.on('connection', (socket) => {
             error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
           });
         }
+      }
+
+      if (error instanceof DraftReadAccessError) {
+        observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
+          outcome: 'forbidden',
+        });
+        reply({
+          ok: false,
+          draftId,
+          code: 'FORBIDDEN',
+          message: 'You do not have access to this draft',
+          retryable: false,
+        });
+        socket.emit('draft:error', {
+          error: 'You do not have access to this draft',
+          code: 'FORBIDDEN',
+          timestamp: new Date().toISOString(),
+        });
+        return;
       }
 
       logger.error('❌ Error joining draft', {
@@ -637,6 +747,13 @@ io.on('connection', (socket) => {
       observeHistogram('socketio_join_duration_seconds', (Date.now() - startJoin) / 1000, {
         outcome: 'error',
       });
+      reply({
+        ok: false,
+        draftId,
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to join draft',
+        retryable: true,
+      });
       socket.emit('draft:error', {
         error: 'Failed to join draft',
         details: error instanceof Error ? error.message : 'Unknown error',
@@ -647,6 +764,45 @@ io.on('connection', (socket) => {
 
   socket.on('join:draft', joinDraftRoom);
   socket.on('draft:join', joinDraftRoom);
+  socket.on('draft:join:v2', async (data: unknown, acknowledge?: DraftRealtimeJoinAckCallback) => {
+    const request = DraftRealtimeJoinV2RequestSchema.safeParse(data);
+    if (!request.success) {
+      acknowledge?.({
+        ok: false,
+        draftId:
+          typeof data === 'object' && data !== null && 'draftId' in data
+            ? String(data.draftId ?? '')
+            : '',
+        code: 'INVALID_REQUEST',
+        message: 'Invalid draft realtime v2 join request',
+        retryable: false,
+      });
+      return;
+    }
+
+    try {
+      await draftSocketV2Session.join(request.data, acknowledge ?? (() => undefined));
+    } catch (error) {
+      logger.error('Unhandled draft v2 join failure', {
+        socketId: socket.id,
+        draftId: request.data.draftId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+  socket.on('draft:leave:v2', async (data: unknown) => {
+    const request = DraftRealtimeLeaveV2RequestSchema.safeParse(data);
+    if (!request.success) return;
+    try {
+      await draftSocketV2Session.leave(request.data);
+    } catch (error) {
+      logger.error('Unhandled draft v2 leave failure', {
+        socketId: socket.id,
+        draftId: request.data.draftId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
 
   socket.on('draft:backfill', async ({ draftId, since }) => {
     try {
@@ -674,10 +830,7 @@ io.on('connection', (socket) => {
     try {
       logger.info('👋 User leaving draft', { socketId: socket.id, draftId });
 
-      await socket.leave(draftId);
-      await socket.leave(`draft:${draftId}`);
-
-      const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
+      const participantCount = await removeDraftSubscription(draftId);
 
       if (participantCount > 0) {
         socket.to(draftId).emit('participant:leave', {
@@ -686,9 +839,6 @@ io.on('connection', (socket) => {
           participantCount,
         });
       }
-
-      // Clear socket data
-      delete socket.data.draftId;
     } catch (error) {
       logger.error('❌ Error leaving draft', {
         socketId: socket.id,
@@ -703,6 +853,8 @@ io.on('connection', (socket) => {
 
   // Handle disconnection with cleanup
   socket.on('disconnect', async (reason) => {
+    const activeV2Subscription = draftSocketV2Session.getActive();
+    const v2Cleanup = draftSocketV2Session.disconnect();
     const connectionDuration = socket.data.connectionStartTime
       ? Date.now() - socket.data.connectionStartTime
       : 0;
@@ -716,12 +868,21 @@ io.on('connection', (socket) => {
       timestamp: new Date().toISOString(),
     });
 
+    try {
+      await v2Cleanup;
+    } catch (error) {
+      logger.error('Unhandled draft v2 disconnect cleanup failure', {
+        socketId: socket.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Clean up any draft rooms this socket was in
-    if (socket.data.draftId) {
+    if (!activeV2Subscription && socket.data.draftId) {
       const draftId = socket.data.draftId as string;
 
       try {
-        const participantCount = await draftRoomStore.removeParticipant(draftId, socket.id);
+        const participantCount = await removeDraftSubscription(draftId);
 
         if (participantCount > 0) {
           socket.to(draftId).emit('participant:disconnect', {

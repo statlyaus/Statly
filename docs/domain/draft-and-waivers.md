@@ -32,6 +32,11 @@ An accepted pick is persisted before it is broadcast. A pick command must:
 Stale, duplicate, or concurrent commands must be rejected or converge to the same committed result.
 Client success is never inferred from a local timer reaching zero or an optimistic row update.
 
+Every shared draft mutation also increments the draft-scoped event sequence and writes its sequenced
+outbox record in the same transaction. Sequence values are never inferred from timestamps, Redis
+ordering, or browser receipt order. Pre-v2 outbox rows with no sequence remain legacy history and are
+not synthesized into the v2 stream.
+
 ## Snake order and availability
 
 Snake order reverses the league member order on alternating rounds. Persisted overall pick, round,
@@ -73,6 +78,14 @@ durable clock state. BullMQ is a wake-up mechanism: an expiry job must pass its 
 `requireExpired` guard into the transactional auto-pick command. Socket.IO must not run a second
 countdown or accept a client request to start one.
 
+`clockDurationSeconds` is captured for the current turn and is immutable for that scheduling revision.
+Changing league settings affects a later turn; it cannot stretch or reset the clock already on the
+clock. A LIVE clock is valid only when it has a positive captured duration, start, deadline, no paused
+remainder, and a deadline at or after its start. Durable convergence repairs malformed legacy anchors
+with a compare-and-swap transition, increments the scheduling revision, and writes a
+`draft:clock-repaired` outbox intent. If another process wins, the loser reloads the winner rather than
+applying a second repair.
+
 HTTP hydration and Socket.IO reconnects expose the same discriminated clock payload:
 
 - `LIVE` includes an absolute persisted start and deadline;
@@ -88,15 +101,23 @@ persisted snapshot.
 
 ## Reconnect and recovery
 
-On direct load, refresh, or reconnect, the client loads a persisted read model, joins the authorized
-room, and applies sequenced events after that snapshot. Gaps trigger resynchronization; duplicates are
-ignored. Current turn, drafted players, roster projection, queue state, and readiness must converge
-without relying on the previously open tab. Persisted reconciliation remains active in both LIVE and
-PAUSED states so a missed resume event cannot strand the room on a frozen clock. Because shared
-snapshots omit private strategy state, every socket rejoin also refreshes the authenticated member's
-queue and watchlist through their scoped HTTP routes. Hydration requests are generation-ordered and
-cancellable: an older response cannot overwrite a newer reconnect, visibility refresh, or successful
-mutation.
+On direct load, refresh, or reconnect, the client buffers v2 events, requests an authenticated
+generation-scoped baseline, and atomically applies the persisted snapshot, contiguous replay, and live
+suffix. Gaps trigger resynchronization; exact duplicates are ignored; conflicting duplicates are
+rejected. A generation that loses to navigation, retry, disconnect, or v1 fallback cannot later commit
+its acknowledgement. Current turn, drafted players, roster projection, queue state, and readiness must
+converge without relying on the previously open tab.
+
+Persisted reconciliation remains active in both LIVE and PAUSED states so a missed resume event cannot
+strand the room on a frozen clock. Because shared snapshots omit private strategy state, every winning
+socket baseline also refreshes the authenticated member's queue and watchlist through scoped HTTP
+routes. Hydration requests are generation-ordered and cancellable: an older response cannot overwrite
+a newer reconnect, visibility refresh, or successful mutation.
+
+Recovery is snapshot-relative, not full event sourcing. The snapshot establishes sequence `S`; replay
+captures a fixed head `H` and returns only persisted events in `(S, H]`; the buffered socket stream
+continues at `H + 1`. An absent row, unsupported event, invalid payload, cursor ahead of the durable
+head, or incomplete replay requires another authoritative snapshot rather than a partial commit.
 
 ## Waivers
 

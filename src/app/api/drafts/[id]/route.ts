@@ -8,9 +8,12 @@ import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse'
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
+import {
+  draftAuthorizedReadService,
+  DraftReadAccessError,
+} from '@/server/draft/services/DraftAuthorizedReadService';
 import { buildDraftClockPayload } from '@/server/draft/services/DraftProjectionService';
 import { getLeagueDraftOperationalReadiness } from '@/server/draft/services/DraftReadinessService';
-import { getDraftMembershipAccess } from '@/server/leagues/membership';
 import { FANTASY_CATEGORIES, type FantasyCategoryKey } from '@/types/fantasyCategories';
 
 export const runtime = 'nodejs';
@@ -48,10 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return commonErrors.unauthorized();
     }
 
-    const access = await getDraftMembershipAccess(id, authenticatedUserId);
-    if (!access.isMember) {
-      return commonErrors.forbidden('Not a member of this draft');
-    }
+    await draftAuthorizedReadService.authorizeMember(id, authenticatedUserId);
 
     // Parse query params (lean meta only cares about updatedSince)
     const url = new URL(request.url);
@@ -62,33 +62,56 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const parsedQuery = QuerySchema.safeParse(queryObj);
     const updatedSince = parsedQuery.success ? parsedQuery.data.updatedSince : undefined;
 
-    // Preflight: compute lastUpdated cheaply (no heavy includes)
-    const [draftTimes, latestPick] = await Promise.all([
-      prisma.draft.findUnique({
-        where: { id },
-        select: {
-          createdAt: true,
-          startedAt: true,
-          completedAt: true,
-          pickStartedAt: true,
-          pickDeadlineAt: true,
-          pausedRemainingSeconds: true,
-          schedulingVersion: true,
-          status: true,
-          lobbyStatus: true,
-          leagueId: true,
-        },
+    const draftTimes = await draftAuthorizedReadService.readReadyForMember({
+      draftId: id,
+      authenticatedUserId,
+      load: (expectedStateRevision) =>
+        prisma.draft.findFirst({
+          where: {
+            id,
+            ...(expectedStateRevision !== undefined
+              ? { schedulingVersion: expectedStateRevision }
+              : {}),
+          },
+          include: {
+            league: {
+              select: {
+                name: true,
+                categoriesJson: true,
+                settings: { select: { draftType: true, pickSeconds: true } },
+              },
+            },
+            orders: {
+              select: {
+                slot: true,
+                member: {
+                  select: {
+                    id: true,
+                    userId: true,
+                    user: { select: { displayName: true } },
+                  },
+                },
+              },
+              orderBy: { slot: 'asc' },
+            },
+            picks: {
+              select: { madeAt: true, overall: true },
+              orderBy: [{ overall: 'desc' }],
+              take: 1,
+            },
+            _count: { select: { picks: true } },
+          },
+        }),
+      getClockIdentity: (draft) => ({
+        status: draft.status,
+        stateRevision: draft.schedulingVersion,
       }),
-      prisma.pick.findFirst({
-        where: { draftId: id },
-        select: { madeAt: true, overall: true },
-        orderBy: { madeAt: 'desc' },
-      }),
-    ]);
+    });
 
     if (!draftTimes) {
       return errorResponse('Draft not found', 404);
     }
+    const latestPick = draftTimes.picks[0];
 
     const draftReadiness = await getLeagueDraftOperationalReadiness(prisma, {
       leagueId: draftTimes.leagueId,
@@ -110,6 +133,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       draftTimes.status,
       draftTimes.lobbyStatus ?? '',
       draftTimes.schedulingVersion,
+      draftTimes.eventSequence,
+      draftTimes.clockDurationSeconds ?? '',
       draftTimes.pickStartedAt?.toISOString() ?? '',
       draftTimes.pickDeadlineAt?.toISOString() ?? '',
       draftTimes.pausedRemainingSeconds ?? '',
@@ -165,45 +190,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // Fetch lean meta (no players list, no picks list)
-    const draft = await prisma.draft.findUnique({
-      where: { id },
-      include: {
-        league: {
-          select: {
-            name: true,
-            categoriesJson: true,
-            settings: { select: { draftType: true, pickSeconds: true } },
-          },
-        },
-        orders: {
-          select: {
-            slot: true,
-            member: {
-              select: {
-                id: true,
-                userId: true,
-                user: { select: { displayName: true } },
-              },
-            },
-          },
-          orderBy: { slot: 'asc' },
-        },
-      },
-    });
-
-    if (!draft) {
-      return errorResponse('Draft not found', 404);
-    }
-
-    const picksCount = await prisma.pick.count({ where: { draftId: id } });
+    const draft = draftTimes;
+    const picksCount = draft._count.picks;
     const selectedCategories = parseSelectedCategories(draft.league?.categoriesJson);
     const serverNow = new Date().toISOString();
     const clock = buildDraftClockPayload({
       status: draft.status,
       lobbyStatus: draft.lobbyStatus,
       revision: draft.schedulingVersion,
-      durationSeconds: draft.league?.settings?.pickSeconds || 120,
+      durationSeconds: draft.clockDurationSeconds ?? draft.league?.settings?.pickSeconds ?? 120,
       serverNow,
       pickStartedAt: draft.pickStartedAt,
       pickDeadlineAt: draft.pickDeadlineAt,
@@ -223,6 +218,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       round: draft.round,
       direction: draft.direction,
       schedulingVersion: draft.schedulingVersion,
+      eventSequence: draft.eventSequence,
       serverNow,
       clock,
       pickStartedAt: draft.pickStartedAt?.toISOString() ?? null,
@@ -270,6 +266,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return response;
   } catch (error) {
+    if (error instanceof DraftReadAccessError) {
+      return commonErrors.forbidden(error.message);
+    }
+
     logger.error('Failed to retrieve draft', {
       error: {
         name: error instanceof Error ? error.name : 'Unknown',

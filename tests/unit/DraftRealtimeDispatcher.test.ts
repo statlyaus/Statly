@@ -36,6 +36,7 @@ function emittedDeltas(emit: ReturnType<typeof vi.fn>) {
 describe('DraftRealtimeDispatcher canonical clock deltas', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    draftPubSub.start.mockResolvedValue(undefined);
     draftPubSub.publish.mockResolvedValue(undefined);
   });
 
@@ -46,6 +47,7 @@ describe('DraftRealtimeDispatcher canonical clock deltas', () => {
     await dispatcher.publishState({
       leagueId: 'league-1',
       draftId: 'draft-1',
+      throughSequence: 4,
       status: 'PAUSED',
       clock: {
         status: 'PAUSED',
@@ -151,5 +153,18 @@ describe('DraftRealtimeDispatcher canonical clock deltas', () => {
         },
       },
     });
+  });
+
+  it('retries subscription startup after a transient Redis failure', async () => {
+    const dispatcher = new DraftRealtimeDispatcher();
+    draftPubSub.start
+      .mockRejectedValueOnce(new Error('redis unavailable'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(dispatcher.startSubscription()).rejects.toThrow('redis unavailable');
+    await expect(dispatcher.startSubscription()).resolves.toBeUndefined();
+    await dispatcher.startSubscription();
+
+    expect(draftPubSub.start).toHaveBeenCalledTimes(2);
   });
 });

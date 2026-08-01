@@ -19,6 +19,11 @@ import {
   type DraftClockPayload,
   type DraftRoomSnapshotPayload,
 } from '@/services/realtime/draftStateWire';
+import {
+  DraftRealtimeV2Client,
+  toDraftRealtimeV2ClientDelta,
+  type DraftRealtimeV2ClientCommit,
+} from '@/services/realtime/draftRealtimeV2Client';
 import type { DraftOperationalReadiness } from '@/types/draftReadiness';
 import type { FantasyCategoryKey } from '@/types/fantasyCategories';
 import type {
@@ -51,6 +56,7 @@ export interface LegacyDraftSnapshot {
   statSeasons?: number[] | null;
   liveState?: DraftLiveState | null;
   ts?: number; // server event time (ms)
+  throughSequence?: number;
 }
 
 export type DraftSnapshot = LegacyDraftSnapshot | DraftRoomSnapshotPayload;
@@ -99,6 +105,10 @@ interface DraftState {
     latencyMs?: number;
     lastEventAt?: number;
     lastRevision?: number;
+    lastSequence?: number;
+    protocol?: 1 | 2;
+    generation?: number;
+    draftId?: string;
     needsResync?: boolean;
   };
   isLoading: boolean;
@@ -377,6 +387,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   includesAvailablePlayers: boolean;
   ts?: number;
   revision?: number;
+  throughSequence?: number;
 } {
   if (!raw) {
     return {
@@ -444,6 +455,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       includesAvailablePlayers: false,
       ts: Date.parse(snapshot.serverNow),
       revision: snapshot.revision,
+      throughSequence: snapshot.throughSequence,
     };
   }
 
@@ -508,6 +520,10 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     includesAvailablePlayers,
     ts: legacyRaw.ts ?? (clockResult.success ? Date.parse(clockResult.data.serverNow) : undefined),
     revision: clockResult.success ? clockResult.data.revision : normalizedRevision,
+    throughSequence:
+      typeof (legacyRaw as any).throughSequence === 'number'
+        ? (legacyRaw as any).throughSequence
+        : undefined,
   };
 }
 
@@ -849,6 +865,14 @@ type Action =
   | { type: 'SET_WATCHLIST_PENDING'; playerId: string; pending: boolean }
   | { type: 'SET_PERSISTED_PICKS'; picks: DraftPick[] }
   | { type: 'APPLY_DELTAS'; deltas: DraftDelta[] }
+  | {
+      type: 'APPLY_V2_COMMIT';
+      snapshot?: ReturnType<typeof normalizeSnapshot>;
+      deltas: DraftDelta[];
+      throughSequence: number;
+      draftId: string;
+      generation: number;
+    }
   | { type: 'SET_CONNECTION'; status: ConnectionStatus; latencyMs?: number }
   | { type: 'SET_SAVING'; saving: boolean }
   | { type: 'SET_LOADING'; loading: boolean }
@@ -872,19 +896,26 @@ function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
     return { ...state, isLoading: false };
   }
 
+  return mergeSnapshotState(state, snapshot);
+}
+
+function mergeSnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot): DraftState {
   const draft = mergeSnapshotDraft(snapshot.draft, state.draft);
   const participants = snapshot.includesParticipantQueues
     ? snapshot.participants
     : mergeParticipantQueues(snapshot.participants, state.participants);
+  const picks = snapshot.includesPicks ? snapshot.picks : state.picks;
+  const availablePlayers = excludeDraftedAvailablePlayers(
+    snapshot.includesAvailablePlayers ? snapshot.availablePlayers : state.availablePlayers,
+    picks
+  );
 
   return {
     ...state,
     draft,
     participants,
-    picks: snapshot.includesPicks ? snapshot.picks : state.picks,
-    availablePlayers: snapshot.includesAvailablePlayers
-      ? snapshot.availablePlayers
-      : state.availablePlayers,
+    picks,
+    availablePlayers,
     draftReadiness: snapshot.draftReadiness ?? state.draftReadiness,
     selectedCategories:
       snapshot.selectedCategories.length > 0
@@ -899,6 +930,7 @@ function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
       ...state.connection,
       lastEventAt: snapshot.ts ?? state.connection.lastEventAt,
       lastRevision: snapshot.revision ?? state.connection.lastRevision,
+      lastSequence: snapshot.throughSequence ?? state.connection.lastSequence,
       needsResync: false,
     },
   };
@@ -979,6 +1011,8 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         pickStartedAt?: unknown;
         pickDeadlineAt?: unknown;
         schedulingVersion?: unknown;
+        durationSeconds?: unknown;
+        serverNow?: unknown;
       };
       const rawPick = payload?.pick;
       const pick = normalizeCommandPick(rawPick, next.participants);
@@ -1037,21 +1071,25 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
         : next.draft;
       const schedulingVersion = Number(delta.revision ?? payload.schedulingVersion);
       const durationSeconds =
-        next.liveState.clock?.durationSeconds ?? next.draft?.settings.timePerPick ?? 120;
+        typeof payload.durationSeconds === 'number' && payload.durationSeconds > 0
+          ? payload.durationSeconds
+          : (next.liveState.clock?.durationSeconds ?? next.draft?.settings.timePerPick ?? 120);
+      const clockServerNow =
+        typeof payload.serverNow === 'string' ? payload.serverNow : new Date(ts).toISOString();
       const clockResult = DraftClockPayloadSchema.safeParse(
         nextStatus === 'COMPLETED'
           ? {
               status: 'COMPLETED',
               revision: schedulingVersion,
               durationSeconds,
-              serverNow: new Date(ts).toISOString(),
+              serverNow: clockServerNow,
             }
           : payload.pickStartedAt && payload.pickDeadlineAt
             ? {
                 status: 'LIVE',
                 revision: schedulingVersion,
                 durationSeconds,
-                serverNow: new Date(ts).toISOString(),
+                serverNow: clockServerNow,
                 startedAt: payload.pickStartedAt,
                 deadlineAt: payload.pickDeadlineAt,
               }
@@ -1169,6 +1207,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
 function reducer(state: DraftState, action: Action): DraftState {
   switch (action.type) {
     case 'SET_SNAPSHOT':
+      if (state.connection.protocol === 2) return state;
       return applySnapshotState(state, action.snapshot);
     case 'SET_AVAILABLE_PLAYERS':
       return {
@@ -1218,8 +1257,72 @@ function reducer(state: DraftState, action: Action): DraftState {
       return applyPersistedPicksState(state, action.picks);
     case 'APPLY_DELTAS': {
       let next = state;
-      for (const d of action.deltas) next = applyDelta(next, d);
+      const deltas =
+        state.connection.protocol === 2
+          ? action.deltas.filter((delta) => delta.type === 'QUEUE_UPDATED')
+          : action.deltas;
+      for (const d of deltas) next = applyDelta(next, d);
       return next;
+    }
+    case 'APPLY_V2_COMMIT': {
+      if (state.draft?.id && String(state.draft.id) !== action.draftId) {
+        return {
+          ...state,
+          connection: { ...state.connection, status: 'reconnecting', needsResync: true },
+        };
+      }
+      if (
+        state.connection.protocol === 2 &&
+        state.connection.generation !== undefined &&
+        action.generation < state.connection.generation
+      ) {
+        return state;
+      }
+
+      let next = action.snapshot ? mergeSnapshotState(state, action.snapshot) : state;
+      for (const delta of action.deltas) {
+        if (
+          delta.revision !== undefined &&
+          next.connection.lastRevision !== undefined &&
+          delta.revision < next.connection.lastRevision
+        ) {
+          return {
+            ...state,
+            connection: { ...state.connection, status: 'reconnecting', needsResync: true },
+          };
+        }
+        const candidate = applyDelta(
+          {
+            ...next,
+            connection: {
+              ...next.connection,
+              lastEventAt: undefined,
+              lastRevision: undefined,
+              needsResync: false,
+            },
+          },
+          delta
+        );
+        if (candidate.connection.needsResync) {
+          return {
+            ...state,
+            connection: { ...state.connection, status: 'reconnecting', needsResync: true },
+          };
+        }
+        next = candidate;
+      }
+      return {
+        ...next,
+        connection: {
+          ...next.connection,
+          status: 'connected',
+          lastSequence: action.throughSequence,
+          protocol: 2,
+          generation: action.generation,
+          draftId: action.draftId,
+          needsResync: false,
+        },
+      };
     }
     case 'SET_CONNECTION':
       return {
@@ -1244,66 +1347,184 @@ function useDraftSocket(opts: {
   draftId: string;
   onSnapshot: (snap: DraftSnapshot) => void;
   onDelta: (delta: DraftDelta) => void;
+  onV2Commit: (commit: DraftRealtimeV2ClientCommit) => void;
   setStatus: (s: ConnectionStatus) => void;
   onReconnect: () => void;
 }) {
-  const { socket, draftId, onSnapshot, onDelta, setStatus, onReconnect } = opts;
+  const { socket, draftId, onSnapshot, onDelta, onV2Commit, setStatus, onReconnect } = opts;
   const joinedDraftIdRef = useRef<string | null>(null);
   const onReconnectRef = useRef(onReconnect);
+  const onV2CommitRef = useRef(onV2Commit);
 
   useEffect(() => {
     onReconnectRef.current = onReconnect;
   }, [onReconnect]);
 
   useEffect(() => {
+    onV2CommitRef.current = onV2Commit;
+  }, [onV2Commit]);
+
+  useEffect(() => {
     if (!socket) return;
 
-    const join = () => {
-      const isReconnect = joinedDraftIdRef.current === draftId;
-      joinedDraftIdRef.current = draftId;
-      setStatus('connected');
-      socket.emit('draft:join', { draftId });
-      if (isReconnect) onReconnectRef.current();
+    let disposed = false;
+    let v1Owned = false;
+    let refreshPrivateStateAfterBaseline = false;
+    let joinTimeout: ReturnType<typeof setTimeout> | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let requestV2Join = () => undefined;
+
+    const clearJoinTimeout = () => {
+      if (!joinTimeout) return;
+      clearTimeout(joinTimeout);
+      joinTimeout = null;
+    };
+    const scheduleRetry = () => {
+      if (retryTimeout || disposed) return;
+      retryTimeout = setTimeout(() => {
+        retryTimeout = null;
+        if (!disposed && socket.connected) requestV2Join();
+      }, 500);
+    };
+    const v2Client = new DraftRealtimeV2Client({
+      onCommit: (commit) => onV2CommitRef.current(commit),
+      onResyncRequired: () => {
+        setStatus('reconnecting');
+        scheduleRetry();
+      },
+    });
+
+    const joinV1 = () => {
+      v1Owned = true;
+      socket.emit('draft:join', { draftId, realtimeProtocols: [1] });
+    };
+    const fallbackToV1 = (generation: number) => {
+      const abandoned = v2Client.abandon(generation);
+      if (!abandoned) return;
+      socket.emit('draft:leave:v2', abandoned);
+      joinV1();
     };
 
-    const onConnect = join;
+    requestV2Join = () => {
+      clearJoinTimeout();
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+        retryTimeout = null;
+      }
+      const isReconnect = joinedDraftIdRef.current === draftId;
+      joinedDraftIdRef.current = draftId;
+      refreshPrivateStateAfterBaseline ||= isReconnect;
+      setStatus(isReconnect ? 'reconnecting' : 'disconnected');
+      if (v1Owned) {
+        joinV1();
+        return;
+      }
+      const generation = v2Client.begin(draftId);
+      v2Client.markJoinSent(generation);
+
+      joinTimeout = setTimeout(() => {
+        joinTimeout = null;
+        if (disposed || generation !== v2Client.getGeneration()) return;
+        if (!v2Client.isV2Owned()) {
+          fallbackToV1(generation);
+          return;
+        }
+        scheduleRetry();
+      }, 1500);
+
+      socket.emit('draft:join:v2', { draftId, generation }, (acknowledgement: unknown) => {
+        if (disposed) return;
+        const outcome = v2Client.acceptJoinAcknowledgement(acknowledgement, generation);
+        if (outcome.status !== 'stale' && generation === v2Client.getGeneration()) {
+          clearJoinTimeout();
+        }
+        if (outcome.status === 'ready') {
+          setStatus('connected');
+          if (refreshPrivateStateAfterBaseline) {
+            refreshPrivateStateAfterBaseline = false;
+            onReconnectRef.current();
+          }
+          return;
+        }
+        if (outcome.status === 'fallback') {
+          fallbackToV1(generation);
+          return;
+        }
+        if (outcome.status === 'resync') {
+          setStatus('reconnecting');
+          scheduleRetry();
+          return;
+        }
+        if (outcome.status === 'failed') {
+          setStatus(outcome.acknowledgement.retryable ? 'reconnecting' : 'disconnected');
+          if (outcome.acknowledgement.retryable) scheduleRetry();
+        }
+      });
+    };
+
+    const onConnect = requestV2Join;
     const onDisconnect = () => setStatus('disconnected');
     const onReconnecting = () => setStatus('reconnecting');
 
-    const handleSnapshot = (snap: DraftSnapshot) => onSnapshot(snap);
-    const handleDelta = (delta: DraftDelta) => onDelta(delta);
+    const handleV2Event = (value: unknown) => v2Client.receive(value);
+    const handleSnapshot = (snap: DraftSnapshot) => {
+      if (!v1Owned) return;
+      onSnapshot(snap);
+      setStatus('connected');
+      if (refreshPrivateStateAfterBaseline) {
+        refreshPrivateStateAfterBaseline = false;
+        onReconnectRef.current();
+      }
+    };
+    const handleDelta = (delta: DraftDelta) => {
+      if (v1Owned) onDelta(delta);
+    };
     const handleBackfill = (deltas: DraftDelta[] = []) => {
-      for (const d of deltas) onDelta(d);
+      if (!v1Owned) return;
+      for (const delta of deltas) onDelta(delta);
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
       setStatus('reconnecting');
-      if (socket.connected) join();
+      if (socket.connected) requestV2Join();
     };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.io?.on?.('reconnect_attempt', onReconnecting);
 
+    // Register the live v2 listener before requesting a baseline so racing events are buffered.
+    socket.on('draft:event:v2', handleV2Event);
     socket.on('draft:snapshot', handleSnapshot);
     socket.on('draft:delta', handleDelta);
     socket.on('draft:backfill', handleBackfill);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    if (socket.connected) join();
+    if (socket.connected) requestV2Join();
 
     return () => {
+      disposed = true;
+      clearJoinTimeout();
+      if (retryTimeout) clearTimeout(retryTimeout);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.io?.off?.('reconnect_attempt', onReconnecting);
 
+      socket.off('draft:event:v2', handleV2Event);
       socket.off('draft:snapshot', handleSnapshot);
       socket.off('draft:delta', handleDelta);
       socket.off('draft:backfill', handleBackfill);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
 
       try {
-        socket.emit('draft:leave', { draftId });
+        if (v2Client.getPhase() !== 'idle') {
+          socket.emit('draft:leave:v2', {
+            draftId,
+            generation: v2Client.getGeneration(),
+          });
+        } else {
+          socket.emit('draft:leave', { draftId });
+        }
       } catch {
         /* noop */
       }
@@ -1355,6 +1576,7 @@ export function DraftProvider({
         status: 'disconnected',
         lastEventAt: snap.ts,
         lastRevision: snap.revision,
+        lastSequence: snap.throughSequence,
         needsResync: false,
       },
       isLoading: !initialSnapshot,
@@ -1406,6 +1628,25 @@ export function DraftProvider({
     },
     [scheduleDeltaFlush]
   );
+
+  const handleV2Commit = useCallback((commit: DraftRealtimeV2ClientCommit) => {
+    const converted = commit.events.map(toDraftRealtimeV2ClientDelta);
+    if (converted.some((delta) => delta === null)) return false;
+    const deltas = converted as DraftDelta[];
+    const snapshot = commit.snapshot
+      ? normalizeSnapshot({ ...commit.snapshot, schemaVersion: 1 })
+      : undefined;
+
+    dispatch({
+      type: 'APPLY_V2_COMMIT',
+      snapshot,
+      deltas,
+      throughSequence: commit.throughSequence,
+      draftId: commit.draftId,
+      generation: commit.generation,
+    });
+    return true;
+  }, []);
 
   const handleStatusChange = useCallback((s: ConnectionStatus) => {
     dispatch({ type: 'SET_CONNECTION', status: s });
@@ -1530,6 +1771,7 @@ export function DraftProvider({
     draftId,
     onSnapshot: handleSnapshot,
     onDelta: handleDelta,
+    onV2Commit: handleV2Commit,
     setStatus: handleStatusChange,
     onReconnect: handlePrivateStateReconnect,
   });

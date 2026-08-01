@@ -248,6 +248,7 @@ async function seedLiveTimerFixture() {
           pickStartedAt: startedAt,
           pickDeadlineAt: deadlineAt,
           pausedRemainingSeconds: null,
+          clockDurationSeconds: FIXTURE.pickSeconds,
           schedulingVersion: 1,
         },
       });
@@ -302,9 +303,9 @@ test.skip(
 );
 
 test(
-  'keeps one canonical clock through pause, resume, and worker expiry',
+  'keeps one canonical clock through pause, resume, disconnect, and worker expiry',
   { tag: '@draft-worker' },
-  async ({ page }) => {
+  async ({ context, page }) => {
     test.setTimeout(60_000);
 
     const runtimeErrors = collectRuntimeErrors(page);
@@ -345,6 +346,19 @@ test(
       .poll(async () => timerTextToSeconds(await timer.innerText()), { timeout: 4_000 })
       .toBeLessThan(pausedTimerValue);
 
+    const disconnectedTimerValue = timerTextToSeconds(await timer.innerText());
+    expect(disconnectedTimerValue).toBeGreaterThan(0);
+    await context.setOffline(true);
+    try {
+      // The BullMQ worker must advance durable state while this browser cannot receive the event.
+      await page.waitForTimeout((disconnectedTimerValue + 2) * 1_000);
+      expect(timerTextToSeconds(await timer.innerText())).toBe(0);
+    } finally {
+      await context.setOffline(false);
+    }
+
+    // Rejoining must return a post-subscription Prisma snapshot (plus supplemental replay), so the
+    // missed expiry cannot leave this client frozen on the previous pick.
     await expect(page.locator('body')).toContainText('Pick 2 of 2', { timeout: 25_000 });
     await expectNoAppErrorBoundary(page);
 
@@ -362,6 +376,8 @@ test(
     expect(picksPayload.data.draftState.currentPick).toBe(2);
     expect(picksPayload.data.draftState.clock.status).toBe('LIVE');
     expect(picksPayload.data.draftState.clock.revision).toBe(4);
-    expect(runtimeErrors).toEqual([]);
+    expect(
+      runtimeErrors.filter((error) => !error.includes('net::ERR_INTERNET_DISCONNECTED'))
+    ).toEqual([]);
   }
 );

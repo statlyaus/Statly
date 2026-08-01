@@ -4,16 +4,19 @@ import {
   type DraftRealtimeEnvelope,
   type DraftRealtimeEventType,
 } from '@/services/realtime/pubsub';
+import type { DraftRealtimeV2EventEnvelope } from '@/services/realtime/draftRealtimeV2';
 import {
-  DraftClockPayloadSchema,
   toDraftRealtimeStatePayload,
   type CanonicalLiveDraftState,
-  type DraftClockPayload,
   type DraftRealtimeStatePayload,
 } from '@/services/realtime/draftStateWire';
-import type { LiveDraftState } from '@/services/liveDraftEngine';
 
 import type { DraftLifecycleEventPayload, DraftPickEventPayload } from '../domain/draftTypes';
+import {
+  buildDraftLifecycleDelta,
+  buildDraftPickDelta,
+  type DraftRealtimeDelta,
+} from './DraftRealtimeDelta';
 import type { Server as SocketIOServer } from 'socket.io';
 
 type DraftStatusPayload = {
@@ -31,37 +34,10 @@ type DraftAdminMessagePayload = {
   userId: string;
 };
 
-type DraftDelta =
-  | {
-      type: 'PICK_MADE';
-      payload: { pick: DraftPickEventPayload };
-      ts: number;
-      revision?: number;
-    }
-  | {
-      type: 'STATE_PATCH';
-      payload: {
-        draft?: {
-          status?: LiveDraftState['status'];
-          currentPick?: number;
-          round?: number;
-          direction?: 'FORWARD' | 'REVERSE';
-          pickDeadlineAt?: string | null;
-        };
-        liveState?: {
-          currentPick?: number;
-          onClockTeamId?: string;
-          clock?: DraftClockPayload;
-          revision?: number;
-        };
-      };
-      ts: number;
-      revision?: number;
-    };
-
 export class DraftRealtimeDispatcher {
   private io: SocketIOServer | null = null;
   private subscriberStarted = false;
+  private subscriptionPromise: Promise<void> | null = null;
 
   attachSocketServer(io: SocketIOServer): void {
     this.io = io;
@@ -71,17 +47,36 @@ export class DraftRealtimeDispatcher {
     if (this.subscriberStarted) {
       return;
     }
+    if (this.subscriptionPromise) {
+      return this.subscriptionPromise;
+    }
 
-    this.subscriberStarted = true;
-    await draftPubSub.start((msg) => {
-      this.dispatchEnvelope(msg);
-    });
+    const attempt = draftPubSub
+      .start((msg) => {
+        this.dispatchEnvelope(msg);
+      })
+      .then(() => {
+        this.subscriberStarted = true;
+      });
+    this.subscriptionPromise = attempt;
+    try {
+      await attempt;
+    } finally {
+      if (this.subscriptionPromise === attempt) {
+        this.subscriptionPromise = null;
+      }
+    }
   }
 
   async publishState(state: CanonicalLiveDraftState): Promise<void> {
     const payload = toDraftRealtimeStatePayload(state);
     this.dispatchToLocal(state.draftId, 'draft:state', payload);
     await draftPubSub.publish(state.draftId, 'draft:state', payload);
+  }
+
+  async publishV2Event(envelope: DraftRealtimeV2EventEnvelope): Promise<void> {
+    this.dispatchV2ToLocal(envelope);
+    await draftPubSub.publishV2(envelope);
   }
 
   async publishDraftEvent(
@@ -118,7 +113,25 @@ export class DraftRealtimeDispatcher {
   }
 
   private dispatchEnvelope(msg: DraftRealtimeEnvelope): void {
+    if (msg.v === 2) {
+      this.dispatchV2ToLocal(msg.message);
+      return;
+    }
+
     this.dispatchToLocal(msg.draftId, msg.event, msg.payload);
+  }
+
+  private dispatchV2ToLocal(envelope: DraftRealtimeV2EventEnvelope): void {
+    if (!this.io) {
+      logger.debug('Skipping local sequenced realtime emit without attached Socket.IO server', {
+        draftId: envelope.draftId,
+        event: envelope.event,
+        sequence: envelope.sequence,
+      });
+      return;
+    }
+
+    this.io.local.to(`draft:${envelope.draftId}`).emit('draft:event:v2', envelope);
   }
 
   private emitToDraftRooms(draftId: string, event: string, payload: unknown): void {
@@ -126,7 +139,7 @@ export class DraftRealtimeDispatcher {
     this.io?.local.to(`draft:${draftId}`).emit(event, payload);
   }
 
-  private emitCompatDelta(draftId: string, delta: DraftDelta): void {
+  private emitCompatDelta(draftId: string, delta: DraftRealtimeDelta): void {
     this.emitToDraftRooms(draftId, 'draft:delta', delta);
   }
 
@@ -187,24 +200,16 @@ export class DraftRealtimeDispatcher {
         this.emitToDraftRooms(draftId, 'draft:pick-made', payload);
         this.emitToDraftRooms(draftId, 'draft:pick', payload);
         this.emitToDraftRooms(draftId, 'pick:made', payload);
-        this.emitCompatDelta(draftId, {
-          type: 'PICK_MADE',
-          payload: this.buildPickDeltaPayload(pickPayload),
-          ts: Date.now(),
-          revision: pickPayload.schedulingVersion,
-        });
+        const delta = buildDraftPickDelta(pickPayload, Date.now());
+        if (delta) this.emitCompatDelta(draftId, delta);
         return;
       }
       case 'draft:auto-pick': {
         const pickPayload = payload as DraftPickEventPayload;
         this.emitToDraftRooms(draftId, 'draft:auto-pick', payload);
         this.emitToDraftRooms(draftId, 'draft:pick', payload);
-        this.emitCompatDelta(draftId, {
-          type: 'PICK_MADE',
-          payload: this.buildPickDeltaPayload(pickPayload),
-          ts: Date.now(),
-          revision: pickPayload.schedulingVersion,
-        });
+        const delta = buildDraftPickDelta(pickPayload, Date.now());
+        if (delta) this.emitCompatDelta(draftId, delta);
         return;
       }
       case 'draft:paused': {
@@ -256,60 +261,8 @@ export class DraftRealtimeDispatcher {
     payload: unknown,
     expectedStatus: 'LIVE' | 'PAUSED'
   ): void {
-    if (!payload || typeof payload !== 'object') return;
-
-    const lifecycle = payload as Partial<DraftLifecycleEventPayload>;
-    if (lifecycle.status !== expectedStatus) return;
-
-    const clockResult = DraftClockPayloadSchema.safeParse(
-      expectedStatus === 'LIVE'
-        ? {
-            status: 'LIVE',
-            revision: lifecycle.schedulingVersion,
-            durationSeconds: lifecycle.durationSeconds,
-            serverNow: lifecycle.serverNow,
-            startedAt: lifecycle.pickStartedAt,
-            deadlineAt: lifecycle.pickDeadlineAt,
-          }
-        : {
-            status: 'PAUSED',
-            revision: lifecycle.schedulingVersion,
-            durationSeconds: lifecycle.durationSeconds,
-            serverNow: lifecycle.serverNow,
-            remainingSeconds: lifecycle.pausedRemainingSeconds,
-          }
-    );
-    if (!clockResult.success) return;
-
-    this.emitCompatDelta(draftId, {
-      type: 'STATE_PATCH',
-      payload: {
-        draft: {
-          status: expectedStatus,
-          pickDeadlineAt: clockResult.data.status === 'LIVE' ? clockResult.data.deadlineAt : null,
-        },
-        liveState: {
-          clock: clockResult.data,
-          revision: clockResult.data.revision,
-        },
-      },
-      ts: Date.parse(clockResult.data.serverNow),
-      revision: clockResult.data.revision,
-    });
-  }
-
-  private buildPickDeltaPayload(pick: DraftPickEventPayload) {
-    return {
-      pick,
-      currentPick: pick.currentPick,
-      isComplete: pick.isComplete,
-      status: pick.status,
-      round: pick.nextRound,
-      direction: pick.nextDirection,
-      pickStartedAt: pick.pickStartedAt,
-      pickDeadlineAt: pick.pickDeadlineAt,
-      schedulingVersion: pick.schedulingVersion,
-    };
+    const delta = buildDraftLifecycleDelta(payload, expectedStatus);
+    if (delta) this.emitCompatDelta(draftId, delta);
   }
 }
 

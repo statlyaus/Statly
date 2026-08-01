@@ -87,6 +87,7 @@ export const DraftRoomSnapshotPayloadSchema = z
     draftId: z.string(),
     leagueId: z.string(),
     revision: z.number().int().nonnegative(),
+    throughSequence: z.number().int().nonnegative().optional(),
     serverNow: IsoTimestampSchema,
     state: z.object({
       name: z.string(),
@@ -134,6 +135,7 @@ export const DraftRealtimeStatePayloadSchema = z.object({
   leagueId: z.string(),
   draftId: z.string(),
   revision: z.number().int().nonnegative(),
+  throughSequence: z.number().int().nonnegative().optional(),
   serverNow: IsoTimestampSchema,
   clock: DraftClockPayloadSchema,
   status: z.enum(['SCHEDULED', 'LOBBY', 'COUNTDOWN', 'LIVE', 'PAUSED', 'COMPLETED']),
@@ -198,6 +200,7 @@ type PublicDraftParticipant = Omit<LiveDraftState['participants'][number], 'queu
 export type CanonicalLiveDraftState = Omit<LiveDraftState, 'participants'> & {
   participants: PublicDraftParticipant[];
   clock: DraftClockPayload;
+  throughSequence: number;
 };
 
 export function toDraftRealtimeStatePayload(

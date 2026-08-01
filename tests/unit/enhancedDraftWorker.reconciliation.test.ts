@@ -1,13 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { draftRepository, draftScheduler, logger, redis } = vi.hoisted(() => ({
-  draftRepository: {
-    transaction: vi.fn(),
-    listLiveDraftPickExpirySchedules: vi.fn(),
-    repairMissingLiveDraftPickDeadline: vi.fn(),
-  },
-  draftScheduler: {
-    schedulePickExpiry: vi.fn(),
+const { draftExpiryReconciler, logger, redis } = vi.hoisted(() => ({
+  draftExpiryReconciler: {
+    reconcileAllLiveDrafts: vi.fn(),
   },
   logger: {
     info: vi.fn(),
@@ -33,11 +28,11 @@ vi.mock('@/server/realtime/scalableConnection', () => ({
 }));
 
 vi.mock('@/server/draft/repository/DraftRepository', () => ({
-  draftRepository,
+  draftRepository: {},
 }));
 
-vi.mock('@/server/draft/services/DraftScheduler', () => ({
-  draftScheduler,
+vi.mock('@/server/draft/services/DraftExpiryReconciler', () => ({
+  draftExpiryReconciler,
 }));
 
 vi.mock('@/server/draft/services/DraftApplicationService', () => ({
@@ -60,36 +55,19 @@ describe('enhanced draft worker expiry reconciliation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.DRAFT_RECONCILIATION_LOCK_TTL_MS;
-    draftRepository.transaction.mockImplementation((work) => work({}));
-    draftRepository.repairMissingLiveDraftPickDeadline.mockResolvedValue({ count: 1 });
+    draftExpiryReconciler.reconcileAllLiveDrafts.mockResolvedValue({
+      scheduledCount: 2,
+      repairedCount: 0,
+      skippedCount: 0,
+    });
     redis.set.mockResolvedValue('OK');
     redis.eval.mockResolvedValue(1);
   });
 
-  it('reschedules every live draft pick deadline from the authoritative draft table', async () => {
-    const schedules = [
-      {
-        draftId: 'draft-expired',
-        leagueId: 'league-1',
-        schedulingVersion: 7,
-        pickDeadlineAt: new Date('2026-06-14T10:00:00.000Z'),
-      },
-      {
-        draftId: 'draft-future',
-        leagueId: 'league-2',
-        schedulingVersion: 3,
-        pickDeadlineAt: new Date('2026-06-14T10:02:00.000Z'),
-      },
-    ];
-    draftRepository.listLiveDraftPickExpirySchedules.mockResolvedValue(schedules);
-
+  it('delegates live clock convergence and scheduling while it owns the lease', async () => {
     await expect(reconcileLiveDraftPickExpiryJobs()).resolves.toBe(2);
 
-    expect(draftRepository.transaction).toHaveBeenCalledTimes(1);
-    expect(draftRepository.listLiveDraftPickExpirySchedules).toHaveBeenCalledWith({});
-    expect(draftScheduler.schedulePickExpiry).toHaveBeenCalledTimes(2);
-    expect(draftScheduler.schedulePickExpiry).toHaveBeenNthCalledWith(1, schedules[0]);
-    expect(draftScheduler.schedulePickExpiry).toHaveBeenNthCalledWith(2, schedules[1]);
+    expect(draftExpiryReconciler.reconcileAllLiveDrafts).toHaveBeenCalledOnce();
 
     const lockToken = redis.set.mock.calls[0][1];
     expect(redis.set).toHaveBeenCalledWith(
@@ -107,36 +85,16 @@ describe('enhanced draft worker expiry reconciliation', () => {
     );
   });
 
-  it('repairs live drafts with missing deadlines before scheduling expiry', async () => {
-    const schedule = {
-      draftId: 'draft-missing-deadline',
-      leagueId: 'league-1',
-      schedulingVersion: 4,
-      pickDeadlineAt: null,
-      pickStartedAt: new Date('2026-06-14T10:00:00.000Z'),
-      startedAt: new Date('2026-06-14T09:55:00.000Z'),
-      pickSeconds: 60,
-    };
-    draftRepository.listLiveDraftPickExpirySchedules.mockResolvedValue([schedule]);
+  it('counts repaired drafts as reconciled work', async () => {
+    draftExpiryReconciler.reconcileAllLiveDrafts.mockResolvedValue({
+      scheduledCount: 0,
+      repairedCount: 1,
+      skippedCount: 0,
+    });
 
     await expect(reconcileLiveDraftPickExpiryJobs()).resolves.toBe(1);
 
-    expect(draftRepository.transaction).toHaveBeenCalledTimes(2);
-    expect(draftRepository.repairMissingLiveDraftPickDeadline).toHaveBeenCalledWith(
-      {},
-      {
-        draftId: 'draft-missing-deadline',
-        currentSchedulingVersion: 4,
-        pickStartedAt: new Date('2026-06-14T10:00:00.000Z'),
-        pickDeadlineAt: new Date('2026-06-14T10:01:00.000Z'),
-      }
-    );
-    expect(draftScheduler.schedulePickExpiry).toHaveBeenCalledWith({
-      draftId: 'draft-missing-deadline',
-      leagueId: 'league-1',
-      schedulingVersion: 5,
-      pickDeadlineAt: new Date('2026-06-14T10:01:00.000Z'),
-    });
+    expect(draftExpiryReconciler.reconcileAllLiveDrafts).toHaveBeenCalledOnce();
   });
 
   it('skips reconciliation when another worker owns the lease', async () => {
@@ -144,8 +102,7 @@ describe('enhanced draft worker expiry reconciliation', () => {
 
     await expect(reconcileLiveDraftPickExpiryJobs()).resolves.toBe(0);
 
-    expect(draftRepository.transaction).not.toHaveBeenCalled();
-    expect(draftScheduler.schedulePickExpiry).not.toHaveBeenCalled();
+    expect(draftExpiryReconciler.reconcileAllLiveDrafts).not.toHaveBeenCalled();
     expect(redis.eval).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(
       'Skipped live draft timer reconciliation because another worker owns the lease',
@@ -154,7 +111,9 @@ describe('enhanced draft worker expiry reconciliation', () => {
   });
 
   it('releases the lease when reconciliation fails', async () => {
-    draftRepository.transaction.mockRejectedValue(new Error('database unavailable'));
+    draftExpiryReconciler.reconcileAllLiveDrafts.mockRejectedValue(
+      new Error('database unavailable')
+    );
 
     await expect(reconcileLiveDraftPickExpiryJobs()).rejects.toThrow('database unavailable');
 
@@ -163,7 +122,11 @@ describe('enhanced draft worker expiry reconciliation', () => {
 
   it('accepts a bounded TTL override for larger reconciliation workloads', async () => {
     process.env.DRAFT_RECONCILIATION_LOCK_TTL_MS = '600000';
-    draftRepository.listLiveDraftPickExpirySchedules.mockResolvedValue([]);
+    draftExpiryReconciler.reconcileAllLiveDrafts.mockResolvedValue({
+      scheduledCount: 0,
+      repairedCount: 0,
+      skippedCount: 0,
+    });
 
     await reconcileLiveDraftPickExpiryJobs();
 

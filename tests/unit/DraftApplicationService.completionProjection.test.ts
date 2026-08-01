@@ -12,6 +12,7 @@ const { draftRepository, statlyZStatsLookup } = vi.hoisted(() => ({
     removeQueuedPlayerById: vi.fn(),
     advanceDraft: vi.fn(),
     updateDraftTiming: vi.fn(),
+    transitionDraftClock: vi.fn(),
     toEventPick: vi.fn(),
     createDraftEvents: vi.fn(),
     findPickByOverall: vi.fn(),
@@ -107,6 +108,11 @@ describe('DraftApplicationService completion projection', () => {
     });
     draftRepository.advanceDraft.mockResolvedValue({ count: 1 });
     draftRepository.updateDraftTiming.mockResolvedValue({ count: 1 });
+    draftRepository.transitionDraftClock.mockResolvedValue({
+      count: 1,
+      schedulingVersion: 4,
+      events: [{ id: 'event-1' }, { id: 'event-2' }],
+    });
     draftRepository.toEventPick.mockReturnValue({
       id: 'pick-2',
       playerId: 'player-2',
@@ -181,24 +187,33 @@ describe('DraftApplicationService completion projection', () => {
 
     expect(result.isComplete).toBe(true);
     expect(result.events).toEqual(['draft:auto-pick', 'draft:completed']);
-    expect(draftRepository.advanceDraft).toHaveBeenCalledWith({}, 'draft-1', 2, {
-      nextPick: 3,
-      nextRound: 1,
-      nextDirection: DraftDirection.FORWARD,
-      isComplete: true,
-    });
+    expect(draftRepository.transitionDraftClock).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        draftId: 'draft-1',
+        leagueId: 'league-1',
+        currentSchedulingVersion: 3,
+        expectedStatus: DraftStatus.LIVE,
+        expectedCurrentPick: 2,
+        status: DraftStatus.COMPLETED,
+        currentPick: 3,
+        pickStartedAt: null,
+        pickDeadlineAt: null,
+        pausedRemainingSeconds: null,
+        clockDurationSeconds: 120,
+      })
+    );
     expect(rosterProjectionService.projectDraft).toHaveBeenCalledWith({
       leagueId: 'league-1',
       draftId: 'draft-1',
     });
-    expect(draftRepository.createDraftEvents).toHaveBeenCalledWith(
+    expect(draftRepository.transitionDraftClock).toHaveBeenCalledWith(
       {},
-      expect.arrayContaining([
-        expect.objectContaining({
-          event: 'draft:completed',
-          publishState: true,
-        }),
-      ])
+      expect.objectContaining({
+        events: expect.arrayContaining([
+          expect.objectContaining({ event: 'draft:completed', publishState: true }),
+        ]),
+      })
     );
   });
 

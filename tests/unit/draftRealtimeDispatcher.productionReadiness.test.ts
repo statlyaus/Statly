@@ -20,6 +20,7 @@ function buildLiveDraftState(): CanonicalLiveDraftState {
   return {
     leagueId: 'league-1',
     draftId: 'draft-1',
+    throughSequence: 4,
     clock: {
       status: 'LIVE',
       revision: 7,
@@ -126,6 +127,9 @@ describe('draft realtime dispatcher production readiness', () => {
         ts: Date.now(),
       })
     );
+    if (parsedEnvelope?.v !== 1) {
+      throw new Error('Expected a v1 draft state envelope');
+    }
 
     expect(wirePayload.currentPick.expiresAt).toBe('2026-07-28T12:01:30.000Z');
     expect(wirePayload.currentPick.startedAt).toBe('2026-07-28T12:00:00.000Z');
@@ -136,7 +140,7 @@ describe('draft realtime dispatcher production readiness', () => {
     expect(wirePayload.participants[0]?.lastActivity).toBe('2026-07-28T12:00:00.000Z');
     expect(wirePayload.participants[0]).not.toHaveProperty('queue');
     expect(wirePayload.timerSettings.pausedAt).toBe('2026-07-28T12:00:00.000Z');
-    expect(parsedEnvelope?.payload).toEqual(jsonPayload);
+    expect(parsedEnvelope.payload).toEqual(jsonPayload);
     expect(emit).toHaveBeenCalledWith('draft:state', wirePayload);
     expect(emit).toHaveBeenCalledWith(
       'draft:delta',
@@ -191,17 +195,15 @@ describe('draft realtime dispatcher production readiness', () => {
     ).toBeNull();
   });
 
-  it('surfaces next pick metadata on pick deltas so the client clock advances', () => {
+  it('delegates pick delta construction to the shared live-and-replay contract', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/server/draft/services/DraftRealtimeDispatcher.ts'),
       'utf8'
     );
 
-    expect(source).toContain('payload: this.buildPickDeltaPayload(pickPayload)');
-    expect(source).toContain('currentPick: pick.currentPick');
-    expect(source).toContain('round: pick.nextRound');
-    expect(source).toContain('direction: pick.nextDirection');
-    expect(source).toContain('pickDeadlineAt: pick.pickDeadlineAt');
+    expect(source).toContain('buildDraftPickDelta');
+    expect(source).toContain('const delta = buildDraftPickDelta(pickPayload, Date.now())');
+    expect(source).not.toContain('buildPickDeltaPayload');
   });
 
   it('keeps application pubsub fanout local when the Socket.IO adapter is installed', () => {

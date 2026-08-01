@@ -18,6 +18,67 @@ vi.mock('@/lib/api', () => ({
 
 import { DraftProvider, useDraft } from '@/contexts/DraftContext';
 
+function makeV2Acknowledgement(revision: number, generation: number, name = 'Realtime Draft') {
+  const serverNow = '2026-06-07T00:00:00.000Z';
+  return {
+    ok: true,
+    draftId: 'draft-1',
+    leagueId: 'league-1',
+    protocol: 2,
+    generation,
+    snapshot: {
+      schemaVersion: 2,
+      draftId: 'draft-1',
+      leagueId: 'league-1',
+      revision,
+      throughSequence: 0,
+      serverNow,
+      state: {
+        name,
+        status: 'LIVE',
+        currentPick: 1,
+        totalPicks: 2,
+        round: 1,
+        direction: 'FORWARD',
+        clock: {
+          status: 'LIVE',
+          revision,
+          durationSeconds: 120,
+          serverNow,
+          startedAt: serverNow,
+          deadlineAt: '2026-06-07T00:02:00.000Z',
+        },
+        onClockMemberId: 'member-1',
+        participants: [
+          {
+            id: 'member-1',
+            userId: 'user-1',
+            displayName: 'Tester',
+            draftOrder: 1,
+          },
+        ],
+        picks: [],
+      },
+    },
+    replay: { afterSequence: 0, throughSequence: 0, events: [] },
+  };
+}
+
+function createV2AcknowledgingEmit(revision: number) {
+  return vi.fn((event: string, data?: any, acknowledge?: (value: unknown) => void) => {
+    if (event !== 'draft:join:v2' || !acknowledge) return;
+    acknowledge(makeV2Acknowledgement(revision, data.generation));
+  });
+}
+
+function createV1FallbackEmit() {
+  return vi.fn((event: string, data?: any, acknowledge?: (value: unknown) => void) => {
+    if (event === 'draft:join:v2' && acknowledge) {
+      acknowledge({ ok: true, draftId: data.draftId, protocol: 1 });
+    }
+  });
+}
+
 function DraftStateProbe() {
   const draft = useDraft();
 
@@ -219,9 +280,13 @@ describe('DraftProvider initial hydration', () => {
     });
 
     const joinCountBeforeSnapshot = emit.mock.calls.filter(
-      (call) => call[0] === 'draft:join'
+      (call) => call[0] === 'draft:join:v2'
     ).length;
     expect(joinCountBeforeSnapshot).toBe(1);
+    expect(emit.mock.calls.find((call) => call[0] === 'draft:join:v2')?.[1]).toEqual({
+      draftId: 'cmevh14aq001lux1gottrhp3a',
+      generation: 1,
+    });
 
     act(() => {
       handlers.get('draft:snapshot')?.({
@@ -257,9 +322,232 @@ describe('DraftProvider initial hydration', () => {
       expect(screen.getByTestId('league-id')).toHaveTextContent('league-1');
     });
 
-    expect(emit.mock.calls.filter((call) => call[0] === 'draft:join')).toHaveLength(
+    expect(emit.mock.calls.filter((call) => call[0] === 'draft:join:v2')).toHaveLength(
       joinCountBeforeSnapshot
     );
+  });
+
+  it('ignores shared v1 traffic until an explicit fallback owns the connection', async () => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    let acknowledgeV2: ((value: unknown) => void) | undefined;
+    const emit = vi.fn((event: string, _data?: unknown, acknowledge?: (value: unknown) => void) => {
+      if (event === 'draft:join:v2') acknowledgeV2 = acknowledge;
+    });
+    socketState.current = {
+      connected: true,
+      emit,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => handlers.set(event, handler)),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+    fetchApi.mockResolvedValue({
+      success: true,
+      data: { players: [], pagination: { hasMore: false }, queue: [], watchlist: [] },
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Initial Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          availablePlayers: [],
+          picks: [],
+          ts: 1,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    expect(acknowledgeV2).toBeDefined();
+    act(() => {
+      handlers.get('draft:snapshot')?.({
+        ...makeV2Acknowledgement(1, 1, 'Stale V1 Draft').snapshot,
+        schemaVersion: 1,
+        revision: 1,
+      });
+      handlers.get('draft:delta')?.({
+        type: 'STATE_PATCH',
+        revision: 2,
+        ts: 2,
+        payload: { draft: { currentPick: 2 } },
+      });
+      handlers.get('draft:backfill')?.([
+        {
+          type: 'STATE_PATCH',
+          revision: 3,
+          ts: 3,
+          payload: { draft: { name: 'Stale Backfill Draft' } },
+        },
+      ]);
+    });
+
+    expect(screen.getByTestId('draft-name')).toHaveTextContent('Initial Draft');
+    expect(screen.getByTestId('current-pick')).toHaveTextContent('1');
+
+    act(() => acknowledgeV2?.(makeV2Acknowledgement(4, 1, 'Atomic V2 Draft')));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('draft-name')).toHaveTextContent('Atomic V2 Draft');
+      expect(screen.getByTestId('clock-revision')).toHaveTextContent('4');
+    });
+  });
+
+  it('removes a player drafted while offline when the reconnect snapshot owns the pick set', async () => {
+    const acknowledgement = makeV2Acknowledgement(4, 1, 'Reconnected Draft') as any;
+    acknowledgement.snapshot.state.picks = [
+      {
+        id: 'pick-1',
+        overall: 1,
+        round: 1,
+        slot: 1,
+        player: {
+          id: 'player-1',
+          name: 'First Player',
+          position: 'MID',
+          club: 'Sydney',
+        },
+        member: {
+          id: 'member-1',
+          userId: 'user-1',
+          displayName: 'Tester',
+        },
+        auto: false,
+        madeAt: '2026-06-07T00:00:05.000Z',
+      },
+    ];
+    const emit = vi.fn((event: string, _data?: unknown, acknowledge?: (value: unknown) => void) => {
+      if (event === 'draft:join:v2') acknowledge?.(acknowledgement);
+    });
+    socketState.current = {
+      connected: true,
+      emit,
+      on: vi.fn(),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+    fetchApi.mockResolvedValue({
+      success: true,
+      data: { players: [], pagination: { hasMore: false }, queue: [], watchlist: [] },
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Initial Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          availablePlayers: [
+            {
+              id: 'player-1',
+              name: 'First Player',
+              position: 'MID',
+              club: 'Sydney',
+              statlyZScore: 1,
+              isAvailable: true,
+            },
+          ],
+          picks: [],
+          ts: 1,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('player-count')).toHaveTextContent('0');
+    });
+  });
+
+  it('keeps the v2 timeout armed for a wrong-generation ack and ignores its late success', async () => {
+    vi.useFakeTimers();
+    const handlers = new Map<string, (...args: any[]) => void>();
+    let acknowledgeV2: ((value: unknown) => void) | undefined;
+    const emit = vi.fn((event: string, _data?: unknown, acknowledge?: (value: unknown) => void) => {
+      if (event === 'draft:join:v2') acknowledgeV2 = acknowledge;
+    });
+    socketState.current = {
+      connected: true,
+      emit,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => handlers.set(event, handler)),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+    fetchApi.mockResolvedValue({
+      success: true,
+      data: { players: [], pagination: { hasMore: false }, queue: [], watchlist: [] },
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Initial Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+          } as any,
+          participants: [],
+          availablePlayers: [],
+          picks: [],
+          ts: 1,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    expect(acknowledgeV2).toBeDefined();
+    act(() => acknowledgeV2?.(makeV2Acknowledgement(4, 99, 'Wrong Generation')));
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(emit).toHaveBeenCalledWith('draft:leave:v2', { draftId: 'draft-1', generation: 1 });
+    expect(emit).toHaveBeenCalledWith('draft:join', {
+      draftId: 'draft-1',
+      realtimeProtocols: [1],
+    });
+
+    act(() => {
+      acknowledgeV2?.(makeV2Acknowledgement(5, 1, 'Late V2 Draft'));
+      handlers.get('draft:snapshot')?.({
+        ...makeV2Acknowledgement(3, 1, 'Fallback V1 Draft').snapshot,
+        schemaVersion: 1,
+      });
+    });
+
+    expect(screen.getByTestId('draft-name')).toHaveTextContent('Fallback V1 Draft');
+    expect(screen.getByTestId('draft-name')).not.toHaveTextContent('Late V2 Draft');
   });
 
   it('orders initial snapshot picks by overall number', () => {
@@ -824,8 +1112,8 @@ describe('DraftProvider initial hydration', () => {
   it('ignores stale socket snapshots after newer state is loaded', async () => {
     const handlers = new Map<string, (...args: any[]) => void>();
     socketState.current = {
-      connected: false,
-      emit: vi.fn(),
+      connected: true,
+      emit: createV1FallbackEmit(),
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
         handlers.set(event, handler);
       }),
@@ -902,8 +1190,8 @@ describe('DraftProvider initial hydration', () => {
       });
     const handlers = new Map<string, (...args: any[]) => void>();
     socketState.current = {
-      connected: false,
-      emit: vi.fn(),
+      connected: true,
+      emit: createV1FallbackEmit(),
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
         handlers.set(event, handler);
       }),
@@ -1549,7 +1837,7 @@ describe('DraftProvider initial hydration', () => {
 
   it('rehydrates private queue and watchlist state after reconnect', async () => {
     const handlers = new Map<string, (...args: any[]) => void>();
-    const emit = vi.fn();
+    const emit = createV2AcknowledgingEmit(5);
     const off = vi.fn();
     socketState.current = {
       connected: true,
@@ -1685,14 +1973,17 @@ describe('DraftProvider initial hydration', () => {
     unmount();
     expect(off).toHaveBeenCalledWith('connect', expect.any(Function));
     expect(off).toHaveBeenCalledWith('disconnect', expect.any(Function));
-    expect(emit).toHaveBeenCalledWith('draft:leave', { draftId: 'draft-1' });
+    expect(emit).toHaveBeenCalledWith('draft:leave:v2', {
+      draftId: 'draft-1',
+      generation: 3,
+    });
   });
 
   it('ignores an older private hydration after a visibility rejoin completes', async () => {
     const handlers = new Map<string, (...args: any[]) => void>();
     socketState.current = {
       connected: true,
-      emit: vi.fn(),
+      emit: createV2AcknowledgingEmit(1),
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
         handlers.set(event, handler);
       }),
@@ -1967,7 +2258,7 @@ describe('DraftProvider initial hydration', () => {
     const handlers = new Map<string, (...args: any[]) => void>();
     socketState.current = {
       connected: true,
-      emit: vi.fn(),
+      emit: createV1FallbackEmit(),
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
         handlers.set(event, handler);
       }),

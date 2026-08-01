@@ -57,9 +57,26 @@ describe('getSocketIoConfig', () => {
     );
 
     expect(backfillSource).toContain('prisma.draftEvent.findMany');
-    expect(backfillSource).toContain('createdAt: { gt: new Date(since) }');
+    expect(backfillSource).toContain('createdAt: { gte: boundary }');
+    expect(backfillSource).toContain("orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]");
+    expect(backfillSource).toContain('take: pageSize');
+    expect(backfillSource).toContain('cursor: { id: cursorId }, skip: 1');
+    expect(backfillSource).toContain('toDraftBackfillDelta(event)');
     expect(backfillSource).not.toContain('getRedis');
     expect(backfillSource).not.toContain('zrangebyscore');
+  });
+
+  it('negotiates the legacy join path explicitly without advertising v2 readiness', () => {
+    const socketServerSource = read('src/server/socketioServer.ts');
+    const legacyManagerSource = read('src/services/liveDraftWebSocketManager.ts');
+
+    expect(socketServerSource).toContain('DraftRealtimeJoinRequestSchema.safeParse(data)');
+    expect(socketServerSource).toContain('selectDraftRealtimeProtocol(realtimeProtocols, [2, 1])');
+    expect(socketServerSource).toContain("code: 'UNSUPPORTED_PROTOCOL'");
+    expect(socketServerSource).toContain('reply({ ok: true, draftId, protocol: 1 })');
+    expect(socketServerSource).toContain("socket.on('draft:join:v2'");
+    expect(legacyManagerSource).toContain('if (msg.v !== 1) return;');
+    expect(legacyManagerSource).not.toContain("emit('draft:event:v2'");
   });
 
   it('keeps local socket timers disabled so BullMQ remains the only clock authority', () => {

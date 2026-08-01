@@ -29,31 +29,77 @@ describe('Socket.IO room state architecture', () => {
     expect(source).not.toContain('roomTimers');
     expect(source).not.toContain('startDraftTimer');
     expect(source).toContain('Direct socket timers are disabled');
-    expect(source).toContain('draftProjectionService.buildRoomSnapshot');
+    expect(source).toContain('draftAuthorizedReadService.buildRoomSnapshot');
   });
 
-  it('authorizes and snapshots before joining or replaying a draft room', () => {
+  it('authorizes before reservation, then subscribes before taking the canonical baseline', () => {
     const source = readSocketServer();
+    const protocolNegotiation = source.indexOf(
+      'selectDraftRealtimeProtocol(realtimeProtocols, [2, 1])'
+    );
+    const authorizationRead = source.indexOf(
+      'const authorizationSnapshot = await draftAuthorizedReadService.buildRoomSnapshot'
+    );
+    const v2Abandonment = source.indexOf('await draftSocketV2Session.abandon()');
+    const roomReservation = source.indexOf('draftRoomStore.initRoomIfMissing');
+    const primaryJoin = source.indexOf('await socket.join(draftId)');
+    const aliasJoin = source.indexOf('await socket.join(`draft:${draftId}`)');
+    const baselineRead = source.indexOf(
+      'const snapshot = await draftAuthorizedReadService.buildRoomSnapshot'
+    );
+    const snapshotEmit = source.indexOf("socket.emit('draft:snapshot', snapshot)");
+    const backfillRead = source.indexOf('const deltas = await getDeltasSince');
 
-    expect(source.indexOf('draftProjectionService.buildRoomSnapshot')).toBeLessThan(
-      source.indexOf('draftRoomStore.initRoomIfMissing')
-    );
-    expect(source.indexOf("socket.emit('draft:snapshot', snapshot)")).toBeLessThan(
-      source.indexOf("socket.emit('draft:backfill', deltas)")
-    );
+    expect(protocolNegotiation).toBeLessThan(authorizationRead);
+    expect(v2Abandonment).toBeLessThan(authorizationRead);
+    expect(authorizationRead).toBeLessThan(roomReservation);
+    expect(roomReservation).toBeLessThan(primaryJoin);
+    expect(primaryJoin).toBeLessThan(aliasJoin);
+    expect(aliasJoin).toBeLessThan(baselineRead);
+    expect(baselineRead).toBeLessThan(snapshotEmit);
+    expect(snapshotEmit).toBeLessThan(backfillRead);
     expect(source).toContain('socket.data.draftId !== draftId');
+    expect(source.indexOf("socket.emit('draft:backfill', deltas)")).toBeLessThan(
+      source.indexOf('reply({ ok: true, draftId, protocol: 1 })')
+    );
+    expect(source).not.toContain('draftProjectionService.buildRoomSnapshot');
   });
 
-  it('replays persisted lifecycle events as revisioned canonical clock deltas', () => {
+  it('uses one allowlisted mapper for persisted pick and lifecycle replay', () => {
     const source = readSocketServer();
 
-    expect(source).toContain('DraftClockPayloadSchema.safeParse');
-    expect(source).toContain("buildLifecycleDelta('PAUSED')");
-    expect(source).toContain("buildLifecycleDelta('LIVE')");
-    expect(source).toContain('revision: clockResult.data.revision');
+    expect(source).toContain('toDraftBackfillDelta');
+    expect(source).toContain('const delta = toDraftBackfillDelta(event)');
+    expect(source).not.toContain('DraftClockPayloadSchema.safeParse');
+  });
+
+  it('keeps durable outbox draining independent from ephemeral subscription startup', () => {
+    const source = readSocketServer();
+
+    expect(source).toContain('const ensureDraftRealtimeSubscription = async');
+    expect(source).toContain('const drainDraftOutbox = async');
+    expect(source).toContain('void ensureDraftRealtimeSubscription();');
+    expect(source).toContain('void drainDraftOutbox();');
     expect(source).toContain(
-      "pickDeadlineAt: clockResult.data.status === 'LIVE' ? clockResult.data.deadlineAt : null"
+      'setInterval(() => void ensureDraftRealtimeSubscription(), draftOutboxDrainIntervalMs)'
     );
+    expect(source).toContain(
+      'setInterval(() => void drainDraftOutbox(), draftOutboxDrainIntervalMs)'
+    );
+  });
+
+  it('cleans up both room aliases and the participant reservation together', () => {
+    const source = readSocketServer();
+    const cleanupSource = source.slice(
+      source.indexOf('const removeDraftSubscription'),
+      source.indexOf('// Join draft room with enhanced validation')
+    );
+
+    expect(cleanupSource).toContain('Promise.allSettled');
+    expect(cleanupSource).toContain('socket.leave(draftId)');
+    expect(cleanupSource).toContain('socket.leave(`draft:${draftId}`)');
+    expect(cleanupSource).toContain('draftRoomStore.removeParticipant(draftId, socket.id)');
+    expect(cleanupSource).toContain('delete socket.data.draftRealtimeProtocol');
   });
 });
 

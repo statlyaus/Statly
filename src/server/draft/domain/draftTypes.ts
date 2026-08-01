@@ -51,10 +51,53 @@ export interface DraftAggregate {
   pickStartedAt: Date | null;
   pickDeadlineAt: Date | null;
   pausedRemainingSeconds: number | null;
+  clockDurationSeconds: number | null;
   schedulingVersion: number;
+  eventSequence: number;
   participants: DraftParticipantSnapshot[];
   settings: DraftSettingsSnapshot;
   picks: DraftPickSnapshot[];
+}
+
+interface DraftClockTokenBase {
+  draftId: string;
+  leagueId: string;
+  currentPick: number;
+  stateRevision: number;
+  durationSeconds: number;
+}
+
+/**
+ * Immutable durable clock state for one scheduling revision. League settings are deliberately
+ * absent: once a revision is created, later settings edits cannot redefine its duration.
+ */
+export type DraftClockToken =
+  | (DraftClockTokenBase & {
+      status: 'LIVE';
+      startedAt: Date;
+      deadlineAt: Date;
+      pausedRemainingSeconds: null;
+    })
+  | (DraftClockTokenBase & {
+      status: 'PAUSED';
+      startedAt: null;
+      deadlineAt: null;
+      pausedRemainingSeconds: number;
+    })
+  | (DraftClockTokenBase & {
+      status: 'SCHEDULED' | 'COMPLETED';
+      startedAt: null;
+      deadlineAt: null;
+      pausedRemainingSeconds: null;
+    });
+
+export type LiveDraftClockToken = Extract<DraftClockToken, { status: 'LIVE' }>;
+
+export interface DraftClockScheduleReceipt {
+  token: LiveDraftClockToken;
+  jobId: string;
+  acceptedAt: Date;
+  repaired: boolean;
 }
 
 export interface DraftTurn {
@@ -97,6 +140,8 @@ export interface DraftPickEventPayload {
   pickStartedAt?: string | null;
   pickDeadlineAt?: string | null;
   schedulingVersion?: number;
+  durationSeconds?: number;
+  serverNow?: string;
   isComplete?: boolean;
 }
 
@@ -117,6 +162,7 @@ export type DraftCommandEventType =
   | 'draft:resumed'
   | 'draft:started'
   | 'draft:completed'
+  | 'draft:clock-repaired'
   | 'draft:queue-updated';
 
 export type DraftOutboxPayload = DraftPickEventPayload | DraftLifecycleEventPayload | null;
@@ -128,6 +174,8 @@ export interface DraftOutboxEventRecord {
   event: DraftCommandEventType;
   payload: DraftOutboxPayload;
   publishState: boolean;
+  sequence: number | null;
+  clockRevision: number | null;
   attempts: number;
   lastError: string | null;
   lockedAt: Date | null;

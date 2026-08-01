@@ -316,8 +316,12 @@ model Draft {
   pickStartedAt          DateTime?
   pickDeadlineAt         DateTime?
   pausedRemainingSeconds Int?
+  // Immutable display duration captured for the current clock revision.
+  clockDurationSeconds   Int?
   // Version counter used to atomically claim scheduling of the next pick
   schedulingVersion      Int                  @default(0)
+  // Monotonic sequence for the durable shared draft event stream.
+  eventSequence          Int                  @default(0)
 
   // Lobby system fields
   lobbyStatus String?   @default("CLOSED")
@@ -336,22 +340,28 @@ model Draft {
 }
 
 model DraftEvent {
-  id           String    @id @default(cuid())
-  draftId      String
-  leagueId     String
-  event        String
-  payload      String?
-  publishState Boolean   @default(false)
-  attempts     Int       @default(0)
-  lastError    String?
-  lockedAt     DateTime?
-  lockedBy     String?
-  publishedAt  DateTime?
-  createdAt    DateTime  @default(now())
+  id            String    @id @default(cuid())
+  draftId       String
+  leagueId      String
+  event         String
+  payload       String?
+  publishState  Boolean   @default(false)
+  // Nullable for pre-v2 history; every newly persisted shared event receives a sequence.
+  sequence      Int?
+  // Present only on the one authoritative clock/snapshot intent for a revision.
+  clockRevision Int?
+  attempts      Int       @default(0)
+  lastError     String?
+  lockedAt      DateTime?
+  lockedBy      String?
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
 
   draft  Draft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
   league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 
+  @@unique([draftId, sequence])
+  @@unique([draftId, clockRevision])
   @@index([draftId, createdAt])
   @@index([leagueId, createdAt])
   @@index([lockedAt, createdAt])
