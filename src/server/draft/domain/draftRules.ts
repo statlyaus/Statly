@@ -1,4 +1,6 @@
-import { DraftDirection, DraftStatus } from '@prisma/client';
+import { DraftStatus } from '@prisma/client';
+
+import { getDraftPickCoordinate } from '@/lib/draftOrder';
 
 import type {
   DraftAggregate,
@@ -7,17 +9,14 @@ import type {
   DraftTypeValue,
 } from './draftTypes';
 
-function calculateLinearTurn(
+function calculateTurn(
+  draftType: DraftTypeValue,
   currentPick: number,
   participants: DraftParticipantSnapshot[]
 ): DraftTurn {
   const teamCount = participants.length;
-  if (teamCount === 0) {
-    throw new Error('Draft has no participants');
-  }
-
-  const round = Math.ceil(currentPick / teamCount);
-  const slot = ((currentPick - 1) % teamCount) + 1;
+  const coordinate = getDraftPickCoordinate(draftType, currentPick, teamCount);
+  const { round, slot } = coordinate;
   const participant = participants.find((item) => item.slot === slot);
   if (!participant) {
     throw new Error(`Draft order is missing slot ${slot}`);
@@ -26,7 +25,7 @@ function calculateLinearTurn(
   return {
     round,
     slot,
-    direction: DraftDirection.FORWARD,
+    direction: coordinate.direction,
     participant,
   };
 }
@@ -35,29 +34,7 @@ export function calculateSnakeTurn(
   currentPick: number,
   participants: DraftParticipantSnapshot[]
 ): DraftTurn {
-  const teamCount = participants.length;
-  if (teamCount === 0) {
-    throw new Error('Draft has no participants');
-  }
-
-  const round = Math.ceil(currentPick / teamCount);
-  const direction = round % 2 === 1 ? DraftDirection.FORWARD : DraftDirection.REVERSE;
-  const slot =
-    direction === DraftDirection.FORWARD
-      ? ((currentPick - 1) % teamCount) + 1
-      : teamCount - ((currentPick - 1) % teamCount);
-
-  const participant = participants.find((item) => item.slot === slot);
-  if (!participant) {
-    throw new Error(`Draft order is missing slot ${slot}`);
-  }
-
-  return {
-    round,
-    slot,
-    direction,
-    participant,
-  };
+  return calculateTurn('SNAKE', currentPick, participants);
 }
 
 export function calculateDraftTurn(
@@ -65,11 +42,7 @@ export function calculateDraftTurn(
   currentPick: number,
   participants: DraftParticipantSnapshot[]
 ): DraftTurn {
-  if (draftType === 'LINEAR') {
-    return calculateLinearTurn(currentPick, participants);
-  }
-
-  return calculateSnakeTurn(currentPick, participants);
+  return calculateTurn(draftType, currentPick, participants);
 }
 
 export function getRosterPickLimit(draft: DraftAggregate): number {

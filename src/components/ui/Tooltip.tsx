@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
 // Tooltip placement options
@@ -25,13 +25,7 @@ export type TooltipTrigger = 'hover' | 'click' | 'focus' | 'manual';
 
 // Tooltip variants
 export type TooltipVariant =
-  | 'default'
-  | 'dark'
-  | 'light'
-  | 'info'
-  | 'success'
-  | 'warning'
-  | 'error';
+  'default' | 'dark' | 'light' | 'info' | 'success' | 'warning' | 'error';
 
 // Tooltip size
 export type TooltipSize = 'sm' | 'md' | 'lg';
@@ -59,9 +53,9 @@ interface TooltipProps {
 // Variant configurations
 const VARIANT_CONFIG = {
   default: {
-    background: 'bg-gray-900',
-    text: 'text-white',
-    border: 'border-gray-900',
+    background: 'bg-popover',
+    text: 'text-popover-foreground',
+    border: 'border-border',
   },
   dark: {
     background: 'bg-black',
@@ -267,6 +261,16 @@ export default function Tooltip({
     }
   }, [interactive]);
 
+  // Escape is an immediate dismissal, even for interactive or delayed tooltips.
+  const dismissTooltip = React.useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = undefined;
+    }
+
+    setIsVisible(false);
+  }, []);
+
   // Update position when visible
   useEffect(() => {
     if (isVisible && triggerRef.current && tooltipRef.current) {
@@ -323,19 +327,18 @@ export default function Tooltip({
     return handlers;
   }, [trigger, isVisible, hideTooltip, showTooltip]);
 
-  // Close on escape key
+  // Listen for Escape for the lifetime of the trigger so a key press cannot race
+  // the effect that follows disclosure. This also cancels a pending delayed show.
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isVisible) {
-        hideTooltip();
+      if (event.key === 'Escape') {
+        dismissTooltip();
       }
     };
 
-    if (isVisible) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
-    }
-  }, [isVisible, hideTooltip]);
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [dismissTooltip]);
 
   // Clean up timeout on unmount
   useEffect(() => {
@@ -346,45 +349,51 @@ export default function Tooltip({
     };
   }, []);
 
-  const tooltipContent = (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div
-          id={tooltipId}
-          ref={tooltipRef}
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.15, ease: 'easeOut' }}
-          className={`
+  // Unmount the semantic tooltip immediately on dismissal. Retaining it for an
+  // exit animation leaves assistive technology associated with stale content.
+  const tooltipContent = isVisible ? (
+    <motion.div
+      id={tooltipId}
+      ref={tooltipRef}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+      className={`
             absolute z-50 rounded-lg shadow-lg border
             ${variantConfig.background} ${variantConfig.text} ${variantConfig.border}
             ${sizeConfig} ${maxWidth} ${contentClassName}
           `}
-          style={{
-            top: position.top,
-            left: position.left,
-            zIndex,
-          }}
-          onMouseEnter={
-            interactive
-              ? () => {
-                  if (timeoutRef.current) {
-                    clearTimeout(timeoutRef.current);
-                  }
-                }
-              : undefined
-          }
-          onMouseLeave={interactive ? hideTooltip : undefined}
-          role="tooltip"
-          aria-hidden={!isVisible}
-        >
-          {content}
-          {arrow && <TooltipArrow placement={placement} variant={variant} />}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+      style={{
+        top: position.top,
+        left: position.left,
+        zIndex,
+      }}
+      onMouseEnter={
+        interactive
+          ? () => {
+              if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+              }
+            }
+          : undefined
+      }
+      onMouseLeave={interactive ? hideTooltip : undefined}
+      role="tooltip"
+    >
+      {content}
+      {arrow && <TooltipArrow placement={placement} variant={variant} />}
+    </motion.div>
+  ) : null;
+
+  const hasElementTrigger = React.isValidElement<{ 'aria-describedby'?: string }>(children);
+  const describedChildren = hasElementTrigger
+    ? React.cloneElement(children, {
+        'aria-describedby':
+          [children.props['aria-describedby'], isVisible ? tooltipId : undefined]
+            .filter(Boolean)
+            .join(' ') || undefined,
+      })
+    : children;
 
   return (
     <>
@@ -392,9 +401,9 @@ export default function Tooltip({
         ref={triggerRef}
         className={`inline-block ${className}`}
         {...eventHandlers}
-        aria-describedby={isVisible ? tooltipId : undefined}
+        aria-describedby={!hasElementTrigger && isVisible ? tooltipId : undefined}
       >
-        {children}
+        {describedChildren}
       </div>
 
       {portal && typeof window !== 'undefined'

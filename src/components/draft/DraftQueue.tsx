@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
-import { AlertContainer, useAlert } from '@/components/ui/Alert';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import { GripVertical, ListPlus, Pencil, Trash2, X } from 'lucide-react';
 import type { DraftPlayer } from '@/types/draft';
@@ -10,7 +9,7 @@ import { cn } from '@/lib/utils';
 interface DraftQueueProps {
   queue: string[];
   availablePlayers: DraftPlayer[];
-  onQueueUpdate: (queue: string[]) => void;
+  onQueueUpdate: (queue: string[]) => Promise<void>;
   isLoading: boolean;
   confirm?: (options: {
     title: string;
@@ -30,11 +29,30 @@ export default function DraftQueue({
   confirm,
 }: DraftQueueProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const { success, error, alerts, removeAlert } = useAlert();
+  const [isMutationPending, setIsMutationPending] = useState(false);
+  const controlsDisabled = isLoading || isMutationPending;
 
-  const queuePlayers = queue
-    .map((id) => availablePlayers.find((p) => p.id === id))
-    .filter(Boolean) as DraftPlayer[];
+  const queueEntries = queue.map((playerId) => ({
+    playerId,
+    player: availablePlayers.find((player) => player.id === playerId),
+  }));
+
+  const commitQueue = useCallback(
+    async (nextQueue: string[]) => {
+      if (controlsDisabled) return;
+
+      setIsMutationPending(true);
+      try {
+        await onQueueUpdate(nextQueue);
+      } catch {
+        // The room-level mutation boundary owns recoverable feedback. Keep this local control
+        // resilient when a caller rejects so fire-and-forget queue actions never leak a promise.
+      } finally {
+        setIsMutationPending(false);
+      }
+    },
+    [controlsDisabled, onQueueUpdate]
+  );
 
   const handleDragEnd = useCallback(
     (result: any) => {
@@ -44,16 +62,16 @@ export default function DraftQueue({
       const [reorderedItem] = items.splice(result.source.index, 1);
       items.splice(result.destination.index, 0, reorderedItem);
 
-      onQueueUpdate(items);
+      void commitQueue(items);
     },
-    [queue, onQueueUpdate]
+    [commitQueue, queue]
   );
 
   const handleRemovePlayer = useCallback(
     (playerId: string) => {
-      onQueueUpdate(queue.filter((id) => id !== playerId));
+      void commitQueue(queue.filter((id) => id !== playerId));
     },
-    [queue, onQueueUpdate]
+    [commitQueue, queue]
   );
 
   const handleClearQueue = useCallback(() => {
@@ -65,33 +83,23 @@ export default function DraftQueue({
         confirmText: 'Clear',
         cancelText: 'Cancel',
         onConfirm: async () => {
-          try {
-            await Promise.resolve(onQueueUpdate([]));
-            success('Queue cleared');
-          } catch (e) {
-            error('Failed to clear queue', e instanceof Error ? e.message : String(e));
-          }
+          await commitQueue([]);
         },
       });
     } else if (
       window.confirm('Are you sure you want to clear your entire queue? This cannot be undone.')
     ) {
-      try {
-        onQueueUpdate([]);
-        success('Queue cleared');
-      } catch (e) {
-        error('Failed to clear queue', e instanceof Error ? e.message : String(e));
-      }
+      void commitQueue([]);
     }
-  }, [confirm, onQueueUpdate, success, error]);
+  }, [commitQueue, confirm]);
 
   const handleAddToQueue = useCallback(
     (player: DraftPlayer) => {
       if (queue.includes(player.id)) return;
 
-      onQueueUpdate([...queue, player.id]);
+      void commitQueue([...queue, player.id]);
     },
-    [queue, onQueueUpdate]
+    [commitQueue, queue]
   );
 
   const availableForQueue = availablePlayers.filter(
@@ -100,21 +108,20 @@ export default function DraftQueue({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div role="status" aria-live="polite" aria-atomic="true">
-        <AlertContainer alerts={alerts} onRemove={removeAlert} position="top-right" />
-      </div>
-
       <section
         className="rounded-md border border-border bg-background p-3"
         aria-label="Draft queue"
+        aria-busy={controlsDisabled}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-foreground">Draft Queue</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              {queue.length === 0
-                ? 'Build your auto-pick priority list.'
-                : `${queue.length} queued`}
+              {controlsDisabled
+                ? 'Saving queue…'
+                : queueEntries.length === 0
+                  ? 'Build your auto-pick priority list.'
+                  : `${queueEntries.length} queued`}
             </p>
           </div>
 
@@ -122,7 +129,8 @@ export default function DraftQueue({
             <button
               type="button"
               onClick={() => setIsEditing(!isEditing)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              disabled={controlsDisabled}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={isEditing ? 'Finish editing draft queue' : 'Edit draft queue'}
               title={isEditing ? 'Done' : 'Edit'}
             >
@@ -131,7 +139,7 @@ export default function DraftQueue({
             <button
               type="button"
               onClick={handleClearQueue}
-              disabled={queue.length === 0 || isLoading}
+              disabled={queueEntries.length === 0 || controlsDisabled}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Clear draft queue"
               title="Clear"
@@ -141,7 +149,7 @@ export default function DraftQueue({
           </div>
         </div>
 
-        {queue.length === 0 ? (
+        {queueEntries.length === 0 ? (
           <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30 px-3 py-5 text-center">
             <ListPlus className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
             <p className="mt-2 text-sm font-medium text-foreground">Your queue is empty</p>
@@ -159,12 +167,12 @@ export default function DraftQueue({
                   className="mt-3 flex max-h-72 flex-col gap-2 overflow-y-auto pr-1"
                   aria-label="Queued players"
                 >
-                  {queuePlayers.map((player, index) => (
+                  {queueEntries.map(({ playerId, player }, index) => (
                     <Draggable
-                      key={player.id}
-                      draggableId={player.id}
+                      key={playerId}
+                      draggableId={playerId}
                       index={index}
-                      isDragDisabled={!isEditing}
+                      isDragDisabled={!isEditing || controlsDisabled}
                     >
                       {(provided, snapshot) => (
                         <li
@@ -191,23 +199,32 @@ export default function DraftQueue({
 
                             <div className="min-w-0 flex-1">
                               <h3 className="truncate text-sm font-semibold text-foreground">
-                                {player.name}
+                                {player?.name ?? 'Queued player'}
                               </h3>
                               <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                                <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-                                  {player.position}
-                                </span>
-                                <span className="truncate">{player.club}</span>
-                                {player.adp && <span className="shrink-0">ADP {player.adp}</span>}
+                                {player ? (
+                                  <>
+                                    <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+                                      {player.position}
+                                    </span>
+                                    <span className="truncate">{player.club}</span>
+                                    {player.adp && (
+                                      <span className="shrink-0">ADP {player.adp}</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span>Player details loading</span>
+                                )}
                               </div>
                             </div>
 
                             {isEditing && (
                               <button
                                 type="button"
-                                onClick={() => handleRemovePlayer(player.id)}
-                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                aria-label={`Remove ${player.name} from queue`}
+                                onClick={() => handleRemovePlayer(playerId)}
+                                disabled={controlsDisabled}
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label={`Remove ${player?.name ?? 'queued player'} from queue`}
                               >
                                 <X className="h-4 w-4" />
                               </button>
@@ -228,6 +245,7 @@ export default function DraftQueue({
       <section
         className="flex min-h-0 flex-1 flex-col rounded-md border border-border bg-background p-3"
         aria-label="Available players for queue"
+        aria-busy={controlsDisabled}
       >
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">Add to Queue</h2>
@@ -264,7 +282,7 @@ export default function DraftQueue({
                   <button
                     type="button"
                     onClick={() => handleAddToQueue(player)}
-                    disabled={isLoading}
+                    disabled={controlsDisabled}
                     className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Add

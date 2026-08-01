@@ -96,6 +96,7 @@ export const DraftRoomSnapshotPayloadSchema = z
       totalPicks: z.number().int().nonnegative(),
       round: z.number().int().positive(),
       direction: z.enum(['FORWARD', 'REVERSE']),
+      draftType: z.enum(['SNAKE', 'LINEAR']).optional(),
       clock: DraftClockPayloadSchema,
       onClockMemberId: z.string().nullable(),
       participants: z.array(DraftRoomSnapshotParticipantSchema),

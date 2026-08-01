@@ -1,9 +1,13 @@
 import type { NextRequest } from 'next/server';
+import { z } from 'zod';
+
 import { successResponse, errorResponse, commonErrors } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUserId } from '@/lib/serverAuth';
 import {
   DraftPrivateStateAccessError,
+  DraftPrivateStateConflictError,
+  DraftPrivateStateValidationError,
   draftPrivateStateService,
 } from '@/server/draft/services/DraftPrivateStateService';
 
@@ -11,13 +15,15 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-interface PreQueueRequest {
-  queue: Array<{
-    playerId: string;
-    rank: number;
-    notes?: string;
-  }>;
-}
+const PreQueueRequestSchema = z.object({
+  queue: z.array(
+    z.object({
+      playerId: z.string().trim().min(1),
+      rank: z.coerce.number().int().positive(),
+      notes: z.string().optional(),
+    })
+  ),
+});
 
 async function authenticate(request: NextRequest): Promise<string | Response> {
   const actorUserId = await getAuthenticatedUserId(request);
@@ -37,6 +43,12 @@ function privateResponse(data: unknown): Response {
 function privateStateErrorResponse(error: unknown, operation: string, draftId: string): Response {
   if (error instanceof DraftPrivateStateAccessError) {
     return commonErrors.forbidden(error.message);
+  }
+  if (error instanceof DraftPrivateStateValidationError) {
+    return commonErrors.badRequest(error.message);
+  }
+  if (error instanceof DraftPrivateStateConflictError) {
+    return errorResponse(error.message, 409, 'CONFLICT');
   }
 
   logger.error(`Failed to ${operation}`, {
@@ -82,25 +94,21 @@ export async function PUT(
       return actorUserId;
     }
 
-    const body = (await request.json().catch(() => null)) as PreQueueRequest | null;
-    if (!body || !Array.isArray(body.queue)) {
-      return errorResponse('Invalid queue format', 400);
+    const parsed = PreQueueRequestSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return commonErrors.unprocessableEntity('Invalid queue format', {
+        issues: parsed.error.flatten(),
+      });
     }
 
-    // Validate queue items
-    for (const item of body.queue) {
-      if (!item.playerId || typeof item.rank !== 'number') {
-        return errorResponse('Invalid queue item format', 400);
-      }
-    }
-
-    const updatedQueue = await draftPrivateStateService.replacePreDraftQueue({
+    const result = await draftPrivateStateService.replacePreDraftQueue({
       draftId,
       actorUserId,
-      queue: body.queue,
+      unresolvedPlayerPolicy: 'reject',
+      queue: parsed.data.queue,
     });
 
-    return privateResponse({ queue: updatedQueue });
+    return privateResponse(result);
   } catch (error) {
     return privateStateErrorResponse(error, 'update pre-draft queue', (await params).id);
   }

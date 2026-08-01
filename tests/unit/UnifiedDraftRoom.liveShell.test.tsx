@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import UnifiedDraftRoom from '@/components/draft/UnifiedDraftRoom';
@@ -15,14 +16,18 @@ type DraftRoomPlayerFixture = {
 const playerGridSpy = vi.hoisted(() => vi.fn());
 const draftLeftRailSpy = vi.hoisted(() => vi.fn());
 const pickFeedSpy = vi.hoisted(() => vi.fn());
+const draftWatchlistSpy = vi.hoisted(() => vi.fn());
 const openLeagueSocialSpy = vi.hoisted(() => vi.fn());
 const setLeagueContextSpy = vi.hoisted(() => vi.fn());
+const updateQueueSpy = vi.hoisted(() => vi.fn());
 
 const draftContext = vi.hoisted<{
   status: 'SCHEDULED' | 'LIVE' | 'PAUSED' | 'COMPLETED';
   availablePlayers: DraftRoomPlayerFixture[];
+  isSaving: boolean;
 }>(() => ({
   status: 'LIVE',
+  isSaving: false,
   availablePlayers: [
     {
       id: 'player-1',
@@ -120,7 +125,10 @@ vi.mock('@/components/draft/DraftLeftRail', () => ({
 }));
 
 vi.mock('@/components/DraftWatchlist', () => ({
-  default: () => <div>Watchlist panel</div>,
+  default: (props: { isLoading: boolean; isQueueMutationPending: boolean }) => {
+    draftWatchlistSpy(props);
+    return <div>Watchlist panel</div>;
+  },
 }));
 
 vi.mock('@/components/draft/ConnectionStatus', () => ({
@@ -136,7 +144,14 @@ vi.mock('@/components/draft/DraftControls', () => ({
 }));
 
 vi.mock('@/components/draft/DraftQueue', () => ({
-  default: () => <div>Draft queue panel</div>,
+  default: ({ onQueueUpdate }: { onQueueUpdate: (queue: string[]) => Promise<void> }) => (
+    <div>
+      Draft queue panel
+      <button type="button" onClick={() => void onQueueUpdate(['player-1'])}>
+        Trigger queue update
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('@/components/draft/DraftStatusBanner', () => ({
@@ -144,7 +159,12 @@ vi.mock('@/components/draft/DraftStatusBanner', () => ({
 }));
 
 vi.mock('@/components/draft/PlayerGrid', () => ({
-  default: (props: { players: Array<{ name: string }>; sortBy: string }) => {
+  default: (props: {
+    players: Array<{ name: string }>;
+    sortBy: string;
+    isLoading: boolean;
+    isQueueMutationPending: boolean;
+  }) => {
     playerGridSpy(props);
 
     return (
@@ -185,7 +205,7 @@ vi.mock('@/contexts/DraftContext', () => ({
     error: null,
     forceRefresh: vi.fn(),
     isLoading: false,
-    isSaving: false,
+    isSaving: draftContext.isSaving,
     liveState: { isYourTurn: false },
     makePick: vi.fn(),
     participants: [
@@ -229,7 +249,7 @@ vi.mock('@/contexts/DraftContext', () => ({
     removeFromWatchlist: vi.fn(),
     selectedCategories: [],
     toggleWatchlist: vi.fn(),
-    updateQueue: vi.fn(),
+    updateQueue: updateQueueSpy,
     watchlistItems: [],
   }),
 }));
@@ -239,9 +259,13 @@ describe('UnifiedDraftRoom live shell composition', () => {
     playerGridSpy.mockClear();
     draftLeftRailSpy.mockClear();
     pickFeedSpy.mockClear();
+    draftWatchlistSpy.mockClear();
     openLeagueSocialSpy.mockClear();
     setLeagueContextSpy.mockClear();
+    updateQueueSpy.mockReset();
+    updateQueueSpy.mockResolvedValue(undefined);
     draftContext.status = 'LIVE';
+    draftContext.isSaving = false;
     draftContext.availablePlayers = [
       {
         id: 'player-1',
@@ -396,6 +420,70 @@ describe('UnifiedDraftRoom live shell composition', () => {
       'Average Scored',
       'Pending Score',
     ]);
+  });
+
+  it('keeps draft-action and queue-action pending state independent', () => {
+    draftContext.isSaving = true;
+
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    expect(playerGridSpy.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ isLoading: true, isQueueMutationPending: false })
+    );
+    expect(draftWatchlistSpy.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ isLoading: true, isQueueMutationPending: false })
+    );
+  });
+
+  it('keeps the draft board mounted and offers Retry after a queue update fails', async () => {
+    const user = userEvent.setup();
+    let resolveRetry: (() => void) | undefined;
+    updateQueueSpy.mockRejectedValueOnce(new Error('Queue request failed'));
+    updateQueueSpy.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRetry = resolve;
+        })
+    );
+
+    render(<UnifiedDraftRoom draftId="draft-1" userId="statly-dev-tester" />);
+
+    await user.click(screen.getByRole('button', { name: 'Trigger queue update' }));
+
+    const feedback = await screen.findByRole('alert');
+    expect(feedback).toHaveTextContent(
+      'Your queue could not be saved. The draft is still live; review the current queue and retry.'
+    );
+    expect(screen.getByRole('region', { name: 'Draft board' })).toBeInTheDocument();
+    expect(screen.queryByText('Draft Error')).not.toBeInTheDocument();
+
+    const retryButton = screen.getByRole('button', { name: 'Retry queue update' });
+    await user.click(retryButton);
+
+    const retryingButton = await screen.findByRole('button', { name: 'Retry queue update' });
+    expect(retryingButton).toBe(retryButton);
+    expect(retryingButton).toHaveAttribute('aria-disabled', 'true');
+    expect(retryingButton).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('Retrying queue update…');
+    expect(screen.getByRole('status')).not.toContainElement(retryingButton);
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].isLoading).toBe(false);
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].isQueueMutationPending).toBe(true);
+    expect(draftWatchlistSpy.mock.calls.at(-1)?.[0].isLoading).toBe(false);
+    expect(draftWatchlistSpy.mock.calls.at(-1)?.[0].isQueueMutationPending).toBe(true);
+    expect(updateQueueSpy).toHaveBeenNthCalledWith(1, ['player-1']);
+    expect(updateQueueSpy).toHaveBeenNthCalledWith(2, ['player-1']);
+
+    await act(async () => {
+      resolveRetry?.();
+      await Promise.resolve();
+    });
+
+    const dismissButton = await screen.findByRole('button', { name: 'Dismiss' });
+    expect(dismissButton).toBe(retryButton);
+    expect(dismissButton).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('Queue saved.');
+    expect(playerGridSpy.mock.calls.at(-1)?.[0].isQueueMutationPending).toBe(false);
+    expect(draftWatchlistSpy.mock.calls.at(-1)?.[0].isQueueMutationPending).toBe(false);
   });
 
   it('keeps desktop and mobile pick feed content ids unique when the mobile feed is open', () => {

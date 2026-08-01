@@ -111,12 +111,12 @@ export default function LivePickHeader({
         yourSlot,
         status: normalizedStatus as DraftRoomStatus,
         timePerPick,
+        draftType: draftData.draftType,
       }),
     [draftData, normalizedStatus, timePerPick, yourSlot]
   );
   const nextUserPick = sequence.nextUserPick;
   const picksUntilYourTurn = nextUserPick?.picksUntil ?? 0;
-  const estimatedTimeUntilYourTurn = nextUserPick?.estimatedSecondsUntil ?? 0;
 
   const getTimerState = useMemo(
     () => () => {
@@ -404,16 +404,9 @@ export default function LivePickHeader({
                 }`}
                 role="status"
                 aria-live="polite"
-                aria-label={`Your turn status: ${picksUntilYourTurn === 1 ? 'You are up next' : `${picksUntilYourTurn} picks until your turn`}`}
+                aria-label={`Your next pick is pick ${nextUserPick?.overall}`}
               >
-                {picksUntilYourTurn === 1
-                  ? "You're up next"
-                  : `${picksUntilYourTurn} pick${picksUntilYourTurn > 1 ? 's' : ''} until your turn`}
-                {estimatedTimeUntilYourTurn > 0 && (
-                  <span className="ml-1 opacity-75">
-                    / about {formatTime(estimatedTimeUntilYourTurn)}
-                  </span>
-                )}
+                Your next pick: Pick {nextUserPick?.overall}
               </div>
             )}
           </div>

@@ -9,6 +9,7 @@ const draftData = {
   totalPicks: 12,
   round: 1,
   direction: 'FORWARD',
+  draftType: 'SNAKE' as const,
   status: 'LIVE',
   pickDeadlineAt: new Date(Date.now() + 120_000).toISOString(),
   participants: [
@@ -74,7 +75,8 @@ describe('LivePickHeader', () => {
     expect(pickTrain).toBeInTheDocument();
     expect(screen.queryByLabelText('Latest draft activity')).not.toBeInTheDocument();
     expect(screen.queryByText('Latest pick')).not.toBeInTheDocument();
-    const nextPickStatus = screen.getByRole('status', { name: /you are up next/i });
+    const nextPickStatus = screen.getByRole('status', { name: 'Your next pick is pick 2' });
+    expect(nextPickStatus).toHaveTextContent('Your next pick: Pick 2');
     expect(nextPickStatus).toHaveClass('bg-[color:var(--draft-broadcast-yellow)]');
     expect(nextPickStatus).not.toHaveClass('bg-accent');
     expect(screen.getByText('On the clock')).toBeInTheDocument();

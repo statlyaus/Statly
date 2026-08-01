@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { AlertCircle, Bookmark, Clock, ListPlus, Search, Trash2, Zap } from 'lucide-react';
 
 import type { DraftPlayer } from '@/types/draft';
+import { getStatlyZPresentation } from '@/lib/statlyZPresentation';
 import { cn } from '@/lib/utils';
 
 interface WatchlistItem {
@@ -32,13 +33,22 @@ interface WatchlistProps {
   pendingWatchlistPlayerIds?: string[];
   onRemoveFromWatchlist: (playerId: string) => void | Promise<void>;
   isLoading?: boolean;
+  isQueueMutationPending?: boolean;
 }
 
 type WatchlistRow = {
   item: WatchlistItem;
   player: Pick<DraftPlayer, 'id' | 'name' | 'position' | 'club'> &
     Partial<
-      Pick<DraftPlayer, 'avgPoints' | 'averagePoints' | 'adp' | 'injuryStatus' | 'isAvailable'>
+      Pick<
+        DraftPlayer,
+        | 'adp'
+        | 'injuryStatus'
+        | 'isAvailable'
+        | 'statlyZScore'
+        | 'statlyZBreakdown'
+        | 'statlyZMissingCategories'
+      >
     >;
   draftablePlayer: DraftPlayer | null;
   order: number;
@@ -82,7 +92,13 @@ function getInjuryLabel(player: WatchlistRow['player']): string | null {
 }
 
 function WatchlistPlayerMeta({ row }: { row: WatchlistRow }) {
-  const avgPoints = row.player.avgPoints ?? row.player.averagePoints;
+  const statlyZ = row.draftablePlayer
+    ? getStatlyZPresentation(row.player)
+    : {
+        state: 'no-data' as const,
+        value: '—',
+        accessibleLabel: 'Statly Z unavailable for this drafted or unavailable player',
+      };
 
   return (
     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -91,7 +107,14 @@ function WatchlistPlayerMeta({ row }: { row: WatchlistRow }) {
       </span>
       <span className="truncate">{row.player.club}</span>
       {typeof row.player.adp === 'number' && <span className="shrink-0">ADP {row.player.adp}</span>}
-      {typeof avgPoints === 'number' && <span className="shrink-0">{avgPoints.toFixed(1)} avg</span>}
+      <span className="shrink-0" aria-label={statlyZ.accessibleLabel}>
+        Statly Z {statlyZ.value}
+      </span>
+      {statlyZ.state === 'partial' && (
+        <span className="shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-medium uppercase">
+          Partial
+        </span>
+      )}
     </div>
   );
 }
@@ -124,6 +147,7 @@ interface WatchlistRowActionsProps {
   canActOnPlayer: boolean;
   canDraft: boolean;
   isLoading: boolean;
+  isQueueMutationPending: boolean;
   isWatchlistPending: boolean;
   onAddToQueue?: (player: DraftPlayer) => void | Promise<void>;
   onDraftPlayer: (player: DraftPlayer) => void | Promise<void>;
@@ -135,6 +159,7 @@ function WatchlistRowActions({
   canActOnPlayer,
   canDraft,
   isLoading,
+  isQueueMutationPending,
   isWatchlistPending,
   onAddToQueue,
   onDraftPlayer,
@@ -148,7 +173,7 @@ function WatchlistRowActions({
           onClick={() => {
             if (row.draftablePlayer) void onAddToQueue(row.draftablePlayer);
           }}
-          disabled={!canActOnPlayer || row.isQueued || isLoading}
+          disabled={!canActOnPlayer || row.isQueued || isQueueMutationPending}
           className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={
             row.isQueued
@@ -197,6 +222,7 @@ interface WatchlistPlayerRowProps {
   row: WatchlistRow;
   canDraft: boolean;
   isLoading: boolean;
+  isQueueMutationPending: boolean;
   pendingWatchlistIds: ReadonlySet<string>;
   onAddToQueue?: (player: DraftPlayer) => void | Promise<void>;
   onDraftPlayer: (player: DraftPlayer) => void | Promise<void>;
@@ -207,6 +233,7 @@ function WatchlistPlayerRow({
   row,
   canDraft,
   isLoading,
+  isQueueMutationPending,
   pendingWatchlistIds,
   onAddToQueue,
   onDraftPlayer,
@@ -252,6 +279,7 @@ function WatchlistPlayerRow({
             canActOnPlayer={canActOnPlayer}
             canDraft={canDraft}
             isLoading={isLoading}
+            isQueueMutationPending={isQueueMutationPending}
             isWatchlistPending={isWatchlistPending}
             onAddToQueue={onAddToQueue}
             onDraftPlayer={onDraftPlayer}
@@ -275,6 +303,7 @@ export default function DraftWatchlist({
   pendingWatchlistPlayerIds = [],
   onRemoveFromWatchlist,
   isLoading = false,
+  isQueueMutationPending = false,
 }: WatchlistProps) {
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -436,6 +465,7 @@ export default function DraftWatchlist({
                 row={row}
                 canDraft={canDraft}
                 isLoading={isLoading}
+                isQueueMutationPending={isQueueMutationPending}
                 pendingWatchlistIds={pendingWatchlistIds}
                 onAddToQueue={onAddToQueue}
                 onDraftPlayer={onDraftPlayer}

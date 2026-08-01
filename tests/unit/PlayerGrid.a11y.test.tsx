@@ -81,7 +81,7 @@ describe('PlayerGrid accessibility', () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it('renders the player list as a native table with accessible actions', () => {
+  it('renders the player list as a native table with accessible actions', async () => {
     const onPlayerSelect = vi.fn();
     const onAddToQueue = vi.fn();
 
@@ -114,11 +114,24 @@ describe('PlayerGrid accessibility', () => {
 
     const playerRow = within(table).getByRole('row', { name: /marcus bontempelli/i });
     expect(within(playerRow).getByText('3.42')).toBeInTheDocument();
-    expect(within(playerRow).queryByText(/combined z score/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sort by Statly Z' })).toHaveAttribute(
-      'title',
-      "Combined Z score across this league's selected scoring categories."
+    const statlyZSort = screen.getByRole('button', { name: 'Sort by Statly Z' });
+    const statlyZInfo = screen.getByRole('button', { name: 'About Statly Z' });
+    expect(statlyZSort).not.toHaveAttribute('title');
+
+    act(() => statlyZInfo.focus());
+    const statlyZTooltip = await screen.findByRole('tooltip');
+    expect(statlyZTooltip).toHaveTextContent(
+      "Statly Z combines a player's results across your league's scoring categories. Higher is better."
     );
+    expect(statlyZInfo).toHaveAttribute('aria-describedby', statlyZTooltip.id);
+    expect(statlyZSort).not.toHaveAttribute('aria-describedby');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(statlyZInfo).toHaveFocus();
+
+    fireEvent.click(statlyZSort);
+    expect(defaultProps.onSortChange).toHaveBeenCalledWith('statlyZ');
     fireEvent.click(screen.getByRole('button', { name: 'Sort by Goals' }));
     expect(defaultProps.onSortChange).toHaveBeenCalledWith('category:goals');
     expect(within(playerRow).getByRole('cell', { name: 'Goals: 1.1' })).toBeInTheDocument();
@@ -168,6 +181,16 @@ describe('PlayerGrid accessibility', () => {
     await waitFor(() => {
       expect(selectButton).not.toBeDisabled();
     });
+  });
+
+  it('disables only queue actions while a queue update is pending', () => {
+    render(<PlayerGrid {...defaultProps} isQueueMutationPending />);
+
+    expect(screen.getByRole('button', { name: /add marcus bontempelli to queue/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /select marcus bontempelli/i })).not.toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /add marcus bontempelli to watchlist/i })
+    ).not.toBeDisabled();
   });
 
   it('keeps unrelated watchlist buttons available while one player is pending', () => {

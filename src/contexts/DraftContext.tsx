@@ -12,7 +12,7 @@ import React, {
 
 import { useSocket } from '@/contexts/SocketContext';
 import { fetchApi } from '@/lib/api';
-import { getSlotForOverallPick } from '@/lib/draftRoomSequencing';
+import { getDraftPickCoordinate } from '@/lib/draftOrder';
 import {
   DraftClockPayloadSchema,
   DraftRoomSnapshotPayloadSchema,
@@ -385,6 +385,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   includesParticipantQueues: boolean;
   includesPicks: boolean;
   includesAvailablePlayers: boolean;
+  includesDraftType: boolean;
   ts?: number;
   revision?: number;
   throughSequence?: number;
@@ -403,6 +404,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       includesParticipantQueues: false,
       includesPicks: false,
       includesAvailablePlayers: false,
+      includesDraftType: false,
     };
   }
 
@@ -424,6 +426,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       totalPicks: snapshot.state.totalPicks,
       round: snapshot.state.round,
       direction: snapshot.state.direction,
+      draftType: snapshot.state.draftType,
       schedulingVersion: snapshot.revision,
       serverNow: snapshot.serverNow,
       clock,
@@ -453,6 +456,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
       includesParticipantQueues: false,
       includesPicks: true,
       includesAvailablePlayers: false,
+      includesDraftType: snapshot.state.draftType !== undefined,
       ts: Date.parse(snapshot.serverNow),
       revision: snapshot.revision,
       throughSequence: snapshot.throughSequence,
@@ -467,6 +471,11 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   const includesParticipantQueues = participantQueueIncluded((legacyRaw as any).participants);
   const includesPicks = 'picks' in legacyRaw;
   const includesAvailablePlayers = 'availablePlayers' in legacyRaw;
+  const includesDraftType =
+    'draftType' in draftSource ||
+    (draftSource.settings &&
+      typeof draftSource.settings === 'object' &&
+      'draftType' in draftSource.settings);
 
   const picks = toArray<DraftPick>(legacyRaw.picks)
     .slice()
@@ -518,6 +527,7 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
     includesParticipantQueues,
     includesPicks,
     includesAvailablePlayers,
+    includesDraftType: Boolean(includesDraftType),
     ts: legacyRaw.ts ?? (clockResult.success ? Date.parse(clockResult.data.serverNow) : undefined),
     revision: clockResult.success ? clockResult.data.revision : normalizedRevision,
     throughSequence:
@@ -527,9 +537,14 @@ function normalizeSnapshot(raw?: DraftSnapshot | null): {
   };
 }
 
-function computeCurrentSlotFromSnake(currentPick: number, teamCount: number): number | undefined {
-  const slot = getSlotForOverallPick(currentPick, teamCount);
-  return slot > 0 ? slot : undefined;
+function computeCurrentSlot(
+  currentPick: number,
+  teamCount: number,
+  draftType: DraftCore['settings']['draftType']
+): number | undefined {
+  if (!Number.isInteger(currentPick) || currentPick <= 0 || teamCount <= 0) return undefined;
+
+  return getDraftPickCoordinate(draftType, currentPick, teamCount).slot;
 }
 
 function normalizeCommandPick(raw: unknown, participants: DraftParticipant[]): DraftPick | null {
@@ -900,11 +915,22 @@ function applySnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot
 }
 
 function mergeSnapshotState(state: DraftState, snapshot: NormalizedDraftSnapshot): DraftState {
-  const draft = mergeSnapshotDraft(snapshot.draft, state.draft);
-  const participants = snapshot.includesParticipantQueues
+  const incomingDraft =
+    !snapshot.includesDraftType && snapshot.draft && state.draft
+      ? {
+          ...snapshot.draft,
+          settings: {
+            ...snapshot.draft.settings,
+            draftType: state.draft.settings.draftType,
+          },
+        }
+      : snapshot.draft;
+  const draft = mergeSnapshotDraft(incomingDraft, state.draft);
+  const snapshotParticipants = snapshot.includesParticipantQueues
     ? snapshot.participants
     : mergeParticipantQueues(snapshot.participants, state.participants);
   const picks = snapshot.includesPicks ? snapshot.picks : state.picks;
+  const participants = reconcileParticipantQueues(snapshotParticipants, picks);
   const availablePlayers = excludeDraftedAvailablePlayers(
     snapshot.includesAvailablePlayers ? snapshot.availablePlayers : state.availablePlayers,
     picks
@@ -947,6 +973,31 @@ function getDraftedPlayerIds(picks: DraftPick[]): Set<string> {
   return new Set(picks.map((pick) => String((pick as any).player?.id ?? (pick as any).playerId)));
 }
 
+export function reconcileQueueWithPicks(queue: unknown, picks: DraftPick[]): string[] {
+  const draftedPlayerIds = getDraftedPlayerIds(picks);
+  const seenPlayerIds = new Set<string>();
+  const reconciledQueue: string[] = [];
+
+  for (const value of toArray<unknown>(queue)) {
+    const playerId = String(value ?? '').trim();
+    if (!playerId || draftedPlayerIds.has(playerId) || seenPlayerIds.has(playerId)) continue;
+    seenPlayerIds.add(playerId);
+    reconciledQueue.push(playerId);
+  }
+
+  return reconciledQueue;
+}
+
+function reconcileParticipantQueues(
+  participants: DraftParticipant[],
+  picks: DraftPick[]
+): DraftParticipant[] {
+  return participants.map((participant) => ({
+    ...participant,
+    queue: reconcileQueueWithPicks(participant.queue, picks),
+  }));
+}
+
 function applyPersistedPicksState(state: DraftState, incomingPicks: DraftPick[]): DraftState {
   const picks = mergePersistedPicks(state.picks, incomingPicks);
   const draftedPlayerIds = getDraftedPlayerIds(picks);
@@ -954,6 +1005,7 @@ function applyPersistedPicksState(state: DraftState, incomingPicks: DraftPick[])
   return {
     ...state,
     picks,
+    participants: reconcileParticipantQueues(state.participants, picks),
     availablePlayers: state.availablePlayers.filter(
       (player) => !draftedPlayerIds.has(String(player.id))
     ),
@@ -1025,12 +1077,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
       });
       const pid = String((pick as any).player?.id ?? (pick as any).playerId);
       const availablePlayers = next.availablePlayers.filter((p) => String(p.id) !== pid);
-      const participants = next.participants.map((participant) => ({
-        ...participant,
-        queue: Array.isArray(participant.queue)
-          ? participant.queue.filter((queuedId) => String(queuedId) !== pid)
-          : [],
-      }));
+      const participants = reconcileParticipantQueues(next.participants, picks);
       const nextCurrentPick =
         typeof payload.currentPick === 'number' && Number.isFinite(payload.currentPick)
           ? payload.currentPick
@@ -1137,7 +1184,7 @@ function applyDelta(state: DraftState, delta: DraftDelta): DraftState {
       const participants = next.participants.map((m) =>
         (memberId && String((m as any).id) === String(memberId)) ||
         (userId && String((m as any).userId) === String(userId))
-          ? { ...m, queue: Array.isArray(queue) ? queue : [] }
+          ? { ...m, queue: reconcileQueueWithPicks(queue, next.picks) }
           : m
       );
       return { ...next, participants };
@@ -1553,6 +1600,7 @@ export function DraftProvider({
   const initialHydrateStartedRef = useRef(Boolean(initialSnapshot));
   const availablePlayersHydratingRef = useRef(false);
   const persistedPickHydratingRef = useRef(false);
+  const queueMutationInFlightRef = useRef(false);
   const privateStateHydrationRef = useRef<{
     generation: number;
     controller: AbortController | null;
@@ -1562,9 +1610,9 @@ export function DraftProvider({
     const snap = normalizeSnapshot(initialSnapshot ?? null);
     return {
       draft: snap.draft,
-      participants: snap.participants,
+      participants: reconcileParticipantQueues(snap.participants, snap.picks),
       picks: snap.picks,
-      availablePlayers: snap.availablePlayers,
+      availablePlayers: excludeDraftedAvailablePlayers(snap.availablePlayers, snap.picks),
       draftReadiness: snap.draftReadiness,
       selectedCategories: snap.selectedCategories,
       statSeason: snap.statSeason,
@@ -2060,37 +2108,24 @@ export function DraftProvider({
   const updateQueue = useCallback(
     async (queue: string[]) => {
       if (!Array.isArray(queue)) {
-        dispatch({
-          type: 'SET_ERROR',
-          error: 'Queue must be an array',
-        });
-        return;
+        throw new Error('Queue must be an array');
       }
 
-      const availableIds = new Set(state.availablePlayers.map((p) => String(p.id)));
-      const invalidIds = queue.filter((id) => !availableIds.has(id));
-      if (invalidIds.length > 0) {
-        dispatch({
-          type: 'SET_ERROR',
-          error: `Invalid player IDs in queue: ${invalidIds.join(', ')}`,
-        });
-        return;
+      if (queueMutationInFlightRef.current) {
+        throw new Error('A queue update is already in progress');
       }
 
       const me = state.participants.find((p) => String((p as any).userId) === String(userId));
       const memberId = me ? String((me as any).id) : undefined;
       if (!memberId) {
-        dispatch({
-          type: 'SET_ERROR',
-          error: 'Unable to identify your draft membership',
-        });
-        return;
+        throw new Error('Unable to identify your draft membership');
       }
 
-      dispatch({ type: 'SET_SAVING', saving: true });
+      const desiredQueue = reconcileQueueWithPicks(queue, state.picks);
+      queueMutationInFlightRef.current = true;
       invalidatePrivateStateHydration();
       try {
-        const queuePayload = queue.map((playerId, index) => ({
+        const queuePayload = desiredQueue.map((playerId, index) => ({
           playerId,
           rank: index + 1,
         }));
@@ -2114,19 +2149,27 @@ export function DraftProvider({
           payload: { memberId, queue: persistedQueue },
           ts: Date.now(),
         };
+        // A reconnect may start private hydration while this PUT is pending. The confirmed
+        // mutation must invalidate that older read before its queue is committed locally.
+        invalidatePrivateStateHydration();
         dispatch({ type: 'APPLY_DELTAS', deltas: [delta] });
       } catch (err: any) {
         if (isMounted.current) {
-          dispatch({
-            type: 'SET_ERROR',
-            error: err?.message ?? 'Failed to update queue',
-          });
+          await hydratePrivateDraftState(memberId);
         }
+        throw err instanceof Error ? err : new Error('Failed to update queue');
       } finally {
-        if (isMounted.current) dispatch({ type: 'SET_SAVING', saving: false });
+        queueMutationInFlightRef.current = false;
       }
     },
-    [draftId, invalidatePrivateStateHydration, state.participants, userId, state.availablePlayers]
+    [
+      draftId,
+      hydratePrivateDraftState,
+      invalidatePrivateStateHydration,
+      state.participants,
+      state.picks,
+      userId,
+    ]
   );
 
   const addToWatchlist = useCallback(
@@ -2320,14 +2363,17 @@ export function DraftProvider({
     const currentPick = Number(
       (state.draft as any).currentPick ?? state.liveState?.currentPick ?? 0
     );
-    const currentSlot = computeCurrentSlotFromSnake(currentPick, teamCount);
-    const onClock = currentSlot && yourSlot && Number(currentSlot) === Number(yourSlot);
+    const persistedOnClockMemberId = state.liveState.onClockTeamId;
+    const currentSlot = computeCurrentSlot(currentPick, teamCount, state.draft.settings.draftType);
+    const onClock = persistedOnClockMemberId
+      ? String(persistedOnClockMemberId) === String(me?.id)
+      : Boolean(currentSlot && yourSlot && Number(currentSlot) === Number(yourSlot));
 
     const status = String((state.draft as any).status ?? '').toUpperCase();
     const live = status === 'LIVE' || status === 'IN_PROGRESS';
 
     return !!(live && onClock && !state.isSaving);
-  }, [state.draft, state.liveState, state.participants.length, yourSlot, state.isSaving]);
+  }, [state.draft, state.liveState, state.participants.length, me?.id, yourSlot, state.isSaving]);
 
   /* ------------------------------- Provide value ---------------------------- */
 

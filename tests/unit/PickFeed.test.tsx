@@ -1,15 +1,12 @@
 import type { ImgHTMLAttributes } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import PickFeed from '@/components/PickFeed';
 
 vi.mock('next/image', () => ({
-  default: ({
-    alt,
-    src,
-    ...props
-  }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) => (
+  default: ({ alt, src, ...props }: ImgHTMLAttributes<HTMLImageElement> & { src: string }) => (
     <img alt={alt} src={src} {...props} />
   ),
 }));
@@ -113,10 +110,16 @@ describe('PickFeed', () => {
     render(<PickFeed {...defaultProps} />);
 
     const feed = screen.getByLabelText('Pick feed');
-    const latestPick = within(feed).getByText('Errol Gulden').closest('div');
+    const latestPick = within(feed)
+      .getByText('Errol Gulden')
+      .closest<HTMLElement>('[data-pick-state]');
 
     expect(latestPick).not.toBeNull();
+    expect(latestPick).toHaveTextContent('Slot 3');
+    expect(latestPick).toHaveTextContent('Pick 3');
+    expect(latestPick).not.toHaveTextContent('View context');
     expect(screen.getByAltText('Sydney logo')).toHaveAttribute('src', '/logos/Sydney.svg');
+    expect(screen.queryByText('View context')).not.toBeInTheDocument();
   });
 
   it('filters to my picks', () => {
@@ -125,6 +128,13 @@ describe('PickFeed', () => {
     fireEvent.click(screen.getByRole('button', { name: /mine/i }));
 
     expect(screen.getByText('Nick Daicos')).toBeInTheDocument();
+    const mineCard = screen.getByText('Nick Daicos').closest<HTMLElement>('[data-pick-state]');
+    if (!mineCard) throw new Error('Expected the user pick card');
+    expect(mineCard).toHaveAttribute('data-pick-state', 'mine');
+    expect(within(mineCard).getByText('Mine').querySelector('svg')).toHaveAttribute(
+      'aria-hidden',
+      'true'
+    );
     expect(screen.queryByText('Marcus Bontempelli')).not.toBeInTheDocument();
     expect(screen.queryByText('Errol Gulden')).not.toBeInTheDocument();
     expect(screen.getByText('Showing 1 of 3 total picks')).toBeInTheDocument();
@@ -136,23 +146,37 @@ describe('PickFeed', () => {
     fireEvent.click(screen.getByRole('button', { name: /watchlist/i }));
 
     expect(screen.getByText('Errol Gulden')).toBeInTheDocument();
+    const watchlistCard = screen
+      .getByText('Errol Gulden')
+      .closest<HTMLElement>('[data-pick-state]');
+    if (!watchlistCard) throw new Error('Expected the watchlist pick card');
+    expect(watchlistCard).toHaveAttribute('data-pick-state', 'watchlist');
+    expect(watchlistCard).toHaveClass('border-[color:var(--draft-broadcast-watchlist-border)]');
+    expect(watchlistCard).toHaveClass('bg-[color:var(--draft-broadcast-watchlist-hit)]');
+    expect(within(watchlistCard).getByText('Watchlist').querySelector('svg')).toHaveAttribute(
+      'aria-hidden',
+      'true'
+    );
     expect(screen.queryByText('Marcus Bontempelli')).not.toBeInTheDocument();
     expect(screen.queryByText('Nick Daicos')).not.toBeInTheDocument();
     expect(screen.getAllByText('Watchlist')).toHaveLength(2);
   });
 
-  it('toggles auto-scroll state with an accessible label', () => {
+  it('toggles auto-scroll state with an accessible switch', async () => {
+    const user = userEvent.setup();
     render(<PickFeed {...defaultProps} />);
 
-    const toggle = screen.getByRole('button', { name: 'Toggle auto-scroll' });
+    const toggle = screen.getByRole('switch', { name: 'Auto-scroll on new picks' });
 
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText('Auto-scroll on new picks')).toBeInTheDocument();
+    expect(screen.queryByText('Live rail')).not.toBeInTheDocument();
 
-    fireEvent.click(toggle);
+    toggle.focus();
+    await user.keyboard(' ');
 
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByText('Manual scroll mode')).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByText('Manual scroll mode')).not.toBeInTheDocument();
   });
 
   it('fills its parent column while keeping picks in the scrollable body', () => {

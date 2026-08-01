@@ -416,6 +416,7 @@ model PreDraftQueue {
 
   @@unique([draftId, memberId, playerId])
   @@index([draftId, memberId])
+  @@index([draftId, playerId])
   @@index([rank])
 }
 

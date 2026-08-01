@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { fetchApi, socketState } = vi.hoisted(() => ({
@@ -81,12 +82,24 @@ function createV1FallbackEmit() {
 
 function DraftStateProbe() {
   const draft = useDraft();
+  const [queueMutationStatus, setQueueMutationStatus] = useState('idle');
+
+  async function updateMixedQueue(): Promise<void> {
+    setQueueMutationStatus('pending');
+    try {
+      await draft.updateQueue(['picked-player', 'progressive-player']);
+      setQueueMutationStatus('resolved');
+    } catch (error) {
+      setQueueMutationStatus(`rejected:${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   return (
     <div>
       <div data-testid="loading">{String(draft.isLoading)}</div>
       <div data-testid="draft-name">{draft.draft?.name ?? 'missing'}</div>
       <div data-testid="league-id">{draft.draft?.leagueId ?? 'missing'}</div>
+      <div data-testid="draft-type">{draft.draft?.settings.draftType ?? 'missing'}</div>
       <div data-testid="current-pick">{draft.draft?.currentPick ?? 'missing'}</div>
       <div data-testid="pick-deadline">
         {draft.draft?.pickDeadlineAt?.toISOString?.() ?? 'missing'}
@@ -108,6 +121,12 @@ function DraftStateProbe() {
       <div data-testid="queue-order">
         {draft.participants.flatMap((participant) => participant.queue ?? []).join(',')}
       </div>
+      <div data-testid="draft-error">{draft.error ?? 'none'}</div>
+      <div data-testid="can-make-pick">{String(draft.canMakePick)}</div>
+      <div data-testid="queue-mutation-status">{queueMutationStatus}</div>
+      <button type="button" onClick={() => void updateMixedQueue()}>
+        Update mixed queue
+      </button>
       <button type="button" onClick={() => void draft.makePick('player-1')}>
         Pick player 1
       </button>
@@ -119,6 +138,80 @@ function DraftStateProbe() {
       </button>
     </div>
   );
+}
+
+const pickedPlayer = {
+  id: 'picked-player',
+  name: 'Picked Player',
+  position: 'MID',
+  club: 'Sydney',
+  isAvailable: false,
+};
+
+const pickedPlayerPick = {
+  id: 'pick-picked-player',
+  overall: 1,
+  round: 1,
+  slot: 1,
+  player: pickedPlayer,
+  member: {
+    id: 'member-2',
+    userId: 'user-2',
+    displayName: 'Opponent',
+  },
+  auto: false,
+  madeAt: '2026-06-07T00:00:00.000Z',
+};
+
+function makeQueueTestSnapshot({
+  picks = [],
+  queue = [],
+}: {
+  picks?: Array<typeof pickedPlayerPick>;
+  queue?: string[];
+}) {
+  return {
+    draft: {
+      id: 'draft-1',
+      name: 'Queue Convergence Draft',
+      leagueId: 'league-1',
+      status: 'LIVE',
+      currentPick: picks.length + 1,
+      totalPicks: 4,
+      round: 1,
+      direction: 'FORWARD',
+    } as any,
+    participants: [
+      {
+        id: 'member-1',
+        memberId: 'member-1',
+        userId: 'user-1',
+        displayName: 'Tester',
+        slot: 1,
+        queue,
+      },
+      {
+        id: 'member-2',
+        memberId: 'member-2',
+        userId: 'user-2',
+        displayName: 'Opponent',
+        slot: 2,
+        queue: [],
+      },
+    ] as any,
+    availablePlayers: [
+      {
+        id: 'catalogue-player',
+        name: 'Catalogue Player',
+        position: 'DEF',
+        club: 'Carlton',
+        isAvailable: true,
+        statlyZScore: 0,
+      },
+    ],
+    picks: picks as any,
+    ts: 1,
+  };
 }
 
 describe('DraftProvider initial hydration', () => {
@@ -324,6 +417,58 @@ describe('DraftProvider initial hydration', () => {
 
     expect(emit.mock.calls.filter((call) => call[0] === 'draft:join:v2')).toHaveLength(
       joinCountBeforeSnapshot
+    );
+  });
+
+  it('preserves a hydrated linear draft type when an older v2 snapshot omits it', async () => {
+    const emit = createV2AcknowledgingEmit(2);
+    socketState.current = {
+      connected: true,
+      emit,
+      on: vi.fn(),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+    fetchApi.mockResolvedValue({
+      success: true,
+      data: { players: [], pagination: { hasMore: false }, queue: [], watchlist: [] },
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={{
+          draft: {
+            id: 'draft-1',
+            name: 'Linear Draft',
+            leagueId: 'league-1',
+            status: 'LIVE',
+            currentPick: 1,
+            totalPicks: 2,
+            round: 1,
+            direction: 'FORWARD',
+            settings: { draftType: 'LINEAR' },
+          } as any,
+          participants: [],
+          availablePlayers: [],
+          picks: [],
+          ts: 1,
+        }}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('draft-name')).toHaveTextContent('Realtime Draft');
+      expect(screen.getByTestId('draft-type')).toHaveTextContent('LINEAR');
+    });
+
+    expect(emit).toHaveBeenCalledWith(
+      'draft:join:v2',
+      { draftId: 'draft-1', generation: 1 },
+      expect.any(Function)
     );
   });
 
@@ -2252,6 +2397,300 @@ describe('DraftProvider initial hydration', () => {
 
     expect(screen.getByTestId('watchlist-order')).toHaveTextContent('player-2');
     expect(screen.getByTestId('watchlist-order')).not.toHaveTextContent('old-watchlist-player');
+  });
+
+  it('does not let delayed private hydration reintroduce a player picked while it was pending', async () => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    let resolveQueue: ((value: unknown) => void) | undefined;
+    socketState.current = {
+      connected: true,
+      emit: createV1FallbackEmit(),
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        handlers.set(event, handler);
+      }),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+
+    fetchApi.mockImplementation(async (endpoint: string) => {
+      if (endpoint === 'drafts/draft-1/pre-queue') {
+        return new Promise((resolve) => {
+          resolveQueue = resolve;
+        });
+      }
+      if (endpoint === 'drafts/draft-1/watchlist') {
+        return { success: true, data: { watchlist: [] } };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={makeQueueTestSnapshot({ queue: ['picked-player', 'progressive-player'] })}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => expect(resolveQueue).toBeDefined());
+
+    act(() => {
+      handlers.get('draft:delta')?.({
+        type: 'PICK_MADE',
+        ts: 2,
+        payload: {
+          pick: pickedPlayerPick,
+          currentPick: 2,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-order')).toHaveTextContent('pick-picked-player');
+      expect(screen.getByTestId('queue-order')).toHaveTextContent('progressive-player');
+      expect(screen.getByTestId('queue-order')).not.toHaveTextContent('picked-player');
+    });
+
+    await act(async () => {
+      resolveQueue?.({
+        success: true,
+        data: {
+          queue: [
+            { playerId: 'picked-player', rank: 1 },
+            { playerId: 'progressive-player', rank: 2 },
+          ],
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('queue-order')).toHaveTextContent('progressive-player');
+    expect(screen.getByTestId('queue-order')).not.toHaveTextContent('picked-player');
+    expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
+  });
+
+  it('sanitizes known drafted IDs without rejecting IDs absent from the progressive catalogue', async () => {
+    let mutationBody: { queue?: Array<{ playerId: string; rank: number }> } | undefined;
+    fetchApi.mockImplementation(async (endpoint: string, options?: RequestInit) => {
+      if (endpoint === 'drafts/draft-1/pre-queue' && options?.method === 'PUT') {
+        const parsedBody = JSON.parse(String(options.body)) as {
+          queue: Array<{ playerId: string; rank: number }>;
+        };
+        mutationBody = parsedBody;
+        return { success: true, data: { queue: parsedBody.queue } };
+      }
+      if (endpoint === 'drafts/draft-1/pre-queue') {
+        return { success: true, data: { queue: [] } };
+      }
+      if (endpoint === 'drafts/draft-1/watchlist') {
+        return { success: true, data: { watchlist: [] } };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={makeQueueTestSnapshot({ picks: [pickedPlayerPick] })}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update mixed queue' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-mutation-status')).toHaveTextContent('resolved');
+    });
+
+    expect(mutationBody).toEqual({
+      queue: [{ playerId: 'progressive-player', rank: 1 }],
+    });
+    expect(screen.getByTestId('queue-order')).toHaveTextContent('progressive-player');
+    expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
+  });
+
+  it('does not let private hydration started during a queue PUT overwrite its confirmed response', async () => {
+    let queueReads = 0;
+    let resolvePut: ((value: unknown) => void) | undefined;
+    let resolveRacingQueueRead: ((value: unknown) => void) | undefined;
+    socketState.current = {
+      connected: true,
+      emit: createV2AcknowledgingEmit(1),
+      on: vi.fn(),
+      off: vi.fn(),
+      io: { on: vi.fn(), off: vi.fn() },
+    };
+
+    fetchApi.mockImplementation(async (endpoint: string, options?: RequestInit) => {
+      if (endpoint === 'drafts/draft-1/pre-queue' && options?.method === 'PUT') {
+        return new Promise((resolve) => {
+          resolvePut = resolve;
+        });
+      }
+      if (endpoint === 'drafts/draft-1/pre-queue') {
+        queueReads += 1;
+        if (queueReads === 1) {
+          return {
+            success: true,
+            data: { queue: [{ playerId: 'initial-player', rank: 1 }] },
+          };
+        }
+
+        return new Promise((resolve) => {
+          resolveRacingQueueRead = resolve;
+        });
+      }
+      if (endpoint === 'drafts/draft-1/watchlist') {
+        return { success: true, data: { watchlist: [] } };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={makeQueueTestSnapshot({ queue: ['initial-player'] })}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-order')).toHaveTextContent('initial-player');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update mixed queue' }));
+    await waitFor(() => {
+      expect(resolvePut).toBeDefined();
+      expect(screen.getByTestId('queue-mutation-status')).toHaveTextContent('pending');
+      expect(screen.getByTestId('can-make-pick')).toHaveTextContent('true');
+    });
+
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    await waitFor(() => expect(resolveRacingQueueRead).toBeDefined());
+
+    await act(async () => {
+      resolvePut?.({
+        success: true,
+        data: { queue: [{ playerId: 'progressive-player', rank: 1 }] },
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-mutation-status')).toHaveTextContent('resolved');
+      expect(screen.getByTestId('queue-order')).toHaveTextContent('progressive-player');
+    });
+
+    await act(async () => {
+      resolveRacingQueueRead?.({
+        success: true,
+        data: { queue: [{ playerId: 'stale-hydration-player', rank: 1 }] },
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('queue-order')).toHaveTextContent('progressive-player');
+    expect(screen.getByTestId('queue-order')).not.toHaveTextContent('stale-hydration-player');
+    expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
+  });
+
+  it('prunes a drafted player from the persisted queue response before committing it', async () => {
+    fetchApi.mockImplementation(async (endpoint: string, options?: RequestInit) => {
+      if (endpoint === 'drafts/draft-1/pre-queue' && options?.method === 'PUT') {
+        return {
+          success: true,
+          data: {
+            queue: [
+              { playerId: 'picked-player', rank: 1 },
+              { playerId: 'progressive-player', rank: 2 },
+            ],
+          },
+        };
+      }
+      if (endpoint === 'drafts/draft-1/pre-queue') {
+        return { success: true, data: { queue: [] } };
+      }
+      if (endpoint === 'drafts/draft-1/watchlist') {
+        return { success: true, data: { watchlist: [] } };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={makeQueueTestSnapshot({ picks: [pickedPlayerPick] })}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update mixed queue' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-mutation-status')).toHaveTextContent('resolved');
+      expect(screen.getByTestId('queue-order')).toHaveTextContent('progressive-player');
+      expect(screen.getByTestId('queue-order')).not.toHaveTextContent('picked-player');
+    });
+  });
+
+  it('rejects a failed queue PUT without promoting it to a fatal draft error', async () => {
+    let queueReads = 0;
+    fetchApi.mockImplementation(async (endpoint: string, options?: RequestInit) => {
+      if (endpoint === 'drafts/draft-1/pre-queue' && options?.method === 'PUT') {
+        throw new Error('Queue service unavailable');
+      }
+      if (endpoint === 'drafts/draft-1/pre-queue') {
+        queueReads += 1;
+        return {
+          success: true,
+          data: { queue: [{ playerId: 'progressive-player', rank: 1 }] },
+        };
+      }
+      if (endpoint === 'drafts/draft-1/watchlist') {
+        return { success: true, data: { watchlist: [] } };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    });
+
+    render(
+      <DraftProvider
+        draftId="draft-1"
+        userId="user-1"
+        initialSnapshot={makeQueueTestSnapshot({ picks: [pickedPlayerPick] })}
+      >
+        <DraftStateProbe />
+      </DraftProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-order')).toHaveTextContent('progressive-player');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update mixed queue' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-mutation-status')).toHaveTextContent(
+        'rejected:Queue service unavailable'
+      );
+      expect(queueReads).toBeGreaterThanOrEqual(2);
+    });
+
+    expect(screen.getByTestId('draft-error')).toHaveTextContent('none');
+    expect(screen.getByTestId('queue-order')).toHaveTextContent('progressive-player');
   });
 
   it('applies revisioned pause and resume clocks immediately and ignores a stale lifecycle delta', async () => {
