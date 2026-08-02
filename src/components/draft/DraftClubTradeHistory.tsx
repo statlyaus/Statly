@@ -11,9 +11,21 @@ import {
 } from '@/components/draft/draftHubChrome';
 import type { DraftClubTradeRefRow } from '@/lib/draftTrades/contracts';
 import { filterClubTradeRefs } from '@/lib/draftTrades/clubTradeRefSearch';
+import { AFL_TRADE_METHODOLOGY_HREF } from '@/types/aflTradeIntelligence';
 
 function clubLinkLabel(ref: DraftClubTradeRefRow): string {
   return `${ref.title} (${ref.year}). View trade detail.`;
+}
+
+function LegacyMetricValue({ value }: { value: number | null }) {
+  if (value !== null) return value;
+
+  return (
+    <>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">Not recorded</span>
+    </>
+  );
 }
 
 export function DraftClubTradeHistory({
@@ -157,6 +169,25 @@ export function DraftClubTradeHistory({
         </div>
       </div>
 
+      <aside
+        id="legacy-trade-metric-note"
+        aria-label="Legacy archive metric note"
+        className="rounded-2xl border border-border bg-card p-4 text-sm leading-6 text-muted-foreground shadow-sm md:p-5"
+      >
+        <p>
+          Legacy expected and actual are imported archive fields. Statly has not verified their
+          original definition or methodology, and they are not Statly trade-value results. A dash
+          means no legacy value was recorded.{' '}
+          <Link
+            href={AFL_TRADE_METHODOLOGY_HREF}
+            className="font-semibold text-foreground underline decoration-border underline-offset-4 transition hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            Read methodology and current limits
+          </Link>
+          .
+        </p>
+      </aside>
+
       <div className="space-y-3 md:hidden">
         {filtered.map((ref) => (
           <article
@@ -183,14 +214,16 @@ export function DraftClubTradeHistory({
             </p>
             <div className="mt-3 flex flex-wrap justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
               <span>
-                Expected:{' '}
+                Legacy expected:{' '}
                 <span className="font-medium tabular-nums text-foreground">
-                  {ref.expected ?? '—'}
+                  <LegacyMetricValue value={ref.expected} />
                 </span>
               </span>
               <span>
-                Actual:{' '}
-                <span className="font-medium tabular-nums text-foreground">{ref.actual ?? '—'}</span>
+                Legacy actual:{' '}
+                <span className="font-medium tabular-nums text-foreground">
+                  <LegacyMetricValue value={ref.actual} />
+                </span>
               </span>
             </div>
           </article>
@@ -224,7 +257,10 @@ export function DraftClubTradeHistory({
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
-            <table className="table table-sm w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3">
+            <table
+              aria-describedby="legacy-trade-metric-note"
+              className="table table-sm w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3"
+            >
               <thead>
                 <tr className="border-b border-border bg-muted [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
                   <th scope="col" className="text-left">
@@ -239,11 +275,11 @@ export function DraftClubTradeHistory({
                   <th scope="col" className="text-left">
                     Club return (raw)
                   </th>
-                  <th scope="col" className="text-right tabular-nums">
-                    Expected
+                  <th scope="col" className="text-right leading-tight tabular-nums">
+                    Legacy expected
                   </th>
-                  <th scope="col" className="text-right tabular-nums">
-                    Actual
+                  <th scope="col" className="text-right leading-tight tabular-nums">
+                    Legacy actual
                   </th>
                 </tr>
               </thead>
@@ -261,11 +297,15 @@ export function DraftClubTradeHistory({
                         {ref.title}
                       </Link>
                     </td>
-                    <td className="min-w-48 text-sm text-muted-foreground">{ref.assetsRaw || '—'}</td>
-                    <td className="text-right tabular-nums text-foreground">
-                      {ref.expected ?? '—'}
+                    <td className="min-w-48 text-sm text-muted-foreground">
+                      {ref.assetsRaw || '—'}
                     </td>
-                    <td className="text-right tabular-nums text-foreground">{ref.actual ?? '—'}</td>
+                    <td className="text-right tabular-nums text-foreground">
+                      <LegacyMetricValue value={ref.expected} />
+                    </td>
+                    <td className="text-right tabular-nums text-foreground">
+                      <LegacyMetricValue value={ref.actual} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

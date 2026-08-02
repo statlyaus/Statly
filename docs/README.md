@@ -5,6 +5,9 @@ authority when a document and implementation disagree; fix the document in the s
 
 ## Architecture
 
+- [Public AFL trade intelligence](architecture/afl-trade-intelligence.md) — public/non-fantasy
+  boundary, source and data gates, canonical analytical target, temporal semantics, model publication,
+  and rollback.
 - [Runtime and data platform](architecture/data-platform.md) — current ownership boundaries and the
   accepted production target.
 - [Realtime delivery](architecture/realtime.md) — Socket.IO, Redis, BullMQ, reconnect, and authority

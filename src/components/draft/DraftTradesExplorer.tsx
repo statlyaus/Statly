@@ -4,6 +4,7 @@ import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headless
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { AflTradeValueUnavailablePanel } from '@/components/draft/AflTradeValueUnavailablePanel';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
 import {
   draftHubClubLogoStripOrder,
@@ -13,6 +14,7 @@ import {
   draftHubHeroTopAccentClass,
   draftHubSkyPillClass,
 } from '@/components/draft/draftHubChrome';
+import type { AflTradeValueUnavailable } from '@/types/aflTradeIntelligence';
 import { DraftTradeDetail } from './DraftTradeDetail';
 
 type DraftTradeHeader = {
@@ -85,6 +87,7 @@ type DraftTradesExplorerProps = {
   trades: DraftTradeHeader[];
   /** RSC snapshot of the URL query — must match the request so SSR and first client paint agree (useSearchParams differs on the server). */
   initialSearchString: string;
+  valueAvailability: AflTradeValueUnavailable;
 };
 
 const detailCache = new Map<string, DraftTradeDetailData>();
@@ -272,6 +275,7 @@ export function DraftTradesExplorer({
   yearOptions,
   trades,
   initialSearchString,
+  valueAvailability,
 }: DraftTradesExplorerProps): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
@@ -472,7 +476,6 @@ export function DraftTradesExplorer({
         }
         return;
       }
-
     }
 
     window.addEventListener('keydown', onKeydown);
@@ -934,6 +937,8 @@ export function DraftTradesExplorer({
         </div>
       </div>
 
+      <AflTradeValueUnavailablePanel availability={valueAvailability} variant="compact" />
+
       <div className="space-y-3 lg:hidden">
         <div className="flex items-end justify-between gap-3">
           <div>
@@ -1033,20 +1038,21 @@ export function DraftTradesExplorer({
               </div>
 
               {isExpanded && (
-                <section
-                  id={`mobile-trade-panel-${trade.tradeId}`}
-                  className="mt-3"
-                  aria-live="polite"
-                >
+                <section id={`mobile-trade-panel-${trade.tradeId}`} className="mt-3">
                   {isLoadingDetail && (
-                    <div className="space-y-2">
+                    <div
+                      className="space-y-2"
+                      role="status"
+                      aria-live="polite"
+                      aria-label="Loading trade details"
+                    >
                       <div className="h-4 w-1/3 animate-pulse rounded bg-base-300" />
                       <div className="h-4 w-2/3 animate-pulse rounded bg-base-300" />
                       <div className="h-24 animate-pulse rounded bg-base-300" />
                     </div>
                   )}
                   {!isLoadingDetail && detailError && (
-                    <p className="text-sm text-error">
+                    <p className="text-sm text-error" role="alert">
                       Could not load trade details: {detailError}
                     </p>
                   )}
@@ -1056,6 +1062,7 @@ export function DraftTradesExplorer({
                         detail={expandedDetail}
                         showOpenFullPageLink
                         mode="inline"
+                        valueAvailability={valueAvailability}
                       />
                     </div>
                   )}
@@ -1339,10 +1346,14 @@ export function DraftTradesExplorer({
                   ref={railBodyRef}
                   id={`trade-panel-${selectedTrade.tradeId}`}
                   className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3 md:px-5 [scrollbar-gutter:stable]"
-                  aria-live="polite"
                 >
                   {loadingTradeId === selectedTrade.tradeId ? (
-                    <div className="space-y-2 rounded-2xl border border-base-300 bg-base-100 p-4">
+                    <div
+                      className="space-y-2 rounded-2xl border border-base-300 bg-base-100 p-4"
+                      role="status"
+                      aria-live="polite"
+                      aria-label="Loading trade details"
+                    >
                       <div className="h-4 w-1/3 animate-pulse rounded bg-base-300" />
                       <div className="h-4 w-2/3 animate-pulse rounded bg-base-300" />
                       <div className="h-40 animate-pulse rounded bg-base-300" />
@@ -1350,7 +1361,10 @@ export function DraftTradesExplorer({
                   ) : null}
 
                   {loadingTradeId !== selectedTrade.tradeId && detailError ? (
-                    <div className="rounded-2xl border border-error/30 bg-error/5 p-4 text-sm text-error">
+                    <div
+                      className="rounded-2xl border border-error/30 bg-error/5 p-4 text-sm text-error"
+                      role="alert"
+                    >
                       Could not load trade details: {detailError}
                     </div>
                   ) : null}
@@ -1358,7 +1372,12 @@ export function DraftTradesExplorer({
                   {loadingTradeId !== selectedTrade.tradeId &&
                   !detailError &&
                   expandedDetail?.trade.tradeId === selectedTrade.tradeId ? (
-                    <DraftTradeDetail detail={expandedDetail} showOpenFullPageLink mode="inline" />
+                    <DraftTradeDetail
+                      detail={expandedDetail}
+                      showOpenFullPageLink
+                      mode="inline"
+                      valueAvailability={valueAvailability}
+                    />
                   ) : null}
                 </div>
               </>

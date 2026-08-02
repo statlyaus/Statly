@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { DraftHubState } from '@/components/draft/DraftHubState';
 import { DraftTradesExplorer } from '@/components/draft/DraftTradesExplorer';
 import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/firestore';
+import { createAflTradePrePublicationAvailability } from '@/server/aflTradeIntelligence/publication/prePublicationAvailability';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,6 +124,7 @@ export default async function DraftTradesPage({
             yearOptions={yearOptions}
             trades={trades}
             initialSearchString={initialSearchString}
+            valueAvailability={createAflTradePrePublicationAvailability()}
           />
         </Suspense>
       </div>

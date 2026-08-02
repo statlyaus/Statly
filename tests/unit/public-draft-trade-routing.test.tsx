@@ -35,6 +35,10 @@ vi.mock('next/navigation', () => ({
 
 import HomePage from '../../src/app/(public)/page';
 import DraftLayout from '../../src/app/(public)/draft/layout';
+import AflTradeMethodologyPage, {
+  metadata as methodologyMetadata,
+} from '../../src/app/(public)/draft/trades/methodology/page';
+import { AFL_TRADE_METHODOLOGY_HREF } from '../../src/types/aflTradeIntelligence';
 
 describe('public AFL draft trade routing', () => {
   it('states the homepage promise before the two primary hero destinations', () => {
@@ -101,5 +105,38 @@ describe('public AFL draft trade routing', () => {
       'href',
       '/dashboard'
     );
+  });
+
+  it('keeps the methodology page static, public, and canonically addressable', () => {
+    const methodologyRoute = readRequiredFile('src/app/(public)/draft/trades/methodology/page.tsx');
+
+    expect(methodologyMetadata.alternates?.canonical).toBe(AFL_TRADE_METHODOLOGY_HREF);
+    expect(methodologyRoute).not.toContain('getDraftTrades');
+    expect(methodologyRoute).not.toContain('getDraftTradeById');
+    expect(methodologyRoute).not.toContain('createAflTradePrePublicationAvailability');
+
+    render(
+      <DraftLayout>
+        <AflTradeMethodologyPage />
+      </DraftLayout>
+    );
+
+    expect(screen.queryByTestId('auth-provider')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'How Statly intends to explain AFL trade value' })
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Return to trade explorer' })).toHaveAttribute(
+      'href',
+      '/draft/trades'
+    );
+  });
+
+  it('adds the static methodology route without displacing dynamic trade detail', () => {
+    const methodologyRoute = readRequiredFile('src/app/(public)/draft/trades/methodology/page.tsx');
+    const detailRoute = readRequiredFile('src/app/(public)/draft/trades/[tradeId]/page.tsx');
+
+    expect(methodologyRoute).toContain('export default function AflTradeMethodologyPage');
+    expect(detailRoute).toContain('export default async function DraftTradeDetailPage');
+    expect(detailRoute).toContain("export const dynamic = 'force-dynamic'");
   });
 });

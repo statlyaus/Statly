@@ -1,6 +1,8 @@
 import Link from 'next/link';
 
+import { AflTradeValueUnavailablePanel } from '@/components/draft/AflTradeValueUnavailablePanel';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
+import type { AflTradeValueUnavailable } from '@/types/aflTradeIntelligence';
 
 export type DraftTradeHeaderView = {
   tradeId: string;
@@ -40,7 +42,19 @@ type DraftTradeDetailProps = {
   detail: DraftTradeDetailView;
   showOpenFullPageLink?: boolean;
   mode?: 'full' | 'inline';
+  valueAvailability: AflTradeValueUnavailable;
 };
+
+function LegacyMetricValue({ value }: { value: number | null }) {
+  if (value !== null) return value;
+
+  return (
+    <>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">Not recorded</span>
+    </>
+  );
+}
 
 function assetTypeLabel(assetType: DraftTradeAssetView['assetType']): string {
   if (assetType === 'future_pick') return 'Future Pick';
@@ -192,6 +206,7 @@ export function DraftTradeDetail({
   detail,
   showOpenFullPageLink = false,
   mode = 'full',
+  valueAvailability,
 }: DraftTradeDetailProps) {
   const groupedAssets = groupAssetsByClub(detail.assets);
   const playerAssetCount = detail.assets.filter((asset) => asset.assetType === 'player').length;
@@ -315,6 +330,8 @@ export function DraftTradeDetail({
         </div>
       </section>
 
+      <AflTradeValueUnavailablePanel availability={valueAvailability} variant="detail" />
+
       {/* Parties: same card language as Summary — sequential section, not a selected tab */}
       <section id="trade-detail-parties" aria-labelledby="trade-parties-heading">
         <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
@@ -323,7 +340,7 @@ export function DraftTradeDetail({
             eyebrow="Parties"
             titleId="trade-parties-heading"
             title="Who was in the deal"
-            description="Each row is one club side. Raw assets are shown as recorded in the source feed."
+            description="Each row is one club side. Raw assets and legacy fields are shown as recorded in the source feed."
             pad={sectionHeaderPad}
             eyebrowClass={`${sectionEyebrow} text-base-content/55`}
             isInline={isInline}
@@ -335,11 +352,16 @@ export function DraftTradeDetail({
                 <table
                   className={`table w-full table-fixed border-collapse text-base [&_thead]:whitespace-normal ${partyTablePad}`}
                 >
+                  <caption className="caption-top px-4 pb-3 text-left text-sm leading-6 text-base-content/65 sm:px-5">
+                    Legacy expected and actual are imported archive fields. Statly has not verified
+                    their original definition or methodology, and they are not Statly trade-value
+                    results. A dash means no legacy value was recorded.
+                  </caption>
                   <colgroup>
                     <col className={isInline ? 'w-38' : 'w-46'} />
                     <col />
-                    <col className="w-22 sm:w-24" />
-                    <col className="w-22 sm:w-24" />
+                    <col className="w-24 sm:w-28" />
+                    <col className="w-24 sm:w-28" />
                   </colgroup>
                   <thead>
                     <tr className="border-b border-base-200 bg-base-200/50 [&>th]:align-bottom [&>th]:text-sm [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-base-content/65">
@@ -349,11 +371,11 @@ export function DraftTradeDetail({
                       <th scope="col" className="min-w-0 text-left">
                         Assets (raw)
                       </th>
-                      <th scope="col" className="whitespace-nowrap text-right tabular-nums">
-                        Expected
+                      <th scope="col" className="text-right leading-tight tabular-nums">
+                        Legacy expected
                       </th>
-                      <th scope="col" className="whitespace-nowrap text-right tabular-nums">
-                        Actual
+                      <th scope="col" className="text-right leading-tight tabular-nums">
+                        Legacy actual
                       </th>
                     </tr>
                   </thead>
@@ -379,10 +401,10 @@ export function DraftTradeDetail({
                             {party.assetsRaw}
                           </td>
                           <td className="align-top text-right text-base tabular-nums">
-                            {party.expected ?? '—'}
+                            <LegacyMetricValue value={party.expected} />
                           </td>
                           <td className="align-top text-right text-base tabular-nums">
-                            {party.actual ?? '—'}
+                            <LegacyMetricValue value={party.actual} />
                           </td>
                         </tr>
                       ))}
