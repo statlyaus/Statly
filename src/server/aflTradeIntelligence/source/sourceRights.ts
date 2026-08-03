@@ -119,7 +119,7 @@ const sourceConditionSchema = z
     }
   });
 
-export const aflTradeSourceRightsProposalContentSchema = z
+const aflTradeSourceRightsProposalContentBaseSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-source-rights/v1'),
     registerId: publicIdSchema,
@@ -215,128 +215,168 @@ export const aflTradeSourceRightsProposalContentSchema = z
     proposedBy: publicIdSchema,
     proposalOrigin: z.enum(['human_authored', 'agent_assisted']),
   })
-  .strict()
-  .superRefine((rights, context) => {
-    const sourceFields = rights.fields.map((field) => field.sourceField);
-    const normalizedFields = rights.fields.map((field) => field.normalizedField);
-    if (new Set(sourceFields).size !== sourceFields.length) {
+  .strict();
+
+type AflTradeSourceRightsProposalContent = z.infer<
+  typeof aflTradeSourceRightsProposalContentBaseSchema
+>;
+
+function refineSourceRightsUniqueness(
+  rights: AflTradeSourceRightsProposalContent,
+  context: z.RefinementCtx
+) {
+  const sourceFields = rights.fields.map((field) => field.sourceField);
+  const normalizedFields = rights.fields.map((field) => field.normalizedField);
+  if (new Set(sourceFields).size !== sourceFields.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['fields'],
+      message: 'Source fields must be unique.',
+    });
+  }
+  if (new Set(normalizedFields).size !== normalizedFields.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['fields'],
+      message: 'Normalized field mappings must be unique.',
+    });
+  }
+  const conditionIds = rights.conditions.map((condition) => condition.conditionId);
+  if (new Set(conditionIds).size !== conditionIds.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['conditions'],
+      message: 'Source-rights conditions must be unique.',
+    });
+  }
+}
+
+function refineSourceRightsScope(
+  rights: AflTradeSourceRightsProposalContent,
+  context: z.RefinementCtx
+) {
+  for (const [index, range] of rights.scope.seasonRanges.entries()) {
+    if (range.to < range.from) {
       context.addIssue({
         code: 'custom',
-        path: ['fields'],
-        message: 'Source fields must be unique.',
+        path: ['scope', 'seasonRanges', index],
+        message: 'A season range cannot end before it starts.',
       });
     }
-    if (new Set(normalizedFields).size !== normalizedFields.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['fields'],
-        message: 'Normalized field mappings must be unique.',
-      });
-    }
-    const conditionIds = rights.conditions.map((condition) => condition.conditionId);
-    if (new Set(conditionIds).size !== conditionIds.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['conditions'],
-        message: 'Source-rights conditions must be unique.',
-      });
-    }
-    for (const [index, range] of rights.scope.seasonRanges.entries()) {
-      if (range.to < range.from) {
-        context.addIssue({
-          code: 'custom',
-          path: ['scope', 'seasonRanges', index],
-          message: 'A season range cannot end before it starts.',
-        });
-      }
-    }
-    if (
-      rights.scope.accessMechanism === 'automated_web' ||
-      rights.scope.accessMechanism === 'provider_api'
-    ) {
-      if (
-        !rights.automatedAccess.permitted ||
-        rights.automatedAccess.identification === null ||
-        rights.automatedAccess.rateLimit === null
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['automatedAccess'],
-          message: 'Automated access requires permission, identification, and a rate limit.',
-        });
-      }
-    }
-    if (
-      rights.automatedAccess.cache.permitted &&
-      rights.automatedAccess.cache.maximumSeconds === null
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['automatedAccess', 'cache', 'maximumSeconds'],
-        message: 'Permitted caching requires a maximum duration.',
-      });
-    }
-    if (
-      rights.attribution.required &&
-      (rights.attribution.text === null || rights.attribution.placement === null)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['attribution'],
-        message: 'Required attribution needs exact text and placement.',
-      });
-    }
-    if (
-      rights.operations.raw_evidence_retention === 'allowed' &&
-      rights.retention.rawEvidence.disposition === 'prohibited'
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['retention', 'rawEvidence'],
-        message: 'Raw retention cannot be allowed when raw evidence retention is prohibited.',
-      });
-    }
-    if (
-      rights.operations.metadata_hash_retention === 'allowed' &&
-      rights.retention.hashesAndMetadata.disposition === 'prohibited'
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['retention', 'hashesAndMetadata'],
-        message: 'Metadata retention cannot be allowed when hashes and metadata are prohibited.',
-      });
-    }
-    if (
-      rights.operations.raw_field_redistribution === 'allowed' &&
-      !rights.redistribution.rawFieldsPermitted
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['redistribution', 'rawFieldsPermitted'],
-        message: 'Raw redistribution requires explicit permission.',
-      });
-    }
-    if (
-      rights.operations.public_derived_output === 'allowed' &&
-      !rights.redistribution.publicDerivedOutputPermitted
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['redistribution', 'publicDerivedOutputPermitted'],
-        message: 'Public derived output requires explicit permission.',
-      });
-    }
-    if (
-      rights.termsEffectiveAt !== null &&
-      rights.termsExpireAt !== null &&
-      Date.parse(rights.termsExpireAt) <= Date.parse(rights.termsEffectiveAt)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['termsExpireAt'],
-        message: 'Source terms must expire after they become effective.',
-      });
-    }
+  }
+}
+
+function refineSourceAccessRequirements(
+  rights: AflTradeSourceRightsProposalContent,
+  context: z.RefinementCtx
+) {
+  const automatedAccess =
+    rights.scope.accessMechanism === 'automated_web' ||
+    rights.scope.accessMechanism === 'provider_api';
+  if (
+    automatedAccess &&
+    (!rights.automatedAccess.permitted ||
+      rights.automatedAccess.identification === null ||
+      rights.automatedAccess.rateLimit === null)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['automatedAccess'],
+      message: 'Automated access requires permission, identification, and a rate limit.',
+    });
+  }
+  if (
+    rights.automatedAccess.cache.permitted &&
+    rights.automatedAccess.cache.maximumSeconds === null
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['automatedAccess', 'cache', 'maximumSeconds'],
+      message: 'Permitted caching requires a maximum duration.',
+    });
+  }
+  if (
+    rights.attribution.required &&
+    (rights.attribution.text === null || rights.attribution.placement === null)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['attribution'],
+      message: 'Required attribution needs exact text and placement.',
+    });
+  }
+}
+
+function refineSourceOperationConsistency(
+  rights: AflTradeSourceRightsProposalContent,
+  context: z.RefinementCtx
+) {
+  if (
+    rights.operations.raw_evidence_retention === 'allowed' &&
+    rights.retention.rawEvidence.disposition === 'prohibited'
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['retention', 'rawEvidence'],
+      message: 'Raw retention cannot be allowed when raw evidence retention is prohibited.',
+    });
+  }
+  if (
+    rights.operations.metadata_hash_retention === 'allowed' &&
+    rights.retention.hashesAndMetadata.disposition === 'prohibited'
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['retention', 'hashesAndMetadata'],
+      message: 'Metadata retention cannot be allowed when hashes and metadata are prohibited.',
+    });
+  }
+  if (
+    rights.operations.raw_field_redistribution === 'allowed' &&
+    !rights.redistribution.rawFieldsPermitted
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['redistribution', 'rawFieldsPermitted'],
+      message: 'Raw redistribution requires explicit permission.',
+    });
+  }
+  if (
+    rights.operations.public_derived_output === 'allowed' &&
+    !rights.redistribution.publicDerivedOutputPermitted
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['redistribution', 'publicDerivedOutputPermitted'],
+      message: 'Public derived output requires explicit permission.',
+    });
+  }
+}
+
+function refineSourceTerms(
+  rights: AflTradeSourceRightsProposalContent,
+  context: z.RefinementCtx
+) {
+  if (
+    rights.termsEffectiveAt !== null &&
+    rights.termsExpireAt !== null &&
+    Date.parse(rights.termsExpireAt) <= Date.parse(rights.termsEffectiveAt)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['termsExpireAt'],
+      message: 'Source terms must expire after they become effective.',
+    });
+  }
+}
+
+export const aflTradeSourceRightsProposalContentSchema =
+  aflTradeSourceRightsProposalContentBaseSchema.superRefine((rights, context) => {
+    refineSourceRightsUniqueness(rights, context);
+    refineSourceRightsScope(rights, context);
+    refineSourceAccessRequirements(rights, context);
+    refineSourceOperationConsistency(rights, context);
+    refineSourceTerms(rights, context);
   });
 
 export const aflTradeSourceRightsProposalSchema = z
