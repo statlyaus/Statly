@@ -89,6 +89,13 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
 }
 
 function sameArtifactReferences(left: unknown, right: unknown): boolean {
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    return sameSet(
+      left.map((reference) => canonicalizeAflTradeJson(reference)),
+      right.map((reference) => canonicalizeAflTradeJson(reference))
+    );
+  }
   return canonicalizeAflTradeJson(left) === canonicalizeAflTradeJson(right);
 }
 

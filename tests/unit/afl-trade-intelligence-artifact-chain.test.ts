@@ -73,7 +73,7 @@ function runContent() {
     containerArtifact: artifact('6'),
     configurationArtifact: artifact('7'),
     environmentArtifact: artifact('8'),
-    featureDefinitionArtifacts: [artifact('9')],
+    featureDefinitionArtifacts: [artifact('9'), artifact('0')],
     outcome: {
       status: 'succeeded' as const,
       modelArtifact: artifact('a'),
@@ -494,6 +494,22 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
       valid: true,
       issues: [],
     });
+  });
+
+  it('treats feature-definition artifacts as an order-independent multiset', () => {
+    const input = validProvenanceInput();
+    const reordered = {
+      ...input,
+      dataset: {
+        ...input.dataset,
+        content: {
+          ...input.dataset.content,
+          featureDefinitionArtifacts: [...input.dataset.content.featureDefinitionArtifacts].reverse(),
+        },
+      },
+    };
+
+    expect(validateAflTradeManifestProvenance(reordered)).toEqual({ valid: true, issues: [] });
   });
 
   it('requires the exact Gate 1 architecture decision in the corpus provenance chain', () => {

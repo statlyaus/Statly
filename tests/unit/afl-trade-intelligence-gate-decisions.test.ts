@@ -333,6 +333,13 @@ describe('AFL trade-intelligence gate decisions', () => {
     expect(() => appendAflTradeGateDecision(invalidLedger, proposed, decided)).toThrowError(
       expect.objectContaining<AflTradeGateDecisionAppendError>({ code: 'INVALID_LEDGER' })
     );
+
+    const decisionForAnotherProposal = decision(proposal(2));
+    expect(() =>
+      appendAflTradeGateDecision(ledger([], []), proposed, decisionForAnotherProposal)
+    ).toThrowError(
+      expect.objectContaining<AflTradeGateDecisionAppendError>({ code: 'INVALID_APPEND' })
+    );
   });
 
   it('keeps a prior effective approval while a later proposal remains pending', () => {

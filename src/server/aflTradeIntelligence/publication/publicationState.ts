@@ -286,29 +286,6 @@ function requireGateDecision(
   }
 }
 
-function eventTime(record: AflTradePublicationRecord, state: AflTradePublicationState): number {
-  const event = [...record.events].reverse().find((candidate) => candidate.to === state);
-  return event ? Date.parse(event.occurredAt) : Number.NEGATIVE_INFINITY;
-}
-
-export function findLastGoodAflTradePublication(
-  registry: AflTradePublicationRegistry,
-  scopeKey: string,
-  excludedPublicationId?: string
-): AflTradePublicationRecord | null {
-  return (
-    Object.values(registry.publications)
-      .filter(
-        (record) =>
-          record.scopeKey === scopeKey &&
-          record.publicationId !== excludedPublicationId &&
-          record.state === 'superseded'
-      )
-      .sort((left, right) => eventTime(right, 'published') - eventTime(left, 'published'))[0] ??
-    null
-  );
-}
-
 function publish(
   registry: AflTradePublicationRegistry,
   record: AflTradePublicationRecord,

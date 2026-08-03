@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { AflTradeGateDecisionLedger } from '../governance/gateDecisionLedger';
 import { resolveAflTradeGateEligibility } from '../governance/gateDecisionLedger';
 import type { AflTradeDecisionEnvironment } from '../governance/gateDecisionTypes';
@@ -353,4 +355,3 @@ export function evaluateAflTradeGate0A(
     blockers,
   };
 }
-import { z } from 'zod';
