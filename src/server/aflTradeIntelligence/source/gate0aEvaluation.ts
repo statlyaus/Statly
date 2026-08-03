@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 import type { AflTradeGateDecisionLedger } from '../governance/gateDecisionLedger';
 import { resolveAflTradeGateEligibility } from '../governance/gateDecisionLedger';
-import type { AflTradeDecisionEnvironment } from '../governance/gateDecisionTypes';
+import type {
+  AflTradeDecisionEnvironment,
+  AflTradeGateDecisionRecord,
+} from '../governance/gateDecisionTypes';
 import {
   aflTradeSourceRightsProposalSchema,
   type AflTradeSourceOperation,
@@ -91,6 +94,249 @@ function scopeDimensionValues(
   return dimensions.find((dimension) => dimension.name === name)?.values ?? null;
 }
 
+function collectDecisionScopeBlockers(
+  decision: AflTradeGateDecisionRecord,
+  request: AflTradeGate0ARequest
+): AflTradeGate0ABlocker[] {
+  const blockers: AflTradeGate0ABlocker[] = [];
+  const scopeChecks: ReadonlyArray<[string, string]> = [
+    ['source_rights_artifact', request.rightsArtifactId],
+    ['competition', request.competition],
+    ['season', String(request.season)],
+    ['access_mechanism', request.accessMechanism],
+    ['geography', request.geography],
+    ['commercial_context', request.commercialContext],
+    ['audience', request.audience],
+  ];
+  for (const [dimensionName, requestedValue] of scopeChecks) {
+    const permittedValues = scopeDimensionValues(decision.content.scope.dimensions, dimensionName);
+    if (permittedValues === null || !permittedValues.includes(requestedValue)) {
+      addBlocker(
+        blockers,
+        'decision_scope_mismatch',
+        `${dimensionName}:${requestedValue}`,
+        `The Gate 0A decision does not include ${requestedValue} in ${dimensionName}.`
+      );
+    }
+  }
+  const permittedOperations = scopeDimensionValues(decision.content.scope.dimensions, 'operation');
+  for (const operation of request.operations) {
+    if (permittedOperations === null || !permittedOperations.includes(operation)) {
+      addBlocker(
+        blockers,
+        'decision_scope_mismatch',
+        operation,
+        `The Gate 0A decision scope does not include ${operation}.`
+      );
+    }
+  }
+  return blockers;
+}
+
+function evaluateGateDecisionAuthorization(
+  ledger: AflTradeGateDecisionLedger,
+  rights: AflTradeSourceRightsProposal,
+  request: AflTradeGate0ARequest
+): { decision: AflTradeGateDecisionRecord | null; blockers: AflTradeGate0ABlocker[] } {
+  const blockers: AflTradeGate0ABlocker[] = [];
+  const gateResolution = resolveAflTradeGateEligibility(ledger, {
+    gate: 'gate_0a_permission_to_evaluate',
+    decisionKey: request.decisionKey,
+    environment: request.environment,
+    evaluatedAt: request.evaluatedAt,
+  });
+  const decision = gateResolution.decision;
+  if (gateResolution.status === 'blocked' || decision === null) {
+    for (const blocker of gateResolution.blockers) {
+      addBlocker(blockers, 'gate_decision_blocked', blocker.code, blocker.message);
+    }
+    return { decision, blockers };
+  }
+  if (
+    !decision.content.affectedArtifacts.some(
+      (artifact) =>
+        artifact.kind === 'source_rights' && artifact.artifactId === rights.rightsArtifactId
+    )
+  ) {
+    addBlocker(
+      blockers,
+      'decision_rights_mismatch',
+      rights.rightsArtifactId,
+      'The effective Gate 0A decision does not pin this source-rights artifact.'
+    );
+  }
+  blockers.push(...collectDecisionScopeBlockers(decision, request));
+  return { decision, blockers };
+}
+
+function collectSourceScopeBlockers(
+  rights: AflTradeSourceRightsProposal,
+  request: AflTradeGate0ARequest,
+  evaluatedAt: number
+): AflTradeGate0ABlocker[] {
+  const blockers: AflTradeGate0ABlocker[] = [];
+  if (Number.isFinite(evaluatedAt)) {
+    if (
+      rights.content.termsEffectiveAt !== null &&
+      evaluatedAt < Date.parse(rights.content.termsEffectiveAt)
+    ) {
+      addBlocker(
+        blockers,
+        'terms_not_current',
+        rights.rightsArtifactId,
+        'The source terms are not yet effective.'
+      );
+    }
+    if (
+      rights.content.termsExpireAt !== null &&
+      evaluatedAt >= Date.parse(rights.content.termsExpireAt)
+    ) {
+      addBlocker(
+        blockers,
+        'terms_not_current',
+        rights.rightsArtifactId,
+        'The source terms have expired.'
+      );
+    }
+  }
+  if (!rights.content.scope.competitions.includes(request.competition)) {
+    addBlocker(
+      blockers,
+      'competition_not_permitted',
+      request.competition,
+      `Competition ${request.competition} is outside the source-rights scope.`
+    );
+  }
+  const seasonPermitted = rights.content.scope.seasonRanges.some(
+    (range) => range.from <= request.season && request.season <= range.to
+  );
+  if (!seasonPermitted) {
+    addBlocker(
+      blockers,
+      'season_not_permitted',
+      String(request.season),
+      `Season ${request.season} is outside the source-rights scope.`
+    );
+  }
+  if (rights.content.scope.accessMechanism !== request.accessMechanism) {
+    addBlocker(
+      blockers,
+      'access_not_permitted',
+      request.accessMechanism,
+      `Access mechanism ${request.accessMechanism} is not permitted by this rights artifact.`
+    );
+  }
+  return blockers;
+}
+
+function collectRequestedPermissionBlockers(
+  rights: AflTradeSourceRightsProposal,
+  request: AflTradeGate0ARequest
+): AflTradeGate0ABlocker[] {
+  const blockers: AflTradeGate0ABlocker[] = [];
+  if (hasDuplicates(request.operations)) {
+    addBlocker(blockers, 'duplicate_request', 'operations', 'Requested operations must be unique.');
+  }
+  const fieldUseKeys = request.fieldUses.map(
+    (fieldUse) => `${fieldUse.sourceField}|${fieldUse.use}`
+  );
+  if (hasDuplicates(fieldUseKeys)) {
+    addBlocker(blockers, 'duplicate_request', 'fieldUses', 'Requested field uses must be unique.');
+  }
+  for (const operation of request.operations) {
+    if (rights.content.operations[operation] !== 'allowed') {
+      addBlocker(
+        blockers,
+        'operation_not_permitted',
+        operation,
+        `Operation ${operation} is not explicitly allowed.`
+      );
+    }
+  }
+  const fieldsBySourceName = new Map(
+    rights.content.fields.map((field) => [field.sourceField, field])
+  );
+  for (const fieldUse of request.fieldUses) {
+    const field = fieldsBySourceName.get(fieldUse.sourceField);
+    if (!field) {
+      addBlocker(
+        blockers,
+        'field_not_registered',
+        fieldUse.sourceField,
+        `Field ${fieldUse.sourceField} is not registered and is denied by default.`
+      );
+    } else if (field.uses[fieldUse.use] !== 'allowed') {
+      addBlocker(
+        blockers,
+        'field_use_not_permitted',
+        `${fieldUse.sourceField}:${fieldUse.use}`,
+        `Field ${fieldUse.sourceField} is not allowed for ${fieldUse.use}.`
+      );
+    }
+  }
+  return blockers;
+}
+
+function collectStorageAndConditionBlockers(
+  rights: AflTradeSourceRightsProposal,
+  decision: AflTradeGateDecisionRecord | null,
+  request: AflTradeGate0ARequest
+): AflTradeGate0ABlocker[] {
+  const blockers: AflTradeGate0ABlocker[] = [];
+  if (!withinRetention(request.rawRetentionDays, rights.content.retention.rawEvidence)) {
+    addBlocker(
+      blockers,
+      'retention_not_permitted',
+      'rawEvidence',
+      'Requested raw-evidence retention exceeds the permitted scope.'
+    );
+  }
+  if (!withinRetention(request.metadataRetentionDays, rights.content.retention.hashesAndMetadata)) {
+    addBlocker(
+      blockers,
+      'retention_not_permitted',
+      'hashesAndMetadata',
+      'Requested metadata retention exceeds the permitted scope.'
+    );
+  }
+  if (request.cacheSeconds !== null) {
+    const cache = rights.content.automatedAccess.cache;
+    const cachePermitted =
+      Number.isInteger(request.cacheSeconds) &&
+      request.cacheSeconds >= 0 &&
+      cache.permitted &&
+      cache.maximumSeconds !== null &&
+      request.cacheSeconds <= cache.maximumSeconds;
+    if (!cachePermitted) {
+      addBlocker(
+        blockers,
+        'cache_not_permitted',
+        String(request.cacheSeconds),
+        'Requested caching exceeds the permitted scope.'
+      );
+    }
+  }
+  if (decision) {
+    const conditionById = new Map(
+      decision.content.conditionResults.map((condition) => [condition.conditionId, condition])
+    );
+    for (const condition of rights.content.conditions) {
+      const applies = condition.appliesToOperations.some((operation) =>
+        request.operations.includes(operation)
+      );
+      if (applies && conditionById.get(condition.conditionId)?.status !== 'satisfied') {
+        addBlocker(
+          blockers,
+          'source_condition_unsatisfied',
+          condition.conditionId,
+          `Source-rights condition ${condition.conditionId} is not satisfied by the decision.`
+        );
+      }
+    }
+  }
+  return blockers;
+}
+
 export function evaluateAflTradeGate0A(
   ledger: AflTradeGateDecisionLedger,
   unparsedRights: AflTradeSourceRightsProposal,
@@ -134,219 +380,12 @@ export function evaluateAflTradeGate0A(
       'Gate 0A requires a valid evaluation time.'
     );
   }
-
-  const gateResolution = resolveAflTradeGateEligibility(ledger, {
-    gate: 'gate_0a_permission_to_evaluate',
-    decisionKey: request.decisionKey,
-    environment: request.environment,
-    evaluatedAt: request.evaluatedAt,
-  });
-  const decision = gateResolution.decision;
-  if (gateResolution.status === 'blocked' || decision === null) {
-    for (const blocker of gateResolution.blockers) {
-      addBlocker(blockers, 'gate_decision_blocked', blocker.code, blocker.message);
-    }
-  } else {
-    if (
-      !decision.content.affectedArtifacts.some(
-        (artifact) =>
-          artifact.kind === 'source_rights' && artifact.artifactId === rights.rightsArtifactId
-      )
-    ) {
-      addBlocker(
-        blockers,
-        'decision_rights_mismatch',
-        rights.rightsArtifactId,
-        'The effective Gate 0A decision does not pin this source-rights artifact.'
-      );
-    }
-
-    const scopeChecks: ReadonlyArray<[string, string]> = [
-      ['source_rights_artifact', rights.rightsArtifactId],
-      ['competition', request.competition],
-      ['season', String(request.season)],
-      ['access_mechanism', request.accessMechanism],
-      ['geography', request.geography],
-      ['commercial_context', request.commercialContext],
-      ['audience', request.audience],
-    ];
-    for (const [dimensionName, requestedValue] of scopeChecks) {
-      const permittedValues = scopeDimensionValues(
-        decision.content.scope.dimensions,
-        dimensionName
-      );
-      if (permittedValues === null || !permittedValues.includes(requestedValue)) {
-        addBlocker(
-          blockers,
-          'decision_scope_mismatch',
-          `${dimensionName}:${requestedValue}`,
-          `The Gate 0A decision does not include ${requestedValue} in ${dimensionName}.`
-        );
-      }
-    }
-    const permittedOperations = scopeDimensionValues(
-      decision.content.scope.dimensions,
-      'operation'
-    );
-    for (const operation of request.operations) {
-      if (permittedOperations === null || !permittedOperations.includes(operation)) {
-        addBlocker(
-          blockers,
-          'decision_scope_mismatch',
-          operation,
-          `The Gate 0A decision scope does not include ${operation}.`
-        );
-      }
-    }
-  }
-
-  if (Number.isFinite(evaluatedAt)) {
-    if (
-      rights.content.termsEffectiveAt !== null &&
-      evaluatedAt < Date.parse(rights.content.termsEffectiveAt)
-    ) {
-      addBlocker(
-        blockers,
-        'terms_not_current',
-        rights.rightsArtifactId,
-        'The source terms are not yet effective.'
-      );
-    }
-    if (
-      rights.content.termsExpireAt !== null &&
-      evaluatedAt >= Date.parse(rights.content.termsExpireAt)
-    ) {
-      addBlocker(
-        blockers,
-        'terms_not_current',
-        rights.rightsArtifactId,
-        'The source terms have expired.'
-      );
-    }
-  }
-
-  if (!rights.content.scope.competitions.includes(request.competition)) {
-    addBlocker(
-      blockers,
-      'competition_not_permitted',
-      request.competition,
-      `Competition ${request.competition} is outside the source-rights scope.`
-    );
-  }
-  if (
-    !rights.content.scope.seasonRanges.some(
-      (range) => range.from <= request.season && request.season <= range.to
-    )
-  ) {
-    addBlocker(
-      blockers,
-      'season_not_permitted',
-      String(request.season),
-      `Season ${request.season} is outside the source-rights scope.`
-    );
-  }
-  if (rights.content.scope.accessMechanism !== request.accessMechanism) {
-    addBlocker(
-      blockers,
-      'access_not_permitted',
-      request.accessMechanism,
-      `Access mechanism ${request.accessMechanism} is not permitted by this rights artifact.`
-    );
-  }
-
-  if (hasDuplicates(request.operations)) {
-    addBlocker(blockers, 'duplicate_request', 'operations', 'Requested operations must be unique.');
-  }
-  const fieldUseKeys = request.fieldUses.map(
-    (fieldUse) => `${fieldUse.sourceField}|${fieldUse.use}`
-  );
-  if (hasDuplicates(fieldUseKeys)) {
-    addBlocker(blockers, 'duplicate_request', 'fieldUses', 'Requested field uses must be unique.');
-  }
-
-  for (const operation of request.operations) {
-    if (rights.content.operations[operation] !== 'allowed') {
-      addBlocker(
-        blockers,
-        'operation_not_permitted',
-        operation,
-        `Operation ${operation} is not explicitly allowed.`
-      );
-    }
-  }
-  for (const fieldUse of request.fieldUses) {
-    const field = rights.content.fields.find(
-      (candidate) => candidate.sourceField === fieldUse.sourceField
-    );
-    if (!field) {
-      addBlocker(
-        blockers,
-        'field_not_registered',
-        fieldUse.sourceField,
-        `Field ${fieldUse.sourceField} is not registered and is denied by default.`
-      );
-    } else if (field.uses[fieldUse.use] !== 'allowed') {
-      addBlocker(
-        blockers,
-        'field_use_not_permitted',
-        `${fieldUse.sourceField}:${fieldUse.use}`,
-        `Field ${fieldUse.sourceField} is not allowed for ${fieldUse.use}.`
-      );
-    }
-  }
-
-  if (!withinRetention(request.rawRetentionDays, rights.content.retention.rawEvidence)) {
-    addBlocker(
-      blockers,
-      'retention_not_permitted',
-      'rawEvidence',
-      'Requested raw-evidence retention exceeds the permitted scope.'
-    );
-  }
-  if (!withinRetention(request.metadataRetentionDays, rights.content.retention.hashesAndMetadata)) {
-    addBlocker(
-      blockers,
-      'retention_not_permitted',
-      'hashesAndMetadata',
-      'Requested metadata retention exceeds the permitted scope.'
-    );
-  }
-  if (request.cacheSeconds !== null) {
-    const cache = rights.content.automatedAccess.cache;
-    if (
-      !Number.isInteger(request.cacheSeconds) ||
-      request.cacheSeconds < 0 ||
-      !cache.permitted ||
-      cache.maximumSeconds === null ||
-      request.cacheSeconds > cache.maximumSeconds
-    ) {
-      addBlocker(
-        blockers,
-        'cache_not_permitted',
-        String(request.cacheSeconds),
-        'Requested caching exceeds the permitted scope.'
-      );
-    }
-  }
-
-  if (decision) {
-    const conditionById = new Map(
-      decision.content.conditionResults.map((condition) => [condition.conditionId, condition])
-    );
-    for (const condition of rights.content.conditions) {
-      if (
-        condition.appliesToOperations.some((operation) => request.operations.includes(operation)) &&
-        conditionById.get(condition.conditionId)?.status !== 'satisfied'
-      ) {
-        addBlocker(
-          blockers,
-          'source_condition_unsatisfied',
-          condition.conditionId,
-          `Source-rights condition ${condition.conditionId} is not satisfied by the decision.`
-        );
-      }
-    }
-  }
+  const authorization = evaluateGateDecisionAuthorization(ledger, rights, request);
+  const decision = authorization.decision;
+  blockers.push(...authorization.blockers);
+  blockers.push(...collectSourceScopeBlockers(rights, request, evaluatedAt));
+  blockers.push(...collectRequestedPermissionBlockers(rights, request));
+  blockers.push(...collectStorageAndConditionBlockers(rights, decision, request));
 
   return {
     status: blockers.length === 0 ? 'mechanically_eligible' : 'blocked',

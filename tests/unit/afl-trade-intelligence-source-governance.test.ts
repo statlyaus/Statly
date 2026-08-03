@@ -592,6 +592,90 @@ describe('AFL trade-intelligence Gate 0A source governance', () => {
     );
   });
 
+  it('preserves Gate 0A blocker precedence across independent policy phases', () => {
+    const fixture = fixtures();
+    const result = evaluateAflTradeGate0A(fixture.ledger, fixture.sourceRights, {
+      ...request(fixture.sourceRights),
+      competition: 'outside-competition',
+      season: 2026,
+      accessMechanism: 'manual_review',
+      geography: 'outside-region',
+      operations: ['model_training'],
+      fieldUses: [{ sourceField: 'unregistered_field', use: 'model_training' }],
+      rawRetentionDays: 8,
+      cacheSeconds: 61,
+    });
+
+    expect(result).toEqual({
+      status: 'blocked',
+      decisionId: fixture.decision.decisionId,
+      rightsArtifactId: fixture.sourceRights.rightsArtifactId,
+      blockers: [
+        {
+          code: 'decision_scope_mismatch',
+          subject: 'competition:outside-competition',
+          message:
+            'The Gate 0A decision does not include outside-competition in competition.',
+        },
+        {
+          code: 'decision_scope_mismatch',
+          subject: 'season:2026',
+          message: 'The Gate 0A decision does not include 2026 in season.',
+        },
+        {
+          code: 'decision_scope_mismatch',
+          subject: 'access_mechanism:manual_review',
+          message: 'The Gate 0A decision does not include manual_review in access_mechanism.',
+        },
+        {
+          code: 'decision_scope_mismatch',
+          subject: 'geography:outside-region',
+          message: 'The Gate 0A decision does not include outside-region in geography.',
+        },
+        {
+          code: 'decision_scope_mismatch',
+          subject: 'model_training',
+          message: 'The Gate 0A decision scope does not include model_training.',
+        },
+        {
+          code: 'competition_not_permitted',
+          subject: 'outside-competition',
+          message: 'Competition outside-competition is outside the source-rights scope.',
+        },
+        {
+          code: 'season_not_permitted',
+          subject: '2026',
+          message: 'Season 2026 is outside the source-rights scope.',
+        },
+        {
+          code: 'access_not_permitted',
+          subject: 'manual_review',
+          message: 'Access mechanism manual_review is not permitted by this rights artifact.',
+        },
+        {
+          code: 'operation_not_permitted',
+          subject: 'model_training',
+          message: 'Operation model_training is not explicitly allowed.',
+        },
+        {
+          code: 'field_not_registered',
+          subject: 'unregistered_field',
+          message: 'Field unregistered_field is not registered and is denied by default.',
+        },
+        {
+          code: 'retention_not_permitted',
+          subject: 'rawEvidence',
+          message: 'Requested raw-evidence retention exceeds the permitted scope.',
+        },
+        {
+          code: 'cache_not_permitted',
+          subject: '61',
+          message: 'Requested caching exceeds the permitted scope.',
+        },
+      ],
+    });
+  });
+
   it('blocks expired terms and expired gate decisions independently', () => {
     const fixture = fixtures();
     const expiredTerms = evaluateAflTradeGate0A(fixture.ledger, fixture.sourceRights, {
