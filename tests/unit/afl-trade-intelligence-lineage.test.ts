@@ -218,31 +218,57 @@ describe('public AFL trade lineage temporal and structural invariants', () => {
 
   it('preserves ordered custody and edge issues across independent invalid records', () => {
     const fixture = buildAflTradeLineageFixture('future_pick_to_player');
+    const assetById = (assetId: string) => {
+      const found = fixture.graph.assets.find((asset) => asset.assetId === assetId);
+      if (!found) throw new Error(`Missing fixture asset ${assetId}.`);
+      return found;
+    };
+    const custodyById = (custodySpellId: string) => {
+      const found = fixture.graph.custodySpells.find(
+        (custody) => custody.custodySpellId === custodySpellId
+      );
+      if (!found) throw new Error(`Missing fixture custody spell ${custodySpellId}.`);
+      return found;
+    };
+    const edgeById = (edgeId: string) => {
+      const found = fixture.graph.edges.find((edge) => edge.edgeId === edgeId);
+      if (!found) throw new Error(`Missing fixture edge ${edgeId}.`);
+      return found;
+    };
+    const player = assetById('fixture:player-kestrel');
+    const futureRight = assetById('fixture:future-right-a');
+    const resolvedPick = assetById('fixture:current-pick-9');
+    const renumberedPick = assetById('fixture:current-pick-12');
+    const playerCustody = custodyById(
+      'custody:fixture:player-kestrel:fixture-club-b:2025-11-20T00:00:00.000Z'
+    );
+    const resolutionEdge = edgeById('fixture:edge-resolve');
+    const renumberingEdge = edgeById('fixture:edge-renumber');
     const extraPlayer = {
-      ...fixture.graph.assets[4],
+      ...player,
       assetId: 'fixture:extra-player',
       effectiveFrom: '2025-12-01T00:00:00.000Z',
       knownFrom: '2025-12-01T00:00:00.000Z',
     };
     const extraFutureRight = {
-      ...fixture.graph.assets[0],
+      ...futureRight,
       assetId: 'fixture:extra-future-right',
     };
     const earlyPick = {
-      ...fixture.graph.assets[1],
+      ...resolvedPick,
       assetId: 'fixture:early-pick-source',
     };
     const laterPick = {
-      ...fixture.graph.assets[2],
+      ...renumberedPick,
       assetId: 'fixture:early-pick-target',
     };
     const missingCustody = {
-      ...fixture.graph.custodySpells[4],
+      ...playerCustody,
       custodySpellId: 'fixture:missing-asset-custody',
       assetId: 'fixture:missing-custody-asset',
     };
     const invalidCustody = {
-      ...fixture.graph.custodySpells[4],
+      ...playerCustody,
       custodySpellId: 'fixture:invalid-custody-interval',
       assetId: extraPlayer.assetId,
       effectiveFrom: '2025-12-02T00:00:00.000Z',
@@ -250,7 +276,7 @@ describe('public AFL trade lineage temporal and structural invariants', () => {
       knownFrom: '2025-12-02T00:00:00.000Z',
     };
     const missingEdge = {
-      ...fixture.graph.edges[0],
+      ...resolutionEdge,
       edgeId: 'fixture:missing-asset-edge',
       kind: 'asset_traded_for_asset' as const,
       sourceAssetId: 'fixture:missing-edge-source',
@@ -259,7 +285,7 @@ describe('public AFL trade lineage temporal and structural invariants', () => {
       knownFrom: '2025-12-01T00:00:00.000Z',
     };
     const selfEdge = {
-      ...fixture.graph.edges[0],
+      ...resolutionEdge,
       edgeId: 'fixture:self-edge',
       kind: 'asset_traded_for_asset' as const,
       sourceAssetId: extraPlayer.assetId,
@@ -268,7 +294,7 @@ describe('public AFL trade lineage temporal and structural invariants', () => {
       knownFrom: '2025-12-01T00:00:00.000Z',
     };
     const invalidTypeEdge = {
-      ...fixture.graph.edges[0],
+      ...resolutionEdge,
       edgeId: 'fixture:invalid-type-edge',
       kind: 'selection_created_player' as const,
       sourceAssetId: extraFutureRight.assetId,
@@ -277,7 +303,7 @@ describe('public AFL trade lineage temporal and structural invariants', () => {
       knownFrom: '2025-10-01T00:00:00.000Z',
     };
     const earlyEdge = {
-      ...fixture.graph.edges[1],
+      ...renumberingEdge,
       edgeId: 'fixture:edge-before-assets',
       sourceAssetId: earlyPick.assetId,
       targetAssetId: laterPick.assetId,
