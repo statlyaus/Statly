@@ -90,17 +90,36 @@ function packageContent(
     authorityTransfer: 'not_executed' as const,
     integrityStatement: 'content_address_proves_integrity_not_truth_or_authority' as const,
     designAssertions: [...AFL_TRADE_ARCHITECTURE_DESIGN_ASSERTIONS],
-    authorityMatrix: AFL_TRADE_AUTHORITY_CONCERNS.map((concern) => ({
-      concern,
-      currentAuthority: `Fixture current authority for ${concern}.`,
-      targetAuthority: `Fixture proposed target for ${concern}.`,
-      transitionRequired: true,
-      currentAuthorityDisposition: 'unchanged_until_authorized_activation' as const,
-      targetAuthorityStatus: 'proposed_not_authoritative' as const,
-      activationOwner: 'fixture-operations-owner',
-      activationConditions: [`Verify the fabricated ${concern} target.`],
-      retirementConditions: [`Close the fabricated ${concern} rollback window.`],
-    })),
+    isolationContract: {
+      protectedFantasyAuthority: 'observed_unchanged_outside_trade_engine' as const,
+      analyticalDatabase: {
+        deploymentBoundary: 'independent_database_or_isolated_database_and_role' as const,
+        credentials: 'separate_pooled_and_direct' as const,
+        migrationHistory: 'separate_postgresql_native' as const,
+        backupRestore: 'separate_evidence_required' as const,
+        connectionBudget: 'separate' as const,
+        relationalDependencies: 'no_fantasy_foreign_keys' as const,
+      },
+      publicIdentities: 'source_native_no_fantasy_ownership' as const,
+      valuationProjectionPointer: 'separate_from_legacy_archive_pointer' as const,
+    },
+    authorityMatrix: AFL_TRADE_AUTHORITY_CONCERNS.map((concern) => {
+      const currentAuthority = `Fixture current authority for ${concern}.`;
+      const protectedFantasy = concern === 'protected_fantasy_relational_state';
+      return {
+        concern,
+        currentAuthority,
+        targetAuthority: protectedFantasy
+          ? currentAuthority
+          : `Fixture proposed target for ${concern}.`,
+        transitionRequired: !protectedFantasy,
+        currentAuthorityDisposition: 'unchanged_until_authorized_activation' as const,
+        targetAuthorityStatus: 'proposed_not_authoritative' as const,
+        activationOwner: 'fixture-operations-owner',
+        activationConditions: [`Verify the fabricated ${concern} target.`],
+        retirementConditions: [`Close the fabricated ${concern} rollback window.`],
+      };
+    }),
     sections: AFL_TRADE_ARCHITECTURE_PACKAGE_SECTIONS.map((section) => ({
       section,
       decision: `Fabricated design decision for ${section}.`,
@@ -222,8 +241,10 @@ describe('AFL trade-intelligence Gate 1 architecture package', () => {
     const content = packageContent(sourceSnapshot.snapshotId);
     const invalid = {
       ...content,
-      authorityMatrix: content.authorityMatrix.map((entry, index) =>
-        index === 0 ? { ...entry, targetAuthority: entry.currentAuthority } : entry
+      authorityMatrix: content.authorityMatrix.map((entry) =>
+        entry.concern === 'analytical_records'
+          ? { ...entry, targetAuthority: entry.currentAuthority }
+          : entry
       ),
     };
 
@@ -233,6 +254,52 @@ describe('AFL trade-intelligence Gate 1 architecture package', () => {
         content: invalid,
       }).success
     ).toBe(false);
+  });
+
+  it('rejects any attempt to transfer protected fantasy relational authority', () => {
+    const sourceSnapshot = snapshot();
+    const content = packageContent(sourceSnapshot.snapshotId);
+    const invalid = {
+      ...content,
+      authorityMatrix: content.authorityMatrix.map((entry) =>
+        entry.concern === 'protected_fantasy_relational_state'
+          ? {
+              ...entry,
+              targetAuthority: 'A trade-engine-owned fantasy database.',
+              transitionRequired: true,
+            }
+          : entry
+      ),
+    };
+
+    expect(
+      aflTradeArchitectureDecisionPackageSchema.safeParse({
+        packageId: createAflTradeContentAddress('architecture-decision-package', invalid),
+        content: invalid,
+      }).success
+    ).toBe(false);
+  });
+
+  it('requires the exact analytical isolation contract', () => {
+    const sourceSnapshot = snapshot();
+    const content = packageContent(sourceSnapshot.snapshotId);
+    const { isolationContract: _omitted, ...missingIsolationContract } = content;
+    const sharedProjectionPointer = {
+      ...content,
+      isolationContract: {
+        ...content.isolationContract,
+        valuationProjectionPointer: 'shared_with_legacy_archive_pointer',
+      },
+    };
+
+    for (const changed of [missingIsolationContract, sharedProjectionPointer]) {
+      expect(
+        aflTradeArchitectureDecisionPackageSchema.safeParse({
+          packageId: createAflTradeContentAddress('architecture-decision-package', changed),
+          content: changed,
+        }).success
+      ).toBe(false);
+    }
   });
 
   it('cannot encode readiness, operational permission, cutover, or a production claim', () => {
@@ -271,10 +338,11 @@ describe('AFL trade-intelligence Gate 1 architecture package', () => {
   it('requires every package current authority to match the referenced snapshot', () => {
     const sourceSnapshot = snapshot();
     const content = packageContent(sourceSnapshot.snapshotId);
-    content.authorityMatrix[0] = {
-      ...content.authorityMatrix[0],
-      currentAuthority: 'A contradictory current authority.',
-    };
+    content.authorityMatrix = content.authorityMatrix.map((entry) =>
+      entry.concern === 'analytical_records'
+        ? { ...entry, currentAuthority: 'A contradictory current authority.' }
+        : entry
+    );
     const changedPackage = aflTradeArchitectureDecisionPackageSchema.parse({
       packageId: createAflTradeContentAddress('architecture-decision-package', content),
       content,

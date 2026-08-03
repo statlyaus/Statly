@@ -258,17 +258,36 @@ function architectureArtifacts() {
     authorityTransfer: 'not_executed' as const,
     integrityStatement: 'content_address_proves_integrity_not_truth_or_authority' as const,
     designAssertions: [...AFL_TRADE_ARCHITECTURE_DESIGN_ASSERTIONS],
-    authorityMatrix: AFL_TRADE_AUTHORITY_CONCERNS.map((concern) => ({
-      concern,
-      currentAuthority: `Fixture current authority for ${concern}.`,
-      targetAuthority: `Fixture target authority for ${concern}.`,
-      transitionRequired: true,
-      currentAuthorityDisposition: 'unchanged_until_authorized_activation' as const,
-      targetAuthorityStatus: 'proposed_not_authoritative' as const,
-      activationOwner: 'fixture-owner',
-      activationConditions: ['Verify the fabricated target.'],
-      retirementConditions: ['Close the fabricated rollback window.'],
-    })),
+    isolationContract: {
+      protectedFantasyAuthority: 'observed_unchanged_outside_trade_engine' as const,
+      analyticalDatabase: {
+        deploymentBoundary: 'independent_database_or_isolated_database_and_role' as const,
+        credentials: 'separate_pooled_and_direct' as const,
+        migrationHistory: 'separate_postgresql_native' as const,
+        backupRestore: 'separate_evidence_required' as const,
+        connectionBudget: 'separate' as const,
+        relationalDependencies: 'no_fantasy_foreign_keys' as const,
+      },
+      publicIdentities: 'source_native_no_fantasy_ownership' as const,
+      valuationProjectionPointer: 'separate_from_legacy_archive_pointer' as const,
+    },
+    authorityMatrix: AFL_TRADE_AUTHORITY_CONCERNS.map((concern) => {
+      const currentAuthority = `Fixture current authority for ${concern}.`;
+      const protectedFantasy = concern === 'protected_fantasy_relational_state';
+      return {
+        concern,
+        currentAuthority,
+        targetAuthority: protectedFantasy
+          ? currentAuthority
+          : `Fixture target authority for ${concern}.`,
+        transitionRequired: !protectedFantasy,
+        currentAuthorityDisposition: 'unchanged_until_authorized_activation' as const,
+        targetAuthorityStatus: 'proposed_not_authoritative' as const,
+        activationOwner: 'fixture-owner',
+        activationConditions: ['Verify the fabricated target.'],
+        retirementConditions: ['Close the fabricated rollback window.'],
+      };
+    }),
     sections: AFL_TRADE_ARCHITECTURE_PACKAGE_SECTIONS.map((section) => ({
       section,
       decision: `Fixture decision for ${section}.`,
@@ -504,7 +523,9 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
         ...input.dataset,
         content: {
           ...input.dataset.content,
-          featureDefinitionArtifacts: [...input.dataset.content.featureDefinitionArtifacts].reverse(),
+          featureDefinitionArtifacts: [
+            ...input.dataset.content.featureDefinitionArtifacts,
+          ].reverse(),
         },
       },
     };

@@ -85,6 +85,14 @@ export const aflTradeAuthorityTransitionEventContentSchema = z
   })
   .strict()
   .superRefine((event, context) => {
+    if (event.concern === 'protected_fantasy_relational_state') {
+      context.addIssue({
+        code: 'custom',
+        path: ['concern'],
+        message:
+          'Protected fantasy relational authority is outside the trade-engine transition boundary.',
+      });
+    }
     if (event.fromAuthority === event.toAuthority) {
       context.addIssue({
         code: 'custom',
@@ -401,7 +409,11 @@ function applyPreparedTransition(
       'A transition must prepare from the current authority.'
     );
   }
-  if (!active && existingTransitionConcern === undefined && current.authority === content.fromAuthority) {
+  if (
+    !active &&
+    existingTransitionConcern === undefined &&
+    current.authority === content.fromAuthority
+  ) {
     state.activeByConcern.set(content.concern, { state: 'prepared', event });
     state.transitionConcernByKey.set(content.transitionKey, content.concern);
   }
@@ -641,7 +653,7 @@ export interface AflTradeAuthorityTransitionCommand {
 }
 
 export type AflTradeAuthorityTransitionErrorCode =
-  'STALE_REVISION' | 'INVALID_LEDGER' | 'INVALID_TRANSITION';
+  'STALE_REVISION' | 'INVALID_LEDGER' | 'INVALID_TRANSITION' | 'PROTECTED_AUTHORITY_BOUNDARY';
 
 export class AflTradeAuthorityTransitionError extends Error {
   constructor(
@@ -662,6 +674,12 @@ export function appendAflTradeAuthorityTransition(
     throw new AflTradeAuthorityTransitionError(
       'INVALID_LEDGER',
       'Cannot append to an invalid ledger.'
+    );
+  }
+  if (command.concern === 'protected_fantasy_relational_state') {
+    throw new AflTradeAuthorityTransitionError(
+      'PROTECTED_AUTHORITY_BOUNDARY',
+      'Protected fantasy relational authority cannot be transferred by the trade engine.'
     );
   }
   if (command.expectedRevision !== ledger.revision) {

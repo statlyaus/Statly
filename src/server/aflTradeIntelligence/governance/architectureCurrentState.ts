@@ -6,7 +6,7 @@ import {
 } from '../artifacts/contentAddress';
 
 export const AFL_TRADE_AUTHORITY_CONCERNS = [
-  'relational_domain_state',
+  'protected_fantasy_relational_state',
   'legacy_trade_archive',
   'analytical_records',
   'immutable_artifacts',
@@ -15,13 +15,15 @@ export const AFL_TRADE_AUTHORITY_CONCERNS = [
 ] as const;
 
 export const AFL_TRADE_REQUIRED_CURRENT_STATE_OBSERVATIONS = [
-  'relational_provider_sqlite',
+  'protected_fantasy_relational_provider_sqlite',
   'legacy_firestore_pointer_cache',
   'legacy_firestore_fallback',
   'legacy_numeric_zero_coercion',
   'legacy_search_separate_pointer',
   'legacy_import_pointer_without_cas',
-  'postgres_cutover_unexecuted',
+  'protected_fantasy_postgres_cutover_unexecuted',
+  'analytical_postgres_target_absent',
+  'analytical_isolation_controls_unverified',
   'immutable_artifact_repository_absent',
   'decision_evidence_registry_absent',
 ] as const;

@@ -36,6 +36,10 @@ export const AFL_TRADE_ARCHITECTURE_DESIGN_ASSERTIONS = [
   'content_addresses_prove_integrity_only',
   'other_gates_remain_conjunctive',
   'publication_registry_owns_activation',
+  'protected_fantasy_authority_is_observed_only',
+  'analytical_database_has_independent_lifecycle',
+  'public_identities_have_no_fantasy_ownership',
+  'valuation_projection_has_separate_pointer',
 ] as const;
 
 const boundedTextSchema = z.string().trim().min(1).max(4000);
@@ -82,6 +86,24 @@ const sectionSchema = z
   })
   .strict();
 
+const isolationContractSchema = z
+  .object({
+    protectedFantasyAuthority: z.literal('observed_unchanged_outside_trade_engine'),
+    analyticalDatabase: z
+      .object({
+        deploymentBoundary: z.literal('independent_database_or_isolated_database_and_role'),
+        credentials: z.literal('separate_pooled_and_direct'),
+        migrationHistory: z.literal('separate_postgresql_native'),
+        backupRestore: z.literal('separate_evidence_required'),
+        connectionBudget: z.literal('separate'),
+        relationalDependencies: z.literal('no_fantasy_foreign_keys'),
+      })
+      .strict(),
+    publicIdentities: z.literal('source_native_no_fantasy_ownership'),
+    valuationProjectionPointer: z.literal('separate_from_legacy_archive_pointer'),
+  })
+  .strict();
+
 export const aflTradeArchitectureDecisionPackageContentSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-architecture-decision-package/v1'),
@@ -101,6 +123,7 @@ export const aflTradeArchitectureDecisionPackageContentSchema = z
     designAssertions: z
       .array(z.enum(AFL_TRADE_ARCHITECTURE_DESIGN_ASSERTIONS))
       .length(AFL_TRADE_ARCHITECTURE_DESIGN_ASSERTIONS.length),
+    isolationContract: isolationContractSchema,
     authorityMatrix: z
       .array(authorityMatrixEntrySchema)
       .length(AFL_TRADE_AUTHORITY_CONCERNS.length),
@@ -132,6 +155,22 @@ export const aflTradeArchitectureDecisionPackageContentSchema = z
       ['sections'],
       'Architecture package sections'
     );
+
+    const protectedFantasyAuthority = decisionPackage.authorityMatrix.find(
+      (entry) => entry.concern === 'protected_fantasy_relational_state'
+    );
+    if (
+      protectedFantasyAuthority &&
+      (protectedFantasyAuthority.currentAuthority !== protectedFantasyAuthority.targetAuthority ||
+        protectedFantasyAuthority.transitionRequired)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['authorityMatrix'],
+        message:
+          'Protected fantasy relational authority is observed context and cannot be transferred by the trade-engine package.',
+      });
+    }
   });
 
 export const aflTradeArchitectureDecisionPackageSchema = z

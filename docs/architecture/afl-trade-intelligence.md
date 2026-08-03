@@ -1,10 +1,10 @@
 # Public AFL trade intelligence
 
-- Status: WP1 pure deterministic foundations, Gate 1 decision/transition contracts, and the WP7A
-  prepublication public boundary are implemented with local contract coverage; Gates 0A and 1 have
-  no production approval, and analytical persistence, model development, numerical publication
-  services, and numerical product delivery are not complete
-- Last verified against source: 2026-08-02
+- Status: WP1 pure deterministic foundations, Gate 1 decision/transition contracts, the independent
+  public analytical target, and the WP7A prepublication public boundary are defined with local
+  contract coverage; Gates 0A and 1 have no production approval, and analytical infrastructure,
+  model development, numerical publication services, and numerical product delivery are not complete
+- Last verified against source: 2026-08-03
 
 ## Purpose
 
@@ -68,12 +68,17 @@ WP1 completion therefore means that later work has a deterministic boundary to b
 mean that a historical source is approved, managed PostgreSQL is operational, an analytical corpus
 exists, a model is approved, a publication is active, or the feature is release-ready.
 
-The Prisma schema currently targets SQLite. Managed PostgreSQL is the proposed production target, but
-the platform-wide cutover described in [the PostgreSQL runbook](../runbooks/postgresql-cutover.md) is
-planned and unexecuted. The repository has no implemented immutable artifact repository and no
-trusted external decision-evidence registry for this capability. Do not describe PostgreSQL or object
-storage as ready, replay SQLite migrations against PostgreSQL, or introduce the analytical schema into
-an unapproved target.
+The protected fantasy Prisma schema currently targets SQLite. Its platform-wide PostgreSQL cutover is
+planned and unexecuted, but it is not the migration path for this public capability. The trade engine
+has no implemented relational store. Its selected design target is an independently migrated managed
+PostgreSQL database, or an isolated database and role on an approved managed PostgreSQL service, with
+separate credentials, connection budgets, migrations, backups, and restore evidence. It contains no
+`User`, fantasy `League`, membership, roster, or fantasy-trade ownership relation.
+
+The repository also has no implemented immutable artifact repository and no trusted external
+decision-evidence registry for this capability. Do not describe the analytical PostgreSQL target or
+object storage as ready, apply the protected fantasy schema or SQLite migration history to it, or
+introduce the analytical schema into an unapproved target.
 
 The repository's Footywire/fitzRoy ETL supplies live-stat evidence for fantasy calculations. That
 existing technical path does not establish permission to train or publish this separate historical
@@ -96,7 +101,7 @@ source-rights proposal
   + content-addressed current-state snapshot
   -> complete architecture decision package
   -> externally authorized Gate 1 decision
-  -> normalized bitemporal corpus manifest in approved managed PostgreSQL
+  -> normalized bitemporal corpus manifest in the approved isolated analytical PostgreSQL target
   -> externally authorized Gate 2 decision
   -> feature dataset and reproducible model-run manifests
   -> externally authorized Gate 3 decision
@@ -110,18 +115,37 @@ source-rights proposal
 
 ### Authority by concern
 
-| Concern                                   | Proposed long-term authority                                     | Constraint                                   |
-| ----------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------- |
-| Source permission and intended use        | Reviewed source-rights register                                  | Technical access is not permission           |
-| Retrieved evidence                        | Immutable content-addressed storage                              | Retention follows source terms               |
-| Evidence metadata and quality issues      | PostgreSQL analytical domain                                     | References immutable evidence                |
-| Public AFL identities                     | PostgreSQL analytical domain linked to canonical identity policy | Does not create fantasy ownership            |
-| Trades, parties, assets, and club custody | PostgreSQL analytical domain                                     | Normalized and bitemporal                    |
-| Asset lineage and attribution             | PostgreSQL analytical domain                                     | Typed edges with conservation invariants     |
-| Feature and model artifacts               | Immutable artifact storage with PostgreSQL metadata              | Reproducible from manifests                  |
-| Valuation snapshots                       | Append-only PostgreSQL publications                              | Candidates never leak into active reads      |
-| Public serving representation             | Versioned Firestore/cache projection                             | Rebuildable and never canonical              |
-| Public HTTP routes                        | Thin transport adapters                                          | Validate input and call shared read services |
+| Concern                                   | Proposed long-term authority                        | Constraint                                          |
+| ----------------------------------------- | --------------------------------------------------- | --------------------------------------------------- |
+| Source permission and intended use        | Reviewed source-rights register                     | Technical access is not permission                  |
+| Retrieved evidence                        | Immutable content-addressed storage                 | Retention follows source terms                      |
+| Evidence metadata and quality issues      | Isolated trade-intelligence PostgreSQL database     | References immutable evidence                       |
+| Public AFL identities                     | Isolated trade-intelligence PostgreSQL database     | Source identities; no fantasy ownership or FK       |
+| Trades, parties, assets, and club custody | Isolated trade-intelligence PostgreSQL database     | Normalized and bitemporal                           |
+| Asset lineage and attribution             | Isolated trade-intelligence PostgreSQL database     | Typed edges with conservation invariants            |
+| Feature and model artifacts               | Immutable artifact storage with analytical metadata | Reproducible from manifests                         |
+| Valuation snapshots                       | Append-only analytical PostgreSQL publications      | Candidates never leak into active reads             |
+| Public serving representation             | Versioned Firestore/cache projection                | Separate pointer; rebuildable and never canonical   |
+| Public HTTP routes                        | Thin transport adapters                             | Validate input and call shared public read services |
+
+### Isolation contract
+
+The public engine uses a separate database boundary even if an approved provider hosts it on the same
+managed PostgreSQL service as another Statly workload. It has its own database, least-privilege roles,
+pooled and direct connection secrets, migration history, backup and restore policy, connection budget,
+monitoring, retention controls, and operational owners. The protected fantasy `DATABASE_URL` and
+Prisma migration history are never accepted as trade-engine configuration.
+
+The analytical schema owns public AFL source identities. It may store reviewed cross-source mappings,
+but it must not reference fantasy users, leagues, memberships, rosters, league trades, or ownership
+records. A future cross-product link is an explicit read-model mapping with independent authorization,
+not a relational ownership edge.
+
+The numerical Firestore projection uses a publication-scoped namespace and active pointer distinct
+from `draftMeta/currentVersion`, which continues to select the legacy archive. The engine can join a
+legacy trade to a published valuation only through stable public archive/source identifiers recorded
+in the projection manifest. A missing join yields an honest unavailable state; it never falls back to
+legacy Expected or Actual fields as Statly value.
 
 Redis may coordinate locks, queues, and caches but never owns durable analytical state. A projection
 failure must not cause Firestore, CSV, or a client fallback to become canonical.
@@ -153,12 +177,13 @@ Every Gate 1 package references an exact `architecture-current-state:` snapshot.
 repository revision, inspection commands, evidence references, one current observation for every
 authority concern, unresolved questions, and the following required findings:
 
-- the relational provider is currently SQLite;
+- the protected fantasy relational provider is currently SQLite and is not the engine's target;
 - the legacy archive uses a cached Firestore pointer and default-collection fallback;
 - malformed or missing legacy numerical fields may be coerced to zero;
 - search performs a separate pointer lookup and fallback;
 - archive import mutates the pointer without revision CAS, demonstrated parity, or last-good rollback;
-- the PostgreSQL cutover is unexecuted;
+- the protected fantasy PostgreSQL cutover is unexecuted and the independent analytical PostgreSQL
+  target is not provisioned;
 - an immutable artifact repository is absent; and
 - a trusted decision-evidence registry is absent.
 
@@ -283,7 +308,9 @@ persistence and operational authorization remain later implementation work.
 There is currently no production source-rights artifact, named approved provider, authority evidence,
 or approved Gate 0A decision for this capability. Historical capture, backfill, and all downstream data
 work therefore remain blocked. FootyWire-derived ingestion is not approved for this use: an open-source
-client or adapter licence does not grant rights to upstream data.
+client or adapter licence does not grant rights to upstream data. The maintained
+[source-rights assessment](afl-trade-source-rights-assessment.md) records the reviewed candidates,
+rejection reasons, evidence request, and minimum approval criteria without creating authority.
 
 ### Gate 0B: data sufficiency
 
@@ -534,24 +561,30 @@ domain results, not generic server errors.
 
 ## Migration and rollback
 
-After the platform PostgreSQL cutover, exact Gate 1 package, and real target are separately approved:
+After the exact Gate 1 package and a real isolated analytical target are separately approved, the
+public engine may proceed independently of the protected fantasy PostgreSQL cutover:
 
-1. introduce the reviewed analytical schema through PostgreSQL-native migrations;
-2. rehearse migrations and rollback on disposable infrastructure;
-3. observe and record the package's integrity, temporal, query, retention, and capacity criteria;
-4. import approved evidence through idempotent adapters;
-5. reconcile source-to-canonical counts and hashes;
-6. build lineage and attribution with deterministic invariants;
-7. build and validate an isolated candidate publication;
-8. project the approved publication to versioned public collections;
-9. obtain separate operational authorization and record a `prepared` transition;
-10. engage the write barrier and re-run the declared parity checkpoint; and
-11. append `activated` with expected-revision CAS. Do not infer cutover from deployment success.
+1. provision the isolated database, roles, pooled/direct secrets, backups, monitoring, and restore
+   target without granting authority;
+2. introduce a separate reviewed analytical schema and PostgreSQL-native migration history;
+3. rehearse migration, backup restore, and rollback on disposable infrastructure;
+4. observe and record the package's integrity, temporal, query, retention, capacity, and isolation
+   criteria;
+5. import only Gate 0A-approved evidence through idempotent adapters;
+6. reconcile source-to-canonical counts and hashes;
+7. build lineage and attribution with deterministic invariants;
+8. build and validate an isolated candidate publication;
+9. project the approved publication to versioned public collections under its separate pointer;
+10. obtain separate operational authorization and record a `prepared` transition;
+11. engage the analytical write barrier and re-run the declared parity checkpoint; and
+12. append `activated` with expected-revision CAS. Do not infer authority from provisioning,
+    migration, deployment, or projection success.
 
-Before the first analytical write, rollback may remove the unused target schema. After writes are
-accepted, preserve the database and use a forward fix or reviewed reverse migration. Published output
-is rolled back by withdrawing numerical valuation, then separately revalidating and activating an
-eligible prior publication when authorized; public history is never rewritten in place.
+Before the first analytical write, rollback may remove the unused target database. After writes are
+accepted, preserve the database and use a forward fix or reviewed reverse migration. An analytical
+rollback never switches the protected fantasy database or its credentials. Published output is rolled
+back by withdrawing numerical valuation, then separately revalidating and activating an eligible
+prior publication when authorized; public history is never rewritten in place.
 
 An authority rollback is a separate append-only event from a publication rollback. It must occur
 inside the recorded rollback window, restore the declared prior authority, and advance the authority
@@ -566,12 +599,13 @@ contracts, response contracts, terminology checks, and ownership-boundary tests 
 data. This is engineering evidence for the pure foundation only.
 
 The capability is production-verified only when source approval, Gate 1 architecture approval,
-trusted infrastructure-readiness evidence, separately authorized authority transitions, coverage,
-migration rehearsal, lineage invariants, model validation, publication parity, API contracts,
-responsive and accessibility evidence, operational alerts, rollback exercises, and representative
-production reads/jobs all pass.
+trusted infrastructure-readiness evidence, database/credential/migration isolation from protected
+fantasy state, separately authorized authority transitions, coverage, migration and restore rehearsal,
+lineage invariants, model validation, publication parity, API contracts, responsive and accessibility
+evidence, operational alerts, rollback exercises, and representative production reads/jobs all pass.
 
-WP1 completion does not mean data/source approved, architecture-approved, database-ready,
+Selecting the isolated target in design does not mean it is provisioned, ready, authoritative, or
+approved. WP1 completion does not mean data/source approved, architecture-approved, database-ready,
 authority-transferred, model-approved, publication-active, release-ready, or production-verified.
 Reports must use those states separately, name every skipped or failed gate, and preserve unavailable
 public product states when later gates do not pass.
@@ -579,6 +613,7 @@ public product states when later gates do not pass.
 ## Related documentation
 
 - [Runtime and data platform](data-platform.md)
-- [PostgreSQL cutover](../runbooks/postgresql-cutover.md)
+- [Protected fantasy PostgreSQL cutover](../runbooks/postgresql-cutover.md) — related platform context,
+  not an analytical-engine prerequisite
 - [Product design principles](../product/design-principles.md)
 - [Player identity consolidation](../runbooks/player-identity.md)

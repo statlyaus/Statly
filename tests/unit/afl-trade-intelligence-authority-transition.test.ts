@@ -112,6 +112,23 @@ describe('AFL trade-intelligence authority transition ledger', () => {
     ).toThrow(AflTradeAuthorityTransitionError);
   });
 
+  it('rejects commands that target protected fantasy relational authority', () => {
+    const sourceLedger = ledger();
+
+    expect(() =>
+      appendAflTradeAuthorityTransition(
+        sourceLedger,
+        command(sourceLedger, 'prepared', {
+          concern: 'protected_fantasy_relational_state',
+          fromAuthority: 'current-protected_fantasy_relational_state',
+          toAuthority: 'proposed-trade-engine-owned-fantasy-state',
+        })
+      )
+    ).toThrow(expect.objectContaining({ code: 'PROTECTED_AUTHORITY_BOUNDARY' }));
+    expect(sourceLedger.revision).toBe(0);
+    expect(sourceLedger.events).toHaveLength(0);
+  });
+
   it('keeps the old authority current while a transition is only prepared', () => {
     const prepared = prepare();
     const validation = validateAflTradeAuthorityTransitionLedger(prepared);
@@ -285,6 +302,24 @@ describe('AFL trade-intelligence authority transition ledger', () => {
     expect(validation.issues).toContainEqual(
       expect.objectContaining({ code: 'event_chain_mismatch' })
     );
+    expect(validation.currentAuthorities).toBeNull();
+  });
+
+  it('rejects replayed events that target protected fantasy relational authority', () => {
+    const prepared = prepare();
+    const changedContent = {
+      ...prepared.events[0].content,
+      concern: 'protected_fantasy_relational_state' as const,
+    };
+    const changedEvent = {
+      eventId: createAflTradeContentAddress('authority-transition', changedContent),
+      content: changedContent,
+    };
+    const invalidLedger = { ...prepared, events: [changedEvent] };
+    const validation = validateAflTradeAuthorityTransitionLedger(invalidLedger);
+
+    expect(validation.valid).toBe(false);
+    expect(validation.issues).toContainEqual(expect.objectContaining({ code: 'invalid_event' }));
     expect(validation.currentAuthorities).toBeNull();
   });
 
