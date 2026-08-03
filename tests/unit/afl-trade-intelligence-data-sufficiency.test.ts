@@ -254,6 +254,88 @@ describe('AFL trade-intelligence data-sufficiency contracts', () => {
     expect(validation.approvalEligible).toBe(false);
   });
 
+  it('preserves ordered issues and outcomes when independent protocol rules fail together', () => {
+    const protocolValue = protocol({
+      ...protocolContent(),
+      proposedAt: '2026-08-03T00:00:00.000Z',
+    });
+    const content = reportContent(protocolValue);
+    const mismatchedContent = {
+      ...content,
+      protocolId: `data-sufficiency-protocol:${'d'.repeat(64)}`,
+      evidenceManifestId: `evidence:${'f'.repeat(64)}`,
+      environment: 'production' as const,
+      observations: [
+        ...content.observations.slice(1),
+        {
+          ...content.observations[0],
+          measureId: 'not-prespecified',
+        },
+      ],
+    };
+    const reportValue = aflTradeCoverageReportSchema.parse({
+      reportId: createAflTradeContentAddress('coverage-report', mismatchedContent),
+      content: mismatchedContent,
+    });
+
+    expect(validateAflTradeCoverageAgainstProtocol(protocolValue, reportValue)).toEqual({
+      valid: false,
+      approvalEligible: false,
+      issues: [
+        {
+          code: 'protocol_mismatch',
+          subject: mismatchedContent.protocolId,
+          message: 'The coverage report must reference the exact prespecified protocol.',
+        },
+        {
+          code: 'evidence_mismatch',
+          subject: mismatchedContent.evidenceManifestId,
+          message: 'The coverage report and protocol must reference the same evidence manifest.',
+        },
+        {
+          code: 'environment_mismatch',
+          subject: mismatchedContent.environment,
+          message: 'The coverage report and protocol must use the same environment.',
+        },
+        {
+          code: 'protocol_not_preregistered',
+          subject: protocolValue.protocolId,
+          message: 'The sufficiency protocol must exist before coverage measurement starts.',
+        },
+        {
+          code: 'observation_missing',
+          subject: 'trade-coverage|season-2024',
+          message: 'Coverage observation trade-coverage|season-2024 is missing.',
+        },
+        {
+          code: 'observation_unknown',
+          subject: 'not-prespecified|season-2024',
+          message: 'Coverage observation not-prespecified|season-2024 was not prespecified.',
+        },
+      ],
+      outcomes: [
+        {
+          measureId: 'trade-coverage',
+          cohortId: 'season-2024',
+          requiredForApproval: true,
+          status: 'missing',
+        },
+        {
+          measureId: 'trade-coverage',
+          cohortId: 'season-2025',
+          requiredForApproval: true,
+          status: 'not_met',
+        },
+        {
+          measureId: 'field-missingness',
+          cohortId: 'season-2024',
+          requiredForApproval: false,
+          status: 'report_only',
+        },
+      ],
+    });
+  });
+
   it('keeps unmeasurable evidence distinct from a measured zero', () => {
     const sourceProtocol = protocol();
     const content = reportContent(sourceProtocol);

@@ -153,33 +153,24 @@ function ratioAtLeast(observed: AflTradeExactRatio, minimum: AflTradeExactRatio)
   );
 }
 
-export function validateAflTradeCoverageAgainstProtocol(
-  unparsedProtocol: AflTradeDataSufficiencyProtocol,
-  unparsedReport: AflTradeCoverageReport
-): AflTradeCoverageProtocolValidation {
-  const issues: AflTradeCoverageProtocolIssue[] = [];
-  const parsedProtocol = aflTradeDataSufficiencyProtocolSchema.safeParse(unparsedProtocol);
-  const parsedReport = aflTradeCoverageReportSchema.safeParse(unparsedReport);
-  if (!parsedProtocol.success) {
-    issues.push({
-      code: 'protocol_invalid',
-      subject: 'protocol',
-      message: 'The data-sufficiency protocol is malformed or fails content-address validation.',
-    });
-  }
-  if (!parsedReport.success) {
-    issues.push({
-      code: 'report_invalid',
-      subject: 'report',
-      message: 'The coverage report is malformed or fails content-address validation.',
-    });
-  }
-  if (!parsedProtocol.success || !parsedReport.success) {
-    return { valid: false, approvalEligible: false, issues, outcomes: [] };
-  }
-  const protocol = parsedProtocol.data;
-  const report = parsedReport.data;
+interface CoverageRequirement {
+  measureId: string;
+  cohortId: string;
+  requiredForApproval: boolean;
+  minimumRatio: AflTradeExactRatio | null;
+}
 
+type CoverageObservation = z.infer<typeof aflTradeCoverageObservationSchema>;
+
+function observationKey(measureId: string, cohortId: string): string {
+  return `${measureId}|${cohortId}`;
+}
+
+function collectCoverageRelationshipIssues(
+  protocol: AflTradeDataSufficiencyProtocol,
+  report: AflTradeCoverageReport
+): AflTradeCoverageProtocolIssue[] {
+  const issues: AflTradeCoverageProtocolIssue[] = [];
   if (report.content.protocolId !== protocol.protocolId) {
     issues.push({
       code: 'protocol_mismatch',
@@ -208,25 +199,42 @@ export function validateAflTradeCoverageAgainstProtocol(
       message: 'The sufficiency protocol must exist before coverage measurement starts.',
     });
   }
+  return issues;
+}
 
-  const expected = new Map<
-    string,
-    { requiredForApproval: boolean; minimumRatio: AflTradeExactRatio | null }
-  >();
+function indexCoverageRequirements(
+  protocol: AflTradeDataSufficiencyProtocol
+): Map<string, CoverageRequirement> {
+  const expected = new Map<string, CoverageRequirement>();
   for (const measure of protocol.content.measures) {
     for (const cohortId of measure.cohortIds) {
-      expected.set(`${measure.measureId}|${cohortId}`, {
+      expected.set(observationKey(measure.measureId, cohortId), {
+        measureId: measure.measureId,
+        cohortId,
         requiredForApproval: measure.requiredForApproval,
         minimumRatio: measure.minimumRatio,
       });
     }
   }
-  const observations = new Map(
+  return expected;
+}
+
+function indexCoverageObservations(
+  report: AflTradeCoverageReport
+): Map<string, CoverageObservation> {
+  return new Map(
     report.content.observations.map((observation) => [
-      `${observation.measureId}|${observation.cohortId}`,
+      observationKey(observation.measureId, observation.cohortId),
       observation,
     ])
   );
+}
+
+function collectCoverageObservationIssues(
+  expected: ReadonlyMap<string, CoverageRequirement>,
+  observations: ReadonlyMap<string, CoverageObservation>
+): AflTradeCoverageProtocolIssue[] {
+  const issues: AflTradeCoverageProtocolIssue[] = [];
   for (const key of expected.keys()) {
     if (!observations.has(key)) {
       issues.push({
@@ -245,26 +253,63 @@ export function validateAflTradeCoverageAgainstProtocol(
       });
     }
   }
+  return issues;
+}
 
-  const outcomes: AflTradeCoverageThresholdOutcome[] = [];
-  for (const [key, requirement] of expected) {
-    const [measureId, cohortId] = key.split('|');
-    const observation = observations.get(key);
-    let status: AflTradeCoverageThresholdOutcome['status'];
-    if (!observation) status = 'missing';
-    else if (observation.status === 'unmeasurable') status = 'unmeasurable';
-    else if (requirement.minimumRatio === null) status = 'report_only';
-    else
-      status = ratioAtLeast(observation.observedRatio, requirement.minimumRatio)
-        ? 'met'
-        : 'not_met';
-    outcomes.push({
-      measureId,
-      cohortId,
-      requiredForApproval: requirement.requiredForApproval,
-      status,
+function coverageOutcomeStatus(
+  requirement: CoverageRequirement,
+  observation: CoverageObservation | undefined
+): AflTradeCoverageThresholdOutcome['status'] {
+  if (!observation) return 'missing';
+  if (observation.status === 'unmeasurable') return 'unmeasurable';
+  if (requirement.minimumRatio === null) return 'report_only';
+  return ratioAtLeast(observation.observedRatio, requirement.minimumRatio) ? 'met' : 'not_met';
+}
+
+function evaluateCoverageOutcomes(
+  expected: ReadonlyMap<string, CoverageRequirement>,
+  observations: ReadonlyMap<string, CoverageObservation>
+): AflTradeCoverageThresholdOutcome[] {
+  return [...expected].map(([key, requirement]) => ({
+    measureId: requirement.measureId,
+    cohortId: requirement.cohortId,
+    requiredForApproval: requirement.requiredForApproval,
+    status: coverageOutcomeStatus(requirement, observations.get(key)),
+  }));
+}
+
+export function validateAflTradeCoverageAgainstProtocol(
+  unparsedProtocol: AflTradeDataSufficiencyProtocol,
+  unparsedReport: AflTradeCoverageReport
+): AflTradeCoverageProtocolValidation {
+  const issues: AflTradeCoverageProtocolIssue[] = [];
+  const parsedProtocol = aflTradeDataSufficiencyProtocolSchema.safeParse(unparsedProtocol);
+  const parsedReport = aflTradeCoverageReportSchema.safeParse(unparsedReport);
+  if (!parsedProtocol.success) {
+    issues.push({
+      code: 'protocol_invalid',
+      subject: 'protocol',
+      message: 'The data-sufficiency protocol is malformed or fails content-address validation.',
     });
   }
+  if (!parsedReport.success) {
+    issues.push({
+      code: 'report_invalid',
+      subject: 'report',
+      message: 'The coverage report is malformed or fails content-address validation.',
+    });
+  }
+  if (!parsedProtocol.success || !parsedReport.success) {
+    return { valid: false, approvalEligible: false, issues, outcomes: [] };
+  }
+  const protocol = parsedProtocol.data;
+  const report = parsedReport.data;
+  issues.push(...collectCoverageRelationshipIssues(protocol, report));
+
+  const expected = indexCoverageRequirements(protocol);
+  const observations = indexCoverageObservations(report);
+  issues.push(...collectCoverageObservationIssues(expected, observations));
+  const outcomes = evaluateCoverageOutcomes(expected, observations);
 
   const valid = issues.length === 0;
   const approvalEligible =
