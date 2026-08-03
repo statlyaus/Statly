@@ -182,6 +182,83 @@ function validateBitemporalRecords(graph: AflTradeLineageGraph, issues: AflTrade
   }
 }
 
+function inspectCustodySpell(
+  spell: AflTradeAssetCustodySpell,
+  assetById: ReadonlyMap<string, AflTradeAsset>,
+): { index: boolean; issues: AflTradeLineageIssue[] } {
+  const issues: AflTradeLineageIssue[] = [];
+  if (!assetById.has(spell.assetId)) {
+    addIssue(
+      issues,
+      'missing_asset',
+      spell.custodySpellId,
+      `Custody spell ${spell.custodySpellId} references missing asset ${spell.assetId}.`
+    );
+    return { index: false, issues };
+  }
+  const start = parseAflTradeTime(spell.effectiveFrom);
+  const end = spell.effectiveTo === null ? null : parseAflTradeTime(spell.effectiveTo);
+  if (start === null || (spell.effectiveTo !== null && end === null)) {
+    addIssue(
+      issues,
+      'invalid_time',
+      spell.custodySpellId,
+      `Custody spell ${spell.custodySpellId} has an invalid effective time.`
+    );
+    return { index: false, issues };
+  }
+  if (end !== null && end <= start) {
+    addIssue(
+      issues,
+      'invalid_custody_interval',
+      spell.custodySpellId,
+      `Custody spell ${spell.custodySpellId} must end after it starts.`
+    );
+  }
+  return { index: true, issues };
+}
+
+function effectiveCustodyIntervalsOverlap(
+  left: AflTradeAssetCustodySpell,
+  right: AflTradeAssetCustodySpell
+): boolean {
+  if (!aflTradeKnowledgeIntervalsOverlap(left, right)) return false;
+  const leftStart = parseAflTradeTime(left.effectiveFrom);
+  const leftEnd =
+    left.effectiveTo === null ? Number.POSITIVE_INFINITY : parseAflTradeTime(left.effectiveTo);
+  const rightStart = parseAflTradeTime(right.effectiveFrom);
+  const rightEnd =
+    right.effectiveTo === null ? Number.POSITIVE_INFINITY : parseAflTradeTime(right.effectiveTo);
+  return (
+    leftStart !== null &&
+    leftEnd !== null &&
+    rightStart !== null &&
+    rightEnd !== null &&
+    leftStart < rightEnd &&
+    rightStart < leftEnd
+  );
+}
+
+function collectCustodyOverlapIssues(
+  assetId: string,
+  spells: readonly AflTradeAssetCustodySpell[]
+): AflTradeLineageIssue[] {
+  const issues: AflTradeLineageIssue[] = [];
+  for (let leftIndex = 0; leftIndex < spells.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < spells.length; rightIndex += 1) {
+      if (effectiveCustodyIntervalsOverlap(spells[leftIndex], spells[rightIndex])) {
+        addIssue(
+          issues,
+          'overlapping_custody',
+          spells[rightIndex].custodySpellId,
+          `Asset ${assetId} has overlapping AFL club custody spells in one knowledge version.`
+        );
+      }
+    }
+  }
+  return issues;
+}
+
 function validateCustody(
   graph: AflTradeLineageGraph,
   assetById: ReadonlyMap<string, AflTradeAsset>,
@@ -189,146 +266,78 @@ function validateCustody(
 ) {
   const spellsByAsset = new Map<string, AflTradeAssetCustodySpell[]>();
   for (const spell of graph.custodySpells) {
-    if (!assetById.has(spell.assetId)) {
-      addIssue(
-        issues,
-        'missing_asset',
-        spell.custodySpellId,
-        `Custody spell ${spell.custodySpellId} references missing asset ${spell.assetId}.`
-      );
-      continue;
-    }
-
-    const start = parseAflTradeTime(spell.effectiveFrom);
-    const end = spell.effectiveTo === null ? null : parseAflTradeTime(spell.effectiveTo);
-    if (start === null || (spell.effectiveTo !== null && end === null)) {
-      addIssue(
-        issues,
-        'invalid_time',
-        spell.custodySpellId,
-        `Custody spell ${spell.custodySpellId} has an invalid effective time.`
-      );
-      continue;
-    }
-    if (end !== null && end <= start) {
-      addIssue(
-        issues,
-        'invalid_custody_interval',
-        spell.custodySpellId,
-        `Custody spell ${spell.custodySpellId} must end after it starts.`
-      );
-    }
-
+    const inspected = inspectCustodySpell(spell, assetById);
+    issues.push(...inspected.issues);
+    if (!inspected.index) continue;
     const existing = spellsByAsset.get(spell.assetId) ?? [];
     existing.push(spell);
     spellsByAsset.set(spell.assetId, existing);
   }
-
   for (const [assetId, spells] of spellsByAsset) {
-    for (let leftIndex = 0; leftIndex < spells.length; leftIndex += 1) {
-      for (let rightIndex = leftIndex + 1; rightIndex < spells.length; rightIndex += 1) {
-        const left = spells[leftIndex];
-        const right = spells[rightIndex];
-        if (!aflTradeKnowledgeIntervalsOverlap(left, right)) continue;
-        const leftStart = parseAflTradeTime(left.effectiveFrom);
-        const leftEnd =
-          left.effectiveTo === null
-            ? Number.POSITIVE_INFINITY
-            : parseAflTradeTime(left.effectiveTo);
-        const rightStart = parseAflTradeTime(right.effectiveFrom);
-        const rightEnd =
-          right.effectiveTo === null
-            ? Number.POSITIVE_INFINITY
-            : parseAflTradeTime(right.effectiveTo);
-        if (
-          leftStart !== null &&
-          leftEnd !== null &&
-          rightStart !== null &&
-          rightEnd !== null &&
-          leftStart < rightEnd &&
-          rightStart < leftEnd
-        ) {
-          addIssue(
-            issues,
-            'overlapping_custody',
-            right.custodySpellId,
-            `Asset ${assetId} has overlapping AFL club custody spells in one knowledge version.`
-          );
-        }
-      }
-    }
+    issues.push(...collectCustodyOverlapIssues(assetId, spells));
   }
 }
 
-function validateEdges(
-  graph: AflTradeLineageGraph,
-  assetById: ReadonlyMap<string, AflTradeAsset>,
-  edgesBySource: ReadonlyMap<string, readonly AflTradeLineageEdge[]>,
-  issues: AflTradeLineageIssue[]
-) {
-  for (const edge of graph.edges) {
-    const source = assetById.get(edge.sourceAssetId);
-    const target = assetById.get(edge.targetAssetId);
-    if (!source || !target) {
-      addIssue(
-        issues,
-        'missing_asset',
-        edge.edgeId,
-        `Lineage edge ${edge.edgeId} references a missing source or target asset.`
-      );
-      continue;
-    }
-    if (source.assetId === target.assetId) {
-      addIssue(
-        issues,
-        'self_edge',
-        edge.edgeId,
-        `Lineage edge ${edge.edgeId} is self-referential.`
-      );
-      continue;
-    }
-
-    const allowed = allowedEdgeTypes[edge.kind];
-    if (!allowed) {
-      addIssue(
-        issues,
-        'invalid_edge_types',
-        edge.edgeId,
-        `Lineage edge ${edge.edgeId} declares unknown kind ${edge.kind}.`
-      );
-      continue;
-    }
-    if (!allowed.source.includes(source.assetType) || !allowed.target.includes(target.assetType)) {
-      addIssue(
-        issues,
-        'invalid_edge_types',
-        edge.edgeId,
-        `${edge.kind} cannot transform ${source.assetType} into ${target.assetType}.`
-      );
-    }
-
-    const edgeTime = parseAflTradeTime(edge.effectiveAt);
-    const sourceTime = parseAflTradeTime(source.effectiveFrom);
-    const targetTime = parseAflTradeTime(target.effectiveFrom);
-    if (edgeTime === null || sourceTime === null || targetTime === null) {
-      addIssue(
-        issues,
-        'invalid_time',
-        edge.edgeId,
-        `Lineage edge ${edge.edgeId} has invalid time.`
-      );
-      continue;
-    }
-    if (edgeTime < sourceTime || edgeTime < targetTime) {
-      addIssue(
-        issues,
-        'edge_before_asset',
-        edge.edgeId,
-        `Lineage edge ${edge.edgeId} predates its source or target asset.`
-      );
-    }
+function collectLineageEdgeIssues(
+  edge: AflTradeLineageEdge,
+  assetById: ReadonlyMap<string, AflTradeAsset>
+): AflTradeLineageIssue[] {
+  const issues: AflTradeLineageIssue[] = [];
+  const source = assetById.get(edge.sourceAssetId);
+  const target = assetById.get(edge.targetAssetId);
+  if (!source || !target) {
+    addIssue(
+      issues,
+      'missing_asset',
+      edge.edgeId,
+      `Lineage edge ${edge.edgeId} references a missing source or target asset.`
+    );
+    return issues;
   }
+  if (source.assetId === target.assetId) {
+    addIssue(issues, 'self_edge', edge.edgeId, `Lineage edge ${edge.edgeId} is self-referential.`);
+    return issues;
+  }
+  const allowed = allowedEdgeTypes[edge.kind];
+  if (!allowed) {
+    addIssue(
+      issues,
+      'invalid_edge_types',
+      edge.edgeId,
+      `Lineage edge ${edge.edgeId} declares unknown kind ${edge.kind}.`
+    );
+    return issues;
+  }
+  if (!allowed.source.includes(source.assetType) || !allowed.target.includes(target.assetType)) {
+    addIssue(
+      issues,
+      'invalid_edge_types',
+      edge.edgeId,
+      `${edge.kind} cannot transform ${source.assetType} into ${target.assetType}.`
+    );
+  }
+  const edgeTime = parseAflTradeTime(edge.effectiveAt);
+  const sourceTime = parseAflTradeTime(source.effectiveFrom);
+  const targetTime = parseAflTradeTime(target.effectiveFrom);
+  if (edgeTime === null || sourceTime === null || targetTime === null) {
+    addIssue(issues, 'invalid_time', edge.edgeId, `Lineage edge ${edge.edgeId} has invalid time.`);
+    return issues;
+  }
+  if (edgeTime < sourceTime || edgeTime < targetTime) {
+    addIssue(
+      issues,
+      'edge_before_asset',
+      edge.edgeId,
+      `Lineage edge ${edge.edgeId} predates its source or target asset.`
+    );
+  }
+  return issues;
+}
 
+function collectSuccessorConflictIssues(
+  edgesBySource: ReadonlyMap<string, readonly AflTradeLineageEdge[]>
+): AflTradeLineageIssue[] {
+  const issues: AflTradeLineageIssue[] = [];
   for (const [sourceAssetId, edges] of edgesBySource) {
     for (let leftIndex = 0; leftIndex < edges.length; leftIndex += 1) {
       for (let rightIndex = leftIndex + 1; rightIndex < edges.length; rightIndex += 1) {
@@ -348,6 +357,17 @@ function validateEdges(
       }
     }
   }
+  return issues;
+}
+
+function validateEdges(
+  graph: AflTradeLineageGraph,
+  assetById: ReadonlyMap<string, AflTradeAsset>,
+  edgesBySource: ReadonlyMap<string, readonly AflTradeLineageEdge[]>,
+  issues: AflTradeLineageIssue[]
+) {
+  for (const edge of graph.edges) issues.push(...collectLineageEdgeIssues(edge, assetById));
+  issues.push(...collectSuccessorConflictIssues(edgesBySource));
 }
 
 function validateDispositions(

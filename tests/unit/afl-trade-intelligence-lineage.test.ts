@@ -216,6 +216,135 @@ describe('public AFL trade lineage temporal and structural invariants', () => {
     expect(uniqueCodes(result.issues)).toContain('conflicting_successors');
   });
 
+  it('preserves ordered custody and edge issues across independent invalid records', () => {
+    const fixture = buildAflTradeLineageFixture('future_pick_to_player');
+    const extraPlayer = {
+      ...fixture.graph.assets[4],
+      assetId: 'fixture:extra-player',
+      effectiveFrom: '2025-12-01T00:00:00.000Z',
+      knownFrom: '2025-12-01T00:00:00.000Z',
+    };
+    const extraFutureRight = {
+      ...fixture.graph.assets[0],
+      assetId: 'fixture:extra-future-right',
+    };
+    const earlyPick = {
+      ...fixture.graph.assets[1],
+      assetId: 'fixture:early-pick-source',
+    };
+    const laterPick = {
+      ...fixture.graph.assets[2],
+      assetId: 'fixture:early-pick-target',
+    };
+    const missingCustody = {
+      ...fixture.graph.custodySpells[4],
+      custodySpellId: 'fixture:missing-asset-custody',
+      assetId: 'fixture:missing-custody-asset',
+    };
+    const invalidCustody = {
+      ...fixture.graph.custodySpells[4],
+      custodySpellId: 'fixture:invalid-custody-interval',
+      assetId: extraPlayer.assetId,
+      effectiveFrom: '2025-12-02T00:00:00.000Z',
+      effectiveTo: '2025-12-01T00:00:00.000Z',
+      knownFrom: '2025-12-02T00:00:00.000Z',
+    };
+    const missingEdge = {
+      ...fixture.graph.edges[0],
+      edgeId: 'fixture:missing-asset-edge',
+      kind: 'asset_traded_for_asset' as const,
+      sourceAssetId: 'fixture:missing-edge-source',
+      targetAssetId: extraPlayer.assetId,
+      effectiveAt: '2025-12-01T00:00:00.000Z',
+      knownFrom: '2025-12-01T00:00:00.000Z',
+    };
+    const selfEdge = {
+      ...fixture.graph.edges[0],
+      edgeId: 'fixture:self-edge',
+      kind: 'asset_traded_for_asset' as const,
+      sourceAssetId: extraPlayer.assetId,
+      targetAssetId: extraPlayer.assetId,
+      effectiveAt: '2025-12-01T00:00:00.000Z',
+      knownFrom: '2025-12-01T00:00:00.000Z',
+    };
+    const invalidTypeEdge = {
+      ...fixture.graph.edges[0],
+      edgeId: 'fixture:invalid-type-edge',
+      kind: 'selection_created_player' as const,
+      sourceAssetId: extraFutureRight.assetId,
+      targetAssetId: earlyPick.assetId,
+      effectiveAt: '2025-10-01T00:00:00.000Z',
+      knownFrom: '2025-10-01T00:00:00.000Z',
+    };
+    const earlyEdge = {
+      ...fixture.graph.edges[1],
+      edgeId: 'fixture:edge-before-assets',
+      sourceAssetId: earlyPick.assetId,
+      targetAssetId: laterPick.assetId,
+      effectiveAt: '2024-01-01T00:00:00.000Z',
+      knownFrom: '2024-01-01T00:00:00.000Z',
+    };
+    const result = validateAflTradeLineageGraph({
+      ...fixture.graph,
+      assets: [
+        ...fixture.graph.assets,
+        extraPlayer,
+        extraFutureRight,
+        earlyPick,
+        laterPick,
+      ],
+      custodySpells: [...fixture.graph.custodySpells, missingCustody, invalidCustody],
+      edges: [
+        ...fixture.graph.edges,
+        missingEdge,
+        selfEdge,
+        invalidTypeEdge,
+        earlyEdge,
+      ],
+    });
+
+    expect(result).toEqual({
+      valid: false,
+      issues: [
+        {
+          code: 'missing_asset',
+          subjectId: missingCustody.custodySpellId,
+          message: `Custody spell ${missingCustody.custodySpellId} references missing asset ${missingCustody.assetId}.`,
+        },
+        {
+          code: 'invalid_custody_interval',
+          subjectId: invalidCustody.custodySpellId,
+          message: `Custody spell ${invalidCustody.custodySpellId} must end after it starts.`,
+        },
+        {
+          code: 'missing_asset',
+          subjectId: missingEdge.edgeId,
+          message: `Lineage edge ${missingEdge.edgeId} references a missing source or target asset.`,
+        },
+        {
+          code: 'self_edge',
+          subjectId: selfEdge.edgeId,
+          message: `Lineage edge ${selfEdge.edgeId} is self-referential.`,
+        },
+        {
+          code: 'invalid_edge_types',
+          subjectId: invalidTypeEdge.edgeId,
+          message: `${invalidTypeEdge.kind} cannot transform ${extraFutureRight.assetType} into ${earlyPick.assetType}.`,
+        },
+        {
+          code: 'edge_before_asset',
+          subjectId: earlyEdge.edgeId,
+          message: `Lineage edge ${earlyEdge.edgeId} predates its source or target asset.`,
+        },
+        {
+          code: 'cycle',
+          subjectId: extraPlayer.assetId,
+          message: `Lineage cycle detected at asset ${extraPlayer.assetId}.`,
+        },
+      ],
+    });
+  });
+
   it('rejects terminal assets that also have active successors', () => {
     const fixture = buildAflTradeLineageFixture('voided_asset');
     const target = {
