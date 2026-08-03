@@ -230,7 +230,7 @@ const reviewerSchema = z
   })
   .strict();
 
-export const aflTradeGateDecisionRecordContentSchema = z
+const aflTradeGateDecisionRecordContentBaseSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-gate-decision/v1'),
     proposalId: aflTradeContentAddressedIdSchema('gate-proposal'),
@@ -255,98 +255,135 @@ export const aflTradeGateDecisionRecordContentSchema = z
     affectedArtifacts: affectedArtifactsSchema,
     withdrawalActions: z.array(boundedTextSchema).max(50),
   })
-  .strict()
-  .superRefine((decision, context) => {
-    const conditionIds = decision.conditionResults.map((condition) => condition.conditionId);
-    if (new Set(conditionIds).size !== conditionIds.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['conditionResults'],
-        message: 'Decision condition results must be unique.',
-      });
-    }
-    const reviewerIds = decision.reviewers.map((reviewer) => reviewer.reviewerId);
-    if (new Set(reviewerIds).size !== reviewerIds.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['reviewers'],
-        message: 'Decision reviewers must be unique.',
-      });
-    }
+  .strict();
 
+type AflTradeGateDecisionRecordContent = z.infer<
+  typeof aflTradeGateDecisionRecordContentBaseSchema
+>;
+
+function refineDecisionRecordUniqueness(
+  decision: AflTradeGateDecisionRecordContent,
+  context: z.RefinementCtx
+) {
+  const conditionIds = decision.conditionResults.map((condition) => condition.conditionId);
+  if (new Set(conditionIds).size !== conditionIds.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['conditionResults'],
+      message: 'Decision condition results must be unique.',
+    });
+  }
+  const reviewerIds = decision.reviewers.map((reviewer) => reviewer.reviewerId);
+  if (new Set(reviewerIds).size !== reviewerIds.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['reviewers'],
+      message: 'Decision reviewers must be unique.',
+    });
+  }
+}
+
+function refinePendingDecisionRecord(
+  decision: AflTradeGateDecisionRecordContent,
+  context: z.RefinementCtx
+) {
+  if (
+    decision.decidedBy !== null ||
+    decision.decidedAt !== null ||
+    decision.effectiveAt !== null ||
+    decision.revalidateAt !== null
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Pending decisions cannot contain completed decision times or authority.',
+    });
+  }
+}
+
+function refineFinalizedDecisionRecord(
+  decision: AflTradeGateDecisionRecordContent,
+  context: z.RefinementCtx
+) {
+  if (
+    decision.decidedBy === null ||
+    decision.decidedAt === null ||
+    decision.effectiveAt === null ||
+    decision.rationale === null ||
+    decision.authorityEvidenceIds.length === 0
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Finalized decisions require authority, evidence, rationale, and decision times.',
+    });
+  }
+  if (
+    decision.decidedAt !== null &&
+    decision.effectiveAt !== null &&
+    Date.parse(decision.effectiveAt) < Date.parse(decision.decidedAt)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['effectiveAt'],
+      message: 'A decision cannot become effective before it is recorded.',
+    });
+  }
+}
+
+function refineApprovedDecisionRecord(
+  decision: AflTradeGateDecisionRecordContent,
+  context: z.RefinementCtx
+) {
+  if (decision.revalidateAt === null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['revalidateAt'],
+      message: 'Approved decisions require a revalidation time.',
+    });
+  } else if (
+    decision.effectiveAt !== null &&
+    Date.parse(decision.revalidateAt) <= Date.parse(decision.effectiveAt)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['revalidateAt'],
+      message: 'Revalidation must follow the effective time.',
+    });
+  }
+  if (
+    decision.environment === 'production' &&
+    decision.authorityKind !== 'external_human_record'
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['authorityKind'],
+      message: 'Production approval requires an externally recorded human decision.',
+    });
+  }
+}
+
+function refineWithdrawnDecisionRecord(
+  decision: AflTradeGateDecisionRecordContent,
+  context: z.RefinementCtx
+) {
+  if (decision.withdrawalActions.length === 0) {
+    context.addIssue({
+      code: 'custom',
+      path: ['withdrawalActions'],
+      message: 'Withdrawn decisions require at least one downstream action.',
+    });
+  }
+}
+
+export const aflTradeGateDecisionRecordContentSchema =
+  aflTradeGateDecisionRecordContentBaseSchema.superRefine((decision, context) => {
+    refineDecisionRecordUniqueness(decision, context);
     if (decision.state === 'pending') {
-      if (
-        decision.decidedBy !== null ||
-        decision.decidedAt !== null ||
-        decision.effectiveAt !== null ||
-        decision.revalidateAt !== null
-      ) {
-        context.addIssue({
-          code: 'custom',
-          message: 'Pending decisions cannot contain completed decision times or authority.',
-        });
-      }
+      refinePendingDecisionRecord(decision, context);
       return;
     }
-
-    if (
-      decision.decidedBy === null ||
-      decision.decidedAt === null ||
-      decision.effectiveAt === null ||
-      decision.rationale === null ||
-      decision.authorityEvidenceIds.length === 0
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Finalized decisions require authority, evidence, rationale, and decision times.',
-      });
-    }
-    if (
-      decision.decidedAt !== null &&
-      decision.effectiveAt !== null &&
-      Date.parse(decision.effectiveAt) < Date.parse(decision.decidedAt)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['effectiveAt'],
-        message: 'A decision cannot become effective before it is recorded.',
-      });
-    }
-    if (decision.state === 'approved') {
-      if (decision.revalidateAt === null) {
-        context.addIssue({
-          code: 'custom',
-          path: ['revalidateAt'],
-          message: 'Approved decisions require a revalidation time.',
-        });
-      } else if (
-        decision.effectiveAt !== null &&
-        Date.parse(decision.revalidateAt) <= Date.parse(decision.effectiveAt)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['revalidateAt'],
-          message: 'Revalidation must follow the effective time.',
-        });
-      }
-      if (
-        decision.environment === 'production' &&
-        decision.authorityKind !== 'external_human_record'
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['authorityKind'],
-          message: 'Production approval requires an externally recorded human decision.',
-        });
-      }
-    }
-    if (decision.state === 'withdrawn' && decision.withdrawalActions.length === 0) {
-      context.addIssue({
-        code: 'custom',
-        path: ['withdrawalActions'],
-        message: 'Withdrawn decisions require at least one downstream action.',
-      });
-    }
+    refineFinalizedDecisionRecord(decision, context);
+    if (decision.state === 'approved') refineApprovedDecisionRecord(decision, context);
+    if (decision.state === 'withdrawn') refineWithdrawnDecisionRecord(decision, context);
   });
 
 export const aflTradeGateDecisionRecordSchema = z

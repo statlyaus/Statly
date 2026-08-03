@@ -14,6 +14,7 @@ import {
 import {
   aflTradeGovernedArtifactRefSchema,
   aflTradeGateDecisionProposalSchema,
+  aflTradeGateDecisionRecordContentSchema,
   aflTradeGateDecisionRecordSchema,
   type AflTradeGateDecisionProposal,
   type AflTradeGateDecisionRecord,
@@ -267,6 +268,55 @@ describe('AFL trade-intelligence gate decisions', () => {
         content,
       }).success
     ).toBe(false);
+  });
+
+  it('preserves ordered decision-record issues when lifecycle rules fail together', () => {
+    const decided = decision(proposal());
+    const content = {
+      ...decided.content,
+      environment: 'production' as const,
+      reviewers: [decided.content.reviewers[0], decided.content.reviewers[0]],
+      conditionResults: [
+        decided.content.conditionResults[0],
+        decided.content.conditionResults[0],
+      ],
+      decidedAt: '2026-08-01T03:00:00.000Z',
+      effectiveAt: '2026-08-01T02:00:00.000Z',
+      revalidateAt: '2026-08-01T02:00:00.000Z',
+    };
+    const result = aflTradeGateDecisionRecordContentSchema.safeParse(content);
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('Expected the composite decision fixture to be invalid.');
+    expect(
+      result.error.issues.map(({ code, path, message }) => ({ code, path, message }))
+    ).toEqual([
+      {
+        code: 'custom',
+        path: ['conditionResults'],
+        message: 'Decision condition results must be unique.',
+      },
+      {
+        code: 'custom',
+        path: ['reviewers'],
+        message: 'Decision reviewers must be unique.',
+      },
+      {
+        code: 'custom',
+        path: ['effectiveAt'],
+        message: 'A decision cannot become effective before it is recorded.',
+      },
+      {
+        code: 'custom',
+        path: ['revalidateAt'],
+        message: 'Revalidation must follow the effective time.',
+      },
+      {
+        code: 'custom',
+        path: ['authorityKind'],
+        message: 'Production approval requires an externally recorded human decision.',
+      },
+    ]);
   });
 
   it('fails closed when a required condition is unsatisfied', () => {
