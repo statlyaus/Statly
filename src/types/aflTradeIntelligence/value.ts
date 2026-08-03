@@ -327,7 +327,10 @@ interface NumericValueForValidation {
   coverage: { excludedAssets: Array<{ assetId: string }> };
 }
 
-function validateNumericValue(value: NumericValueForValidation, context: z.RefinementCtx) {
+function validateNumericModelVintage(
+  value: NumericValueForValidation,
+  context: z.RefinementCtx
+) {
   if (value.view === 'at_trade' && value.modelVintage === 'current') {
     context.addIssue({
       code: 'custom',
@@ -342,6 +345,12 @@ function validateNumericValue(value: NumericValueForValidation, context: z.Refin
       message: 'Realized, remaining and current views use the current model vintage.',
     });
   }
+}
+
+function validateNumericClubAlignment(
+  value: NumericValueForValidation,
+  context: z.RefinementCtx
+) {
   const clubIds = value.clubValues.map((club) => club.aflClubId);
   addAflTradeUniqueArrayIssue(clubIds, context, 'AFL clubs must not be duplicated.', [
     'clubValues',
@@ -356,11 +365,14 @@ function validateNumericValue(value: NumericValueForValidation, context: z.Refin
       message: 'The comparison set must contain every and only valued AFL clubs.',
     });
   }
+}
 
-  const coverageExcludedAssetIds = value.coverage.excludedAssets
-    .map((asset) => asset.assetId)
-    .sort();
-  const comparisonExcludedAssetIds = [...(value.comparison.excludedAssetIds ?? [])].sort();
+function validateNumericExclusionAlignment(
+  value: NumericValueForValidation,
+  context: z.RefinementCtx,
+  coverageExcludedAssetIds: readonly string[],
+  comparisonExcludedAssetIds: readonly string[]
+) {
   if (
     coverageExcludedAssetIds.length !== comparisonExcludedAssetIds.length ||
     coverageExcludedAssetIds.some((assetId, index) => assetId !== comparisonExcludedAssetIds[index])
@@ -371,7 +383,13 @@ function validateNumericValue(value: NumericValueForValidation, context: z.Refin
       message: 'The comparison basis must identify exactly the assets excluded from coverage.',
     });
   }
+}
 
+function validateNumericAssessmentScope(
+  value: NumericValueForValidation,
+  context: z.RefinementCtx,
+  coverageExcludedAssetIds: readonly string[]
+) {
   if (value.comparison.basis === 'complete_trade') {
     if (coverageExcludedAssetIds.length > 0) {
       context.addIssue({
@@ -408,7 +426,12 @@ function validateNumericValue(value: NumericValueForValidation, context: z.Refin
       });
     }
   }
+}
 
+function validateNumericFavouredClub(
+  value: NumericValueForValidation,
+  context: z.RefinementCtx
+) {
   const favoured = value.assessment.favouredAflClubId;
   if (value.assessment.interpretation === 'balanced_within_uncertainty') {
     if (favoured !== null) {
@@ -443,6 +466,24 @@ function validateNumericValue(value: NumericValueForValidation, context: z.Refin
       message: 'The favoured AFL club must have the highest finishes-ahead probability.',
     });
   }
+}
+
+function validateNumericValue(value: NumericValueForValidation, context: z.RefinementCtx) {
+  const coverageExcludedAssetIds = value.coverage.excludedAssets
+    .map((asset) => asset.assetId)
+    .sort();
+  const comparisonExcludedAssetIds = [...(value.comparison.excludedAssetIds ?? [])].sort();
+
+  validateNumericModelVintage(value, context);
+  validateNumericClubAlignment(value, context);
+  validateNumericExclusionAlignment(
+    value,
+    context,
+    coverageExcludedAssetIds,
+    comparisonExcludedAssetIds
+  );
+  validateNumericAssessmentScope(value, context, coverageExcludedAssetIds);
+  validateNumericFavouredClub(value, context);
 }
 
 export const aflTradeValueAvailableSchema = z

@@ -303,6 +303,64 @@ describe('AFL trade-intelligence numerical contracts', () => {
     ).toBe(true);
   });
 
+  it('preserves ordered numerical-contract issues when independent rules fail together', () => {
+    const value = partialWithIncludedAssetsOnly();
+    value.clubValues.push({
+      ...value.clubValues[0],
+      aflClubId: value.clubValues[0].aflClubId,
+      clubName: 'Duplicate Fabricated Club A',
+    });
+    value.comparison.excludedAssetIds = ['different-excluded-asset'];
+    const result = aflTradeValueResultSchema.safeParse({
+      ...value,
+      view: 'at_trade',
+      modelVintage: 'current',
+      assessment: {
+        interpretation: 'balanced_within_uncertainty',
+        favouredAflClubId: 'fixture-club-a',
+        scope: 'complete_trade',
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('Expected the composite value fixture to be invalid.');
+    expect(
+      result.error.issues.map(({ code, path, message }) => ({ code, path, message }))
+    ).toEqual([
+      {
+        code: 'custom',
+        path: ['modelVintage'],
+        message:
+          'At-trade values must be original-vintage assessments or historical restatements.',
+      },
+      {
+        code: 'custom',
+        path: ['clubValues'],
+        message: 'AFL clubs must not be duplicated.',
+      },
+      {
+        code: 'custom',
+        path: ['comparison'],
+        message: 'The comparison set must contain every and only valued AFL clubs.',
+      },
+      {
+        code: 'custom',
+        path: ['comparison'],
+        message: 'The comparison basis must identify exactly the assets excluded from coverage.',
+      },
+      {
+        code: 'custom',
+        path: ['assessment', 'scope'],
+        message: 'Included-assets-only comparisons cannot support a complete-trade assessment.',
+      },
+      {
+        code: 'custom',
+        path: ['assessment', 'favouredAflClubId'],
+        message: 'Balanced results must not declare a favoured AFL club.',
+      },
+    ]);
+  });
+
   it('rejects temporal contexts that use future evidence', () => {
     const value = available();
     value.temporalContext = {
