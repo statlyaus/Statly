@@ -6,7 +6,7 @@ import { AFL_TRADE_DECISION_ENVIRONMENTS } from '../governance/gateDecisionTypes
 import { aflTradeArtifactRefSchema } from './artifactReference';
 import { addAflTradeContentAddressIssue, aflTradeContentAddressedIdSchema } from './contentAddress';
 
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const publicIdSchema = z
   .string()
   .trim()
@@ -36,13 +36,19 @@ export const aflTradePublicationManifestContentSchema = z
   })
   .strict()
   .superRefine((manifest, context) => {
-    if (
-      new Set(manifest.sourceRegisterIds).size !== manifest.sourceRegisterIds.length ||
-      new Set(manifest.supportedViews).size !== manifest.supportedViews.length ||
-      new Set(manifest.supportedCohorts).size !== manifest.supportedCohorts.length ||
-      new Set(manifest.excludedCohorts).size !== manifest.excludedCohorts.length
-    ) {
-      context.addIssue({ code: 'custom', message: 'Publication set members must be unique.' });
+    for (const [field, values] of [
+      ['sourceRegisterIds', manifest.sourceRegisterIds],
+      ['supportedViews', manifest.supportedViews],
+      ['supportedCohorts', manifest.supportedCohorts],
+      ['excludedCohorts', manifest.excludedCohorts],
+    ] as const) {
+      if (new Set(values).size !== values.length) {
+        context.addIssue({
+          code: 'custom',
+          path: [field],
+          message: `${field} members must be unique.`,
+        });
+      }
     }
     const excluded = new Set(manifest.excludedCohorts);
     if (manifest.supportedCohorts.some((cohort) => excluded.has(cohort))) {

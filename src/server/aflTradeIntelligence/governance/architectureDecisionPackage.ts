@@ -6,6 +6,7 @@ import {
 } from '../artifacts/contentAddress';
 import {
   AFL_TRADE_AUTHORITY_CONCERNS,
+  addAflTradeExactSetIssues,
   aflTradeArchitectureCurrentStateSchema,
   type AflTradeArchitectureCurrentState,
   type AflTradeAuthorityConcern,
@@ -45,7 +46,7 @@ const publicIdSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
 const immutableReferenceSchema = z.string().regex(/^[a-z][a-z0-9-]*:[a-f0-9]{64}$/);
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 
 const authorityMatrixEntrySchema = z
   .object({
@@ -81,29 +82,6 @@ const sectionSchema = z
   })
   .strict();
 
-function addExactSetIssues(
-  values: readonly string[],
-  requiredValues: readonly string[],
-  context: z.RefinementCtx,
-  path: string[],
-  label: string
-) {
-  const actual = new Set(values);
-  const required = new Set(requiredValues);
-  if (actual.size !== values.length) {
-    context.addIssue({ code: 'custom', path, message: `${label} must not contain duplicates.` });
-  }
-  const missing = requiredValues.filter((value) => !actual.has(value));
-  const unexpected = values.filter((value) => !required.has(value));
-  if (missing.length > 0 || unexpected.length > 0) {
-    context.addIssue({
-      code: 'custom',
-      path,
-      message: `${label} must cover the exact required set. Missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}.`,
-    });
-  }
-}
-
 export const aflTradeArchitectureDecisionPackageContentSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-architecture-decision-package/v1'),
@@ -133,21 +111,21 @@ export const aflTradeArchitectureDecisionPackageContentSchema = z
   })
   .strict()
   .superRefine((decisionPackage, context) => {
-    addExactSetIssues(
+    addAflTradeExactSetIssues(
       decisionPackage.designAssertions,
       AFL_TRADE_ARCHITECTURE_DESIGN_ASSERTIONS,
       context,
       ['designAssertions'],
       'Design assertions'
     );
-    addExactSetIssues(
+    addAflTradeExactSetIssues(
       decisionPackage.authorityMatrix.map((entry) => entry.concern),
       AFL_TRADE_AUTHORITY_CONCERNS,
       context,
       ['authorityMatrix'],
       'Authority matrix concerns'
     );
-    addExactSetIssues(
+    addAflTradeExactSetIssues(
       decisionPackage.sections.map((section) => section.section),
       AFL_TRADE_ARCHITECTURE_PACKAGE_SECTIONS,
       context,
@@ -185,7 +163,8 @@ export type AflTradeArchitecturePackageContextIssueCode =
   | 'invalid_current_state'
   | 'invalid_decision_package'
   | 'current_state_reference_mismatch'
-  | 'environment_mismatch';
+  | 'environment_mismatch'
+  | 'current_authority_mismatch';
 
 export interface AflTradeArchitecturePackageContextValidation {
   valid: boolean;
@@ -228,6 +207,20 @@ export function validateAflTradeArchitecturePackageContext(
       code: 'environment_mismatch',
       message: 'The architecture package and current-state snapshot environments must match.',
     });
+  }
+  const snapshotAuthorities = new Map(
+    currentStateResult.data.content.authorities.map((entry) => [
+      entry.concern,
+      entry.currentAuthority,
+    ])
+  );
+  for (const entry of packageResult.data.content.authorityMatrix) {
+    if (snapshotAuthorities.get(entry.concern) !== entry.currentAuthority) {
+      issues.push({
+        code: 'current_authority_mismatch',
+        message: `The package current authority for ${entry.concern} must match its snapshot.`,
+      });
+    }
   }
 
   return { valid: issues.length === 0, issues };

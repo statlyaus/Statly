@@ -263,6 +263,7 @@ function validateCustody(
 function validateEdges(
   graph: AflTradeLineageGraph,
   assetById: ReadonlyMap<string, AflTradeAsset>,
+  edgesBySource: ReadonlyMap<string, readonly AflTradeLineageEdge[]>,
   issues: AflTradeLineageIssue[]
 ) {
   for (const edge of graph.edges) {
@@ -288,6 +289,15 @@ function validateEdges(
     }
 
     const allowed = allowedEdgeTypes[edge.kind];
+    if (!allowed) {
+      addIssue(
+        issues,
+        'invalid_edge_types',
+        edge.edgeId,
+        `Lineage edge ${edge.edgeId} declares unknown kind ${edge.kind}.`
+      );
+      continue;
+    }
     if (!allowed.source.includes(source.assetType) || !allowed.target.includes(target.assetType)) {
       addIssue(
         issues,
@@ -319,12 +329,6 @@ function validateEdges(
     }
   }
 
-  const edgesBySource = new Map<string, AflTradeLineageEdge[]>();
-  for (const edge of graph.edges) {
-    const existing = edgesBySource.get(edge.sourceAssetId) ?? [];
-    existing.push(edge);
-    edgesBySource.set(edge.sourceAssetId, existing);
-  }
   for (const [sourceAssetId, edges] of edgesBySource) {
     for (let leftIndex = 0; leftIndex < edges.length; leftIndex += 1) {
       for (let rightIndex = leftIndex + 1; rightIndex < edges.length; rightIndex += 1) {
@@ -349,6 +353,7 @@ function validateEdges(
 function validateDispositions(
   graph: AflTradeLineageGraph,
   assetById: ReadonlyMap<string, AflTradeAsset>,
+  edgesBySource: ReadonlyMap<string, readonly AflTradeLineageEdge[]>,
   issues: AflTradeLineageIssue[]
 ) {
   const dispositionsByAsset = new Map<string, AflTradeAssetDisposition[]>();
@@ -399,7 +404,7 @@ function validateDispositions(
       }
     }
     for (const disposition of dispositions) {
-      for (const edge of graph.edges.filter((candidate) => candidate.sourceAssetId === assetId)) {
+      for (const edge of edgesBySource.get(assetId) ?? []) {
         if (aflTradeKnowledgeIntervalsOverlap(disposition, edge)) {
           addIssue(
             issues,
@@ -492,9 +497,15 @@ export function validateAflTradeLineageGraph(
   validateUniqueIds(graph, issues);
   validateBitemporalRecords(graph, issues);
   const assetById = new Map(graph.assets.map((asset) => [asset.assetId, asset]));
+  const edgesBySource = new Map<string, AflTradeLineageEdge[]>();
+  for (const edge of graph.edges) {
+    const existing = edgesBySource.get(edge.sourceAssetId) ?? [];
+    existing.push(edge);
+    edgesBySource.set(edge.sourceAssetId, existing);
+  }
   validateCustody(graph, assetById, issues);
-  validateEdges(graph, assetById, issues);
-  validateDispositions(graph, assetById, issues);
+  validateEdges(graph, assetById, edgesBySource, issues);
+  validateDispositions(graph, assetById, edgesBySource, issues);
   validatePackages(graph, issues);
   validateCorrections(graph, issues);
   validateCycles(graph, issues);

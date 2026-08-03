@@ -8,10 +8,24 @@ import {
   type AflTradeManifestProvenanceInput,
 } from '@/server/aflTradeIntelligence/artifacts/manifestContracts';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  AFL_TRADE_ARCHITECTURE_DESIGN_ASSERTIONS,
+  AFL_TRADE_ARCHITECTURE_PACKAGE_SECTIONS,
+  aflTradeArchitectureDecisionPackageSchema,
+} from '@/server/aflTradeIntelligence/governance/architectureDecisionPackage';
+import {
+  AFL_TRADE_AUTHORITY_CONCERNS,
+  AFL_TRADE_REQUIRED_CURRENT_STATE_OBSERVATIONS,
+  aflTradeArchitectureCurrentStateSchema,
+} from '@/server/aflTradeIntelligence/governance/architectureCurrentState';
 import type { AflTradeGateDecisionLedger } from '@/server/aflTradeIntelligence/governance/gateDecisionLedger';
 import type {
   AflTradeGateCode,
   AflTradeGovernedArtifactRef,
+} from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
+import {
+  aflTradeGateDecisionProposalSchema,
+  aflTradeGateDecisionRecordSchema,
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 
 const digest = (character: string) => character.repeat(64);
@@ -133,47 +147,145 @@ function gatePair(
     dimensions: [],
     exclusions: [],
   };
-  const proposal = {
-    proposalId: `gate-proposal:${digest(decisionCharacter)}`,
-    content: {
-      gate,
-      decisionKey: `${gate}-fixture`,
-      version: 1,
-      environment: 'test_fixture' as const,
-      scope,
-      accountableOwner: 'fixture-owner',
-      conditions: [],
-      reviewRequirement: 'accountable_owner_only' as const,
-      requiredReviewerRoles: [],
-    },
+  const proposalContent = {
+    schemaVersion: 'afl-trade-gate-proposal/v1' as const,
+    gate,
+    decisionKey: `${gate}-fixture`,
+    version: 1,
+    environment: 'test_fixture' as const,
+    scope,
+    accountableOwner: 'fixture-owner',
+    conditions: [],
+    proposal: 'Approve the fabricated artifact-chain fixture.',
+    alternativesConsidered: ['Keep the fabricated chain blocked.'],
+    evidenceIds: [`artifact:${digest(decisionCharacter)}`],
+    affectedArtifacts,
+    proposedAt: '2026-08-01T00:00:00.000Z',
+    proposedBy: 'fixture-owner',
+    proposalOrigin: 'agent_assisted' as const,
+    reviewRequirement: 'accountable_owner_only' as const,
+    requiredReviewerRoles: [],
   };
-  const decision = {
-    decisionId: `gate-decision:${digest(decisionCharacter)}`,
-    content: {
-      proposalId: proposal.proposalId,
-      gate,
-      decisionKey: proposal.content.decisionKey,
-      version: 1,
-      environment: 'test_fixture' as const,
-      scope,
-      state: 'approved' as const,
-      authorityKind: 'fixture' as const,
-      accountableOwner: 'fixture-owner',
-      decidedBy: 'fixture-owner',
-      reviewers: [],
-      authorityEvidenceIds: [`artifact:${digest('f')}`],
-      conditionResults: [],
-      rationale: 'Fabricated approval.',
-      limitations: ['No production authority.'],
-      decidedAt: '2026-08-01T00:00:00.000Z',
-      effectiveAt: '2026-08-01T00:00:00.000Z',
-      revalidateAt: '2027-01-01T00:00:00.000Z',
-      supersedesDecisionId: null,
-      affectedArtifacts,
-      withdrawalActions: [],
-    },
+  const proposal = aflTradeGateDecisionProposalSchema.parse({
+    proposalId: createAflTradeContentAddress('gate-proposal', proposalContent),
+    content: proposalContent,
+  });
+  const decisionContent = {
+    schemaVersion: 'afl-trade-gate-decision/v1' as const,
+    proposalId: proposal.proposalId,
+    gate,
+    decisionKey: proposal.content.decisionKey,
+    version: 1,
+    environment: 'test_fixture' as const,
+    scope,
+    state: 'approved' as const,
+    authorityKind: 'fixture' as const,
+    accountableOwner: 'fixture-owner',
+    decidedBy: 'fixture-owner',
+    reviewers: [],
+    authorityEvidenceIds: [`artifact:${digest('f')}`],
+    conditionResults: [],
+    rationale: 'Fabricated approval.',
+    limitations: ['No production authority.'],
+    decidedAt: '2026-08-01T00:00:00.000Z',
+    effectiveAt: '2026-08-01T00:00:00.000Z',
+    revalidateAt: '2027-01-01T00:00:00.000Z',
+    supersedesDecisionId: null,
+    affectedArtifacts,
+    withdrawalActions: [],
   };
+  const decision = aflTradeGateDecisionRecordSchema.parse({
+    decisionId: createAflTradeContentAddress('gate-decision', decisionContent),
+    content: decisionContent,
+  });
   return { proposal, decision };
+}
+
+function architectureArtifacts() {
+  const currentStateContent = {
+    schemaVersion: 'afl-trade-architecture-current-state/v1' as const,
+    subject: 'afl-trade-intelligence' as const,
+    environment: 'test_fixture' as const,
+    repositoryRevision: digest('a').slice(0, 40),
+    capturedAt: '2026-08-02T00:00:00.000Z',
+    capturedBy: 'fixture-owner',
+    captureMethod: 'repository_inspection' as const,
+    productionClaim: false as const,
+    integrityStatement: 'content_address_proves_integrity_not_truth_or_authority' as const,
+    verifications: [
+      {
+        verificationId: 'fixture-verification',
+        command: 'Inspect fabricated fixtures.',
+        outcome: 'confirmed' as const,
+        observedAt: '2026-08-02T00:00:00.000Z',
+        evidenceIds: [`artifact:${digest('a')}`],
+      },
+    ],
+    authorities: AFL_TRADE_AUTHORITY_CONCERNS.map((concern) => ({
+      concern,
+      implementationState: 'not_implemented' as const,
+      currentAuthority: `Fixture current authority for ${concern}.`,
+      readPath: `Fixture read path for ${concern}.`,
+      writePath: `Fixture write path for ${concern}.`,
+      sourceReferences: [`fixture/${concern}`],
+      limitations: ['No production authority.'],
+    })),
+    requiredObservations: AFL_TRADE_REQUIRED_CURRENT_STATE_OBSERVATIONS.map((observation) => ({
+      observation,
+      finding: `Fixture finding for ${observation}.`,
+      sourceReferences: [`fixture/${observation}`],
+      verificationIds: ['fixture-verification'],
+    })),
+    unresolvedQuestions: ['Production readiness remains unverified.'],
+  };
+  const currentState = aflTradeArchitectureCurrentStateSchema.parse({
+    snapshotId: createAflTradeContentAddress('architecture-current-state', currentStateContent),
+    content: currentStateContent,
+  });
+  const packageContent = {
+    schemaVersion: 'afl-trade-architecture-decision-package/v1' as const,
+    subject: 'afl-trade-intelligence' as const,
+    environment: 'test_fixture' as const,
+    decisionKey: 'fixture-gate1',
+    packageVersion: 1,
+    currentStateSnapshotId: currentState.snapshotId,
+    preparedAt: '2026-08-03T00:00:00.000Z',
+    preparedBy: 'fixture-owner',
+    packageState: 'proposal_only' as const,
+    productionClaim: false as const,
+    infrastructureReadiness: 'not_asserted' as const,
+    operationalAuthorization: 'not_granted' as const,
+    authorityTransfer: 'not_executed' as const,
+    integrityStatement: 'content_address_proves_integrity_not_truth_or_authority' as const,
+    designAssertions: [...AFL_TRADE_ARCHITECTURE_DESIGN_ASSERTIONS],
+    authorityMatrix: AFL_TRADE_AUTHORITY_CONCERNS.map((concern) => ({
+      concern,
+      currentAuthority: `Fixture current authority for ${concern}.`,
+      targetAuthority: `Fixture target authority for ${concern}.`,
+      transitionRequired: true,
+      currentAuthorityDisposition: 'unchanged_until_authorized_activation' as const,
+      targetAuthorityStatus: 'proposed_not_authoritative' as const,
+      activationOwner: 'fixture-owner',
+      activationConditions: ['Verify the fabricated target.'],
+      retirementConditions: ['Close the fabricated rollback window.'],
+    })),
+    sections: AFL_TRADE_ARCHITECTURE_PACKAGE_SECTIONS.map((section) => ({
+      section,
+      decision: `Fixture decision for ${section}.`,
+      owner: 'fixture-owner',
+      acceptanceCriteria: ['Review fabricated evidence.'],
+      evidenceIds: [`artifact:${digest('a')}`],
+      sourceReferences: [`fixture/${section}`],
+    })),
+    readinessEvidenceRequirements: ['Observe controlled behavior.'],
+    operationalAuthorizationRequirements: ['Record separate authorization.'],
+    limitations: ['No production authority.'],
+  };
+  const decisionPackage = aflTradeArchitectureDecisionPackageSchema.parse({
+    packageId: createAflTradeContentAddress('architecture-decision-package', packageContent),
+    content: packageContent,
+  });
+  return { currentState, decisionPackage };
 }
 
 function validProvenanceInput(): AflTradeManifestProvenanceInput {
@@ -252,7 +364,17 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
   const corpusId = `corpus:${digest('4')}`;
   const datasetId = `dataset:${digest('1')}`;
   const run = modelRun();
-  const candidate = publication(publicationContent(run));
+  const candidate = publication({
+    ...publicationContent(run),
+    validationReportArtifact:
+      run.content.outcome.status === 'succeeded'
+        ? run.content.outcome.validationReportArtifact
+        : artifact('3'),
+    modelCardArtifact:
+      run.content.outcome.status === 'succeeded'
+        ? run.content.outcome.modelCardArtifact
+        : artifact('4'),
+  });
   const projectionValue = projectionContent(candidate);
   const build = aflTradeProjectionManifestSchema.parse({
     projectionId: createAflTradeContentAddress('projection', projectionValue),
@@ -265,6 +387,11 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
     { kind: 'data_sufficiency_protocol', artifactId: protocolId },
     { kind: 'coverage_report', artifactId: reportId },
   ]);
+  const architecture = architectureArtifacts();
+  const gate1 = gatePair('gate_1_architecture_authority', 'b', [
+    { kind: 'architecture_current_state', artifactId: architecture.currentState.snapshotId },
+    { kind: 'architecture_decision_package', artifactId: architecture.decisionPackage.packageId },
+  ]);
   const gate2 = gatePair('gate_2_corpus_lineage', '7', [
     { kind: 'corpus_manifest', artifactId: corpusId },
   ]);
@@ -273,8 +400,8 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
   ]);
   return {
     ledger: {
-      proposals: [gate0a.proposal, gate0b.proposal, gate2.proposal, gate3.proposal],
-      decisions: [gate0a.decision, gate0b.decision, gate2.decision, gate3.decision],
+      proposals: [gate0a.proposal, gate0b.proposal, gate1.proposal, gate2.proposal, gate3.proposal],
+      decisions: [gate0a.decision, gate0b.decision, gate1.decision, gate2.decision, gate3.decision],
     } as unknown as AflTradeGateDecisionLedger,
     environment: 'test_fixture',
     evaluatedAt: '2026-08-10T00:00:00.000Z',
@@ -324,6 +451,8 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
     } as never,
     dataSufficiencyProtocol: { protocolId, content: protocolContent },
     coverageReport: { reportId, content: reportContent },
+    architectureCurrentState: architecture.currentState,
+    architectureDecisionPackage: architecture.decisionPackage,
     corpus: {
       corpusId,
       content: {
@@ -331,6 +460,9 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
         dataSufficiencyProtocolId: protocolId,
         coverageReportId: reportId,
         gate0bDecisionId: gate0b.decision.decisionId,
+        architectureCurrentStateId: architecture.currentState.snapshotId,
+        architectureDecisionPackageId: architecture.decisionPackage.packageId,
+        gate1DecisionId: gate1.decision.decisionId,
         sourceRegisterIds: ['fixture-source'],
         environment: 'test_fixture',
         createdAt: '2026-08-04T00:00:00.000Z',
@@ -344,6 +476,7 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
         sourceRegisterIds: ['fixture-source'],
         environment: 'test_fixture',
         createdAt: '2026-08-05T00:00:00.000Z',
+        featureDefinitionArtifacts: run.content.featureDefinitionArtifacts,
       },
     } as never,
     modelRun: run,
@@ -361,6 +494,23 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
       valid: true,
       issues: [],
     });
+  });
+
+  it('requires the exact Gate 1 architecture decision in the corpus provenance chain', () => {
+    const input = validProvenanceInput();
+    const gate1DecisionId = input.corpus.content.gate1DecisionId;
+    input.ledger = {
+      proposals: input.ledger.proposals.filter(
+        (proposal) => proposal.content.gate !== 'gate_1_architecture_authority'
+      ),
+      decisions: input.ledger.decisions.filter(
+        (decision) => decision.decisionId !== gate1DecisionId
+      ),
+    };
+
+    expect(validateAflTradeManifestProvenance(input).issues).toContainEqual(
+      expect.objectContaining({ code: 'decision_invalid', subject: gate1DecisionId })
+    );
   });
   it('builds an acyclic model-run, publication, and projection chain', () => {
     const run = modelRun();
@@ -406,10 +556,12 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
 
   it('rejects a forward projection reference from a publication manifest', () => {
     const content = publicationContent();
+    const invalidContent = { ...content, projectionId: `projection:${digest('f')}` };
+
     expect(
       aflTradePublicationManifestSchema.safeParse({
-        publicationId: createAflTradeContentAddress('publication', content),
-        content: { ...content, projectionId: `projection:${digest('f')}` },
+        publicationId: createAflTradeContentAddress('publication', invalidContent),
+        content: invalidContent,
       }).success
     ).toBe(false);
   });

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   AFL_TRADE_VALUE_AVAILABILITY,
   AFL_TRADE_VALUE_BEARING_AVAILABILITY,
+  AFL_TRADE_VALUE_UNAVAILABLE_AVAILABILITY,
+  aflTradePublicHrefSchema,
   aflTradeValueResultSchema,
   type AflTradeValueAvailability,
 } from '@/types/aflTradeIntelligence';
@@ -49,6 +51,7 @@ function numericCore() {
         aflClubId: 'fixture-club-a',
         clubName: 'Fabricated Club A',
         estimate: 10,
+        estimateStatistic: 'mean' as const,
         uncertainty: uncertainty(10),
         factors: [],
       },
@@ -56,6 +59,7 @@ function numericCore() {
         aflClubId: 'fixture-club-b',
         clubName: 'Fabricated Club B',
         estimate: 8,
+        estimateStatistic: 'mean' as const,
         uncertainty: uncertainty(8),
         factors: [],
       },
@@ -225,6 +229,18 @@ describe('AFL trade-intelligence availability contracts', () => {
       'withdrawn',
       'unsupported_trade',
     ]);
+    expect(AFL_TRADE_VALUE_UNAVAILABLE_AVAILABILITY).toEqual(
+      AFL_TRADE_VALUE_AVAILABILITY.filter(
+        (availability) => !AFL_TRADE_VALUE_BEARING_AVAILABILITY.includes(availability as never)
+      )
+    );
+  });
+
+  it('accepts only same-site public paths', () => {
+    expect(aflTradePublicHrefSchema.safeParse('/draft/trades/methodology').success).toBe(true);
+    for (const href of ['//attacker.example', '/\\attacker.example', '/path\\redirect', '/bad path']) {
+      expect(aflTradePublicHrefSchema.safeParse(href).success).toBe(false);
+    }
   });
 
   it.each(Object.keys(unavailableNextActions) as UnavailableState[])(

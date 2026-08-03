@@ -49,7 +49,7 @@ const clubTradeRefs: DraftClubTradeRefRow[] = [
     title: 'Fabricated AFL trade',
     clubSlug: 'fabricated-club-a',
     clubName: 'Fabricated Club A',
-    assetsRaw: 'Fabricated player and pick',
+    assetsRaw: '',
     expected: 0,
     actual: null,
   },
@@ -72,19 +72,23 @@ describe('AFL trade-intelligence public product', () => {
       );
 
       const summary = container.querySelector('#trade-detail-summary');
-      const availability = screen.getByRole('region', {
-        name: 'Current outcome trade value status',
-      });
       const parties = container.querySelector('#trade-detail-parties');
 
       expect(summary).not.toBeNull();
       expect(parties).not.toBeNull();
-      expectDocumentOrder(summary!, availability);
-      expectDocumentOrder(availability, parties!);
-      expect(
-        screen.getByRole('heading', { level: 3, name: 'Trade value unavailable' })
-      ).toBeVisible();
-      expect(screen.getAllByRole('region', { name: /trade value status/i })).toHaveLength(1);
+      if (mode === 'full') {
+        const availability = screen.getByRole('region', {
+          name: 'Current outcome trade value status',
+        });
+        expectDocumentOrder(summary!, availability);
+        expectDocumentOrder(availability, parties!);
+        expect(
+          screen.getByRole('heading', { level: 3, name: 'Trade value unavailable' })
+        ).toBeVisible();
+      } else {
+        expectDocumentOrder(summary!, parties!);
+        expect(screen.queryByRole('region', { name: /trade value status/i })).toBeNull();
+      }
 
       expect(screen.getByRole('columnheader', { name: 'Legacy expected' })).toBeVisible();
       expect(screen.getByRole('columnheader', { name: 'Legacy actual' })).toBeVisible();
@@ -116,6 +120,7 @@ describe('AFL trade-intelligence public product', () => {
     expect(screen.getByRole('columnheader', { name: 'Legacy actual' })).toBeVisible();
     expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('Not recorded').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/No raw club return recorded/).length).toBeGreaterThanOrEqual(2);
   });
 
   it('presents the methodology as planned and unavailable rather than operational', () => {

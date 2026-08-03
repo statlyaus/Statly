@@ -1,4 +1,5 @@
 import type { AflTradePublicationState } from '@/types/aflTradeIntelligence';
+import { z } from 'zod';
 
 import {
   aflTradeProjectionManifestSchema,
@@ -96,7 +97,7 @@ export function createAflTradePublicationRegistry(): AflTradePublicationRegistry
 }
 
 function requireTimestamp(value: string) {
-  if (!Number.isFinite(Date.parse(value))) {
+  if (!z.iso.datetime({ offset: true }).safeParse(value).success) {
     throw new AflTradePublicationStateError('INVALID_TIMESTAMP', 'A valid timestamp is required.');
   }
 }
@@ -149,7 +150,11 @@ export function registerAflTradePublication(
     evidenceId: string;
   }
 ): AflTradePublicationRegistry {
-  const manifest = aflTradePublicationManifestSchema.parse(input.manifest);
+  const parsedManifest = aflTradePublicationManifestSchema.safeParse(input.manifest);
+  if (!parsedManifest.success) {
+    throw new AflTradePublicationStateError('INVALID_MANIFEST', 'Publication manifest is invalid.');
+  }
+  const manifest = parsedManifest.data;
   const publicationId = manifest.publicationId;
   if (registry.publications[publicationId]) {
     throw new AflTradePublicationStateError(
@@ -356,24 +361,8 @@ function withdraw(
   const currentPointer = activeByScope[record.scopeKey];
 
   if (currentPointer?.publicationId === record.publicationId) {
-    const fallback = findLastGoodAflTradePublication(
-      registry,
-      record.scopeKey,
-      record.publicationId
-    );
-    if (fallback) {
-      publications[fallback.publicationId] = appendEvent(fallback, 'published', {
-        ...command,
-        reason: `Reactivated after withdrawal of ${record.publicationId}.`,
-      });
-      activeByScope[record.scopeKey] = {
-        publicationId: fallback.publicationId,
-        activatedAt: command.occurredAt,
-        revision,
-      };
-    } else {
-      delete activeByScope[record.scopeKey];
-    }
+    // A superseded publication is not silently reactivated. It must pass current gates again.
+    delete activeByScope[record.scopeKey];
   }
 
   return { revision, publications, activeByScope };
@@ -393,7 +382,14 @@ export function applyAflTradePublicationCommand(
   }
 
   if (command.action === 'validate') {
-    const projection = aflTradeProjectionManifestSchema.parse(command.projectionManifest);
+    const parsedProjection = aflTradeProjectionManifestSchema.safeParse(command.projectionManifest);
+    if (!parsedProjection.success) {
+      throw new AflTradePublicationStateError(
+        'INVALID_MANIFEST',
+        'Projection manifest is invalid.'
+      );
+    }
+    const projection = parsedProjection.data;
     if (
       projection.content.publicationId !== record.publicationId ||
       projection.content.scopeKey !== record.scopeKey ||

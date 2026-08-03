@@ -38,7 +38,6 @@ import DraftLayout from '../../src/app/(public)/draft/layout';
 import AflTradeMethodologyPage, {
   metadata as methodologyMetadata,
 } from '../../src/app/(public)/draft/trades/methodology/page';
-import { AFL_TRADE_METHODOLOGY_HREF } from '../../src/types/aflTradeIntelligence';
 
 describe('public AFL draft trade routing', () => {
   it('states the homepage promise before the two primary hero destinations', () => {
@@ -107,10 +106,10 @@ describe('public AFL draft trade routing', () => {
     );
   });
 
-  it('keeps the methodology page static, public, and canonically addressable', () => {
+  it('keeps the methodology page static and public without inventing a canonical origin', () => {
     const methodologyRoute = readRequiredFile('src/app/(public)/draft/trades/methodology/page.tsx');
 
-    expect(methodologyMetadata.alternates?.canonical).toBe(AFL_TRADE_METHODOLOGY_HREF);
+    expect(methodologyMetadata.alternates?.canonical).toBeUndefined();
     expect(methodologyRoute).not.toContain('getDraftTrades');
     expect(methodologyRoute).not.toContain('getDraftTradeById');
     expect(methodologyRoute).not.toContain('createAflTradePrePublicationAvailability');

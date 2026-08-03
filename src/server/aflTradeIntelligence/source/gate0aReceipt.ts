@@ -19,7 +19,7 @@ import {
   type AflTradeSourceRightsProposal,
 } from './sourceRights';
 
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const boundedTextSchema = z.string().trim().min(1).max(1000);
 const publicIdSchema = z
   .string()

@@ -75,8 +75,11 @@ export function AflTradeValueUnavailablePanel({
               aria-label="Trade value availability warnings"
               className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground"
             >
-              {availability.warnings.map((warning) => (
-                <li key={warning.code} className="rounded-lg border border-border bg-muted p-3">
+              {availability.warnings.map((warning, index) => (
+                <li
+                  key={`${warning.code}-${index}`}
+                  className="rounded-lg border border-border bg-muted p-3"
+                >
                   {warning.message}
                 </li>
               ))}

@@ -302,10 +302,14 @@ A content-addressed Gate 0B protocol must exist before measurement starts. It na
 measure, numerator, denominator, exact rational acceptance floor, null-versus-zero rule, candidate
 window, embargo, and exclusion. The coverage report records one measured ratio or explicit
 unmeasurable reason for every prespecified measure/cohort pair. It cannot add post-hoc observations or
-hide a failing cohort behind an aggregate.
+hide a failing cohort behind an aggregate. Structural validity and approval eligibility are separate:
+every required observation must be present, measurable, and at or above its exact floor before Gate 0B
+can support downstream work.
 
-The Gate 0B decision pins the protocol and report. A later corpus manifest pins that decision and owns
-normalized identity, real-club custody, lineage, reconciliation, quality, and quarantine artifacts.
+The Gate 0B decision pins the protocol and report. A later corpus manifest pins that decision plus the
+exact current-state snapshot, architecture decision package, and Gate 1 decision; Gate 0B and Gate 1
+are parallel prerequisites rather than substitutes. The corpus owns normalized identity, real-club
+custody, lineage, reconciliation, quality, and quarantine artifacts.
 Gate 2 approves that corpus before a feature dataset can be created. A successful reproducible run and
 Gate 3 decision precede the candidate publication; the projection is a separate downstream manifest.
 Cross-manifest validation requires exact parents, source sets, environments, effective decisions, and
@@ -425,8 +429,10 @@ internals. Payloads are strict and reject Statly user, fantasy league, membershi
 ownership fields.
 
 Every numerical result declares its valuation view, model vintage, effective time, knowledge cutoff,
-valuation time, unit, per-club estimate and uncertainty, structured factors, comparison probabilities,
-practical-equivalence probability, assessment, methodology link, and asset coverage. Probabilities
+valuation time, unit, per-club mean estimate and uncertainty, structured factors, comparison
+probabilities, practical-equivalence probability, assessment, methodology link, and asset coverage. A
+mean is explicitly identified and is not incorrectly constrained to lie inside a central quantile
+interval. Probabilities
 name the complete multi-club comparison set and reconcile to one with practical equivalence.
 
 Coverage reconciles valued and excluded asset counts to the total. Every excluded asset has one public
@@ -446,7 +452,8 @@ Publication and dataset identifiers are lowercase SHA-256 content addresses with
 `dataset:` prefixes. Public projection builds use the same rule with a `projection:` prefix. A response
 selects one active publication, one explicit historical publication, or none. Numerical results require
 one immutable selected publication; active selection references only a published publication; withdrawn
-results identify the withdrawn publication; and list items cannot override the response publication.
+results identify the withdrawn publication; a withdrawn publication cannot serve any value-bearing
+result; and list items cannot override the response publication.
 Serving, publication, calculation, and knowledge-cutoff times must be chronologically consistent.
 
 ### Prepublication public delivery boundary
@@ -509,8 +516,9 @@ downstream projection manifest, approval requires an effective Gate 4 decision t
 artifacts, and publication requires an effective Gate 5 decision with the same pins. Only a published
 publication may be selected by the active pointer for a declared product/model scope.
 Publishing a replacement supersedes the prior active publication atomically. Withdrawing the active
-publication selects the most recent eligible superseded publication or leaves the scope without an
-active publication.
+publication removes the active pointer. A superseded publication may become active again only through
+a fresh, current validation and gate-authorized activation; withdrawal never backdates or silently
+reactivates fallback output.
 
 WP1 implements and tests these transitions as pure deterministic state. Mechanical decision
 resolution does not approve Gate 4 or Gate 5, persist a registry, authorize operational reviewers,
@@ -542,8 +550,8 @@ After the platform PostgreSQL cutover, exact Gate 1 package, and real target are
 
 Before the first analytical write, rollback may remove the unused target schema. After writes are
 accepted, preserve the database and use a forward fix or reviewed reverse migration. Published output
-is rolled back by selecting the last approved publication or withdrawing numerical valuation; public
-history is never rewritten in place.
+is rolled back by withdrawing numerical valuation, then separately revalidating and activating an
+eligible prior publication when authorized; public history is never rewritten in place.
 
 An authority rollback is a separate append-only event from a publication rollback. It must occur
 inside the recorded rollback window, restore the declared prior authority, and advance the authority

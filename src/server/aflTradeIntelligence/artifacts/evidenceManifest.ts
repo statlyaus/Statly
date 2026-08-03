@@ -4,7 +4,7 @@ import { AFL_TRADE_DECISION_ENVIRONMENTS } from '../governance/gateDecisionTypes
 import { aflTradeArtifactRefSchema } from './artifactReference';
 import { addAflTradeContentAddressIssue, aflTradeContentAddressedIdSchema } from './contentAddress';
 
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const publicIdSchema = z
   .string()
   .trim()

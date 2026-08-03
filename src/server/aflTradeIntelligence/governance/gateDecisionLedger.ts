@@ -1,9 +1,11 @@
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
-import type {
-  AflTradeDecisionEnvironment,
-  AflTradeGateCode,
-  AflTradeGateDecisionProposal,
-  AflTradeGateDecisionRecord,
+import {
+  aflTradeGateDecisionProposalSchema,
+  aflTradeGateDecisionRecordSchema,
+  type AflTradeDecisionEnvironment,
+  type AflTradeGateCode,
+  type AflTradeGateDecisionProposal,
+  type AflTradeGateDecisionRecord,
 } from './gateDecisionTypes';
 
 export interface AflTradeGateDecisionLedger {
@@ -12,6 +14,8 @@ export interface AflTradeGateDecisionLedger {
 }
 
 export type AflTradeGateLedgerIssueCode =
+  | 'invalid_proposal'
+  | 'invalid_decision'
   | 'duplicate_proposal'
   | 'duplicate_decision'
   | 'duplicate_version'
@@ -38,6 +42,7 @@ export interface AflTradeGateLedgerValidation {
 
 export type AflTradeGateEligibilityBlockerCode =
   | 'invalid_ledger'
+  | 'invalid_request'
   | 'decision_absent'
   | 'decision_not_effective'
   | 'decision_pending'
@@ -92,28 +97,72 @@ function addIssue(
   issues.push({ code, subjectId, message });
 }
 
+export class AflTradeGateDecisionAppendError extends Error {
+  constructor(
+    public readonly code: 'INVALID_LEDGER' | 'INVALID_APPEND',
+    public readonly issues: readonly AflTradeGateLedgerIssue[]
+  ) {
+    super(issues.map((issue) => issue.message).join(' '));
+    this.name = 'AflTradeGateDecisionAppendError';
+  }
+}
+
 export function validateAflTradeGateDecisionLedger(
   ledger: AflTradeGateDecisionLedger
 ): AflTradeGateLedgerValidation {
   const issues: AflTradeGateLedgerIssue[] = [];
-  for (const proposalId of duplicateValues(ledger.proposals.map((item) => item.proposalId))) {
+  const proposals = Array.isArray(ledger?.proposals)
+    ? ledger.proposals.flatMap((proposal, index) => {
+        const parsed = aflTradeGateDecisionProposalSchema.safeParse(proposal);
+        if (parsed.success) return [parsed.data];
+        addIssue(
+          issues,
+          'invalid_proposal',
+          typeof proposal?.proposalId === 'string' ? proposal.proposalId : `proposal[${index}]`,
+          `Proposal at index ${index} is not a valid content-addressed gate proposal.`
+        );
+        return [];
+      })
+    : [];
+  const decisions = Array.isArray(ledger?.decisions)
+    ? ledger.decisions.flatMap((decision, index) => {
+        const parsed = aflTradeGateDecisionRecordSchema.safeParse(decision);
+        if (parsed.success) return [parsed.data];
+        addIssue(
+          issues,
+          'invalid_decision',
+          typeof decision?.decisionId === 'string' ? decision.decisionId : `decision[${index}]`,
+          `Decision at index ${index} is not a valid content-addressed gate decision.`
+        );
+        return [];
+      })
+    : [];
+
+  if (!Array.isArray(ledger?.proposals)) {
+    addIssue(issues, 'invalid_proposal', 'proposals', 'Ledger proposals must be an array.');
+  }
+  if (!Array.isArray(ledger?.decisions)) {
+    addIssue(issues, 'invalid_decision', 'decisions', 'Ledger decisions must be an array.');
+  }
+
+  for (const proposalId of duplicateValues(proposals.map((item) => item.proposalId))) {
     addIssue(issues, 'duplicate_proposal', proposalId, `Proposal ${proposalId} is duplicated.`);
   }
-  for (const decisionId of duplicateValues(ledger.decisions.map((item) => item.decisionId))) {
+  for (const decisionId of duplicateValues(decisions.map((item) => item.decisionId))) {
     addIssue(issues, 'duplicate_decision', decisionId, `Decision ${decisionId} is duplicated.`);
   }
-  for (const key of duplicateValues(ledger.proposals.map(versionKey))) {
+  for (const key of duplicateValues(proposals.map(versionKey))) {
     addIssue(issues, 'duplicate_version', key, `Proposal version ${key} is duplicated.`);
   }
-  for (const key of duplicateValues(ledger.decisions.map(versionKey))) {
+  for (const key of duplicateValues(decisions.map(versionKey))) {
     addIssue(issues, 'duplicate_version', key, `Decision version ${key} is duplicated.`);
   }
 
-  const proposalById = new Map(ledger.proposals.map((proposal) => [proposal.proposalId, proposal]));
-  const decisionById = new Map(ledger.decisions.map((decision) => [decision.decisionId, decision]));
+  const proposalById = new Map(proposals.map((proposal) => [proposal.proposalId, proposal]));
+  const decisionById = new Map(decisions.map((decision) => [decision.decisionId, decision]));
   const successorsByDecisionId = new Map<string, string[]>();
 
-  for (const decision of ledger.decisions) {
+  for (const decision of decisions) {
     const proposal = proposalById.get(decision.content.proposalId);
     if (!proposal) {
       addIssue(
@@ -282,13 +331,17 @@ export function appendAflTradeGateDecision(
   proposal: AflTradeGateDecisionProposal,
   decision: AflTradeGateDecisionRecord
 ): AflTradeGateDecisionLedger {
+  const existingValidation = validateAflTradeGateDecisionLedger(ledger);
+  if (!existingValidation.valid) {
+    throw new AflTradeGateDecisionAppendError('INVALID_LEDGER', existingValidation.issues);
+  }
   const candidate = {
     proposals: [...ledger.proposals, proposal],
     decisions: [...ledger.decisions, decision],
   };
   const validation = validateAflTradeGateDecisionLedger(candidate);
   if (!validation.valid) {
-    throw new Error(validation.issues.map((issue) => issue.message).join(' '));
+    throw new AflTradeGateDecisionAppendError('INVALID_APPEND', validation.issues);
   }
   return candidate;
 }
@@ -315,7 +368,7 @@ export function resolveAflTradeGateEligibility(
     return {
       status: 'blocked',
       decision: null,
-      blockers: [{ code: 'decision_not_effective', message: 'The evaluation time is invalid.' }],
+      blockers: [{ code: 'invalid_request', message: 'The evaluation time is invalid.' }],
     };
   }
 
@@ -374,16 +427,18 @@ export function resolveAflTradeGateEligibility(
     };
   }
 
-  const stateBlockers: Partial<
-    Record<AflTradeGateDecisionRecord['content']['state'], AflTradeGateEligibilityBlocker>
-  > = {
-    pending: { code: 'decision_pending', message: 'The gate decision is pending.' },
-    blocked: { code: 'decision_blocked', message: 'The gate decision is blocked.' },
-    expired: { code: 'decision_expired', message: 'The gate decision is expired.' },
-    withdrawn: { code: 'decision_withdrawn', message: 'The gate decision is withdrawn.' },
-  };
-  const stateBlocker = stateBlockers[decision.content.state];
-  if (stateBlocker) return { status: 'blocked', decision, blockers: [stateBlocker] };
+  if (decision.content.state !== 'approved') {
+    const stateBlockers: Record<
+      Exclude<AflTradeGateDecisionRecord['content']['state'], 'approved'>,
+      AflTradeGateEligibilityBlocker
+    > = {
+      pending: { code: 'decision_pending', message: 'The gate decision is pending.' },
+      blocked: { code: 'decision_blocked', message: 'The gate decision is blocked.' },
+      expired: { code: 'decision_expired', message: 'The gate decision is expired.' },
+      withdrawn: { code: 'decision_withdrawn', message: 'The gate decision is withdrawn.' },
+    };
+    return { status: 'blocked', decision, blockers: [stateBlockers[decision.content.state]] };
+  }
 
   if (
     decision.content.revalidateAt === null ||

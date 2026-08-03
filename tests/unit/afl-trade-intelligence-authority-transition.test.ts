@@ -166,6 +166,16 @@ describe('AFL trade-intelligence authority transition ledger', () => {
     ).toThrow(expect.objectContaining({ code: 'INVALID_TRANSITION' }));
   });
 
+  it('does not allow the verification basis to change within a transition', () => {
+    const prepared = prepare();
+    expect(() =>
+      appendAflTradeAuthorityTransition(
+        prepared,
+        command(prepared, 'activated', { verificationMode: 'trusted_external_registry' })
+      )
+    ).toThrow(expect.objectContaining({ code: 'INVALID_TRANSITION' }));
+  });
+
   it('keeps transition keys unique across authority concerns', () => {
     const prepared = prepare();
 
@@ -204,6 +214,12 @@ describe('AFL trade-intelligence authority transition ledger', () => {
       appendAflTradeAuthorityTransition(
         activated,
         command(activated, 'rolled_back', { occurredAt: '2026-08-04T00:00:00.000Z' })
+      )
+    ).toThrow(expect.objectContaining({ code: 'INVALID_TRANSITION' }));
+    expect(() =>
+      appendAflTradeAuthorityTransition(
+        activated,
+        command(activated, 'rolled_back', { occurredAt: '2026-08-03T00:00:00.000Z' })
       )
     ).toThrow(expect.objectContaining({ code: 'INVALID_TRANSITION' }));
     expect(() =>
@@ -270,5 +286,23 @@ describe('AFL trade-intelligence authority transition ledger', () => {
       expect.objectContaining({ code: 'event_chain_mismatch' })
     );
     expect(validation.currentAuthorities).toBeNull();
+  });
+
+  it('returns structured failures for malformed events and commands', () => {
+    const malformedLedger = {
+      ...ledger(),
+      revision: 1,
+      events: [null],
+    } as unknown as AflTradeAuthorityTransitionLedger;
+    expect(validateAflTradeAuthorityTransitionLedger(malformedLedger).issues).toContainEqual(
+      expect.objectContaining({ code: 'invalid_event', eventId: null })
+    );
+    const sourceLedger = ledger();
+    expect(() =>
+      appendAflTradeAuthorityTransition(
+        sourceLedger,
+        command(sourceLedger, 'prepared', { occurredAt: 'not-an-instant' })
+      )
+    ).toThrow(expect.objectContaining({ code: 'INVALID_TRANSITION' }));
   });
 });

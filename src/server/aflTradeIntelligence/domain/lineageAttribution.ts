@@ -53,19 +53,23 @@ export function buildAflTradeAttributionFrontier(
   const outgoing = activeAflTradeEdgesBySource(edges, cutoff);
   const terminalAssetIds = activeAflTradeTerminalAssetIds(dispositions, cutoff);
   const frontier = new Set<string>();
+  const visiting = new Set<string>();
+  const completed = new Set<string>();
 
-  const visit = (assetId: string, path: ReadonlySet<string>) => {
-    if (path.has(assetId) || terminalAssetIds.has(assetId)) return;
+  const visit = (assetId: string) => {
+    if (visiting.has(assetId) || completed.has(assetId) || terminalAssetIds.has(assetId)) return;
+    visiting.add(assetId);
     const successors = outgoing.get(assetId) ?? [];
     if (successors.length === 0) {
       frontier.add(assetId);
-      return;
+    } else {
+      for (const edge of successors) visit(edge.targetAssetId);
     }
-    const nextPath = new Set(path).add(assetId);
-    for (const edge of successors) visit(edge.targetAssetId, nextPath);
+    visiting.delete(assetId);
+    completed.add(assetId);
   };
 
-  for (const rootAssetId of rootAssetIds) visit(rootAssetId, new Set());
+  for (const rootAssetId of rootAssetIds) visit(rootAssetId);
   return [...frontier].sort();
 }
 
@@ -77,9 +81,9 @@ function hasPath(
 ): boolean {
   if (sourceAssetId === targetAssetId) return true;
   if (visited.has(sourceAssetId)) return false;
-  const nextVisited = new Set(visited).add(sourceAssetId);
+  visited.add(sourceAssetId);
   return (outgoing.get(sourceAssetId) ?? []).some((edge) =>
-    hasPath(edge.targetAssetId, targetAssetId, outgoing, nextVisited)
+    hasPath(edge.targetAssetId, targetAssetId, outgoing, visited)
   );
 }
 
@@ -90,6 +94,8 @@ export function validateAflTradeAttribution(
   const issues: AflTradeAttributionIssue[] = [];
   const assetById = new Map(graph.assets.map((asset) => [asset.assetId, asset]));
   const excludedAssetIds = request.excludedAssetIds ?? [];
+  const effectiveAsOf = parseAflTradeTime(request.effectiveAsOf);
+  const knowledgeCutoff = parseAflTradeTime(request.knowledgeCutoffAt);
 
   const duplicateGroups: ReadonlyArray<{
     values: readonly string[];
@@ -109,6 +115,26 @@ export function validateAflTradeAttribution(
       });
     }
   }
+
+  const visibleRootAssetIds = request.rootAssetIds.filter((assetId) => {
+    const asset = assetById.get(assetId);
+    if (!asset) return false;
+    const effectiveFrom = parseAflTradeTime(asset.effectiveFrom);
+    const visible =
+      effectiveAsOf !== null &&
+      knowledgeCutoff !== null &&
+      effectiveFrom !== null &&
+      effectiveFrom <= effectiveAsOf &&
+      isAflTradeKnownAt(asset, knowledgeCutoff);
+    if (!visible) {
+      issues.push({
+        code: 'root_not_visible',
+        assetId,
+        message: `Root asset ${assetId} was not effective and knowable at the attribution cutoff.`,
+      });
+    }
+    return visible;
+  });
 
   const identityGroups: ReadonlyArray<{
     values: readonly string[];
@@ -166,7 +192,7 @@ export function validateAflTradeAttribution(
   }
 
   const expectedFrontierAssetIds = buildAflTradeAttributionFrontier(
-    request.rootAssetIds.filter((assetId) => assetById.has(assetId)),
+    visibleRootAssetIds,
     activeEdges,
     request,
     graph.dispositions

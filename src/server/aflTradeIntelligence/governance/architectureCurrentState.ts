@@ -34,7 +34,7 @@ const publicIdSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
 const immutableReferenceSchema = z.string().regex(/^[a-z][a-z0-9-]*:[a-f0-9]{64}$/);
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const repositoryRevisionSchema = z.string().regex(/^[a-f0-9]{40,64}$/);
 
 const verificationSchema = z
@@ -68,7 +68,7 @@ const requiredObservationSchema = z
   })
   .strict();
 
-function addExactSetIssues(
+export function addAflTradeExactSetIssues(
   values: readonly string[],
   requiredValues: readonly string[],
   context: z.RefinementCtx,
@@ -111,14 +111,14 @@ export const aflTradeArchitectureCurrentStateContentSchema = z
   })
   .strict()
   .superRefine((snapshot, context) => {
-    addExactSetIssues(
+    addAflTradeExactSetIssues(
       snapshot.authorities.map((authority) => authority.concern),
       AFL_TRADE_AUTHORITY_CONCERNS,
       context,
       ['authorities'],
       'Authority observations'
     );
-    addExactSetIssues(
+    addAflTradeExactSetIssues(
       snapshot.requiredObservations.map((observation) => observation.observation),
       AFL_TRADE_REQUIRED_CURRENT_STATE_OBSERVATIONS,
       context,

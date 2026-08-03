@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { aflTradeContentAddressedIdSchema, aflTradeSha256Schema } from './contentAddress';
 
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 
 /**
  * Identifies immutable bytes through a content digest and a provider-neutral logical URI. The URI is

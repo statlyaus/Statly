@@ -31,9 +31,14 @@ export const aflTradePublicIdSchema = z
   .max(160)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
 
-export const aflTradeIsoDateTimeSchema = z.string().datetime({ offset: true });
+export const aflTradeIsoDateTimeSchema = z.iso.datetime({ offset: true });
 export const aflTradePublicMessageSchema = z.string().trim().min(1).max(500);
-export const aflTradePublicHrefSchema = z.string().trim().min(1).max(500).startsWith('/');
+export const aflTradePublicHrefSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .regex(/^\/(?![/\\])[^\s\\]*$/, 'Public links must be site-relative paths.');
 export const aflTradeScopeDescriptionSchema = z.string().trim().min(1).max(300);
 
 export function hasAflTradeDuplicates(values: readonly string[]): boolean {

@@ -11,6 +11,7 @@ import {
   AFL_TRADE_LINEAGE_FIXTURE_KINDS,
   buildAflTradeLineageFixture,
 } from '@/server/aflTradeIntelligence/domain/lineageFixtures';
+import { parseAflTradeTime } from '@/server/aflTradeIntelligence/domain/lineageTemporal';
 
 function uniqueCodes<T extends { code: string }>(issues: readonly T[]) {
   return [...new Set(issues.map((issue) => issue.code))].sort();
@@ -58,6 +59,25 @@ describe('public AFL trade lineage fixtures', () => {
 });
 
 describe('public AFL trade lineage temporal and structural invariants', () => {
+  it('parses only ISO date-only values or instants with explicit offsets', () => {
+    expect(parseAflTradeTime('2024-10-10')).not.toBeNull();
+    expect(parseAflTradeTime('2024-10-10T12:00:00.000Z')).not.toBeNull();
+    expect(parseAflTradeTime('2024-10-10T12:00:00')).toBeNull();
+    expect(parseAflTradeTime('Oct 10 2024')).toBeNull();
+  });
+
+  it('does not credit a root before it is effective and knowable', () => {
+    const fixture = buildAflTradeLineageFixture('future_pick_to_player');
+    const result = validateAflTradeAttribution(fixture.graph, {
+      rootAssetIds: ['fixture:future-right-a'],
+      creditedAssetIds: ['fixture:future-right-a'],
+      effectiveAsOf: '2023-01-01T00:00:00.000Z',
+      knowledgeCutoffAt: '2023-01-01T00:00:00.000Z',
+    });
+
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: 'root_not_visible' }));
+    expect(result.expectedFrontierAssetIds).toEqual([]);
+  });
   it('preserves one future-right identity across real AFL club custody handoffs', () => {
     const fixture = buildAflTradeLineageFixture('future_pick_to_player');
     const root = 'fixture:future-right-a';
@@ -162,6 +182,18 @@ describe('public AFL trade lineage temporal and structural invariants', () => {
     });
 
     expect(uniqueCodes(result.issues)).toContain('invalid_edge_types');
+  });
+
+  it('reports an unknown edge kind without throwing', () => {
+    const fixture = buildAflTradeLineageFixture('future_pick_to_player');
+    const graph = {
+      ...fixture.graph,
+      edges: [{ ...fixture.graph.edges[0], kind: 'unknown_edge_kind' }],
+    } as unknown as AflTradeLineageGraph;
+
+    expect(validateAflTradeLineageGraph(graph).issues).toContainEqual(
+      expect.objectContaining({ code: 'invalid_edge_types' })
+    );
   });
 
   it('rejects conflicting active successor transformations', () => {

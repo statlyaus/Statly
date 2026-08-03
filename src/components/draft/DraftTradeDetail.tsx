@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { AflTradeValueUnavailablePanel } from '@/components/draft/AflTradeValueUnavailablePanel';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
+import { LegacyMetricValue } from '@/components/draft/LegacyMetricValue';
 import type { AflTradeValueUnavailable } from '@/types/aflTradeIntelligence';
 
 export type DraftTradeHeaderView = {
@@ -44,17 +45,6 @@ type DraftTradeDetailProps = {
   mode?: 'full' | 'inline';
   valueAvailability: AflTradeValueUnavailable;
 };
-
-function LegacyMetricValue({ value }: { value: number | null }) {
-  if (value !== null) return value;
-
-  return (
-    <>
-      <span aria-hidden="true">—</span>
-      <span className="sr-only">Not recorded</span>
-    </>
-  );
-}
 
 function assetTypeLabel(assetType: DraftTradeAssetView['assetType']): string {
   if (assetType === 'future_pick') return 'Future Pick';
@@ -330,7 +320,9 @@ export function DraftTradeDetail({
         </div>
       </section>
 
-      <AflTradeValueUnavailablePanel availability={valueAvailability} variant="detail" />
+      {!isInline ? (
+        <AflTradeValueUnavailablePanel availability={valueAvailability} variant="detail" />
+      ) : null}
 
       {/* Parties: same card language as Summary — sequential section, not a selected tab */}
       <section id="trade-detail-parties" aria-labelledby="trade-parties-heading">

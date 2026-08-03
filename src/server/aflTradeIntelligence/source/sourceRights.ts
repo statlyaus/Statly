@@ -41,7 +41,7 @@ const publicIdSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
 const immutableReferenceSchema = z.string().regex(/^[a-z][a-z0-9-]*:[a-f0-9]{64}$/);
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const boundedTextSchema = z.string().trim().min(1).max(1000);
 const dispositionSchema = z.enum(AFL_TRADE_SOURCE_FIELD_DISPOSITIONS);
 

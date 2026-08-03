@@ -157,6 +157,7 @@ describe('AFL trade-intelligence data-sufficiency contracts', () => {
     );
 
     expect(validation.valid).toBe(true);
+    expect(validation.approvalEligible).toBe(false);
     expect(validation.outcomes).toEqual([
       {
         measureId: 'trade-coverage',
@@ -183,6 +184,17 @@ describe('AFL trade-intelligence data-sufficiency contracts', () => {
     const content = protocolContent();
     content.measures[0].minimumRatio = null;
 
+    expect(
+      aflTradeDataSufficiencyProtocolSchema.safeParse({
+        protocolId: createAflTradeContentAddress('data-sufficiency-protocol', content),
+        content,
+      }).success
+    ).toBe(false);
+  });
+
+  it('requires one unambiguous null-and-zero declaration per field', () => {
+    const content = protocolContent();
+    content.nullZeroSemantics.push({ ...content.nullZeroSemantics[0] });
     expect(
       aflTradeDataSufficiencyProtocolSchema.safeParse({
         protocolId: createAflTradeContentAddress('data-sufficiency-protocol', content),
@@ -238,6 +250,8 @@ describe('AFL trade-intelligence data-sufficiency contracts', () => {
       'observation_missing',
       'observation_unknown',
     ]);
+    expect(validation.outcomes[0].status).toBe('missing');
+    expect(validation.approvalEligible).toBe(false);
   });
 
   it('keeps unmeasurable evidence distinct from a measured zero', () => {
@@ -256,9 +270,25 @@ describe('AFL trade-intelligence data-sufficiency contracts', () => {
       content,
     });
 
-    expect(
-      validateAflTradeCoverageAgainstProtocol(sourceProtocol, changedReport).outcomes[0].status
-    ).toBe('unmeasurable');
+    const validation = validateAflTradeCoverageAgainstProtocol(sourceProtocol, changedReport);
+    expect(validation.outcomes[0].status).toBe('unmeasurable');
+    expect(validation.valid).toBe(true);
+    expect(validation.approvalEligible).toBe(false);
+  });
+
+  it('returns structured issues for malformed artifacts instead of throwing', () => {
+    const sourceProtocol = protocol();
+    const sourceReport = report(sourceProtocol);
+    const validation = validateAflTradeCoverageAgainstProtocol(
+      { ...sourceProtocol, protocolId: 'invalid' } as AflTradeDataSufficiencyProtocol,
+      { ...sourceReport, reportId: 'invalid' }
+    );
+
+    expect(validation).toMatchObject({ valid: false, approvalEligible: false, outcomes: [] });
+    expect(validation.issues.map((issue) => issue.code)).toEqual([
+      'protocol_invalid',
+      'report_invalid',
+    ]);
   });
 
   it('rejects report or protocol content changed after hashing', () => {

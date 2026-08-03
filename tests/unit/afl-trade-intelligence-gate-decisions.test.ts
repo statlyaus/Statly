@@ -5,6 +5,8 @@ import {
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
+  AflTradeGateDecisionAppendError,
+  appendAflTradeGateDecision,
   resolveAflTradeGateEligibility,
   validateAflTradeGateDecisionLedger,
   type AflTradeGateDecisionLedger,
@@ -156,6 +158,28 @@ describe('AFL trade-intelligence gate decisions', () => {
     ).toBe(false);
   });
 
+  it('rejects a decision mutated after content addressing before eligibility resolution', () => {
+    const proposed = proposal();
+    const blocked = decision(proposed, { state: 'blocked' });
+    const mutated = {
+      ...blocked,
+      content: { ...blocked.content, state: 'approved' as const },
+    };
+    const fixtureLedger = ledger([proposed], [mutated]);
+
+    expect(validateAflTradeGateDecisionLedger(fixtureLedger).issues).toContainEqual(
+      expect.objectContaining({ code: 'invalid_decision' })
+    );
+    expect(
+      resolveAflTradeGateEligibility(fixtureLedger, {
+        gate: proposed.content.gate,
+        decisionKey: proposed.content.decisionKey,
+        environment: 'test_fixture',
+        evaluatedAt: '2026-08-03T00:00:00.000Z',
+      }).blockers
+    ).toEqual([expect.objectContaining({ code: 'invalid_ledger' })]);
+  });
+
   it('requires governed artifact kinds to match their content-address prefixes', () => {
     const base = proposal().content;
     const content = {
@@ -284,6 +308,31 @@ describe('AFL trade-intelligence gate decisions', () => {
       expect.objectContaining({ code: 'decision_expired' })
     );
     expect(decided.content.state).toBe('approved');
+  });
+
+  it('distinguishes an invalid eligibility request from decision timing', () => {
+    const proposed = proposal();
+    const decided = decision(proposed);
+    expect(
+      resolveAflTradeGateEligibility(ledger([proposed], [decided]), {
+        gate: proposed.content.gate,
+        decisionKey: proposed.content.decisionKey,
+        environment: 'test_fixture',
+        evaluatedAt: 'not-an-instant',
+      }).blockers
+    ).toEqual([expect.objectContaining({ code: 'invalid_request' })]);
+  });
+
+  it('reports whether append failed because the ledger or candidate was invalid', () => {
+    const proposed = proposal();
+    const decided = decision(proposed);
+    const invalidLedger = ledger([proposed], [
+      { ...decided, content: { ...decided.content, state: 'blocked' } },
+    ] as AflTradeGateDecisionRecord[]);
+
+    expect(() => appendAflTradeGateDecision(invalidLedger, proposed, decided)).toThrowError(
+      expect.objectContaining<AflTradeGateDecisionAppendError>({ code: 'INVALID_LEDGER' })
+    );
   });
 
   it('keeps a prior effective approval while a later proposal remains pending', () => {

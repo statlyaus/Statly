@@ -25,7 +25,7 @@ const publicIdSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
 const immutableReferenceSchema = z.string().regex(/^[a-z][a-z0-9-]*:[a-f0-9]{64}$/);
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 
 const operationalAuthorizationSchema = z
   .object({
@@ -251,6 +251,7 @@ function sameTransitionIdentity(
     left.content.toAuthority === right.content.toAuthority &&
     left.content.architecturePackageId === right.content.architecturePackageId &&
     left.content.gate1DecisionId === right.content.gate1DecisionId &&
+    left.content.verificationMode === right.content.verificationMode &&
     left.content.rollbackWindowEndsAt === right.content.rollbackWindowEndsAt
   );
 }
@@ -313,7 +314,9 @@ export function validateAflTradeAuthorityTransitionLedger(
       addIssue(
         issues,
         'invalid_event',
-        rawEvent.eventId,
+        typeof rawEvent === 'object' && rawEvent !== null && 'eventId' in rawEvent
+          ? String(rawEvent.eventId)
+          : null,
         `Event at revision ${index + 1} is invalid.`
       );
       continue;
@@ -442,7 +445,7 @@ export function validateAflTradeAuthorityTransitionLedger(
             event.eventId,
             'Only an activated transition can be rolled back.'
           );
-        } else if (Date.parse(content.occurredAt) > Date.parse(content.rollbackWindowEndsAt)) {
+        } else if (Date.parse(content.occurredAt) >= Date.parse(content.rollbackWindowEndsAt)) {
           addIssue(
             issues,
             'rollback_window_closed',
@@ -585,7 +588,7 @@ export function appendAflTradeAuthorityTransition(
   const previousConcernEvent = [...ledger.events]
     .reverse()
     .find((event) => event.content.concern === command.concern);
-  const content = aflTradeAuthorityTransitionEventContentSchema.parse({
+  const parsedContent = aflTradeAuthorityTransitionEventContentSchema.safeParse({
     schemaVersion: 'afl-trade-authority-transition/v1',
     registryRevision: ledger.revision + 1,
     previousEventId: previousEvent?.eventId ?? null,
@@ -608,10 +611,24 @@ export function appendAflTradeAuthorityTransition(
     occurredAt: command.occurredAt,
     reason: command.reason,
   });
-  const event = aflTradeAuthorityTransitionEventSchema.parse({
+  if (!parsedContent.success) {
+    throw new AflTradeAuthorityTransitionError(
+      'INVALID_TRANSITION',
+      'The authority-transition command is invalid.'
+    );
+  }
+  const content = parsedContent.data;
+  const parsedEvent = aflTradeAuthorityTransitionEventSchema.safeParse({
     eventId: createAflTradeContentAddress('authority-transition', content),
     content,
   });
+  if (!parsedEvent.success) {
+    throw new AflTradeAuthorityTransitionError(
+      'INVALID_TRANSITION',
+      'The authority-transition event is invalid.'
+    );
+  }
+  const event = parsedEvent.data;
   const candidate = {
     ...ledger,
     revision: ledger.revision + 1,

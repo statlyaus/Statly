@@ -72,6 +72,7 @@ function available(): AflTradeValueResult {
         aflClubId: 'fixture-club-a',
         clubName: 'Fabricated Club A',
         estimate: 10,
+        estimateStatistic: 'mean',
         uncertainty: {
           lower: 8,
           median: 10,
@@ -91,6 +92,7 @@ function available(): AflTradeValueResult {
         aflClubId: 'fixture-club-b',
         clubName: 'Fabricated Club B',
         estimate: 8,
+        estimateStatistic: 'mean',
         uncertainty: {
           lower: 6,
           median: 8,
@@ -321,6 +323,19 @@ describe('AFL trade-intelligence response contracts', () => {
       aflTradeValueListResponseSchema.safeParse(listResponse(withdrawn(), withdrawnConsistency))
         .success
     ).toBe(true);
+    expect(
+      aflTradeValueListResponseSchema.safeParse(listResponse(available(), withdrawnConsistency))
+        .success
+    ).toBe(false);
+    expect(
+      aflTradeValueDetailResponseSchema.safeParse({
+        consistency: withdrawnConsistency,
+        tradeId: 'fixture-trade-1',
+        valuations: [available()],
+        lineageStatus: 'resolved',
+        unresolvedAssetCount: 0,
+      }).success
+    ).toBe(false);
   });
 
   it('rejects fantasy ownership and unknown fields at response boundaries', () => {

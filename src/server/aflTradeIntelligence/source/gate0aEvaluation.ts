@@ -8,6 +8,8 @@ import {
   type AflTradeSourceUse,
 } from './sourceRights';
 
+const gate0aEvaluationTimeSchema = z.iso.datetime({ offset: true });
+
 export interface AflTradeGate0ARequest {
   decisionKey: string;
   environment: AflTradeDecisionEnvironment;
@@ -118,8 +120,11 @@ export function evaluateAflTradeGate0A(
     );
   }
 
-  const evaluatedAt = Date.parse(request.evaluatedAt);
-  if (!Number.isFinite(evaluatedAt)) {
+  const parsedEvaluationTime = gate0aEvaluationTimeSchema.safeParse(request.evaluatedAt);
+  const evaluatedAt = parsedEvaluationTime.success
+    ? Date.parse(parsedEvaluationTime.data)
+    : Number.NaN;
+  if (!parsedEvaluationTime.success) {
     addBlocker(
       blockers,
       'invalid_evaluation_time',
@@ -348,3 +353,4 @@ export function evaluateAflTradeGate0A(
     blockers,
   };
 }
+import { z } from 'zod';

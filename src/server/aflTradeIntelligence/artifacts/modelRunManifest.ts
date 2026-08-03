@@ -5,7 +5,7 @@ import { aflTradeArtifactRefSchema } from './artifactReference';
 import { addAflTradeContentAddressIssue, aflTradeContentAddressedIdSchema } from './contentAddress';
 
 const gitCommitSchema = z.string().regex(/^[a-f0-9]{40}([a-f0-9]{24})?$/);
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const publicIdSchema = z
   .string()
   .trim()

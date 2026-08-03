@@ -13,7 +13,7 @@ import {
 import { aflTradeArtifactRefSchema } from './artifactReference';
 import { addAflTradeContentAddressIssue, aflTradeContentAddressedIdSchema } from './contentAddress';
 
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const boundedTextSchema = z.string().trim().min(1).max(1000);
 const publicIdSchema = z
   .string()
@@ -117,6 +117,8 @@ export const aflTradeCoverageReportSchema = z
   });
 
 export type AflTradeCoverageProtocolIssueCode =
+  | 'protocol_invalid'
+  | 'report_invalid'
   | 'protocol_mismatch'
   | 'evidence_mismatch'
   | 'environment_mismatch'
@@ -134,11 +136,12 @@ export interface AflTradeCoverageThresholdOutcome {
   measureId: string;
   cohortId: string;
   requiredForApproval: boolean;
-  status: 'met' | 'not_met' | 'unmeasurable' | 'report_only';
+  status: 'met' | 'not_met' | 'unmeasurable' | 'missing' | 'report_only';
 }
 
 export interface AflTradeCoverageProtocolValidation {
   valid: boolean;
+  approvalEligible: boolean;
   issues: AflTradeCoverageProtocolIssue[];
   outcomes: AflTradeCoverageThresholdOutcome[];
 }
@@ -154,9 +157,28 @@ export function validateAflTradeCoverageAgainstProtocol(
   unparsedProtocol: AflTradeDataSufficiencyProtocol,
   unparsedReport: AflTradeCoverageReport
 ): AflTradeCoverageProtocolValidation {
-  const protocol = aflTradeDataSufficiencyProtocolSchema.parse(unparsedProtocol);
-  const report = aflTradeCoverageReportSchema.parse(unparsedReport);
   const issues: AflTradeCoverageProtocolIssue[] = [];
+  const parsedProtocol = aflTradeDataSufficiencyProtocolSchema.safeParse(unparsedProtocol);
+  const parsedReport = aflTradeCoverageReportSchema.safeParse(unparsedReport);
+  if (!parsedProtocol.success) {
+    issues.push({
+      code: 'protocol_invalid',
+      subject: 'protocol',
+      message: 'The data-sufficiency protocol is malformed or fails content-address validation.',
+    });
+  }
+  if (!parsedReport.success) {
+    issues.push({
+      code: 'report_invalid',
+      subject: 'report',
+      message: 'The coverage report is malformed or fails content-address validation.',
+    });
+  }
+  if (!parsedProtocol.success || !parsedReport.success) {
+    return { valid: false, approvalEligible: false, issues, outcomes: [] };
+  }
+  const protocol = parsedProtocol.data;
+  const report = parsedReport.data;
 
   if (report.content.protocolId !== protocol.protocolId) {
     issues.push({
@@ -229,7 +251,8 @@ export function validateAflTradeCoverageAgainstProtocol(
     const [measureId, cohortId] = key.split('|');
     const observation = observations.get(key);
     let status: AflTradeCoverageThresholdOutcome['status'];
-    if (!observation || observation.status === 'unmeasurable') status = 'unmeasurable';
+    if (!observation) status = 'missing';
+    else if (observation.status === 'unmeasurable') status = 'unmeasurable';
     else if (requirement.minimumRatio === null) status = 'report_only';
     else
       status = ratioAtLeast(observation.observedRatio, requirement.minimumRatio)
@@ -243,7 +266,10 @@ export function validateAflTradeCoverageAgainstProtocol(
     });
   }
 
-  return { valid: issues.length === 0, issues, outcomes };
+  const valid = issues.length === 0;
+  const approvalEligible =
+    valid && outcomes.every((outcome) => !outcome.requiredForApproval || outcome.status === 'met');
+  return { valid, approvalEligible, issues, outcomes };
 }
 
 export type AflTradeCoverageObservation = z.infer<typeof aflTradeCoverageObservationSchema>;

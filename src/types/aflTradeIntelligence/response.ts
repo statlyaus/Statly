@@ -141,6 +141,13 @@ function validateResponseConsistency(value: ResponseConsistencyValue, context: z
       message: 'Numerical results require one selected immutable publication.',
     });
   }
+  if (hasValue && value.consistency.publication?.state === 'withdrawn') {
+    context.addIssue({
+      code: 'custom',
+      path: ['consistency', 'publication', 'state'],
+      message: 'Withdrawn publications cannot serve numerical results.',
+    });
+  }
   const hasWithdrawn = value.results.some((result) => result.availability === 'withdrawn');
   if (hasWithdrawn && value.consistency.publication?.state !== 'withdrawn') {
     context.addIssue({

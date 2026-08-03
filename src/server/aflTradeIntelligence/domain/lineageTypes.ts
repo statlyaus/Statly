@@ -141,6 +141,7 @@ export type AflTradeAttributionIssueCode =
   | 'unknown_root'
   | 'unknown_credit'
   | 'unknown_exclusion'
+  | 'root_not_visible'
   | 'asset_both_credited_and_excluded'
   | 'non_value_bearing_credit'
   | 'ancestor_double_counted'
@@ -153,17 +154,15 @@ export interface AflTradeAttributionIssue {
   assetId: string;
 }
 
-export interface AflTradeAttributionRequest {
-  rootAssetIds: readonly string[];
-  creditedAssetIds: readonly string[];
-  excludedAssetIds?: readonly string[];
+export interface AflTradeTemporalCutoff {
   effectiveAsOf: string;
   knowledgeCutoffAt: string;
 }
 
-export interface AflTradeTemporalCutoff {
-  effectiveAsOf: string;
-  knowledgeCutoffAt: string;
+export interface AflTradeAttributionRequest extends AflTradeTemporalCutoff {
+  rootAssetIds: readonly string[];
+  creditedAssetIds: readonly string[];
+  excludedAssetIds?: readonly string[];
 }
 
 export interface AflTradeAttributionValidation {

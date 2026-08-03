@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type {
   AflTradeAssetDisposition,
   AflTradeLineageEdge,
@@ -5,6 +7,10 @@ import type {
 } from './lineageTypes';
 
 export function parseAflTradeTime(value: string): number | null {
+  const validFormat =
+    z.iso.date().safeParse(value).success ||
+    z.iso.datetime({ offset: true }).safeParse(value).success;
+  if (!validFormat) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
 }

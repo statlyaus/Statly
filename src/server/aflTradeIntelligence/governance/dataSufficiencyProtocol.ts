@@ -6,7 +6,7 @@ import {
 } from '../artifacts/contentAddress';
 import { AFL_TRADE_DECISION_ENVIRONMENTS, aflTradeGateScopeSchema } from './gateDecisionTypes';
 
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const boundedTextSchema = z.string().trim().min(1).max(1000);
 const publicIdSchema = z
   .string()
@@ -148,6 +148,14 @@ export const aflTradeDataSufficiencyProtocolContentSchema = z
     const measureIds = protocol.measures.map((measure) => measure.measureId);
     if (new Set(measureIds).size !== measureIds.length) {
       context.addIssue({ code: 'custom', path: ['measures'], message: 'Measures must be unique.' });
+    }
+    const semanticFields = protocol.nullZeroSemantics.map((semantic) => semantic.field);
+    if (new Set(semanticFields).size !== semanticFields.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['nullZeroSemantics'],
+        message: 'Null and zero semantics must declare each field exactly once.',
+      });
     }
     for (const [index, measure] of protocol.measures.entries()) {
       if (measure.cohortIds.some((cohortId) => !knownCohorts.has(cohortId))) {

@@ -149,6 +149,7 @@ describe('AFL trade-intelligence Gate 1 architecture package', () => {
   });
 
   it('requires every current-state risk and authority concern exactly once', () => {
+    expect(AFL_TRADE_AUTHORITY_CONCERNS.length).toBeGreaterThanOrEqual(2);
     const content = currentStateContent();
     const missingObservation = {
       ...content,
@@ -203,6 +204,17 @@ describe('AFL trade-intelligence Gate 1 architecture package', () => {
         content: invalid,
       }).success
     ).toBe(false);
+    for (const changed of [
+      { ...content, designAssertions: content.designAssertions.slice(1) },
+      { ...content, authorityMatrix: content.authorityMatrix.slice(1) },
+    ]) {
+      expect(
+        aflTradeArchitectureDecisionPackageSchema.safeParse({
+          packageId: createAflTradeContentAddress('architecture-decision-package', changed),
+          content: changed,
+        }).success
+      ).toBe(false);
+    }
   });
 
   it('rejects contradictory transition declarations', () => {
@@ -254,5 +266,22 @@ describe('AFL trade-intelligence Gate 1 architecture package', () => {
     expect(
       validateAflTradeArchitecturePackageContext(sourceSnapshot, wrongEnvironmentPackage).issues
     ).toContainEqual(expect.objectContaining({ code: 'environment_mismatch' }));
+  });
+
+  it('requires every package current authority to match the referenced snapshot', () => {
+    const sourceSnapshot = snapshot();
+    const content = packageContent(sourceSnapshot.snapshotId);
+    content.authorityMatrix[0] = {
+      ...content.authorityMatrix[0],
+      currentAuthority: 'A contradictory current authority.',
+    };
+    const changedPackage = aflTradeArchitectureDecisionPackageSchema.parse({
+      packageId: createAflTradeContentAddress('architecture-decision-package', content),
+      content,
+    });
+
+    expect(
+      validateAflTradeArchitecturePackageContext(sourceSnapshot, changedPackage).issues
+    ).toContainEqual(expect.objectContaining({ code: 'current_authority_mismatch' }));
   });
 });

@@ -4,6 +4,7 @@ import { useDeferredValue, useId, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
+import { LegacyMetricValue } from '@/components/draft/LegacyMetricValue';
 import {
   draftHubHeroShellClass,
   draftHubHeroTopAccentClass,
@@ -15,17 +16,6 @@ import { AFL_TRADE_METHODOLOGY_HREF } from '@/types/aflTradeIntelligence';
 
 function clubLinkLabel(ref: DraftClubTradeRefRow): string {
   return `${ref.title} (${ref.year}). View trade detail.`;
-}
-
-function LegacyMetricValue({ value }: { value: number | null }) {
-  if (value !== null) return value;
-
-  return (
-    <>
-      <span aria-hidden="true">—</span>
-      <span className="sr-only">Not recorded</span>
-    </>
-  );
 }
 
 export function DraftClubTradeHistory({
@@ -298,7 +288,12 @@ export function DraftClubTradeHistory({
                       </Link>
                     </td>
                     <td className="min-w-48 text-sm text-muted-foreground">
-                      {ref.assetsRaw || '—'}
+                      {ref.assetsRaw || (
+                        <LegacyMetricValue
+                          value={null}
+                          missingLabel="No raw club return recorded"
+                        />
+                      )}
                     </td>
                     <td className="text-right tabular-nums text-foreground">
                       <LegacyMetricValue value={ref.expected} />

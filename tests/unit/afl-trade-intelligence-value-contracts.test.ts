@@ -40,6 +40,7 @@ function numericCore() {
         aflClubId: 'fixture-club-a',
         clubName: 'Fabricated Club A',
         estimate: 10,
+        estimateStatistic: 'mean' as const,
         uncertainty: uncertainty(10),
         factors: [],
       },
@@ -47,6 +48,7 @@ function numericCore() {
         aflClubId: 'fixture-club-b',
         clubName: 'Fabricated Club B',
         estimate: 8,
+        estimateStatistic: 'mean' as const,
         uncertainty: uncertainty(8),
         factors: [],
       },
@@ -220,6 +222,20 @@ describe('AFL trade-intelligence numerical contracts', () => {
     const value = available();
     value.clubValues[0].uncertainty = { ...uncertainty(10), lower: 12 };
     expect(aflTradeValueResultSchema.safeParse(value).success).toBe(false);
+  });
+
+  it('declares estimates as means without conflating them with interval medians', () => {
+    const value = available();
+    value.clubValues[0].estimate = 20;
+    expect(aflTradeValueResultSchema.safeParse(value).success).toBe(true);
+    expect(
+      aflTradeValueResultSchema.safeParse({
+        ...available(),
+        clubValues: available().clubValues.map((club, index) =>
+          index === 0 ? { ...club, estimateStatistic: 'median' } : club
+        ),
+      }).success
+    ).toBe(false);
   });
 
   it('requires club and practical-equivalence probabilities to sum to one', () => {

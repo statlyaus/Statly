@@ -503,6 +503,18 @@ describe('AFL trade-intelligence Gate 0A source governance', () => {
     );
   });
 
+  it('rejects non-ISO and offset-less evaluation times deterministically', () => {
+    const fixture = fixtures();
+    for (const evaluatedAt of ['Aug 3 2026', '2026-08-03T00:00:00']) {
+      expect(
+        evaluateAflTradeGate0A(fixture.ledger, fixture.sourceRights, {
+          ...request(fixture.sourceRights),
+          evaluatedAt,
+        }).blockers
+      ).toContainEqual(expect.objectContaining({ code: 'invalid_evaluation_time' }));
+    }
+  });
+
   it('blocks retention and caching beyond the reviewed scope', () => {
     const fixture = fixtures();
     const result = evaluateAflTradeGate0A(fixture.ledger, fixture.sourceRights, {

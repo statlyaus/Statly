@@ -8,15 +8,11 @@ import {
   draftHubSectionPillClass,
   draftHubSubtlePanelClass,
 } from '@/components/draft/draftHubChrome';
-import { AFL_TRADE_METHODOLOGY_HREF } from '@/types/aflTradeIntelligence';
 
 export const metadata: Metadata = {
   title: 'AFL Trade Value Methodology | Statly',
   description:
     'How Statly plans to explain AFL trade value, uncertainty, source limitations, and unavailable results.',
-  alternates: {
-    canonical: AFL_TRADE_METHODOLOGY_HREF,
-  },
 };
 
 const plannedViews = [

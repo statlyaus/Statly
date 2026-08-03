@@ -1,5 +1,10 @@
 import type { AflTradeGateDecisionLedger } from '../governance/gateDecisionLedger';
 import {
+  validateAflTradeArchitecturePackageContext,
+  type AflTradeArchitectureDecisionPackage,
+} from '../governance/architectureDecisionPackage';
+import type { AflTradeArchitectureCurrentState } from '../governance/architectureCurrentState';
+import {
   resolveAflTradeGateEligibility,
   validateAflTradeGateDecisionLedger,
 } from '../governance/gateDecisionLedger';
@@ -11,6 +16,7 @@ import type {
 import type { AflTradeDataSufficiencyProtocol } from '../governance/dataSufficiencyProtocol';
 import type { AflTradeGate0AReceipt } from '../source/gate0aReceipt';
 import type { AflTradeSourceRightsProposal } from '../source/sourceRights';
+import { canonicalizeAflTradeJson } from './contentAddress';
 import type { AflTradeCorpusManifest } from './corpusManifest';
 import {
   type AflTradeCoverageReport,
@@ -36,6 +42,8 @@ export type AflTradeManifestProvenanceIssueCode =
   | 'authorization_mismatch'
   | 'field_not_authorized'
   | 'protocol_report_invalid'
+  | 'data_sufficiency_not_met'
+  | 'architecture_context_invalid'
   | 'unsuccessful_model_run';
 
 export interface AflTradeManifestProvenanceIssue {
@@ -53,6 +61,8 @@ export interface AflTradeManifestProvenanceInput {
   evidence: AflTradeEvidenceManifest;
   dataSufficiencyProtocol: AflTradeDataSufficiencyProtocol;
   coverageReport: AflTradeCoverageReport;
+  architectureCurrentState: AflTradeArchitectureCurrentState;
+  architectureDecisionPackage: AflTradeArchitectureDecisionPackage;
   corpus: AflTradeCorpusManifest;
   dataset: AflTradeDatasetManifest;
   modelRun: AflTradeModelRunManifest;
@@ -76,6 +86,10 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
     sortedLeft.length === sortedRight.length &&
     sortedLeft.every((value, index) => value === sortedRight[index])
   );
+}
+
+function sameArtifactReferences(left: unknown, right: unknown): boolean {
+  return canonicalizeAflTradeJson(left) === canonicalizeAflTradeJson(right);
 }
 
 function decisionPins(
@@ -160,6 +174,12 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
   const receiptsById = new Map(
     input.gate0aReceipts.map((receipt) => [receipt.receiptId, receipt] as const)
   );
+  const permittedFieldsByReceiptId = new Map(
+    input.gate0aReceipts.map((receipt) => [
+      receipt.receiptId,
+      new Set(receipt.content.request.fieldUses.map((fieldUse) => fieldUse.sourceField)),
+    ])
+  );
   const authorizationById = new Map(
     input.evidence.content.sourceAuthorizations.map((authorization) => [
       authorization.authorizationId,
@@ -204,9 +224,9 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
   for (const item of input.evidence.content.items) {
     const authorization = authorizationById.get(item.content.authorizationId);
     const receipt = authorization ? receiptsById.get(authorization.gate0aReceiptId) : undefined;
-    const permittedFields = new Set(
-      receipt?.content.request.fieldUses.map((fieldUse) => fieldUse.sourceField) ?? []
-    );
+    const permittedFields = receipt
+      ? (permittedFieldsByReceiptId.get(receipt.receiptId) ?? new Set<string>())
+      : new Set<string>();
     if (
       !receipt ||
       !receipt.content.request.operations.includes('bounded_evaluation_capture') ||
@@ -238,6 +258,26 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
   for (const issue of coverageValidation.issues) {
     addIssue(issues, 'protocol_report_invalid', issue.subject, issue.message);
   }
+  if (!coverageValidation.approvalEligible) {
+    addIssue(
+      issues,
+      'data_sufficiency_not_met',
+      input.coverageReport.reportId,
+      'Required Gate 0B coverage outcomes are not approval-eligible.'
+    );
+  }
+  const architectureContext = validateAflTradeArchitecturePackageContext(
+    input.architectureCurrentState,
+    input.architectureDecisionPackage
+  );
+  for (const issue of architectureContext.issues) {
+    addIssue(
+      issues,
+      'architecture_context_invalid',
+      input.architectureDecisionPackage.packageId,
+      issue.message
+    );
+  }
   validateDecision(
     input,
     issues,
@@ -246,6 +286,22 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
     [
       { kind: 'data_sufficiency_protocol', artifactId: input.dataSufficiencyProtocol.protocolId },
       { kind: 'coverage_report', artifactId: input.coverageReport.reportId },
+    ]
+  );
+  validateDecision(
+    input,
+    issues,
+    input.corpus.content.gate1DecisionId,
+    'gate_1_architecture_authority',
+    [
+      {
+        kind: 'architecture_current_state',
+        artifactId: input.architectureCurrentState.snapshotId,
+      },
+      {
+        kind: 'architecture_decision_package',
+        artifactId: input.architectureDecisionPackage.packageId,
+      },
     ]
   );
   validateDecision(input, issues, input.dataset.content.gate2DecisionId, 'gate_2_corpus_lineage', [
@@ -259,6 +315,8 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
     [{ kind: 'model_run', artifactId: input.modelRun.runId }]
   );
 
+  const successfulOutcome =
+    input.modelRun.content.outcome.status === 'succeeded' ? input.modelRun.content.outcome : null;
   const parentChecks: ReadonlyArray<[boolean, string, string]> = [
     [
       input.corpus.content.evidenceManifestId === input.evidence.manifestId,
@@ -272,6 +330,14 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
       'Corpus must reference the exact Gate 0B protocol and report.',
     ],
     [
+      input.corpus.content.architectureCurrentStateId ===
+        input.architectureCurrentState.snapshotId &&
+        input.corpus.content.architectureDecisionPackageId ===
+          input.architectureDecisionPackage.packageId,
+      input.corpus.corpusId,
+      'Corpus must reference the exact Gate 1 architecture snapshot and package.',
+    ],
+    [
       input.dataset.content.corpusId === input.corpus.corpusId,
       input.dataset.datasetId,
       'Dataset must reference the exact corpus.',
@@ -282,10 +348,31 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
       'Model run must reference the exact dataset.',
     ],
     [
+      sameArtifactReferences(
+        input.dataset.content.featureDefinitionArtifacts,
+        input.modelRun.content.featureDefinitionArtifacts
+      ),
+      input.modelRun.runId,
+      'Model run feature definitions must exactly match its dataset.',
+    ],
+    [
       input.publication.content.datasetId === input.dataset.datasetId &&
         input.publication.content.modelRunId === input.modelRun.runId,
       input.publication.publicationId,
       'Publication must reference the exact dataset and model run.',
+    ],
+    [
+      successfulOutcome !== null &&
+        sameArtifactReferences(
+          input.publication.content.validationReportArtifact,
+          successfulOutcome.validationReportArtifact
+        ) &&
+        sameArtifactReferences(
+          input.publication.content.modelCardArtifact,
+          successfulOutcome.modelCardArtifact
+        ),
+      input.publication.publicationId,
+      'Publication validation report and model card must come from its successful model run.',
     ],
     [
       input.projection.content.publicationId === input.publication.publicationId,
@@ -297,9 +384,13 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
     if (!valid) addIssue(issues, 'parent_mismatch', subject, message);
   }
 
-  const evidenceSources = input.evidence.content.sourceAuthorizations.map(
-    (authorization) => authorization.sourceRegisterId
-  );
+  const evidenceSources = [
+    ...new Set(
+      input.evidence.content.sourceAuthorizations.map(
+        (authorization) => authorization.sourceRegisterId
+      )
+    ),
+  ];
   for (const [subject, sources] of [
     [input.coverageReport.reportId, input.coverageReport.content.sourceRegisterIds],
     [input.corpus.corpusId, input.corpus.content.sourceRegisterIds],
@@ -320,6 +411,8 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
     input.evidence.content.environment,
     input.dataSufficiencyProtocol.content.environment,
     input.coverageReport.content.environment,
+    input.architectureCurrentState.content.environment,
+    input.architectureDecisionPackage.content.environment,
     input.corpus.content.environment,
     input.dataset.content.environment,
     input.modelRun.content.environment,
@@ -348,9 +441,23 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
     { id: input.corpus.corpusId, time: input.corpus.content.createdAt },
     { id: input.dataset.datasetId, time: input.dataset.content.createdAt },
     { id: input.modelRun.runId, time: input.modelRun.content.startedAt },
+    { id: `${input.modelRun.runId}:finished`, time: input.modelRun.content.finishedAt },
     { id: input.publication.publicationId, time: input.publication.content.createdAt },
     { id: input.projection.projectionId, time: input.projection.content.createdAt },
   ]);
+  if (
+    Date.parse(input.architectureCurrentState.content.capturedAt) >
+      Date.parse(input.architectureDecisionPackage.content.preparedAt) ||
+    Date.parse(input.architectureDecisionPackage.content.preparedAt) >
+      Date.parse(input.corpus.content.createdAt)
+  ) {
+    addIssue(
+      issues,
+      'chronology_invalid',
+      input.architectureDecisionPackage.packageId,
+      'Gate 1 snapshot and package must exist before corpus materialization.'
+    );
+  }
 
   return { valid: issues.length === 0, issues };
 }

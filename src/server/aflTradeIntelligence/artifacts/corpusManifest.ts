@@ -4,7 +4,7 @@ import { AFL_TRADE_DECISION_ENVIRONMENTS } from '../governance/gateDecisionTypes
 import { aflTradeArtifactRefSchema } from './artifactReference';
 import { addAflTradeContentAddressIssue, aflTradeContentAddressedIdSchema } from './contentAddress';
 
-const isoDateTimeSchema = z.string().datetime({ offset: true });
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const publicIdSchema = z
   .string()
   .trim()
@@ -21,6 +21,11 @@ export const aflTradeCorpusManifestContentSchema = z
     dataSufficiencyProtocolId: aflTradeContentAddressedIdSchema('data-sufficiency-protocol'),
     coverageReportId: aflTradeContentAddressedIdSchema('coverage-report'),
     gate0bDecisionId: aflTradeContentAddressedIdSchema('gate-decision'),
+    architectureCurrentStateId: aflTradeContentAddressedIdSchema('architecture-current-state'),
+    architectureDecisionPackageId: aflTradeContentAddressedIdSchema(
+      'architecture-decision-package'
+    ),
+    gate1DecisionId: aflTradeContentAddressedIdSchema('gate-decision'),
     sourceRegisterIds: z.array(publicIdSchema).min(1).max(50),
     knowledgeCutoffAt: isoDateTimeSchema,
     effectiveFrom: isoDateTimeSchema,

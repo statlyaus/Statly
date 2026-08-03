@@ -58,8 +58,15 @@ describe('AFL trade-intelligence architecture operation policy', () => {
   it('requires Gates 4 and 5 for activation in addition to the upstream gates', () => {
     const activation = getAflTradeOperationPrerequisites('activate_publication');
 
-    expect(activation.requiredGates).toContain('gate_4_publication_api_readiness');
-    expect(activation.requiredGates).toContain('gate_5_comprehension_accessibility');
+    expect(activation.requiredGates).toEqual([
+      'gate_0a_permission_to_evaluate',
+      'gate_0b_data_sufficiency',
+      'gate_1_architecture_authority',
+      'gate_2_corpus_lineage',
+      'gate_3_model_validity',
+      'gate_4_publication_api_readiness',
+      'gate_5_comprehension_accessibility',
+    ]);
     expect(activation.requiresOperationalAuthorization).toBe(true);
     expect(activation.requiresCurrentAuthority).toBe(true);
   });

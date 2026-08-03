@@ -84,6 +84,9 @@ function corpusContent(parentEvidence = evidence()) {
     dataSufficiencyProtocolId: `data-sufficiency-protocol:${digest('8')}`,
     coverageReportId: `coverage-report:${digest('9')}`,
     gate0bDecisionId: `gate-decision:${digest('a')}`,
+    architectureCurrentStateId: `architecture-current-state:${digest('2')}`,
+    architectureDecisionPackageId: `architecture-decision-package:${digest('3')}`,
+    gate1DecisionId: `gate-decision:${digest('4')}`,
     sourceRegisterIds: ['fixture-source-v1'],
     knowledgeCutoffAt: '2026-08-02T00:00:00.000Z',
     effectiveFrom: '2021-01-01T00:00:00.000Z',
@@ -165,10 +168,12 @@ describe('AFL trade-intelligence evidence, corpus, and dataset manifests', () =>
 
   it('keeps identity and lineage artifacts out of the raw-evidence manifest', () => {
     const content = evidenceContent();
+    const invalidContent = { ...content, lineageArtifact: artifact('8') };
+
     expect(
       aflTradeEvidenceManifestSchema.safeParse({
-        manifestId: createAflTradeContentAddress('evidence', content),
-        content: { ...content, lineageArtifact: artifact('8') },
+        manifestId: createAflTradeContentAddress('evidence', invalidContent),
+        content: invalidContent,
       }).success
     ).toBe(false);
   });

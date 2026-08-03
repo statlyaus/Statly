@@ -38,6 +38,17 @@ export const AFL_TRADE_VALUE_BEARING_AVAILABILITY = [
   'failed_previous_available',
 ] as const;
 
+type AflTradeValueAvailabilityValue = (typeof AFL_TRADE_VALUE_AVAILABILITY)[number];
+type AflTradeValueBearingAvailabilityValue =
+  (typeof AFL_TRADE_VALUE_BEARING_AVAILABILITY)[number];
+
+export const AFL_TRADE_VALUE_UNAVAILABLE_AVAILABILITY = AFL_TRADE_VALUE_AVAILABILITY.filter(
+  (availability): availability is Exclude<
+    AflTradeValueAvailabilityValue,
+    AflTradeValueBearingAvailabilityValue
+  > => !(AFL_TRADE_VALUE_BEARING_AVAILABILITY as readonly string[]).includes(availability)
+);
+
 export const AFL_TRADE_VALUE_INTERPRETATIONS = [
   'balanced_within_uncertainty',
   'leans_to_club',
@@ -102,6 +113,7 @@ export const aflTradeClubValueSchema = z
     aflClubId: aflTradePublicIdSchema,
     clubName: z.string().trim().min(1).max(120),
     estimate: z.number().finite(),
+    estimateStatistic: z.literal('mean'),
     uncertainty: aflTradeUncertaintySchema,
     factors: z.array(aflTradeValueFactorSchema).max(20),
   })
@@ -493,18 +505,9 @@ const unavailableBaseSchema = z.object({
   methodologyHref: aflTradePublicHrefSchema,
 });
 
-export const aflTradeValueUnavailableSchema = z
-  .discriminatedUnion('availability', [
-    unavailableBaseSchema.extend({ availability: z.literal('not_calculated') }).strict(),
-    unavailableBaseSchema.extend({ availability: z.literal('source_blocked') }).strict(),
-    unavailableBaseSchema.extend({ availability: z.literal('insufficient_data') }).strict(),
-    unavailableBaseSchema.extend({ availability: z.literal('identity_unresolved') }).strict(),
-    unavailableBaseSchema.extend({ availability: z.literal('lineage_unresolved') }).strict(),
-    unavailableBaseSchema.extend({ availability: z.literal('model_not_approved') }).strict(),
-    unavailableBaseSchema.extend({ availability: z.literal('calculating') }).strict(),
-    unavailableBaseSchema.extend({ availability: z.literal('withdrawn') }).strict(),
-    unavailableBaseSchema.extend({ availability: z.literal('unsupported_trade') }).strict(),
-  ])
+export const aflTradeValueUnavailableSchema = unavailableBaseSchema
+  .extend({ availability: z.enum(AFL_TRADE_VALUE_UNAVAILABLE_AVAILABILITY) })
+  .strict()
   .superRefine((value, context) => {
     const allowedNextActions: Record<
       typeof value.availability,
@@ -554,6 +557,8 @@ export type AflTradeValuationView = z.infer<typeof aflTradeValuationViewSchema>;
 export type AflTradeValueAvailability = z.infer<typeof aflTradeValueAvailabilitySchema>;
 export type AflTradeValueBearingAvailability =
   (typeof AFL_TRADE_VALUE_BEARING_AVAILABILITY)[number];
+export type AflTradeValueUnavailableAvailability =
+  (typeof AFL_TRADE_VALUE_UNAVAILABLE_AVAILABILITY)[number];
 export type AflTradeModelVintage = z.infer<typeof aflTradeModelVintageSchema>;
 export type AflTradeUncertainty = z.infer<typeof aflTradeUncertaintySchema>;
 export type AflTradeClubValue = z.infer<typeof aflTradeClubValueSchema>;
