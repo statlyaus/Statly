@@ -12,6 +12,7 @@ import {
   aflTradeGateDecisionRecordSchema,
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import {
+  AflTradePublicationStateError,
   applyAflTradePublicationCommand,
   createAflTradePublicationRegistry,
   getActiveAflTradePublication,
@@ -214,7 +215,7 @@ describe('AFL trade-intelligence publication lifecycle', () => {
       projectionId: createAflTradeContentAddress('projection', wrongContent),
       content: wrongContent,
     });
-    expect(() =>
+    try {
       applyAflTradePublicationCommand(registry, {
         action: 'validate',
         publicationId: manifest.publicationId,
@@ -222,11 +223,15 @@ describe('AFL trade-intelligence publication lifecycle', () => {
         actor: 'fixture-reviewer',
         evidenceId: `artifact:${hash('2')}`,
         projectionManifest: wrong,
-      })
-    ).toThrow();
+      });
+      throw new Error('Expected the mismatched projection to be rejected.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AflTradePublicationStateError);
+      expect((error as AflTradePublicationStateError).code).toBe('INVALID_MANIFEST');
+    }
   });
 
-  it('requires Gate 4 and Gate 5 before atomic activation', () => {
+  it('requires Gate 4 and Gate 5 before activation', () => {
     const { manifest, registry } = register();
     const build = projection(manifest);
     let next = applyAflTradePublicationCommand(registry, {

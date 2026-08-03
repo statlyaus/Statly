@@ -552,6 +552,17 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
         content,
       }).content.outcome.status
     ).toBe('failed');
+
+    const impersonatingContent = {
+      ...content,
+      outcome: { ...content.outcome, modelArtifact: artifact('a') },
+    };
+    expect(
+      aflTradeModelRunManifestSchema.safeParse({
+        runId: createAflTradeContentAddress('model-run', impersonatingContent),
+        content: impersonatingContent,
+      }).success
+    ).toBe(false);
   });
 
   it('rejects a forward projection reference from a publication manifest', () => {

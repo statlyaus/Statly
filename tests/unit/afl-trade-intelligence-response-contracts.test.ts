@@ -207,7 +207,7 @@ describe('AFL trade-intelligence response contracts', () => {
     ).toBe(false);
   });
 
-  it('enforces calculation, publication, knowledge, and serving chronology', () => {
+  it('serves after calculation/publication and calculates after the knowledge cutoff', () => {
     expect(
       aflTradeConsistencyEnvelopeSchema.safeParse({
         ...consistency(),

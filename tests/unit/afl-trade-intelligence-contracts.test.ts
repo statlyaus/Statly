@@ -193,6 +193,19 @@ const unavailableNextActions: Record<
 
 type UnavailableState = keyof typeof unavailableNextActions;
 
+const valueBearingFixtures: Record<
+  (typeof AFL_TRADE_VALUE_BEARING_AVAILABILITY)[number],
+  | ReturnType<typeof available>
+  | ReturnType<typeof partial>
+  | ReturnType<typeof stale>
+  | ReturnType<typeof failedPreviousAvailable>
+> = {
+  available: available(),
+  available_partial: partial(),
+  stale: stale(),
+  failed_previous_available: failedPreviousAvailable(),
+};
+
 function unavailable(availability: UnavailableState) {
   return {
     availability,
@@ -261,10 +274,16 @@ describe('AFL trade-intelligence availability contracts', () => {
           estimate: 0,
         }).success
       ).toBe(false);
+      expect(
+        aflTradeValueResultSchema.safeParse({
+          ...unavailable(availability),
+          unexpectedField: true,
+        }).success
+      ).toBe(false);
     }
   );
 
-  it.each([available(), partial(), stale(), failedPreviousAvailable()])(
+  it.each(Object.values(valueBearingFixtures))(
     'accepts the value-bearing $availability state',
     (value) => {
       expect(aflTradeValueResultSchema.parse(value).availability).toBe(value.availability);

@@ -131,17 +131,17 @@ function partialWithIncludedAssetsOnly() {
 }
 
 function partialWithAdjustment() {
+  const partial = partialWithIncludedAssetsOnly();
   return {
-    ...partialWithIncludedAssetsOnly(),
+    ...partial,
     comparison: {
-      ...numericCore().comparison,
+      ...partial.comparison,
       basis: 'model_adjusted_for_exclusions' as const,
-      excludedAssetIds: [excludedAssetId],
       adjustmentMethodCode: 'missing-asset-adjustment-v1',
       adjustmentExplanation:
         'The approved model estimates the omitted fabricated asset contribution.',
     },
-    assessment: { ...numericCore().assessment, scope: 'complete_trade' as const },
+    assessment: { ...partial.assessment, scope: 'complete_trade' as const },
   };
 }
 
@@ -199,6 +199,15 @@ describe('AFL trade-intelligence numerical contracts', () => {
       aflTradeValueResultSchema.safeParse({
         ...partialWithAdjustment(),
         comparison: withoutMethod,
+      }).success
+    ).toBe(false);
+
+    const { adjustmentExplanation: _explanation, ...withoutExplanation } =
+      partialWithAdjustment().comparison;
+    expect(
+      aflTradeValueResultSchema.safeParse({
+        ...partialWithAdjustment(),
+        comparison: withoutExplanation,
       }).success
     ).toBe(false);
   });
