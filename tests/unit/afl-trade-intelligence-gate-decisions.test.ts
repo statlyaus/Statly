@@ -5,7 +5,6 @@ import {
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
-  AflTradeGateDecisionAppendError,
   appendAflTradeGateDecision,
   resolveAflTradeGateEligibility,
   validateAflTradeGateDecisionLedger,
@@ -257,6 +256,62 @@ describe('AFL trade-intelligence gate decisions', () => {
     ).toContainEqual(expect.objectContaining({ code: 'environment_mismatch' }));
   });
 
+  it('preserves ordered ledger issues across duplicate and missing references', () => {
+    const firstProposal = proposal(1);
+    const firstDecision = decision(firstProposal);
+    const unregisteredProposal = proposal(2);
+    const unregisteredDecision = decision(unregisteredProposal);
+    const result = validateAflTradeGateDecisionLedger(
+      ledger(
+        [firstProposal, firstProposal],
+        [firstDecision, firstDecision, unregisteredDecision]
+      )
+    );
+    const proposalVersionKey = [
+      firstProposal.content.gate,
+      firstProposal.content.environment,
+      firstProposal.content.decisionKey,
+      firstProposal.content.version,
+    ].join('|');
+    const decisionVersionKey = [
+      firstDecision.content.gate,
+      firstDecision.content.environment,
+      firstDecision.content.decisionKey,
+      firstDecision.content.version,
+    ].join('|');
+
+    expect(result).toEqual({
+      valid: false,
+      issues: [
+        {
+          code: 'duplicate_proposal',
+          subjectId: firstProposal.proposalId,
+          message: `Proposal ${firstProposal.proposalId} is duplicated.`,
+        },
+        {
+          code: 'duplicate_decision',
+          subjectId: firstDecision.decisionId,
+          message: `Decision ${firstDecision.decisionId} is duplicated.`,
+        },
+        {
+          code: 'duplicate_version',
+          subjectId: proposalVersionKey,
+          message: `Proposal version ${proposalVersionKey} is duplicated.`,
+        },
+        {
+          code: 'duplicate_version',
+          subjectId: decisionVersionKey,
+          message: `Decision version ${decisionVersionKey} is duplicated.`,
+        },
+        {
+          code: 'missing_proposal',
+          subjectId: unregisteredDecision.decisionId,
+          message: `Decision ${unregisteredDecision.decisionId} references a missing proposal.`,
+        },
+      ],
+    });
+  });
+
   it('rejects fixture authority on a production decision record', () => {
     const proposed = proposal();
     const decided = decision(proposed);
@@ -381,15 +436,13 @@ describe('AFL trade-intelligence gate decisions', () => {
     ] as AflTradeGateDecisionRecord[]);
 
     expect(() => appendAflTradeGateDecision(invalidLedger, proposed, decided)).toThrowError(
-      expect.objectContaining<AflTradeGateDecisionAppendError>({ code: 'INVALID_LEDGER' })
+      expect.objectContaining({ code: 'INVALID_LEDGER' })
     );
 
     const decisionForAnotherProposal = decision(proposal(2));
     expect(() =>
       appendAflTradeGateDecision(ledger([], []), proposed, decisionForAnotherProposal)
-    ).toThrowError(
-      expect.objectContaining<AflTradeGateDecisionAppendError>({ code: 'INVALID_APPEND' })
-    );
+    ).toThrowError(expect.objectContaining({ code: 'INVALID_APPEND' }));
   });
 
   it('keeps a prior effective approval while a later proposal remains pending', () => {
