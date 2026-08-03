@@ -305,4 +305,64 @@ describe('AFL trade-intelligence authority transition ledger', () => {
       )
     ).toThrow(expect.objectContaining({ code: 'INVALID_TRANSITION' }));
   });
+
+  it('reports malformed ledger and event-chain failures in stable order', () => {
+    const activated = activate();
+    const malformedLedger = {
+      ...activated,
+      schemaVersion: 'invalid-ledger-version',
+      environment: 'production',
+      currentStateSnapshotId: 'invalid-snapshot',
+      revision: 3,
+      events: [null, activated.events[1]],
+    } as unknown as AflTradeAuthorityTransitionLedger;
+
+    expect(validateAflTradeAuthorityTransitionLedger(malformedLedger)).toEqual({
+      valid: false,
+      issues: [
+        {
+          code: 'invalid_ledger_header',
+          eventId: null,
+          message: 'The authority ledger header is invalid.',
+        },
+        {
+          code: 'trusted_evidence_verification_required',
+          eventId: null,
+          message:
+            'Non-fixture authority resolution requires a trusted evidence verifier that is not implemented.',
+        },
+        {
+          code: 'revision_mismatch',
+          eventId: null,
+          message: 'The registry revision must equal the append-only event count.',
+        },
+        {
+          code: 'invalid_event',
+          eventId: null,
+          message: 'Event at revision 1 is invalid.',
+        },
+        {
+          code: 'event_chain_mismatch',
+          eventId: activated.events[1].eventId,
+          message: 'The event does not extend the latest global ledger event.',
+        },
+        {
+          code: 'concern_chain_mismatch',
+          eventId: activated.events[1].eventId,
+          message: 'The event does not extend the latest event for its authority concern.',
+        },
+        {
+          code: 'environment_mismatch',
+          eventId: activated.events[1].eventId,
+          message: 'Authority event and ledger environments must match.',
+        },
+        {
+          code: 'transition_identity_mismatch',
+          eventId: activated.events[1].eventId,
+          message: 'The event must continue the active transition identity.',
+        },
+      ],
+      currentAuthorities: null,
+    });
+  });
 });

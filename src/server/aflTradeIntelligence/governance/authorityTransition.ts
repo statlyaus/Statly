@@ -256,9 +256,17 @@ function sameTransitionIdentity(
   );
 }
 
-export function validateAflTradeAuthorityTransitionLedger(
+interface TransitionValidationState {
+  currentAuthorities: Record<AflTradeAuthorityConcern, AflTradeResolvedAuthority>;
+  activeByConcern: Map<AflTradeAuthorityConcern, ActiveTransition>;
+  transitionConcernByKey: Map<string, AflTradeAuthorityConcern>;
+  lastEventByConcern: Map<AflTradeAuthorityConcern, string>;
+  previousEvent: AflTradeAuthorityTransitionEvent | null;
+}
+
+function collectLedgerHeaderIssues(
   ledger: AflTradeAuthorityTransitionLedger
-): AflTradeAuthorityTransitionValidation {
+): AflTradeAuthorityTransitionIssue[] {
   const issues: AflTradeAuthorityTransitionIssue[] = [];
   if (
     ledger.schemaVersion !== 'afl-trade-authority-transition-ledger/v1' ||
@@ -276,10 +284,276 @@ export function validateAflTradeAuthorityTransitionLedger(
       'Non-fixture authority resolution requires a trusted evidence verifier that is not implemented.'
     );
   }
-  const parsedInitialAuthorities = z
-    .array(initialAuthoritySchema)
-    .safeParse(ledger.initialAuthorities);
-  if (!parsedInitialAuthorities.success || !exactInitialAuthorities(ledger.initialAuthorities)) {
+  return issues;
+}
+
+function validInitialAuthorities(ledger: AflTradeAuthorityTransitionLedger): boolean {
+  return (
+    z.array(initialAuthoritySchema).safeParse(ledger.initialAuthorities).success &&
+    exactInitialAuthorities(ledger.initialAuthorities)
+  );
+}
+
+function createTransitionValidationState(
+  ledger: AflTradeAuthorityTransitionLedger
+): TransitionValidationState {
+  const currentAuthorities = Object.fromEntries(
+    ledger.initialAuthorities.map((entry) => [
+      entry.concern,
+      { ...entry, establishedByEventId: null },
+    ])
+  ) as Record<AflTradeAuthorityConcern, AflTradeResolvedAuthority>;
+  return {
+    currentAuthorities,
+    activeByConcern: new Map(),
+    transitionConcernByKey: new Map(),
+    lastEventByConcern: new Map(),
+    previousEvent: null,
+  };
+}
+
+function collectEventSequenceIssues(
+  ledger: AflTradeAuthorityTransitionLedger,
+  state: TransitionValidationState,
+  event: AflTradeAuthorityTransitionEvent,
+  index: number
+): AflTradeAuthorityTransitionIssue[] {
+  const issues: AflTradeAuthorityTransitionIssue[] = [];
+  const { content } = event;
+  if (content.registryRevision !== index + 1) {
+    addIssue(
+      issues,
+      'revision_mismatch',
+      event.eventId,
+      'Event revisions must be contiguous and one-based.'
+    );
+  }
+  const expectedPreviousEventId = state.previousEvent?.eventId ?? null;
+  if (content.previousEventId !== expectedPreviousEventId) {
+    addIssue(
+      issues,
+      'event_chain_mismatch',
+      event.eventId,
+      'The event does not extend the latest global ledger event.'
+    );
+  }
+  const expectedConcernEventId = state.lastEventByConcern.get(content.concern) ?? null;
+  if (content.previousConcernEventId !== expectedConcernEventId) {
+    addIssue(
+      issues,
+      'concern_chain_mismatch',
+      event.eventId,
+      'The event does not extend the latest event for its authority concern.'
+    );
+  }
+  if (
+    state.previousEvent !== null &&
+    Date.parse(content.occurredAt) < Date.parse(state.previousEvent.content.occurredAt)
+  ) {
+    addIssue(
+      issues,
+      'non_monotonic_event',
+      event.eventId,
+      'Authority events must be appended in chronological order.'
+    );
+  }
+  if (content.environment !== ledger.environment) {
+    addIssue(
+      issues,
+      'environment_mismatch',
+      event.eventId,
+      'Authority event and ledger environments must match.'
+    );
+  }
+  return issues;
+}
+
+function applyPreparedTransition(
+  state: TransitionValidationState,
+  event: AflTradeAuthorityTransitionEvent
+): AflTradeAuthorityTransitionIssue[] {
+  const issues: AflTradeAuthorityTransitionIssue[] = [];
+  const { content } = event;
+  const current = state.currentAuthorities[content.concern];
+  const active = state.activeByConcern.get(content.concern);
+  const existingTransitionConcern = state.transitionConcernByKey.get(content.transitionKey);
+  if (active) {
+    addIssue(
+      issues,
+      'active_transition_exists',
+      event.eventId,
+      'Only one transition may be active for an authority concern.'
+    );
+  }
+  if (existingTransitionConcern !== undefined) {
+    addIssue(
+      issues,
+      'duplicate_transition_key',
+      event.eventId,
+      `Transition key ${content.transitionKey} is already assigned to ${existingTransitionConcern}.`
+    );
+  }
+  if (current.authority !== content.fromAuthority) {
+    addIssue(
+      issues,
+      'authority_mismatch',
+      event.eventId,
+      'A transition must prepare from the current authority.'
+    );
+  }
+  if (!active && existingTransitionConcern === undefined && current.authority === content.fromAuthority) {
+    state.activeByConcern.set(content.concern, { state: 'prepared', event });
+    state.transitionConcernByKey.set(content.transitionKey, content.concern);
+  }
+  return issues;
+}
+
+function applyActivation(
+  state: TransitionValidationState,
+  event: AflTradeAuthorityTransitionEvent,
+  active: ActiveTransition
+): AflTradeAuthorityTransitionIssue[] {
+  const issues: AflTradeAuthorityTransitionIssue[] = [];
+  const { content } = event;
+  const current = state.currentAuthorities[content.concern];
+  if (active.state !== 'prepared') {
+    addIssue(
+      issues,
+      'transition_not_prepared',
+      event.eventId,
+      'Only a prepared transition can be activated.'
+    );
+  } else if (current.authority !== content.fromAuthority) {
+    addIssue(
+      issues,
+      'authority_mismatch',
+      event.eventId,
+      'Activation must replace the authority that was prepared.'
+    );
+  } else {
+    state.currentAuthorities[content.concern] = {
+      concern: content.concern,
+      authority: content.toAuthority,
+      authorityEpoch: current.authorityEpoch + 1,
+      establishedByEventId: event.eventId,
+    };
+    state.activeByConcern.set(content.concern, { state: 'activated', event });
+  }
+  return issues;
+}
+
+function applyRollback(
+  state: TransitionValidationState,
+  event: AflTradeAuthorityTransitionEvent,
+  active: ActiveTransition
+): AflTradeAuthorityTransitionIssue[] {
+  const issues: AflTradeAuthorityTransitionIssue[] = [];
+  const { content } = event;
+  const current = state.currentAuthorities[content.concern];
+  if (active.state !== 'activated') {
+    addIssue(
+      issues,
+      'transition_not_activated',
+      event.eventId,
+      'Only an activated transition can be rolled back.'
+    );
+  } else if (Date.parse(content.occurredAt) >= Date.parse(content.rollbackWindowEndsAt)) {
+    addIssue(
+      issues,
+      'rollback_window_closed',
+      event.eventId,
+      'Rollback must occur within the declared rollback window.'
+    );
+  } else if (current.authority !== content.toAuthority) {
+    addIssue(
+      issues,
+      'authority_mismatch',
+      event.eventId,
+      'Rollback requires the target to still be the current authority.'
+    );
+  } else {
+    state.currentAuthorities[content.concern] = {
+      concern: content.concern,
+      authority: content.fromAuthority,
+      authorityEpoch: current.authorityEpoch + 1,
+      establishedByEventId: event.eventId,
+    };
+    state.activeByConcern.delete(content.concern);
+  }
+  return issues;
+}
+
+function applyRetirement(
+  state: TransitionValidationState,
+  event: AflTradeAuthorityTransitionEvent,
+  active: ActiveTransition
+): AflTradeAuthorityTransitionIssue[] {
+  const issues: AflTradeAuthorityTransitionIssue[] = [];
+  const { content } = event;
+  if (active.state === 'activated') {
+    if (content.writeBarrier.state !== 'engaged') {
+      addIssue(
+        issues,
+        'write_barrier_mismatch',
+        event.eventId,
+        'Retiring an activated transition requires the engaged write barrier.'
+      );
+    } else if (Date.parse(content.occurredAt) < Date.parse(content.rollbackWindowEndsAt)) {
+      addIssue(
+        issues,
+        'retirement_before_rollback_window',
+        event.eventId,
+        'An activated transition cannot retire before its rollback window closes.'
+      );
+    } else {
+      state.activeByConcern.delete(content.concern);
+    }
+  } else if (content.writeBarrier.state !== 'planned') {
+    addIssue(
+      issues,
+      'write_barrier_mismatch',
+      event.eventId,
+      'Closing an unactivated preparation must not claim an engaged write barrier.'
+    );
+  } else {
+    state.activeByConcern.delete(content.concern);
+  }
+  return issues;
+}
+
+function applyTransitionEvent(
+  state: TransitionValidationState,
+  event: AflTradeAuthorityTransitionEvent
+): AflTradeAuthorityTransitionIssue[] {
+  const { content } = event;
+  if (content.state === 'prepared') return applyPreparedTransition(state, event);
+
+  const active = state.activeByConcern.get(content.concern);
+  if (!active || !sameTransitionIdentity(active.event, event)) {
+    return [
+      {
+        code: 'transition_identity_mismatch',
+        eventId: event.eventId,
+        message: 'The event must continue the active transition identity.',
+      },
+    ];
+  }
+  if (content.state === 'activated') return applyActivation(state, event, active);
+  if (content.state === 'rolled_back') return applyRollback(state, event, active);
+  return applyRetirement(state, event, active);
+}
+
+function malformedEventId(rawEvent: unknown): string | null {
+  return typeof rawEvent === 'object' && rawEvent !== null && 'eventId' in rawEvent
+    ? String(rawEvent.eventId)
+    : null;
+}
+
+export function validateAflTradeAuthorityTransitionLedger(
+  ledger: AflTradeAuthorityTransitionLedger
+): AflTradeAuthorityTransitionValidation {
+  const issues = collectLedgerHeaderIssues(ledger);
+  if (!validInitialAuthorities(ledger)) {
     addIssue(
       issues,
       'invalid_initial_authorities',
@@ -297,217 +571,29 @@ export function validateAflTradeAuthorityTransitionLedger(
     );
   }
 
-  const currentAuthorities = Object.fromEntries(
-    ledger.initialAuthorities.map((entry) => [
-      entry.concern,
-      { ...entry, establishedByEventId: null },
-    ])
-  ) as Record<AflTradeAuthorityConcern, AflTradeResolvedAuthority>;
-  const activeByConcern = new Map<AflTradeAuthorityConcern, ActiveTransition>();
-  const transitionConcernByKey = new Map<string, AflTradeAuthorityConcern>();
-  const lastEventByConcern = new Map<AflTradeAuthorityConcern, string>();
-  let previousEvent: AflTradeAuthorityTransitionEvent | null = null;
-
+  const state = createTransitionValidationState(ledger);
   for (const [index, rawEvent] of ledger.events.entries()) {
     const parsedEvent = aflTradeAuthorityTransitionEventSchema.safeParse(rawEvent);
     if (!parsedEvent.success) {
       addIssue(
         issues,
         'invalid_event',
-        typeof rawEvent === 'object' && rawEvent !== null && 'eventId' in rawEvent
-          ? String(rawEvent.eventId)
-          : null,
+        malformedEventId(rawEvent),
         `Event at revision ${index + 1} is invalid.`
       );
       continue;
     }
     const event = parsedEvent.data;
-    const content = event.content;
-    if (content.registryRevision !== index + 1) {
-      addIssue(
-        issues,
-        'revision_mismatch',
-        event.eventId,
-        'Event revisions must be contiguous and one-based.'
-      );
-    }
-    const expectedPreviousEventId = previousEvent?.eventId ?? null;
-    if (content.previousEventId !== expectedPreviousEventId) {
-      addIssue(
-        issues,
-        'event_chain_mismatch',
-        event.eventId,
-        'The event does not extend the latest global ledger event.'
-      );
-    }
-    const expectedConcernEventId = lastEventByConcern.get(content.concern) ?? null;
-    if (content.previousConcernEventId !== expectedConcernEventId) {
-      addIssue(
-        issues,
-        'concern_chain_mismatch',
-        event.eventId,
-        'The event does not extend the latest event for its authority concern.'
-      );
-    }
-    if (
-      previousEvent !== null &&
-      Date.parse(content.occurredAt) < Date.parse(previousEvent.content.occurredAt)
-    ) {
-      addIssue(
-        issues,
-        'non_monotonic_event',
-        event.eventId,
-        'Authority events must be appended in chronological order.'
-      );
-    }
-    if (content.environment !== ledger.environment) {
-      addIssue(
-        issues,
-        'environment_mismatch',
-        event.eventId,
-        'Authority event and ledger environments must match.'
-      );
-    }
-
-    const current = currentAuthorities[content.concern];
-    const active = activeByConcern.get(content.concern);
-    if (content.state === 'prepared') {
-      const existingTransitionConcern = transitionConcernByKey.get(content.transitionKey);
-      if (active) {
-        addIssue(
-          issues,
-          'active_transition_exists',
-          event.eventId,
-          'Only one transition may be active for an authority concern.'
-        );
-      }
-      if (existingTransitionConcern !== undefined) {
-        addIssue(
-          issues,
-          'duplicate_transition_key',
-          event.eventId,
-          `Transition key ${content.transitionKey} is already assigned to ${existingTransitionConcern}.`
-        );
-      }
-      if (current.authority !== content.fromAuthority) {
-        addIssue(
-          issues,
-          'authority_mismatch',
-          event.eventId,
-          'A transition must prepare from the current authority.'
-        );
-      }
-      if (
-        !active &&
-        existingTransitionConcern === undefined &&
-        current.authority === content.fromAuthority
-      ) {
-        activeByConcern.set(content.concern, { state: 'prepared', event });
-        transitionConcernByKey.set(content.transitionKey, content.concern);
-      }
-    } else {
-      if (!active || !sameTransitionIdentity(active.event, event)) {
-        addIssue(
-          issues,
-          'transition_identity_mismatch',
-          event.eventId,
-          'The event must continue the active transition identity.'
-        );
-      } else if (content.state === 'activated') {
-        if (active.state !== 'prepared') {
-          addIssue(
-            issues,
-            'transition_not_prepared',
-            event.eventId,
-            'Only a prepared transition can be activated.'
-          );
-        } else if (current.authority !== content.fromAuthority) {
-          addIssue(
-            issues,
-            'authority_mismatch',
-            event.eventId,
-            'Activation must replace the authority that was prepared.'
-          );
-        } else {
-          currentAuthorities[content.concern] = {
-            concern: content.concern,
-            authority: content.toAuthority,
-            authorityEpoch: current.authorityEpoch + 1,
-            establishedByEventId: event.eventId,
-          };
-          activeByConcern.set(content.concern, { state: 'activated', event });
-        }
-      } else if (content.state === 'rolled_back') {
-        if (active.state !== 'activated') {
-          addIssue(
-            issues,
-            'transition_not_activated',
-            event.eventId,
-            'Only an activated transition can be rolled back.'
-          );
-        } else if (Date.parse(content.occurredAt) >= Date.parse(content.rollbackWindowEndsAt)) {
-          addIssue(
-            issues,
-            'rollback_window_closed',
-            event.eventId,
-            'Rollback must occur within the declared rollback window.'
-          );
-        } else if (current.authority !== content.toAuthority) {
-          addIssue(
-            issues,
-            'authority_mismatch',
-            event.eventId,
-            'Rollback requires the target to still be the current authority.'
-          );
-        } else {
-          currentAuthorities[content.concern] = {
-            concern: content.concern,
-            authority: content.fromAuthority,
-            authorityEpoch: current.authorityEpoch + 1,
-            establishedByEventId: event.eventId,
-          };
-          activeByConcern.delete(content.concern);
-        }
-      } else if (active.state === 'activated') {
-        if (content.writeBarrier.state !== 'engaged') {
-          addIssue(
-            issues,
-            'write_barrier_mismatch',
-            event.eventId,
-            'Retiring an activated transition requires the engaged write barrier.'
-          );
-        } else if (Date.parse(content.occurredAt) < Date.parse(content.rollbackWindowEndsAt)) {
-          addIssue(
-            issues,
-            'retirement_before_rollback_window',
-            event.eventId,
-            'An activated transition cannot retire before its rollback window closes.'
-          );
-        } else {
-          activeByConcern.delete(content.concern);
-        }
-      } else {
-        if (content.writeBarrier.state !== 'planned') {
-          addIssue(
-            issues,
-            'write_barrier_mismatch',
-            event.eventId,
-            'Closing an unactivated preparation must not claim an engaged write barrier.'
-          );
-        } else {
-          activeByConcern.delete(content.concern);
-        }
-      }
-    }
-
-    previousEvent = event;
-    lastEventByConcern.set(content.concern, event.eventId);
+    issues.push(...collectEventSequenceIssues(ledger, state, event, index));
+    issues.push(...applyTransitionEvent(state, event));
+    state.previousEvent = event;
+    state.lastEventByConcern.set(event.content.concern, event.eventId);
   }
 
   return {
     valid: issues.length === 0,
     issues,
-    currentAuthorities: issues.length === 0 ? currentAuthorities : null,
+    currentAuthorities: issues.length === 0 ? state.currentAuthorities : null,
   };
 }
 
