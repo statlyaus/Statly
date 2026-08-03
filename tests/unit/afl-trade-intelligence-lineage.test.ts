@@ -440,4 +440,80 @@ describe('public AFL trade lineage temporal and structural invariants', () => {
       'non_value_bearing_credit',
     ]);
   });
+
+  it('preserves ordered attribution issues across identity, credit, and frontier rules', () => {
+    const fixture = buildAflTradeLineageFixture('future_pick_to_player');
+    const root = 'fixture:future-right-a';
+    const selection = 'fixture:draft-selection-12';
+    const frontier = 'fixture:player-kestrel';
+    const result = validateAflTradeAttribution(fixture.graph, {
+      rootAssetIds: [root, root, 'fixture:unknown-root'],
+      creditedAssetIds: [root, root, selection, 'fixture:unknown-credit'],
+      excludedAssetIds: [root, 'fixture:unknown-exclusion'],
+      effectiveAsOf: '2026-01-01T00:00:00.000Z',
+      knowledgeCutoffAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    expect(result).toEqual({
+      valid: false,
+      expectedFrontierAssetIds: [frontier],
+      issues: [
+        {
+          code: 'duplicate_root',
+          assetId: root,
+          message: `Root asset ${root} is duplicated.`,
+        },
+        {
+          code: 'duplicate_credit',
+          assetId: root,
+          message: `Credited asset ${root} is duplicated.`,
+        },
+        {
+          code: 'unknown_root',
+          assetId: 'fixture:unknown-root',
+          message: 'Root asset fixture:unknown-root does not exist.',
+        },
+        {
+          code: 'unknown_credit',
+          assetId: 'fixture:unknown-credit',
+          message: 'Credited asset fixture:unknown-credit does not exist.',
+        },
+        {
+          code: 'unknown_exclusion',
+          assetId: 'fixture:unknown-exclusion',
+          message: 'Excluded asset fixture:unknown-exclusion does not exist.',
+        },
+        {
+          code: 'asset_both_credited_and_excluded',
+          assetId: root,
+          message: `Asset ${root} cannot be both credited and excluded.`,
+        },
+        {
+          code: 'non_value_bearing_credit',
+          assetId: selection,
+          message: `Asset ${selection} is draft_selection and cannot carry numerical credit.`,
+        },
+        {
+          code: 'ancestor_double_counted',
+          assetId: root,
+          message: `Asset ${root} is credited with its successor ${selection}.`,
+        },
+        {
+          code: 'missing_frontier_asset',
+          assetId: frontier,
+          message: `Terminal frontier asset ${frontier} is neither credited nor explicitly excluded.`,
+        },
+        {
+          code: 'unexpected_frontier_asset',
+          assetId: root,
+          message: `Asset ${root} is not on the attribution frontier.`,
+        },
+        {
+          code: 'unexpected_frontier_asset',
+          assetId: selection,
+          message: `Asset ${selection} is not on the attribution frontier.`,
+        },
+      ],
+    });
+  });
 });

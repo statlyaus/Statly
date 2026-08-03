@@ -7,6 +7,7 @@ import {
 } from './lineageTemporal';
 import {
   isAflTradeValueBearingAssetType,
+  type AflTradeAsset,
   type AflTradeAssetCustodySpell,
   type AflTradeAssetDisposition,
   type AflTradeAttributionIssue,
@@ -87,16 +88,11 @@ function hasPath(
   );
 }
 
-export function validateAflTradeAttribution(
-  graph: AflTradeLineageGraph,
-  request: AflTradeAttributionRequest
-): AflTradeAttributionValidation {
+function collectAttributionDuplicateIssues(
+  request: AflTradeAttributionRequest,
+  excludedAssetIds: readonly string[]
+): AflTradeAttributionIssue[] {
   const issues: AflTradeAttributionIssue[] = [];
-  const assetById = new Map(graph.assets.map((asset) => [asset.assetId, asset]));
-  const excludedAssetIds = request.excludedAssetIds ?? [];
-  const effectiveAsOf = parseAflTradeTime(request.effectiveAsOf);
-  const knowledgeCutoff = parseAflTradeTime(request.knowledgeCutoffAt);
-
   const duplicateGroups: ReadonlyArray<{
     values: readonly string[];
     code: AflTradeAttributionIssueCode;
@@ -115,8 +111,17 @@ export function validateAflTradeAttribution(
       });
     }
   }
+  return issues;
+}
 
-  const visibleRootAssetIds = request.rootAssetIds.filter((assetId) => {
+function selectVisibleAttributionRoots(
+  request: AflTradeAttributionRequest,
+  assetById: ReadonlyMap<string, AflTradeAsset>,
+  effectiveAsOf: number | null,
+  knowledgeCutoff: number | null
+): { assetIds: string[]; issues: AflTradeAttributionIssue[] } {
+  const issues: AflTradeAttributionIssue[] = [];
+  const assetIds = request.rootAssetIds.filter((assetId) => {
     const asset = assetById.get(assetId);
     if (!asset) return false;
     const effectiveFrom = parseAflTradeTime(asset.effectiveFrom);
@@ -135,7 +140,15 @@ export function validateAflTradeAttribution(
     }
     return visible;
   });
+  return { assetIds, issues };
+}
 
+function collectAttributionIdentityIssues(
+  request: AflTradeAttributionRequest,
+  excludedAssetIds: readonly string[],
+  assetById: ReadonlyMap<string, AflTradeAsset>
+): AflTradeAttributionIssue[] {
+  const issues: AflTradeAttributionIssue[] = [];
   const identityGroups: ReadonlyArray<{
     values: readonly string[];
     code: AflTradeAttributionIssueCode;
@@ -156,9 +169,15 @@ export function validateAflTradeAttribution(
       }
     }
   }
+  return issues;
+}
 
-  const credited = new Set(request.creditedAssetIds.filter((assetId) => assetById.has(assetId)));
-  const excluded = new Set(excludedAssetIds.filter((assetId) => assetById.has(assetId)));
+function collectCreditEligibilityIssues(
+  credited: ReadonlySet<string>,
+  excluded: ReadonlySet<string>,
+  assetById: ReadonlyMap<string, AflTradeAsset>
+): AflTradeAttributionIssue[] {
+  const issues: AflTradeAttributionIssue[] = [];
   for (const assetId of credited) {
     if (excluded.has(assetId)) {
       issues.push({
@@ -176,9 +195,14 @@ export function validateAflTradeAttribution(
       });
     }
   }
+  return issues;
+}
 
-  const activeEdgesMap = activeAflTradeEdgesBySource(graph.edges, request);
-  const activeEdges = [...activeEdgesMap.values()].flat();
+function collectAncestorCreditIssues(
+  credited: ReadonlySet<string>,
+  activeEdgesMap: ReadonlyMap<string, readonly AflTradeLineageEdge[]>
+): AflTradeAttributionIssue[] {
+  const issues: AflTradeAttributionIssue[] = [];
   for (const ancestor of credited) {
     for (const descendant of credited) {
       if (ancestor !== descendant && hasPath(ancestor, descendant, activeEdgesMap)) {
@@ -190,13 +214,15 @@ export function validateAflTradeAttribution(
       }
     }
   }
+  return issues;
+}
 
-  const expectedFrontierAssetIds = buildAflTradeAttributionFrontier(
-    visibleRootAssetIds,
-    activeEdges,
-    request,
-    graph.dispositions
-  );
+function collectFrontierAccountingIssues(
+  expectedFrontierAssetIds: readonly string[],
+  credited: ReadonlySet<string>,
+  excluded: ReadonlySet<string>
+): AflTradeAttributionIssue[] {
+  const issues: AflTradeAttributionIssue[] = [];
   const expected = new Set(expectedFrontierAssetIds);
   const accounted = new Set([...credited, ...excluded]);
   for (const assetId of expected) {
@@ -217,6 +243,43 @@ export function validateAflTradeAttribution(
       });
     }
   }
+  return issues;
+}
+
+export function validateAflTradeAttribution(
+  graph: AflTradeLineageGraph,
+  request: AflTradeAttributionRequest
+): AflTradeAttributionValidation {
+  const issues: AflTradeAttributionIssue[] = [];
+  const assetById = new Map(graph.assets.map((asset) => [asset.assetId, asset]));
+  const excludedAssetIds = request.excludedAssetIds ?? [];
+  const effectiveAsOf = parseAflTradeTime(request.effectiveAsOf);
+  const knowledgeCutoff = parseAflTradeTime(request.knowledgeCutoffAt);
+  issues.push(...collectAttributionDuplicateIssues(request, excludedAssetIds));
+  const visibleRoots = selectVisibleAttributionRoots(
+    request,
+    assetById,
+    effectiveAsOf,
+    knowledgeCutoff
+  );
+  issues.push(...visibleRoots.issues);
+  issues.push(...collectAttributionIdentityIssues(request, excludedAssetIds, assetById));
+
+  const credited = new Set(request.creditedAssetIds.filter((assetId) => assetById.has(assetId)));
+  const excluded = new Set(excludedAssetIds.filter((assetId) => assetById.has(assetId)));
+  issues.push(...collectCreditEligibilityIssues(credited, excluded, assetById));
+
+  const activeEdgesMap = activeAflTradeEdgesBySource(graph.edges, request);
+  const activeEdges = [...activeEdgesMap.values()].flat();
+  issues.push(...collectAncestorCreditIssues(credited, activeEdgesMap));
+
+  const expectedFrontierAssetIds = buildAflTradeAttributionFrontier(
+    visibleRoots.assetIds,
+    activeEdges,
+    request,
+    graph.dispositions
+  );
+  issues.push(...collectFrontierAccountingIssues(expectedFrontierAssetIds, credited, excluded));
 
   return { valid: issues.length === 0, expectedFrontierAssetIds, issues };
 }
