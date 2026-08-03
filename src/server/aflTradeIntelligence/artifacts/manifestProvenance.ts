@@ -110,18 +110,68 @@ function decisionPins(
   );
 }
 
-function validateDecision(
-  input: AflTradeManifestProvenanceInput,
-  issues: AflTradeManifestProvenanceIssue[],
-  decisionId: string,
-  gate: AflTradeGateCode,
-  expectedArtifacts: readonly AflTradeGovernedArtifactRef[]
-) {
+function collectChronologyIssues(
+  entries: ReadonlyArray<{ id: string; time: string }>
+): AflTradeManifestProvenanceIssue[] {
+  const issues: AflTradeManifestProvenanceIssue[] = [];
+  for (let index = 1; index < entries.length; index += 1) {
+    if (Date.parse(entries[index].time) < Date.parse(entries[index - 1].time)) {
+      addIssue(
+        issues,
+        'chronology_invalid',
+        entries[index].id,
+        `${entries[index].id} predates ${entries[index - 1].id}.`
+      );
+    }
+  }
+  return issues;
+}
+
+function buildProvenanceLookupContext(input: AflTradeManifestProvenanceInput) {
+  return {
+    input,
+    rightsById: new Map(
+      input.sourceRights.map((rights) => [rights.rightsArtifactId, rights] as const)
+    ),
+    receiptsById: new Map(
+      input.gate0aReceipts.map((receipt) => [receipt.receiptId, receipt] as const)
+    ),
+    permittedFieldsByReceiptId: new Map(
+      input.gate0aReceipts.map((receipt) => [
+        receipt.receiptId,
+        new Set(receipt.content.request.fieldUses.map((fieldUse) => fieldUse.sourceField)),
+      ])
+    ),
+    authorizationById: new Map(
+      input.evidence.content.sourceAuthorizations.map((authorization) => [
+        authorization.authorizationId,
+        authorization,
+      ])
+    ),
+  };
+}
+
+type ProvenanceLookupContext = ReturnType<typeof buildProvenanceLookupContext>;
+
+interface DecisionRequirement {
+  decisionId: string;
+  gate: AflTradeGateCode;
+  expectedArtifacts: readonly AflTradeGovernedArtifactRef[];
+}
+
+function collectDecisionRequirementIssues(
+  context: ProvenanceLookupContext,
+  requirement: DecisionRequirement
+): AflTradeManifestProvenanceIssue[] {
+  const issues: AflTradeManifestProvenanceIssue[] = [];
+  const { input } = context;
+  const { decisionId, expectedArtifacts, gate } = requirement;
   const decision = input.ledger.decisions.find((candidate) => candidate.decisionId === decisionId);
   if (!decision || decision.content.gate !== gate) {
     addIssue(issues, 'decision_invalid', decisionId, `Required ${gate} decision is absent.`);
-    return;
+    return issues;
   }
+
   const resolution = resolveAflTradeGateEligibility(input.ledger, {
     gate,
     decisionKey: decision.content.decisionKey,
@@ -147,56 +197,16 @@ function validateDecision(
       `Decision ${decisionId} does not pin every required artifact.`
     );
   }
+  return issues;
 }
 
-function validateChronology(
-  issues: AflTradeManifestProvenanceIssue[],
-  entries: ReadonlyArray<{ id: string; time: string }>
-) {
-  for (let index = 1; index < entries.length; index += 1) {
-    if (Date.parse(entries[index].time) < Date.parse(entries[index - 1].time)) {
-      addIssue(
-        issues,
-        'chronology_invalid',
-        entries[index].id,
-        `${entries[index].id} predates ${entries[index - 1].id}.`
-      );
-    }
-  }
-}
-
-export function validateAflTradeManifestProvenance(input: AflTradeManifestProvenanceInput): {
-  valid: boolean;
-  issues: AflTradeManifestProvenanceIssue[];
-} {
+function collectSourceAuthorizationIssues(
+  context: ProvenanceLookupContext
+): AflTradeManifestProvenanceIssue[] {
   const issues: AflTradeManifestProvenanceIssue[] = [];
-  if (!validateAflTradeGateDecisionLedger(input.ledger).valid) {
-    addIssue(issues, 'invalid_ledger', 'ledger', 'The gate decision ledger is invalid.');
-    return { valid: false, issues };
-  }
-
-  const rightsById = new Map(
-    input.sourceRights.map((rights) => [rights.rightsArtifactId, rights] as const)
-  );
-  const receiptsById = new Map(
-    input.gate0aReceipts.map((receipt) => [receipt.receiptId, receipt] as const)
-  );
-  const permittedFieldsByReceiptId = new Map(
-    input.gate0aReceipts.map((receipt) => [
-      receipt.receiptId,
-      new Set(receipt.content.request.fieldUses.map((fieldUse) => fieldUse.sourceField)),
-    ])
-  );
-  const authorizationById = new Map(
-    input.evidence.content.sourceAuthorizations.map((authorization) => [
-      authorization.authorizationId,
-      authorization,
-    ])
-  );
-
-  for (const authorization of input.evidence.content.sourceAuthorizations) {
-    const rights = rightsById.get(authorization.rightsArtifactId);
-    const receipt = receiptsById.get(authorization.gate0aReceiptId);
+  for (const authorization of context.input.evidence.content.sourceAuthorizations) {
+    const rights = context.rightsById.get(authorization.rightsArtifactId);
+    const receipt = context.receiptsById.get(authorization.gate0aReceiptId);
     if (!rights || !receipt) {
       addIssue(
         issues,
@@ -219,20 +229,30 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
         'Source authorization does not match its rights artifact, receipt, and decision.'
       );
     }
-    validateDecision(
-      input,
-      issues,
-      authorization.gate0aDecisionId,
-      'gate_0a_permission_to_evaluate',
-      [{ kind: 'source_rights', artifactId: authorization.rightsArtifactId }]
+    issues.push(
+      ...collectDecisionRequirementIssues(context, {
+        decisionId: authorization.gate0aDecisionId,
+        gate: 'gate_0a_permission_to_evaluate',
+        expectedArtifacts: [
+          { kind: 'source_rights', artifactId: authorization.rightsArtifactId },
+        ],
+      })
     );
   }
+  return issues;
+}
 
-  for (const item of input.evidence.content.items) {
-    const authorization = authorizationById.get(item.content.authorizationId);
-    const receipt = authorization ? receiptsById.get(authorization.gate0aReceiptId) : undefined;
+function collectEvidenceAuthorizationIssues(
+  context: ProvenanceLookupContext
+): AflTradeManifestProvenanceIssue[] {
+  const issues: AflTradeManifestProvenanceIssue[] = [];
+  for (const item of context.input.evidence.content.items) {
+    const authorization = context.authorizationById.get(item.content.authorizationId);
+    const receipt = authorization
+      ? context.receiptsById.get(authorization.gate0aReceiptId)
+      : undefined;
     const permittedFields = receipt
-      ? (permittedFieldsByReceiptId.get(receipt.receiptId) ?? new Set<string>())
+      ? (context.permittedFieldsByReceiptId.get(receipt.receiptId) ?? new Set<string>())
       : new Set<string>();
     if (
       !receipt ||
@@ -257,7 +277,14 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
       }
     }
   }
+  return issues;
+}
 
+function collectGatePolicyIssues(
+  context: ProvenanceLookupContext
+): AflTradeManifestProvenanceIssue[] {
+  const { input } = context;
+  const issues: AflTradeManifestProvenanceIssue[] = [];
   const coverageValidation = validateAflTradeCoverageAgainstProtocol(
     input.dataSufficiencyProtocol,
     input.coverageReport
@@ -285,43 +312,50 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
       issue.message
     );
   }
-  validateDecision(
-    input,
-    issues,
-    input.corpus.content.gate0bDecisionId,
-    'gate_0b_data_sufficiency',
-    [
-      { kind: 'data_sufficiency_protocol', artifactId: input.dataSufficiencyProtocol.protocolId },
-      { kind: 'coverage_report', artifactId: input.coverageReport.reportId },
-    ]
-  );
-  validateDecision(
-    input,
-    issues,
-    input.corpus.content.gate1DecisionId,
-    'gate_1_architecture_authority',
-    [
-      {
-        kind: 'architecture_current_state',
-        artifactId: input.architectureCurrentState.snapshotId,
-      },
-      {
-        kind: 'architecture_decision_package',
-        artifactId: input.architectureDecisionPackage.packageId,
-      },
-    ]
-  );
-  validateDecision(input, issues, input.dataset.content.gate2DecisionId, 'gate_2_corpus_lineage', [
-    { kind: 'corpus_manifest', artifactId: input.corpus.corpusId },
-  ]);
-  validateDecision(
-    input,
-    issues,
-    input.publication.content.gate3DecisionId,
-    'gate_3_model_validity',
-    [{ kind: 'model_run', artifactId: input.modelRun.runId }]
-  );
+  const requirements: readonly DecisionRequirement[] = [
+    {
+      decisionId: input.corpus.content.gate0bDecisionId,
+      gate: 'gate_0b_data_sufficiency',
+      expectedArtifacts: [
+        { kind: 'data_sufficiency_protocol', artifactId: input.dataSufficiencyProtocol.protocolId },
+        { kind: 'coverage_report', artifactId: input.coverageReport.reportId },
+      ],
+    },
+    {
+      decisionId: input.corpus.content.gate1DecisionId,
+      gate: 'gate_1_architecture_authority',
+      expectedArtifacts: [
+        {
+          kind: 'architecture_current_state',
+          artifactId: input.architectureCurrentState.snapshotId,
+        },
+        {
+          kind: 'architecture_decision_package',
+          artifactId: input.architectureDecisionPackage.packageId,
+        },
+      ],
+    },
+    {
+      decisionId: input.dataset.content.gate2DecisionId,
+      gate: 'gate_2_corpus_lineage',
+      expectedArtifacts: [{ kind: 'corpus_manifest', artifactId: input.corpus.corpusId }],
+    },
+    {
+      decisionId: input.publication.content.gate3DecisionId,
+      gate: 'gate_3_model_validity',
+      expectedArtifacts: [{ kind: 'model_run', artifactId: input.modelRun.runId }],
+    },
+  ];
+  for (const requirement of requirements) {
+    issues.push(...collectDecisionRequirementIssues(context, requirement));
+  }
+  return issues;
+}
 
+function collectParentRelationshipIssues(
+  input: AflTradeManifestProvenanceInput
+): AflTradeManifestProvenanceIssue[] {
+  const issues: AflTradeManifestProvenanceIssue[] = [];
   const successfulOutcome =
     input.modelRun.content.outcome.status === 'succeeded' ? input.modelRun.content.outcome : null;
   const parentChecks: ReadonlyArray<[boolean, string, string]> = [
@@ -390,7 +424,13 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
   for (const [valid, subject, message] of parentChecks) {
     if (!valid) addIssue(issues, 'parent_mismatch', subject, message);
   }
+  return issues;
+}
 
+function collectSourceSetIssues(
+  input: AflTradeManifestProvenanceInput
+): AflTradeManifestProvenanceIssue[] {
+  const issues: AflTradeManifestProvenanceIssue[] = [];
   const evidenceSources = [
     ...new Set(
       input.evidence.content.sourceAuthorizations.map(
@@ -413,7 +453,13 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
       );
     }
   }
+  return issues;
+}
 
+function collectEnvironmentAndOutcomeIssues(
+  input: AflTradeManifestProvenanceInput
+): AflTradeManifestProvenanceIssue[] {
+  const issues: AflTradeManifestProvenanceIssue[] = [];
   const environments = [
     input.evidence.content.environment,
     input.dataSufficiencyProtocol.content.environment,
@@ -442,7 +488,13 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
       'A publication cannot descend from an unsuccessful model run.'
     );
   }
-  validateChronology(issues, [
+  return issues;
+}
+
+function collectManifestChronologyIssues(
+  input: AflTradeManifestProvenanceInput
+): AflTradeManifestProvenanceIssue[] {
+  const issues = collectChronologyIssues([
     { id: input.evidence.manifestId, time: input.evidence.content.createdAt },
     { id: input.coverageReport.reportId, time: input.coverageReport.content.createdAt },
     { id: input.corpus.corpusId, time: input.corpus.content.createdAt },
@@ -465,6 +517,35 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
       'Gate 1 snapshot and package must exist before corpus materialization.'
     );
   }
+  return issues;
+}
 
+export function validateAflTradeManifestProvenance(input: AflTradeManifestProvenanceInput): {
+  valid: boolean;
+  issues: AflTradeManifestProvenanceIssue[];
+} {
+  if (!validateAflTradeGateDecisionLedger(input.ledger).valid) {
+    return {
+      valid: false,
+      issues: [
+        {
+          code: 'invalid_ledger',
+          subject: 'ledger',
+          message: 'The gate decision ledger is invalid.',
+        },
+      ],
+    };
+  }
+
+  const context = buildProvenanceLookupContext(input);
+  const issues = [
+    ...collectSourceAuthorizationIssues(context),
+    ...collectEvidenceAuthorizationIssues(context),
+    ...collectGatePolicyIssues(context),
+    ...collectParentRelationshipIssues(input),
+    ...collectSourceSetIssues(input),
+    ...collectEnvironmentAndOutcomeIssues(input),
+    ...collectManifestChronologyIssues(input),
+  ];
   return { valid: issues.length === 0, issues };
 }

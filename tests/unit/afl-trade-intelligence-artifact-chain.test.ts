@@ -512,6 +512,40 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
     expect(validateAflTradeManifestProvenance(reordered)).toEqual({ valid: true, issues: [] });
   });
 
+  it('reports independent provenance failures in stable validation order', () => {
+    const input = validProvenanceInput();
+    input.dataset.content.corpusId = `corpus:${digest('d')}`;
+    input.publication.content.sourceRegisterIds = ['other-source'];
+    input.projection.content.environment = 'non_production';
+    input.projection.content.createdAt = '2026-08-05T12:00:00.000Z';
+
+    expect(validateAflTradeManifestProvenance(input)).toEqual({
+      valid: false,
+      issues: [
+        {
+          code: 'parent_mismatch',
+          subject: input.dataset.datasetId,
+          message: 'Dataset must reference the exact corpus.',
+        },
+        {
+          code: 'source_set_mismatch',
+          subject: input.publication.publicationId,
+          message: 'Artifact source set differs from evidence.',
+        },
+        {
+          code: 'environment_mismatch',
+          subject: input.environment,
+          message: 'Artifact environments must match.',
+        },
+        {
+          code: 'chronology_invalid',
+          subject: input.projection.projectionId,
+          message: `${input.projection.projectionId} predates ${input.publication.publicationId}.`,
+        },
+      ],
+    });
+  });
+
   it('requires the exact Gate 1 architecture decision in the corpus provenance chain', () => {
     const input = validProvenanceInput();
     const gate1DecisionId = input.corpus.content.gate1DecisionId;
