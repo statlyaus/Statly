@@ -22,6 +22,15 @@ const publicIdSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
 
+const unmeasurableReasonSchema = z.enum([
+  'source_field_unavailable',
+  'denominator_unavailable',
+  'identity_unresolved',
+  'lineage_unresolved',
+  'cohort_empty',
+  'evidence_invalid',
+]);
+
 const measuredObservationSchema = z
   .object({
     measureId: publicIdSchema,
@@ -37,14 +46,7 @@ const unmeasurableObservationSchema = z
     measureId: publicIdSchema,
     cohortId: publicIdSchema,
     status: z.literal('unmeasurable'),
-    reason: z.enum([
-      'source_field_unavailable',
-      'denominator_unavailable',
-      'identity_unresolved',
-      'lineage_unresolved',
-      'cohort_empty',
-      'evidence_invalid',
-    ]),
+    reason: unmeasurableReasonSchema,
     explanation: boundedTextSchema,
     supportingArtifacts: z.array(aflTradeArtifactRefSchema).max(50),
   })
@@ -67,7 +69,17 @@ export const aflTradeCoverageReportContentSchema = z
     createdAt: isoDateTimeSchema,
     observations: z.array(aflTradeCoverageObservationSchema).min(1).max(100_000),
     findings: z.array(boundedTextSchema).max(1000),
-    excludedCohorts: z.array(publicIdSchema).max(500),
+    unsupportedCohorts: z
+      .array(
+        z
+          .object({
+            cohortId: publicIdSchema,
+            reason: unmeasurableReasonSchema,
+            explanation: boundedTextSchema,
+          })
+          .strict()
+      )
+      .max(500),
   })
   .strict()
   .superRefine((report, context) => {
@@ -86,6 +98,14 @@ export const aflTradeCoverageReportContentSchema = z
         code: 'custom',
         path: ['observations'],
         message: 'Each measure and cohort pair must have exactly one observation.',
+      });
+    }
+    const unsupportedCohortIds = report.unsupportedCohorts.map((cohort) => cohort.cohortId);
+    if (new Set(unsupportedCohortIds).size !== unsupportedCohortIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['unsupportedCohorts'],
+        message: 'Unsupported cohorts must be unique.',
       });
     }
     if (Date.parse(report.measurementCompletedAt) < Date.parse(report.measurementStartedAt)) {
@@ -124,7 +144,10 @@ export type AflTradeCoverageProtocolIssueCode =
   | 'environment_mismatch'
   | 'protocol_not_preregistered'
   | 'observation_missing'
-  | 'observation_unknown';
+  | 'observation_unknown'
+  | 'unsupported_cohort_unknown'
+  | 'unsupported_cohort_has_measured_observation'
+  | 'unsupported_cohort_missing';
 
 export interface AflTradeCoverageProtocolIssue {
   code: AflTradeCoverageProtocolIssueCode;
@@ -256,6 +279,61 @@ function collectCoverageObservationIssues(
   return issues;
 }
 
+function collectUnsupportedCohortIssues(
+  expected: ReadonlyMap<string, CoverageRequirement>,
+  observations: ReadonlyMap<string, CoverageObservation>,
+  report: AflTradeCoverageReport
+): AflTradeCoverageProtocolIssue[] {
+  const issues: AflTradeCoverageProtocolIssue[] = [];
+  const expectedCohorts = new Set(
+    [...expected.values()].map((requirement) => requirement.cohortId)
+  );
+  const declaredUnsupported = new Set(
+    report.content.unsupportedCohorts.map((cohort) => cohort.cohortId)
+  );
+
+  for (const cohort of report.content.unsupportedCohorts) {
+    if (!expectedCohorts.has(cohort.cohortId)) {
+      issues.push({
+        code: 'unsupported_cohort_unknown',
+        subject: cohort.cohortId,
+        message: `Unsupported cohort ${cohort.cohortId} was not prespecified.`,
+      });
+      continue;
+    }
+    const cohortObservations = [...expected.values()]
+      .filter((requirement) => requirement.cohortId === cohort.cohortId)
+      .map((requirement) =>
+        observations.get(observationKey(requirement.measureId, requirement.cohortId))
+      );
+    if (cohortObservations.some((observation) => observation?.status === 'measured')) {
+      issues.push({
+        code: 'unsupported_cohort_has_measured_observation',
+        subject: cohort.cohortId,
+        message: `Unsupported cohort ${cohort.cohortId} cannot contain measured observations.`,
+      });
+    }
+  }
+
+  for (const cohortId of expectedCohorts) {
+    const cohortObservations = [...expected.values()]
+      .filter((requirement) => requirement.cohortId === cohortId)
+      .map((requirement) => observations.get(observationKey(requirement.measureId, cohortId)));
+    if (
+      cohortObservations.length > 0 &&
+      cohortObservations.every((observation) => observation?.status === 'unmeasurable') &&
+      !declaredUnsupported.has(cohortId)
+    ) {
+      issues.push({
+        code: 'unsupported_cohort_missing',
+        subject: cohortId,
+        message: `Wholly unmeasurable cohort ${cohortId} must be declared unsupported.`,
+      });
+    }
+  }
+  return issues;
+}
+
 function coverageOutcomeStatus(
   requirement: CoverageRequirement,
   observation: CoverageObservation | undefined
@@ -309,6 +387,7 @@ export function validateAflTradeCoverageAgainstProtocol(
   const expected = indexCoverageRequirements(protocol);
   const observations = indexCoverageObservations(report);
   issues.push(...collectCoverageObservationIssues(expected, observations));
+  issues.push(...collectUnsupportedCohortIssues(expected, observations, report));
   const outcomes = evaluateCoverageOutcomes(expected, observations);
 
   const valid = issues.length === 0;

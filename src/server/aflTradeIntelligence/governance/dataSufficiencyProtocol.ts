@@ -18,6 +18,12 @@ const publicIdSchema = z
 export const aflTradeNonNegativeIntegerStringSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
 export const aflTradePositiveIntegerStringSchema = z.string().regex(/^[1-9][0-9]*$/);
 
+export const AFL_TRADE_REQUIRED_EVIDENCE_LANES = [
+  'transactions_and_lineage',
+  'player_contribution_and_availability',
+  'point_in_time_current_state',
+] as const;
+
 export const aflTradeExactRatioSchema = z
   .object({
     numerator: aflTradeNonNegativeIntegerStringSchema,
@@ -62,7 +68,51 @@ const cohortSchema = z
       .min(1)
       .max(50),
   })
-  .strict();
+  .strict()
+  .superRefine((cohort, context) => {
+    const dimensionNames = cohort.dimensions.map((dimension) => dimension.name);
+    if (new Set(dimensionNames).size !== dimensionNames.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['dimensions'],
+        message: 'Cohort dimension names must be unique.',
+      });
+    }
+    cohort.dimensions.forEach((dimension, index) => {
+      if (new Set(dimension.values).size !== dimension.values.length) {
+        context.addIssue({
+          code: 'custom',
+          path: ['dimensions', index, 'values'],
+          message: 'Cohort dimension values must be unique.',
+        });
+      }
+    });
+  });
+
+const evidenceLaneSchema = z
+  .object({
+    lane: z.enum(AFL_TRADE_REQUIRED_EVIDENCE_LANES),
+    description: boundedTextSchema,
+    requiredFields: z.array(publicIdSchema).min(1).max(500),
+    cohortIds: z.array(publicIdSchema).min(1).max(500),
+  })
+  .strict()
+  .superRefine((lane, context) => {
+    if (new Set(lane.requiredFields).size !== lane.requiredFields.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['requiredFields'],
+        message: 'Evidence-lane fields must be unique.',
+      });
+    }
+    if (new Set(lane.cohortIds).size !== lane.cohortIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['cohortIds'],
+        message: 'Evidence-lane cohort references must be unique.',
+      });
+    }
+  });
 
 const measureSchema = z
   .object({
@@ -79,6 +129,7 @@ const measureSchema = z
     description: boundedTextSchema,
     numeratorDefinition: boundedTextSchema,
     denominatorDefinition: boundedTextSchema,
+    evidenceLanes: z.array(z.enum(AFL_TRADE_REQUIRED_EVIDENCE_LANES)).min(1),
     cohortIds: z.array(publicIdSchema).min(1).max(500),
     requiredForApproval: z.boolean(),
     minimumRatio: aflTradeExactRatioSchema.nullable(),
@@ -99,6 +150,13 @@ const measureSchema = z
         message: 'Measure cohort references must be unique.',
       });
     }
+    if (new Set(measure.evidenceLanes).size !== measure.evidenceLanes.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['evidenceLanes'],
+        message: 'Measure evidence-lane references must be unique.',
+      });
+    }
   });
 
 export const aflTradeDataSufficiencyProtocolContentSchema = z
@@ -110,6 +168,18 @@ export const aflTradeDataSufficiencyProtocolContentSchema = z
     evidenceManifestId: aflTradeContentAddressedIdSchema('evidence'),
     scope: aflTradeGateScopeSchema,
     estimand: boundedTextSchema,
+    evidenceLanes: z.array(evidenceLaneSchema).length(AFL_TRADE_REQUIRED_EVIDENCE_LANES.length),
+    identityAndQuarantinePolicy: z
+      .object({
+        automaticIdentityMerge: z.literal('prohibited'),
+        ambiguousIdentity: z.literal('quarantine'),
+        unresolvedIdentity: z.literal('quarantine'),
+        conflictingEvidence: z.literal('quarantine'),
+        quarantinedApprovalNumerator: z.literal('excluded'),
+        quarantinedEligibleDenominator: z.literal('included'),
+        manualResolutionRequiresEvidence: z.literal(true),
+      })
+      .strict(),
     cohorts: z.array(cohortSchema).min(1).max(500),
     measures: z.array(measureSchema).min(1).max(1000),
     nullZeroSemantics: z
@@ -145,6 +215,29 @@ export const aflTradeDataSufficiencyProtocolContentSchema = z
       context.addIssue({ code: 'custom', path: ['cohorts'], message: 'Cohorts must be unique.' });
     }
     const knownCohorts = new Set(cohortIds);
+    const evidenceLaneIds = protocol.evidenceLanes.map((lane) => lane.lane);
+    const knownEvidenceLanes = new Set(evidenceLaneIds);
+    const requiredEvidenceLanes = new Set(AFL_TRADE_REQUIRED_EVIDENCE_LANES);
+    if (
+      knownEvidenceLanes.size !== evidenceLaneIds.length ||
+      evidenceLaneIds.some((lane) => !requiredEvidenceLanes.has(lane)) ||
+      AFL_TRADE_REQUIRED_EVIDENCE_LANES.some((lane) => !knownEvidenceLanes.has(lane))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['evidenceLanes'],
+        message: 'Evidence lanes must cover the exact required set once each.',
+      });
+    }
+    protocol.evidenceLanes.forEach((lane, index) => {
+      if (lane.cohortIds.some((cohortId) => !knownCohorts.has(cohortId))) {
+        context.addIssue({
+          code: 'custom',
+          path: ['evidenceLanes', index, 'cohortIds'],
+          message: 'Every evidence-lane cohort must be declared by the protocol.',
+        });
+      }
+    });
     const measureIds = protocol.measures.map((measure) => measure.measureId);
     if (new Set(measureIds).size !== measureIds.length) {
       context.addIssue({ code: 'custom', path: ['measures'], message: 'Measures must be unique.' });
@@ -164,6 +257,23 @@ export const aflTradeDataSufficiencyProtocolContentSchema = z
           path: ['measures', index, 'cohortIds'],
           message: 'Every measure cohort must be declared by the protocol.',
         });
+      }
+    }
+    for (const [laneIndex, lane] of protocol.evidenceLanes.entries()) {
+      for (const cohortId of lane.cohortIds) {
+        const coveredForApproval = protocol.measures.some(
+          (measure) =>
+            measure.requiredForApproval &&
+            measure.evidenceLanes.includes(lane.lane) &&
+            measure.cohortIds.includes(cohortId)
+        );
+        if (!coveredForApproval) {
+          context.addIssue({
+            code: 'custom',
+            path: ['evidenceLanes', laneIndex, 'cohortIds'],
+            message: `Evidence lane ${lane.lane} cohort ${cohortId} requires an approval measure.`,
+          });
+        }
       }
     }
     const windows = [

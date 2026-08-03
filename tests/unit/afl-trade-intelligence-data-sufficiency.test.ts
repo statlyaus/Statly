@@ -40,6 +40,35 @@ function protocolContent() {
       exclusions: ['All production evidence'],
     },
     estimand: 'Whether fabricated evidence is structurally measurable for later research.',
+    evidenceLanes: [
+      {
+        lane: 'transactions_and_lineage' as const,
+        description: 'Fabricated transactions, assets, and lineage.',
+        requiredFields: ['trade_id', 'asset_id', 'effective_at'],
+        cohortIds: ['season-2024', 'season-2025'],
+      },
+      {
+        lane: 'player_contribution_and_availability' as const,
+        description: 'Fabricated appearances, exposure, contribution, and availability.',
+        requiredFields: ['player_id', 'appearance', 'exposure'],
+        cohortIds: ['season-2024', 'season-2025'],
+      },
+      {
+        lane: 'point_in_time_current_state' as const,
+        description: 'Fabricated club custody and point-in-time state.',
+        requiredFields: ['club_id', 'recorded_at', 'effective_at'],
+        cohortIds: ['season-2024', 'season-2025'],
+      },
+    ],
+    identityAndQuarantinePolicy: {
+      automaticIdentityMerge: 'prohibited' as const,
+      ambiguousIdentity: 'quarantine' as const,
+      unresolvedIdentity: 'quarantine' as const,
+      conflictingEvidence: 'quarantine' as const,
+      quarantinedApprovalNumerator: 'excluded' as const,
+      quarantinedEligibleDenominator: 'included' as const,
+      manualResolutionRequiresEvidence: true as const,
+    },
     cohorts: [
       {
         cohortId: 'season-2024',
@@ -59,6 +88,11 @@ function protocolContent() {
         description: 'Share of expected fabricated trades observed.',
         numeratorDefinition: 'Count of observed fabricated trade records.',
         denominatorDefinition: 'Count of expected fabricated trade records.',
+        evidenceLanes: [
+          'transactions_and_lineage' as const,
+          'player_contribution_and_availability' as const,
+          'point_in_time_current_state' as const,
+        ],
         cohortIds: ['season-2024', 'season-2025'],
         requiredForApproval: true,
         minimumRatio: { numerator: '95', denominator: '100' },
@@ -69,6 +103,7 @@ function protocolContent() {
         description: 'Observed presence of a fabricated optional field.',
         numeratorDefinition: 'Count with the field present.',
         denominatorDefinition: 'Count eligible for the field.',
+        evidenceLanes: ['player_contribution_and_availability' as const],
         cohortIds: ['season-2024'],
         requiredForApproval: false,
         minimumRatio: null,
@@ -136,7 +171,7 @@ function reportContent(sourceProtocol = protocol()) {
       },
     ],
     findings: ['One fabricated cohort is below its prespecified floor.'],
-    excludedCohorts: [],
+    unsupportedCohorts: [],
   };
 }
 
@@ -192,6 +227,22 @@ describe('AFL trade-intelligence data-sufficiency contracts', () => {
     ).toBe(false);
   });
 
+  it('requires every evidence lane and every lane cohort to have an approval measure', () => {
+    const missingLane = protocolContent();
+    missingLane.evidenceLanes = missingLane.evidenceLanes.slice(1);
+    const unevaluatedCohort = protocolContent();
+    unevaluatedCohort.measures[0].cohortIds = ['season-2024'];
+
+    for (const content of [missingLane, unevaluatedCohort]) {
+      expect(
+        aflTradeDataSufficiencyProtocolSchema.safeParse({
+          protocolId: createAflTradeContentAddress('data-sufficiency-protocol', content),
+          content,
+        }).success
+      ).toBe(false);
+    }
+  });
+
   it('requires one unambiguous null-and-zero declaration per field', () => {
     const content = protocolContent();
     content.nullZeroSemantics.push({ ...content.nullZeroSemantics[0] });
@@ -201,6 +252,30 @@ describe('AFL trade-intelligence data-sufficiency contracts', () => {
         content,
       }).success
     ).toBe(false);
+  });
+
+  it('rejects quarantine denominator laundering and duplicate cohort dimensions', () => {
+    const base = protocolContent();
+    const laundered = {
+      ...base,
+      identityAndQuarantinePolicy: {
+        ...base.identityAndQuarantinePolicy,
+        quarantinedEligibleDenominator: 'excluded',
+      },
+    };
+    const duplicateDimension = protocolContent();
+    duplicateDimension.cohorts[0].dimensions.push({
+      ...duplicateDimension.cohorts[0].dimensions[0],
+    });
+
+    for (const content of [laundered, duplicateDimension]) {
+      expect(
+        aflTradeDataSufficiencyProtocolSchema.safeParse({
+          protocolId: createAflTradeContentAddress('data-sufficiency-protocol', content),
+          content,
+        }).success
+      ).toBe(false);
+    }
   });
 
   it('rejects invalid exact ratios instead of rounding floating-point values', () => {
@@ -356,6 +431,93 @@ describe('AFL trade-intelligence data-sufficiency contracts', () => {
     expect(validation.outcomes[0].status).toBe('unmeasurable');
     expect(validation.valid).toBe(true);
     expect(validation.approvalEligible).toBe(false);
+  });
+
+  it('requires wholly unmeasurable cohorts to be declared unsupported', () => {
+    const sourceProtocol = protocol();
+    const content = reportContent(sourceProtocol);
+    content.observations = content.observations.map((observation) =>
+      observation.cohortId === 'season-2024'
+        ? ({
+            measureId: observation.measureId,
+            cohortId: observation.cohortId,
+            status: 'unmeasurable' as const,
+            reason: 'evidence_invalid' as const,
+            explanation: 'All fabricated evidence for the cohort is invalid.',
+            supportingArtifacts: [],
+          } as unknown as (typeof content.observations)[number])
+        : observation
+    );
+    const undeclaredReport = aflTradeCoverageReportSchema.parse({
+      reportId: createAflTradeContentAddress('coverage-report', content),
+      content,
+    });
+    expect(
+      validateAflTradeCoverageAgainstProtocol(sourceProtocol, undeclaredReport).issues
+    ).toContainEqual(expect.objectContaining({ code: 'unsupported_cohort_missing' }));
+
+    const declaredContent = {
+      ...content,
+      unsupportedCohorts: [
+        {
+          cohortId: 'season-2024',
+          reason: 'evidence_invalid' as const,
+          explanation: 'All fabricated evidence for the cohort is invalid.',
+        },
+      ],
+    };
+    const declaredReport = aflTradeCoverageReportSchema.parse({
+      reportId: createAflTradeContentAddress('coverage-report', declaredContent),
+      content: declaredContent,
+    });
+    expect(validateAflTradeCoverageAgainstProtocol(sourceProtocol, declaredReport)).toMatchObject({
+      valid: true,
+      approvalEligible: false,
+      issues: [],
+    });
+  });
+
+  it('rejects unknown or measured cohorts labelled unsupported', () => {
+    const sourceProtocol = protocol();
+    const base = reportContent(sourceProtocol);
+    const candidates = [
+      {
+        expectedCode: 'unsupported_cohort_unknown',
+        content: {
+          ...base,
+          unsupportedCohorts: [
+            {
+              cohortId: 'not-prespecified',
+              reason: 'cohort_empty' as const,
+              explanation: 'This cohort was not part of the protocol.',
+            },
+          ],
+        },
+      },
+      {
+        expectedCode: 'unsupported_cohort_has_measured_observation',
+        content: {
+          ...base,
+          unsupportedCohorts: [
+            {
+              cohortId: 'season-2025',
+              reason: 'evidence_invalid' as const,
+              explanation: 'This contradicts the measured observation.',
+            },
+          ],
+        },
+      },
+    ];
+
+    for (const candidate of candidates) {
+      const changedReport = aflTradeCoverageReportSchema.parse({
+        reportId: createAflTradeContentAddress('coverage-report', candidate.content),
+        content: candidate.content,
+      });
+      expect(
+        validateAflTradeCoverageAgainstProtocol(sourceProtocol, changedReport).issues
+      ).toContainEqual(expect.objectContaining({ code: candidate.expectedCode }));
+    }
   });
 
   it('returns structured issues for malformed artifacts instead of throwing', () => {

@@ -319,6 +319,35 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
     evidenceManifestId: evidenceId,
     scope: { scopeKey: 'fixture', description: 'Fixture scope.', dimensions: [], exclusions: [] },
     estimand: 'Fabricated measurability only.',
+    evidenceLanes: [
+      {
+        lane: 'transactions_and_lineage' as const,
+        description: 'Fabricated transaction lineage.',
+        requiredFields: ['trade_id', 'asset_id'],
+        cohortIds: ['fixture-cohort'],
+      },
+      {
+        lane: 'player_contribution_and_availability' as const,
+        description: 'Fabricated player contribution.',
+        requiredFields: ['player_id', 'appearance'],
+        cohortIds: ['fixture-cohort'],
+      },
+      {
+        lane: 'point_in_time_current_state' as const,
+        description: 'Fabricated point-in-time state.',
+        requiredFields: ['club_id', 'effective_at'],
+        cohortIds: ['fixture-cohort'],
+      },
+    ],
+    identityAndQuarantinePolicy: {
+      automaticIdentityMerge: 'prohibited' as const,
+      ambiguousIdentity: 'quarantine' as const,
+      unresolvedIdentity: 'quarantine' as const,
+      conflictingEvidence: 'quarantine' as const,
+      quarantinedApprovalNumerator: 'excluded' as const,
+      quarantinedEligibleDenominator: 'included' as const,
+      manualResolutionRequiresEvidence: true as const,
+    },
     cohorts: [
       {
         cohortId: 'fixture-cohort',
@@ -333,6 +362,11 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
         description: 'Fixture coverage.',
         numeratorDefinition: 'Observed fixtures.',
         denominatorDefinition: 'Expected fixtures.',
+        evidenceLanes: [
+          'transactions_and_lineage' as const,
+          'player_contribution_and_availability' as const,
+          'point_in_time_current_state' as const,
+        ],
         cohortIds: ['fixture-cohort'],
         requiredForApproval: true,
         minimumRatio: { numerator: '1', denominator: '1' },
@@ -377,7 +411,7 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
       },
     ],
     findings: [],
-    excludedCohorts: [],
+    unsupportedCohorts: [],
   };
   const reportId = createAflTradeContentAddress('coverage-report', reportContent);
   const corpusId = `corpus:${digest('4')}`;

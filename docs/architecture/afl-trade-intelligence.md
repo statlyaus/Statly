@@ -327,11 +327,20 @@ boundary.
 
 A content-addressed Gate 0B protocol must exist before measurement starts. It names every cohort,
 measure, numerator, denominator, exact rational acceptance floor, null-versus-zero rule, candidate
-window, embargo, and exclusion. The coverage report records one measured ratio or explicit
-unmeasurable reason for every prespecified measure/cohort pair. It cannot add post-hoc observations or
-hide a failing cohort behind an aggregate. Structural validity and approval eligibility are separate:
-every required observation must be present, measurable, and at or above its exact floor before Gate 0B
-can support downstream work.
+window, embargo, and exclusion. It must cover transactions and lineage, player contribution and
+availability, and point-in-time current state as three explicit evidence lanes. Every lane/cohort pair
+requires at least one approval measure; merely declaring a cohort or lane cannot satisfy the gate.
+
+Automatic identity merging is prohibited. Ambiguous, unresolved, or conflicting identities are
+quarantined, excluded from approval numerators, and retained in eligible denominators so missing or
+uncertain evidence cannot improve coverage. Manual resolution requires evidence.
+
+The coverage report records one measured ratio or explicit unmeasurable reason for every prespecified
+measure/cohort pair. A wholly unmeasurable cohort is reported as unsupported with a structured reason;
+it is not post-hoc excluded. The report cannot add unknown observations, label measured cohorts as
+unsupported, or hide a failing cohort behind an aggregate. Structural validity and approval
+eligibility are separate: every required observation must be present, measurable, and at or above its
+exact floor before Gate 0B can support downstream work.
 
 The Gate 0B decision pins the protocol and report. A later corpus manifest pins that decision plus the
 exact current-state snapshot, architecture decision package, and Gate 1 decision; Gate 0B and Gate 1
