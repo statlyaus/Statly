@@ -648,14 +648,19 @@ views, exact trade/view membership, projection metadata, timestamps, pagination,
 final v2 response schema. Export and publication-specific methodology must consume the same captured
 selection when their concrete adapters are implemented; no response may mix publication versions.
 
+`GET /api/draft-trades/valuations` accepts a bounded page of public trade IDs and one view.
+`GET /api/draft-trades/[tradeId]/valuation` first confirms the trade exists in the legacy public
+archive, then returns one to four requested views. Both are anonymous transport adapters over the same
+read service and currently expose only the verified prepublication state.
+
 When the selector reports no active publication, list and detail reads return the requested views as
 the current `source_blocked` state and do not call a projection repository. Once a publication is
 active, repository failure, revision drift, mismatched publication/projection/scope, missing trade or
 view members, and invalid chronology fail closed as typed serving errors; none may reuse the
-prepublication source blocker as a fallback. This contract does not persist a registry, implement a
-Firestore or PostgreSQL projection adapter, create route handlers, or assert that a numerical
-publication exists. Candidate, rejected, and partially built data therefore remain incapable of
-reaching an active public read through this code alone.
+prepublication source blocker as a fallback. The route composition does not persist a registry,
+implement a Firestore or PostgreSQL projection adapter, connect numerical responses to the public
+pages, or assert that a numerical publication exists. Candidate, rejected, and partially built data
+therefore remain incapable of reaching an active public read through this code alone.
 
 ## Migration and rollback
 
