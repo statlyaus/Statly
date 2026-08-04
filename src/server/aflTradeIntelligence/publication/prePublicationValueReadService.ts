@@ -26,4 +26,3 @@ export const aflTradePrePublicationValueReadService = createAflTradeValueReadSer
   },
   projectionRepository: unavailableProjectionRepository,
 });
-

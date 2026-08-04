@@ -74,4 +74,3 @@ export async function GET(
     return commonErrors.internalServerError('Failed to load AFL trade valuation detail');
   }
 }
-
