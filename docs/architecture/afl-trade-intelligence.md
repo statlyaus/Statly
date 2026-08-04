@@ -641,12 +641,21 @@ resolution does not approve Gate 4 or Gate 5, persist a registry, authorize oper
 construct a projection, or mutate a live active pointer. Those responsibilities begin only after their
 source, persistence, model, product, and serving gates pass.
 
-The eventual serving boundary captures one publication identifier and registry revision for each
-read. List, detail, export, and methodology responses must not mix publication versions. Cache and
-projection keys include the publication identifier and relevant query dimensions. Candidate,
-rejected, or partially built projection data is isolated from active public reads. Public availability
-uses the complete closed vocabulary in the public response contract above; availability outcomes are
-domain results, not generic server errors.
+The source-independent serving boundary now captures one publication, valuation bundle, projection,
+scope, and registry revision for each read. Its selector and projection-repository ports keep storage
+choices outside request orchestration. List and detail composition validates bounded inputs, supported
+views, exact trade/view membership, projection metadata, timestamps, pagination, value unit, and the
+final v2 response schema. Export and publication-specific methodology must consume the same captured
+selection when their concrete adapters are implemented; no response may mix publication versions.
+
+When the selector reports no active publication, list and detail reads return the requested views as
+the current `source_blocked` state and do not call a projection repository. Once a publication is
+active, repository failure, revision drift, mismatched publication/projection/scope, missing trade or
+view members, and invalid chronology fail closed as typed serving errors; none may reuse the
+prepublication source blocker as a fallback. This contract does not persist a registry, implement a
+Firestore or PostgreSQL projection adapter, create route handlers, or assert that a numerical
+publication exists. Candidate, rejected, and partially built data therefore remain incapable of
+reaching an active public read through this code alone.
 
 ## Migration and rollback
 

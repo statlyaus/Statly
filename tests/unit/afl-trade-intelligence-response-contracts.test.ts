@@ -314,6 +314,22 @@ describe('AFL trade-intelligence response contracts', () => {
         items: [...list.items, list.items[0]],
       }).success
     ).toBe(false);
+    expect(
+      aflTradeValueListResponseSchema.safeParse({
+        ...list,
+        page: { ...list.page, total: 0 },
+      }).success
+    ).toBe(false);
+    expect(
+      aflTradeValueListResponseSchema.safeParse({
+        ...list,
+        page: { ...list.page, limit: 1 },
+        items: [
+          ...list.items,
+          { ...list.items[0], tradeId: 'fixture-trade-2' },
+        ],
+      }).success
+    ).toBe(false);
   });
 
   it('requires unique detail views and reconciled lineage status', () => {

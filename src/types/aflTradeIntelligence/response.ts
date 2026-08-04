@@ -193,6 +193,20 @@ export const aflTradeValueListResponseSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.items.length > value.page.limit) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message: 'A list response cannot contain more items than its page limit.',
+      });
+    }
+    if (value.page.total !== null && value.page.total < value.items.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['page', 'total'],
+        message: 'A reported total cannot be smaller than the returned page.',
+      });
+    }
     addAflTradeUniqueArrayIssue(
       value.items.map((item) => item.tradeId),
       context,

@@ -1,6 +1,7 @@
 import {
   AFL_TRADE_METHODOLOGY_HREF,
   aflTradeValueUnavailableSchema,
+  type AflTradeValuationView,
   type AflTradeValueUnavailable,
 } from '@/types/aflTradeIntelligence';
 
@@ -10,10 +11,12 @@ import {
  * This is a temporary pre-publication boundary, not a fallback for a failed WP6 read service. Once
  * an approved publication can be selected, the owning read service must return its exact state.
  */
-export function createAflTradePrePublicationAvailability(): AflTradeValueUnavailable {
+export function createAflTradePrePublicationAvailability(
+  view: AflTradeValuationView = 'current'
+): AflTradeValueUnavailable {
   return aflTradeValueUnavailableSchema.parse({
     availability: 'source_blocked',
-    view: 'current',
+    view,
     modelVintage: null,
     temporalContext: null,
     reasonCode: 'valuation-source-use-not-approved',
