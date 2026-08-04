@@ -24,7 +24,7 @@ import {
 } from './coverageReport';
 import type { AflTradeDatasetManifest } from './datasetManifest';
 import type { AflTradeEvidenceManifest } from './evidenceManifest';
-import type { AflTradePlayerContributionModelProtocol } from './modelProtocol';
+import type { AflTradeModelProtocol } from './modelProtocol';
 import type { AflTradeModelRunManifest } from './modelRunManifest';
 import type {
   AflTradeProjectionManifest,
@@ -67,7 +67,7 @@ export interface AflTradeManifestProvenanceInput {
   architectureDecisionPackage: AflTradeArchitectureDecisionPackage;
   corpus: AflTradeCorpusManifest;
   dataset: AflTradeDatasetManifest;
-  modelProtocol: AflTradePlayerContributionModelProtocol;
+  modelProtocol: AflTradeModelProtocol;
   modelRun: AflTradeModelRunManifest;
   publication: AflTradePublicationManifest;
   projection: AflTradeProjectionManifest;

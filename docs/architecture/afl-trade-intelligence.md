@@ -544,6 +544,21 @@ only as known at the prediction cutoff. Unknown and observed zero remain distinc
 and post-outcome features are prohibited. Realized club contribution stops at real-club departure or
 the observation boundary, and active careers are right-censored under an immutable definition.
 
+Draft-pick and future-pick distributions use a separate content-addressed protocol aligned to the
+same player-contribution value unit. Its assets are source-native AFL draft entitlements with no
+fantasy ownership. The protocol models both a mutually exclusive and exhaustive mixture of hurdle,
+regular, and elite outcomes and the landing distribution of a future selection; incomplete active
+careers are right-censored rather than recorded as completed zero-value outcomes.
+
+Expected contribution across national-draft selection number uses a constrained monotonic curve and
+must retain predictive uncertainty rather than publishing a point estimate alone. Future-pick
+simulation uses selection-order rules as known at the valuation cutoff, an explicit time-delay
+definition, correlated ladder outcomes, a run-manifest seed, held-out temporal-season calibration,
+and declared scenario sensitivities. Its feature joins and corrections obey the same point-in-time,
+unknown-versus-zero, sealed-final-test, and chronological-window protections as the player protocol.
+Validation additionally covers monotonicity and behavior by era, draft round, draft pathway, player
+position, age at draft, and evidence quality.
+
 Validation uses chronological train, calibration, validation, and final-test windows with the declared
 embargo. Candidate selection uses train, calibration, and validation data only. The candidate is locked
 before a single final-test evaluation, and final-test retuning is prohibited. Random row splits cannot
@@ -560,10 +575,12 @@ Every successful run retains separate immutable evidence for:
 - missingness and unsupported cohorts; and
 - data, feature, code, configuration, seed, model, and environment identifiers.
 
-Gate 3 pins both the exact model protocol and its run. Cross-manifest validation requires the protocol
-and run to reference the same dataset, use identical windows, share an environment, and appear in
-chronological order. These contracts do not assert that a protocol has been approved, a run has
-succeeded on real data, or Gate 3 has production authority.
+Gate 3 pins both the exact model protocol and its run. This applies independently to each governed
+model boundary; a later package-valuation publication must compose the required validated components
+explicitly rather than conceal multiple models behind one run identifier. Cross-manifest validation
+requires each protocol and run to reference the same dataset, use identical windows, share an
+environment, and appear in chronological order. These contracts do not assert that a protocol has
+been approved, a run has succeeded on real data, or Gate 3 has production authority.
 
 Failure leaves the public archive available without numerical valuation. Product design must not turn
 a failed or missing model into hidden fallback numbers.
