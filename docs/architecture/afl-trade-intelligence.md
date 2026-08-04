@@ -575,24 +575,59 @@ Every successful run retains separate immutable evidence for:
 - missingness and unsupported cohorts; and
 - data, feature, code, configuration, seed, model, and environment identifiers.
 
-Gate 3 pins both the exact model protocol and its run. This applies independently to each governed
-model boundary; a later package-valuation publication must compose the required validated components
-explicitly rather than conceal multiple models behind one run identifier. Cross-manifest validation
-requires each protocol and run to reference the same dataset, use identical windows, share an
-environment, and appear in chronological order. These contracts do not assert that a protocol has
-been approved, a run has succeeded on real data, or Gate 3 has production authority.
+Package valuation composes the independently governed player and pick/future-pick components through
+a third content-addressed valuation-bundle manifest. The bundle contains public, source-native AFL
+assets only and carries no fantasy user, league, roster, or membership ownership. It fixes one common
+football-contribution unit and records the exact dataset, protocol, run, and Gate 3 decision for each
+component.
+
+The calculation unit is the complete multi-party trade. Joint simulation preserves shared factors and
+correlated outcomes rather than summing independent point estimates. Lineage-frontier attribution
+credits each asset exactly once, limits player contribution to the receiving real AFL club until
+departure, and follows an exercised pick into either its selected player or later return assets without
+double counting. Unresolved assets are excluded with explicit reasons and never receive fallback
+values. List-spot, scarcity, and role-congestion policies are immutable referenced artifacts; universal
+football value remains visible and club utility, contract value, and commercial value stay separate or
+explicitly unavailable.
+
+Each bundle contains at-trade, realized, remaining, and current temporal contexts. At-trade knowledge
+cannot follow the real trade, while the other three views share one current context and preserve the
+identity `current = realized club value + remaining asset value`. Simulation output includes mean,
+median, an 80% central interval, downside and upside quantiles, low-return and elite probabilities,
+club-ahead probabilities, and data/model confidence. Explanations come from structured reason codes
+and measured factors, distinguish facts, estimates, assumptions, unavailable information, and
+low-confidence output, and must pass numerical-parity evidence. Unconstrained generated numerical
+claims are prohibited. Legacy source values remain separate and cannot be relabelled as Statly value.
+
+The bundle records a clean source revision, configuration, runtime, seed, execution identity and
+chronology, immutable snapshots and simulation draws, attribution and replay reports, coverage and
+exclusion evidence, confidence and sensitivity reports, and bundle-level validation and model-card
+artifacts. These are contracts for reproducibility and review; they are not evidence that a real bundle
+has been calculated successfully.
+
+Gate 3 first pins each component's exact model protocol and run. A separate effective Gate 3 decision
+then pins the exact valuation bundle selected by a publication. Cross-manifest validation requires the
+provided dataset, protocol, and run inventories to match the bundle exactly; verifies every component's
+model kind, value unit, feature definitions, prespecified windows, successful outcome, environment,
+source set, cohort exclusions, and chronology; and binds the publication's scope, views, validation
+report, and model card to the bundle. A missing component, borrowed single-model report, ineffective
+component decision, or ineffective bundle decision fails closed. These contracts do not assert that a
+protocol or bundle has been approved, a run has succeeded on real data, or Gate 3 has production
+authority.
 
 Failure leaves the public archive available without numerical valuation. Product design must not turn
 a failed or missing model into hidden fallback numbers.
 
 ## Immutable publication
 
-Model runs are not public publications. Registration validates the actual content-addressed
-publication manifest. The source-independent state machine moves it through candidate, validated,
-approved, published, superseded, rejected, or withdrawn states. Validation requires the exact
-downstream projection manifest, approval requires an effective Gate 4 decision that pins both
-artifacts, and publication requires an effective Gate 5 decision with the same pins. Only a published
-publication may be selected by the active pointer for a declared product/model scope.
+Model runs and valuation bundles are not public publications. Publication manifest v2 references the
+exact valuation bundle rather than choosing one component dataset or model run as a proxy for the
+whole calculation. Registration validates the actual content-addressed publication manifest. The
+source-independent state machine moves it through candidate, validated, approved, published,
+superseded, rejected, or withdrawn states. Validation requires the exact downstream projection
+manifest, approval requires an effective Gate 4 decision that pins both artifacts, and publication
+requires an effective Gate 5 decision with the same pins. Only a published publication may be selected
+by the active pointer for a declared product/model scope.
 Publishing a replacement supersedes the prior active publication atomically. Withdrawing the active
 publication removes the active pointer. A superseded publication may become active again only through
 a fresh, current validation and gate-authorized activation; withdrawal never backdates or silently

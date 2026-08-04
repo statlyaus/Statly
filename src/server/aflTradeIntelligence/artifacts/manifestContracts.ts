@@ -13,3 +13,4 @@ export * from './manifestProvenance';
 export * from './modelProtocol';
 export * from './modelRunManifest';
 export * from './publicationProjectionManifests';
+export * from './valuationBundleManifest';

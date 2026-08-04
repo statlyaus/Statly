@@ -198,6 +198,7 @@ describe('AFL trade-intelligence gate decisions', () => {
   });
 
   it.each([
+    ['valuation_bundle', 'valuation-bundle'],
     ['architecture_current_state', 'architecture-current-state'],
     ['architecture_decision_package', 'architecture-decision-package'],
     ['authority_transition', 'authority-transition'],

@@ -31,12 +31,11 @@ const artifact = (value: string) => ({
 
 function publication() {
   const content = {
-    schemaVersion: 'afl-trade-publication/v1' as const,
+    schemaVersion: 'afl-trade-publication/v2' as const,
     environment: 'test_fixture' as const,
     scopeKey: 'fixture-current',
     createdAt: '2026-08-01T00:00:00.000Z',
-    datasetId: `dataset:${hash('1')}`,
-    modelRunId: `model-run:${hash('2')}`,
+    valuationBundleId: `valuation-bundle:${hash('1')}`,
     gate3DecisionId: `gate-decision:${hash('3')}`,
     sourceRegisterIds: ['fixture-source'],
     supportedViews: ['current' as const],

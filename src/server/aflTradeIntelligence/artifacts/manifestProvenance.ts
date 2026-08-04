@@ -30,6 +30,7 @@ import type {
   AflTradeProjectionManifest,
   AflTradePublicationManifest,
 } from './publicationProjectionManifests';
+import type { AflTradeValuationBundleManifest } from './valuationBundleManifest';
 
 export type AflTradeManifestProvenanceIssueCode =
   | 'invalid_ledger'
@@ -66,9 +67,10 @@ export interface AflTradeManifestProvenanceInput {
   architectureCurrentState: AflTradeArchitectureCurrentState;
   architectureDecisionPackage: AflTradeArchitectureDecisionPackage;
   corpus: AflTradeCorpusManifest;
-  dataset: AflTradeDatasetManifest;
-  modelProtocol: AflTradeModelProtocol;
-  modelRun: AflTradeModelRunManifest;
+  datasets: readonly AflTradeDatasetManifest[];
+  modelProtocols: readonly AflTradeModelProtocol[];
+  modelRuns: readonly AflTradeModelRunManifest[];
+  valuationBundle: AflTradeValuationBundleManifest;
   publication: AflTradePublicationManifest;
   projection: AflTradeProjectionManifest;
 }
@@ -151,10 +153,80 @@ function buildProvenanceLookupContext(input: AflTradeManifestProvenanceInput) {
         authorization,
       ])
     ),
+    datasetById: new Map(input.datasets.map((dataset) => [dataset.datasetId, dataset] as const)),
+    protocolById: new Map(
+      input.modelProtocols.map((protocol) => [protocol.protocolId, protocol] as const)
+    ),
+    runById: new Map(input.modelRuns.map((run) => [run.runId, run] as const)),
   };
 }
 
 type ProvenanceLookupContext = ReturnType<typeof buildProvenanceLookupContext>;
+
+function collectComponentInventoryIssues(
+  context: ProvenanceLookupContext
+): AflTradeManifestProvenanceIssue[] {
+  const { input } = context;
+  const issues: AflTradeManifestProvenanceIssue[] = [];
+  const expectedDatasetIds = [
+    ...new Set(input.valuationBundle.content.components.map((component) => component.datasetId)),
+  ];
+  const inventories: ReadonlyArray<{
+    label: string;
+    expected: readonly string[];
+    actual: readonly string[];
+  }> = [
+    {
+      label: 'dataset',
+      expected: expectedDatasetIds,
+      actual: input.datasets.map((dataset) => dataset.datasetId),
+    },
+    {
+      label: 'model protocol',
+      expected: input.valuationBundle.content.components.map((component) => component.protocolId),
+      actual: input.modelProtocols.map((protocol) => protocol.protocolId),
+    },
+    {
+      label: 'model run',
+      expected: input.valuationBundle.content.components.map((component) => component.runId),
+      actual: input.modelRuns.map((run) => run.runId),
+    },
+  ];
+  for (const inventory of inventories) {
+    if (!sameSet(inventory.expected, inventory.actual)) {
+      addIssue(
+        issues,
+        'artifact_missing',
+        input.valuationBundle.valuationBundleId,
+        `Valuation bundle ${inventory.label} inventory must match its exact component references.`
+      );
+    }
+  }
+
+  for (const component of input.valuationBundle.content.components) {
+    const dataset = context.datasetById.get(component.datasetId);
+    const protocol = context.protocolById.get(component.protocolId);
+    const run = context.runById.get(component.runId);
+    if (!dataset || !protocol || !run) {
+      addIssue(
+        issues,
+        'artifact_missing',
+        component.runId,
+        `Valuation component ${component.role} is missing its exact dataset, protocol, or run.`
+      );
+      continue;
+    }
+    if (protocol.content.modelKind !== component.modelKind) {
+      addIssue(
+        issues,
+        'parent_mismatch',
+        component.protocolId,
+        `Valuation component ${component.role} does not match its protocol model kind.`
+      );
+    }
+  }
+  return issues;
+}
 
 interface DecisionRequirement {
   decisionId: string;
@@ -315,7 +387,7 @@ function collectGatePolicyIssues(
       issue.message
     );
   }
-  const requirements: readonly DecisionRequirement[] = [
+  const requirements: DecisionRequirement[] = [
     {
       decisionId: input.corpus.content.gate0bDecisionId,
       gate: 'gate_0b_data_sufficiency',
@@ -338,20 +410,31 @@ function collectGatePolicyIssues(
         },
       ],
     },
-    {
-      decisionId: input.dataset.content.gate2DecisionId,
+  ];
+  for (const dataset of input.datasets) {
+    requirements.push({
+      decisionId: dataset.content.gate2DecisionId,
       gate: 'gate_2_corpus_lineage',
       expectedArtifacts: [{ kind: 'corpus_manifest', artifactId: input.corpus.corpusId }],
-    },
-    {
-      decisionId: input.publication.content.gate3DecisionId,
+    });
+  }
+  for (const component of input.valuationBundle.content.components) {
+    requirements.push({
+      decisionId: component.gate3DecisionId,
       gate: 'gate_3_model_validity',
       expectedArtifacts: [
-        { kind: 'model_protocol', artifactId: input.modelProtocol.protocolId },
-        { kind: 'model_run', artifactId: input.modelRun.runId },
+        { kind: 'model_protocol', artifactId: component.protocolId },
+        { kind: 'model_run', artifactId: component.runId },
       ],
-    },
-  ];
+    });
+  }
+  requirements.push({
+    decisionId: input.publication.content.gate3DecisionId,
+    gate: 'gate_3_model_validity',
+    expectedArtifacts: [
+      { kind: 'valuation_bundle', artifactId: input.valuationBundle.valuationBundleId },
+    ],
+  });
   for (const requirement of requirements) {
     issues.push(...collectDecisionRequirementIssues(context, requirement));
   }
@@ -359,11 +442,10 @@ function collectGatePolicyIssues(
 }
 
 function collectParentRelationshipIssues(
-  input: AflTradeManifestProvenanceInput
+  context: ProvenanceLookupContext
 ): AflTradeManifestProvenanceIssue[] {
+  const { input } = context;
   const issues: AflTradeManifestProvenanceIssue[] = [];
-  const successfulOutcome =
-    input.modelRun.content.outcome.status === 'succeeded' ? input.modelRun.content.outcome : null;
   const parentChecks: ReadonlyArray<[boolean, string, string]> = [
     [
       input.corpus.content.evidenceManifestId === input.evidence.manifestId,
@@ -385,53 +467,31 @@ function collectParentRelationshipIssues(
       'Corpus must reference the exact Gate 1 architecture snapshot and package.',
     ],
     [
-      input.dataset.content.corpusId === input.corpus.corpusId,
-      input.dataset.datasetId,
-      'Dataset must reference the exact corpus.',
+      input.publication.content.valuationBundleId === input.valuationBundle.valuationBundleId,
+      input.publication.publicationId,
+      'Publication must reference the exact valuation bundle.',
     ],
     [
-      input.modelRun.content.datasetId === input.dataset.datasetId,
-      input.modelRun.runId,
-      'Model run must reference the exact dataset.',
-    ],
-    [
-      input.modelProtocol.content.datasetId === input.dataset.datasetId &&
-        input.modelRun.content.modelProtocolId === input.modelProtocol.protocolId,
-      input.modelRun.runId,
-      'Model protocol and run must reference the exact dataset and each other.',
-    ],
-    [
-      canonicalizeAflTradeJson(input.modelRun.content.windows) ===
-        canonicalizeAflTradeJson(input.modelProtocol.content.windows),
-      input.modelRun.runId,
-      'Model run windows must exactly match the prespecified protocol.',
+      input.publication.content.scopeKey === input.valuationBundle.content.scopeKey &&
+        input.publication.content.valueUnitId === input.valuationBundle.content.valueUnitId &&
+        sameSet(
+          input.publication.content.supportedViews,
+          input.valuationBundle.content.viewContexts.map((viewContext) => viewContext.view)
+        ),
+      input.publication.publicationId,
+      'Publication scope, value unit, and views must match the valuation bundle.',
     ],
     [
       sameArtifactReferences(
-        input.dataset.content.featureDefinitionArtifacts,
-        input.modelRun.content.featureDefinitionArtifacts
-      ),
-      input.modelRun.runId,
-      'Model run feature definitions must exactly match its dataset.',
-    ],
-    [
-      input.publication.content.datasetId === input.dataset.datasetId &&
-        input.publication.content.modelRunId === input.modelRun.runId,
-      input.publication.publicationId,
-      'Publication must reference the exact dataset and model run.',
-    ],
-    [
-      successfulOutcome !== null &&
-        sameArtifactReferences(
-          input.publication.content.validationReportArtifact,
-          successfulOutcome.validationReportArtifact
-        ) &&
+        input.publication.content.validationReportArtifact,
+        input.valuationBundle.content.outputs.validationReportArtifact
+      ) &&
         sameArtifactReferences(
           input.publication.content.modelCardArtifact,
-          successfulOutcome.modelCardArtifact
+          input.valuationBundle.content.outputs.modelCardArtifact
         ),
       input.publication.publicationId,
-      'Publication validation report and model card must come from its successful model run.',
+      'Publication validation report and model card must come from its valuation bundle.',
     ],
     [
       input.projection.content.publicationId === input.publication.publicationId,
@@ -441,6 +501,55 @@ function collectParentRelationshipIssues(
   ];
   for (const [valid, subject, message] of parentChecks) {
     if (!valid) addIssue(issues, 'parent_mismatch', subject, message);
+  }
+
+  for (const dataset of input.datasets) {
+    if (dataset.content.corpusId !== input.corpus.corpusId) {
+      addIssue(
+        issues,
+        'parent_mismatch',
+        dataset.datasetId,
+        'Every component dataset must reference the exact corpus.'
+      );
+    }
+  }
+  for (const component of input.valuationBundle.content.components) {
+    const dataset = context.datasetById.get(component.datasetId);
+    const protocol = context.protocolById.get(component.protocolId);
+    const run = context.runById.get(component.runId);
+    if (!dataset || !protocol || !run) continue;
+
+    const protocolValueUnitId =
+      protocol.content.modelKind === 'player_contribution_and_availability'
+        ? protocol.content.valueUnit.valueUnitId
+        : protocol.content.valueAlignment.valueUnitId;
+    const componentChecks: ReadonlyArray<[boolean, string]> = [
+      [
+        protocol.content.datasetId === dataset.datasetId &&
+          run.content.datasetId === dataset.datasetId &&
+          run.content.modelProtocolId === protocol.protocolId,
+        'Component protocol and run must reference the exact dataset and each other.',
+      ],
+      [
+        canonicalizeAflTradeJson(run.content.windows) ===
+          canonicalizeAflTradeJson(protocol.content.windows),
+        'Component run windows must exactly match the prespecified protocol.',
+      ],
+      [
+        sameArtifactReferences(
+          dataset.content.featureDefinitionArtifacts,
+          run.content.featureDefinitionArtifacts
+        ),
+        'Component run feature definitions must exactly match its dataset.',
+      ],
+      [
+        protocolValueUnitId === input.valuationBundle.content.valueUnitId,
+        'Component value unit must match the valuation bundle.',
+      ],
+    ];
+    for (const [valid, message] of componentChecks) {
+      if (!valid) addIssue(issues, 'parent_mismatch', component.runId, message);
+    }
   }
   return issues;
 }
@@ -462,16 +571,18 @@ function collectCohortBoundaryIssues(
     );
   }
 
-  const includedCohorts = new Set(input.dataset.content.includedCohorts);
-  const excludedCohorts = new Set(input.dataset.content.excludedCohorts);
-  for (const cohortId of corpusUnsupportedCohorts) {
-    if (includedCohorts.has(cohortId) || !excludedCohorts.has(cohortId)) {
-      addIssue(
-        issues,
-        'cohort_mismatch',
-        `${input.dataset.datasetId}:${cohortId}`,
-        'A corpus-unsupported cohort must be explicitly excluded from the dataset.'
-      );
+  for (const dataset of input.datasets) {
+    const includedCohorts = new Set(dataset.content.includedCohorts);
+    const excludedCohorts = new Set(dataset.content.excludedCohorts);
+    for (const cohortId of corpusUnsupportedCohorts) {
+      if (includedCohorts.has(cohortId) || !excludedCohorts.has(cohortId)) {
+        addIssue(
+          issues,
+          'cohort_mismatch',
+          `${dataset.datasetId}:${cohortId}`,
+          'A corpus-unsupported cohort must be explicitly excluded from every component dataset.'
+        );
+      }
     }
   }
   return issues;
@@ -488,12 +599,15 @@ function collectSourceSetIssues(
       )
     ),
   ];
-  for (const [subject, sources] of [
+  const sourceSets: ReadonlyArray<readonly [string, readonly string[]]> = [
     [input.coverageReport.reportId, input.coverageReport.content.sourceRegisterIds],
     [input.corpus.corpusId, input.corpus.content.sourceRegisterIds],
-    [input.dataset.datasetId, input.dataset.content.sourceRegisterIds],
+    ...input.datasets.map(
+      (dataset) => [dataset.datasetId, dataset.content.sourceRegisterIds] as const
+    ),
     [input.publication.publicationId, input.publication.content.sourceRegisterIds],
-  ] as const) {
+  ];
+  for (const [subject, sources] of sourceSets) {
     if (!sameSet(evidenceSources, sources)) {
       addIssue(
         issues,
@@ -517,9 +631,10 @@ function collectEnvironmentAndOutcomeIssues(
     input.architectureCurrentState.content.environment,
     input.architectureDecisionPackage.content.environment,
     input.corpus.content.environment,
-    input.dataset.content.environment,
-    input.modelProtocol.content.environment,
-    input.modelRun.content.environment,
+    ...input.datasets.map((dataset) => dataset.content.environment),
+    ...input.modelProtocols.map((protocol) => protocol.content.environment),
+    ...input.modelRuns.map((run) => run.content.environment),
+    input.valuationBundle.content.environment,
     input.publication.content.environment,
     input.projection.content.environment,
   ];
@@ -531,13 +646,15 @@ function collectEnvironmentAndOutcomeIssues(
       'Artifact environments must match.'
     );
   }
-  if (input.modelRun.content.outcome.status !== 'succeeded') {
-    addIssue(
-      issues,
-      'unsuccessful_model_run',
-      input.modelRun.runId,
-      'A publication cannot descend from an unsuccessful model run.'
-    );
+  for (const run of input.modelRuns) {
+    if (run.content.outcome.status !== 'succeeded') {
+      addIssue(
+        issues,
+        'unsuccessful_model_run',
+        run.runId,
+        'A publication cannot descend from an unsuccessful component model run.'
+      );
+    }
   }
   return issues;
 }
@@ -545,17 +662,51 @@ function collectEnvironmentAndOutcomeIssues(
 function collectManifestChronologyIssues(
   input: AflTradeManifestProvenanceInput
 ): AflTradeManifestProvenanceIssue[] {
-  const issues = collectChronologyIssues([
+  const issues: AflTradeManifestProvenanceIssue[] = [];
+  const commonPrefix = [
     { id: input.evidence.manifestId, time: input.evidence.content.createdAt },
     { id: input.coverageReport.reportId, time: input.coverageReport.content.createdAt },
     { id: input.corpus.corpusId, time: input.corpus.content.createdAt },
-    { id: input.dataset.datasetId, time: input.dataset.content.createdAt },
-    { id: input.modelProtocol.protocolId, time: input.modelProtocol.content.preparedAt },
-    { id: input.modelRun.runId, time: input.modelRun.content.startedAt },
-    { id: `${input.modelRun.runId}:finished`, time: input.modelRun.content.finishedAt },
-    { id: input.publication.publicationId, time: input.publication.content.createdAt },
-    { id: input.projection.projectionId, time: input.projection.content.createdAt },
-  ]);
+  ];
+  for (const component of input.valuationBundle.content.components) {
+    const dataset = input.datasets.find((candidate) => candidate.datasetId === component.datasetId);
+    const protocol = input.modelProtocols.find(
+      (candidate) => candidate.protocolId === component.protocolId
+    );
+    const run = input.modelRuns.find((candidate) => candidate.runId === component.runId);
+    if (!dataset || !protocol || !run) continue;
+    issues.push(
+      ...collectChronologyIssues([
+        ...commonPrefix,
+        { id: dataset.datasetId, time: dataset.content.createdAt },
+        { id: protocol.protocolId, time: protocol.content.preparedAt },
+        { id: run.runId, time: run.content.startedAt },
+        { id: `${run.runId}:finished`, time: run.content.finishedAt },
+        {
+          id: `${input.valuationBundle.valuationBundleId}:started`,
+          time: input.valuationBundle.content.execution.startedAt,
+        },
+      ])
+    );
+  }
+  issues.push(
+    ...collectChronologyIssues([
+      {
+        id: `${input.valuationBundle.valuationBundleId}:started`,
+        time: input.valuationBundle.content.execution.startedAt,
+      },
+      {
+        id: `${input.valuationBundle.valuationBundleId}:finished`,
+        time: input.valuationBundle.content.execution.finishedAt,
+      },
+      {
+        id: input.valuationBundle.valuationBundleId,
+        time: input.valuationBundle.content.createdAt,
+      },
+      { id: input.publication.publicationId, time: input.publication.content.createdAt },
+      { id: input.projection.projectionId, time: input.projection.content.createdAt },
+    ])
+  );
   if (
     Date.parse(input.architectureCurrentState.content.capturedAt) >
       Date.parse(input.architectureDecisionPackage.content.preparedAt) ||
@@ -591,10 +742,11 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
 
   const context = buildProvenanceLookupContext(input);
   const issues = [
+    ...collectComponentInventoryIssues(context),
     ...collectSourceAuthorizationIssues(context),
     ...collectEvidenceAuthorizationIssues(context),
     ...collectGatePolicyIssues(context),
-    ...collectParentRelationshipIssues(input),
+    ...collectParentRelationshipIssues(context),
     ...collectCohortBoundaryIssues(input),
     ...collectSourceSetIssues(input),
     ...collectEnvironmentAndOutcomeIssues(input),

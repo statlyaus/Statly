@@ -16,12 +16,11 @@ const publicIdSchema = z
 
 export const aflTradePublicationManifestContentSchema = z
   .object({
-    schemaVersion: z.literal('afl-trade-publication/v1'),
+    schemaVersion: z.literal('afl-trade-publication/v2'),
     environment: z.enum(AFL_TRADE_DECISION_ENVIRONMENTS),
     scopeKey: publicIdSchema,
     createdAt: isoDateTimeSchema,
-    datasetId: aflTradeContentAddressedIdSchema('dataset'),
-    modelRunId: aflTradeContentAddressedIdSchema('model-run'),
+    valuationBundleId: aflTradeContentAddressedIdSchema('valuation-bundle'),
     gate3DecisionId: aflTradeContentAddressedIdSchema('gate-decision'),
     sourceRegisterIds: z.array(publicIdSchema).min(1).max(50),
     supportedViews: z.array(z.enum(AFL_TRADE_VALUATION_VIEWS)).min(1),

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   aflTradeModelRunManifestSchema,
+  aflTradePickDistributionModelProtocolSchema,
   aflTradePlayerContributionModelProtocolSchema,
   aflTradeProjectionManifestSchema,
   aflTradePublicationManifestSchema,
+  aflTradeValuationBundleManifestSchema,
   validateAflTradeManifestProvenance,
   type AflTradeManifestProvenanceInput,
 } from '@/server/aflTradeIntelligence/artifacts/manifestContracts';
@@ -182,25 +184,271 @@ function modelRun(content = runContent()) {
   });
 }
 
-function publicationContent(run = modelRun()) {
+function pickModelProtocolContent() {
   return {
-    schemaVersion: 'afl-trade-publication/v1' as const,
+    schemaVersion: 'afl-trade-model-protocol/v1' as const,
+    environment: 'test_fixture' as const,
+    protocolKey: 'fixture-pick-distribution',
+    version: 1,
+    modelKind: 'draft_pick_and_future_pick_distribution' as const,
+    datasetId: `dataset:${digest('d')}`,
+    preparedAt: '2026-08-04T13:00:00.000Z',
+    preparedBy: 'fixture-model-owner',
+    proposalOrigin: 'agent_assisted' as const,
+    publicAssetBoundary: 'source_native_afl_draft_entitlement_no_fantasy_ownership' as const,
+    estimands: [
+      'draft_pick_outcome_distribution' as const,
+      'future_pick_landing_distribution' as const,
+    ],
+    valueAlignment: {
+      valueUnitId: 'fixture-contribution',
+      playerContributionAlignmentArtifact: artifact('d'),
+      aggregation: 'expected_additive_contribution' as const,
+    },
+    outcomeMixture: {
+      hurdleOutcomeDefinitionArtifact: artifact('1'),
+      regularOutcomeDefinitionArtifact: artifact('2'),
+      eliteOutcomeDefinitionArtifact: artifact('3'),
+      probabilityMass: 'mutually_exclusive_and_exhaustive' as const,
+      activeCareerTreatment: 'right_censored' as const,
+    },
+    pickCurve: {
+      domain: 'national_draft_selection_number' as const,
+      smoother: 'constrained_monotonic' as const,
+      expectedContributionDirection: 'non_increasing_with_pick_number' as const,
+      monotonicViolations: 'prohibited' as const,
+      uncertaintyTreatment: 'preserved_not_point_estimate_only' as const,
+      extrapolationDefinitionArtifact: artifact('4'),
+    },
+    cohortPolicy: {
+      eraDefinitionArtifact: artifact('5'),
+      draftPathwayDefinitionArtifact: artifact('6'),
+      incompleteCareerTreatmentArtifact: artifact('7'),
+      delistedAndInactiveDefinitionArtifact: artifact('8'),
+    },
+    futurePickSimulation: {
+      landingPositionModelArtifact: artifact('9'),
+      selectionOrderRulesArtifact: artifact('a'),
+      ruleVintage: 'as_known_at_valuation_cutoff' as const,
+      timeDelayDefinitionArtifact: artifact('b'),
+      correlatedLadderOutcomeArtifact: artifact('c'),
+      simulationDraws: 10_000,
+      randomSeedPolicy: 'model_run_manifest_seed' as const,
+      landingCalibration: 'held_out_temporal_seasons' as const,
+      scenarioSensitivityArtifacts: [artifact('d')],
+    },
+    featurePolicy: {
+      knowledgeJoin: 'point_in_time_as_known_at_valuation_cutoff' as const,
+      correctionAvailability: 'only_after_known_from' as const,
+      unknownAndZero: 'distinct' as const,
+      postOutcomeFeatures: 'prohibited' as const,
+      featureAvailabilityArtifact: artifact('e'),
+    },
+    windows: modelWindows(),
+    modelSelectionPolicy: {
+      candidateSelectionData: 'train_calibration_validation_only' as const,
+      finalTestUse: 'single_evaluation_after_candidate_lock' as const,
+      finalTestRetuning: 'prohibited' as const,
+    },
+    validationPlan: {
+      baselineDefinitionArtifacts: [artifact('f')],
+      metricDefinitionArtifacts: [artifact('0')],
+      probabilityCalibrationArtifact: artifact('1'),
+      intervalCoverageArtifact: artifact('2'),
+      monotonicityAuditArtifact: artifact('3'),
+      subgroupDimensions: [
+        'era' as const,
+        'draft_round' as const,
+        'draft_pathway' as const,
+        'player_position' as const,
+        'age_at_draft' as const,
+        'evidence_quality' as const,
+      ],
+      sensitivityAnalysisArtifacts: [artifact('4')],
+      acceptanceCriteriaArtifact: artifact('5'),
+    },
+    limitations: ['Fabricated pick protocol with no production authority.'],
+  };
+}
+
+function pickModelProtocol(content = pickModelProtocolContent()) {
+  return aflTradePickDistributionModelProtocolSchema.parse({
+    protocolId: createAflTradeContentAddress('model-protocol', content),
+    content,
+  });
+}
+
+function pickRunContent(protocol = pickModelProtocol()) {
+  const playerContent = runContent();
+  return {
+    ...playerContent,
+    modelId: 'fixture-pick-model',
+    datasetId: protocol.content.datasetId,
+    modelProtocolId: protocol.protocolId,
+    job: { ...playerContent.job, jobId: 'fixture-pick-job' },
+  };
+}
+
+function pickModelRun(content = pickRunContent()) {
+  return aflTradeModelRunManifestSchema.parse({
+    runId: createAflTradeContentAddress('model-run', content),
+    content,
+  });
+}
+
+function valuationBundleContent(
+  playerProtocol = modelProtocol(),
+  playerRun = modelRun(runContent(playerProtocol)),
+  pickProtocol = pickModelProtocol(),
+  pickRun = pickModelRun(pickRunContent(pickProtocol))
+) {
+  return {
+    schemaVersion: 'afl-trade-valuation-bundle/v1' as const,
     environment: 'test_fixture' as const,
     scopeKey: 'fixture-current-outcome',
+    valueUnitId: 'fixture-contribution',
+    createdAt: '2026-08-05T04:00:00.000Z',
+    components: [
+      {
+        role: 'player_contribution_and_availability' as const,
+        modelKind: 'player_contribution_and_availability' as const,
+        protocolId: playerProtocol.protocolId,
+        runId: playerRun.runId,
+        datasetId: playerProtocol.content.datasetId,
+        gate3DecisionId: `gate-decision:${digest('a')}`,
+      },
+      {
+        role: 'draft_pick_and_future_pick_distribution' as const,
+        modelKind: 'draft_pick_and_future_pick_distribution' as const,
+        protocolId: pickProtocol.protocolId,
+        runId: pickRun.runId,
+        datasetId: pickProtocol.content.datasetId,
+        gate3DecisionId: `gate-decision:${digest('b')}`,
+      },
+    ],
+    viewContexts: [
+      {
+        view: 'at_trade' as const,
+        modelVintage: 'historical_restatement' as const,
+        effectiveAt: '2020-11-12T00:00:00.000Z',
+        knowledgeCutoffAt: '2020-11-11T23:59:59.000Z',
+        valuationAsOf: '2020-11-12T00:00:00.000Z',
+      },
+      ...(['realized', 'remaining', 'current'] as const).map((view) => ({
+        view,
+        modelVintage: 'current' as const,
+        effectiveAt: '2025-12-31T00:00:00.000Z',
+        knowledgeCutoffAt: '2025-12-31T23:59:59.000Z',
+        valuationAsOf: '2026-01-01T00:00:00.000Z',
+      })),
+    ],
+    publicAssetBoundary: 'source_native_afl_assets_no_fantasy_ownership' as const,
+    packagePolicy: {
+      calculationUnit: 'complete_multi_party_trade' as const,
+      attribution: 'lineage_frontier_exactly_once' as const,
+      playerContributionCredit: 'receiving_club_only_until_real_club_departure' as const,
+      exercisedPickCredit: 'selected_player_or_return_assets_without_double_counting' as const,
+      unresolvedAssetTreatment: 'exclude_with_explicit_reason_no_fallback_value' as const,
+      aggregation: 'joint_simulation_not_independent_point_sum' as const,
+      sharedFactorTreatment: 'preserve_correlated_outcomes' as const,
+      currentOutcomeIdentity: 'realized_club_value_plus_remaining_asset_value' as const,
+      universalFootballValue: 'always_visible' as const,
+      clubUtilityTreatment: 'separate_optional_view' as const,
+      contractValueTreatment: 'separate_or_explicitly_unavailable' as const,
+      commercialValueTreatment: 'separate_or_explicitly_unavailable' as const,
+      listSpotPolicyArtifact: artifact('1'),
+      scarcityPolicyArtifact: artifact('2'),
+      roleCongestionPolicyArtifact: artifact('3'),
+    },
+    simulation: {
+      draws: 10_000,
+      seed: 42,
+      centralIntervalLevel: 0.8 as const,
+      downsideQuantile: 0.1 as const,
+      upsideQuantile: 0.9 as const,
+      lowReturnDefinitionArtifact: artifact('4'),
+      eliteOutcomeDefinitionArtifact: artifact('5'),
+      practicalEquivalenceDefinitionArtifact: artifact('6'),
+      requiredStatistics: [
+        'mean' as const,
+        'median' as const,
+        'central_interval' as const,
+        'downside_quantile' as const,
+        'upside_quantile' as const,
+        'low_return_probability' as const,
+        'elite_outcome_probability' as const,
+        'club_finishes_ahead_probability' as const,
+        'data_and_model_confidence' as const,
+      ],
+    },
+    explanationPolicy: {
+      sourceOfTruth: 'structured_reason_codes_and_measured_factors' as const,
+      unconstrainedGenerativeClaims: 'prohibited' as const,
+      numericalClaimParity: 'required' as const,
+      requiredDistinctions: [
+        'measured_fact' as const,
+        'model_estimate' as const,
+        'assumption' as const,
+        'unavailable_information' as const,
+        'low_confidence_output' as const,
+      ],
+      legacyValueTreatment: 'separate_source_metric_never_relabelled_statly_value' as const,
+    },
+    execution: {
+      codeCommitSha: digest('c').slice(0, 40),
+      cleanWorktree: true as const,
+      jobId: 'fixture-valuation-job',
+      attempt: 1,
+      initiatedBy: 'fixture-model-owner',
+      workerIdentity: 'fixture-worker',
+      startedAt: '2026-08-05T02:00:00.000Z',
+      finishedAt: '2026-08-05T03:00:00.000Z',
+      sourceCodeArtifact: artifact('7'),
+      dependencyLockArtifact: artifact('8'),
+      runtimeArtifact: artifact('9'),
+      configurationArtifact: artifact('a'),
+    },
+    outputs: {
+      immutableSnapshotsArtifact: artifact('b'),
+      simulationDrawsArtifact: artifact('c'),
+      attributionInvariantReportArtifact: artifact('d'),
+      deterministicReplayReportArtifact: artifact('e'),
+      explanationParityReportArtifact: artifact('f'),
+      coverageAndExclusionReportArtifact: artifact('0'),
+      confidenceReportArtifact: artifact('1'),
+      sensitivityReportArtifact: artifact('2'),
+      validationReportArtifact: artifact('3'),
+      modelCardArtifact: artifact('4'),
+    },
+    limitations: ['Fabricated bundle with no production authority.'],
+  };
+}
+
+function valuationBundle(content = valuationBundleContent()) {
+  return aflTradeValuationBundleManifestSchema.parse({
+    valuationBundleId: createAflTradeContentAddress('valuation-bundle', content),
+    content,
+  });
+}
+
+function publicationContent(bundle = valuationBundle()) {
+  return {
+    schemaVersion: 'afl-trade-publication/v2' as const,
+    environment: 'test_fixture' as const,
+    scopeKey: bundle.content.scopeKey,
     createdAt: '2026-08-06T00:00:00.000Z',
-    datasetId: run.content.datasetId,
-    modelRunId: run.runId,
+    valuationBundleId: bundle.valuationBundleId,
     gate3DecisionId: `gate-decision:${digest('e')}`,
     sourceRegisterIds: ['fixture-source'],
-    supportedViews: ['current' as const],
+    supportedViews: ['at_trade' as const, 'realized' as const, 'remaining' as const, 'current' as const],
     supportedCohorts: ['fixture-supported'],
     excludedCohorts: ['fixture-excluded'],
-    valueUnitId: 'fixture-contribution-v1',
+    valueUnitId: bundle.content.valueUnitId,
     entryCount: 10,
     publicationBundleArtifact: artifact('1'),
     methodologyArtifact: artifact('2'),
-    validationReportArtifact: artifact('3'),
-    modelCardArtifact: artifact('4'),
+    validationReportArtifact: bundle.content.outputs.validationReportArtifact,
+    modelCardArtifact: bundle.content.outputs.modelCardArtifact,
   };
 }
 
@@ -233,7 +481,7 @@ function gatePair(
   affectedArtifacts: AflTradeGovernedArtifactRef[]
 ) {
   const scope = {
-    scopeKey: `${gate}-fixture`,
+    scopeKey: `${gate}-fixture-${decisionCharacter}`,
     description: 'Fabricated artifact-chain scope.',
     dimensions: [],
     exclusions: [],
@@ -241,7 +489,7 @@ function gatePair(
   const proposalContent = {
     schemaVersion: 'afl-trade-gate-proposal/v1' as const,
     gate,
-    decisionKey: `${gate}-fixture`,
+    decisionKey: `${gate}-fixture-${decisionCharacter}`,
     version: 1,
     environment: 'test_fixture' as const,
     scope,
@@ -506,25 +754,10 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
   };
   const reportId = createAflTradeContentAddress('coverage-report', reportContent);
   const corpusId = `corpus:${digest('4')}`;
-  const datasetId = `dataset:${digest('1')}`;
-  const protocol = modelProtocol();
-  const run = modelRun(runContent(protocol));
-  const candidate = publication({
-    ...publicationContent(run),
-    validationReportArtifact:
-      run.content.outcome.status === 'succeeded'
-        ? run.content.outcome.validationReportArtifact
-        : artifact('3'),
-    modelCardArtifact:
-      run.content.outcome.status === 'succeeded'
-        ? run.content.outcome.modelCardArtifact
-        : artifact('4'),
-  });
-  const projectionValue = projectionContent(candidate);
-  const build = aflTradeProjectionManifestSchema.parse({
-    projectionId: createAflTradeContentAddress('projection', projectionValue),
-    content: projectionValue,
-  });
+  const playerProtocol = modelProtocol();
+  const playerRun = modelRun(runContent(playerProtocol));
+  const pickProtocol = pickModelProtocol();
+  const pickRun = pickModelRun(pickRunContent(pickProtocol));
   const gate0a = gatePair('gate_0a_permission_to_evaluate', '5', [
     { kind: 'source_rights', artifactId: rightsId },
   ]);
@@ -540,14 +773,35 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
   const gate2 = gatePair('gate_2_corpus_lineage', '7', [
     { kind: 'corpus_manifest', artifactId: corpusId },
   ]);
-  const gate3 = gatePair('gate_3_model_validity', 'e', [
-    { kind: 'model_protocol', artifactId: protocol.protocolId },
-    { kind: 'model_run', artifactId: run.runId },
+  const playerGate3 = gatePair('gate_3_model_validity', '8', [
+    { kind: 'model_protocol', artifactId: playerProtocol.protocolId },
+    { kind: 'model_run', artifactId: playerRun.runId },
   ]);
+  const pickGate3 = gatePair('gate_3_model_validity', '9', [
+    { kind: 'model_protocol', artifactId: pickProtocol.protocolId },
+    { kind: 'model_run', artifactId: pickRun.runId },
+  ]);
+  const bundleValue = valuationBundleContent(playerProtocol, playerRun, pickProtocol, pickRun);
+  bundleValue.components[0].gate3DecisionId = playerGate3.decision.decisionId;
+  bundleValue.components[1].gate3DecisionId = pickGate3.decision.decisionId;
+  const bundle = valuationBundle(bundleValue);
+  const bundleGate3 = gatePair('gate_3_model_validity', 'a', [
+    { kind: 'valuation_bundle', artifactId: bundle.valuationBundleId },
+  ]);
+  const candidate = publication({
+    ...publicationContent(bundle),
+    gate3DecisionId: bundleGate3.decision.decisionId,
+  });
+  const projectionValue = projectionContent(candidate);
+  const build = aflTradeProjectionManifestSchema.parse({
+    projectionId: createAflTradeContentAddress('projection', projectionValue),
+    content: projectionValue,
+  });
+  const gatePairs = [gate0a, gate0b, gate1, gate2, playerGate3, pickGate3, bundleGate3];
   return {
     ledger: {
-      proposals: [gate0a.proposal, gate0b.proposal, gate1.proposal, gate2.proposal, gate3.proposal],
-      decisions: [gate0a.decision, gate0b.decision, gate1.decision, gate2.decision, gate3.decision],
+      proposals: gatePairs.map((pair) => pair.proposal),
+      decisions: gatePairs.map((pair) => pair.decision),
     } as unknown as AflTradeGateDecisionLedger,
     environment: 'test_fixture',
     evaluatedAt: '2026-08-10T00:00:00.000Z',
@@ -615,25 +869,38 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
         unsupportedCohortIds: [],
       },
     } as never,
-    dataset: {
-      datasetId,
-      content: {
-        corpusId,
-        gate2DecisionId: gate2.decision.decisionId,
-        sourceRegisterIds: ['fixture-source'],
-        environment: 'test_fixture',
-        createdAt: '2026-08-04T06:00:00.000Z',
-        includedCohorts: ['fixture-cohort'],
-        excludedCohorts: [],
-        featureDefinitionArtifacts: run.content.featureDefinitionArtifacts,
-      },
-    } as never,
-    modelProtocol: protocol,
-    modelRun: run,
-    publication: {
-      ...candidate,
-      content: { ...candidate.content, gate3DecisionId: gate3.decision.decisionId },
-    } as never,
+    datasets: [
+      {
+        datasetId: playerProtocol.content.datasetId,
+        content: {
+          corpusId,
+          gate2DecisionId: gate2.decision.decisionId,
+          sourceRegisterIds: ['fixture-source'],
+          environment: 'test_fixture',
+          createdAt: '2026-08-04T06:00:00.000Z',
+          includedCohorts: ['fixture-cohort'],
+          excludedCohorts: [],
+          featureDefinitionArtifacts: playerRun.content.featureDefinitionArtifacts,
+        },
+      } as never,
+      {
+        datasetId: pickProtocol.content.datasetId,
+        content: {
+          corpusId,
+          gate2DecisionId: gate2.decision.decisionId,
+          sourceRegisterIds: ['fixture-source'],
+          environment: 'test_fixture',
+          createdAt: '2026-08-04T06:30:00.000Z',
+          includedCohorts: ['fixture-cohort'],
+          excludedCohorts: [],
+          featureDefinitionArtifacts: pickRun.content.featureDefinitionArtifacts,
+        },
+      } as never,
+    ],
+    modelProtocols: [playerProtocol, pickProtocol],
+    modelRuns: [playerRun, pickRun],
+    valuationBundle: bundle,
+    publication: candidate,
     projection: build,
   };
 }
@@ -650,15 +917,19 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
     const input = validProvenanceInput();
     const reordered = {
       ...input,
-      dataset: {
-        ...input.dataset,
-        content: {
-          ...input.dataset.content,
-          featureDefinitionArtifacts: [
-            ...input.dataset.content.featureDefinitionArtifacts,
-          ].reverse(),
-        },
-      },
+      datasets: input.datasets.map((dataset, index) =>
+        index === 0
+          ? {
+              ...dataset,
+              content: {
+                ...dataset.content,
+                featureDefinitionArtifacts: [
+                  ...dataset.content.featureDefinitionArtifacts,
+                ].reverse(),
+              },
+            }
+          : dataset
+      ),
     };
 
     expect(validateAflTradeManifestProvenance(reordered)).toEqual({ valid: true, issues: [] });
@@ -666,7 +937,7 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
 
   it('reports independent provenance failures in stable validation order', () => {
     const input = validProvenanceInput();
-    input.dataset.content.corpusId = `corpus:${digest('d')}`;
+    input.datasets[0].content.corpusId = `corpus:${digest('d')}`;
     input.publication.content.sourceRegisterIds = ['other-source'];
     input.projection.content.environment = 'non_production';
     input.projection.content.createdAt = '2026-08-05T12:00:00.000Z';
@@ -676,8 +947,8 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
       issues: [
         {
           code: 'parent_mismatch',
-          subject: input.dataset.datasetId,
-          message: 'Dataset must reference the exact corpus.',
+          subject: input.datasets[0].datasetId,
+          message: 'Every component dataset must reference the exact corpus.',
         },
         {
           code: 'source_set_mismatch',
@@ -717,23 +988,68 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
 
   it('requires the model run to reference the exact prespecified protocol', () => {
     const input = validProvenanceInput();
-    input.modelRun.content.modelProtocolId = `model-protocol:${digest('d')}`;
+    input.modelRuns[0].content.modelProtocolId = `model-protocol:${digest('d')}`;
 
     expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
       code: 'parent_mismatch',
-      subject: input.modelRun.runId,
-      message: 'Model protocol and run must reference the exact dataset and each other.',
+      subject: input.modelRuns[0].runId,
+      message: 'Component protocol and run must reference the exact dataset and each other.',
     });
   });
 
   it('requires executed model windows to match the prespecified protocol exactly', () => {
     const input = validProvenanceInput();
-    input.modelRun.content.windows.embargoDays += 1;
+    input.modelRuns[0].content.windows.embargoDays += 1;
 
     expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
       code: 'parent_mismatch',
-      subject: input.modelRun.runId,
-      message: 'Model run windows must exactly match the prespecified protocol.',
+      subject: input.modelRuns[0].runId,
+      message: 'Component run windows must exactly match the prespecified protocol.',
+    });
+  });
+
+  it('rejects an incomplete valuation component inventory', () => {
+    const input = validProvenanceInput();
+    input.modelRuns = [input.modelRuns[0]];
+
+    expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
+      code: 'artifact_missing',
+      subject: input.valuationBundle.valuationBundleId,
+      message: 'Valuation bundle model run inventory must match its exact component references.',
+    });
+  });
+
+  it('requires the effective Gate 3 decision that pins the exact valuation bundle', () => {
+    const input = validProvenanceInput();
+    const bundleDecisionId = input.publication.content.gate3DecisionId;
+    input.ledger = {
+      proposals: input.ledger.proposals.filter(
+        (proposal) => proposal.content.decisionKey !==
+          input.ledger.decisions.find((decision) => decision.decisionId === bundleDecisionId)?.content
+            .decisionKey
+      ),
+      decisions: input.ledger.decisions.filter(
+        (decision) => decision.decisionId !== bundleDecisionId
+      ),
+    };
+
+    expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
+      code: 'decision_invalid',
+      subject: bundleDecisionId,
+      message: 'Required gate_3_model_validity decision is absent.',
+    });
+  });
+
+  it('rejects publication evidence borrowed from one component run', () => {
+    const input = validProvenanceInput();
+    const playerOutcome = input.modelRuns[0].content.outcome;
+    if (playerOutcome.status !== 'succeeded') throw new Error('Expected a successful fixture run.');
+    input.publication.content.validationReportArtifact = playerOutcome.validationReportArtifact;
+
+    expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
+      code: 'parent_mismatch',
+      subject: input.publication.publicationId,
+      message: 'Publication validation report and model card must come from its valuation bundle.',
     });
   });
 
@@ -761,21 +1077,32 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
 
     expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
       code: 'cohort_mismatch',
-      subject: `${input.dataset.datasetId}:fixture-cohort`,
-      message: 'A corpus-unsupported cohort must be explicitly excluded from the dataset.',
+      subject: `${input.datasets[0].datasetId}:fixture-cohort`,
+      message:
+        'A corpus-unsupported cohort must be explicitly excluded from every component dataset.',
     });
   });
 
-  it('builds an acyclic model-run, publication, and projection chain', () => {
-    const run = modelRun();
-    const candidate = publication(publicationContent(run));
+  it('builds an acyclic component, bundle, publication, and projection chain', () => {
+    const playerProtocol = modelProtocol();
+    const playerRun = modelRun(runContent(playerProtocol));
+    const pickProtocol = pickModelProtocol();
+    const pickRun = pickModelRun(pickRunContent(pickProtocol));
+    const bundle = valuationBundle(
+      valuationBundleContent(playerProtocol, playerRun, pickProtocol, pickRun)
+    );
+    const candidate = publication(publicationContent(bundle));
     const projectionContentValue = projectionContent(candidate);
     const projection = aflTradeProjectionManifestSchema.parse({
       projectionId: createAflTradeContentAddress('projection', projectionContentValue),
       content: projectionContentValue,
     });
 
-    expect(candidate.content.modelRunId).toBe(run.runId);
+    expect(candidate.content.valuationBundleId).toBe(bundle.valuationBundleId);
+    expect(bundle.content.components.map((component) => component.runId)).toEqual([
+      playerRun.runId,
+      pickRun.runId,
+    ]);
     expect(projection.content.publicationId).toBe(candidate.publicationId);
   });
 
