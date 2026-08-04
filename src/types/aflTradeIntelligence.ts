@@ -7,3 +7,4 @@
 export * from './aflTradeIntelligence/shared';
 export * from './aflTradeIntelligence/value';
 export * from './aflTradeIntelligence/response';
+export * from './aflTradeIntelligence/methodology';

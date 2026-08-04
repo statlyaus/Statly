@@ -653,14 +653,25 @@ selection when their concrete adapters are implemented; no response may mix publ
 archive, then returns one to four requested views. Both are anonymous transport adapters over the same
 read service and currently expose only the verified prepublication state.
 
+`GET /api/draft-trades/methodology` is the stable public model-metadata boundary. A published response
+must identify the exact valuation bundle and value unit, both governed model components, the primary
+outcome definition, training period, calculation time, all four valuation views, supported data
+coverage, known limitations and material changes from the previous release. Those fields must match
+the same captured publication and projection metadata used by value reads. With no active
+publication, the endpoint returns `methodology: null` and the verified source-approval blocker; it
+does not invent a model version, training period, calculation date or outcome definition.
+
 When the selector reports no active publication, list and detail reads return the requested views as
 the current `source_blocked` state and do not call a projection repository. Once a publication is
 active, repository failure, revision drift, mismatched publication/projection/scope, missing trade or
 view members, and invalid chronology fail closed as typed serving errors; none may reuse the
-prepublication source blocker as a fallback. The route composition does not persist a registry,
-implement a Firestore or PostgreSQL projection adapter, connect numerical responses to the public
-pages, or assert that a numerical publication exists. Candidate, rejected, and partially built data
-therefore remain incapable of reaching an active public read through this code alone.
+prepublication source blocker as a fallback. Methodology reads apply the same rules: incomplete
+four-view selections, registry revision drift, projection identity mismatch, repository failure and
+invalid publication-bound metadata fail closed. The route composition does not persist a registry,
+implement a Firestore or PostgreSQL value or methodology projection adapter, connect numerical
+responses to the public pages, or assert that a numerical publication exists. Candidate, rejected,
+and partially built data therefore remain incapable of reaching an active public read through this
+code alone.
 
 ## Migration and rollback
 
