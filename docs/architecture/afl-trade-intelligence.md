@@ -559,6 +559,34 @@ only as known at the prediction cutoff. Unknown and observed zero remain distinc
 and post-outcome features are prohibited. Realized club contribution stops at real-club departure or
 the observation boundary, and active careers are right-censored under an immutable definition.
 
+The executable player baseline boundary lives in `src/server/aflTradeIntelligence/modeling`. Its
+strict, content-addressed observation contract requires source-native public player-season identities,
+all four chronological partitions, point-in-time role evidence, explicit contribution availability,
+games played and available, and either completed-career or right-censored evidence. It rejects fantasy
+user, league, roster, membership, and ownership fields by construction. The deterministic fitter uses
+games-played weighting to estimate the declared replacement quantile for each sufficiently supported
+training-only role/era cohort. Every input then reconciles to either an auditable season score or an
+explicit unavailable, zero-game, or unsupported-cohort result. Contribution per game, impact above
+replacement, availability, total season contribution above replacement, and censoring treatment remain
+separate outputs; games played is not treated as quality by itself.
+
+Held-out evaluation consumes a content-addressed prediction set rather than fitting or inventing a
+candidate predictor. The set must cover the evaluated validation or final-test partition exactly, bind
+to the same observation set, baseline fit, and value unit, and use each observation's declared feature
+cutoff. A validation candidate may be selected from train and calibration only. A final-test candidate
+may also use validation, but final-test refitting remains prohibited. The evaluator compares candidate
+and point-in-time expected-games-only predictions using MAE, RMSE, bias, absolute deltas, and declared
+relative-improvement thresholds. Missing or otherwise unscored outcomes remain visible as exclusions;
+insufficient comparable observations, incomplete prediction coverage, mismatched cutoffs, or broken
+artifact lineage fail closed.
+
+These contracts and deterministic fixture tests establish an executable, reproducible Stage 3
+baseline and evaluation harness. They do not establish that a real candidate outperforms the
+games-only baseline. No lawfully approved player-stat observation set, trained candidate, held-out
+performance report, source approval, Gate approval, or production readiness is represented by the
+fixture evidence. Stage 3 exit criteria remain unmet until approved source data and a locked candidate
+produce reviewed real-data evidence through this boundary.
+
 Draft-pick and future-pick distributions use a separate content-addressed protocol aligned to the
 same player-contribution value unit. Its assets are source-native AFL draft entitlements with no
 fantasy ownership. The protocol models both a mutually exclusive and exhaustive mixture of hurdle,
