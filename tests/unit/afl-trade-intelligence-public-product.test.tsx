@@ -6,7 +6,10 @@ import AflTradeMethodologyPage from '../../src/app/(public)/draft/trades/methodo
 import { DraftClubTradeHistory } from '@/components/draft/DraftClubTradeHistory';
 import { DraftTradeDetail, type DraftTradeDetailView } from '@/components/draft/DraftTradeDetail';
 import type { DraftClubTradeRefRow } from '@/lib/draftTrades/contracts';
-import { createAflTradePrePublicationAvailability } from '@/server/aflTradeIntelligence/publication/prePublicationAvailability';
+import {
+  AFL_TRADE_PUBLIC_VALUE_SCOPE,
+  aflTradePrePublicationValueReadService,
+} from '@/server/aflTradeIntelligence/publication/prePublicationValueReadService';
 import { AFL_TRADE_METHODOLOGY_HREF } from '@/types/aflTradeIntelligence';
 
 const detail: DraftTradeDetailView = {
@@ -62,13 +65,14 @@ function expectDocumentOrder(first: Element, second: Element) {
 describe('AFL trade-intelligence public product', () => {
   it.each(['full', 'inline'] as const)(
     'keeps identity, unavailable value, and legacy archive data in order in %s detail mode',
-    (mode) => {
+    async (mode) => {
+      const valueAnalysis = await aflTradePrePublicationValueReadService.detail({
+        scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
+        tradeId: detail.trade.tradeId,
+        requestedViews: ['at_trade', 'realized', 'remaining', 'current'],
+      });
       const { container } = render(
-        <DraftTradeDetail
-          detail={detail}
-          mode={mode}
-          valueAvailability={createAflTradePrePublicationAvailability()}
-        />
+        <DraftTradeDetail detail={detail} mode={mode} valueAnalysis={valueAnalysis} />
       );
 
       const summary = container.querySelector('#trade-detail-summary');

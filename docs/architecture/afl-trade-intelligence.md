@@ -506,22 +506,28 @@ Serving, publication, calculation, and knowledge-cutoff times must be chronologi
 
 ### Prepublication public delivery boundary
 
-Until the required evidence use is approved and an immutable publication is active, the public trade
-explorer and trade-detail route receive one server-created `source_blocked` result for the `current`
-view. That result has no publication reference, model vintage, temporal context, numerical payload,
-winner, or estimated release time. Its reason is `valuation-source-use-not-approved`, and its only
-action links to the general methodology page at `/draft/trades/methodology`.
+The public explorer and trade-detail server pages now read through the same publication-aware service
+as the value APIs. The explorer requests a bounded list page for the `current` view; a full trade page
+requests all four views. Until the required evidence use is approved and an immutable publication is
+active, the service returns a server-created `source_blocked` result for every requested trade and
+view. The explorer consolidates an all-blocked page into one archive-level notice, while full detail
+selects the current-view blocker. A blocker has no publication reference, model vintage, temporal
+context, numerical payload, winner, or estimated release time. Its reason is
+`valuation-source-use-not-approved`, and its only action links to the general methodology page at
+`/draft/trades/methodology`.
 
 This unavailable result applies only to the additional evidence needed for Statly valuation. It does
 not disable the existing historical AFL archive. The archive remains anonymous and separate from the
 fantasy domain: public AFL trades and assets have no user, league, roster, or membership owner.
 
-The prepublication constructor is a temporary composition dependency, not a read service, serving
-authority, or exception fallback. WP6 must replace it at the server-component boundary with the
-approved, publication-consistent read service. After numerical publication begins, read failures or
-withdrawals must resolve to their truthful contract state (`stale`, `failed_previous_available`,
-`withdrawn`, or another applicable unavailable state); they must never fall back to the hard-coded
-prepublication result or to legacy archive numbers.
+The prepublication constructor is now confined to the no-publication branch inside the read-service
+composition; public pages do not call it directly. The current prepublication service deliberately
+captures a selector with no active publication and a projection repository that cannot be read. A
+future serving transition must replace those ports with approved durable registry and projection
+adapters, not bypass the service. After numerical publication begins, read failures or withdrawals
+must resolve to their truthful contract state (`stale`, `failed_previous_available`, `withdrawn`, or
+another applicable unavailable state); they must never fall back to the hard-coded prepublication
+result or to legacy archive numbers.
 
 Imported archive fields labelled Expected and Actual remain visible only as legacy fields. Their
 original source definition and methodology are unverified, so the UI must not describe them as
@@ -529,9 +535,11 @@ Statly value, fairness, or a winner. A missing legacy value is rendered as a das
 distinguishable from a recorded zero. The general methodology page explains planned views and release
 requirements but is not publication-specific methodology and must not imply that a model is running.
 
-WP7A demonstrates this safe prepublication product boundary only. It does not establish source
-approval, Gate 1 approval, model approval, Gate 5 publication approval, publication activation,
-responsive browser verification, release readiness, or numerical product completion.
+The current UI has local desktop and 390-pixel evidence for the source-blocked archive and detail
+states, including keyboard focus, no horizontal overflow, and no observed console or hydration error.
+That evidence does not cover a numerical publication. This work does not establish source approval,
+Gate 1 approval, model approval, Gate 5 publication approval, publication activation, release
+readiness, or numerical product completion.
 
 ## Model and validation boundary
 
@@ -661,6 +669,15 @@ list items, preventing the explorer from becoming a batch simulation-detail endp
 reads retain the richer valuation result contract, including fifth/tenth-percentile downside,
 ninetieth/ninety-fifth-percentile upside, low-return probability and elite-outcome probability.
 
+The public UI consumes those contracts without recalculating them. When any list item is
+value-bearing, mobile and desktop explorer cards render per-trade summaries with the assessment,
+expected and median side values, central interval, finishes-ahead and practical-equivalence
+probabilities, coverage, confidence, calculation date and methodology link. Full detail renders the
+published club distributions, asset attribution, resolved lineage, per-view values, current
+realized-plus-remaining components and explanation factors. Balanced assessments remain explicitly
+too close to call. Partial, stale and previous-available states retain their public caveat, and legacy
+Expected and Actual fields remain visually and semantically separate.
+
 Numerical detail also requires a public asset-attribution projection. Each original traded asset has
 a stable asset ID, canonical public kind, receiving AFL club, lineage root, uniquely credited lineage
 frontier, and a value or explicit exclusion for every numerical view in the response. Current asset
@@ -692,11 +709,10 @@ active, repository failure, revision drift, mismatched publication/projection/sc
 view members, and invalid chronology fail closed as typed serving errors; none may reuse the
 prepublication source blocker as a fallback. Methodology reads apply the same rules: incomplete
 four-view selections, registry revision drift, projection identity mismatch, repository failure and
-invalid publication-bound metadata fail closed. The route composition does not persist a registry,
-implement a Firestore or PostgreSQL value or methodology projection adapter, connect numerical
-responses to the public pages, or assert that a numerical publication exists. Candidate, rejected,
-and partially built data therefore remain incapable of reaching an active public read through this
-code alone.
+invalid publication-bound metadata fail closed. The route and public-page composition do not persist
+a registry, implement a Firestore or PostgreSQL value or methodology projection adapter, or assert
+that a numerical publication exists. The UI is contract-ready, but candidate, rejected, and partially
+built data remain incapable of reaching an active public read through this code alone.
 
 ## Migration and rollback
 

@@ -1,9 +1,9 @@
 import Link from 'next/link';
 
-import { AflTradeValueUnavailablePanel } from '@/components/draft/AflTradeValueUnavailablePanel';
+import { AflTradeValueDetailPanel } from '@/components/draft/AflTradeValueDetailPanel';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
 import { LegacyMetricValue } from '@/components/draft/LegacyMetricValue';
-import type { AflTradeValueUnavailable } from '@/types/aflTradeIntelligence';
+import type { AflTradeValueDetailResponse } from '@/types/aflTradeIntelligence';
 
 export type DraftTradeHeaderView = {
   tradeId: string;
@@ -43,7 +43,7 @@ type DraftTradeDetailProps = {
   detail: DraftTradeDetailView;
   showOpenFullPageLink?: boolean;
   mode?: 'full' | 'inline';
-  valueAvailability: AflTradeValueUnavailable;
+  valueAnalysis?: AflTradeValueDetailResponse;
 };
 
 function assetTypeLabel(assetType: DraftTradeAssetView['assetType']): string {
@@ -196,7 +196,7 @@ export function DraftTradeDetail({
   detail,
   showOpenFullPageLink = false,
   mode = 'full',
-  valueAvailability,
+  valueAnalysis,
 }: DraftTradeDetailProps) {
   const groupedAssets = groupAssetsByClub(detail.assets);
   const playerAssetCount = detail.assets.filter((asset) => asset.assetType === 'player').length;
@@ -320,9 +320,7 @@ export function DraftTradeDetail({
         </div>
       </section>
 
-      {!isInline ? (
-        <AflTradeValueUnavailablePanel availability={valueAvailability} variant="detail" />
-      ) : null}
+      {!isInline && valueAnalysis ? <AflTradeValueDetailPanel analysis={valueAnalysis} /> : null}
 
       {/* Parties: same card language as Summary — sequential section, not a selected tab */}
       <section id="trade-detail-parties" aria-labelledby="trade-parties-heading">

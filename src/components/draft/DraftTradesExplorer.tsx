@@ -4,6 +4,7 @@ import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headless
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { AflTradeValueSummaryCard } from '@/components/draft/AflTradeValueSummaryCard';
 import { AflTradeValueUnavailablePanel } from '@/components/draft/AflTradeValueUnavailablePanel';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
 import {
@@ -14,7 +15,11 @@ import {
   draftHubHeroTopAccentClass,
   draftHubSkyPillClass,
 } from '@/components/draft/draftHubChrome';
-import type { AflTradeValueUnavailable } from '@/types/aflTradeIntelligence';
+import type {
+  AflTradeValueBearingSummary,
+  AflTradeValueListResponse,
+  AflTradeValueSummary,
+} from '@/types/aflTradeIntelligence';
 import { DraftTradeDetail } from './DraftTradeDetail';
 
 type DraftTradeHeader = {
@@ -87,7 +92,7 @@ type DraftTradesExplorerProps = {
   trades: DraftTradeHeader[];
   /** RSC snapshot of the URL query — must match the request so SSR and first client paint agree (useSearchParams differs on the server). */
   initialSearchString: string;
-  valueAvailability: AflTradeValueUnavailable;
+  valueResponse: AflTradeValueListResponse | null;
 };
 
 const detailCache = new Map<string, DraftTradeDetailData>();
@@ -95,6 +100,12 @@ const detailRequestCache = new Map<string, Promise<DraftTradeDetailData>>();
 
 function normalizeQuery(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function isValueBearingSummary(
+  valuation: AflTradeValueSummary
+): valuation is AflTradeValueBearingSummary {
+  return 'clubValues' in valuation;
 }
 
 function buildClubOptions(trades: DraftTradeHeader[]): Array<{ slug: string; name: string }> {
@@ -275,7 +286,7 @@ export function DraftTradesExplorer({
   yearOptions,
   trades,
   initialSearchString,
-  valueAvailability,
+  valueResponse,
 }: DraftTradesExplorerProps): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
@@ -370,6 +381,12 @@ export function DraftTradesExplorer({
   }, [expandedTradeId]);
 
   const clubOptions = useMemo(() => buildClubOptions(trades), [trades]);
+  const valuationByTradeId = useMemo(
+    () => new Map(valueResponse?.items.map((item) => [item.tradeId, item.valuation]) ?? []),
+    [valueResponse]
+  );
+  const showPerTradeValuations =
+    valueResponse?.items.some((item) => isValueBearingSummary(item.valuation)) ?? false;
   const filteredTrades = useMemo(() => {
     // Keep in sync with `listDraftTradesByYear` (firestore.ts): trim/lowercase q only;
     // do not trim trade title/club strings so SSR trade list and client filter agree.
@@ -937,7 +954,14 @@ export function DraftTradesExplorer({
         </div>
       </div>
 
-      <AflTradeValueUnavailablePanel availability={valueAvailability} variant="compact" />
+      {!showPerTradeValuations &&
+      valueResponse?.items[0] &&
+      !isValueBearingSummary(valueResponse.items[0].valuation) ? (
+        <AflTradeValueUnavailablePanel
+          availability={valueResponse.items[0].valuation}
+          variant="compact"
+        />
+      ) : null}
 
       <div className="space-y-3 lg:hidden">
         <div className="flex items-end justify-between gap-3">
@@ -954,6 +978,7 @@ export function DraftTradesExplorer({
         {filteredTrades.map((trade) => {
           const isExpanded = expandedTradeId === trade.tradeId;
           const isLoadingDetail = isExpanded && loadingTradeId === trade.tradeId;
+          const valuation = valuationByTradeId.get(trade.tradeId);
           const receives =
             trade.receivesByClub.length > 0
               ? trade.receivesByClub
@@ -1013,6 +1038,14 @@ export function DraftTradesExplorer({
                   </span>
                 </button>
               </div>
+              {showPerTradeValuations && valuation ? (
+                <div className="mt-3">
+                  <AflTradeValueSummaryCard
+                    valuation={valuation}
+                    calculationAsOf={valueResponse?.consistency.calculationAsOf ?? null}
+                  />
+                </div>
+              ) : null}
               <div className="mt-2 space-y-1 rounded-md border border-base-300 bg-base-200/35 p-2">
                 {renderReceiveSummary(receives, `mobile-receives-${trade.tradeId}`)}
               </div>
@@ -1062,7 +1095,6 @@ export function DraftTradesExplorer({
                         detail={expandedDetail}
                         showOpenFullPageLink
                         mode="inline"
-                        valueAvailability={valueAvailability}
                       />
                     </div>
                   )}
@@ -1115,6 +1147,7 @@ export function DraftTradesExplorer({
               {filteredTrades.map((trade) => {
                 const isExpanded = expandedTradeId === trade.tradeId;
                 const isActive = activeTradeId === trade.tradeId;
+                const valuation = valuationByTradeId.get(trade.tradeId);
                 const receives =
                   trade.receivesByClub.length > 0
                     ? trade.receivesByClub
@@ -1172,6 +1205,15 @@ export function DraftTradesExplorer({
                         </button>
                       </div>
                     </div>
+
+                    {showPerTradeValuations && valuation ? (
+                      <div className="mt-4">
+                        <AflTradeValueSummaryCard
+                          valuation={valuation}
+                          calculationAsOf={valueResponse?.consistency.calculationAsOf ?? null}
+                        />
+                      </div>
+                    ) : null}
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {trade.clubNames.map((clubName, index) => {
@@ -1372,12 +1414,7 @@ export function DraftTradesExplorer({
                   {loadingTradeId !== selectedTrade.tradeId &&
                   !detailError &&
                   expandedDetail?.trade.tradeId === selectedTrade.tradeId ? (
-                    <DraftTradeDetail
-                      detail={expandedDetail}
-                      showOpenFullPageLink
-                      mode="inline"
-                      valueAvailability={valueAvailability}
-                    />
+                    <DraftTradeDetail detail={expandedDetail} showOpenFullPageLink mode="inline" />
                   ) : null}
                 </div>
               </>
