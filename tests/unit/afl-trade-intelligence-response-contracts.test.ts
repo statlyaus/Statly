@@ -86,6 +86,12 @@ function available(): AflTradeValueResult {
             },
           ],
         },
+        distribution: {
+          downside: { quantile: 0.1, value: 7 },
+          upside: { quantile: 0.9, value: 13 },
+          lowReturn: { threshold: 8, probability: 0.2 },
+          eliteOutcome: { threshold: 12, probability: 0.15 },
+        },
         factors: [],
       },
       {
@@ -105,6 +111,12 @@ function available(): AflTradeValueResult {
               description: 'Fabricated outcome variation for contract testing.',
             },
           ],
+        },
+        distribution: {
+          downside: { quantile: 0.1, value: 5 },
+          upside: { quantile: 0.9, value: 11 },
+          lowReturn: { threshold: 6, probability: 0.25 },
+          eliteOutcome: { threshold: 10, probability: 0.1 },
         },
         factors: [],
       },
@@ -183,6 +195,70 @@ function availableSummary(): AflTradeValueSummary {
     coverage: { status: 'complete', coverageRatio: 1, excludedAssetCount: 0 },
     methodologyHref: '/afl-trades/methodology',
     warnings: [],
+  };
+}
+
+function assetBreakdowns() {
+  return [
+    {
+      assetId: 'fixture-asset-a',
+      assetKind: 'player' as const,
+      label: 'Fabricated player A',
+      receivedByAflClubId: 'fixture-club-a',
+      lineage: {
+        status: 'resolved' as const,
+        rootAssetId: 'fixture-asset-a',
+        creditedAssetIds: ['fixture-asset-a'],
+        summary: 'Fabricated resolved player lineage.',
+      },
+      values: [
+        {
+          status: 'valued' as const,
+          view: 'current' as const,
+          estimate: 10,
+          estimateStatistic: 'mean' as const,
+          uncertainty: available().clubValues[0].uncertainty,
+          distribution: available().clubValues[0].distribution,
+          factors: [],
+          currentComponents: { realizedValue: 6, remainingValue: 4 },
+        },
+      ],
+    },
+    {
+      assetId: 'fixture-asset-b',
+      assetKind: 'draft_selection' as const,
+      label: 'Fabricated draft selection B',
+      receivedByAflClubId: 'fixture-club-b',
+      lineage: {
+        status: 'resolved' as const,
+        rootAssetId: 'fixture-asset-b',
+        creditedAssetIds: ['fixture-asset-b', 'fixture-player-b'],
+        summary: 'Fabricated selection-to-player lineage.',
+      },
+      values: [
+        {
+          status: 'valued' as const,
+          view: 'current' as const,
+          estimate: 8,
+          estimateStatistic: 'mean' as const,
+          uncertainty: available().clubValues[1].uncertainty,
+          distribution: available().clubValues[1].distribution,
+          factors: [],
+          currentComponents: { realizedValue: 5, remainingValue: 3 },
+        },
+      ],
+    },
+  ];
+}
+
+function resolvedLineageSummary() {
+  return {
+    status: 'resolved' as const,
+    totalAssetCount: 2,
+    resolvedAssetCount: 2,
+    unresolvedAssetCount: 0 as const,
+    lineageEdgeCount: 1,
+    maximumDepth: 1,
   };
 }
 
@@ -391,25 +467,56 @@ describe('AFL trade-intelligence response contracts', () => {
       consistency: consistency(),
       tradeId: 'fixture-trade-1',
       valuations: [available(), available()],
-      lineageStatus: 'resolved',
-      unresolvedAssetCount: 0,
+      assets: assetBreakdowns(),
+      lineageSummary: resolvedLineageSummary(),
     };
     expect(aflTradeValueDetailResponseSchema.safeParse(detail).success).toBe(false);
     expect(
       aflTradeValueDetailResponseSchema.safeParse({
         ...detail,
         valuations: [available()],
-        unresolvedAssetCount: 1,
+        lineageSummary: { ...resolvedLineageSummary(), resolvedAssetCount: 1 },
       }).success
     ).toBe(false);
     expect(
       aflTradeValueDetailResponseSchema.safeParse({
         ...detail,
         valuations: [available()],
-        lineageStatus: 'partial',
-        unresolvedAssetCount: 1,
+        assets: assetBreakdowns(),
+        lineageSummary: resolvedLineageSummary(),
       }).success
     ).toBe(true);
+  });
+
+  it('requires per-asset attribution to reconcile exactly to each receiving AFL club', () => {
+    const detail = {
+      consistency: consistency(),
+      tradeId: 'fixture-trade-1',
+      valuations: [available()],
+      assets: assetBreakdowns(),
+      lineageSummary: resolvedLineageSummary(),
+    };
+    expect(aflTradeValueDetailResponseSchema.safeParse(detail).success).toBe(true);
+
+    const changedAssets = assetBreakdowns();
+    changedAssets[0].values[0].estimate = 9;
+    changedAssets[0].values[0].currentComponents = { realizedValue: 5, remainingValue: 4 };
+    expect(
+      aflTradeValueDetailResponseSchema.safeParse({ ...detail, assets: changedAssets }).success
+    ).toBe(false);
+
+    const wrongClubAssets = assetBreakdowns();
+    wrongClubAssets[0].receivedByAflClubId = 'fixture-club-outside-comparison';
+    expect(
+      aflTradeValueDetailResponseSchema.safeParse({ ...detail, assets: wrongClubAssets }).success
+    ).toBe(false);
+
+    const duplicateCreditAssets = assetBreakdowns();
+    duplicateCreditAssets[1].lineage.creditedAssetIds.push('fixture-asset-a');
+    expect(
+      aflTradeValueDetailResponseSchema.safeParse({ ...detail, assets: duplicateCreditAssets })
+        .success
+    ).toBe(false);
   });
 
   it('serves withdrawn results only with the matching withdrawn publication', () => {
@@ -436,8 +543,8 @@ describe('AFL trade-intelligence response contracts', () => {
         consistency: withdrawnConsistency,
         tradeId: 'fixture-trade-1',
         valuations: [available()],
-        lineageStatus: 'resolved',
-        unresolvedAssetCount: 0,
+        assets: assetBreakdowns(),
+        lineageSummary: resolvedLineageSummary(),
       }).success
     ).toBe(false);
   });

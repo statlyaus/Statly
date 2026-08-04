@@ -658,7 +658,20 @@ contains side expected and median values, one central interval, finishes-ahead p
 practical equivalence, assessment, value unit, compact coverage, warnings and confidence. Strict
 validation rejects detail-only uncertainty components, explanation factors and exclusion records in
 list items, preventing the explorer from becoming a batch simulation-detail endpoint. Full detail
-reads retain the richer valuation result contract.
+reads retain the richer valuation result contract, including fifth/tenth-percentile downside,
+ninetieth/ninety-fifth-percentile upside, low-return probability and elite-outcome probability.
+
+Numerical detail also requires a public asset-attribution projection. Each original traded asset has
+a stable asset ID, canonical public kind, receiving AFL club, lineage root, uniquely credited lineage
+frontier, and a value or explicit exclusion for every numerical view in the response. Current asset
+value must equal realized plus remaining value. Per-view exclusions must match coverage records and
+valued asset estimates must sum exactly to each receiving club's published total, preventing ancestor
+and successor double-counting from passing the API boundary. This is real AFL club attribution only;
+the contract rejects user, fantasy league, roster and owner fields.
+
+When no numerical publication is selected, detail returns no asset attribution and a lineage summary
+whose counts, edge total and maximum depth are `null`. Unknown lineage is never represented as zero.
+Raw evidence, lineage graphs and operational review data remain behind the analytical boundary.
 
 Every numerical result and numerical list summary has structured confidence dimensions for model
 calibration, data coverage, identity, lineage and source freshness as applicable. The public overall

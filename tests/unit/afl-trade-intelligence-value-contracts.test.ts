@@ -20,6 +20,15 @@ function uncertainty(median: number) {
   };
 }
 
+function distribution(median: number) {
+  return {
+    downside: { quantile: 0.1 as const, value: median - 3 },
+    upside: { quantile: 0.9 as const, value: median + 3 },
+    lowReturn: { threshold: median - 2, probability: 0.2 },
+    eliteOutcome: { threshold: median + 2, probability: 0.15 },
+  };
+}
+
 function confidence() {
   return {
     level: 'moderate' as const,
@@ -62,6 +71,7 @@ function numericCore() {
         estimate: 10,
         estimateStatistic: 'mean' as const,
         uncertainty: uncertainty(10),
+        distribution: distribution(10),
         factors: [],
       },
       {
@@ -70,6 +80,7 @@ function numericCore() {
         estimate: 8,
         estimateStatistic: 'mean' as const,
         uncertainty: uncertainty(8),
+        distribution: distribution(8),
         factors: [],
       },
     ],
@@ -167,6 +178,41 @@ function partialWithAdjustment() {
 }
 
 describe('AFL trade-intelligence numerical contracts', () => {
+  it('requires coherent downside, upside, low-return and elite-outcome summaries', () => {
+    const value = available();
+    expect(
+      aflTradeValueResultSchema.safeParse({
+        ...value,
+        clubValues: [
+          {
+            ...value.clubValues[0],
+            distribution: {
+              ...value.clubValues[0].distribution,
+              downside: { quantile: 0.1, value: 11 },
+            },
+          },
+          value.clubValues[1],
+        ],
+      }).success
+    ).toBe(false);
+    expect(
+      aflTradeValueResultSchema.safeParse({
+        ...value,
+        clubValues: [
+          {
+            ...value.clubValues[0],
+            distribution: {
+              ...value.clubValues[0].distribution,
+              lowReturn: { threshold: 8, probability: 0.7 },
+              eliteOutcome: { threshold: 12, probability: 0.4 },
+            },
+          },
+          value.clubValues[1],
+        ],
+      }).success
+    ).toBe(false);
+  });
+
   it('requires overall confidence to equal the weakest unique confidence dimension', () => {
     expect(aflTradeValueResultSchema.safeParse(available()).success).toBe(true);
     expect(

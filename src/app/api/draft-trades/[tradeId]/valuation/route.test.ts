@@ -59,8 +59,15 @@ describe('GET /api/draft-trades/[tradeId]/valuation', () => {
     expect(body.success).toBe(true);
     expect(body.data).toMatchObject({
       tradeId: 't1',
-      lineageStatus: 'unavailable',
-      unresolvedAssetCount: 0,
+      assets: [],
+      lineageSummary: {
+        status: 'unavailable',
+        totalAssetCount: null,
+        resolvedAssetCount: null,
+        unresolvedAssetCount: null,
+        lineageEdgeCount: null,
+        maximumDepth: null,
+      },
       consistency: {
         contractVersion: 'afl-trade-value/v2',
         selection: 'none',

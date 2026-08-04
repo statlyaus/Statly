@@ -152,6 +152,50 @@ export const aflTradeConfidenceSchema = z
     }
   });
 
+export const aflTradeOutcomeDistributionSummarySchema = z
+  .object({
+    downside: z
+      .object({
+        quantile: z.union([z.literal(0.05), z.literal(0.1)]),
+        value: z.number().finite(),
+      })
+      .strict(),
+    upside: z
+      .object({
+        quantile: z.union([z.literal(0.9), z.literal(0.95)]),
+        value: z.number().finite(),
+      })
+      .strict(),
+    lowReturn: z
+      .object({ threshold: z.number().finite(), probability: z.number().finite().min(0).max(1) })
+      .strict(),
+    eliteOutcome: z
+      .object({ threshold: z.number().finite(), probability: z.number().finite().min(0).max(1) })
+      .strict(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.downside.value > value.upside.value) {
+      context.addIssue({
+        code: 'custom',
+        message: 'The downside value cannot exceed the upside value.',
+      });
+    }
+    if (value.lowReturn.threshold >= value.eliteOutcome.threshold) {
+      context.addIssue({
+        code: 'custom',
+        path: ['eliteOutcome', 'threshold'],
+        message: 'The elite-outcome threshold must exceed the low-return threshold.',
+      });
+    }
+    if (value.lowReturn.probability + value.eliteOutcome.probability > 1 + 1e-9) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Mutually exclusive low-return and elite-outcome probabilities cannot exceed one.',
+      });
+    }
+  });
+
 export const aflTradeValueFactorSchema = z
   .object({
     kind: z.enum(['positive', 'negative', 'uncertainty']),
@@ -168,9 +212,22 @@ export const aflTradeClubValueSchema = z
     estimate: z.number().finite(),
     estimateStatistic: z.literal('mean'),
     uncertainty: aflTradeUncertaintySchema,
+    distribution: aflTradeOutcomeDistributionSummarySchema,
     factors: z.array(aflTradeValueFactorSchema).max(20),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.distribution.downside.value > value.uncertainty.median ||
+      value.uncertainty.median > value.distribution.upside.value
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['distribution'],
+        message: 'Downside and upside values must bracket the median.',
+      });
+    }
+  });
 
 const comparisonShape = {
   aflClubIds: z.array(aflTradePublicIdSchema).min(2).max(18),
@@ -657,6 +714,9 @@ export type AflTradeValueUnavailableAvailability =
 export type AflTradeModelVintage = z.infer<typeof aflTradeModelVintageSchema>;
 export type AflTradeUncertainty = z.infer<typeof aflTradeUncertaintySchema>;
 export type AflTradeConfidence = z.infer<typeof aflTradeConfidenceSchema>;
+export type AflTradeOutcomeDistributionSummary = z.infer<
+  typeof aflTradeOutcomeDistributionSummarySchema
+>;
 export type AflTradeClubValue = z.infer<typeof aflTradeClubValueSchema>;
 export type AflTradeComparison = z.infer<typeof aflTradeComparisonSchema>;
 export type AflTradeValueAvailable = z.infer<typeof aflTradeValueAvailableSchema>;

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 import type {
+  AflTradeAssetBreakdown,
   AflTradeConsistencyEnvelope,
+  AflTradeLineageSummary,
   AflTradePublicWarning,
   AflTradeValuationView,
   AflTradeValueDetailResponse,
@@ -95,8 +97,8 @@ export interface AflTradeProjectionDetail {
   metadata: AflTradeProjectionReadMetadata;
   tradeId: string;
   valuations: readonly AflTradeValueResult[];
-  lineageStatus: 'resolved' | 'partial' | 'unavailable';
-  unresolvedAssetCount: number;
+  assets: readonly AflTradeAssetBreakdown[];
+  lineageSummary: AflTradeLineageSummary;
 }
 
 export interface AflTradePublicationSelector {
@@ -183,8 +185,15 @@ function createNoPublicationDetailResponse(
     valuations: request.requestedViews.map((view: AflTradeValuationView) =>
       createAflTradePrePublicationAvailability(view)
     ),
-    lineageStatus: 'unavailable',
-    unresolvedAssetCount: 0,
+    assets: [],
+    lineageSummary: {
+      status: 'unavailable',
+      totalAssetCount: null,
+      resolvedAssetCount: null,
+      unresolvedAssetCount: null,
+      lineageEdgeCount: null,
+      maximumDepth: null,
+    },
   };
 }
 
@@ -380,8 +389,8 @@ export function createAflTradeValueReadService(dependencies: {
         consistency: createActiveConsistency(selection, projection.metadata, servedAt),
         tradeId: projection.tradeId,
         valuations: projection.valuations,
-        lineageStatus: projection.lineageStatus,
-        unresolvedAssetCount: projection.unresolvedAssetCount,
+        assets: projection.assets,
+        lineageSummary: projection.lineageSummary,
       });
     },
   };

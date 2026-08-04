@@ -90,8 +90,15 @@ function repository(
       metadata: metadata(active),
       tradeId: request.tradeId,
       valuations: request.requestedViews.map(unavailable),
-      lineageStatus: 'unavailable' as const,
-      unresolvedAssetCount: 0,
+      assets: [],
+      lineageSummary: {
+        status: 'unavailable' as const,
+        totalAssetCount: null,
+        resolvedAssetCount: null,
+        unresolvedAssetCount: null,
+        lineageEdgeCount: null,
+        maximumDepth: null,
+      },
     })),
   };
 }
@@ -251,8 +258,15 @@ describe('AFL trade-value read service', () => {
       metadata: metadata(active),
       tradeId: detailRequest.tradeId,
       valuations: [unavailable('current')],
-      lineageStatus: 'unavailable',
-      unresolvedAssetCount: 0,
+      assets: [],
+      lineageSummary: {
+        status: 'unavailable',
+        totalAssetCount: null,
+        resolvedAssetCount: null,
+        unresolvedAssetCount: null,
+        lineageEdgeCount: null,
+        maximumDepth: null,
+      },
     });
     await expect(
       service(active, wrongDetailRepository).value.detail(detailRequest)

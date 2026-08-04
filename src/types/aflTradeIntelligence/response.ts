@@ -13,9 +13,16 @@ import {
   aflTradeValuationViewSchema,
   aflTradeValueResultSchema,
   isAflTradeValueBearingAvailability,
+  type AflTradeValueBearing,
   type AflTradeValueResult,
 } from './value';
 import { aflTradeValueSummarySchema, type AflTradeValueSummary } from './summary';
+import {
+  aflTradeAssetBreakdownSchema,
+  aflTradeLineageSummarySchema,
+  type AflTradeAssetBreakdown,
+  type AflTradeLineageSummary,
+} from './detail';
 
 export const aflTradeProjectionBuildIdSchema = z.string().regex(/^projection:[a-f0-9]{64}$/);
 
@@ -227,13 +234,149 @@ export const aflTradeValueListResponseSchema = z
     );
   });
 
+interface DetailBreakdownValue {
+  valuations: readonly AflTradeValueResult[];
+  assets: readonly AflTradeAssetBreakdown[];
+  lineageSummary: AflTradeLineageSummary;
+}
+
+function validateDetailBreakdowns(value: DetailBreakdownValue, context: z.RefinementCtx) {
+  const numericalValuations = value.valuations.filter(
+    (valuation): valuation is AflTradeValueBearing =>
+      isAflTradeValueBearingAvailability(valuation.availability)
+  );
+  if (numericalValuations.length === 0) {
+    if (value.assets.length > 0 || value.lineageSummary.status !== 'unavailable') {
+      context.addIssue({
+        code: 'custom',
+        path: ['assets'],
+        message: 'Detail without numerical valuations cannot claim asset attribution or lineage.',
+      });
+    }
+    return;
+  }
+
+  if (value.assets.length === 0 || value.lineageSummary.status === 'unavailable') {
+    context.addIssue({
+      code: 'custom',
+      path: ['assets'],
+      message: 'Numerical detail requires asset attribution and a resolved or partial lineage summary.',
+    });
+    return;
+  }
+
+  addAflTradeUniqueArrayIssue(
+    value.assets.map((asset) => asset.assetId),
+    context,
+    'Detail asset identifiers must be unique.',
+    ['assets']
+  );
+  addAflTradeUniqueArrayIssue(
+    value.assets.flatMap((asset) => asset.lineage.creditedAssetIds),
+    context,
+    'A lineage-frontier asset cannot be credited to more than one traded root.',
+    ['assets']
+  );
+  if (value.lineageSummary.totalAssetCount !== value.assets.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['lineageSummary', 'totalAssetCount'],
+      message: 'Lineage total must equal the number of attributed trade assets.',
+    });
+  }
+  const partialLineageCount = value.assets.filter(
+    (asset) => asset.lineage.status === 'partial'
+  ).length;
+  if (
+    value.lineageSummary.unresolvedAssetCount !== partialLineageCount ||
+    value.lineageSummary.resolvedAssetCount !== value.assets.length - partialLineageCount
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['lineageSummary'],
+      message: 'Lineage summary counts must reconcile with asset lineage statuses.',
+    });
+  }
+
+  const numericalViews = numericalValuations.map((valuation) => valuation.view).sort();
+  for (const [assetIndex, asset] of value.assets.entries()) {
+    const assetViews = asset.values.map((assetValue) => assetValue.view).sort();
+    if (
+      assetViews.length !== numericalViews.length ||
+      assetViews.some((view, index) => view !== numericalViews[index])
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['assets', assetIndex, 'values'],
+        message: 'Every asset must report each and only numerical detail view.',
+      });
+    }
+  }
+
+  for (const valuation of numericalValuations) {
+    if (valuation.coverage.totalAssetCount !== value.assets.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['valuations'],
+        message: 'Valuation coverage total must equal the detail asset count.',
+      });
+    }
+
+    const excludedAssetIds = value.assets
+      .filter((asset) =>
+        asset.values.some(
+          (assetValue) => assetValue.view === valuation.view && assetValue.status === 'excluded'
+        )
+      )
+      .map((asset) => asset.assetId)
+      .sort();
+    const coverageExcludedAssetIds = valuation.coverage.excludedAssets
+      .map((asset) => asset.assetId)
+      .sort();
+    if (
+      excludedAssetIds.length !== coverageExcludedAssetIds.length ||
+      excludedAssetIds.some((assetId, index) => assetId !== coverageExcludedAssetIds[index])
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['assets'],
+        message: 'Per-asset exclusions must exactly match valuation coverage exclusions.',
+      });
+    }
+
+    for (const clubValue of valuation.clubValues) {
+      const attributedEstimate = value.assets.reduce((sum, asset) => {
+        if (asset.receivedByAflClubId !== clubValue.aflClubId) return sum;
+        const assetValue = asset.values.find((entry) => entry.view === valuation.view);
+        return assetValue?.status === 'valued' ? sum + assetValue.estimate : sum;
+      }, 0);
+      if (Math.abs(attributedEstimate - clubValue.estimate) > 1e-9) {
+        context.addIssue({
+          code: 'custom',
+          path: ['assets'],
+          message: `Attributed ${valuation.view} asset values must sum to ${clubValue.aflClubId}'s club value.`,
+        });
+      }
+    }
+
+    const valuedClubIds = new Set(valuation.clubValues.map((clubValue) => clubValue.aflClubId));
+    if (value.assets.some((asset) => !valuedClubIds.has(asset.receivedByAflClubId))) {
+      context.addIssue({
+        code: 'custom',
+        path: ['assets'],
+        message: 'Every receiving AFL club must belong to the valued trade comparison.',
+      });
+    }
+  }
+}
+
 export const aflTradeValueDetailResponseSchema = z
   .object({
     consistency: aflTradeConsistencyEnvelopeSchema,
     tradeId: aflTradePublicIdSchema,
     valuations: z.array(aflTradeValueResultSchema).min(1).max(AFL_TRADE_VALUATION_VIEWS.length),
-    lineageStatus: z.enum(['resolved', 'partial', 'unavailable']),
-    unresolvedAssetCount: z.number().int().nonnegative(),
+    assets: z.array(aflTradeAssetBreakdownSchema).max(100),
+    lineageSummary: aflTradeLineageSummarySchema,
   })
   .strict()
   .superRefine((value, context) => {
@@ -243,20 +386,7 @@ export const aflTradeValueDetailResponseSchema = z
       'Detail valuations must have unique views.',
       ['valuations']
     );
-    if (value.lineageStatus === 'resolved' && value.unresolvedAssetCount !== 0) {
-      context.addIssue({
-        code: 'custom',
-        path: ['unresolvedAssetCount'],
-        message: 'Resolved lineage cannot report unresolved assets.',
-      });
-    }
-    if (value.lineageStatus === 'partial' && value.unresolvedAssetCount < 1) {
-      context.addIssue({
-        code: 'custom',
-        path: ['unresolvedAssetCount'],
-        message: 'Partial lineage must report at least one unresolved asset.',
-      });
-    }
+    validateDetailBreakdowns(value, context);
     validateResponseConsistency(
       { consistency: value.consistency, results: value.valuations },
       context

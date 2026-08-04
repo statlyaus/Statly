@@ -31,6 +31,15 @@ function uncertainty(median: number) {
   };
 }
 
+function distribution(median: number) {
+  return {
+    downside: { quantile: 0.1 as const, value: median - 3 },
+    upside: { quantile: 0.9 as const, value: median + 3 },
+    lowReturn: { threshold: median - 2, probability: 0.2 },
+    eliteOutcome: { threshold: median + 2, probability: 0.15 },
+  };
+}
+
 function confidence() {
   return {
     level: 'moderate' as const,
@@ -73,6 +82,7 @@ function numericCore() {
         estimate: 10,
         estimateStatistic: 'mean' as const,
         uncertainty: uncertainty(10),
+        distribution: distribution(10),
         factors: [],
       },
       {
@@ -81,6 +91,7 @@ function numericCore() {
         estimate: 8,
         estimateStatistic: 'mean' as const,
         uncertainty: uncertainty(8),
+        distribution: distribution(8),
         factors: [],
       },
     ],
