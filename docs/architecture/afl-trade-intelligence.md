@@ -345,7 +345,13 @@ exact floor before Gate 0B can support downstream work.
 The Gate 0B decision pins the protocol and report. A later corpus manifest pins that decision plus the
 exact current-state snapshot, architecture decision package, and Gate 1 decision; Gate 0B and Gate 1
 are parallel prerequisites rather than substitutes. The corpus owns normalized identity, real-club
-custody, lineage, reconciliation, quality, and quarantine artifacts.
+custody, lineage, reconciliation, quality, and quarantine artifacts. Its identity outcomes reconcile
+every candidate to resolved, ambiguous, unresolved, or conflicting status; manual resolutions are a
+documented subset of resolved identities, and automatic merging remains prohibited. Immutable
+identity-decision and temporal-correction ledgers preserve review evidence and knowledge-time changes.
+Each of the three required evidence lanes accounts for every input as reconciled or quarantined and
+pins its evidence-to-canonical mapping artifact. Unsupported cohort identifiers must exactly match the
+approved coverage report, and a feature dataset must explicitly exclude every unsupported cohort.
 Gate 2 approves that corpus before a feature dataset can be created. A successful reproducible run and
 Gate 3 decision precede the candidate publication; the projection is a separate downstream manifest.
 Cross-manifest validation requires exact parents, source sets, environments, effective decisions, and

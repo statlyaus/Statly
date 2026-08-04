@@ -77,7 +77,7 @@ function evidence(content = evidenceContent()) {
 
 function corpusContent(parentEvidence = evidence()) {
   return {
-    schemaVersion: 'afl-trade-corpus/v1' as const,
+    schemaVersion: 'afl-trade-corpus/v2' as const,
     environment: 'test_fixture' as const,
     createdAt: '2026-08-03T00:00:00.000Z',
     evidenceManifestId: parentEvidence.manifestId,
@@ -101,12 +101,58 @@ function corpusContent(parentEvidence = evidence()) {
       unresolvedValueBearingAssets: 1,
     },
     identityResolutionArtifact: artifact('b'),
+    identityDecisionLedgerArtifact: artifact('c'),
+    identityOutcomeCounts: {
+      candidates: 20,
+      resolved: 19,
+      ambiguous: 0,
+      unresolved: 1,
+      conflicting: 0,
+      manuallyResolved: 1,
+    },
+    identityPolicy: {
+      automaticMerge: 'prohibited' as const,
+      ambiguousOutcome: 'quarantine' as const,
+      unresolvedOutcome: 'quarantine' as const,
+      conflictingOutcome: 'quarantine' as const,
+      manualResolutionRequiresEvidence: true as const,
+    },
     custodyArtifact: artifact('c'),
     lineageArtifact: artifact('d'),
+    correctionLedgerArtifact: artifact('e'),
     reconciliationArtifact: artifact('e'),
     qualityReportArtifact: artifact('f'),
     quarantineArtifact: artifact('1'),
-    unsupportedCohorts: ['unresolved-fixture-assets'],
+    laneReconciliations: [
+      {
+        lane: 'transactions_and_lineage' as const,
+        inputRecords: 10,
+        reconciledInputRecords: 10,
+        quarantinedInputRecords: 0,
+        canonicalRecords: 10,
+        correctionRecords: 1,
+        evidenceToCanonicalMappingArtifact: artifact('8'),
+      },
+      {
+        lane: 'player_contribution_and_availability' as const,
+        inputRecords: 20,
+        reconciledInputRecords: 19,
+        quarantinedInputRecords: 1,
+        canonicalRecords: 19,
+        correctionRecords: 0,
+        evidenceToCanonicalMappingArtifact: artifact('9'),
+      },
+      {
+        lane: 'point_in_time_current_state' as const,
+        inputRecords: 30,
+        reconciledInputRecords: 30,
+        quarantinedInputRecords: 0,
+        canonicalRecords: 30,
+        correctionRecords: 0,
+        evidenceToCanonicalMappingArtifact: artifact('a'),
+      },
+    ],
+    unsupportedCohortIds: ['unresolved-fixture-assets'],
   };
 }
 
@@ -214,6 +260,66 @@ describe('AFL trade-intelligence evidence, corpus, and dataset manifests', () =>
         content: incomplete,
       }).success
     ).toBe(false);
+  });
+
+  it('requires every evidence lane to reconcile exactly once', () => {
+    const missingLane = corpusContent();
+    missingLane.laneReconciliations = missingLane.laneReconciliations.slice(0, 2);
+    const duplicateLane = corpusContent();
+    duplicateLane.laneReconciliations[2] = {
+      ...duplicateLane.laneReconciliations[2],
+      lane: 'transactions_and_lineage',
+    };
+
+    for (const content of [missingLane, duplicateLane]) {
+      expect(
+        aflTradeCorpusManifestSchema.safeParse({
+          corpusId: createAflTradeContentAddress('corpus', content),
+          content,
+        }).success
+      ).toBe(false);
+    }
+  });
+
+  it('rejects evidence-lane inputs that neither reconcile nor enter quarantine', () => {
+    const content = corpusContent();
+    content.laneReconciliations[0].inputRecords += 1;
+
+    expect(
+      aflTradeCorpusManifestSchema.safeParse({
+        corpusId: createAflTradeContentAddress('corpus', content),
+        content,
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejects identity outcomes that do not reconcile to all candidates', () => {
+    const content = corpusContent();
+    content.identityOutcomeCounts.candidates += 1;
+
+    expect(
+      aflTradeCorpusManifestSchema.safeParse({
+        corpusId: createAflTradeContentAddress('corpus', content),
+        content,
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejects corpus counts that conceal quarantined identities or impossible assets', () => {
+    const concealedIdentity = corpusContent();
+    concealedIdentity.recordCounts.quarantinedRecords = 0;
+    const impossibleAssets = corpusContent();
+    impossibleAssets.recordCounts.unresolvedValueBearingAssets =
+      impossibleAssets.recordCounts.assets + 1;
+
+    for (const content of [concealedIdentity, impossibleAssets]) {
+      expect(
+        aflTradeCorpusManifestSchema.safeParse({
+          corpusId: createAflTradeContentAddress('corpus', content),
+          content,
+        }).success
+      ).toBe(false);
+    }
   });
 
   it('rejects a cohort included and excluded by the same dataset', () => {

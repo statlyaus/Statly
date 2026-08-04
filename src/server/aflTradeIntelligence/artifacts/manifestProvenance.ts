@@ -44,6 +44,7 @@ export type AflTradeManifestProvenanceIssueCode =
   | 'protocol_report_invalid'
   | 'data_sufficiency_not_met'
   | 'architecture_context_invalid'
+  | 'cohort_mismatch'
   | 'unsuccessful_model_run';
 
 export interface AflTradeManifestProvenanceIssue {
@@ -427,6 +428,38 @@ function collectParentRelationshipIssues(
   return issues;
 }
 
+function collectCohortBoundaryIssues(
+  input: AflTradeManifestProvenanceInput
+): AflTradeManifestProvenanceIssue[] {
+  const issues: AflTradeManifestProvenanceIssue[] = [];
+  const coverageUnsupportedCohorts = input.coverageReport.content.unsupportedCohorts.map(
+    (cohort) => cohort.cohortId
+  );
+  const corpusUnsupportedCohorts = input.corpus.content.unsupportedCohortIds;
+  if (!sameSet(coverageUnsupportedCohorts, corpusUnsupportedCohorts)) {
+    addIssue(
+      issues,
+      'cohort_mismatch',
+      input.corpus.corpusId,
+      'Corpus unsupported cohorts must exactly match the approved coverage report.'
+    );
+  }
+
+  const includedCohorts = new Set(input.dataset.content.includedCohorts);
+  const excludedCohorts = new Set(input.dataset.content.excludedCohorts);
+  for (const cohortId of corpusUnsupportedCohorts) {
+    if (includedCohorts.has(cohortId) || !excludedCohorts.has(cohortId)) {
+      addIssue(
+        issues,
+        'cohort_mismatch',
+        `${input.dataset.datasetId}:${cohortId}`,
+        'A corpus-unsupported cohort must be explicitly excluded from the dataset.'
+      );
+    }
+  }
+  return issues;
+}
+
 function collectSourceSetIssues(
   input: AflTradeManifestProvenanceInput
 ): AflTradeManifestProvenanceIssue[] {
@@ -543,6 +576,7 @@ export function validateAflTradeManifestProvenance(input: AflTradeManifestProven
     ...collectEvidenceAuthorizationIssues(context),
     ...collectGatePolicyIssues(context),
     ...collectParentRelationshipIssues(input),
+    ...collectCohortBoundaryIssues(input),
     ...collectSourceSetIssues(input),
     ...collectEnvironmentAndOutcomeIssues(input),
     ...collectManifestChronologyIssues(input),

@@ -519,6 +519,7 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
         sourceRegisterIds: ['fixture-source'],
         environment: 'test_fixture',
         createdAt: '2026-08-04T00:00:00.000Z',
+        unsupportedCohortIds: [],
       },
     } as never,
     dataset: {
@@ -529,6 +530,8 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
         sourceRegisterIds: ['fixture-source'],
         environment: 'test_fixture',
         createdAt: '2026-08-05T00:00:00.000Z',
+        includedCohorts: ['fixture-cohort'],
+        excludedCohorts: [],
         featureDefinitionArtifacts: run.content.featureDefinitionArtifacts,
       },
     } as never,
@@ -617,6 +620,36 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
       expect.objectContaining({ code: 'decision_invalid', subject: gate1DecisionId })
     );
   });
+
+  it('rejects corpus unsupported cohorts that differ from the coverage report', () => {
+    const input = validProvenanceInput();
+    input.corpus.content.unsupportedCohortIds = ['fixture-cohort'];
+
+    expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
+      code: 'cohort_mismatch',
+      subject: input.corpus.corpusId,
+      message: 'Corpus unsupported cohorts must exactly match the approved coverage report.',
+    });
+  });
+
+  it('prevents a corpus-unsupported cohort from leaking into a feature dataset', () => {
+    const input = validProvenanceInput();
+    input.coverageReport.content.unsupportedCohorts = [
+      {
+        cohortId: 'fixture-cohort',
+        reason: 'not_measurable',
+        explanation: 'The fixture has no eligible observations.',
+      },
+    ];
+    input.corpus.content.unsupportedCohortIds = ['fixture-cohort'];
+
+    expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
+      code: 'cohort_mismatch',
+      subject: `${input.dataset.datasetId}:fixture-cohort`,
+      message: 'A corpus-unsupported cohort must be explicitly excluded from the dataset.',
+    });
+  });
+
   it('builds an acyclic model-run, publication, and projection chain', () => {
     const run = modelRun();
     const candidate = publication(publicationContent(run));
