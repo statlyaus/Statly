@@ -6,6 +6,7 @@ import {
   aflTradeValueListResponseSchema,
   type AflTradeConsistencyEnvelope,
   type AflTradeValueResult,
+  type AflTradeValueSummary,
 } from '@/types/aflTradeIntelligence';
 
 const publication = {
@@ -122,6 +123,23 @@ function available(): AflTradeValueResult {
       favouredAflClubId: 'fixture-club-a',
       scope: 'complete_trade',
     },
+    confidence: {
+      level: 'moderate',
+      dimensions: [
+        {
+          kind: 'model_calibration',
+          level: 'high',
+          reasonCode: 'fixture-model-calibrated',
+          explanation: 'Fabricated held-out calibration evidence supports this model component.',
+        },
+        {
+          kind: 'lineage',
+          level: 'moderate',
+          reasonCode: 'fixture-lineage-moderate',
+          explanation: 'Fabricated lineage evidence supports a moderate confidence classification.',
+        },
+      ],
+    },
     methodologyHref: '/afl-trades/methodology',
     coverage: {
       totalAssetCount: 2,
@@ -134,7 +152,41 @@ function available(): AflTradeValueResult {
   };
 }
 
-function withdrawn(): AflTradeValueResult {
+function availableSummary(): AflTradeValueSummary {
+  return {
+    availability: 'available',
+    view: 'current',
+    modelVintage: 'current',
+    unit: available().unit,
+    clubValues: [
+      {
+        aflClubId: 'fixture-club-a',
+        clubName: 'Fabricated Club A',
+        expectedValue: 10,
+        medianValue: 10,
+        interval: { lower: 8, upper: 12, level: 0.8 },
+        finishesAheadProbability: 0.55,
+      },
+      {
+        aflClubId: 'fixture-club-b',
+        clubName: 'Fabricated Club B',
+        expectedValue: 8,
+        medianValue: 8,
+        interval: { lower: 6, upper: 10, level: 0.8 },
+        finishesAheadProbability: 0.35,
+      },
+    ],
+    practicalEquivalenceProbability: 0.1,
+    comparisonBasis: 'complete_trade',
+    assessment: available().assessment,
+    confidence: available().confidence,
+    coverage: { status: 'complete', coverageRatio: 1, excludedAssetCount: 0 },
+    methodologyHref: '/afl-trades/methodology',
+    warnings: [],
+  };
+}
+
+function withdrawn(): AflTradeValueSummary {
   return {
     availability: 'withdrawn',
     view: 'current',
@@ -154,7 +206,7 @@ function withdrawn(): AflTradeValueResult {
 }
 
 function listResponse(
-  valuation: AflTradeValueResult,
+  valuation: AflTradeValueSummary,
   envelope: AflTradeConsistencyEnvelope = consistency()
 ) {
   return {
@@ -261,10 +313,12 @@ describe('AFL trade-intelligence response contracts', () => {
   });
 
   it('requires one immutable publication for numerical list results', () => {
-    expect(aflTradeValueListResponseSchema.safeParse(listResponse(available())).success).toBe(true);
+    expect(aflTradeValueListResponseSchema.safeParse(listResponse(availableSummary())).success).toBe(
+      true
+    );
     expect(
       aflTradeValueListResponseSchema.safeParse(
-        listResponse(available(), noPublicationConsistency())
+        listResponse(availableSummary(), noPublicationConsistency())
       ).success
     ).toBe(false);
   });
@@ -272,7 +326,7 @@ describe('AFL trade-intelligence response contracts', () => {
   it('rejects numerical results expressed in a different unit from the selected bundle', () => {
     expect(
       aflTradeValueListResponseSchema.safeParse(
-        listResponse(available(), {
+        listResponse(availableSummary(), {
           ...consistency(),
           publication: { ...publication, valueUnitId: 'different-value-unit' },
         })
@@ -284,24 +338,24 @@ describe('AFL trade-intelligence response contracts', () => {
     expect(
       aflTradeValueListResponseSchema.safeParse(
         listResponse({
-          ...available(),
+          ...availableSummary(),
           publication: {
             ...publication,
             publicationId: `publication:${'e'.repeat(64)}`,
           },
-        } as unknown as AflTradeValueResult)
+        } as unknown as AflTradeValueSummary)
       ).success
     ).toBe(false);
     expect(
       aflTradeValueListResponseSchema.safeParse({
-        ...listResponse(available()),
+        ...listResponse(availableSummary()),
         requestedView: 'at_trade',
       }).success
     ).toBe(false);
   });
 
   it('enforces pagination bounds and unique list trade identifiers', () => {
-    const list = listResponse(available());
+    const list = listResponse(availableSummary());
     expect(
       aflTradeValueListResponseSchema.safeParse({
         ...list,
@@ -373,8 +427,9 @@ describe('AFL trade-intelligence response contracts', () => {
         .success
     ).toBe(true);
     expect(
-      aflTradeValueListResponseSchema.safeParse(listResponse(available(), withdrawnConsistency))
-        .success
+      aflTradeValueListResponseSchema.safeParse(
+        listResponse(availableSummary(), withdrawnConsistency)
+      ).success
     ).toBe(false);
     expect(
       aflTradeValueDetailResponseSchema.safeParse({
@@ -390,9 +445,18 @@ describe('AFL trade-intelligence response contracts', () => {
   it('rejects fantasy ownership and unknown fields at response boundaries', () => {
     expect(
       aflTradeValueListResponseSchema.safeParse({
-        ...listResponse(available()),
+        ...listResponse(availableSummary()),
         userId: 'fixture-user',
         fantasyLeagueId: 'fixture-league',
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejects full detail payloads from lightweight list items', () => {
+    expect(
+      aflTradeValueListResponseSchema.safeParse({
+        ...listResponse(availableSummary()),
+        items: [{ tradeId: 'fixture-trade-1', valuation: available() }],
       }).success
     ).toBe(false);
   });

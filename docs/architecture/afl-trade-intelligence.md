@@ -653,6 +653,18 @@ selection when their concrete adapters are implemented; no response may mix publ
 archive, then returns one to four requested views. Both are anonymous transport adapters over the same
 read service and currently expose only the verified prepublication state.
 
+The list projection is intentionally distinct from the full detail projection. A numerical list item
+contains side expected and median values, one central interval, finishes-ahead probabilities,
+practical equivalence, assessment, value unit, compact coverage, warnings and confidence. Strict
+validation rejects detail-only uncertainty components, explanation factors and exclusion records in
+list items, preventing the explorer from becoming a batch simulation-detail endpoint. Full detail
+reads retain the richer valuation result contract.
+
+Every numerical result and numerical list summary has structured confidence dimensions for model
+calibration, data coverage, identity, lineage and source freshness as applicable. The public overall
+confidence level must equal the weakest included dimension. Confidence therefore cannot be raised by
+averaging strong model evidence over a weak identity, lineage, coverage or freshness boundary.
+
 `GET /api/draft-trades/methodology` is the stable public model-metadata boundary. A published response
 must identify the exact valuation bundle and value unit, both governed model components, the primary
 outcome definition, training period, calculation time, all four valuation views, supported data

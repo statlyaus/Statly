@@ -15,6 +15,7 @@ import {
   isAflTradeValueBearingAvailability,
   type AflTradeValueResult,
 } from './value';
+import { aflTradeValueSummarySchema, type AflTradeValueSummary } from './summary';
 
 export const aflTradeProjectionBuildIdSchema = z.string().regex(/^projection:[a-f0-9]{64}$/);
 
@@ -127,7 +128,7 @@ export const aflTradeConsistencyEnvelopeSchema = z
 
 interface ResponseConsistencyValue {
   consistency: z.infer<typeof aflTradeConsistencyEnvelopeSchema>;
-  results: readonly AflTradeValueResult[];
+  results: readonly (AflTradeValueResult | AflTradeValueSummary)[];
 }
 
 function validateResponseConsistency(value: ResponseConsistencyValue, context: z.RefinementCtx) {
@@ -174,7 +175,7 @@ function validateResponseConsistency(value: ResponseConsistencyValue, context: z
 export const aflTradeValueListItemSchema = z
   .object({
     tradeId: aflTradePublicIdSchema,
-    valuation: aflTradeValueResultSchema,
+    valuation: aflTradeValueSummarySchema,
   })
   .strict();
 

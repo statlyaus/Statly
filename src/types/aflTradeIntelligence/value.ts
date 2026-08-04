@@ -69,6 +69,16 @@ export const AFL_TRADE_COMPARISON_BASES = [
 
 export const AFL_TRADE_ASSESSMENT_SCOPES = ['complete_trade', 'included_assets_only'] as const;
 
+export const AFL_TRADE_CONFIDENCE_LEVELS = ['low', 'moderate', 'high'] as const;
+
+export const AFL_TRADE_CONFIDENCE_DIMENSIONS = [
+  'model_calibration',
+  'data_coverage',
+  'identity',
+  'lineage',
+  'source_freshness',
+] as const;
+
 export const aflTradeValuationViewSchema = z.enum(AFL_TRADE_VALUATION_VIEWS);
 export const aflTradeValueAvailabilitySchema = z.enum(AFL_TRADE_VALUE_AVAILABILITY);
 export const aflTradeModelVintageSchema = z.enum(AFL_TRADE_MODEL_VINTAGES);
@@ -95,6 +105,49 @@ export const aflTradeUncertaintySchema = z
       context.addIssue({
         code: 'custom',
         message: 'Uncertainty bounds must satisfy lower <= median <= upper.',
+      });
+    }
+  });
+
+export const aflTradeConfidenceDimensionSchema = z
+  .object({
+    kind: z.enum(AFL_TRADE_CONFIDENCE_DIMENSIONS),
+    level: z.enum(AFL_TRADE_CONFIDENCE_LEVELS),
+    reasonCode: aflTradePublicIdSchema,
+    explanation: z.string().trim().min(1).max(400),
+  })
+  .strict();
+
+export const aflTradeConfidenceSchema = z
+  .object({
+    level: z.enum(AFL_TRADE_CONFIDENCE_LEVELS),
+    dimensions: z.array(aflTradeConfidenceDimensionSchema).min(1).max(
+      AFL_TRADE_CONFIDENCE_DIMENSIONS.length
+    ),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    addAflTradeUniqueArrayIssue(
+      value.dimensions.map((dimension) => dimension.kind),
+      context,
+      'Confidence dimensions must be unique.',
+      ['dimensions']
+    );
+    const rank: Record<(typeof AFL_TRADE_CONFIDENCE_LEVELS)[number], number> = {
+      low: 0,
+      moderate: 1,
+      high: 2,
+    };
+    const weakestLevel = value.dimensions.reduce(
+      (weakest, dimension) =>
+        rank[dimension.level] < rank[weakest] ? dimension.level : weakest,
+      value.dimensions[0].level
+    );
+    if (value.level !== weakestLevel) {
+      context.addIssue({
+        code: 'custom',
+        path: ['level'],
+        message: 'Overall confidence must equal the weakest reported confidence dimension.',
       });
     }
   });
@@ -306,6 +359,7 @@ const numericValueShape = {
   clubValues: z.array(aflTradeClubValueSchema).min(2).max(18),
   comparison: aflTradeComparisonSchema,
   assessment: aflTradeAssessmentSchema,
+  confidence: aflTradeConfidenceSchema,
   methodologyHref: aflTradePublicHrefSchema,
 };
 
@@ -602,6 +656,7 @@ export type AflTradeValueUnavailableAvailability =
   (typeof AFL_TRADE_VALUE_UNAVAILABLE_AVAILABILITY)[number];
 export type AflTradeModelVintage = z.infer<typeof aflTradeModelVintageSchema>;
 export type AflTradeUncertainty = z.infer<typeof aflTradeUncertaintySchema>;
+export type AflTradeConfidence = z.infer<typeof aflTradeConfidenceSchema>;
 export type AflTradeClubValue = z.infer<typeof aflTradeClubValueSchema>;
 export type AflTradeComparison = z.infer<typeof aflTradeComparisonSchema>;
 export type AflTradeValueAvailable = z.infer<typeof aflTradeValueAvailableSchema>;

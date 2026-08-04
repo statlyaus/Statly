@@ -31,6 +31,26 @@ function uncertainty(median: number) {
   };
 }
 
+function confidence() {
+  return {
+    level: 'moderate' as const,
+    dimensions: [
+      {
+        kind: 'model_calibration' as const,
+        level: 'high' as const,
+        reasonCode: 'fixture-model-calibrated',
+        explanation: 'Fabricated held-out calibration evidence supports this model component.',
+      },
+      {
+        kind: 'lineage' as const,
+        level: 'moderate' as const,
+        reasonCode: 'fixture-lineage-moderate',
+        explanation: 'Fabricated lineage evidence supports a moderate confidence classification.',
+      },
+    ],
+  };
+}
+
 function numericCore() {
   return {
     view: 'current' as const,
@@ -78,6 +98,7 @@ function numericCore() {
       favouredAflClubId: 'fixture-club-a',
       scope: 'complete_trade' as const,
     },
+    confidence: confidence(),
     methodologyHref: '/afl-trades/methodology',
   };
 }

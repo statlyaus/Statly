@@ -20,6 +20,26 @@ function uncertainty(median: number) {
   };
 }
 
+function confidence() {
+  return {
+    level: 'moderate' as const,
+    dimensions: [
+      {
+        kind: 'model_calibration' as const,
+        level: 'high' as const,
+        reasonCode: 'fixture-model-calibrated',
+        explanation: 'Fabricated held-out calibration evidence supports this model component.',
+      },
+      {
+        kind: 'lineage' as const,
+        level: 'moderate' as const,
+        reasonCode: 'fixture-lineage-moderate',
+        explanation: 'Fabricated lineage evidence supports a moderate confidence classification.',
+      },
+    ],
+  };
+}
+
 function numericCore() {
   return {
     view: 'current' as const,
@@ -67,6 +87,7 @@ function numericCore() {
       favouredAflClubId: 'fixture-club-a',
       scope: 'complete_trade' as const,
     },
+    confidence: confidence(),
     methodologyHref: '/afl-trades/methodology',
   };
 }
@@ -146,6 +167,25 @@ function partialWithAdjustment() {
 }
 
 describe('AFL trade-intelligence numerical contracts', () => {
+  it('requires overall confidence to equal the weakest unique confidence dimension', () => {
+    expect(aflTradeValueResultSchema.safeParse(available()).success).toBe(true);
+    expect(
+      aflTradeValueResultSchema.safeParse({
+        ...available(),
+        confidence: { ...confidence(), level: 'high' },
+      }).success
+    ).toBe(false);
+    expect(
+      aflTradeValueResultSchema.safeParse({
+        ...available(),
+        confidence: {
+          level: 'high',
+          dimensions: [confidence().dimensions[0], confidence().dimensions[0]],
+        },
+      }).success
+    ).toBe(false);
+  });
+
   it('accepts a complete-trade result only with complete coverage', () => {
     expect(aflTradeValueResultSchema.safeParse(available()).success).toBe(true);
     expect(
