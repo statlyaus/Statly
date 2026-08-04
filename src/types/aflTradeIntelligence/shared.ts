@@ -87,9 +87,8 @@ export const aflTradePublicationRefSchema = z
   .object({
     publicationId: z.string().regex(/^publication:[a-f0-9]{64}$/),
     state: z.enum(['published', 'superseded', 'withdrawn']),
-    modelId: aflTradePublicIdSchema,
-    modelVersion: aflTradePublicIdSchema,
-    datasetId: z.string().regex(/^dataset:[a-f0-9]{64}$/),
+    valuationBundleId: z.string().regex(/^valuation-bundle:[a-f0-9]{64}$/),
+    valueUnitId: aflTradePublicIdSchema,
     publishedAt: aflTradeIsoDateTimeSchema,
   })
   .strict();

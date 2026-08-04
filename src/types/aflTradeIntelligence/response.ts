@@ -20,7 +20,7 @@ export const aflTradeProjectionBuildIdSchema = z.string().regex(/^projection:[a-
 
 export const aflTradeConsistencyEnvelopeSchema = z
   .object({
-    contractVersion: z.literal('afl-trade-value/v1'),
+    contractVersion: z.literal('afl-trade-value/v2'),
     selection: z.enum(['active', 'explicit_historical', 'none']),
     publication: aflTradePublicationRefSchema.nullable(),
     registryRevision: z.number().int().nonnegative(),
@@ -146,6 +146,19 @@ function validateResponseConsistency(value: ResponseConsistencyValue, context: z
       code: 'custom',
       path: ['consistency', 'publication', 'state'],
       message: 'Withdrawn publications cannot serve numerical results.',
+    });
+  }
+  if (
+    value.consistency.publication !== null &&
+    value.results.some(
+      (result) =>
+        'unit' in result && result.unit.id !== value.consistency.publication?.valueUnitId
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['consistency', 'publication', 'valueUnitId'],
+      message: 'Every numerical result must use the selected publication value unit.',
     });
   }
   const hasWithdrawn = value.results.some((result) => result.availability === 'withdrawn');

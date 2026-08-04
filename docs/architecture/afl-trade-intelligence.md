@@ -32,10 +32,10 @@ supported for a cohort. A published model may answer four separate questions:
    when the player leaves that club.
 3. **Remaining value:** forecast contribution after a stated valuation date.
 4. **Current outcome distribution:** a present-day combination of realized contribution and remaining
-   value using an explicitly named model version.
+   value using an explicitly identified valuation bundle.
 
 These views must never be silently combined. Every numerical response identifies its value unit,
-valuation view, effective date, knowledge cutoff, publication, model version, and uncertainty.
+valuation view, effective date, knowledge cutoff, publication, valuation bundle, and uncertainty.
 
 Permitted language describes model estimates, distributions, assumptions, and evidence. Public copy
 must not claim objective fairness, causal certainty, or an unqualified winner or loser.
@@ -493,12 +493,15 @@ An incomplete result can never silently present included-assets-only probabiliti
 conclusion. Comparison exclusions must exactly equal coverage exclusions, including for stale or
 previously available results that retain partial coverage.
 
-Publication and dataset identifiers are lowercase SHA-256 content addresses with `publication:` and
-`dataset:` prefixes. Public projection builds use the same rule with a `projection:` prefix. A response
+The public consistency envelope is `afl-trade-value/v2`. Publication, valuation-bundle, and projection
+identifiers are lowercase SHA-256 content addresses with `publication:`, `valuation-bundle:`, and
+`projection:` prefixes. The publication reference names the exact bundle and value unit; it does not
+misrepresent one component model or dataset as the identity of the whole calculation. A response
 selects one active publication, one explicit historical publication, or none. Numerical results require
-one immutable selected publication; active selection references only a published publication; withdrawn
-results identify the withdrawn publication; a withdrawn publication cannot serve any value-bearing
-result; and list items cannot override the response publication.
+one immutable selected publication and must use its declared value unit; active selection references
+only a published publication; withdrawn results identify the withdrawn publication; a withdrawn
+publication cannot serve any value-bearing result; and list items cannot override the response
+publication. The retired v1 single-model metadata shape is rejected rather than silently interpreted.
 Serving, publication, calculation, and knowledge-cutoff times must be chronologically consistent.
 
 ### Prepublication public delivery boundary

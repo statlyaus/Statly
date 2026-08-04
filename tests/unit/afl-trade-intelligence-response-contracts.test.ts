@@ -11,15 +11,14 @@ import {
 const publication = {
   publicationId: `publication:${'a'.repeat(64)}`,
   state: 'published' as const,
-  modelId: 'afl-contribution-model',
-  modelVersion: '1.0.0',
-  datasetId: `dataset:${'b'.repeat(64)}`,
+  valuationBundleId: `valuation-bundle:${'b'.repeat(64)}`,
+  valueUnitId: 'contribution-above-replacement-v1',
   publishedAt: '2026-01-01T12:00:00.000Z',
 };
 
 function consistency(): AflTradeConsistencyEnvelope {
   return {
-    contractVersion: 'afl-trade-value/v1' as const,
+    contractVersion: 'afl-trade-value/v2' as const,
     selection: 'active' as const,
     publication,
     registryRevision: 8,
@@ -36,7 +35,7 @@ function consistency(): AflTradeConsistencyEnvelope {
 
 function noPublicationConsistency(): AflTradeConsistencyEnvelope {
   return {
-    contractVersion: 'afl-trade-value/v1' as const,
+    contractVersion: 'afl-trade-value/v2' as const,
     selection: 'none' as const,
     publication: null,
     registryRevision: 0,
@@ -189,6 +188,29 @@ describe('AFL trade-intelligence response contracts', () => {
     ).toBe(false);
   });
 
+  it('requires the v2 bundle publication identity instead of legacy single-model metadata', () => {
+    expect(
+      aflTradeConsistencyEnvelopeSchema.safeParse({
+        ...consistency(),
+        contractVersion: 'afl-trade-value/v1',
+      }).success
+    ).toBe(false);
+
+    const { valuationBundleId: _valuationBundleId, valueUnitId: _valueUnitId, ...legacyBase } =
+      publication;
+    expect(
+      aflTradeConsistencyEnvelopeSchema.safeParse({
+        ...consistency(),
+        publication: {
+          ...legacyBase,
+          modelId: 'afl-contribution-model',
+          modelVersion: '1.0.0',
+          datasetId: `dataset:${'b'.repeat(64)}`,
+        },
+      }).success
+    ).toBe(false);
+  });
+
   it('requires active selection to reference a published publication', () => {
     expect(
       aflTradeConsistencyEnvelopeSchema.safeParse({
@@ -243,6 +265,17 @@ describe('AFL trade-intelligence response contracts', () => {
     expect(
       aflTradeValueListResponseSchema.safeParse(
         listResponse(available(), noPublicationConsistency())
+      ).success
+    ).toBe(false);
+  });
+
+  it('rejects numerical results expressed in a different unit from the selected bundle', () => {
+    expect(
+      aflTradeValueListResponseSchema.safeParse(
+        listResponse(available(), {
+          ...consistency(),
+          publication: { ...publication, valueUnitId: 'different-value-unit' },
+        })
       ).success
     ).toBe(false);
   });
