@@ -24,6 +24,7 @@ import {
 } from './coverageReport';
 import type { AflTradeDatasetManifest } from './datasetManifest';
 import type { AflTradeEvidenceManifest } from './evidenceManifest';
+import type { AflTradePlayerContributionModelProtocol } from './modelProtocol';
 import type { AflTradeModelRunManifest } from './modelRunManifest';
 import type {
   AflTradeProjectionManifest,
@@ -66,6 +67,7 @@ export interface AflTradeManifestProvenanceInput {
   architectureDecisionPackage: AflTradeArchitectureDecisionPackage;
   corpus: AflTradeCorpusManifest;
   dataset: AflTradeDatasetManifest;
+  modelProtocol: AflTradePlayerContributionModelProtocol;
   modelRun: AflTradeModelRunManifest;
   publication: AflTradePublicationManifest;
   projection: AflTradeProjectionManifest;
@@ -344,7 +346,10 @@ function collectGatePolicyIssues(
     {
       decisionId: input.publication.content.gate3DecisionId,
       gate: 'gate_3_model_validity',
-      expectedArtifacts: [{ kind: 'model_run', artifactId: input.modelRun.runId }],
+      expectedArtifacts: [
+        { kind: 'model_protocol', artifactId: input.modelProtocol.protocolId },
+        { kind: 'model_run', artifactId: input.modelRun.runId },
+      ],
     },
   ];
   for (const requirement of requirements) {
@@ -388,6 +393,18 @@ function collectParentRelationshipIssues(
       input.modelRun.content.datasetId === input.dataset.datasetId,
       input.modelRun.runId,
       'Model run must reference the exact dataset.',
+    ],
+    [
+      input.modelProtocol.content.datasetId === input.dataset.datasetId &&
+        input.modelRun.content.modelProtocolId === input.modelProtocol.protocolId,
+      input.modelRun.runId,
+      'Model protocol and run must reference the exact dataset and each other.',
+    ],
+    [
+      canonicalizeAflTradeJson(input.modelRun.content.windows) ===
+        canonicalizeAflTradeJson(input.modelProtocol.content.windows),
+      input.modelRun.runId,
+      'Model run windows must exactly match the prespecified protocol.',
     ],
     [
       sameArtifactReferences(
@@ -501,6 +518,7 @@ function collectEnvironmentAndOutcomeIssues(
     input.architectureDecisionPackage.content.environment,
     input.corpus.content.environment,
     input.dataset.content.environment,
+    input.modelProtocol.content.environment,
     input.modelRun.content.environment,
     input.publication.content.environment,
     input.projection.content.environment,
@@ -532,6 +550,7 @@ function collectManifestChronologyIssues(
     { id: input.coverageReport.reportId, time: input.coverageReport.content.createdAt },
     { id: input.corpus.corpusId, time: input.corpus.content.createdAt },
     { id: input.dataset.datasetId, time: input.dataset.content.createdAt },
+    { id: input.modelProtocol.protocolId, time: input.modelProtocol.content.preparedAt },
     { id: input.modelRun.runId, time: input.modelRun.content.startedAt },
     { id: `${input.modelRun.runId}:finished`, time: input.modelRun.content.finishedAt },
     { id: input.publication.publicationId, time: input.publication.content.createdAt },

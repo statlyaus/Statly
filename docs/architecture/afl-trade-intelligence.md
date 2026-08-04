@@ -103,8 +103,10 @@ source-rights proposal
   -> externally authorized Gate 1 decision
   -> normalized bitemporal corpus manifest in the approved isolated analytical PostgreSQL target
   -> externally authorized Gate 2 decision
-  -> feature dataset and reproducible model-run manifests
-  -> externally authorized Gate 3 decision
+  -> feature dataset manifest
+  -> pre-registered player-contribution model protocol
+  -> reproducible model-run manifest
+  -> externally authorized Gate 3 decision pinning the protocol and run
   -> immutable candidate-publication manifest
   -> rebuildable projection manifest
   -> externally authorized Gates 4 and 5
@@ -373,8 +375,9 @@ source-rights proposal
   -> corpus manifest
   -> Gate 2 decision
   -> feature dataset manifest
+  -> model-protocol manifest
   -> model-run manifest
-  -> Gate 3 decision
+  -> Gate 3 decision pinning protocol and run
   -> publication manifest
   -> projection manifest
   -> Gate 4 decision
@@ -529,22 +532,38 @@ responsive browser verification, release readiness, or numerical product complet
 
 ## Model and validation boundary
 
-The target, value unit, role taxonomy, replacement baseline, feature availability, censoring rules,
-pick-distribution method, package simulation, and acceptance thresholds are frozen in a protocol before
-candidate training.
+Player contribution and availability use a dedicated, content-addressed protocol prepared after the
+feature dataset and before training. It fixes the target estimands, additive value unit, role taxonomy,
+era definitions, replacement baseline, feature availability, censoring rules, split windows, embargo,
+validation plan, acceptance criteria, and known limitations. Public player identities are source-native
+and carry no fantasy ownership.
 
-Validation uses chronological train, calibration, validation, and final-test windows. Features are
-joined as known at each transaction cutoff. Random row splits cannot establish deployable historical
-performance.
+Replacement levels are stratified by role and era and estimated from the training partition only;
+validation or test refitting is prohibited. Role assignments, corrections, and features are available
+only as known at the prediction cutoff. Unknown and observed zero remain distinct, while target-derived
+and post-outcome features are prohibited. Realized club contribution stops at real-club departure or
+the observation boundary, and active careers are right-censored under an immutable definition.
 
-Every candidate is compared with declared baselines and reports:
+Validation uses chronological train, calibration, validation, and final-test windows with the declared
+embargo. Candidate selection uses train, calibration, and validation data only. The candidate is locked
+before a single final-test evaluation, and final-test retuning is prohibited. Random row splits cannot
+establish deployable historical performance.
+
+Every successful run retains separate immutable evidence for:
 
 - primary and secondary predictive metrics;
+- comparison with declared baselines;
 - calibration and interval coverage;
-- subgroup behavior by era, role, position, age, asset class, and evidence quality;
+- subgroup behavior by era, role, position, age, availability state, and evidence quality;
 - sensitivity to material assumptions;
+- a point-in-time leakage audit;
 - missingness and unsupported cohorts; and
 - data, feature, code, configuration, seed, model, and environment identifiers.
+
+Gate 3 pins both the exact model protocol and its run. Cross-manifest validation requires the protocol
+and run to reference the same dataset, use identical windows, share an environment, and appear in
+chronological order. These contracts do not assert that a protocol has been approved, a run has
+succeeded on real data, or Gate 3 has production authority.
 
 Failure leaves the public archive available without numerical valuation. Product design must not turn
 a failed or missing model into hidden fallback numbers.

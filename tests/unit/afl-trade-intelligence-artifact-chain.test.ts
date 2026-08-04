@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   aflTradeModelRunManifestSchema,
+  aflTradePlayerContributionModelProtocolSchema,
   aflTradeProjectionManifestSchema,
   aflTradePublicationManifestSchema,
   validateAflTradeManifestProvenance,
@@ -42,13 +43,101 @@ function artifact(character: string) {
   };
 }
 
-function runContent() {
+function modelWindows() {
   return {
-    schemaVersion: 'afl-trade-model-run/v1' as const,
+    train: { from: '2020-01-01T00:00:00.000Z', to: '2021-01-01T00:00:00.000Z' },
+    calibration: { from: '2021-01-08T00:00:00.000Z', to: '2022-01-01T00:00:00.000Z' },
+    validation: { from: '2022-01-08T00:00:00.000Z', to: '2023-01-01T00:00:00.000Z' },
+    finalTest: { from: '2023-01-08T00:00:00.000Z', to: '2024-01-01T00:00:00.000Z' },
+    embargoDays: 7,
+  };
+}
+
+function modelProtocolContent() {
+  return {
+    schemaVersion: 'afl-trade-model-protocol/v1' as const,
+    environment: 'test_fixture' as const,
+    protocolKey: 'fixture-player-contribution',
+    version: 1,
+    modelKind: 'player_contribution_and_availability' as const,
+    datasetId: `dataset:${digest('1')}`,
+    preparedAt: '2026-08-04T12:00:00.000Z',
+    preparedBy: 'fixture-model-owner',
+    proposalOrigin: 'agent_assisted' as const,
+    publicIdentityBoundary: 'source_native_no_fantasy_ownership' as const,
+    estimands: ['realized_club_contribution' as const, 'remaining_contribution' as const],
+    valueUnit: {
+      valueUnitId: 'fixture-contribution',
+      label: 'Fixture contribution',
+      definitionArtifact: artifact('1'),
+      aggregation: 'additive_contribution' as const,
+    },
+    footballContext: {
+      roleTaxonomyArtifact: artifact('2'),
+      eraDefinitionArtifact: artifact('3'),
+      roleAssignmentTiming: 'as_known_at_prediction_cutoff' as const,
+      unknownRoleTreatment: 'explicit_unknown_role' as const,
+    },
+    replacementBaseline: {
+      definitionArtifact: artifact('4'),
+      stratification: 'role_and_era' as const,
+      estimationData: 'training_partition_only' as const,
+      validationAndTestRefit: 'prohibited' as const,
+    },
+    featurePolicy: {
+      knowledgeJoin: 'point_in_time_as_known_at_prediction_cutoff' as const,
+      correctionAvailability: 'only_after_known_from' as const,
+      unknownAndZero: 'distinct' as const,
+      targetDerivedFeatures: 'prohibited' as const,
+      postOutcomeFeatures: 'prohibited' as const,
+      featureAvailabilityArtifact: artifact('5'),
+    },
+    contributionAndCensoringPolicy: {
+      clubContributionEnd: 'real_club_departure_or_observation_end' as const,
+      activeCareerTreatment: 'right_censored' as const,
+      unavailableObservationTreatmentArtifact: artifact('6'),
+      censoringDefinitionArtifact: artifact('7'),
+    },
+    windows: modelWindows(),
+    modelSelectionPolicy: {
+      candidateSelectionData: 'train_calibration_validation_only' as const,
+      finalTestUse: 'single_evaluation_after_candidate_lock' as const,
+      finalTestRetuning: 'prohibited' as const,
+    },
+    validationPlan: {
+      baselineDefinitionArtifacts: [artifact('8')],
+      metricDefinitionArtifacts: [artifact('9')],
+      intervalCalibrationArtifact: artifact('a'),
+      subgroupDimensions: [
+        'era' as const,
+        'role' as const,
+        'position' as const,
+        'age' as const,
+        'availability_state' as const,
+        'evidence_quality' as const,
+      ],
+      sensitivityAnalysisArtifacts: [artifact('b')],
+      acceptanceCriteriaArtifact: artifact('c'),
+    },
+    limitations: ['Fabricated protocol with no production authority.'],
+  };
+}
+
+function modelProtocol(content = modelProtocolContent()) {
+  return aflTradePlayerContributionModelProtocolSchema.parse({
+    protocolId: createAflTradeContentAddress('model-protocol', content),
+    content,
+  });
+}
+
+function runContent(protocol = modelProtocol()) {
+  return {
+    schemaVersion: 'afl-trade-model-run/v2' as const,
     environment: 'test_fixture' as const,
     modelId: 'fixture-model',
     modelVersion: 'fixture-v1',
-    datasetId: `dataset:${digest('1')}`,
+    datasetId: protocol.content.datasetId,
+    modelProtocolId: protocol.protocolId,
     codeCommitSha: digest('2').slice(0, 40),
     cleanWorktree: true as const,
     seed: 42,
@@ -59,14 +148,10 @@ function runContent() {
       workerIdentity: 'fixture-worker',
     },
     startedAt: '2026-08-05T00:00:00.000Z',
+    candidateLockedAt: '2026-08-05T00:30:00.000Z',
+    finalTestEvaluatedAt: '2026-08-05T00:45:00.000Z',
     finishedAt: '2026-08-05T01:00:00.000Z',
-    windows: {
-      train: { from: '2020-01-01T00:00:00.000Z', to: '2021-01-01T00:00:00.000Z' },
-      calibration: { from: '2021-01-08T00:00:00.000Z', to: '2022-01-01T00:00:00.000Z' },
-      validation: { from: '2022-01-08T00:00:00.000Z', to: '2023-01-01T00:00:00.000Z' },
-      finalTest: { from: '2023-01-08T00:00:00.000Z', to: '2024-01-01T00:00:00.000Z' },
-      embargoDays: 7,
-    },
+    windows: modelWindows(),
     sourceCodeArtifact: artifact('3'),
     dependencyLockArtifact: artifact('4'),
     runtimeArtifact: artifact('5'),
@@ -78,6 +163,12 @@ function runContent() {
       status: 'succeeded' as const,
       modelArtifact: artifact('a'),
       validationReportArtifact: artifact('b'),
+      baselineComparisonArtifact: artifact('c'),
+      calibrationReportArtifact: artifact('d'),
+      intervalCoverageArtifact: artifact('e'),
+      subgroupReportArtifact: artifact('f'),
+      sensitivityReportArtifact: artifact('1'),
+      leakageAuditArtifact: artifact('2'),
       modelCardArtifact: artifact('c'),
       diagnosticsArtifact: artifact('d'),
     },
@@ -416,7 +507,8 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
   const reportId = createAflTradeContentAddress('coverage-report', reportContent);
   const corpusId = `corpus:${digest('4')}`;
   const datasetId = `dataset:${digest('1')}`;
-  const run = modelRun();
+  const protocol = modelProtocol();
+  const run = modelRun(runContent(protocol));
   const candidate = publication({
     ...publicationContent(run),
     validationReportArtifact:
@@ -449,6 +541,7 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
     { kind: 'corpus_manifest', artifactId: corpusId },
   ]);
   const gate3 = gatePair('gate_3_model_validity', 'e', [
+    { kind: 'model_protocol', artifactId: protocol.protocolId },
     { kind: 'model_run', artifactId: run.runId },
   ]);
   return {
@@ -529,12 +622,13 @@ function validProvenanceInput(): AflTradeManifestProvenanceInput {
         gate2DecisionId: gate2.decision.decisionId,
         sourceRegisterIds: ['fixture-source'],
         environment: 'test_fixture',
-        createdAt: '2026-08-05T00:00:00.000Z',
+        createdAt: '2026-08-04T06:00:00.000Z',
         includedCohorts: ['fixture-cohort'],
         excludedCohorts: [],
         featureDefinitionArtifacts: run.content.featureDefinitionArtifacts,
       },
     } as never,
+    modelProtocol: protocol,
     modelRun: run,
     publication: {
       ...candidate,
@@ -621,6 +715,28 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
     );
   });
 
+  it('requires the model run to reference the exact prespecified protocol', () => {
+    const input = validProvenanceInput();
+    input.modelRun.content.modelProtocolId = `model-protocol:${digest('d')}`;
+
+    expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
+      code: 'parent_mismatch',
+      subject: input.modelRun.runId,
+      message: 'Model protocol and run must reference the exact dataset and each other.',
+    });
+  });
+
+  it('requires executed model windows to match the prespecified protocol exactly', () => {
+    const input = validProvenanceInput();
+    input.modelRun.content.windows.embargoDays += 1;
+
+    expect(validateAflTradeManifestProvenance(input).issues).toContainEqual({
+      code: 'parent_mismatch',
+      subject: input.modelRun.runId,
+      message: 'Model run windows must exactly match the prespecified protocol.',
+    });
+  });
+
   it('rejects corpus unsupported cohorts that differ from the coverage report', () => {
     const input = validProvenanceInput();
     input.corpus.content.unsupportedCohortIds = ['fixture-cohort'];
@@ -676,6 +792,8 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
   it('records failed runs without allowing them to impersonate successful output', () => {
     const content = {
       ...runContent(),
+      candidateLockedAt: null,
+      finalTestEvaluatedAt: null,
       outcome: {
         status: 'failed' as const,
         failureClassification: 'validation_failure' as const,
@@ -701,6 +819,27 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
         content: impersonatingContent,
       }).success
     ).toBe(false);
+  });
+
+  it('requires successful validation evidence and candidate lock before final testing', () => {
+    const valid = runContent();
+    const reversedMilestones = {
+      ...valid,
+      candidateLockedAt: '2026-08-05T00:50:00.000Z',
+      finalTestEvaluatedAt: '2026-08-05T00:40:00.000Z',
+    };
+    const successfulOutcome = valid.outcome;
+    const { leakageAuditArtifact: _omitted, ...incompleteOutcome } = successfulOutcome;
+    const incompleteEvidence = { ...valid, outcome: incompleteOutcome };
+
+    for (const content of [reversedMilestones, incompleteEvidence]) {
+      expect(
+        aflTradeModelRunManifestSchema.safeParse({
+          runId: createAflTradeContentAddress('model-run', content),
+          content,
+        }).success
+      ).toBe(false);
+    }
   });
 
   it('rejects a forward projection reference from a publication manifest', () => {

@@ -10,5 +10,6 @@ export * from './corpusManifest';
 export * from './datasetManifest';
 export * from './evidenceManifest';
 export * from './manifestProvenance';
+export * from './modelProtocol';
 export * from './modelRunManifest';
 export * from './publicationProjectionManifests';

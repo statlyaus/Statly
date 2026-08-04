@@ -27,6 +27,12 @@ const successfulOutcomeSchema = z
     status: z.literal('succeeded'),
     modelArtifact: aflTradeArtifactRefSchema,
     validationReportArtifact: aflTradeArtifactRefSchema,
+    baselineComparisonArtifact: aflTradeArtifactRefSchema,
+    calibrationReportArtifact: aflTradeArtifactRefSchema,
+    intervalCoverageArtifact: aflTradeArtifactRefSchema,
+    subgroupReportArtifact: aflTradeArtifactRefSchema,
+    sensitivityReportArtifact: aflTradeArtifactRefSchema,
+    leakageAuditArtifact: aflTradeArtifactRefSchema,
     modelCardArtifact: aflTradeArtifactRefSchema,
     diagnosticsArtifact: aflTradeArtifactRefSchema,
   })
@@ -50,11 +56,12 @@ const unsuccessfulOutcomeSchema = z
 
 export const aflTradeModelRunManifestContentSchema = z
   .object({
-    schemaVersion: z.literal('afl-trade-model-run/v1'),
+    schemaVersion: z.literal('afl-trade-model-run/v2'),
     environment: z.enum(AFL_TRADE_DECISION_ENVIRONMENTS),
     modelId: publicIdSchema,
     modelVersion: publicIdSchema,
     datasetId: aflTradeContentAddressedIdSchema('dataset'),
+    modelProtocolId: aflTradeContentAddressedIdSchema('model-protocol'),
     codeCommitSha: gitCommitSchema,
     cleanWorktree: z.literal(true),
     seed: z.number().int().nonnegative(),
@@ -67,6 +74,8 @@ export const aflTradeModelRunManifestContentSchema = z
       })
       .strict(),
     startedAt: isoDateTimeSchema,
+    candidateLockedAt: isoDateTimeSchema.nullable(),
+    finalTestEvaluatedAt: isoDateTimeSchema.nullable(),
     finishedAt: isoDateTimeSchema,
     windows: z
       .object({
@@ -93,6 +102,29 @@ export const aflTradeModelRunManifestContentSchema = z
         code: 'custom',
         path: ['finishedAt'],
         message: 'A model run cannot finish before it starts.',
+      });
+    }
+    const candidateLockedAt =
+      manifest.candidateLockedAt === null ? null : Date.parse(manifest.candidateLockedAt);
+    const finalTestEvaluatedAt =
+      manifest.finalTestEvaluatedAt === null ? null : Date.parse(manifest.finalTestEvaluatedAt);
+    if (
+      (manifest.outcome.status === 'succeeded' &&
+        (candidateLockedAt === null || finalTestEvaluatedAt === null)) ||
+      (finalTestEvaluatedAt !== null && candidateLockedAt === null) ||
+      (candidateLockedAt !== null && candidateLockedAt < Date.parse(manifest.startedAt)) ||
+      (candidateLockedAt !== null && Date.parse(manifest.finishedAt) < candidateLockedAt) ||
+      (candidateLockedAt !== null &&
+        finalTestEvaluatedAt !== null &&
+        finalTestEvaluatedAt < candidateLockedAt) ||
+      (finalTestEvaluatedAt !== null &&
+        Date.parse(manifest.finishedAt) < finalTestEvaluatedAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['candidateLockedAt'],
+        message:
+          'The candidate must be locked before final-test evaluation and before the run finishes.',
       });
     }
     const windows = [
