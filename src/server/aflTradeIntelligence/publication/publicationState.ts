@@ -1,4 +1,8 @@
-import type { AflTradePublicationState } from '@/types/aflTradeIntelligence';
+import type {
+  AflTradePublicationRef,
+  AflTradePublicationState,
+  AflTradeValuationView,
+} from '@/types/aflTradeIntelligence';
 import { z } from 'zod';
 
 import {
@@ -26,6 +30,11 @@ export interface AflTradePublicationEvent {
 export interface AflTradePublicationRecord {
   publicationId: string;
   scopeKey: string;
+  valuationBundleId: string;
+  valueUnitId: string;
+  supportedViews: readonly AflTradeValuationView[];
+  supportedCohorts: readonly string[];
+  excludedCohorts: readonly string[];
   manifestContentSha256: string;
   state: AflTradePublicationState;
   createdAt: string;
@@ -45,6 +54,16 @@ export interface AflTradePublicationRegistry {
   revision: number;
   publications: Readonly<Record<string, AflTradePublicationRecord>>;
   activeByScope: Readonly<Record<string, AflTradeActivePublicationPointer>>;
+}
+
+export interface AflTradePublicationReadSelection {
+  publication: AflTradePublicationRef;
+  projectionBuildId: string;
+  registryRevision: number;
+  scopeKey: string;
+  supportedViews: readonly AflTradeValuationView[];
+  supportedCohorts: readonly string[];
+  excludedCohorts: readonly string[];
 }
 
 interface CommandMetadata {
@@ -172,6 +191,11 @@ export function registerAflTradePublication(
   const record: AflTradePublicationRecord = {
     publicationId,
     scopeKey: manifest.content.scopeKey,
+    valuationBundleId: manifest.content.valuationBundleId,
+    valueUnitId: manifest.content.valueUnitId,
+    supportedViews: manifest.content.supportedViews,
+    supportedCohorts: manifest.content.supportedCohorts,
+    excludedCohorts: manifest.content.excludedCohorts,
     manifestContentSha256: publicationId.slice('publication:'.length),
     state: 'candidate',
     createdAt: manifest.content.createdAt,
@@ -443,9 +467,31 @@ export function getActiveAflTradePublication(
 export function captureAflTradePublicationRead(
   registry: AflTradePublicationRegistry,
   scopeKey: string
-): { publicationId: string; registryRevision: number } | null {
+): AflTradePublicationReadSelection | null {
   const active = getActiveAflTradePublication(registry, scopeKey);
-  return active
-    ? { publicationId: active.publicationId, registryRevision: registry.revision }
-    : null;
+  if (!active) return null;
+
+  const pointer = registry.activeByScope[scopeKey];
+  if (!pointer || active.projectionId === null) {
+    throw new AflTradePublicationStateError(
+      'INVALID_ACTIVE_POINTER',
+      `Scope ${scopeKey} does not identify a complete serving publication.`
+    );
+  }
+
+  return {
+    publication: {
+      publicationId: active.publicationId,
+      state: 'published',
+      valuationBundleId: active.valuationBundleId,
+      valueUnitId: active.valueUnitId,
+      publishedAt: pointer.activatedAt,
+    },
+    projectionBuildId: active.projectionId,
+    registryRevision: registry.revision,
+    scopeKey: active.scopeKey,
+    supportedViews: [...active.supportedViews],
+    supportedCohorts: [...active.supportedCohorts],
+    excludedCohorts: [...active.excludedCohorts],
+  };
 }

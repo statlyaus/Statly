@@ -14,6 +14,7 @@ import {
 import {
   AflTradePublicationStateError,
   applyAflTradePublicationCommand,
+  captureAflTradePublicationRead,
   createAflTradePublicationRegistry,
   getActiveAflTradePublication,
   registerAflTradePublication,
@@ -62,7 +63,7 @@ function projection(parent = publication()) {
     createdAt: '2026-08-01T01:00:00.000Z',
     publicationId: parent.publicationId,
     buildJobId: 'fixture-build',
-    responseContractVersion: 'fixture-v1',
+    responseContractVersion: 'afl-trade-value/v2' as const,
     documentCount: 1,
     projectionArtifact: artifact('8'),
     schemaArtifact: artifact('9'),
@@ -199,8 +200,17 @@ function published() {
 describe('AFL trade-intelligence publication lifecycle', () => {
   it('registers a validated manifest as an inactive candidate', () => {
     const { manifest, registry } = register();
-    expect(registry.publications[manifest.publicationId].state).toBe('candidate');
+    const record = registry.publications[manifest.publicationId];
+    expect(record).toMatchObject({
+      state: 'candidate',
+      valuationBundleId: manifest.content.valuationBundleId,
+      valueUnitId: manifest.content.valueUnitId,
+      supportedViews: manifest.content.supportedViews,
+      supportedCohorts: manifest.content.supportedCohorts,
+      excludedCohorts: manifest.content.excludedCohorts,
+    });
     expect(getActiveAflTradePublication(registry, manifest.content.scopeKey)).toBeNull();
+    expect(captureAflTradePublicationRead(registry, manifest.content.scopeKey)).toBeNull();
   });
 
   it('requires the matching projection before validation', () => {
@@ -265,6 +275,37 @@ describe('AFL trade-intelligence publication lifecycle', () => {
     });
     expect(getActiveAflTradePublication(next, manifest.content.scopeKey)?.publicationId).toBe(
       manifest.publicationId
+    );
+    expect(captureAflTradePublicationRead(next, manifest.content.scopeKey)).toEqual({
+      publication: {
+        publicationId: manifest.publicationId,
+        state: 'published',
+        valuationBundleId: manifest.content.valuationBundleId,
+        valueUnitId: manifest.content.valueUnitId,
+        publishedAt: '2026-08-01T04:00:00.000Z',
+      },
+      projectionBuildId: build.projectionId,
+      registryRevision: next.revision,
+      scopeKey: manifest.content.scopeKey,
+      supportedViews: manifest.content.supportedViews,
+      supportedCohorts: manifest.content.supportedCohorts,
+      excludedCohorts: manifest.content.excludedCohorts,
+    });
+  });
+
+  it('fails closed when an active publication has no projection identity', () => {
+    const { manifest, registry } = published();
+    const record = registry.publications[manifest.publicationId];
+    const corrupted = {
+      ...registry,
+      publications: {
+        ...registry.publications,
+        [manifest.publicationId]: { ...record, projectionId: null },
+      },
+    };
+
+    expect(() => captureAflTradePublicationRead(corrupted, manifest.content.scopeKey)).toThrow(
+      expect.objectContaining({ code: 'INVALID_ACTIVE_POINTER' })
     );
   });
 

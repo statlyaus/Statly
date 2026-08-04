@@ -467,7 +467,7 @@ function projectionContent(parent = publication()) {
     createdAt: '2026-08-07T00:00:00.000Z',
     publicationId: parent.publicationId,
     buildJobId: 'fixture-projection-job',
-    responseContractVersion: 'afl-trade-response-v1',
+    responseContractVersion: 'afl-trade-value/v2' as const,
     documentCount: 10,
     projectionArtifact: artifact('5'),
     schemaArtifact: artifact('6'),
@@ -1104,6 +1104,20 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
       pickRun.runId,
     ]);
     expect(projection.content.publicationId).toBe(candidate.publicationId);
+  });
+
+  it('rejects a projection built for any response contract other than v2', () => {
+    const content = {
+      ...projectionContent(),
+      responseContractVersion: 'afl-trade-value/v1',
+    };
+
+    expect(
+      aflTradeProjectionManifestSchema.safeParse({
+        projectionId: createAflTradeContentAddress('projection', content),
+        content,
+      }).success
+    ).toBe(false);
   });
 
   it('requires a clean source tree for a reproducible model run', () => {

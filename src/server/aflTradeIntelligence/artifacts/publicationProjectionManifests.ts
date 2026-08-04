@@ -83,7 +83,7 @@ export const aflTradeProjectionManifestContentSchema = z
     createdAt: isoDateTimeSchema,
     publicationId: aflTradeContentAddressedIdSchema('publication'),
     buildJobId: publicIdSchema,
-    responseContractVersion: publicIdSchema,
+    responseContractVersion: z.literal('afl-trade-value/v2'),
     documentCount: z.number().int().nonnegative(),
     projectionArtifact: aflTradeArtifactRefSchema,
     schemaArtifact: aflTradeArtifactRefSchema,
