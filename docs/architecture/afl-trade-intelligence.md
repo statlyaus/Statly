@@ -1,10 +1,11 @@
 # Public AFL trade intelligence
 
 - Status: WP1 pure deterministic foundations, Gate 1 decision/transition contracts, the independent
-  public analytical target, and the WP7A prepublication public boundary are defined with local
-  contract coverage; Gates 0A and 1 have no production approval, and analytical infrastructure,
-  model development, numerical publication services, and numerical product delivery are not complete
-- Last verified against source: 2026-08-03
+  public analytical target, the WP7A public boundary, and source-independent operational contracts
+  are defined with local contract coverage; Gates 0A and 1 have no production approval, and live
+  analytical infrastructure, model development, numerical publication, deployment, and production
+  verification are not complete
+- Last verified against source: 2026-08-05
 
 ## Purpose
 
@@ -59,10 +60,13 @@ Firestore is ready to become the new engine's projection authority.
 The source-independent WP1 foundation is implemented separately from those existing archive reads. It
 currently provides strict public contracts, source-governance and artifact-manifest schemas,
 bitemporal lineage rules, deterministic fabricated fixtures, attribution invariants, and publication
-state transitions. These modules do not read production evidence, write a database, fit a model,
-publish numerical values, or activate a public projection. The separate WP7A prepublication boundary
-adds an honest unavailable-state experience and general methodology page; it is not a numerical
-valuation experience.
+state transitions. The operational layer adds immutable calculation runs and attempts, pure lease and
+retry transitions, content-addressed schedule decisions and dispatch claims, operational-health
+recommendations, and append-only model-change reviews. These modules do not read production evidence,
+write a database, configure a queue or scheduler, fit a model, publish numerical values, or activate a
+public projection. The separate WP7A public boundary adds an honest unavailable-state experience,
+contract-ready numerical views, and a general methodology page; it is not evidence that a numerical
+valuation exists.
 
 WP1 completion therefore means that later work has a deterministic boundary to build on. It does not
 mean that a historical source is approved, managed PostgreSQL is operational, an analytical corpus
@@ -714,6 +718,39 @@ a registry, implement a Firestore or PostgreSQL value or methodology projection 
 that a numerical publication exists. The UI is contract-ready, but candidate, rejected, and partially
 built data remain incapable of reaching an active public read through this code alone.
 
+## Calculation operations
+
+The source-independent operations boundary is deliberately separate from transport, infrastructure,
+and publication authority:
+
+- calculation inputs pin the public scope, environment, as-of time, knowledge cutoff, valuation
+  bundle, datasets, evidence manifests, source registers, views, code commit, and configuration;
+- a content-addressed logical run contains append-only content-addressed attempts and captures the
+  last-good publication at queue time;
+- queued, running, succeeded, failed, and cancelled transitions preserve chronology and reject stale
+  attempt or lease ownership;
+- only the current unexpired lease may commit success, and a retry appends a new attempt only after a
+  retryable failure;
+- success creates an exact publication/projection candidate; it never changes the publication
+  registry or converts the captured last-good snapshot into a serving pointer;
+- aligned schedule occurrences produce deterministic dispatch keys, and an adapter may enqueue only
+  after winning a durable atomic unique claim for that key;
+- source or calculation approval absence, excessive lateness, and active same-scope work prevent
+  enqueue;
+- content-addressed health snapshots combine current source-rights evidence, active-publication and
+  projection evidence, latest run state, and explicit freshness thresholds into serve, retain,
+  suppress, withdraw, retry, stop, or investigate recommendations; and
+- a model recalibration or material change produces a distinct candidate release and an append-only,
+  independently reviewed model-change record. Its strongest outcome is a recommendation for Gate 3
+  review, not approval or publication.
+
+Operational recommendations are declarative. The selected runtime adapters must persist run
+transitions transactionally or with revision compare-and-swap, enforce dispatch-key uniqueness,
+preserve immutable artifacts, and route health alerts. Only the Gate ledger and publication registry
+may approve or activate a release. The [public AFL trade-intelligence operations
+runbook](../runbooks/afl-trade-intelligence-operations.md) owns scheduling, execution, health, incident,
+withdrawal, recovery, recalibration, and exact-commit verification procedure.
+
 ## Migration and rollback
 
 After the exact Gate 1 package and a real isolated analytical target are separately approved, the
@@ -772,3 +809,4 @@ public product states when later gates do not pass.
   not an analytical-engine prerequisite
 - [Product design principles](../product/design-principles.md)
 - [Player identity consolidation](../runbooks/player-identity.md)
+- [Public AFL trade-intelligence operations](../runbooks/afl-trade-intelligence-operations.md)

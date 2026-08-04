@@ -39,6 +39,8 @@ authority when a document and implementation disagree; fix the document in the s
 
 ## Runbooks
 
+- [Public AFL trade-intelligence operations](runbooks/afl-trade-intelligence-operations.md) —
+  scheduling, calculation lifecycle, health, publication incidents, recovery, and model-change review.
 - [PostgreSQL cutover](runbooks/postgresql-cutover.md) — planned, not yet executed.
 - [Player identity consolidation](runbooks/player-identity.md) — reviewed production data operation.
 
