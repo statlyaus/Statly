@@ -2,9 +2,9 @@
 
 - Status: WP1 pure deterministic foundations, Gate 1 decision/transition contracts, the independent
   public analytical target, the WP7A public boundary, source-independent operational contracts, and
-  the Stage 3 and Stage 4 modeling harnesses are defined with local contract coverage; Gates 0A and 1
-  have no production approval, and approved real-data model development, numerical publication,
-  deployment, and production verification are not complete
+  the Stage 3, Stage 4, and Stage 5 modeling and valuation harnesses are defined with local contract
+  coverage; Gates 0A and 1 have no production approval, and approved real-data model development,
+  numerical publication, deployment, and production verification are not complete
 - Last verified against source: 2026-08-05
 
 ## Purpose
@@ -57,19 +57,21 @@ does not implement expected-revision compare-and-swap, demonstrated parity, or a
 rollback. These behaviors are current-state risks to replace deliberately; they are not evidence that
 Firestore is ready to become the new engine's projection authority.
 
-The source-independent WP1 and modeling foundations are implemented separately from those existing
-archive reads. They provide strict public contracts, source-governance and artifact-manifest schemas,
-bitemporal lineage rules, deterministic fabricated fixtures, attribution invariants, publication
-state transitions, a player-contribution baseline harness, and draft-pick and future-pick distribution
-harnesses. The operational layer adds immutable calculation runs and attempts, pure lease and retry
-transitions, content-addressed schedule decisions and dispatch claims, operational-health
-recommendations, and append-only model-change reviews. The modeling modules can fit deterministic
-benchmarks, run simulations, and evaluate locked predictions supplied through their contracts, but
-only fabricated fixtures have been used to establish local behavior. These modules do not read
-production evidence, write a database, configure a queue or scheduler, establish approved real-data
-performance, publish numerical values, or activate a public projection. The separate WP7A public
-boundary adds an honest unavailable-state experience, contract-ready numerical views, and a general
-methodology page; it is not evidence that a numerical valuation exists.
+The source-independent WP1, modeling, and valuation foundations are implemented separately from those
+existing archive reads. They provide strict public contracts, source-governance and artifact-manifest
+schemas, bitemporal lineage rules, deterministic fabricated fixtures, attribution invariants,
+publication state transitions, a player-contribution baseline harness, draft-pick and future-pick
+distribution harnesses, and a complete-trade valuation artifact chain. The operational layer adds
+immutable calculation runs and attempts, pure lease and retry transitions, content-addressed schedule
+decisions and dispatch claims, operational-health recommendations, and append-only model-change
+reviews. The modeling and valuation modules can fit deterministic benchmarks, run simulations,
+compose aligned component draws, calculate package distributions, produce snapshots and structured
+explanations, and evaluate locked predictions supplied through their contracts, but only fabricated
+fixtures have been used to establish local behavior. These modules do not read production evidence,
+write a database, configure a queue or scheduler, establish approved real-data performance, publish
+numerical values, or activate a public projection. The separate WP7A public boundary adds an honest
+unavailable-state experience, contract-ready numerical views, and a general methodology page; it is
+not evidence that a numerical valuation exists.
 
 WP1 completion therefore means that later work has a deterministic boundary to build on. It does not
 mean that a historical source is approved, managed PostgreSQL is operational, an analytical corpus
@@ -656,35 +658,94 @@ Every successful run retains separate immutable evidence for:
 - missingness and unsupported cohorts; and
 - data, feature, code, configuration, seed, model, and environment identifiers.
 
+### Stage 5 complete-trade valuation foundation
+
 Package valuation composes the independently governed player and pick/future-pick components through
 a third content-addressed valuation-bundle manifest. The bundle contains public, source-native AFL
 assets only and carries no fantasy user, league, roster, or membership ownership. It fixes one common
 football-contribution unit and records the exact dataset, protocol, run, and Gate 3 decision for each
 component.
 
-The calculation unit is the complete multi-party trade. Joint simulation preserves shared factors and
+The executable Stage 5 boundary lives in `src/server/aflTradeIntelligence/valuation`. Its immutable
+artifact chain is:
+
+```text
+valuation bundle + public lineage graph
+  -> valuation case
+  + aligned component draw set
+  + realized-contribution ledger
+  + package policy
+  -> complete-trade calculation
+  -> four-view snapshot set
+  -> structured explanation
+  -> structural validation report
+```
+
+The valuation case pins the exact bundle, graph, draw set, realized ledger, package policy, trade
+parties, lineage roots, and the temporal context for all four views. Parties are real AFL clubs and
+roots are public AFL assets. The case and every downstream artifact reject user, fantasy, roster,
+owner, and legacy-value fields. Content addressing makes a changed parent a different artifact rather
+than an in-place update.
+
+The component draw set is either an exactly enumerated weighted joint distribution or a deterministic
+sampled distribution. Each draw contains all supported lineage roots, keeps shared factors aligned
+across components and clubs, and retains season paths and the separate declared data, model,
+future-state, and sampling-uncertainty treatments. Product iteration order cannot redefine a draw.
+Football timing is represented in component paths; market discounting, contract value, commercial
+value, and opaque preference discounts are not inserted into component forecasts.
+
+The realized-contribution ledger distinguishes observed contribution from unavailable evidence,
+references immutable evidence, and validates time, club custody, player identity, and root
+attribution. Realized contribution is credited once to the receiving real AFL club and stops at club
+departure. It is not reconstructed from a forecast, defaulted to zero when missing, or adjusted by
+later list-spot or scarcity policy.
+
+The calculation unit is the complete multi-party trade. Joint draws preserve shared factors and
 correlated outcomes rather than summing independent point estimates. Lineage-frontier attribution
-credits each asset exactly once, limits player contribution to the receiving real AFL club until
-departure, and follows an exercised pick into either its selected player or later return assets without
-double counting. Unresolved assets are excluded with explicit reasons and never receive fallback
-values. List-spot, scarcity, and role-congestion policies are immutable referenced artifacts; universal
-football value remains visible and club utility, contract value, and commercial value stay separate or
-explicitly unavailable.
+credits each root exactly once, follows pick and player successors, and rejects missing or duplicated
+frontier coverage. Unavailable inputs propagate an unavailable value with reasons; the kernel does not
+coerce missing evidence to zero.
 
-Each bundle contains at-trade, realized, remaining, and current temporal contexts. At-trade knowledge
-cannot follow the real trade, while the other three views share one current context and preserve the
-identity `current = realized club value + remaining asset value`. Simulation output includes mean,
+Universal football value remains visible in three ordered layers: gross contribution, list-spot
+adjusted contribution, and scarcity-adjusted contribution. Their evidence-backed parameters live in
+an immutable package-policy artifact and are not production defaults. Optional club utility applies
+club timing and role-congestion assumptions in a separate layer and never relabels universal value.
+Market, contract, and commercial value remain separate and unavailable in this kernel.
+
+The four immutable snapshots represent at-trade, realized, remaining, and current views. At-trade
+knowledge cannot follow the real trade, while realized, remaining, and current share one present
+temporal context. The calculation enforces `current = realized + remaining` for every root, draw,
+club, and value layer rather than checking only aggregate means. Weighted snapshots report mean,
 median, an 80% central interval, downside and upside quantiles, low-return and elite probabilities,
-club-ahead probabilities, and data/model confidence. Explanations come from structured reason codes
-and measured factors, distinguish facts, estimates, assumptions, unavailable information, and
-low-confidence output, and must pass numerical-parity evidence. Unconstrained generated numerical
-claims are prohibited. Legacy source values remain separate and cannot be relabelled as Statly value.
+all pairwise club comparison probabilities, confidence evidence, and exact-versus-sampled uncertainty.
+Partially available distributions may expose a clearly labelled conditional summary, but never a
+whole-trade statistic or comparison over missing probability mass.
 
-The bundle records a clean source revision, configuration, runtime, seed, execution identity and
-chronology, immutable snapshots and simulation draws, attribution and replay reports, coverage and
-exclusion evidence, confidence and sensitivity reports, and bundle-level validation and model-card
-artifacts. These are contracts for reproducibility and review; they are not evidence that a real bundle
-has been calculated successfully.
+Explanations are rendered only from fixed templates and structured reason codes. Their statements
+separate measured facts, model estimates, assumptions, unavailable information, and low-confidence
+warnings. Numerical claims are regenerated from the calculation and snapshot artifacts and must pass
+parity validation; unconstrained generated numerical claims remain prohibited. Legacy Expected and
+Actual source fields are excluded from the kernel and cannot be relabelled as Statly value.
+
+Four fully fabricated fixture families exercise two-party, three-party, future-pick, and on-traded-pick
+chains end to end. The validator checks schemas and content addresses, graph and case lineage,
+realized attribution, exactly-once terminal frontiers, deterministic calculation/snapshot/explanation
+replay, explanation parity, and the public ownership boundary. Tamper tests cover changed hashes,
+parents, lineage, realized evidence, snapshots, explanations, and forbidden fields.
+
+A structurally valid fixture report always retains `publicationReady: false` and the five external
+blockers: lawful source rights, a real historical-data run, component-model calibration exit criteria,
+effective Gate approvals, and production storage and release evidence. Stage 5 therefore establishes
+the source-independent calculation architecture and its invariants only. It does not establish an
+approved source, calibrated real-data inputs, acceptable historical trade performance, production
+policy parameters, an approved valuation bundle, durable storage, numerical publication, or release
+readiness.
+
+The broader bundle contract records a clean source revision, configuration, runtime, seed, execution
+identity and chronology, immutable snapshots and simulation draws, attribution and replay reports,
+coverage and exclusion evidence, confidence and sensitivity reports, and bundle-level validation and
+model-card artifacts. These remain contracts for reproducibility and review; they are not evidence
+that a real bundle has been calculated successfully.
 
 Gate 3 first pins each component's exact model protocol and run. A separate effective Gate 3 decision
 then pins the exact valuation bundle selected by a publication. Cross-manifest validation requires the
