@@ -1,3 +1,5 @@
+import { types as nodeUtilTypes } from 'node:util';
+
 import type {
   AflTradePublicationRef,
   AflTradePublicationState,
@@ -17,6 +19,10 @@ import type {
   AflTradeDecisionEnvironment,
   AflTradeGateCode,
 } from '../governance/gateDecisionTypes';
+import {
+  authenticateAflTradeProjectionManifestMaterialization,
+  type AflTradeProjectionManifestMaterializationVerifyInput,
+} from './projectionManifestMaterialization';
 
 export interface AflTradePublicationEvent {
   from: AflTradePublicationState | null;
@@ -29,6 +35,7 @@ export interface AflTradePublicationEvent {
 
 export interface AflTradePublicationRecord {
   publicationId: string;
+  publicationManifestSchemaVersion: AflTradePublicationManifest['content']['schemaVersion'];
   scopeKey: string;
   valuationBundleId: string;
   valueUnitId: string;
@@ -75,7 +82,16 @@ interface CommandMetadata {
 }
 
 export type AflTradePublicationCommand =
-  | (CommandMetadata & { action: 'validate'; projectionManifest: AflTradeProjectionManifest })
+  | (CommandMetadata & { action: 'validate' } & (
+        | {
+            projectionManifest: AflTradeProjectionManifest;
+            projectionManifestVerification?: never;
+          }
+        | {
+            projectionManifest?: never;
+            projectionManifestVerification: AflTradeProjectionManifestMaterializationVerifyInput;
+          }
+      ))
   | (CommandMetadata & {
       action: 'approve';
       gateDecisionId: string;
@@ -190,6 +206,7 @@ export function registerAflTradePublication(
   }
   const record: AflTradePublicationRecord = {
     publicationId,
+    publicationManifestSchemaVersion: manifest.content.schemaVersion,
     scopeKey: manifest.content.scopeKey,
     valuationBundleId: manifest.content.valuationBundleId,
     valueUnitId: manifest.content.valueUnitId,
@@ -265,6 +282,153 @@ function requireTransition(
       `Cannot ${action} publication ${record.publicationId} from ${record.state}.`
     );
   }
+}
+
+function invalidProjectionManifest(message = 'Projection manifest is invalid.'): never {
+  throw new AflTradePublicationStateError('INVALID_MANIFEST', message);
+}
+
+const PUBLICATION_COMMAND_ACTIONS = [
+  'validate',
+  'approve',
+  'publish',
+  'reject',
+  'withdraw',
+] as const;
+const VALIDATE_REQUIRED_KEYS = [
+  'action',
+  'publicationId',
+  'occurredAt',
+  'actor',
+  'evidenceId',
+] as const;
+
+function requireOwnCommandAction(value: unknown): AflTradePublicationCommand['action'] {
+  try {
+    if (value === null || typeof value !== 'object' || nodeUtilTypes.isProxy(value)) {
+      throw new TypeError();
+    }
+    const prototype = Object.getPrototypeOf(value);
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, 'action');
+    if (
+      (prototype !== Object.prototype && prototype !== null) ||
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      descriptor.enumerable !== true ||
+      !PUBLICATION_COMMAND_ACTIONS.includes(
+        descriptor.value as (typeof PUBLICATION_COMMAND_ACTIONS)[number]
+      )
+    ) {
+      throw new TypeError();
+    }
+    return descriptor.value as AflTradePublicationCommand['action'];
+  } catch {
+    throw new AflTradePublicationStateError(
+      'INVALID_COMMAND',
+      'Publication commands require an own immutable action field.'
+    );
+  }
+}
+
+function admitValidateCommand(
+  value: unknown
+): Extract<AflTradePublicationCommand, { action: 'validate' }> {
+  try {
+    if (value === null || typeof value !== 'object' || nodeUtilTypes.isProxy(value)) {
+      throw new TypeError();
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) throw new TypeError();
+    const ownKeys = Reflect.ownKeys(value);
+    if (ownKeys.some((key) => typeof key !== 'string')) throw new TypeError();
+    const keys = ownKeys as string[];
+    const allowed = new Set<string>([
+      ...VALIDATE_REQUIRED_KEYS,
+      'reason',
+      'projectionManifest',
+      'projectionManifestVerification',
+    ]);
+    if (
+      VALIDATE_REQUIRED_KEYS.some((key) => !keys.includes(key)) ||
+      keys.some((key) => !allowed.has(key)) ||
+      keys.includes('projectionManifest') === keys.includes('projectionManifestVerification')
+    ) {
+      throw new TypeError();
+    }
+    const snapshot = Object.create(null) as Record<string, unknown>;
+    for (const key of keys) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !('value' in descriptor) || descriptor.enumerable !== true) {
+        throw new TypeError();
+      }
+      snapshot[key] = descriptor.value;
+    }
+    if (snapshot.action !== 'validate') throw new TypeError();
+    return Object.freeze(snapshot) as unknown as Extract<
+      AflTradePublicationCommand,
+      { action: 'validate' }
+    >;
+  } catch {
+    throw new AflTradePublicationStateError(
+      'INVALID_COMMAND',
+      'Validate commands require one exact own data-property envelope.'
+    );
+  }
+}
+
+function resolveProjectionForValidation(
+  command: Extract<AflTradePublicationCommand, { action: 'validate' }>,
+  record: AflTradePublicationRecord
+): AflTradeProjectionManifest {
+  let compactDescriptor: PropertyDescriptor | undefined;
+  let verificationDescriptor: PropertyDescriptor | undefined;
+  try {
+    compactDescriptor = Object.getOwnPropertyDescriptor(command, 'projectionManifest');
+    verificationDescriptor = Object.getOwnPropertyDescriptor(
+      command,
+      'projectionManifestVerification'
+    );
+  } catch {
+    return invalidProjectionManifest();
+  }
+
+  if (
+    (compactDescriptor === undefined) === (verificationDescriptor === undefined) ||
+    (compactDescriptor !== undefined && !('value' in compactDescriptor)) ||
+    (verificationDescriptor !== undefined && !('value' in verificationDescriptor))
+  ) {
+    return invalidProjectionManifest(
+      'Validation requires exactly one projection-manifest validation path.'
+    );
+  }
+
+  if (compactDescriptor !== undefined && 'value' in compactDescriptor) {
+    let parsedProjection: ReturnType<typeof aflTradeProjectionManifestSchema.safeParse>;
+    try {
+      parsedProjection = aflTradeProjectionManifestSchema.safeParse(compactDescriptor.value);
+    } catch {
+      return invalidProjectionManifest();
+    }
+    if (
+      !parsedProjection.success ||
+      parsedProjection.data.content.schemaVersion !== 'afl-trade-projection/v1' ||
+      record.publicationManifestSchemaVersion !== 'afl-trade-publication/v2'
+    ) {
+      return invalidProjectionManifest(
+        'Compact projection v1 validation is restricted to legacy publication v2.'
+      );
+    }
+    return parsedProjection.data;
+  }
+
+  const verification = verificationDescriptor?.value;
+  const authenticated = authenticateAflTradeProjectionManifestMaterialization(verification);
+  if (authenticated === null) {
+    return invalidProjectionManifest(
+      'Projection v2 validation requires a valid total materialization verification.'
+    );
+  }
+  return authenticated.projectionManifest;
 }
 
 function requireGateDecision(
@@ -371,10 +535,12 @@ function withdraw(
 
 export function applyAflTradePublicationCommand(
   registry: AflTradePublicationRegistry,
-  command: AflTradePublicationCommand
+  unparsedCommand: AflTradePublicationCommand
 ): AflTradePublicationRegistry {
+  const action = requireOwnCommandAction(unparsedCommand);
+  const command = action === 'validate' ? admitValidateCommand(unparsedCommand) : unparsedCommand;
   const record = requirePublication(registry, command.publicationId);
-  requireTransition(record, command.action);
+  requireTransition(record, action);
   if ((command.action === 'reject' || command.action === 'withdraw') && !command.reason?.trim()) {
     throw new AflTradePublicationStateError(
       'INVALID_COMMAND',
@@ -383,18 +549,13 @@ export function applyAflTradePublicationCommand(
   }
 
   if (command.action === 'validate') {
-    const parsedProjection = aflTradeProjectionManifestSchema.safeParse(command.projectionManifest);
-    if (!parsedProjection.success) {
-      throw new AflTradePublicationStateError(
-        'INVALID_MANIFEST',
-        'Projection manifest is invalid.'
-      );
-    }
-    const projection = parsedProjection.data;
+    requireCommandMetadata(command);
+    const projection = resolveProjectionForValidation(command, record);
     if (
       projection.content.publicationId !== record.publicationId ||
       projection.content.scopeKey !== record.scopeKey ||
-      Date.parse(projection.content.createdAt) < Date.parse(record.createdAt)
+      Date.parse(projection.content.createdAt) < Date.parse(record.createdAt) ||
+      Date.parse(command.occurredAt) < Date.parse(projection.content.createdAt)
     ) {
       throw new AflTradePublicationStateError(
         'INVALID_MANIFEST',

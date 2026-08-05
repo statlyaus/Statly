@@ -1,5 +1,12 @@
+import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
+import {
+  createAflTradeCanonicalJsonArtifactRef,
+  doesAflTradeArtifactRefMatchCanonicalJson,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import {
   aflTradeCorpusManifestSchema,
   aflTradeDatasetManifestSchema,
@@ -191,6 +198,103 @@ function dataset(content = datasetContent()) {
     content,
   });
 }
+
+describe('AFL trade-intelligence canonical JSON artifact references', () => {
+  it('uses canonical JSON digests and UTF-8 byte lengths for non-ASCII content', () => {
+    const value = { note: 'Kulin Nation 🏉', club: 'Walyalup' };
+    const canonicalJson = '{"club":"Walyalup","note":"Kulin Nation 🏉"}';
+    const expectedDigest = createHash('sha256').update(canonicalJson, 'utf8').digest('hex');
+
+    const reference = createAflTradeCanonicalJsonArtifactRef(value, '2026-08-01T00:00:00.000Z');
+
+    expect(reference).toEqual({
+      artifactId: `artifact:${expectedDigest}`,
+      contentSha256: expectedDigest,
+      storageUri: `artifact://sha256/${expectedDigest}`,
+      mediaType: 'application/json',
+      byteLength: Buffer.byteLength(canonicalJson, 'utf8'),
+      createdAt: '2026-08-01T00:00:00.000Z',
+    });
+    expect(doesAflTradeArtifactRefMatchCanonicalJson(reference, value)).toBe(true);
+  });
+
+  it('treats reordered object keys as the same canonical JSON bytes', () => {
+    const first = {
+      zeta: 'last',
+      nested: { second: 2, first: 1 },
+      alpha: 'first',
+    };
+    const reordered = {
+      alpha: 'first',
+      nested: { first: 1, second: 2 },
+      zeta: 'last',
+    };
+    const createdAt = '2026-08-01T00:00:00.000Z';
+    const reference = createAflTradeCanonicalJsonArtifactRef(first, createdAt);
+
+    expect(createAflTradeCanonicalJsonArtifactRef(reordered, createdAt)).toEqual(reference);
+    expect(doesAflTradeArtifactRefMatchCanonicalJson(reference, reordered)).toBe(true);
+  });
+
+  it('rejects tampered digest, identity, URI, media type, byte length, and payload', () => {
+    const payload = { schemaVersion: 'fixture/v1', label: 'canonical' };
+    const reference = createAflTradeCanonicalJsonArtifactRef(payload, '2026-08-01T00:00:00.000Z');
+    const alternateDigest = 'f'.repeat(64);
+    const tamperedReferences = [
+      { ...reference, contentSha256: alternateDigest },
+      { ...reference, artifactId: `artifact:${alternateDigest}` },
+      { ...reference, storageUri: `artifact://sha256/${alternateDigest}` },
+      { ...reference, mediaType: 'application/octet-stream' },
+      { ...reference, byteLength: reference.byteLength + 1 },
+    ];
+
+    for (const tampered of tamperedReferences) {
+      expect(doesAflTradeArtifactRefMatchCanonicalJson(tampered, payload)).toBe(false);
+    }
+    expect(
+      doesAflTradeArtifactRefMatchCanonicalJson(reference, { ...payload, label: 'tampered' })
+    ).toBe(false);
+  });
+
+  it('returns false for cyclic, hostile, and revoked references or payloads', () => {
+    const payload = { kind: 'fixture' };
+    const reference = createAflTradeCanonicalJsonArtifactRef(payload, '2026-08-01T00:00:00.000Z');
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+    const hostileReference = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('hostile reference');
+        },
+      }
+    );
+    const hostilePayload = new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error('hostile payload');
+        },
+      }
+    );
+    const revokedReference = Proxy.revocable(reference, {});
+    const revokedPayload = Proxy.revocable(payload, {});
+    revokedReference.revoke();
+    revokedPayload.revoke();
+
+    expect(doesAflTradeArtifactRefMatchCanonicalJson(reference, cyclic)).toBe(false);
+    expect(doesAflTradeArtifactRefMatchCanonicalJson(hostileReference, payload)).toBe(false);
+    expect(doesAflTradeArtifactRefMatchCanonicalJson(reference, hostilePayload)).toBe(false);
+    expect(doesAflTradeArtifactRefMatchCanonicalJson(revokedReference.proxy, payload)).toBe(false);
+    expect(doesAflTradeArtifactRefMatchCanonicalJson(reference, revokedPayload.proxy)).toBe(false);
+  });
+
+  it('rejects construction with an invalid creation timestamp', () => {
+    expect(() =>
+      createAflTradeCanonicalJsonArtifactRef({ valid: true }, 'not-a-timestamp')
+    ).toThrow();
+  });
+});
 
 describe('AFL trade-intelligence evidence, corpus, and dataset manifests', () => {
   it('accepts the ordered raw-evidence, corpus, and feature-dataset boundaries', () => {

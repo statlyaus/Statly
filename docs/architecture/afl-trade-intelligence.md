@@ -84,10 +84,11 @@ PostgreSQL database, or an isolated database and role on an approved managed Pos
 separate credentials, connection budgets, migrations, backups, and restore evidence. It contains no
 `User`, fantasy `League`, membership, roster, or fantasy-trade ownership relation.
 
-The repository also has no implemented immutable artifact repository and no trusted external
-decision-evidence registry for this capability. Do not describe the analytical PostgreSQL target or
-object storage as ready, apply the protected fantasy schema or SQLite migration history to it, or
-introduce the analytical schema into an unapproved target.
+The repository has an authenticated, exact-identifier, in-memory artifact-read adapter, but no
+approved durable artifact byte source and no trusted external decision-evidence registry for this
+capability. Do not describe the analytical PostgreSQL target or object storage as ready, apply the
+protected fantasy schema or SQLite migration history to it, or introduce the analytical schema into
+an unapproved target.
 
 The repository's Footywire/fitzRoy ETL supplies live-stat evidence for fantasy calculations. That
 existing technical path does not establish permission to train or publish this separate historical
@@ -513,6 +514,42 @@ publication cannot serve any value-bearing result; and list items cannot overrid
 publication. The retired v1 single-model metadata shape is rejected rather than silently interpreted.
 Serving, publication, calculation, and knowledge-cutoff times must be chronologically consistent.
 
+### Immutable projection and serving chain
+
+Numerical serving now has a complete source-independent artifact chain. A projection build must:
+
+1. verify each trade's exact public evidence sources against the governed evidence index;
+2. create one deterministic trade materialization receipt and its non-methodology documents;
+3. assemble bounded materialization shards and a compact aggregate root;
+4. add the exact publication methodology, then create bounded document-set shards and root;
+5. replay every stored document against that authenticated set and produce a passing parity report;
+6. derive projection manifest v2 from the replayed publication v3, inventory index, freshness policy,
+   presentation policy, public-evidence index, schema bundle, materialization root, document-set root,
+   and parity report; and
+7. validate publication v3 only from that total materialization-verification envelope.
+
+Every stage is content addressed and binds exact parent identifiers, artifact references, public scope,
+value unit, document lattice, digests, and chronology. Same-count artifacts from independently valid
+pipelines cannot be spliced. The boundary descriptor-admits and bounds the complete verification graph
+before replay, and consumers receive replay-derived output rather than reparsing caller-owned state.
+Projection v1 remains a migration-only validation path for publication v2. Publication v3 cannot use
+that compact path.
+
+`projectionArtifactReadRepository.ts` mounts one exact projection identifier from a byte source that
+must enforce the declared 128 MiB limit before returning data. Mounting authenticates the complete
+verification envelope once, indexes the exact summary, detail, methodology, and valuation-export
+documents, and performs no artifact or external-source request during page reads. Each read requires
+an exact captured registry selection and evaluates the authenticated freshness policy. The mounted
+adapter retains a monotonic evaluation high-water mark: a clock regression cannot make a previously
+expired projection servable again during that mounted adapter instance. This is not durable across a
+remount or process restart; live serving must restore a trusted monotonic minimum from durable state
+before evaluating freshness. Failed-candidate context may retain only an explicitly active prior
+publication that is still current or stale; it never changes the registry pointer.
+
+The adapter also exposes ordered `afl-trade-valuation-csv/v1` projection rows as a distinct interface.
+It does not alter the historical archive CSV or relabel its imported `Expected` and `Actual` columns.
+Routes may adopt that new interface only as an explicit contract change.
+
 ### Prepublication public delivery boundary
 
 The public explorer and trade-detail server pages now read through the same publication-aware service
@@ -529,14 +566,15 @@ This unavailable result applies only to the additional evidence needed for Statl
 not disable the existing historical AFL archive. The archive remains anonymous and separate from the
 fantasy domain: public AFL trades and assets have no user, league, roster, or membership owner.
 
-The prepublication constructor is now confined to the no-publication branch inside the read-service
-composition; public pages do not call it directly. The current prepublication service deliberately
-captures a selector with no active publication and a projection repository that cannot be read. A
-future serving transition must replace those ports with approved durable registry and projection
-adapters, not bypass the service. After numerical publication begins, read failures or withdrawals
-must resolve to their truthful contract state (`stale`, `failed_previous_available`, `withdrawn`, or
-another applicable unavailable state); they must never fall back to the hard-coded prepublication
-result or to legacy archive numbers.
+The prepublication constructor is confined to the no-publication branch inside the read-service
+composition; public pages do not call it directly. The current route composition deliberately captures
+a selector with no active publication. The immutable artifact repository is implemented and tested,
+but no approved durable byte source or active registry selector is configured in route composition. A
+serving transition must provide those approved adapters through the existing service ports, not bypass
+the service. After numerical publication begins, read failures or withdrawals must resolve to their
+truthful contract state (`stale`, `failed_previous_available`, `withdrawn`, or another applicable
+unavailable state); they must never fall back to the hard-coded prepublication result or to legacy
+archive numbers.
 
 Imported archive fields labelled Expected and Actual remain visible only as legacy fields. Their
 original source definition and methodology are unverified, so the UI must not describe them as
@@ -840,10 +878,15 @@ active, repository failure, revision drift, mismatched publication/projection/sc
 view members, and invalid chronology fail closed as typed serving errors; none may reuse the
 prepublication source blocker as a fallback. Methodology reads apply the same rules: incomplete
 four-view selections, registry revision drift, projection identity mismatch, repository failure and
-invalid publication-bound metadata fail closed. The route and public-page composition do not persist
-a registry, implement a Firestore or PostgreSQL value or methodology projection adapter, or assert
-that a numerical publication exists. The UI is contract-ready, but candidate, rejected, and partially
-built data remain incapable of reaching an active public read through this code alone.
+invalid publication-bound metadata fail closed. The repository can serve authenticated in-memory
+release bytes through the value, methodology, and explicit valuation-export interfaces, but the route
+and public-page composition do not persist a registry, configure a durable artifact byte source, or
+assert that a numerical publication exists. No Firestore or PostgreSQL analytical adapter, live source
+pipeline, real publication, or active numerical route composition has been implemented. The UI is
+contract-ready, but candidate, rejected, and partially built data remain incapable of reaching an
+active public read through this code alone. Live composition additionally requires a concrete byte
+source that enforces the declared size limit before allocation, contract tests for that enforcement,
+and durable monotonic freshness state so a restart cannot reactivate an expired release.
 
 ## Calculation operations
 

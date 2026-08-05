@@ -249,18 +249,24 @@ describe('AFL trade-intelligence valuation-case contracts', () => {
   });
 
   it('rejects trade roots related through the lineage graph', () => {
-    const relatedGraph = graph();
-    relatedGraph.edges.push({
-      edgeId: 'edge:player-a-returned-pick-a',
-      kind: 'asset_traded_for_asset',
-      sourceAssetId: 'asset:player-a',
-      targetAssetId: 'asset:pick-a',
-      effectiveAt: '2025-01-01T00:00:00.000Z',
-      knownFrom: '2025-01-01T00:00:00.000Z',
-      knownTo: null,
-      evidenceId: 'evidence:edge-player-a-returned-pick-a',
-      ruleVersion: 'fabricated-test/v1',
-    });
+    const baseGraph = graph();
+    const relatedGraph = {
+      ...baseGraph,
+      edges: [
+        ...baseGraph.edges,
+        {
+          edgeId: 'edge:player-a-returned-pick-a',
+          kind: 'asset_traded_for_asset' as const,
+          sourceAssetId: 'asset:player-a',
+          targetAssetId: 'asset:pick-a',
+          effectiveAt: '2025-01-01T00:00:00.000Z',
+          knownFrom: '2025-01-01T00:00:00.000Z',
+          knownTo: null,
+          evidenceId: 'evidence:edge-player-a-returned-pick-a',
+          ruleVersion: 'fabricated-test/v1',
+        },
+      ],
+    };
     const valuationCase = createAflTradeValuationCase(content(relatedGraph));
 
     expect(

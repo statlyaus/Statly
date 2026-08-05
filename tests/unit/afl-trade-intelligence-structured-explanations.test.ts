@@ -196,10 +196,11 @@ describe('AFL trade structured explanations', () => {
   });
 
   it('requires canonical claim-kind support and contiguous statement identities', () => {
-    const reversedKinds = content();
-    reversedKinds.supportedClaimKinds = [
-      ...reversedKinds.supportedClaimKinds,
-    ].reverse() as typeof reversedKinds.supportedClaimKinds;
+    const canonicalContent = content();
+    const reversedKinds = {
+      ...canonicalContent,
+      supportedClaimKinds: [...canonicalContent.supportedClaimKinds].reverse(),
+    };
     const skippedId = content();
     skippedId.statements[2].statementId = 'statement:99';
     const duplicateId = content();

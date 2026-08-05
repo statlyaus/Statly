@@ -5,11 +5,9 @@ import {
   AflTradeValueReadError,
   createAflTradeValueReadService,
   type AflTradeProjectionReadMetadata,
+  type AflTradeValueProjectionRepository,
 } from '@/server/aflTradeIntelligence/publication/valueReadService';
-import type {
-  AflTradeValuationView,
-  AflTradeValueUnavailable,
-} from '@/types/aflTradeIntelligence';
+import type { AflTradeValuationView, AflTradeValueUnavailable } from '@/types/aflTradeIntelligence';
 
 const digest = (character: string) => character.repeat(64);
 const servedAt = '2026-08-05T04:00:00.000Z';
@@ -73,20 +71,18 @@ function metadata(
   };
 }
 
-function repository(
-  active: AflTradePublicationReadSelection = selection()
-) {
+function repository(active: AflTradePublicationReadSelection = selection()) {
   return {
-    list: vi.fn(async (_selection, request) => ({
+    list: vi.fn<AflTradeValueProjectionRepository['list']>(async (_selection, request) => ({
       metadata: metadata(active),
       items: request.tradeIds.map((tradeId) => ({
         tradeId,
         valuation: unavailable(request.requestedView),
       })),
-      nextCursor: null,
-      total: request.tradeIds.length,
+      nextCursor: null as string | null,
+      total: request.tradeIds.length as number | null,
     })),
-    detail: vi.fn(async (_selection, request) => ({
+    detail: vi.fn<AflTradeValueProjectionRepository['detail']>(async (_selection, request) => ({
       metadata: metadata(active),
       tradeId: request.tradeId,
       valuations: request.requestedViews.map(unavailable),
@@ -100,7 +96,7 @@ function repository(
         maximumDepth: null,
       },
     })),
-  };
+  } satisfies AflTradeValueProjectionRepository;
 }
 
 function service(
@@ -133,12 +129,7 @@ const listRequest = {
 const detailRequest = {
   scopeKey: 'public-afl-trades-current',
   tradeId: tradeIds[0],
-  requestedViews: [
-    'at_trade',
-    'realized',
-    'remaining',
-    'current',
-  ] as AflTradeValuationView[],
+  requestedViews: ['at_trade', 'realized', 'remaining', 'current'] as AflTradeValuationView[],
 };
 
 describe('AFL trade-value read service', () => {
@@ -207,6 +198,17 @@ describe('AFL trade-value read service', () => {
     expect(context.projectionRepository.detail).not.toHaveBeenCalled();
   });
 
+  it('rejects cursor continuation for an explicit trade-identifier batch before capture', async () => {
+    const active = selection();
+    const context = service(active);
+
+    await expect(
+      context.value.list({ ...listRequest, cursor: 'opaque-cursor' })
+    ).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(context.publicationSelector.capture).not.toHaveBeenCalled();
+    expect(context.projectionRepository.list).not.toHaveBeenCalled();
+  });
+
   it('does not substitute source-blocked output when the active projection read fails', async () => {
     const active = selection();
     const projectionRepository = repository(active);
@@ -222,8 +224,9 @@ describe('AFL trade-value read service', () => {
   it('rejects registry, publication, projection, scope, trade, and view drift', async () => {
     const active = selection();
 
-    await expect(service(active, repository(active), active.registryRevision + 1).value.list(listRequest))
-      .rejects.toMatchObject({ code: 'PROJECTION_MISMATCH' });
+    await expect(
+      service(active, repository(active), active.registryRevision + 1).value.list(listRequest)
+    ).rejects.toMatchObject({ code: 'PROJECTION_MISMATCH' });
 
     for (const mismatchedMetadata of [
       { publicationId: `publication:${digest('f')}` },
@@ -237,9 +240,9 @@ describe('AFL trade-value read service', () => {
         nextCursor: null,
         total: tradeIds.length,
       });
-      await expect(service(active, projectionRepository).value.list(listRequest)).rejects.toMatchObject(
-        { code: 'PROJECTION_MISMATCH' }
-      );
+      await expect(
+        service(active, projectionRepository).value.list(listRequest)
+      ).rejects.toMatchObject({ code: 'PROJECTION_MISMATCH' });
     }
 
     const wrongListRepository = repository(active);
@@ -273,6 +276,73 @@ describe('AFL trade-value read service', () => {
     ).rejects.toMatchObject({ code: 'PROJECTION_MISMATCH' });
   });
 
+  it('rejects reordered, duplicated, or paginated explicit-batch projection output', async () => {
+    const active = selection();
+    const variants = [
+      {
+        items: [...tradeIds]
+          .reverse()
+          .map((tradeId) => ({ tradeId, valuation: unavailable('current') })),
+        nextCursor: null,
+        total: tradeIds.length,
+      },
+      {
+        items: tradeIds.map(() => ({ tradeId: tradeIds[0], valuation: unavailable('current') })),
+        nextCursor: null,
+        total: tradeIds.length,
+      },
+      {
+        items: tradeIds.map((tradeId) => ({ tradeId, valuation: unavailable('current') })),
+        nextCursor: 'fabricated-continuation',
+        total: tradeIds.length,
+      },
+      {
+        items: tradeIds.map((tradeId) => ({ tradeId, valuation: unavailable('current') })),
+        nextCursor: null,
+        total: null,
+      },
+      {
+        items: tradeIds.map((tradeId) => ({ tradeId, valuation: unavailable('current') })),
+        nextCursor: null,
+        total: tradeIds.length + 1,
+      },
+    ];
+
+    for (const variant of variants) {
+      const projectionRepository = repository(active);
+      projectionRepository.list.mockResolvedValueOnce({
+        metadata: metadata(active),
+        ...variant,
+      });
+      await expect(
+        service(active, projectionRepository).value.list(listRequest)
+      ).rejects.toMatchObject({ code: 'PROJECTION_MISMATCH' });
+    }
+  });
+
+  it('rejects schema-valid detail valuations returned in a different view order', async () => {
+    const active = selection();
+    const projectionRepository = repository(active);
+    projectionRepository.detail.mockResolvedValueOnce({
+      metadata: metadata(active),
+      tradeId: detailRequest.tradeId,
+      valuations: [...detailRequest.requestedViews].reverse().map(unavailable),
+      assets: [],
+      lineageSummary: {
+        status: 'unavailable',
+        totalAssetCount: null,
+        resolvedAssetCount: null,
+        unresolvedAssetCount: null,
+        lineageEdgeCount: null,
+        maximumDepth: null,
+      },
+    });
+
+    await expect(
+      service(active, projectionRepository).value.detail(detailRequest)
+    ).rejects.toMatchObject({ code: 'PROJECTION_MISMATCH' });
+  });
+
   it('rejects projection chronology that cannot form a valid v2 response', async () => {
     const active = selection();
     const projectionRepository = repository(active);
@@ -286,8 +356,8 @@ describe('AFL trade-value read service', () => {
       total: tradeIds.length,
     });
 
-    await expect(service(active, projectionRepository).value.list(listRequest)).rejects.toMatchObject(
-      { code: 'INVALID_PROJECTION_PAYLOAD' }
-    );
+    await expect(
+      service(active, projectionRepository).value.list(listRequest)
+    ).rejects.toMatchObject({ code: 'INVALID_PROJECTION_PAYLOAD' });
   });
 });

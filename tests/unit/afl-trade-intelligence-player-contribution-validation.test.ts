@@ -266,7 +266,7 @@ describe('AFL trade-intelligence player-contribution validation', () => {
       ),
       unscored: [
         ...fit.content.unscored,
-        { observationId: removedObservationId, reason: 'contribution_unavailable' },
+        { observationId: removedObservationId, reason: 'contribution_unavailable' as const },
       ].sort((left, right) => left.observationId.localeCompare(right.observationId)),
       diagnostics: {
         ...fit.content.diagnostics,

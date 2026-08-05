@@ -46,6 +46,13 @@ const listRequestSchema = z
         message: 'The requested trade page cannot exceed its limit.',
       });
     }
+    if (request.cursor !== null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['cursor'],
+        message: 'Explicit trade-identifier batches do not support cursor continuation.',
+      });
+    }
   });
 
 const detailRequestSchema = z
@@ -197,10 +204,11 @@ function createNoPublicationDetailResponse(
   };
 }
 
-function sameMembers(actual: readonly string[], expected: readonly string[]): boolean {
-  if (actual.length !== expected.length) return false;
-  const expectedMembers = new Set(expected);
-  return actual.every((member) => expectedMembers.has(member));
+function sameOrderedValues(actual: readonly string[], expected: readonly string[]): boolean {
+  return (
+    actual.length === expected.length &&
+    actual.every((member, index) => member === expected[index])
+  );
 }
 
 function requireSelection(
@@ -323,10 +331,12 @@ export function createAflTradeValueReadService(dependencies: {
       }
       requireProjectionMetadata(selection, projection.metadata);
       if (
-        !sameMembers(
+        !sameOrderedValues(
           projection.items.map((item) => item.tradeId),
           request.tradeIds
-        )
+        ) ||
+        projection.nextCursor !== null ||
+        projection.total !== request.tradeIds.length
       ) {
         throw new AflTradeValueReadError(
           'PROJECTION_MISMATCH',
@@ -374,7 +384,7 @@ export function createAflTradeValueReadService(dependencies: {
       requireProjectionMetadata(selection, projection.metadata);
       if (
         projection.tradeId !== request.tradeId ||
-        !sameMembers(
+        !sameOrderedValues(
           projection.valuations.map((valuation) => valuation.view),
           request.requestedViews
         )

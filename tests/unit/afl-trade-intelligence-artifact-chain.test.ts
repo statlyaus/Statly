@@ -1069,7 +1069,7 @@ describe('AFL trade-intelligence model, publication, and projection artifacts', 
     input.coverageReport.content.unsupportedCohorts = [
       {
         cohortId: 'fixture-cohort',
-        reason: 'not_measurable',
+        reason: 'cohort_empty',
         explanation: 'The fixture has no eligible observations.',
       },
     ];

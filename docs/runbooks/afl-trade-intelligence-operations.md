@@ -34,6 +34,9 @@ target environment:
    calculation inputs.
 4. The calculation-run, schedule-claim, artifact, projection, and publication stores have approved
    durable adapters, backup/restore evidence, retention rules, and least-privilege identities.
+   The projection byte source must reject an object above the repository's declared 128 MiB limit
+   before allocating or returning the complete payload; an adapter-side check after an unbounded load
+   is not sufficient.
 5. The dispatch adapter enforces `dispatchKey` uniqueness atomically. Read-then-enqueue without a
    unique claim is not sufficient.
 6. Projection parity, publication rollback, source withdrawal, and last-good recovery have been
@@ -92,16 +95,30 @@ successors.
 
 A successful calculation is a candidate, not an active publication.
 
-1. Verify all candidate manifests and artifacts by identifier and digest.
+1. Verify all candidate manifests and artifacts by identifier and digest. For publication v3, replay
+   the complete evidence-source, trade-materialization, aggregate-materialization, document-set, stored
+   document, schema-bundle, and parity envelope and derive projection v2 from that replay. A compact
+   projection v1 manifest is valid only for the legacy publication v2 migration path.
 2. Complete model-change review when the candidate changes or recalibrates a model release.
 3. Resolve fresh effective Gate 3, Gate 4, and Gate 5 decisions for the exact candidate and environment.
-4. Validate the projection against the immutable publication manifest and rehearse representative
-   reads.
-5. Apply publication-registry commands in their allowed order. Only the registry's governed publish
+4. Configure the candidate artifact source to open only the requested projection identifier and to
+   enforce the repository byte limit before returning data. Mount the exact release once; do not query
+   by scope or `latest`. Verify the concrete source rejects an oversized object before complete-payload
+   allocation with a contract test against the deployed adapter.
+5. Rehearse representative list, detail, methodology, and explicit valuation-export reads using one
+   captured registry selection. Confirm publication, projection, scope, value unit, bundle, views,
+   cohorts, exclusions, registry revision, document counts, export ordinals, and calculation/knowledge
+   times match. Confirm no artifact or external source is read after mount.
+6. Exercise current, stale, failed-candidate-retained, expired, source-error, malformed-release, and
+   clock-regression cases. Expired or unavailable output must not serve, and moving a clock backward
+   must not reactivate it. Restart or remount the serving process and confirm it restores a trusted
+   durable monotonic minimum before freshness evaluation, so restart cannot reactivate an expired
+   release.
+7. Apply publication-registry commands in their allowed order. Only the registry's governed publish
    transition may change the active pointer.
-6. Confirm the resulting active pointer, registry revision, projection identity, and representative
+8. Confirm the resulting active pointer, registry revision, projection identity, and representative
    public reads all refer to the same release.
-7. Preserve the previous release and recovery evidence for the declared rollback window.
+9. Preserve the previous release and recovery evidence for the declared rollback window.
 
 Never update the active pointer from the calculation worker, scheduler, health evaluator, API route, or
 UI. Never substitute an ungoverned candidate when a published projection is unavailable.
@@ -139,11 +156,14 @@ and it is not permission to reactivate an older release automatically.
    timestamp, and reason.
 4. Confirm the active pointer no longer selects the withdrawn publication and numerical API responses
    resolve to a truthful non-numerical contract state.
+   Also confirm a previously mounted adapter cannot serve after its captured selection is no longer
+   active; repository freshness does not override registry authority.
 5. Purge downstream caches or projections only where the approved withdrawal duties require it; retain
    audit evidence according to policy.
 6. Investigate and prepare a new or previously published candidate through fresh validation and Gates.
 7. Activate recovery only through the normal governed publication path. Never backdate activation or
-   decrement registry revision.
+   decrement registry revision. Do not use a backward clock, failed-candidate retention, a `latest`
+   lookup, or an exception fallback to make expired or superseded output active again.
 
 An analytical authority rollback is separate from publication withdrawal. Follow the authority event
 ledger and its recorded rollback window; do not use a publication incident to switch the protected

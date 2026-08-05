@@ -17,6 +17,8 @@ const publication = {
   publishedAt: '2026-01-01T12:00:00.000Z',
 };
 
+type AvailableAflTradeValueResult = Extract<AflTradeValueResult, { availability: 'available' }>;
+
 function consistency(): AflTradeConsistencyEnvelope {
   return {
     contractVersion: 'afl-trade-value/v2' as const,
@@ -51,7 +53,7 @@ function noPublicationConsistency(): AflTradeConsistencyEnvelope {
   };
 }
 
-function available(): AflTradeValueResult {
+function available(): AvailableAflTradeValueResult {
   return {
     availability: 'available',
     view: 'current',
