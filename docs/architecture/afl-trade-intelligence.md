@@ -1,10 +1,10 @@
 # Public AFL trade intelligence
 
 - Status: WP1 pure deterministic foundations, Gate 1 decision/transition contracts, the independent
-  public analytical target, the WP7A public boundary, and source-independent operational contracts
-  are defined with local contract coverage; Gates 0A and 1 have no production approval, and live
-  analytical infrastructure, model development, numerical publication, deployment, and production
-  verification are not complete
+  public analytical target, the WP7A public boundary, source-independent operational contracts, and
+  the Stage 3 and Stage 4 modeling harnesses are defined with local contract coverage; Gates 0A and 1
+  have no production approval, and approved real-data model development, numerical publication,
+  deployment, and production verification are not complete
 - Last verified against source: 2026-08-05
 
 ## Purpose
@@ -57,16 +57,19 @@ does not implement expected-revision compare-and-swap, demonstrated parity, or a
 rollback. These behaviors are current-state risks to replace deliberately; they are not evidence that
 Firestore is ready to become the new engine's projection authority.
 
-The source-independent WP1 foundation is implemented separately from those existing archive reads. It
-currently provides strict public contracts, source-governance and artifact-manifest schemas,
-bitemporal lineage rules, deterministic fabricated fixtures, attribution invariants, and publication
-state transitions. The operational layer adds immutable calculation runs and attempts, pure lease and
-retry transitions, content-addressed schedule decisions and dispatch claims, operational-health
-recommendations, and append-only model-change reviews. These modules do not read production evidence,
-write a database, configure a queue or scheduler, fit a model, publish numerical values, or activate a
-public projection. The separate WP7A public boundary adds an honest unavailable-state experience,
-contract-ready numerical views, and a general methodology page; it is not evidence that a numerical
-valuation exists.
+The source-independent WP1 and modeling foundations are implemented separately from those existing
+archive reads. They provide strict public contracts, source-governance and artifact-manifest schemas,
+bitemporal lineage rules, deterministic fabricated fixtures, attribution invariants, publication
+state transitions, a player-contribution baseline harness, and draft-pick and future-pick distribution
+harnesses. The operational layer adds immutable calculation runs and attempts, pure lease and retry
+transitions, content-addressed schedule decisions and dispatch claims, operational-health
+recommendations, and append-only model-change reviews. The modeling modules can fit deterministic
+benchmarks, run simulations, and evaluate locked predictions supplied through their contracts, but
+only fabricated fixtures have been used to establish local behavior. These modules do not read
+production evidence, write a database, configure a queue or scheduler, establish approved real-data
+performance, publish numerical values, or activate a public projection. The separate WP7A public
+boundary adds an honest unavailable-state experience, contract-ready numerical views, and a general
+methodology page; it is not evidence that a numerical valuation exists.
 
 WP1 completion therefore means that later work has a deterministic boundary to build on. It does not
 mean that a historical source is approved, managed PostgreSQL is operational, an analytical corpus
@@ -587,25 +590,60 @@ performance report, source approval, Gate approval, or production readiness is r
 fixture evidence. Stage 3 exit criteria remain unmet until approved source data and a locked candidate
 produce reviewed real-data evidence through this boundary.
 
+### Stage 4 draft-pick and future-pick foundation
+
 Draft-pick and future-pick distributions use a separate content-addressed protocol aligned to the
-same player-contribution value unit. Its assets are source-native AFL draft entitlements with no
-fantasy ownership. The protocol models both a mutually exclusive and exhaustive mixture of hurdle,
-regular, and elite outcomes and the landing distribution of a future selection; incomplete active
-careers are right-censored rather than recorded as completed zero-value outcomes.
+same player-contribution value unit. Its observations and assets are source-native public AFL records:
+clubs may hold draft entitlements, but no Statly user or fantasy league owns a player, pick,
+entitlement, observation, scenario, or result.
 
-Expected contribution across national-draft selection number uses a constrained monotonic curve and
-must retain predictive uncertainty rather than publishing a point estimate alone. Future-pick
-simulation uses selection-order rules as known at the valuation cutoff, an explicit time-delay
-definition, correlated ladder outcomes, a run-manifest seed, held-out temporal-season calibration,
-and declared scenario sensitivities. Its feature joins and corrections obey the same point-in-time,
-unknown-versus-zero, sealed-final-test, and chronological-window protections as the player protocol.
-Validation additionally covers monotonicity and behavior by era, draft round, draft pathway, player
-position, age at draft, and evidence quality.
+The executable observation boundary requires complete, mature whole-draft cohorts at one fixed
+football-contribution horizon. Each observation retains actual selection number separately from
+nominal position and bid-match context and belongs to exactly one of six ordered, mutually exclusive
+and exhaustive contribution categories, including a true no-return category. Active or otherwise
+incomplete horizons are right-censored instead of being converted to completed zero-value outcomes.
+Draft pathway and selection-access evidence remain explicit so that a benchmark cannot quietly treat
+incomparable access rules as ordinary national-draft selections. Chronological train, calibration,
+validation, and sealed final-test partitions are label-purged and preserve the declared embargo.
 
-Validation uses chronological train, calibration, validation, and final-test windows with the declared
-embargo. Candidate selection uses train, calibration, and validation data only. The candidate is locked
-before a single final-test evaluation, and final-test retuning is prohibited. Random row splits cannot
-establish deployable historical performance.
+The first executable benchmark is deliberately narrower than the eventual model. It fits training-only,
+mature, open-access national-draft observations at actual selection number and records every other
+observation under an explicit exclusion reason. Player-count weights feed a deterministic
+non-increasing weighted isotonic regression, sparse adjacent positions pool under declared support
+rules, and each supported block retains its empirical outcome distribution. Unsupported ranges remain
+unsupported: the benchmark does not extrapolate a convenient value. This is an auditable baseline for
+comparison, not an approved production candidate.
+
+Uncertainty and sampling are versioned, content-addressed protocol inputs. The deterministic sampler
+uses semantic streams and counter-based SHA-256 coordinates so iteration order cannot change a result.
+The bootstrap resamples whole draft classes within declared strata to preserve cohort dependence;
+data-sampling uncertainty, model uncertainty, future-state uncertainty, and Monte Carlo error remain
+separate and cannot be relabelled as one confidence interval.
+
+A future-pick scenario is one coherent joint state model rather than independent pick marginals. It
+binds correlated club ladder outcomes, a dated selection-rule vintage with a complete nominal-to-actual
+mapping, open entitlements, a shared draft-class effect, category-conditional productive-contribution
+delay, and reachable pick-distribution blocks. Simulation follows one fixed causal order: joint ladder
+state, selection-order mapping, shared class effect, player outcomes, then productive delay. Delay is
+football timing only and must not embed market discounting or impatience. The simulator enumerates the
+exact finite state space when it is within the declared bound and otherwise uses the deterministic
+counter sampler; reported Monte Carlo error is separate from football and model uncertainty.
+
+Held-out validation is bound to one successful, immutable model-run manifest, dataset, protocol,
+value unit, benchmark, and locked prediction set. Every target observation is either scored or has an
+explicit exclusion. The report includes multiclass Brier score, log loss, ranked probability score,
+contribution CRPS, MAE, RMSE, interval coverage, subgroup sufficiency, monotonicity, and stability
+against an explicitly compatible reference fit. Assigning zero probability to the observed outcome
+invalidates the report rather than being hidden behind a probability floor. Candidate selection uses
+train and calibration evidence; a candidate is locked before final-test evaluation, and final-test
+retuning is prohibited. Random row splits cannot establish deployable historical performance.
+
+The Stage 4 modules and deterministic fixture tests establish source-independent contracts,
+mathematical invariants, reproducibility, exact-enumeration checks, convergence checks, and validation
+failure behavior. They do not establish an approved observation corpus, a real fitted model, acceptable
+held-out calibration or stability, a production scenario set, source approval, Gate approval, or
+publication readiness. Stage 4 exit criteria remain unmet until lawfully approved evidence is processed
+through a locked real-data run and the required independent reviews accept its results.
 
 Every successful run retains separate immutable evidence for:
 
