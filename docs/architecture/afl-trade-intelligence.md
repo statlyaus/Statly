@@ -155,13 +155,23 @@ separate credentials, connection budgets, migrations, backups, and restore evide
 `User`, fantasy `League`, membership, roster, or fantasy-trade ownership relation.
 
 The repository has an authenticated, exact-identifier, in-memory valuation-artifact read adapter and a
-pure factual release selector over deterministic registry state, but no approved durable object-storage
-adapter, factual PostgreSQL repository, transactional factual registry adapter, or trusted external
-decision-evidence registry for this capability. The pure registry proves admission and transition
-semantics only; it does not establish durable compare-and-swap, approve any fixture decision, or make a
-release active in the application. Do not describe the analytical PostgreSQL target, object storage,
-factual release views, or valuation artifact source as ready; do not apply the protected fantasy schema
-or SQLite migration history to them or introduce the public schema into an unapproved target.
+pure factual release selector over deterministic registry state. It also contains a separate,
+source-independent PostgreSQL schema and native migration history plus an injected-client registry
+adapter that persists the pure registry's emitted event chain and expected-revision pointer in one
+read-committed transaction with an explicit global-head row lock and revision compare-and-swap.
+Release and event-chain foreign keys prevent dangling immutable evidence;
+projection manifests are append-only versions so a superseded release can complete a fresh validation
+cycle; and projection items carry an explicit non-null identity key within their exact projection.
+The injected `pg` pool adapter commits or rolls back as one unit and never discovers configuration.
+This persistence slice is dormant and synthetic-only: its migrations have not been applied to a
+disposable or hosted target, no provider credentials are configured, and application composition still
+selects no factual release. There is no approved durable object-storage adapter, hosted factual PostgreSQL target,
+production registry, or trusted external decision-evidence registry for this capability. These local
+contracts prove admission, transition, and storage conformance only; they do not establish production
+durability, approve any fixture decision, or make a release active in the application. Do not describe
+the analytical PostgreSQL target, object storage, factual release views, or valuation artifact source
+as ready; do not apply the protected fantasy schema or SQLite migration history to them or introduce
+the public schema into an unapproved target.
 
 fitzRoy is the selected technical adapter family for obtaining compatible AFL statistical evidence,
 not a source-rights grant. It can expose multiple upstream providers, and every capture must name the
@@ -1104,7 +1114,8 @@ public engine may proceed independently of the protected fantasy PostgreSQL cuto
 1. approve exact workbook and upstream uses, then provision isolated object storage and the hosted
    PostgreSQL database, roles, pooled/direct secrets, backups, monitoring, and restore target without
    granting either authority;
-2. introduce a separate reviewed public-outcomes schema and PostgreSQL-native migration history;
+2. review the dormant public-outcomes schema against the approved package, then apply only its separate
+   PostgreSQL-native migration history to that isolated target;
 3. rehearse database migration, object retrieval, backup restore, and rollback on disposable
    infrastructure;
 4. capture the approved workbook and permitted fitzRoy/upstream responses as immutable source objects

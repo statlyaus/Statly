@@ -1,8 +1,25 @@
 // Ambient module declarations for optional runtime dependencies used behind feature flags.
 declare module 'pg' {
+  export interface QueryResult<Row extends Record<string, unknown> = Record<string, unknown>> {
+    rows: Row[];
+    rowCount: number | null;
+  }
+
+  export interface PoolClient {
+    query<Row extends Record<string, unknown> = Record<string, unknown>>(
+      text: string,
+      params?: readonly unknown[]
+    ): Promise<QueryResult<Row>>;
+    release(): void;
+  }
+
   export class Pool {
     constructor(options?: unknown);
-    query(text: string, params?: unknown[]): Promise<unknown>;
+    query<Row extends Record<string, unknown> = Record<string, unknown>>(
+      text: string,
+      params?: readonly unknown[]
+    ): Promise<QueryResult<Row>>;
+    connect(): Promise<PoolClient>;
     end(): Promise<void>;
   }
 }

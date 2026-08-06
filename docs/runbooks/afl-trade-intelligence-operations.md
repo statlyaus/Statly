@@ -10,10 +10,15 @@ fantasy ownership.
 
 The source-independent contracts, legacy archive, fail-closed factual-outcome page/API, factual
 candidate/projection manifests, and deterministic expected-revision factual lifecycle are implemented,
-along with provider-neutral byte-custody and source-snapshot contracts, but the page/API intentionally
-select no factual release and serve no checked rows. The only custody implementation is fixture-only.
+along with provider-neutral byte-custody and source-snapshot contracts. A separate PostgreSQL schema,
+native migration and explicit-client transactional registry adapter exist as dormant synthetic-only
+conformance code. Its release and event chain is referentially constrained, projection evidence is
+append-only and versioned per release, and each projection item has an explicit projection-scoped
+identity. No migration has been applied to a disposable or hosted target and no adapter is mounted.
+The page/API intentionally select no factual release and serve no checked rows. The only custody
+implementation is fixture-only.
 Approved workbook/upstream capture, durable immutable object storage, hosted public-outcomes
-PostgreSQL, durable factual release infrastructure, job infrastructure, real model releases, real Gate
+PostgreSQL, an operational factual release registry, job infrastructure, real model releases, real Gate
 decisions, deployment, and production verification are not evidenced by the repository. Do not
 interpret possession of a workbook, successful fitzRoy call, passing fixture test, build, model-change
 review, import, or calculation as permission to retain or publish data or numbers.
@@ -58,6 +63,11 @@ target environment:
 6. Workbook/source reconciliation, factual release parity, generated-export parity, projection parity,
    both release rollback paths, source withdrawal, and last-good recovery have been rehearsed on
    disposable infrastructure as applicable.
+   Run `npm run test:outcomes:int` only with `AFL_OUTCOMES_TEST_DATABASE_URL` pointing to an explicitly
+   provisioned disposable PostgreSQL database. The harness creates and removes one uniquely named test
+   schema and verifies the native migration, versioned projections, chain foreign keys, append-only
+   triggers, item identity, transaction rollback, and expected-revision concurrency. A schema-only
+   validation or unit test is not a substitute for this rehearsal.
 7. Monitoring routes every critical health alert to an accountable operator.
 8. Preview behavior is verified from the exact candidate commit. Production behavior is verified only
    after a deployment record identifies that same commit.
@@ -169,13 +179,16 @@ rollback windows remain open. Strict command parsing rejects unknown fields and 
 Every mutation authenticates strict registry, record, and pointer envelopes; validates the full
 transition history and authority identities; and extends a content-addressed global event chain that
 commits every historical affected-record snapshot and revalidates its projection and authority state.
-The public selector must load the current Gate 0A
-ledger and evaluate the bound rights at its serving timestamp; activation is never a permanent rights
-cache. A
-future PostgreSQL adapter must implement those transitions transactionally and preserve the emitted
-history. Running the pure fixture state machine is not activation, and the application must remain on
-the prepublication selector until that adapter, real decisions, and production verification are
-approved.
+The public selector must load the current Gate 0A ledger and evaluate the bound rights at its serving
+timestamp; activation is never a permanent rights cache. The dormant PostgreSQL adapter preserves one
+global expected-revision chain with an explicit row lock and compare-and-swap in a read-committed
+transaction, retains multiple immutable projection
+versions for fresh superseded-release validation, commits every affected record state, and changes the
+active pointer with the same transaction. Its schema-only validation and generation scripts use an
+inert URL; only the explicitly named migration command may target configured infrastructure. Running
+the pure fixture state machine or the synthetic adapter tests is not activation, and the application
+must remain on the prepublication selector until the migration is rehearsed on a disposable target and
+real decisions, target approval, restore evidence, and production verification are approved.
 
 ## Scheduling an optional valuation occurrence
 

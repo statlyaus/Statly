@@ -273,20 +273,10 @@ describe('AFL trade-intelligence immutable byte custody', () => {
       reference: artifact,
     });
     await expect(
-      verifyAflTradeArtifactReadback(
-        repository,
-        laterReference,
-        '2026-08-05T02:06:00.000Z',
-        10_000
-      )
+      verifyAflTradeArtifactReadback(repository, laterReference, '2026-08-05T02:06:00.000Z', 10_000)
     ).rejects.toMatchObject({ code: 'READBACK_MISMATCH' });
     await expect(
-      verifyAflTradeArtifactReadback(
-        repository,
-        artifact,
-        '2026-08-05T02:06:00.000Z',
-        10_000
-      )
+      verifyAflTradeArtifactReadback(repository, artifact, '2026-08-05T02:06:00.000Z', 10_000)
     ).resolves.toMatchObject({ content: { artifact } });
     bytes[0] = 99;
     await expect(repository.loadExact(artifact, 4)).resolves.toEqual({
@@ -526,11 +516,15 @@ describe('AFL trade-intelligence source snapshots', () => {
       createdAt: '2026-08-05T02:02:00.000Z',
     });
     expect(snapshot.content.capture.kind).toBe('fitzroy');
+    if (snapshot.content.capture.kind !== 'fitzroy') {
+      throw new Error('Expected a fitzRoy capture fixture.');
+    }
+    const fitzRoyCapture = snapshot.content.capture;
     for (const capture of [
-      { ...snapshot.content.capture, sourceRegisterId: 'another-register' },
-      { ...snapshot.content.capture, upstreamProvider: 'Another provider' },
-      { ...snapshot.content.capture, upstreamDataset: 'Another dataset' },
-      { ...snapshot.content.capture, upstreamDatasetVersion: 'another-version' },
+      { ...fitzRoyCapture, sourceRegisterId: 'another-register' },
+      { ...fitzRoyCapture, upstreamProvider: 'Another provider' },
+      { ...fitzRoyCapture, upstreamDataset: 'Another dataset' },
+      { ...fitzRoyCapture, upstreamDatasetVersion: 'another-version' },
     ]) {
       expect(
         aflTradeSourceSnapshotManifestContentSchema.safeParse({
@@ -543,9 +537,9 @@ describe('AFL trade-intelligence source snapshots', () => {
       aflTradeSourceSnapshotManifestContentSchema.safeParse({
         ...snapshot.content,
         capture: {
-          ...snapshot.content.capture,
+          ...fitzRoyCapture,
           argumentsArtifact: {
-            ...snapshot.content.capture.argumentsArtifact,
+            ...fitzRoyCapture.argumentsArtifact,
             createdAt: '2026-08-05T01:55:00.000Z',
           },
         },

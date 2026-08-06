@@ -801,6 +801,16 @@ function authenticateRegistry(
   return value;
 }
 
+/**
+ * Authenticates a registry snapshot loaded from a persistence boundary before it is exposed to
+ * callers. Durable adapters must not treat a successfully decoded JSON value as trusted state.
+ */
+export function authenticateAflDraftTradeOutcomeReleaseRegistry(
+  value: AflDraftTradeOutcomeReleaseRegistry
+): AflDraftTradeOutcomeReleaseRegistry {
+  return authenticateRegistry(value);
+}
+
 function appendRegistryEvent(
   previous: AflDraftTradeOutcomeReleaseRegistry,
   next: AflDraftTradeOutcomeReleaseRegistry,

@@ -30,6 +30,7 @@ dist/
 *.tsbuildinfo
 .cache/
 public/auth-service-worker.js
+src/generated/aflTradeOutcomesPrisma/
 
 # --- Firebase ---
 .firebase/

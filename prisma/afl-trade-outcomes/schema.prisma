@@ -1,0 +1,118 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../../src/generated/aflTradeOutcomesPrisma"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource outcomes {
+  provider = "postgresql"
+  url      = env("AFL_OUTCOMES_DATABASE_URL")
+}
+
+model OutcomeRegistryHead {
+  singletonId  Int      @id @default(1) @map("singleton_id")
+  revision     Int
+  lastEventId  String?  @map("last_event_id")
+  registryJson Json     @map("registry_json")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @outcomes.Timestamptz(3)
+
+  @@map("outcome_registry_head")
+}
+
+model OutcomeReleaseManifest {
+  releaseId        String                         @id @map("release_id")
+  scopeKey         String                         @map("scope_key")
+  environment      String
+  createdAt        DateTime                       @map("created_at") @outcomes.Timestamptz(3)
+  effectiveThrough DateTime                       @map("effective_through") @outcomes.Timestamptz(3)
+  manifestJson     Json                           @map("manifest_json")
+  projections      OutcomeProjectionManifest[]
+  registryEvents   OutcomeRegistryEvent[]
+  stateCommitments OutcomeRecordStateCommitment[]
+  activePointer    OutcomeActiveRelease?
+
+  @@index([scopeKey, createdAt])
+  @@map("outcome_release_manifest")
+}
+
+model OutcomeProjectionManifest {
+  projectionId    String                  @id @map("projection_id")
+  releaseId       String                  @map("release_id")
+  createdAt       DateTime                @map("created_at") @outcomes.Timestamptz(3)
+  manifestJson    Json                    @map("manifest_json")
+  release         OutcomeReleaseManifest  @relation(fields: [releaseId], references: [releaseId], onDelete: Restrict)
+  projectionItems OutcomeProjectionItem[]
+
+  @@unique([releaseId, projectionId], map: "outcome_projection_manifest_release_projection_key")
+  @@map("outcome_projection_manifest")
+}
+
+model OutcomeRegistryEvent {
+  revision        Int                            @id
+  eventId         String                         @unique @map("event_id")
+  previousEventId String?                        @unique @map("previous_event_id")
+  releaseId       String                         @map("release_id")
+  scopeKey        String                         @map("scope_key")
+  action          String
+  occurredAt      DateTime                       @map("occurred_at") @outcomes.Timestamptz(3)
+  eventJson       Json                           @map("event_json")
+  release         OutcomeReleaseManifest         @relation(fields: [releaseId], references: [releaseId], onDelete: Restrict)
+  previousEvent   OutcomeRegistryEvent?          @relation("OutcomeRegistryEventChain", fields: [previousEventId], references: [eventId], onDelete: Restrict)
+  nextEvent       OutcomeRegistryEvent?          @relation("OutcomeRegistryEventChain")
+  affectedStates  OutcomeRecordStateCommitment[]
+
+  @@index([scopeKey, revision])
+  @@index([releaseId, revision])
+  @@map("outcome_registry_event")
+}
+
+model OutcomeRecordStateCommitment {
+  eventRevision Int                    @map("event_revision")
+  releaseId     String                 @map("release_id")
+  recordStateId String                 @unique @map("record_state_id")
+  recordState   Json                   @map("record_state_json")
+  event         OutcomeRegistryEvent   @relation(fields: [eventRevision], references: [revision], onDelete: Restrict)
+  release       OutcomeReleaseManifest @relation(fields: [releaseId], references: [releaseId], onDelete: Restrict)
+
+  @@id([eventRevision, releaseId])
+  @@index([releaseId, eventRevision], map: "outcome_record_state_commitment_release_revision_idx")
+  @@map("outcome_record_state_commitment")
+}
+
+model OutcomeActiveRelease {
+  scopeKey    String                 @id @map("scope_key")
+  releaseId   String                 @unique @map("release_id")
+  activatedAt DateTime               @map("activated_at") @outcomes.Timestamptz(3)
+  revision    Int
+  release     OutcomeReleaseManifest @relation(fields: [releaseId], references: [releaseId], onDelete: Restrict)
+
+  @@map("outcome_active_release")
+}
+
+model OutcomeProjectionItem {
+  releaseId    String                    @map("release_id")
+  projectionId String                    @map("projection_id")
+  ordinal      BigInt
+  itemKey      String                    @map("item_key")
+  eventId      String                    @map("event_id")
+  tradeId      String?                   @map("trade_id")
+  assetId      String?                   @map("asset_id")
+  year         Int
+  aflClubId    String                    @map("afl_club_id")
+  clubName     String                    @map("club_name")
+  playerName   String                    @map("player_name")
+  searchText   String                    @map("search_text")
+  metricCodes  String[]                  @default([]) @map("metric_codes")
+  statusCodes  String[]                  @default([]) @map("status_codes")
+  itemJson     Json                      @map("item_json")
+  projection   OutcomeProjectionManifest @relation(fields: [releaseId, projectionId], references: [releaseId, projectionId], onDelete: Restrict, map: "outcome_projection_item_projection_fkey")
+
+  @@id([projectionId, ordinal])
+  @@unique([projectionId, itemKey], map: "outcome_projection_item_projection_item_key")
+  @@index([releaseId, year, ordinal], map: "outcome_projection_item_release_year_ordinal_idx")
+  @@index([releaseId, aflClubId, ordinal], map: "outcome_projection_item_release_club_ordinal_idx")
+  @@index([releaseId, playerName, ordinal], map: "outcome_projection_item_release_player_ordinal_idx")
+  @@index([metricCodes], type: Gin, map: "outcome_projection_item_metric_codes_gin_idx")
+  @@index([statusCodes], type: Gin, map: "outcome_projection_item_status_codes_gin_idx")
+  @@map("outcome_projection_item")
+}
