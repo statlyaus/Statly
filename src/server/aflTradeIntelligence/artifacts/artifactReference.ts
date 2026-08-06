@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto';
+
 import { z } from 'zod';
 
 import {
   aflTradeContentAddressedIdSchema,
   aflTradeSha256Schema,
   canonicalizeAflTradeJson,
-  sha256AflTradeCanonicalJson,
 } from './contentAddress';
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
@@ -47,20 +48,85 @@ export const aflTradeArtifactRefSchema = z
 
 export type AflTradeArtifactRef = z.infer<typeof aflTradeArtifactRefSchema>;
 
+export function doAflTradeArtifactRefsExactlyMatch(
+  left: AflTradeArtifactRef,
+  right: AflTradeArtifactRef
+): boolean {
+  return (
+    left.artifactId === right.artifactId &&
+    left.contentSha256 === right.contentSha256 &&
+    left.storageUri === right.storageUri &&
+    left.mediaType === right.mediaType &&
+    left.byteLength === right.byteLength &&
+    left.createdAt === right.createdAt
+  );
+}
+
+function copyAflTradeArtifactBytes(bytes: Uint8Array): Uint8Array {
+  if (
+    !ArrayBuffer.isView(bytes) ||
+    !('length' in bytes) ||
+    typeof bytes.length !== 'number' ||
+    bytes.byteLength !== bytes.length
+  ) {
+    throw new TypeError('Artifact bytes must be supplied as a Uint8Array.');
+  }
+  return Uint8Array.from(bytes);
+}
+
+export function createAflTradeByteArtifactRef(
+  bytes: Uint8Array,
+  mediaType: string,
+  createdAt: string
+): AflTradeArtifactRef {
+  const immutableBytes = copyAflTradeArtifactBytes(bytes);
+  const contentSha256 = createHash('sha256').update(immutableBytes).digest('hex');
+  return aflTradeArtifactRefSchema.parse({
+    artifactId: `artifact:${contentSha256}`,
+    contentSha256,
+    storageUri: `artifact://sha256/${contentSha256}`,
+    mediaType,
+    byteLength: immutableBytes.byteLength,
+    createdAt,
+  });
+}
+
+export function doesAflTradeArtifactRefMatchBytes(
+  reference: unknown,
+  bytes: Uint8Array,
+  expectedMediaType?: string
+): reference is AflTradeArtifactRef {
+  try {
+    const parsed = aflTradeArtifactRefSchema.safeParse(reference);
+    if (!parsed.success || (expectedMediaType && parsed.data.mediaType !== expectedMediaType)) {
+      return false;
+    }
+    const expected = createAflTradeByteArtifactRef(
+      bytes,
+      parsed.data.mediaType,
+      parsed.data.createdAt
+    );
+    return (
+      parsed.data.artifactId === expected.artifactId &&
+      parsed.data.contentSha256 === expected.contentSha256 &&
+      parsed.data.storageUri === expected.storageUri &&
+      parsed.data.byteLength === expected.byteLength
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function createAflTradeCanonicalJsonArtifactRef(
   value: unknown,
   createdAt: string
 ): AflTradeArtifactRef {
   const canonicalJson = canonicalizeAflTradeJson(value);
-  const contentSha256 = sha256AflTradeCanonicalJson(value);
-  return aflTradeArtifactRefSchema.parse({
-    artifactId: `artifact:${contentSha256}`,
-    contentSha256,
-    storageUri: `artifact://sha256/${contentSha256}`,
-    mediaType: AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE,
-    byteLength: new TextEncoder().encode(canonicalJson).byteLength,
-    createdAt,
-  });
+  return createAflTradeByteArtifactRef(
+    new TextEncoder().encode(canonicalJson),
+    AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE,
+    createdAt
+  );
 }
 
 export function doesAflTradeArtifactRefMatchCanonicalJson(

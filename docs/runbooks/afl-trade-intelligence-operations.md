@@ -10,12 +10,13 @@ fantasy ownership.
 
 The source-independent contracts, legacy archive, fail-closed factual-outcome page/API, factual
 candidate/projection manifests, and deterministic expected-revision factual lifecycle are implemented,
-but the page/API intentionally select no factual release and serve no checked rows. Approved
-workbook/upstream capture, immutable object storage, hosted public-outcomes PostgreSQL, durable factual
-release infrastructure, job infrastructure, real model releases, real Gate decisions, deployment, and
-production verification are not evidenced by the repository. Do not interpret possession of a
-workbook, successful fitzRoy call, passing fixture test, build, model-change review, import, or
-calculation as permission to retain or publish data or numbers.
+along with provider-neutral byte-custody and source-snapshot contracts, but the page/API intentionally
+select no factual release and serve no checked rows. The only custody implementation is fixture-only.
+Approved workbook/upstream capture, durable immutable object storage, hosted public-outcomes
+PostgreSQL, durable factual release infrastructure, job infrastructure, real model releases, real Gate
+decisions, deployment, and production verification are not evidenced by the repository. Do not
+interpret possession of a workbook, successful fitzRoy call, passing fixture test, build, model-change
+review, import, or calculation as permission to retain or publish data or numbers.
 
 The durable runtime adapters eventually selected for this subsystem must preserve these authorities:
 
@@ -73,16 +74,24 @@ Generated workbooks are release outputs and cannot be edited to mutate the activ
 
 For each capture or import:
 
-1. Resolve current Gate 0A evidence for the exact source object, upstream provider, environment,
+1. Resolve current Gate 0A evidence from the trusted complete durable decision ledger immediately
+   before retrieval for the exact source object, source register/provider/dataset/version, environment,
    competition, season range, fields, intended uses, retention period, and redistribution behavior.
-   Stop before retrieval when any requested use is absent or blocked.
-2. For a workbook, record its externally assigned source identity, original filename as metadata,
-   byte length, media type, digest, received time, provenance evidence, and rights decision. For
-   fitzRoy, also pin the package version, exact upstream source, function, arguments, rate/cache policy,
-   retrieval time, response media type, byte length, and digest. Never rely on a fitzRoy default source.
+   Stop before retrieval when any requested use is absent or blocked; an embedded receipt alone cannot
+   rule out an omitted withdrawal or superseding decision.
+2. For a workbook, record its externally assigned source identity and dataset version, original
+   filename as metadata, byte length, media type, digest, received time, provenance evidence, and
+   rights decision; require its filename extension, workbook format, and approved media type to agree.
+   For fitzRoy, also pin the package version, exact upstream source and dataset version, function,
+   pre-authorized content-addressed arguments, rate/cache policy, retrieval time, response media type,
+   byte length, and digest. Never rely on a fitzRoy default source.
 3. Store the original bytes once in the approved immutable object store under a content-addressed key.
    Verify a read-back digest before creating an import run. Do not put source bytes, local paths, or
    credentials in Git, logs, PostgreSQL payload columns, or public responses.
+   The implemented port requires content-addressed `putIfAbsent`, returns the first-writer canonical
+   reference for a same-byte/same-media retry, requires a declared maximum before loading, and emits a
+   content-addressed read-back receipt for that canonical reference. A provider adapter must preserve
+   those semantics and must not add overwrite or mutable `latest` behavior.
 4. Create one import run that references the immutable object and a reviewed mapping/schema version.
    Load into release-scoped staging; do not upsert directly into active public tables or views.
 5. Validate every field before normalization. At minimum check type, required/null state, finite and

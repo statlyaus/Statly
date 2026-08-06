@@ -284,11 +284,26 @@ authority concern, unresolved questions, and the following required findings:
 - archive import mutates the pointer without revision CAS, demonstrated parity, or last-good rollback;
 - the protected fantasy PostgreSQL cutover is unexecuted and the independent analytical PostgreSQL
   target is not provisioned;
-- an immutable artifact repository is absent; and
+- an approved durable immutable artifact adapter is absent; and
 - a trusted decision-evidence registry is absent.
 
 The snapshot is a reproducible repository assessment with `productionClaim: false`. It cannot claim
 that inspected infrastructure is production-ready or that its evidence is independently true.
+
+The source-independent custody boundary now supports arbitrary byte artifact references, exact
+put-if-absent repository semantics with first-writer canonical metadata, bounded exact reads, and content-addressed complete-reference
+read-back receipts. A source-snapshot manifest distinguishes workbook capture from fitzRoy capture and
+binds the source register/provider/dataset/version, original filename or exact
+upstream/package/function/arguments, raw artifact, Gate 0A proposal/decision/receipt, captured fields,
+retention duties, and chronology. Workbook snapshots require a closed extension/format/media-type
+match; fitzRoy argument artifacts must predate authorization. Its in-memory repository is named and
+documented as fixture-only. These contracts neither capture the local workbook nor call fitzRoy,
+choose a storage provider, authorize source use, or prove that durable object storage exists.
+
+A future production capture coordinator must resolve Gate 0A from the trusted complete durable ledger
+immediately before retrieval, then bind that result to the snapshot. Replaying the manifest's embedded
+decision chain proves internal consistency but cannot by itself prove that no later withdrawal or
+superseding decision exists.
 
 ### Gate 1 decision package
 
