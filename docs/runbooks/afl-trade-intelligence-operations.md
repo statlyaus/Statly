@@ -1,21 +1,30 @@
-# Public AFL trade-intelligence operations
+# Public AFL Draft & Trade Outcomes operations
 
 ## Purpose and authority
 
-This runbook owns operational procedure for the public AFL trade-intelligence capability. It does not
-operate fantasy leagues, user-owned teams, fantasy rosters, or the authenticated fantasy trade system.
-Public AFL players, draft picks, trades, calculations, and publications have no Statly-user ownership.
+This runbook owns operational procedure for the public AFL Draft & Trade Outcomes capability and its
+separately governed valuation layer. It does not operate fantasy leagues, user-owned teams, fantasy
+rosters, or the authenticated fantasy trade system. Public AFL players, clubs, draft picks, trades,
+source facts, calculations, and publications have no Statly-user ownership. AFL club custody is not
+fantasy ownership.
 
-The source-independent contracts are implemented, but live source approval, analytical persistence,
-job infrastructure, real model releases, Gate decisions, deployment, and production verification are
-not evidenced by the repository. Do not interpret a passing fixture test, build, model-change review,
-or successful calculation as permission to publish numbers.
+The source-independent contracts, legacy archive, and fail-closed factual-outcome page/API are
+implemented, but the page/API intentionally select no factual release and serve no checked rows.
+Approved workbook/upstream capture, immutable object storage, hosted public-outcomes PostgreSQL,
+factual release infrastructure, job infrastructure, real model releases, Gate decisions, deployment,
+and production verification are not evidenced by the repository. Do not interpret possession of a
+workbook, successful fitzRoy call, passing fixture test, build, model-change review, import, or
+calculation as permission to retain or publish data or numbers.
 
 The durable runtime adapters eventually selected for this subsystem must preserve these authorities:
 
 - the calculation-run store owns append-only run and attempt records;
 - the scheduler store owns an atomic unique constraint on each content-addressed dispatch key;
-- the publication registry alone owns active-publication pointers;
+- immutable object storage owns original approved workbook and fitzRoy/upstream response bytes;
+- the isolated outcomes PostgreSQL database owns normalized public facts, exceptions, and release
+  metadata;
+- the factual release registry alone owns the active factual-outcome pointer;
+- the valuation publication registry separately owns the active valuation pointer;
 - the Gate decision ledger owns approval; and
 - approved source-rights evidence remains a prerequisite for collection, calculation, and serving.
 
@@ -27,28 +36,118 @@ and Gate state remain separate boundaries under `publication` and `governance`.
 Do not configure a recurring job or analytical writer until all of the following are evidenced for the
 target environment:
 
-1. Gate 0A source-rights evidence is effective and permits the exact collection, derivation, retention,
-   and public-output uses.
+1. Gate 0A source-rights evidence is effective for each workbook or fitzRoy-backed upstream and permits
+   the exact capture, fields, derivation, retention, caching, public fact display, generated export,
+   model, and public-output uses requested by the operation.
 2. The current authority-transition package permits analytical writes to the selected isolated store.
-3. Gates 1–3 permit the exact datasets, protocols, model runs, and valuation bundle required by the
-   calculation inputs.
-4. The calculation-run, schedule-claim, artifact, projection, and publication stores have approved
-   durable adapters, backup/restore evidence, retention rules, and least-privilege identities.
+3. Gate 1 and the applicable corpus/data decision permit the exact immutable source objects,
+   PostgreSQL schema, source-grain facts, metric definitions, and acquisition-spell rules used by a
+   factual candidate. Gates 2–3 additionally permit exact datasets, protocols, model runs, and
+   valuation bundles when model work is requested.
+4. Object storage, public-outcomes PostgreSQL, factual release, calculation-run, schedule-claim,
+   valuation artifact, projection, and publication stores used by the operation have approved durable
+   adapters, backup/restore evidence, retention rules, and least-privilege identities.
    The projection byte source must reject an object above the repository's declared 128 MiB limit
    before allocating or returning the complete payload; an adapter-side check after an unbounded load
    is not sufficient.
 5. The dispatch adapter enforces `dispatchKey` uniqueness atomically. Read-then-enqueue without a
    unique claim is not sufficient.
-6. Projection parity, publication rollback, source withdrawal, and last-good recovery have been
-   rehearsed on disposable infrastructure.
+6. Workbook/source reconciliation, factual release parity, generated-export parity, projection parity,
+   both release rollback paths, source withdrawal, and last-good recovery have been rehearsed on
+   disposable infrastructure as applicable.
 7. Monitoring routes every critical health alert to an accountable operator.
 8. Preview behavior is verified from the exact candidate commit. Production behavior is verified only
    after a deployment record identifies that same commit.
 
-Until this checklist passes, the public archive may expose source-blocked or other truthful
-non-numerical states only.
+Until the source and factual checklist passes, the public archive may expose only its current legacy
+records and truthful factual-unavailable states. Until the additional model checklist passes, it may
+expose reviewed factual outcomes but must keep valuation numerical states unavailable.
 
-## Scheduling an occurrence
+## Capturing workbook and fitzRoy evidence
+
+The workbook is an immutable evidence input and interchange format, never a live serving store. The
+site, API, workers, and calculation jobs must not open a local or uploaded workbook at request time.
+Generated workbooks are release outputs and cannot be edited to mutate the active database.
+
+For each capture or import:
+
+1. Resolve current Gate 0A evidence for the exact source object, upstream provider, environment,
+   competition, season range, fields, intended uses, retention period, and redistribution behavior.
+   Stop before retrieval when any requested use is absent or blocked.
+2. For a workbook, record its externally assigned source identity, original filename as metadata,
+   byte length, media type, digest, received time, provenance evidence, and rights decision. For
+   fitzRoy, also pin the package version, exact upstream source, function, arguments, rate/cache policy,
+   retrieval time, response media type, byte length, and digest. Never rely on a fitzRoy default source.
+3. Store the original bytes once in the approved immutable object store under a content-addressed key.
+   Verify a read-back digest before creating an import run. Do not put source bytes, local paths, or
+   credentials in Git, logs, PostgreSQL payload columns, or public responses.
+4. Create one import run that references the immutable object and a reviewed mapping/schema version.
+   Load into release-scoped staging; do not upsert directly into active public tables or views.
+5. Validate every field before normalization. At minimum check type, required/null state, finite and
+   allowed numeric range, controlled vocabulary, natural key, duplicate grain, season/round/match
+   references, club and player identities, effective time, source field permission, and provenance.
+6. Preserve games, goals, votes, and awards at their declared source grain. Do not infer awards from
+   statistics, copy a season fact into match rows, treat a missing field as zero, or count both a pick
+   and its resolved player as separate contribution.
+7. Reconcile every input row and governed field to normalized, unresolved, conflicting, quarantined,
+   not-applicable, or rejected status. Persist exceptions with public-safe reason codes and protected
+   review evidence; no row may disappear from the accounting report.
+8. Resolve identities and pick lineage only through reviewed evidence. Manual overrides are append-only
+   decisions with actor, reason, evidence, effective time, knowledge time, and supersession history.
+9. Build acquisition spells using the exact reviewed rule version. Confirm contribution begins at the
+   supported acquisition boundary, stops when the player leaves the receiving AFL club, and does not
+   double-count ancestors, descendants, packages, or return assets.
+10. Produce a candidate reconciliation report containing object digests, source/staging/canonical row
+    and field counts, duplicate counts, identity/lineage outcomes, exceptions, metric coverage, and
+    aggregate checks. An import success only means the candidate was built; it does not publish it.
+
+A failed capture or import preserves its run and diagnostics, marks no release active, and leaves the
+previous reviewed release unchanged. Retrying creates a new attempt or import run referencing the same
+immutable object; it never overwrites the failed evidence.
+
+## Publishing a factual outcome release
+
+A factual candidate is independent from a valuation candidate. It may publish governed descriptive
+outcomes without approving a model, and its approval cannot activate valuation.
+
+1. Capture the current factual pointer and registry revision. Pin the exact archive dataset, immutable
+   source objects, import/reconciliation report, identity and lineage decisions, metric registry,
+   acquisition-spell rule version, exception dispositions, effective-through time, schema version, and
+   candidate content digest.
+2. Verify source rights remain effective for public fact display and every generated export field.
+   Withdrawal, expiry, or a narrower current decision blocks the candidate.
+3. Re-run structural, field, identity, lineage, acquisition-spell, null-versus-zero, aggregate, and
+   release-completeness checks from the immutable inputs. Reviewers must see unresolved and quarantined
+   evidence; do not calculate coverage only from accepted rows.
+4. Generate candidate list, trade-detail, club, player, year, dashboard, and export views under the
+   candidate release identifier. No active/public query may select them yet.
+5. Reconcile representative and total counts across normalized tables, release views, XLSX, CSV, and
+   JSON. Confirm each output identifies the same release and effective-through date and that legacy
+   `Expected`/`Actual` fields remain labelled as unverified archive data rather than factual metrics.
+6. Exercise measured zero, missing, partial, unresolved identity, unresolved lineage, unsupported
+   metric, stale, withdrawn, source-object failure, and release-mismatch cases. The public contract must
+   distinguish each without fabricating a value or falling back to the workbook or Firestore default
+   collections.
+7. Obtain the exact factual review and operational authorization required by the architecture package.
+   Record reviewers, evidence identifiers, candidate digest, target environment, release identifier,
+   expected registry revision, and rollback window.
+8. Engage the factual write barrier, repeat the declared parity checkpoint, and use expected-revision
+   compare-and-swap to activate the candidate once. A concurrent winner requires fresh capture and
+   review; never force the pointer.
+9. Confirm representative public reads and generated downloads resolve the activated release. Record
+   cache/projection invalidation and monitor errors, latency, release mismatches, and exception counts
+   through the observation window.
+10. Preserve the previous factual release and immutable evidence for the authorized rollback and
+    retention periods. Retire the legacy Firestore pointer only through its separately reviewed
+    migration plan after parity and observation pass.
+
+The public site reads reviewed PostgreSQL release views, optionally through a release-bound cache. It
+never reads staging, exceptions, raw object bytes, a candidate release, or a mutable spreadsheet.
+
+## Scheduling an optional valuation occurrence
+
+This section begins only after an eligible factual release exists and the independent model Gates pass.
+It does not apply to factual imports or factual release activation.
 
 1. Resolve the effective source and calculation Gate decisions at the occurrence time. Never reuse a
    stale Boolean from a previous job.
@@ -69,7 +168,7 @@ non-numerical states only.
 The periodic calculation `calculationAsOf` must equal the aligned schedule occurrence. A full
 historical recalibration is not a normal scheduled calculation; use the model-change procedure below.
 
-## Running and retrying a calculation
+## Running and retrying an optional valuation calculation
 
 1. Create the run with `queueAflTradeCalculationRun`, capturing the active publication pointer as
    `lastGoodAtStart`. This snapshot is evidence, not a mutable serving pointer.
@@ -91,7 +190,7 @@ Persist transitions transactionally or with revision compare-and-swap. The pure 
 validate state; a runtime adapter must still prevent concurrent writers from both persisting divergent
 successors.
 
-## Publication after calculation
+## Valuation publication after calculation
 
 A successful calculation is a candidate, not an active publication.
 
@@ -125,10 +224,27 @@ UI. Never substitute an ungoverned candidate when a published projection is unav
 
 ## Health evaluation and alerts
 
-Build `AflTradeOperationalHealthInput` from fresh source-rights evidence, the exact active pointer,
-projection verification, latest calculation run, and reviewed thresholds. Persist the resulting
-content-addressed snapshot and route every alert. The evaluator recommends action; adapters and
-authorized operators execute it.
+### Factual outcome health
+
+No durable factual-outcome health adapter is implemented. The selected runtime must monitor immutable
+source-object retrieval and digest verification, PostgreSQL connectivity and restore status, import
+failures, rejected/quarantined field counts, unresolved identity and lineage counts, acquisition-spell
+coverage, factual pointer consistency, release-view parity, export parity, freshness, and cache release
+mismatches. Alerts must use bounded labels and link to the exact import or release evidence; source
+rows, names, local paths, and protected review payloads do not belong in telemetry labels.
+
+An object-integrity failure, rights withdrawal, active factual-release mismatch, or failed release
+parity immediately suppresses affected factual metrics and blocks new publication. A transient read
+failure does not authorize the workbook, a candidate release, legacy Firestore defaults, or an older
+release to become current. The factual registry remains unchanged until an authorized withdrawal or
+recovery command succeeds.
+
+### Valuation health
+
+Build `AflTradeOperationalHealthInput` from fresh source-rights evidence, the exact active valuation
+pointer, projection verification, latest calculation run, and reviewed thresholds. Persist the
+resulting content-addressed snapshot and route every alert. The implemented evaluator recommends
+action; adapters and authorized operators execute it.
 
 | Alert                                | Immediate response                                                        | Publication handling                                                  |
 | ------------------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -147,8 +263,35 @@ an operational configuration change with its own artifact and delivery record.
 
 ## Withdrawal and recovery
 
-Withdrawal stops serving the affected publication and preserves its audit trail. It is not deletion,
-and it is not permission to reactivate an older release automatically.
+Withdrawal stops serving the affected release and preserves its audit trail. It is not deletion, and
+it is not permission to reactivate an older release automatically. Factual and valuation withdrawals
+use separate registries and must be evaluated independently.
+
+### Factual release withdrawal
+
+1. Stop source capture, imports, and new factual candidates when the incident affects rights,
+   provenance, object integrity, mappings, identity/lineage, metric definitions, or acquisition-spell
+   validity.
+2. Capture the exact source-object, import, exception, factual pointer, release-view, export,
+   deployment, cache, health, and incident evidence before mutation.
+3. Apply the factual registry's governed withdrawal command with the expected revision, authorized
+   actor, evidence identifier, timestamp, affected scope, and reason.
+4. Confirm affected factual API/UI responses are unavailable or explicitly partial, generated download
+   links do not present the withdrawn release as current, and caches cannot serve it after the captured
+   selection is invalidated.
+5. Follow source-specific retention, deletion, or access-revocation duties without deleting the
+   append-only decision and incident evidence that the rights decision permits Statly to retain.
+6. Correct evidence through a new immutable source object, mapping/rule version, import run, exception
+   review, and factual candidate. Never edit normalized facts or release exports in place.
+7. Recover only through the complete factual publication procedure with a fresh expected revision and
+   authorization. Never fall back to the workbook, staging, Firestore default collections, an
+   unreviewed candidate, or a backward clock.
+
+Withdrawing a factual release requires reassessing every valuation publication that depends on it. It
+does not silently withdraw or reactivate a valuation; the valuation registry must record its own
+governed action.
+
+### Valuation publication withdrawal
 
 1. Stop new work if the incident affects source permission or calculation validity.
 2. Capture source, projection, health, registry, deployment, and incident evidence before mutation.
@@ -191,17 +334,24 @@ silently rewrite prior values or comparisons.
 
 ## Verification and incident record
 
-For every live schedule enablement, publication, withdrawal, recovery, or model release, record:
+For every source capture, import, factual publication, live valuation schedule enablement, valuation
+publication, withdrawal, recovery, or model release, record:
 
 - exact deployed commit and deployment identifier;
 - effective source and Gate decision identifiers;
+- immutable source-object identifiers, byte lengths, digests, upstream/provider, fitzRoy version and
+  arguments, mapping/schema version, and retention disposition as applicable;
+- import run, reconciliation report, exception review, identity/lineage decision, metric registry,
+  acquisition-spell rule, factual release, and effective-through identifiers as applicable;
 - schedule decision, dispatch claim, run, attempt, health, review, bundle, publication, and projection
   identifiers as applicable;
 - commands/checks run and their outcomes;
-- public API and responsive UI smoke evidence;
+- representative PostgreSQL release-view, generated XLSX/CSV/JSON, public API, and responsive UI smoke
+  evidence as applicable;
 - operator, reviewer, and incident timestamps; and
 - residual risks and follow-up owner.
 
 Use disposable fixtures for rehearsal. Never point tests at `prisma/dev.db`, protected fantasy data, or
-production analytical data. A local build or fixture pass is not deployment, source approval, Gate
-approval, production health, or release evidence.
+production public-outcomes data. A local build or fixture pass is not workbook provenance, upstream
+permission, object-storage readiness, PostgreSQL readiness, factual release approval, deployment, Gate
+approval, production health, or valuation publication evidence.

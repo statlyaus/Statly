@@ -10,3 +10,4 @@ export * from './aflTradeIntelligence/summary';
 export * from './aflTradeIntelligence/detail';
 export * from './aflTradeIntelligence/response';
 export * from './aflTradeIntelligence/methodology';
+export * from './aflDraftTradeOutcomes';

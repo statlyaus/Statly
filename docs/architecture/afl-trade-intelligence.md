@@ -1,17 +1,25 @@
-# Public AFL trade intelligence
+# Public AFL Draft & Trade Outcomes
 
-- Status: WP1 pure deterministic foundations, Gate 1 decision/transition contracts, the independent
-  public analytical target, the WP7A public boundary, source-independent operational contracts, and
-  the Stage 3, Stage 4, and Stage 5 modeling and valuation harnesses are defined with local contract
-  coverage; Gates 0A and 1 have no production approval, and approved real-data model development,
-  numerical publication, deployment, and production verification are not complete
-- Last verified against source: 2026-08-05
+- Status: the legacy public archive, source-independent governance/valuation contracts, strict
+  factual-outcome evaluation/read contracts, and truthful prepublication outcome UI/API exist; the
+  separate factual-outcomes target is defined, but isolated hosted PostgreSQL, immutable object
+  storage, approved source capture, reviewed factual releases, real-data model development,
+  deployment, and production verification are not complete
+- Last verified against source: 2026-08-06
 
 ## Purpose
 
-Statly's AFL Draft & Trade Archive is a public research product for historical AFL transactions. The
-trade-intelligence capability may add reproducible estimates of what clubs exchanged and subsequently
-received, but it must not turn public AFL records into fantasy assets or user-owned records.
+Statly's AFL Draft & Trade Outcomes capability is a public, non-fantasy research domain for historical
+AFL transactions and the factual outcomes attached to them. Its first responsibility is to preserve
+what moved, resolve public AFL identities and pick lineage, and report governed acquisition-spell
+facts such as games, goals, votes, and awards. A separately approved valuation capability may later
+add reproducible estimates, but factual outcome publication must not depend on a model release.
+
+The source workbook is evidence and an import/export format. It is never the request-time authority,
+a live database, or a manually maintained competitor to the reviewed public release. The long-term
+authority target is an isolated hosted PostgreSQL database; original workbooks and permitted fitzRoy
+source snapshots belong in immutable object storage. Neither target is provisioned or authoritative
+merely because it is described here.
 
 The capability is distinct from protected fantasy trading:
 
@@ -24,8 +32,23 @@ The capability is distinct from protected fantasy trading:
 
 ## Product contract
 
-The archive must remain useful when numerical valuation is unavailable, withdrawn, stale, or not
-supported for a cohort. A published model may answer four separate questions:
+The factual product answers three questions before any valuation is considered:
+
+1. **What happened:** which AFL clubs participated and which players, picks, future-pick
+   entitlements, or other recorded consideration moved.
+2. **What each club received:** the resolved public identity, pick lineage, and real-club acquisition
+   spell for every supported asset.
+3. **What was subsequently recorded:** source-grain games, goals, votes, and awards, with an exact
+   evidence cutoff, metric definition, coverage status, and release identifier.
+
+A measured zero is distinct from missing, unavailable, unresolved, or not-applicable evidence. Public
+outcomes describe recorded contribution and coverage; they do not by themselves establish causal
+impact, objective fairness, or a trade winner. Each public response must identify the reviewed factual
+release and its effective-through date.
+
+The archive and factual outcomes must remain useful when numerical valuation is unavailable,
+withdrawn, stale, or unsupported for a cohort. A separately published model may answer four distinct
+questions:
 
 1. **At-trade decision value:** the distribution of future contribution knowable at the transaction
    date.
@@ -35,8 +58,9 @@ supported for a cohort. A published model may answer four separate questions:
 4. **Current outcome distribution:** a present-day combination of realized contribution and remaining
    value using an explicitly identified valuation bundle.
 
-These views must never be silently combined. Every numerical response identifies its value unit,
-valuation view, effective date, knowledge cutoff, publication, valuation bundle, and uncertainty.
+These views must never be silently combined with each other or with factual metrics. Every numerical
+response identifies its value unit, valuation view, effective date, knowledge cutoff, publication,
+valuation bundle, and uncertainty.
 
 Permitted language describes model estimates, distributions, assumptions, and evidence. Public copy
 must not claim objective fairness, causal certainty, or an unqualified winner or loser.
@@ -44,9 +68,11 @@ must not claim objective fairness, causal certainty, or an unqualified winner or
 ## Current repository state
 
 The current archive is served from versioned Firestore collections through server-only read helpers.
-The browser-facing pages and APIs are public. Firestore currently contains archive documents and an
-active-collection pointer, but it is a legacy serving store rather than a demonstrated rebuildable
-analytical projection.
+Those collections originate from imported archive material and expose transactions, parties, assets,
+and unverified legacy `Expected` and `Actual` fields. The browser-facing pages and APIs are public.
+Firestore currently contains archive documents and an active-collection pointer, but it is a legacy
+serving store rather than the proposed factual-outcomes authority or a demonstrated rebuildable
+release projection. The workbook is not queried by the application at request time.
 
 The current Firestore path resolves `draftMeta/currentVersion`, caches the selected collection in the
 server process for 60 seconds, and catches pointer-read failures by falling back to default collection
@@ -56,6 +82,19 @@ collection revision. The import script writes versioned collections and then mut
 does not implement expected-revision compare-and-swap, demonstrated parity, or a recorded last-good
 rollback. These behaviors are current-state risks to replace deliberately; they are not evidence that
 Firestore is ready to become the new engine's projection authority.
+
+The public `/draft/outcomes` page and `/api/draft-trades/outcomes` route now expose a strict
+`afl-draft-trade-outcomes/v1` read contract for games, goals, coaches votes, Brownlow votes, and
+evidence-bearing achievements. The boundary preserves checked zero, missing, partial, differing,
+single-source, and unavailable states; requires exact release metadata, metric definitions, scope,
+effective-through dates, and source references; structurally rejects fantasy/user identifiers; and
+prevents unresolved player identities from carrying checked facts. An active read uses the metric
+definitions captured with that exact release, validates each evidence reference and fact cutoff
+against them, and rejects repository rows outside exact requested year and metric/status predicates.
+The repository owns governed alias, abbreviation, normalization, and text-index matching semantics.
+The current composition intentionally captures no active factual release, never calls a workbook or
+Firestore fallback, and returns no rows. The annual-workbook evaluator is a pure staging/evaluation
+boundary, not a request-time importer or permission to publish its values.
 
 The source-independent WP1, modeling, and valuation foundations are implemented separately from those
 existing archive reads. They provide strict public contracts, source-governance and artifact-manifest
@@ -74,8 +113,9 @@ unavailable-state experience, contract-ready numerical views, and a general meth
 not evidence that a numerical valuation exists.
 
 WP1 completion therefore means that later work has a deterministic boundary to build on. It does not
-mean that a historical source is approved, managed PostgreSQL is operational, an analytical corpus
-exists, a model is approved, a publication is active, or the feature is release-ready.
+mean that a historical source is approved, object storage or managed PostgreSQL is operational, a
+reconciled factual corpus exists, a factual outcome release is reviewed, a model is approved, a
+publication is active, or the feature is release-ready.
 
 The protected fantasy Prisma schema currently targets SQLite. Its platform-wide PostgreSQL cutover is
 planned and unexecuted, but it is not the migration path for this public capability. The trade engine
@@ -84,15 +124,19 @@ PostgreSQL database, or an isolated database and role on an approved managed Pos
 separate credentials, connection budgets, migrations, backups, and restore evidence. It contains no
 `User`, fantasy `League`, membership, roster, or fantasy-trade ownership relation.
 
-The repository has an authenticated, exact-identifier, in-memory artifact-read adapter, but no
-approved durable artifact byte source and no trusted external decision-evidence registry for this
-capability. Do not describe the analytical PostgreSQL target or object storage as ready, apply the
-protected fantasy schema or SQLite migration history to it, or introduce the analytical schema into
-an unapproved target.
+The repository has an authenticated, exact-identifier, in-memory valuation-artifact read adapter, but
+no approved durable object-storage adapter, factual PostgreSQL repository, factual release selector,
+or trusted external decision-evidence registry for this capability. Do not describe the analytical
+PostgreSQL target, object storage, factual release views, or valuation artifact source as ready; do not
+apply the protected fantasy schema or SQLite migration history to them or introduce the public schema
+into an unapproved target.
 
-The repository's Footywire/fitzRoy ETL supplies live-stat evidence for fantasy calculations. That
-existing technical path does not establish permission to train or publish this separate historical
-trade-intelligence product from the same upstream data.
+fitzRoy is the selected technical adapter family for obtaining compatible AFL statistical evidence,
+not a source-rights grant. It can expose multiple upstream providers, and every capture must name the
+exact upstream, function/parameters, package version, retrieval time, source grain, and permitted
+fields. The repository's existing Footywire-through-fitzRoy ETL supplies live-stat evidence for
+fantasy calculations; that path neither supplies historical trade/pick lineage nor establishes
+permission to retain, derive, display, or model data for this separate public product.
 
 ## Proposed target architecture
 
@@ -104,41 +148,49 @@ separate Gate 1 receipt: an immutable decision is audit evidence, not a replayab
 source-rights proposal
   -> externally authorized Gate 0A decision
   -> content-addressed Gate 0A evaluation receipt
-  -> immutable, content-addressed evidence manifest
+  -> immutable workbook and permitted fitzRoy/upstream snapshots in object storage
+  -> content-addressed evidence manifest
   + pre-registered data-sufficiency protocol
   -> content-addressed coverage report
   -> externally authorized Gate 0B decision
   + content-addressed current-state snapshot
   -> complete architecture decision package
   -> externally authorized Gate 1 decision
-  -> normalized bitemporal corpus manifest in the approved isolated analytical PostgreSQL target
+  -> staging, field validation, identity resolution, and exception review
+  -> normalized source-grain facts in the approved isolated PostgreSQL target
   -> externally authorized Gate 2 decision
-  -> feature dataset manifest
-  -> pre-registered player-contribution model protocol
-  -> reproducible model-run manifest
-  -> externally authorized Gate 3 decision pinning the protocol and run
-  -> immutable candidate-publication manifest
-  -> rebuildable projection manifest
-  -> externally authorized Gates 4 and 5
-  -> atomic active-publication pointer
-  -> public service and transport adapters
-  -> archive and trade-detail UI
+  -> immutable factual-outcome candidate
+  -> reviewed factual-outcome release and atomic release pointer
+  -> release-scoped public outcome views and generated XLSX/CSV/JSON
+  -> public factual service, outcome explorer, trade detail, and exports
+  + optional valuation path:
+      feature dataset manifest
+      -> pre-registered player-contribution model protocol
+      -> reproducible model-run manifest
+      -> externally authorized Gate 3 decision pinning the protocol and run
+      -> immutable candidate-publication manifest
+      -> rebuildable projection manifest
+      -> externally authorized Gates 4 and 5
+      -> atomic active-publication pointer
+      -> valuation service and trade-detail model views
 ```
 
 ### Authority by concern
 
-| Concern                                   | Proposed long-term authority                        | Constraint                                          |
-| ----------------------------------------- | --------------------------------------------------- | --------------------------------------------------- |
-| Source permission and intended use        | Reviewed source-rights register                     | Technical access is not permission                  |
-| Retrieved evidence                        | Immutable content-addressed storage                 | Retention follows source terms                      |
-| Evidence metadata and quality issues      | Isolated trade-intelligence PostgreSQL database     | References immutable evidence                       |
-| Public AFL identities                     | Isolated trade-intelligence PostgreSQL database     | Source identities; no fantasy ownership or FK       |
-| Trades, parties, assets, and club custody | Isolated trade-intelligence PostgreSQL database     | Normalized and bitemporal                           |
-| Asset lineage and attribution             | Isolated trade-intelligence PostgreSQL database     | Typed edges with conservation invariants            |
-| Feature and model artifacts               | Immutable artifact storage with analytical metadata | Reproducible from manifests                         |
-| Valuation snapshots                       | Append-only analytical PostgreSQL publications      | Candidates never leak into active reads             |
-| Public serving representation             | Versioned Firestore/cache projection                | Separate pointer; rebuildable and never canonical   |
-| Public HTTP routes                        | Thin transport adapters                             | Validate input and call shared public read services |
+| Concern                                        | Proposed long-term authority                         | Constraint                                                      |
+| ---------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------- |
+| Source permission and intended use             | Reviewed source-rights register                      | fitzRoy or workbook access is not permission                    |
+| Original workbooks and upstream snapshots      | Immutable content-addressed object storage           | Retention and redistribution follow exact source terms          |
+| Import runs, evidence metadata, and exceptions | Isolated outcomes PostgreSQL database                | References immutable source objects; failed rows remain visible |
+| Public AFL identities                          | Isolated outcomes PostgreSQL database                | Source identities; no fantasy ownership or foreign key          |
+| Trades, parties, assets, and club custody      | Isolated outcomes PostgreSQL database                | Normalized, relational, and bitemporal                          |
+| Games, goals, votes, and awards facts          | Isolated outcomes PostgreSQL database                | Preserve source grain and null-versus-zero semantics            |
+| Asset lineage and acquisition spells           | Isolated outcomes PostgreSQL database                | Versioned rules with conservation and custody invariants        |
+| Reviewed factual-outcome releases              | Append-only PostgreSQL release records and views     | Independent pointer; candidates never leak into public reads    |
+| Generated XLSX, CSV, and JSON                  | Release-derived export artifacts                     | Rebuildable from one reviewed release; never reverse authority  |
+| Feature and model artifacts                    | Immutable object storage with analytical metadata    | Optional valuation path; reproducible from manifests            |
+| Valuation snapshots                            | Append-only analytical PostgreSQL/artifact releases  | Separate lifecycle and pointer from factual outcomes            |
+| Public HTTP routes                             | Thin transport adapters over release-scoped services | No workbook, raw object, staging, or unreviewed-candidate reads |
 
 ### Isolation contract
 
@@ -150,14 +202,18 @@ Prisma migration history are never accepted as trade-engine configuration.
 
 The analytical schema owns public AFL source identities. It may store reviewed cross-source mappings,
 but it must not reference fantasy users, leagues, memberships, rosters, league trades, or ownership
-records. A future cross-product link is an explicit read-model mapping with independent authorization,
-not a relational ownership edge.
+records. AFL club custody is a public football fact, not Statly-user ownership. A future cross-product
+link is an explicit read-model mapping with independent authorization, not a relational ownership
+edge.
 
-The numerical Firestore projection uses a publication-scoped namespace and active pointer distinct
-from `draftMeta/currentVersion`, which continues to select the legacy archive. The engine can join a
-legacy trade to a published valuation only through stable public archive/source identifiers recorded
-in the projection manifest. A missing join yields an honest unavailable state; it never falls back to
-legacy Expected or Actual fields as Statly value.
+The public site reads only release-scoped PostgreSQL read models selected by one atomic factual-release
+pointer. A cache or rebuildable serving projection may accelerate those reads, but it does not become
+authority and cannot select a different release independently. `draftMeta/currentVersion` continues
+to select the legacy Firestore archive only during migration and is not the target release mechanism.
+The engine can join an archive trade, factual outcome, or published valuation only through stable
+public source identifiers and an exact archive dataset identity recorded by the corresponding
+release. A missing or mismatched join yields an honest unavailable state; it never falls back to a
+workbook lookup or legacy `Expected`/`Actual` field.
 
 Redis may coordinate locks, queues, and caches but never owns durable analytical state. A projection
 failure must not cause Firestore, CSV, or a client fallback to become canonical.
@@ -319,8 +375,10 @@ persistence and operational authorization remain later implementation work.
 
 There is currently no production source-rights artifact, named approved provider, authority evidence,
 or approved Gate 0A decision for this capability. Historical capture, backfill, and all downstream data
-work therefore remain blocked. FootyWire-derived ingestion is not approved for this use: an open-source
-client or adapter licence does not grant rights to upstream data. The maintained
+work therefore remain blocked. Possession of the local workbook does not establish its provenance or
+grant retention, derivation, public-display, or redistribution rights. Likewise, fitzRoy is an adapter
+over separately governed upstream sources: its package licence and technical access do not grant rights
+to AFL, FootyWire, AFL Tables, or another provider's data. The maintained
 [source-rights assessment](afl-trade-source-rights-assessment.md) records the reviewed candidates,
 rejection reasons, evidence request, and minimum approval criteria without creating authority.
 
@@ -384,15 +442,16 @@ source-rights proposal
   -> Gate 1 decision
   -> corpus manifest
   -> Gate 2 decision
-  -> feature dataset manifest
-  -> model-protocol manifest
-  -> model-run manifest
+  -> reviewed factual-outcome release
+  -> active factual-release pointer
+  + optional feature dataset manifest
+  -> optional model-protocol manifest
+  -> optional model-run manifest
   -> Gate 3 decision pinning protocol and run
-  -> publication manifest
-  -> projection manifest
-  -> Gate 4 decision
-  -> Gate 5 decision
-  -> active-publication pointer
+  -> valuation publication manifest
+  -> valuation projection manifest
+  -> Gates 4 and 5
+  -> active valuation-publication pointer
 ```
 
 Source-independent contracts, deterministic lineage fixtures, manifest schemas, and unavailable
@@ -456,6 +515,57 @@ beside them. Every frontier asset must be credited exactly once or explicitly ex
 ancestors and descendants cannot both receive credit. Terminally voided or expired assets leave the
 frontier. Player contribution to an AFL club stops when the player leaves that club. Multi-party trades
 remain multi-party; the system must not fabricate independent bilateral trades.
+
+### Factual outcome grain and validation
+
+The factual corpus preserves evidence at the finest approved source grain rather than storing only a
+dashboard total. Transaction rows, asset movements, player-match or player-season statistics, votes,
+and awards remain distinct facts with their own natural keys, effective times, knowledge times, source
+object references, and field-level rights dispositions. A derived acquisition spell joins those facts
+under one reviewed rule version; it is not rewritten into a raw source row.
+
+The initial public metric vocabulary may include games, goals, votes, and awards only where the
+approved source supplies and defines them. Their source grains may differ: for example, games and goals
+may be match observations while a vote or award may be an event- or season-level observation. The
+normalizer must not fabricate a common grain, infer an award from statistics, or duplicate an
+observation across both a player and its predecessor pick. Aggregates retain the exact metric
+definition version, acquisition-spell rule, numerator, denominator, coverage status, and
+effective-through date.
+
+Every captured field passes checks appropriate to its declared source contract before it can enter a
+candidate factual release:
+
+- structural type, required/null, finite-number, range, and controlled-vocabulary checks;
+- natural-key and duplicate checks at the declared source grain;
+- season, round, match, club, player, and award/vote referential checks where applicable;
+- public identity and real-club custody checks at the fact's effective time;
+- source-object digest, upstream/provider, fitzRoy version and parameters, retrieval time, and Gate 0A
+  field-use checks; and
+- explicit reconciliation to measured, unresolved, conflicting, quarantined, not applicable, or
+  unavailable status.
+
+Missing, malformed, ambiguous, or unapproved fields are quarantined or published as unavailable. They
+are never coerced to zero. A factual release records row and field counts, exceptions, unresolved
+identities, lineage gaps, and metric coverage so incomplete evidence cannot improve its own quality
+claim.
+
+### Independent factual and valuation releases
+
+A factual-outcome release binds an exact archive dataset, source snapshot set, metric registry,
+acquisition-spell rule version, effective-through time, exception disposition, review decision, and
+release identifier. The active factual pointer changes atomically only after reconciliation and review.
+Public outcome list, trade detail, club, player, year, dashboard, and export views all resolve that same
+captured release.
+
+Valuation publications remain independent. A reviewed factual release neither approves a model nor
+activates a numerical valuation; a blocked or withdrawn valuation does not hide an otherwise approved
+factual release. When a page composes both, each response retains its own release/publication envelope
+and the valuation manifest must bind the exact factual/archive inputs it used. Mixed-version joins fail
+closed.
+
+Generated workbooks, CSV, and JSON are outputs of one factual release and include its identifier and
+effective-through date. An operator may also submit an approved workbook as a new immutable import
+candidate, but editing an export never mutates the active database or public release.
 
 ## Public response contract
 
@@ -926,27 +1036,36 @@ withdrawal, recovery, recalibration, and exact-commit verification procedure.
 After the exact Gate 1 package and a real isolated analytical target are separately approved, the
 public engine may proceed independently of the protected fantasy PostgreSQL cutover:
 
-1. provision the isolated database, roles, pooled/direct secrets, backups, monitoring, and restore
-   target without granting authority;
-2. introduce a separate reviewed analytical schema and PostgreSQL-native migration history;
-3. rehearse migration, backup restore, and rollback on disposable infrastructure;
-4. observe and record the package's integrity, temporal, query, retention, capacity, and isolation
-   criteria;
-5. import only Gate 0A-approved evidence through idempotent adapters;
-6. reconcile source-to-canonical counts and hashes;
-7. build lineage and attribution with deterministic invariants;
-8. build and validate an isolated candidate publication;
-9. project the approved publication to versioned public collections under its separate pointer;
-10. obtain separate operational authorization and record a `prepared` transition;
-11. engage the analytical write barrier and re-run the declared parity checkpoint; and
-12. append `activated` with expected-revision CAS. Do not infer authority from provisioning,
-    migration, deployment, or projection success.
+1. approve exact workbook and upstream uses, then provision isolated object storage and the hosted
+   PostgreSQL database, roles, pooled/direct secrets, backups, monitoring, and restore target without
+   granting either authority;
+2. introduce a separate reviewed public-outcomes schema and PostgreSQL-native migration history;
+3. rehearse database migration, object retrieval, backup restore, and rollback on disposable
+   infrastructure;
+4. capture the approved workbook and permitted fitzRoy/upstream responses as immutable source objects
+   with digests and retention metadata;
+5. stage and validate every field, resolve public AFL identities, and retain all exceptions without
+   coercing missing evidence to zero;
+6. reconcile source-to-canonical row, field, natural-key, identity, lineage, and digest counts;
+7. build acquisition spells and source-grain factual metrics with deterministic, versioned rules;
+8. create a factual-outcome candidate, generate its public views and exports, and prove release parity;
+9. obtain factual review and separate operational authorization, then atomically activate the exact
+   factual release under an expected-revision write barrier;
+10. verify the outcome explorer, trade, club, player, year, dashboard, and generated export reads all
+    resolve the same release and effective-through date;
+11. develop and approve model datasets, runs, valuation publications, and serving projections only on
+    their separate optional path; and
+12. retire the Firestore archive pointer only after release-scoped PostgreSQL parity, rollback, and
+    observation evidence pass. Do not infer authority from provisioning, migration, import,
+    deployment, or projection success.
 
-Before the first analytical write, rollback may remove the unused target database. After writes are
-accepted, preserve the database and use a forward fix or reviewed reverse migration. An analytical
-rollback never switches the protected fantasy database or its credentials. Published output is rolled
-back by withdrawing numerical valuation, then separately revalidating and activating an eligible
-prior publication when authorized; public history is never rewritten in place.
+Before the first analytical write, rollback may remove the unused target database and objects according
+to the approved retention policy. After writes are accepted, preserve the database and immutable source
+evidence and use a forward fix or reviewed reverse migration. An analytical rollback never switches the
+protected fantasy database or its credentials. A factual rollback withdraws or supersedes the factual
+release through its own append-only registry; a valuation rollback separately withdraws numerical
+valuation. Reactivating an eligible prior release requires fresh validation and authorization, and
+public history is never rewritten in place.
 
 An authority rollback is a separate append-only event from a publication rollback. It must occur
 inside the recorded rollback window, restore the declared prior authority, and advance the authority
@@ -960,17 +1079,22 @@ invariants, manifest contracts, publication state machine, Gate 1 package and au
 contracts, response contracts, terminology checks, and ownership-boundary tests pass using fabricated
 data. This is engineering evidence for the pure foundation only.
 
-The capability is production-verified only when source approval, Gate 1 architecture approval,
-trusted infrastructure-readiness evidence, database/credential/migration isolation from protected
-fantasy state, separately authorized authority transitions, coverage, migration and restore rehearsal,
-lineage invariants, model validation, publication parity, API contracts, responsive and accessibility
-evidence, operational alerts, rollback exercises, and representative production reads/jobs all pass.
+The factual capability is production-verified only when workbook and upstream source approval, Gate 1
+architecture approval, immutable-object retention/retrieval evidence, hosted PostgreSQL and credential
+isolation from protected fantasy state, separately authorized authority transitions, field-level
+validation, identity/lineage/acquisition-spell reconciliation, factual release and export parity,
+migration and restore rehearsal, API contracts, responsive and accessibility evidence, operational
+alerts, rollback exercises, and representative production reads/jobs all pass. Numerical valuation
+additionally requires approved feature/model evidence, model validation, valuation publication parity,
+and its own product and release Gates.
 
 Selecting the isolated target in design does not mean it is provisioned, ready, authoritative, or
-approved. WP1 completion does not mean data/source approved, architecture-approved, database-ready,
-authority-transferred, model-approved, publication-active, release-ready, or production-verified.
-Reports must use those states separately, name every skipped or failed gate, and preserve unavailable
-public product states when later gates do not pass.
+approved. The current external blockers are exact workbook provenance/use rights, upstream rights for
+each fitzRoy-backed source and field, approved retention/redistribution terms, provisioned object
+storage and hosted PostgreSQL, reconciled real identities and lineage, reviewed metric definitions,
+and authorized factual and valuation releases. WP1 completion does not satisfy any of them. Reports
+must name every skipped or failed gate and keep factual outcomes and valuation independently
+unavailable when their own requirements do not pass.
 
 ## Related documentation
 
@@ -979,4 +1103,4 @@ public product states when later gates do not pass.
   not an analytical-engine prerequisite
 - [Product design principles](../product/design-principles.md)
 - [Player identity consolidation](../runbooks/player-identity.md)
-- [Public AFL trade-intelligence operations](../runbooks/afl-trade-intelligence-operations.md)
+- [Public AFL Draft & Trade Outcomes operations](../runbooks/afl-trade-intelligence-operations.md)
