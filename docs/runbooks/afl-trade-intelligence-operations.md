@@ -8,11 +8,12 @@ rosters, or the authenticated fantasy trade system. Public AFL players, clubs, d
 source facts, calculations, and publications have no Statly-user ownership. AFL club custody is not
 fantasy ownership.
 
-The source-independent contracts, legacy archive, and fail-closed factual-outcome page/API are
-implemented, but the page/API intentionally select no factual release and serve no checked rows.
-Approved workbook/upstream capture, immutable object storage, hosted public-outcomes PostgreSQL,
-factual release infrastructure, job infrastructure, real model releases, Gate decisions, deployment,
-and production verification are not evidenced by the repository. Do not interpret possession of a
+The source-independent contracts, legacy archive, fail-closed factual-outcome page/API, factual
+candidate/projection manifests, and deterministic expected-revision factual lifecycle are implemented,
+but the page/API intentionally select no factual release and serve no checked rows. Approved
+workbook/upstream capture, immutable object storage, hosted public-outcomes PostgreSQL, durable factual
+release infrastructure, job infrastructure, real model releases, real Gate decisions, deployment, and
+production verification are not evidenced by the repository. Do not interpret possession of a
 workbook, successful fitzRoy call, passing fixture test, build, model-change review, import, or
 calculation as permission to retain or publish data or numbers.
 
@@ -28,8 +29,9 @@ The durable runtime adapters eventually selected for this subsystem must preserv
 - the Gate decision ledger owns approval; and
 - approved source-rights evidence remains a prerequisite for collection, calculation, and serving.
 
-The operations contracts live under `src/server/aflTradeIntelligence/operations`. Publication state
-and Gate state remain separate boundaries under `publication` and `governance`.
+The operations contracts live under `src/server/aflTradeIntelligence/operations`. Factual release,
+valuation publication, and Gate state remain separate boundaries under `outcomes`, `publication`, and
+`governance`. Never route a factual outcome through the valuation pointer or infer fantasy ownership.
 
 ## Before enabling live work
 
@@ -128,9 +130,11 @@ outcomes without approving a model, and its approval cannot activate valuation.
    metric, stale, withdrawn, source-object failure, and release-mismatch cases. The public contract must
    distinguish each without fabricating a value or falling back to the workbook or Firestore default
    collections.
-7. Obtain the exact factual review and operational authorization required by the architecture package.
-   Record reviewers, evidence identifiers, candidate digest, target environment, release identifier,
-   expected registry revision, and rollback window.
+7. Obtain the exact Gate 4 factual/API review and Gate 5 comprehension/accessibility decisions, each
+   pinning the candidate release and projection. Separately obtain the operational activation
+   authorization. Record reviewers, authority evidence, target environment and scope, release and
+   projection identifiers, parity-report identifier, expected registry revision, authorization expiry,
+   rollback window, and engaged write barrier.
 8. Engage the factual write barrier, repeat the declared parity checkpoint, and use expected-revision
    compare-and-swap to activate the candidate once. A concurrent winner requires fresh capture and
    review; never force the pointer.
@@ -143,6 +147,26 @@ outcomes without approving a model, and its approval cannot activate valuation.
 
 The public site reads reviewed PostgreSQL release views, optionally through a release-bound cache. It
 never reads staging, exceptions, raw object bytes, a candidate release, or a mutable spreadsheet.
+
+The repository's pure factual lifecycle is the executable conformance rule for steps 1, 7, and 8. The
+candidate hashes the complete Gate 0A receipt for each source snapshot, including exact operations,
+fields/uses, audience, retention, and cache terms; the candidate and projection are content-addressed;
+and validation requires current Gate 0A source-rights decisions. Activation re-evaluates each complete
+source-rights proposal and bound request at the activation timestamp—including terms, conditions,
+restrictions, exact consumed fields/uses, retention, and cache—then rechecks the Gate 4 review, verifies
+the separate Gate 5 decision, and requires a distinct content-addressed operational authorization for
+the exact revision with the parity checkpoint and write barrier pinned while both its authorization and
+rollback windows remain open. Strict command parsing rejects unknown fields and executable accessors.
+Every mutation authenticates strict registry, record, and pointer envelopes; validates the full
+transition history and authority identities; and extends a content-addressed global event chain that
+commits every historical affected-record snapshot and revalidates its projection and authority state.
+The public selector must load the current Gate 0A
+ledger and evaluate the bound rights at its serving timestamp; activation is never a permanent rights
+cache. A
+future PostgreSQL adapter must implement those transitions transactionally and preserve the emitted
+history. Running the pure fixture state machine is not activation, and the application must remain on
+the prepublication selector until that adapter, real decisions, and production verification are
+approved.
 
 ## Scheduling an optional valuation occurrence
 
@@ -286,6 +310,11 @@ use separate registries and must be evaluated independently.
 7. Recover only through the complete factual publication procedure with a fresh expected revision and
    authorization. Never fall back to the workbook, staging, Firestore default collections, an
    unreviewed candidate, or a backward clock.
+
+The deterministic lifecycle enforces the same no-fallback rule: withdrawing the active factual release
+clears its pointer and does not reactivate a superseded release. A superseded release may return only
+after fresh validation, Gate 4 and Gate 5 decisions, and a separate current operational activation
+authorization advance the registry revision.
 
 Withdrawing a factual release requires reassessing every valuation publication that depends on it. It
 does not silently withdraw or reactivate a valuation; the valuation registry must record its own

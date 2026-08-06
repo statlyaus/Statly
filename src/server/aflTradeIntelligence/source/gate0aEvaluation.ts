@@ -43,6 +43,9 @@ export type AflTradeGate0ABlockerCode =
   | 'competition_not_permitted'
   | 'season_not_permitted'
   | 'access_not_permitted'
+  | 'geography_not_permitted'
+  | 'commercial_context_not_permitted'
+  | 'audience_not_permitted'
   | 'operation_not_permitted'
   | 'field_not_registered'
   | 'field_use_not_permitted'
@@ -225,6 +228,44 @@ function collectSourceScopeBlockers(
       request.accessMechanism,
       `Access mechanism ${request.accessMechanism} is not permitted by this rights artifact.`
     );
+  }
+  const restrictionChecks: ReadonlyArray<{
+    permitted: readonly string[];
+    requested: string;
+    code: 'geography_not_permitted' | 'commercial_context_not_permitted' | 'audience_not_permitted';
+    subject: string;
+  }> = [
+    {
+      permitted: rights.content.restrictions.geographic,
+      requested: request.geography,
+      code: 'geography_not_permitted',
+      subject: 'geography',
+    },
+    {
+      permitted: rights.content.restrictions.commercial,
+      requested: request.commercialContext,
+      code: 'commercial_context_not_permitted',
+      subject: 'commercial context',
+    },
+    {
+      permitted: rights.content.restrictions.audience,
+      requested: request.audience,
+      code: 'audience_not_permitted',
+      subject: 'audience',
+    },
+  ];
+  for (const restriction of restrictionChecks) {
+    if (
+      restriction.permitted.length > 0 &&
+      !restriction.permitted.includes(restriction.requested)
+    ) {
+      addBlocker(
+        blockers,
+        restriction.code,
+        restriction.requested,
+        `The requested ${restriction.subject} is outside the source-rights restrictions.`
+      );
+    }
   }
   return blockers;
 }

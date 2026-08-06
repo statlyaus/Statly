@@ -43,6 +43,8 @@ export const AFL_TRADE_GOVERNED_ARTIFACT_KINDS = [
   'valuation_bundle',
   'publication',
   'projection',
+  'factual_release',
+  'factual_projection',
   'architecture_current_state',
   'architecture_decision_package',
   'authority_transition',
@@ -61,6 +63,8 @@ const governedArtifactPrefixes = {
   valuation_bundle: 'valuation-bundle',
   publication: 'publication',
   projection: 'projection',
+  factual_release: 'outcome-release',
+  factual_projection: 'outcome-projection',
   architecture_current_state: 'architecture-current-state',
   architecture_decision_package: 'architecture-decision-package',
   authority_transition: 'authority-transition',
@@ -353,10 +357,7 @@ function refineApprovedDecisionRecord(
       message: 'Revalidation must follow the effective time.',
     });
   }
-  if (
-    decision.environment === 'production' &&
-    decision.authorityKind !== 'external_human_record'
-  ) {
+  if (decision.environment === 'production' && decision.authorityKind !== 'external_human_record') {
     context.addIssue({
       code: 'custom',
       path: ['authorityKind'],

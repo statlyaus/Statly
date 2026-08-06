@@ -1,10 +1,12 @@
 # Public AFL Draft & Trade Outcomes
 
 - Status: the legacy public archive, source-independent governance/valuation contracts, strict
-  factual-outcome evaluation/read contracts, and truthful prepublication outcome UI/API exist; the
-  separate factual-outcomes target is defined, but isolated hosted PostgreSQL, immutable object
-  storage, approved source capture, reviewed factual releases, real-data model development,
-  deployment, and production verification are not complete
+  factual-outcome evaluation/read contracts, content-addressed factual candidate/projection
+  contracts, an expected-revision factual release lifecycle, and truthful prepublication outcome
+  UI/API exist; the separate factual-outcomes target is defined, but isolated hosted PostgreSQL,
+  immutable object storage, approved source capture, durable release persistence, reviewed real
+  factual releases, real-data model development, deployment, and production verification are not
+  complete
 - Last verified against source: 2026-08-06
 
 ## Purpose
@@ -96,6 +98,34 @@ The current composition intentionally captures no active factual release, never 
 Firestore fallback, and returns no rows. The annual-workbook evaluator is a pure staging/evaluation
 boundary, not a request-time importer or permission to publish its values.
 
+The source-independent factual release boundary now defines content-addressed candidate, projection,
+and activation-authorization manifests. A candidate pins the archive dataset, source snapshot and
+evaluation sets, acquisition-spell rule, metric definitions, reconciliation and exception evidence,
+counts, scope, effective-through time, and the complete Gate 0A receipt for every source snapshot. Each
+receipt preserves the exact audience, access method, operations, field uses, retention, cache, rights
+artifact, and decision that were evaluated. Its projection pins the exact list, trade-detail, club,
+player, year, dashboard, JSON, CSV, and XLSX artifacts plus a passed parity report. A separate
+deterministic registry requires expected-revision compare-and-swap for registration and every
+transition, rechecks current Gate 0A and Gate 4 decisions at activation, and requires Gate 4 and Gate 5
+decisions to pin the exact factual release/projection. Gate 5 remains the comprehension/accessibility
+decision; a distinct expiring operational authorization pins the environment, scope, release,
+projection, parity report, expected revision, rollback window, and engaged write barrier. Activation
+supersedes the prior release atomically; withdrawal removes the active pointer without silently
+selecting a predecessor; recovery requires fresh validation, review, and authorization. Strict command
+parsing and a content-addressed global event chain make malformed, accessor-bearing, forged, or
+tampered in-memory state fail closed. A registry-derived selector can produce the exact public read
+snapshot, but it is not mounted by the application because no durable approved registry exists.
+
+The activation-time Gate 0A check re-evaluates the complete bound source-rights proposal and original
+request at the activation timestamp. It therefore rechecks terms expiry, conditions, decision scope,
+audience and commercial/geographic restrictions, operations, retention, cache, and the exact sorted
+source fields consumed by each snapshot; every consumed field must have exactly one public-display use.
+The operational authorization must also remain inside both its expiry and rollback windows at
+activation. Selection is not permanently authorized by activation: every active capture loads the
+current Gate 0A ledger and re-evaluates the bound source terms at the serving timestamp, so an expired,
+withdrawn, superseded, or narrowed source decision fails closed even before an operator withdraws the
+release.
+
 The source-independent WP1, modeling, and valuation foundations are implemented separately from those
 existing archive reads. They provide strict public contracts, source-governance and artifact-manifest
 schemas, bitemporal lineage rules, deterministic fabricated fixtures, attribution invariants,
@@ -124,12 +154,14 @@ PostgreSQL database, or an isolated database and role on an approved managed Pos
 separate credentials, connection budgets, migrations, backups, and restore evidence. It contains no
 `User`, fantasy `League`, membership, roster, or fantasy-trade ownership relation.
 
-The repository has an authenticated, exact-identifier, in-memory valuation-artifact read adapter, but
-no approved durable object-storage adapter, factual PostgreSQL repository, factual release selector,
-or trusted external decision-evidence registry for this capability. Do not describe the analytical
-PostgreSQL target, object storage, factual release views, or valuation artifact source as ready; do not
-apply the protected fantasy schema or SQLite migration history to them or introduce the public schema
-into an unapproved target.
+The repository has an authenticated, exact-identifier, in-memory valuation-artifact read adapter and a
+pure factual release selector over deterministic registry state, but no approved durable object-storage
+adapter, factual PostgreSQL repository, transactional factual registry adapter, or trusted external
+decision-evidence registry for this capability. The pure registry proves admission and transition
+semantics only; it does not establish durable compare-and-swap, approve any fixture decision, or make a
+release active in the application. Do not describe the analytical PostgreSQL target, object storage,
+factual release views, or valuation artifact source as ready; do not apply the protected fantasy schema
+or SQLite migration history to them or introduce the public schema into an unapproved target.
 
 fitzRoy is the selected technical adapter family for obtaining compatible AFL statistical evidence,
 not a source-rights grant. It can expose multiple upstream providers, and every capture must name the
@@ -371,7 +403,8 @@ Decision environments are isolated as `test_fixture`, `non_production`, and `pro
 authority is valid only in `test_fixture` and can never authorize non-production or production use.
 Approved records expire at their revalidation time, can be superseded only by the next version in the
 same gate, key, and environment, and can be withdrawn with explicit downstream actions. Durable ledger
-persistence and operational authorization remain later implementation work.
+persistence, trusted external authority verification, and execution of operational authorization
+remain later implementation work.
 
 There is currently no production source-rights artifact, named approved provider, authority evidence,
 or approved Gate 0A decision for this capability. Historical capture, backfill, and all downstream data
@@ -556,6 +589,23 @@ acquisition-spell rule version, effective-through time, exception disposition, r
 release identifier. The active factual pointer changes atomically only after reconciliation and review.
 Public outcome list, trade detail, club, player, year, dashboard, and export views all resolve that same
 captured release.
+
+The implemented source-independent manifest makes those bindings content-addressed and requires the
+projection to name every public view and JSON/CSV/XLSX artifact plus passed parity evidence. The pure
+registry models expected-revision registration, validation, review, activation, supersession,
+rejection, withdrawal, and freshly authorized recovery. Every mutation extends a content-addressed
+global event chain and authenticates the complete registry before selection or mutation.
+Authentication validates every state transition, exact duplicated global/record metadata, stored
+authority identifiers, pointer envelope, replayed pointer history, and every historical affected-record
+snapshot and content address. Release-event histories must be continuous: each transition must begin
+at the preceding transition's state. Historical snapshots apply the same release/projection pairing,
+state-dependent projection, and Gate 4/Gate 5/activation-authority checks as the current record.
+Activation
+re-evaluates the exact Gate 0A source terms and request, rechecks Gate 4, separately requires the Gate 5
+product decision, and requires an expiring exact-revision operational authorization with an open
+rollback window and the write barrier engaged. This is a conformance contract for the future PostgreSQL
+adapter, not the durable registry itself; fixture decisions and authorizations are accepted only in the
+`test_fixture` environment and carry no real authority.
 
 Valuation publications remain independent. A reviewed factual release neither approves a model nor
 activates a numerical valuation; a blocked or withdrawn valuation does not hide an otherwise approved
@@ -1087,6 +1137,11 @@ migration and restore rehearsal, API contracts, responsive and accessibility evi
 alerts, rollback exercises, and representative production reads/jobs all pass. Numerical valuation
 additionally requires approved feature/model evidence, model validation, valuation publication parity,
 and its own product and release Gates.
+
+Passing the factual manifest and lifecycle fixture tests proves content integrity, transition rules,
+stale-revision rejection, exact selection, and no-fallback withdrawal behavior. It does not prove raw
+source byte custody, PostgreSQL transactions, source rights, human review, generated export contents,
+parity against a real corpus, cache invalidation, backup/restore, or a production release.
 
 Selecting the isolated target in design does not mean it is provisioned, ready, authoritative, or
 approved. The current external blockers are exact workbook provenance/use rights, upstream rights for

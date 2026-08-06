@@ -138,7 +138,7 @@ function rightsContent() {
 }
 
 function rights(
-  content: ReturnType<typeof rightsContent> = rightsContent()
+  content: AflTradeSourceRightsProposal['content'] = rightsContent()
 ): AflTradeSourceRightsProposal {
   return aflTradeSourceRightsProposalSchema.parse({
     rightsArtifactId: createAflTradeContentAddress('source-rights', content),
@@ -465,66 +465,66 @@ describe('AFL trade-intelligence Gate 0A source governance', () => {
 
     expect(result.success).toBe(false);
     if (result.success) throw new Error('Expected the composite source-rights fixture to fail.');
-    expect(
-      result.error.issues.map(({ code, path, message }) => ({ code, path, message }))
-    ).toEqual([
-      { code: 'custom', path: ['fields'], message: 'Source fields must be unique.' },
-      {
-        code: 'custom',
-        path: ['fields'],
-        message: 'Normalized field mappings must be unique.',
-      },
-      {
-        code: 'custom',
-        path: ['conditions'],
-        message: 'Source-rights conditions must be unique.',
-      },
-      {
-        code: 'custom',
-        path: ['scope', 'seasonRanges', 0],
-        message: 'A season range cannot end before it starts.',
-      },
-      {
-        code: 'custom',
-        path: ['automatedAccess'],
-        message: 'Automated access requires permission, identification, and a rate limit.',
-      },
-      {
-        code: 'custom',
-        path: ['automatedAccess', 'cache', 'maximumSeconds'],
-        message: 'Permitted caching requires a maximum duration.',
-      },
-      {
-        code: 'custom',
-        path: ['attribution'],
-        message: 'Required attribution needs exact text and placement.',
-      },
-      {
-        code: 'custom',
-        path: ['retention', 'rawEvidence'],
-        message: 'Raw retention cannot be allowed when raw evidence retention is prohibited.',
-      },
-      {
-        code: 'custom',
-        path: ['retention', 'hashesAndMetadata'],
-        message: 'Metadata retention cannot be allowed when hashes and metadata are prohibited.',
-      },
-      {
-        code: 'custom',
-        path: ['redistribution', 'rawFieldsPermitted'],
-        message: 'Raw redistribution requires explicit permission.',
-      },
-      {
-        code: 'custom',
-        path: ['redistribution', 'publicDerivedOutputPermitted'],
-        message: 'Public derived output requires explicit permission.',
-      },
-      {
-        code: 'custom',
-        path: ['termsExpireAt'],
-        message: 'Source terms must expire after they become effective.',
-      },
-    ]);
+    expect(result.error.issues.map(({ code, path, message }) => ({ code, path, message }))).toEqual(
+      [
+        { code: 'custom', path: ['fields'], message: 'Source fields must be unique.' },
+        {
+          code: 'custom',
+          path: ['fields'],
+          message: 'Normalized field mappings must be unique.',
+        },
+        {
+          code: 'custom',
+          path: ['conditions'],
+          message: 'Source-rights conditions must be unique.',
+        },
+        {
+          code: 'custom',
+          path: ['scope', 'seasonRanges', 0],
+          message: 'A season range cannot end before it starts.',
+        },
+        {
+          code: 'custom',
+          path: ['automatedAccess'],
+          message: 'Automated access requires permission, identification, and a rate limit.',
+        },
+        {
+          code: 'custom',
+          path: ['automatedAccess', 'cache', 'maximumSeconds'],
+          message: 'Permitted caching requires a maximum duration.',
+        },
+        {
+          code: 'custom',
+          path: ['attribution'],
+          message: 'Required attribution needs exact text and placement.',
+        },
+        {
+          code: 'custom',
+          path: ['retention', 'rawEvidence'],
+          message: 'Raw retention cannot be allowed when raw evidence retention is prohibited.',
+        },
+        {
+          code: 'custom',
+          path: ['retention', 'hashesAndMetadata'],
+          message: 'Metadata retention cannot be allowed when hashes and metadata are prohibited.',
+        },
+        {
+          code: 'custom',
+          path: ['redistribution', 'rawFieldsPermitted'],
+          message: 'Raw redistribution requires explicit permission.',
+        },
+        {
+          code: 'custom',
+          path: ['redistribution', 'publicDerivedOutputPermitted'],
+          message: 'Public derived output requires explicit permission.',
+        },
+        {
+          code: 'custom',
+          path: ['termsExpireAt'],
+          message: 'Source terms must expire after they become effective.',
+        },
+      ]
+    );
   });
 
   it('denies unregistered fields and blocked field uses by default', () => {
@@ -614,8 +614,7 @@ describe('AFL trade-intelligence Gate 0A source governance', () => {
         {
           code: 'decision_scope_mismatch',
           subject: 'competition:outside-competition',
-          message:
-            'The Gate 0A decision does not include outside-competition in competition.',
+          message: 'The Gate 0A decision does not include outside-competition in competition.',
         },
         {
           code: 'decision_scope_mismatch',
@@ -714,6 +713,33 @@ describe('AFL trade-intelligence Gate 0A source governance', () => {
       expect.arrayContaining([
         expect.objectContaining({ code: 'retention_not_permitted' }),
         expect.objectContaining({ code: 'cache_not_permitted' }),
+      ])
+    );
+  });
+
+  it('enforces non-empty geographic, commercial, and audience restrictions', () => {
+    const content = rightsContent();
+    const sourceRights = rights({
+      ...content,
+      restrictions: {
+        geographic: ['different-region'] as string[],
+        commercial: ['different-context'] as string[],
+        audience: ['different-audience'] as string[],
+      },
+    });
+    const proposal = gateProposal(sourceRights);
+    const decision = gateDecision(proposal);
+    const result = evaluateAflTradeGate0A(
+      { proposals: [proposal], decisions: [decision] },
+      sourceRights,
+      request(sourceRights)
+    );
+
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'geography_not_permitted' }),
+        expect.objectContaining({ code: 'commercial_context_not_permitted' }),
+        expect.objectContaining({ code: 'audience_not_permitted' }),
       ])
     );
   });
