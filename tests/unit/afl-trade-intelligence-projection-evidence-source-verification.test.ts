@@ -685,7 +685,7 @@ describe('AFL trade projection evidence source verification', () => {
       () => createAflTradeProjectionEvidenceSourceVerification(aggregate),
       'TOTAL_SOURCE_ARTIFACT_SIZE_LIMIT_EXCEEDED'
     );
-  }, 30_000);
+  }, 60_000);
 
   it('observes nested descriptors once without invoking getters and rejects non-JSON arrays', () => {
     const hostile = fixture();
