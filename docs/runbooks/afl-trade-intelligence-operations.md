@@ -126,6 +126,41 @@ A failed capture or import preserves its run and diagnostics, marks no release a
 previous reviewed release unchanged. Retrying creates a new attempt or import run referencing the same
 immutable object; it never overwrites the failed evidence.
 
+### Development-only workbook evaluation
+
+The local workbook harness may exercise structural validation and the existing fail-closed evaluator
+before Gate 0A approval. It grants no capture, publication, redistribution, or production authority.
+The loader refuses `NODE_ENV=production`, relative paths, files inside the repository workspace,
+non-XLSX inputs, empty/non-file inputs, files above 128 MiB before reading, and bytes that do not match
+the explicitly supplied SHA-256 digest. It emits metadata and aggregate exception counts only; raw
+rows and the local path are not logged or persisted.
+
+Keep the workbook outside Git. First fingerprint the local file:
+
+```sh
+AFL_OUTCOMES_DEV_WORKBOOK_PATH="/absolute/path/AFL Drafts Trades.xlsx" \
+  npm run outcomes:workbook:inspect
+```
+
+Then pin the reported digest for structural evaluation or the opt-in integration suite:
+
+```sh
+AFL_OUTCOMES_DEV_WORKBOOK_PATH="/absolute/path/AFL Drafts Trades.xlsx" \
+AFL_OUTCOMES_DEV_WORKBOOK_SHA256="<reported-sha256>" \
+  npm run outcomes:workbook:inspect
+
+AFL_OUTCOMES_DEV_WORKBOOK_PATH="/absolute/path/AFL Drafts Trades.xlsx" \
+AFL_OUTCOMES_DEV_WORKBOOK_SHA256="<reported-sha256>" \
+  npm run test:outcomes:workbook
+```
+
+Annual sheets are admitted only with the exact ordered 18-column contract, unique year-scoped
+`document_id` values, and no populated cells after the declared columns. Numeric XLSX cells are
+converted losslessly to invariant strings before evaluation. Composite games remain partial,
+workbook-only achievements and identities remain unresolved, rights remain blocked, and every result
+remains publication-ineligible. This harness never writes PostgreSQL, object storage, Firestore, or
+fantasy state and is not part of the normal CI suite.
+
 ## Publishing a factual outcome release
 
 A factual candidate is independent from a valuation candidate. It may publish governed descriptive
