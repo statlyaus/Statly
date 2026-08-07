@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { DraftClubTradeHistory } from '@/components/draft/DraftClubTradeHistory';
-import { listDraftTradeRefsByClub } from '@/lib/draftTrades/firestore';
+import { listDraftTradeRefsByClub } from '@/lib/draftTrades/read';
 
 export const dynamic = 'force-dynamic';
 

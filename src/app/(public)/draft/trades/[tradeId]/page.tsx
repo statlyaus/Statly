@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { DraftTradeDetail } from '@/components/draft/DraftTradeDetail';
-import { getDraftTradeById } from '@/lib/draftTrades/firestore';
+import { getDraftTradeById } from '@/lib/draftTrades/read';
 import {
   AFL_TRADE_PUBLIC_VALUE_SCOPE,
   aflTradePrePublicationValueReadService,

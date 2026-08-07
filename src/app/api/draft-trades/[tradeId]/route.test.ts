@@ -5,7 +5,7 @@ const { getDraftTradeByIdMock } = vi.hoisted(() => ({
   getDraftTradeByIdMock: vi.fn(),
 }));
 
-vi.mock('@/lib/draftTrades/firestore', () => ({
+vi.mock('@/lib/draftTrades/read', () => ({
   getDraftTradeById: getDraftTradeByIdMock,
 }));
 

@@ -154,12 +154,36 @@ AFL_OUTCOMES_DEV_WORKBOOK_SHA256="<reported-sha256>" \
   npm run test:outcomes:workbook
 ```
 
+To display the pinned workbook in the local draft-and-trade archive, explicitly enable the
+development read adapter before starting Next.js:
+
+```sh
+AFL_OUTCOMES_DEV_WORKBOOK_READ_ENABLED="true" \
+AFL_OUTCOMES_DEV_WORKBOOK_PATH="/absolute/path/AFL Drafts Trades.xlsx" \
+AFL_OUTCOMES_DEV_WORKBOOK_SHA256="<reported-sha256>" \
+  npm run dev
+```
+
+The adapter validates and projects the dedicated `AFL VFL Trades` sheet into an in-memory read model
+used consistently by trade lists, filters, detail reads, club histories, and CSV exports. It does not
+seed Firestore or PostgreSQL and does not associate records with Statly users, leagues, fantasy teams,
+or rosters. The adapter is ignored in production even if the opt-in environment variable is present;
+production continues to use the governed repository and active-release path.
+
+The Outcomes page also renders a clearly labelled development preview of the annual acquisition
+rows. Its category contract retains `National`, `Rookie`, `Mid-Season`, `Pre-Season`, `Mini-Draft`,
+`Trade`, `Free Agency`, `Pre-Draft`, `Post-Draft`, and `Training Squad Selection` as separate
+mechanisms. A new workbook value fails closed until it is reviewed and added deliberately. Preview
+values remain raw workbook observations: they do not satisfy identity, rights, independent-source, or
+release gates and never appear when the development adapter is disabled.
+
 Annual sheets are admitted only with the exact ordered 18-column contract, unique year-scoped
 `document_id` values, and no populated cells after the declared columns. Numeric XLSX cells are
 converted losslessly to invariant strings before evaluation. Composite games remain partial,
 workbook-only achievements and identities remain unresolved, rights remain blocked, and every result
-remains publication-ineligible. This harness never writes PostgreSQL, object storage, Firestore, or
-fantasy state and is not part of the normal CI suite.
+remains publication-ineligible. Annual acquisition/outcome rows are not reinterpreted as transaction
+records; they remain reserved for the factual outcomes workflow. This harness never writes PostgreSQL,
+object storage, Firestore, or fantasy state and is not part of the normal CI suite.
 
 ## Publishing a factual outcome release
 

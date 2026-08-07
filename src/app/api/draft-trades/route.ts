@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/firestore';
+import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/read';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';

@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { getDraftTradeById } from '@/lib/draftTrades/firestore';
+import { getDraftTradeById } from '@/lib/draftTrades/read';
 import { logger } from '@/lib/logger';
 import {
   AFL_TRADE_PUBLIC_VALUE_SCOPE,
@@ -21,10 +21,7 @@ export const dynamic = 'force-dynamic';
 const requestSchema = z
   .object({
     tradeId: aflTradePublicIdSchema,
-    views: z
-      .array(aflTradeValuationViewSchema)
-      .min(1)
-      .max(AFL_TRADE_VALUATION_VIEWS.length),
+    views: z.array(aflTradeValuationViewSchema).min(1).max(AFL_TRADE_VALUATION_VIEWS.length),
   })
   .strict()
   .superRefine((request, context) => {

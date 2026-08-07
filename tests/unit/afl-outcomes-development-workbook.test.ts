@@ -17,7 +17,9 @@ const sourceArtifact = createAflTradeByteArtifactRef(
 
 function annualRow(
   documentId: string,
-  overrides: Partial<Record<(typeof AFL_DRAFT_TRADE_ANNUAL_WORKBOOK_HEADER)[number], string | number>> = {}
+  overrides: Partial<
+    Record<(typeof AFL_DRAFT_TRADE_ANNUAL_WORKBOOK_HEADER)[number], string | number>
+  > = {}
 ): AflOutcomesDevelopmentWorkbookCell[] {
   const values: Record<
     (typeof AFL_DRAFT_TRADE_ANNUAL_WORKBOOK_HEADER)[number],
@@ -46,10 +48,22 @@ function annualRow(
   return AFL_DRAFT_TRADE_ANNUAL_WORKBOOK_HEADER.map((field) => values[field]);
 }
 
-function normalize(rows: AflOutcomesDevelopmentWorkbookCell[][]) {
+const validTradeSheet: AflOutcomesDevelopmentWorkbookCell[][] = [
+  ['Full All-Time List of VFL/AFL Trades', null],
+  [2020, null],
+  ['2020 Trade for Fixture Player', null],
+  ['Fixture Club', 'Fixture Player (10 games)'],
+  ['Other Club', '#1 (Drafted Player - 0 games)'],
+];
+
+function normalize(
+  rows: AflOutcomesDevelopmentWorkbookCell[][],
+  tradeRows: AflOutcomesDevelopmentWorkbookCell[][] = validTradeSheet
+) {
   return normalizeAflOutcomesDevelopmentWorkbook({
     sheets: [
       { sheet: 'Notes', data: [['ignored']] },
+      { sheet: 'AFL VFL Trades', data: tradeRows },
       {
         sheet: '2020',
         data: [[...AFL_DRAFT_TRADE_ANNUAL_WORKBOOK_HEADER], ...rows],
@@ -87,6 +101,11 @@ describe('AFL outcomes development workbook boundary', () => {
       annualSheetCount: 1,
       ignoredSheetCount: 1,
       totalRows: 2,
+      tradeSheet: {
+        tradeCount: 1,
+        partyCount: 2,
+        years: [2020],
+      },
       anomalyCounts: {
         compositeGamesRows: 1,
         unresolvedGamesRows: 0,
@@ -106,13 +125,14 @@ describe('AFL outcomes development workbook boundary', () => {
     );
     const duplicated = annualRow('2020_0001');
     expectWorkbookError(() => normalize([duplicated, duplicated]), 'DUPLICATE_DOCUMENT_ID');
-    expectWorkbookError(
-      () => normalize([annualRow('2021_0001')]),
-      'YEAR_MISMATCH'
-    );
+    expectWorkbookError(() => normalize([annualRow('2021_0001')]), 'YEAR_MISMATCH');
     expectWorkbookError(
       () => normalize([[...annualRow('2020_0001'), 'unexpected']]),
       'EXTRA_ANNUAL_COLUMNS'
+    );
+    expectWorkbookError(
+      () => normalize([annualRow('2020_0001')], validTradeSheet.slice(0, -1)),
+      'INVALID_TRADE_SHEET'
     );
   });
 });

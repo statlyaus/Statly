@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { commonErrors } from '@/lib/apiResponse';
 import { escapeCsvCell as csvEscape } from '@/lib/draftTrades/csv';
-import { getDraftTradeById } from '@/lib/draftTrades/firestore';
+import { getDraftTradeById } from '@/lib/draftTrades/read';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';

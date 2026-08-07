@@ -5,7 +5,7 @@ const { getDraftTradeByIdMock } = vi.hoisted(() => ({
   getDraftTradeByIdMock: vi.fn(),
 }));
 
-vi.mock('@/lib/draftTrades/firestore', () => ({
+vi.mock('@/lib/draftTrades/read', () => ({
   getDraftTradeById: getDraftTradeByIdMock,
 }));
 
@@ -21,11 +21,7 @@ describe('GET /api/draft-trades/[tradeId]/valuation', () => {
   it.each([
     ['bad id', 'http://localhost/api/draft-trades/bad/valuation', []],
     ['t1', 'http://localhost/api/draft-trades/t1/valuation?view=fantasy', []],
-    [
-      't1',
-      'http://localhost/api/draft-trades/t1/valuation?view=current&view=current',
-      [],
-    ],
+    ['t1', 'http://localhost/api/draft-trades/t1/valuation?view=current&view=current', []],
   ])('returns 400 before archive access for an invalid request', async (tradeId, url) => {
     const response = await GET(new NextRequest(url), context(tradeId));
     expect(response.status).toBe(400);
@@ -45,46 +41,58 @@ describe('GET /api/draft-trades/[tradeId]/valuation', () => {
 
   it.each([
     [[], ['at_trade', 'realized', 'remaining', 'current']],
-    [['at_trade', 'current'], ['at_trade', 'current']],
-  ])('returns source-blocked detail for a known archive trade', async (queryViews, expectedViews) => {
-    getDraftTradeByIdMock.mockResolvedValue({ trade: { tradeId: 't1' }, parties: [], assets: [] });
-    const query = queryViews.map((view) => `view=${view}`).join('&');
-    const response = await GET(
-      new NextRequest(`http://localhost/api/draft-trades/t1/valuation${query ? `?${query}` : ''}`),
-      context('t1')
-    );
-    const body = await response.json();
+    [
+      ['at_trade', 'current'],
+      ['at_trade', 'current'],
+    ],
+  ])(
+    'returns source-blocked detail for a known archive trade',
+    async (queryViews, expectedViews) => {
+      getDraftTradeByIdMock.mockResolvedValue({
+        trade: { tradeId: 't1' },
+        parties: [],
+        assets: [],
+      });
+      const query = queryViews.map((view) => `view=${view}`).join('&');
+      const response = await GET(
+        new NextRequest(
+          `http://localhost/api/draft-trades/t1/valuation${query ? `?${query}` : ''}`
+        ),
+        context('t1')
+      );
+      const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.success).toBe(true);
-    expect(body.data).toMatchObject({
-      tradeId: 't1',
-      assets: [],
-      lineageSummary: {
-        status: 'unavailable',
-        totalAssetCount: null,
-        resolvedAssetCount: null,
-        unresolvedAssetCount: null,
-        lineageEdgeCount: null,
-        maximumDepth: null,
-      },
-      consistency: {
-        contractVersion: 'afl-trade-value/v2',
-        selection: 'none',
-        publication: null,
-        projectionBuildId: null,
-      },
-    });
-    expect(body.data.valuations.map((valuation: { view: string }) => valuation.view)).toEqual(
-      expectedViews
-    );
-    expect(
-      body.data.valuations.every(
-        (valuation: { availability: string }) => valuation.availability === 'source_blocked'
-      )
-    ).toBe(true);
-    expect(JSON.stringify(body.data)).not.toMatch(
-      /"(userId|leagueId|rosterId|ownerId|estimate|clubValues|probabilities)"/
-    );
-  });
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.data).toMatchObject({
+        tradeId: 't1',
+        assets: [],
+        lineageSummary: {
+          status: 'unavailable',
+          totalAssetCount: null,
+          resolvedAssetCount: null,
+          unresolvedAssetCount: null,
+          lineageEdgeCount: null,
+          maximumDepth: null,
+        },
+        consistency: {
+          contractVersion: 'afl-trade-value/v2',
+          selection: 'none',
+          publication: null,
+          projectionBuildId: null,
+        },
+      });
+      expect(body.data.valuations.map((valuation: { view: string }) => valuation.view)).toEqual(
+        expectedViews
+      );
+      expect(
+        body.data.valuations.every(
+          (valuation: { availability: string }) => valuation.availability === 'source_blocked'
+        )
+      ).toBe(true);
+      expect(JSON.stringify(body.data)).not.toMatch(
+        /"(userId|leagueId|rosterId|ownerId|estimate|clubValues|probabilities)"/
+      );
+    }
+  );
 });

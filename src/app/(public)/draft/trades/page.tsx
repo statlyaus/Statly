@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 
 import { DraftHubState } from '@/components/draft/DraftHubState';
 import { DraftTradesExplorer } from '@/components/draft/DraftTradesExplorer';
-import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/firestore';
+import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/read';
 import {
   AFL_TRADE_PUBLIC_VALUE_SCOPE,
   aflTradePrePublicationValueReadService,

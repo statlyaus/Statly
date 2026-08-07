@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { evaluateAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookEvaluation';
+import { projectAflOutcomesDevelopmentWorkbookAcquisitions } from '@/server/aflTradeIntelligence/source/developmentWorkbookAcquisitionProjection';
 import { loadAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookLoader';
 import type { AflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookStructure';
+import { projectAflOutcomesDevelopmentWorkbookTrades } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeProjection';
 
 const workbookPath = process.env.AFL_OUTCOMES_DEV_WORKBOOK_PATH;
 const expectedSha256 = process.env.AFL_OUTCOMES_DEV_WORKBOOK_SHA256;
@@ -30,12 +32,52 @@ describe('AFL Draft and Trade development workbook', () => {
     expect(workbook.report.annualSheets).toEqual(
       [...workbook.report.annualSheets].sort((left, right) => left.year - right.year)
     );
-    expect(
-      workbook.report.annualSheets.reduce((total, sheet) => total + sheet.rowCount, 0)
-    ).toBe(workbook.report.totalRows);
+    expect(workbook.report.annualSheets.reduce((total, sheet) => total + sheet.rowCount, 0)).toBe(
+      workbook.report.totalRows
+    );
     expect(new Set(workbook.report.annualSheets.map(({ year }) => year)).size).toBe(
       workbook.report.annualSheetCount
     );
+  });
+
+  it('projects the dedicated transaction sheet into the complete development archive', () => {
+    const projection = projectAflOutcomesDevelopmentWorkbookTrades(workbook);
+    expect(workbook.report.tradeSheet).toEqual({
+      tradeCount: 975,
+      partyCount: 1987,
+      years: Array.from({ length: 38 }, (_, index) => 1988 + index),
+    });
+    expect(projection.years).toEqual(Array.from({ length: 38 }, (_, index) => 2025 - index));
+    expect(projection.detailsById.size).toBe(975);
+    expect(projection.clubs.map(({ clubName }) => clubName)).toEqual(
+      expect.arrayContaining(['Carlton', 'Fitzroy', 'GWS', 'Western Bulldogs'])
+    );
+    expect(projection.tradesByYear.get(2025)).not.toHaveLength(0);
+    expect(
+      Array.from(projection.detailsById.values()).some(({ assets }) =>
+        assets.some(({ assetType }) => assetType === 'future_pick')
+      )
+    ).toBe(true);
+  });
+
+  it('reconciles every annual row to its exact acquisition mechanism', () => {
+    const projection = projectAflOutcomesDevelopmentWorkbookAcquisitions(workbook);
+    expect(projection.items).toHaveLength(4139);
+    expect(projection.categoryCounts).toEqual({
+      national_draft: 1813,
+      rookie_draft: 1019,
+      mid_season_draft: 102,
+      pre_season_draft: 103,
+      mini_draft: 4,
+      trade: 642,
+      free_agency: 138,
+      pre_draft: 129,
+      post_draft: 188,
+      training_squad_selection: 1,
+    });
+    expect(
+      Object.values(projection.categoryCounts).reduce((total, count) => total + count, 0)
+    ).toBe(workbook.report.totalRows);
   });
 
   it('rejects workbook bytes that do not match the pinned digest', async () => {

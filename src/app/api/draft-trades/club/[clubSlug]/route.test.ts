@@ -5,7 +5,7 @@ const { listDraftTradeRefsByClubMock } = vi.hoisted(() => ({
   listDraftTradeRefsByClubMock: vi.fn(),
 }));
 
-vi.mock('@/lib/draftTrades/firestore', () => ({
+vi.mock('@/lib/draftTrades/read', () => ({
   listDraftTradeRefsByClub: listDraftTradeRefsByClubMock,
 }));
 
