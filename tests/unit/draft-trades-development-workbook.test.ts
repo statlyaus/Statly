@@ -12,6 +12,7 @@ import {
   clearDevelopmentWorkbookDraftTradeReadCacheForTests,
   getDevelopmentWorkbookAcquisitionPreview,
   getDevelopmentWorkbookDraftTradeReadRepository,
+  getDevelopmentWorkbookTradeGradeEvidence,
   isDevelopmentWorkbookDraftTradeReadEnabled,
 } from '@/lib/draftTrades/developmentWorkbook';
 import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
@@ -105,6 +106,12 @@ describe('development workbook draft-trade repository', () => {
         { ...enabledEnvironment, NODE_ENV: 'production' }
       )
     ).resolves.toBeNull();
+    await expect(
+      getDevelopmentWorkbookTradeGradeEvidence('workbook-trade', {
+        ...enabledEnvironment,
+        NODE_ENV: 'production',
+      })
+    ).resolves.toBeNull();
     expect(loadWorkbookMock).not.toHaveBeenCalled();
   });
 
@@ -124,6 +131,10 @@ describe('development workbook draft-trade repository', () => {
     await expect(first?.listTradesByYear(2025, { type: 'future_pick' })).resolves.toHaveLength(1);
     await expect(first?.listTradesByYear(2025, { clubSlug: 'essendon' })).resolves.toEqual([]);
     const trade = (await first?.listTradesByYear(2024))?.[0];
+    const gradeEvidence = await getDevelopmentWorkbookTradeGradeEvidence(
+      trade?.tradeId ?? '',
+      enabledEnvironment
+    );
     await expect(first?.getById(trade?.tradeId ?? '')).resolves.toMatchObject({
       trade: { year: 2024 },
       parties: expect.any(Array),
@@ -143,6 +154,21 @@ describe('development workbook draft-trade repository', () => {
           playerName: 'Fixture Player',
         }),
       ],
+    });
+    expect(gradeEvidence).toMatchObject({
+      status: 'partial',
+      coverage: { totalAssets: 2, matchedAssets: 1, gradedAssets: 1, unresolvedAssets: 1 },
+      assets: expect.arrayContaining([
+        expect.objectContaining({
+          status: 'graded',
+          outcome: expect.objectContaining({ playerName: 'Fixture Player', grade: 'B' }),
+        }),
+        expect.objectContaining({
+          assetType: 'pick',
+          status: 'unresolved',
+          reasonCode: 'no_acquisition_match',
+        }),
+      ]),
     });
   });
 

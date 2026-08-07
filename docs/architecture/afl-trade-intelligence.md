@@ -7,7 +7,7 @@
   immutable object storage, approved source capture, durable release persistence, reviewed real
   factual releases, real-data model development, deployment, and production verification are not
   complete
-- Last verified against source: 2026-08-06
+- Last verified against source: 2026-08-07
 
 ## Purpose
 
@@ -97,6 +97,18 @@ The repository owns governed alias, abbreviation, normalization, and text-index 
 The current composition intentionally captures no active factual release, never calls a workbook or
 Firestore fallback, and returns no rows. The annual-workbook evaluator is a pure staging/evaluation
 boundary, not a request-time importer or permission to publish its values.
+
+An explicitly enabled non-production adapter may load one absolute-path, SHA-256-pinned workbook for
+local development. It projects archive trades, acquisition rows, and a separate
+`afl-outcomes-development-trade-grade/v1` evidence view from the same cached workbook load. Grade
+linking is conservative: a traded player requires one same-year, same-receiving-club, suffix-name
+match to a `Trade` acquisition; a drafted player requires one same-year, same-receiving-club,
+selection-number and suffix-name match to a supported draft acquisition. Future picks, missing drafted
+players, absent matches, and ambiguous matches remain unresolved. The UI shows exact per-asset source
+grades and raw outcome fields with coverage and source-capture context. It never averages grade
+letters, names a trade winner, treats the workbook grade as Statly value, or changes the blocked
+valuation state. The workbook contains no grade formulas or documented whole-trade aggregation rule,
+and this adapter remains disabled in production.
 
 The source-independent factual release boundary now defines content-addressed candidate, projection,
 and activation-authorization manifests. A candidate pins the archive dataset, source snapshot and

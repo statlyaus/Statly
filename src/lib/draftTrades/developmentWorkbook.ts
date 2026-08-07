@@ -14,6 +14,10 @@ import {
   projectAflOutcomesDevelopmentWorkbookTrades,
   type AflOutcomesDevelopmentTradeProjection,
 } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeProjection';
+import {
+  projectAflOutcomesDevelopmentWorkbookTradeGrades,
+  type AflOutcomesDevelopmentTradeGradeEvidence,
+} from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeOutcomeProjection';
 
 import type {
   DraftClubListItem,
@@ -65,6 +69,7 @@ export interface DevelopmentWorkbookAcquisitionPreview {
 interface DevelopmentWorkbookProjectionBundle {
   trades: AflOutcomesDevelopmentTradeProjection;
   acquisitions: AflOutcomesDevelopmentAcquisitionProjection;
+  tradeGrades: ReadonlyMap<string, AflOutcomesDevelopmentTradeGradeEvidence>;
 }
 
 const projectionCache = new Map<string, Promise<DevelopmentWorkbookProjectionBundle>>();
@@ -106,10 +111,19 @@ async function loadProjectionBundle(
     expectedSha256,
     runtimeEnvironment: environment.NODE_ENV,
   };
-  const pending = loadAflOutcomesDevelopmentWorkbook(loadInput).then((workbook) => ({
-    trades: projectAflOutcomesDevelopmentWorkbookTrades(workbook),
-    acquisitions: projectAflOutcomesDevelopmentWorkbookAcquisitions(workbook),
-  }));
+  const pending = loadAflOutcomesDevelopmentWorkbook(loadInput).then((workbook) => {
+    const trades = projectAflOutcomesDevelopmentWorkbookTrades(workbook);
+    const acquisitions = projectAflOutcomesDevelopmentWorkbookAcquisitions(workbook);
+    return {
+      trades,
+      acquisitions,
+      tradeGrades: projectAflOutcomesDevelopmentWorkbookTradeGrades(
+        workbook,
+        trades,
+        acquisitions
+      ),
+    };
+  });
   projectionCache.set(cacheKey, pending);
   try {
     return await pending;
@@ -193,6 +207,14 @@ export async function getDevelopmentWorkbookAcquisitionPreview(
     categoryCounts: projection.categoryCounts,
     years: projection.years,
   };
+}
+
+export async function getDevelopmentWorkbookTradeGradeEvidence(
+  tradeId: string,
+  environment: DevelopmentWorkbookDraftTradeEnvironment = process.env
+): Promise<AflOutcomesDevelopmentTradeGradeEvidence | null> {
+  if (!isDevelopmentWorkbookDraftTradeReadEnabled(environment)) return null;
+  return (await loadProjectionBundle(environment)).tradeGrades.get(tradeId) ?? null;
 }
 
 export function clearDevelopmentWorkbookDraftTradeReadCacheForTests(): void {

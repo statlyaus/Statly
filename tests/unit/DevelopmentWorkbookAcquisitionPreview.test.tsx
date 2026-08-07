@@ -55,6 +55,7 @@ describe('DevelopmentWorkbookAcquisitionPreview', () => {
     expect(screen.getByText('Development only')).toBeVisible();
     expect(screen.getAllByText('Rookie draft')).not.toHaveLength(0);
     expect(screen.getByRole('heading', { name: 'Fixture Player' })).toBeVisible();
+    expect(screen.getByText('Source grade B')).toBeVisible();
     expect(screen.getByText(/not a reviewed factual release/i)).toBeVisible();
     expect(
       screen.getByRole('form', { name: 'Filter development workbook acquisitions' })

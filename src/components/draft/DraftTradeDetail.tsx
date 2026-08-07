@@ -1,8 +1,10 @@
 import Link from 'next/link';
 
 import { AflTradeValueDetailPanel } from '@/components/draft/AflTradeValueDetailPanel';
+import { DevelopmentWorkbookTradeGradePanel } from '@/components/draft/DevelopmentWorkbookTradeGradePanel';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
 import { LegacyMetricValue } from '@/components/draft/LegacyMetricValue';
+import type { AflOutcomesDevelopmentTradeGradeEvidence } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeOutcomeProjection';
 import type { AflTradeValueDetailResponse } from '@/types/aflTradeIntelligence';
 
 export type DraftTradeHeaderView = {
@@ -44,6 +46,7 @@ type DraftTradeDetailProps = {
   showOpenFullPageLink?: boolean;
   mode?: 'full' | 'inline';
   valueAnalysis?: AflTradeValueDetailResponse;
+  developmentGradeEvidence?: AflOutcomesDevelopmentTradeGradeEvidence | null;
 };
 
 function assetTypeLabel(assetType: DraftTradeAssetView['assetType']): string {
@@ -197,6 +200,7 @@ export function DraftTradeDetail({
   showOpenFullPageLink = false,
   mode = 'full',
   valueAnalysis,
+  developmentGradeEvidence,
 }: DraftTradeDetailProps) {
   const groupedAssets = groupAssetsByClub(detail.assets);
   const playerAssetCount = detail.assets.filter((asset) => asset.assetType === 'player').length;
@@ -321,6 +325,10 @@ export function DraftTradeDetail({
       </section>
 
       {!isInline && valueAnalysis ? <AflTradeValueDetailPanel analysis={valueAnalysis} /> : null}
+
+      {!isInline && developmentGradeEvidence ? (
+        <DevelopmentWorkbookTradeGradePanel evidence={developmentGradeEvidence} />
+      ) : null}
 
       {/* Parties: same card language as Summary — sequential section, not a selected tab */}
       <section id="trade-detail-parties" aria-labelledby="trade-parties-heading">

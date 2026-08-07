@@ -189,9 +189,14 @@ export function DevelopmentWorkbookAcquisitionPreview({ preview, query }: Props)
                       {item.year} · {item.clubName}
                     </p>
                   </div>
-                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">
-                    {AFL_OUTCOMES_DEVELOPMENT_ACQUISITION_CATEGORY_LABELS[item.category]}
-                  </span>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">
+                      {AFL_OUTCOMES_DEVELOPMENT_ACQUISITION_CATEGORY_LABELS[item.category]}
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground">
+                      Source grade {item.grade ?? 'not recorded'}
+                    </span>
+                  </div>
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
                   <div>

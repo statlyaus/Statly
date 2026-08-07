@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { DraftTradeDetail } from '@/components/draft/DraftTradeDetail';
+import { getDevelopmentWorkbookTradeGradeEvidence } from '@/lib/draftTrades/developmentWorkbook';
 import { getDraftTradeById } from '@/lib/draftTrades/read';
 import {
   AFL_TRADE_PUBLIC_VALUE_SCOPE,
@@ -20,11 +21,20 @@ export default async function DraftTradeDetailPage({
   if (!detail) {
     notFound();
   }
-  const valueAnalysis = await aflTradePrePublicationValueReadService.detail({
-    scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
-    tradeId,
-    requestedViews: [...AFL_TRADE_VALUATION_VIEWS],
-  });
+  const [valueAnalysis, developmentGradeEvidence] = await Promise.all([
+    aflTradePrePublicationValueReadService.detail({
+      scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
+      tradeId,
+      requestedViews: [...AFL_TRADE_VALUATION_VIEWS],
+    }),
+    getDevelopmentWorkbookTradeGradeEvidence(tradeId),
+  ]);
 
-  return <DraftTradeDetail detail={detail} valueAnalysis={valueAnalysis} />;
+  return (
+    <DraftTradeDetail
+      detail={detail}
+      valueAnalysis={valueAnalysis}
+      developmentGradeEvidence={developmentGradeEvidence}
+    />
+  );
 }

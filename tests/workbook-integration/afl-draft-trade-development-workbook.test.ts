@@ -4,6 +4,7 @@ import { evaluateAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelli
 import { projectAflOutcomesDevelopmentWorkbookAcquisitions } from '@/server/aflTradeIntelligence/source/developmentWorkbookAcquisitionProjection';
 import { loadAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookLoader';
 import type { AflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookStructure';
+import { projectAflOutcomesDevelopmentWorkbookTradeGrades } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeOutcomeProjection';
 import { projectAflOutcomesDevelopmentWorkbookTrades } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeProjection';
 
 const workbookPath = process.env.AFL_OUTCOMES_DEV_WORKBOOK_PATH;
@@ -78,6 +79,33 @@ describe('AFL Draft and Trade development workbook', () => {
     expect(
       Object.values(projection.categoryCounts).reduce((total, count) => total + count, 0)
     ).toBe(workbook.report.totalRows);
+  });
+
+  it('links only uniquely supported acquisition grades to trade assets', () => {
+    const trades = projectAflOutcomesDevelopmentWorkbookTrades(workbook);
+    const acquisitions = projectAflOutcomesDevelopmentWorkbookAcquisitions(workbook);
+    const tradeGrades = projectAflOutcomesDevelopmentWorkbookTradeGrades(
+      workbook,
+      trades,
+      acquisitions
+    );
+    const evidence = Array.from(tradeGrades.values());
+
+    expect(tradeGrades.size).toBe(975);
+    expect(
+      evidence.reduce((total, trade) => total + trade.coverage.gradedAssets, 0)
+    ).toBe(1344);
+    expect(
+      evidence.reduce((total, trade) => total + trade.coverage.matchedAssets, 0)
+    ).toBe(1344);
+    expect(
+      evidence.reduce((total, trade) => total + trade.coverage.matchedWithoutGradeAssets, 0)
+    ).toBe(0);
+    expect(evidence.some(({ status }) => status === 'partial')).toBe(true);
+    expect(evidence.some(({ status }) => status === 'unavailable')).toBe(true);
+    expect(
+      evidence.flatMap(({ assets }) => assets).filter(({ status }) => status === 'graded')
+    ).toHaveLength(1344);
   });
 
   it('rejects workbook bytes that do not match the pinned digest', async () => {

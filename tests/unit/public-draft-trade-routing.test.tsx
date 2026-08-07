@@ -228,5 +228,7 @@ describe('public AFL draft trade routing', () => {
     expect(methodologyRoute).toContain('export default function AflTradeMethodologyPage');
     expect(detailRoute).toContain('export default async function DraftTradeDetailPage');
     expect(detailRoute).toContain("export const dynamic = 'force-dynamic'");
+    expect(detailRoute).toContain('getDevelopmentWorkbookTradeGradeEvidence');
+    expect(detailRoute).toContain('developmentGradeEvidence={developmentGradeEvidence}');
   });
 });
