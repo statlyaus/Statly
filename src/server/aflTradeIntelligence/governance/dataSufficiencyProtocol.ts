@@ -259,15 +259,18 @@ export const aflTradeDataSufficiencyProtocolContentSchema = z
         });
       }
     }
+    const approvalCoverage = new Map<string, Set<string>>();
+    for (const measure of protocol.measures) {
+      if (!measure.requiredForApproval) continue;
+      for (const lane of measure.evidenceLanes) {
+        const coveredCohorts = approvalCoverage.get(lane) ?? new Set<string>();
+        for (const cohortId of measure.cohortIds) coveredCohorts.add(cohortId);
+        approvalCoverage.set(lane, coveredCohorts);
+      }
+    }
     for (const [laneIndex, lane] of protocol.evidenceLanes.entries()) {
       for (const cohortId of lane.cohortIds) {
-        const coveredForApproval = protocol.measures.some(
-          (measure) =>
-            measure.requiredForApproval &&
-            measure.evidenceLanes.includes(lane.lane) &&
-            measure.cohortIds.includes(cohortId)
-        );
-        if (!coveredForApproval) {
+        if (!approvalCoverage.get(lane.lane)?.has(cohortId)) {
           context.addIssue({
             code: 'custom',
             path: ['evidenceLanes', laneIndex, 'cohortIds'],
