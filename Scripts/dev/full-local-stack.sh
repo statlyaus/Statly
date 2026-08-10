@@ -32,7 +32,10 @@ export STATLY_ENABLE_DEV_TOOLS="true"
 export AFL_TRADE_PUBLIC_READ_MODE="postgres"
 export AFL_TRADE_PUBLIC_READ_ENVIRONMENT="test_fixture"
 export AFL_OUTCOMES_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/postgres?sslmode=disable"
-export AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64="c3RhdGx5LWxvY2FsLW9ubHktY3Vyc29yLXNlY3JldC12MQ=="
+if [[ -z "${AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64:-}" ]]; then
+  AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))")"
+fi
+export AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64
 export AFL_TRADE_OBJECT_BUCKET="statly-local-afl-trade-projections"
 export AFL_TRADE_OBJECT_PREFIX="test-fixture"
 export AFL_TRADE_OBJECT_KMS_KEY_ID="statly-local-only-no-production-authority"
