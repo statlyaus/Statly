@@ -362,7 +362,7 @@ async function seedExternalIdentityReviewerAuthority(input: {
       `INSERT INTO outcome_governed_evidence_reference
         (reference_id,reference_sha256,evidence_kind,artifact_id,environment,status,
          approval_decision_id,created_at,evidence_canonical_json,evidence_json)
-       VALUES ($1,$2,'reviewer_authority_evidence',$3,'test_fixture','approved',$4,$5,$6,$6::jsonb)`,
+       VALUES ($1,$2,'reviewer_authority_evidence',$3,'test_fixture','approved',$4,$5,$6::TEXT,$6::jsonb)`,
       [
         referenceId,
         referenceSha256,

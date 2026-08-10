@@ -188,11 +188,12 @@ async function seedCaptureAndEvidence(): Promise<void> {
       (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,dataset,
        dataset_version,access_mechanism,capability_id,competition,anchor_season_year,effective_at,
        captured_at,status,manifest_json)
-     VALUES ($1,'attempt-promotion','snapshot-promotion','artifact-promotion-source','test_fixture',
+     VALUES ($1,'attempt-promotion',$2,'artifact-promotion-source','test_fixture',
              'draftguru','trades','2025','automated_web','draftguru-trade-detail','AFLM',2025,
-             '2025-10-15T00:00:00.000Z','2025-11-01T00:00:01.000Z','approved',$2::jsonb)`,
+             '2025-10-15T00:00:00.000Z','2025-11-01T00:00:01.000Z','approved',$3::jsonb)`,
     [
       captureId,
+      `source-snapshot:${digest('2')}`,
       canonicalizeAflTradeJson({
         sourceUrl: 'https://www.draftguru.com.au/trades/promotion-fixture',
         executionReceipt,

@@ -47,12 +47,15 @@ const artifactReference = (letter: string) => ({
   createdAt: '2026-08-08T00:00:00.000Z',
 });
 
-function publicationManifest(scopeKey = 'runtime-authority-fixture') {
+function publicationManifest(
+  scopeKey = 'runtime-authority-fixture',
+  createdAt = '2026-08-08T00:00:00.000Z'
+) {
   const content = {
     schemaVersion: 'afl-trade-publication/v2' as const,
     environment: 'test_fixture' as const,
     scopeKey,
-    createdAt: '2026-08-08T00:00:00.000Z',
+    createdAt,
     valuationBundleId: `valuation-bundle:${'1'.repeat(64)}`,
     gate3DecisionId: `gate-decision:${'2'.repeat(64)}`,
     sourceRegisterIds: [`${scopeKey}-source`],
@@ -261,25 +264,27 @@ describe('PostgreSQL AFL trade runtime authority', () => {
         projectionCreatedAt,
       ]
     );
-    await outcomesPool.query(
-      `INSERT INTO outcome_valuation_publication_manifest
-        (publication_id,scope_key,created_at,manifest_json)
-       VALUES ($1,'runtime-freshness-fixture',$2,$3::jsonb)`,
-      [publicationId, '2026-08-08T00:00:00.000Z', JSON.stringify(publication)]
-    );
-    await outcomesPool.query(
-      `INSERT INTO outcome_valuation_projection_manifest
-        (projection_id,publication_id,artifact_id,created_at,manifest_json)
-       VALUES ($1,$2,$3,$4,$5::jsonb)`,
-      [
-        projectionId,
-        publicationId,
-        projectionArtifactId,
-        projectionCreatedAt,
-        JSON.stringify(projection),
-      ]
-    );
     const client = createPgAflOutcomeSqlClient(outcomesPool);
+    const publicationRepository = createPostgresAflTradePublicationRepository(client);
+    const beforeRegistration = await publicationRepository.load();
+    const registered = await publicationRepository.register({
+      expectedRevision: beforeRegistration.revision,
+      manifest: publication,
+      actor: 'runtime-freshness-fixture-worker',
+      evidenceId: projectionArtifactId,
+    });
+    await publicationRepository.apply({
+      expectedRevision: registered.registry.revision,
+      command: {
+        action: 'validate',
+        publicationId,
+        occurredAt: projectionCreatedAt,
+        actor: 'runtime-freshness-fixture-reviewer',
+        evidenceId: projectionArtifactId,
+        projectionManifest: projection,
+      },
+      projectionArtifactId,
+    });
     const firstProcess = createPostgresAflTradeProjectionFreshnessHighWaterStore(client);
     await firstProcess.advance(projectionId, '2026-08-08T02:00:00.000Z');
 
@@ -302,43 +307,47 @@ describe('PostgreSQL AFL trade runtime authority', () => {
   it('persists valuation publication state, exact replay, and stale-revision CAS', async () => {
     const client = createPgAflOutcomeSqlClient(outcomesPool);
     const repository = createPostgresAflTradePublicationRepository(client);
-    const manifest = publicationManifest();
+    const beforeRegistration = await repository.load();
+    const manifest = publicationManifest('runtime-authority-fixture', '2026-08-08T03:00:00.000Z');
     const registered = await repository.register({
-      expectedRevision: 0,
+      expectedRevision: beforeRegistration.revision,
       manifest,
       actor: 'runtime-authority-publication-worker',
       evidenceId: artifact('7'),
     });
-    expect(registered.registry.revision).toBe(1);
+    expect(registered.registry.revision).toBe(beforeRegistration.revision + 1);
     expect(registered.idempotentReplay).toBe(false);
 
     const restarted = createPostgresAflTradePublicationRepository(client);
     expect(await restarted.load()).toEqual(registered.registry);
     expect(
       await restarted.register({
-        expectedRevision: 1,
+        expectedRevision: registered.registry.revision,
         manifest,
         actor: 'runtime-authority-publication-worker',
         evidenceId: artifact('7'),
       })
-    ).toMatchObject({ registry: { revision: 1 }, idempotentReplay: true });
+    ).toMatchObject({
+      registry: { revision: registered.registry.revision },
+      idempotentReplay: true,
+    });
 
     const rejectionCommand = {
       action: 'reject' as const,
       publicationId: manifest.publicationId,
-      occurredAt: '2026-08-08T01:00:00.000Z',
+      occurredAt: '2026-08-08T04:00:00.000Z',
       actor: 'runtime-authority-publication-reviewer',
       evidenceId: artifact('8'),
       reason: 'Real PostgreSQL rejection proves durable publication state.',
     };
     const rejected = await restarted.apply({
-      expectedRevision: 1,
+      expectedRevision: registered.registry.revision,
       command: rejectionCommand,
     });
     expect(rejected.registry.publications[manifest.publicationId]?.state).toBe('rejected');
 
     await expect(
-      restarted.apply({ expectedRevision: 1, command: rejectionCommand })
+      restarted.apply({ expectedRevision: registered.registry.revision, command: rejectionCommand })
     ).rejects.toMatchObject({ code: 'STALE_REVISION' });
     expect(await createPostgresAflTradePublicationRepository(client).load()).toEqual(
       rejected.registry

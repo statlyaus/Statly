@@ -521,8 +521,9 @@ BEGIN
      AND decision."effective_at"<=trusted_now
      AND decision."revalidate_at">trusted_now
      AND NEW."valid_through"<=decision."revalidate_at"
-     AND (receipt."receipt_json"->'content'->'request'-'evaluatedAt') IS NOT DISTINCT FROM
-       (admission_receipt."receipt_json"->'content'->'request'-'evaluatedAt')
+     AND ((receipt."receipt_json"->'content'->'request') - 'evaluatedAt'::TEXT)
+       IS NOT DISTINCT FROM
+       ((admission_receipt."receipt_json"->'content'->'request') - 'evaluatedAt'::TEXT)
      AND receipt."receipt_json"->'content'->'request'->'operations' ? 'model_training'
      AND EXISTS (SELECT 1
        FROM jsonb_array_elements(
