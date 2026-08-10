@@ -6,7 +6,7 @@ const { listDraftTradesByYearMock, listDraftTradeYearsMock } = vi.hoisted(() => 
   listDraftTradeYearsMock: vi.fn(),
 }));
 
-vi.mock('@/lib/draftTrades/firestore', () => ({
+vi.mock('@/lib/draftTrades/read', () => ({
   listDraftTradesByYear: listDraftTradesByYearMock,
   listDraftTradeYears: listDraftTradeYearsMock,
 }));

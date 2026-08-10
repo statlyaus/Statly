@@ -13,6 +13,15 @@ RUN \
   else echo "Lockfile not found." && exit 1; \
   fi
 
+# One-shot production operator for scheduler-owned external draft/trade capture ticks.
+# Build with --target afl-trade-external-dispatcher and inject all credentials at runtime.
+FROM deps AS afl-trade-external-dispatcher
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --chown=node:node . .
+USER node
+CMD ["sh", "-c", "exec npm run outcomes:sources:dispatch-due-external -- --worker \"$AFL_TRADE_CAPTURE_WORKER_ID\" --limit \"${AFL_TRADE_CAPTURE_DISPATCH_LIMIT:-25}\""]
+
 # Build source
 FROM base AS builder
 WORKDIR /app

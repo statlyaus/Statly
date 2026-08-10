@@ -16,15 +16,72 @@ npm run test:e2e:draft-worker
 npm run build
 ```
 
+For the sourced AFL transaction/draft boundary, run the focused, offline contract set while editing:
+
+```sh
+npm run test:unit -- \
+  tests/unit/afl-trade-intelligence-approved-external-sources.test.ts \
+  tests/unit/afl-trade-intelligence-external-provider-ingestion.test.ts \
+  tests/unit/afl-trade-intelligence-external-ingestion.test.ts \
+  tests/unit/afl-trade-intelligence-external-discovery-contracts.test.ts \
+  tests/unit/afl-trade-intelligence-postgres-external-discovery.test.ts \
+  tests/unit/afl-trade-intelligence-external-historical-discovery-command.test.ts \
+  tests/unit/afl-trade-intelligence-external-historical-plan-runner.test.ts \
+  tests/unit/afl-trade-intelligence-external-historical-completion-contracts.test.ts \
+  tests/unit/afl-trade-intelligence-postgres-external-historical-completion.test.ts \
+  tests/unit/afl-trade-intelligence-external-historical-completion-command.test.ts \
+  tests/unit/afl-trade-intelligence-external-reconciliation-source-authority.test.ts \
+  tests/unit/afl-trade-intelligence-external-historical-reconciliation-preparation.test.ts \
+  tests/unit/afl-trade-intelligence-postgres-external-historical-reconciliation-source.test.ts \
+  tests/unit/afl-trade-intelligence-external-identity-review-contracts.test.ts \
+  tests/unit/afl-trade-intelligence-external-identity-review-work-builder.test.ts \
+  tests/unit/afl-trade-intelligence-external-identity-review-service.test.ts \
+  tests/unit/afl-trade-intelligence-postgres-external-identity-review.test.ts \
+  tests/unit/afl-trade-intelligence-external-identity-review-command.test.ts \
+  tests/unit/afl-trade-intelligence-external-canonical-promotion-review-contracts.test.ts \
+  tests/unit/afl-trade-intelligence-external-canonical-promotion-review-service.test.ts \
+  tests/unit/afl-trade-intelligence-postgres-external-canonical-promotion-review.test.ts \
+  tests/unit/afl-trade-intelligence-external-canonical-promotion-review-command.test.ts \
+  tests/unit/afl-trade-intelligence-prepare-external-historical-reconciliation-command.test.ts \
+  tests/unit/afl-trade-intelligence-external-evidence-reconciliation.test.ts \
+  tests/unit/afl-trade-intelligence-external-reconciliation-command.test.ts \
+  tests/unit/afl-trade-intelligence-postgres-external-reconciliation.test.ts
+```
+
+These tests make no network request and grant no source authority. The disposable PostgreSQL outcomes
+job remains mandatory for migration triggers, append-only custody/reconciliation behavior and
+concurrency. Its external-discovery lifecycle also exercises exact plan completion, `304` prior-batch
+reuse, governed identity review, current-head resolution loading and post-finalization child rejection.
+Production source commands additionally require reviewed
+JSON, durable Gate records, Redis admission and isolated KMS-backed object custody.
+
 `npm run test:all` runs lint, typecheck, unit, integration, and browser tests. Its integration stage
 includes the persisted 12-team, 22-player-roster, 264-pick draft convergence contract. CI exposes
 these boundaries as stable merge checks so a failure identifies its owning verification stage. The
 standard browser command excludes tests tagged `@draft-worker`; CI runs those separately with the real
 draft worker enabled.
 
+## Local full stack
+
+`npm run dev:full:all` starts the normal local web, Socket.IO, draft-worker and Firebase emulator
+boundaries plus a persistent loopback-only PGlite service for the isolated AFL outcomes schema. The
+launcher deploys all outcomes migrations and exact-replays a deterministic `test_fixture` factual
+release before Next starts. Local outcomes bytes live under ignored `.statly-local/`; they are never a
+production database or source authority.
+
+The local AFL fixture is source-shaped rather than workbook-backed. It contains one 2025 GWS–Western
+Bulldogs pick exchange, including nominal Pick 14 resolving through a typed draft selection to Harry
+Kyle and one unresolved 2026 future pick. It intentionally creates no valuation publication, so the
+archive is visible while numerical values and grades remain honestly unavailable. Run the database or
+seed independently with `npm run dev:outcomes-db` and `npm run dev:outcomes:seed`.
+
+PGlite's PostgreSQL socket compatibility layer is for local development only and is serialized through
+a one-connection `test_fixture` read pool. Migration triggers and concurrent repository behavior remain
+owned by the disposable real-PostgreSQL outcomes integration job described below.
+
 ## CI architecture
 
-The CI workflow has four explicit ownership boundaries:
+The CI workflow has five explicit ownership boundaries:
 
 - root jobs own documentation, root lint, root typecheck, unit/integration/browser tests, and the
   production build;
@@ -33,7 +90,9 @@ The CI workflow has four explicit ownership boundaries:
 - `Functions` owns its independent install, flat-ESLint config, typecheck, compiled smoke test, and
   build; and
 - `ETL` owns its independent install, Node/R static validation, typecheck, deterministic compiled
-  tests, and build.
+  tests, build, and the offline fitzRoy RDS-decoder contract inside the pinned capture image; and
+- `AFL outcomes PostgreSQL` owns the isolated analytical Prisma schema, migrations, triggers, and
+  repository behavior against a disposable PostgreSQL service.
 
 `CI Gate` depends on every root and nested validation job. It runs even when an upstream job fails or
 is cancelled, and succeeds only when every dependency reports `success`. Repository protection should
@@ -69,11 +128,13 @@ runs `test:compiled` against that output. The public `npm test` command remains 
 building before it runs the same compiled tests.
 
 The nested tests load compiled artifacts but remain credential-free and network-free. ETL's nested
-tests do not invoke R or write to Firestore; the external pipeline commands retain their separate
-authorization and environment requirements.
+Node tests do not invoke R or write to Firestore. CI separately builds the pinned
+`etl/afl-trade-intelligence` image and runs `test_decode_contract.R` against its locked R, fitzRoy,
+`jsonlite`, and `digest` versions. That test creates only local fixture RDS bytes and makes no provider
+request; external capture commands retain their separate authorization and environment requirements.
 
 ETL `npm run lint` composes `lint:node` with `lint:r`. The R check parses `fetch_fw_round.R` without
-loading fitzRoy or contacting FootyWire. CI pins R 4.6.1 to match the ETL container's build stage; local
+loading fitzRoy or contacting FootyWire. CI pins R 4.5.1 to match the ETL container's build stage; local
 verification requires an available `Rscript` and may use a newer compatible R release.
 
 ## Database isolation
@@ -103,6 +164,20 @@ git status --short -- prisma/dev.db
 Delete the disposable database after verification only when the explicit path is known and it contains
 no required evidence. Never use a recursive delete, repository glob, or unresolved environment variable
 for cleanup.
+
+The public AFL outcomes authority uses its own PostgreSQL schema and migration history. Run its real
+integration suite only against an explicitly provisioned disposable database:
+
+```sh
+export AFL_OUTCOMES_TEST_DATABASE_URL='postgresql://<disposable-user>:<password>@127.0.0.1:5432/<disposable-database>'
+npm run outcomes:prisma:validate
+npm run outcomes:prisma:generate
+npm run test:outcomes:int
+```
+
+The suite creates unique temporary schemas, applies the isolated migrations, exercises trigger and
+repository behavior, and removes those schemas afterward. Never point either
+`AFL_OUTCOMES_TEST_DATABASE_URL` or `AFL_OUTCOMES_DATABASE_URL` at shared or production PostgreSQL.
 
 ## Test layers
 

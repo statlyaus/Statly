@@ -11,6 +11,55 @@ import {
 } from '@/components/draft/draftHubChrome';
 import type { DraftClubTradeRefRow } from '@/lib/draftTrades/contracts';
 import { filterClubTradeRefs } from '@/lib/draftTrades/clubTradeRefSearch';
+import {
+  deriveAflTradeStatlyGrades,
+  type AflTradeStatlyClubGrade,
+} from '@/server/aflTradeIntelligence/valuation/statlyGradePolicy';
+import { AFL_TRADE_METHODOLOGY_HREF } from '@/types/aflTradeIntelligence';
+import type { AflTradeValueSummary } from '@/types/aflTradeIntelligence';
+
+export interface DraftClubTradeStatlyValues {
+  atTrade: AflTradeValueSummary;
+  current: AflTradeValueSummary;
+}
+
+function normalizedClubName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ');
+}
+
+function clubGrade(
+  summary: AflTradeValueSummary | undefined,
+  clubName: string
+): AflTradeStatlyClubGrade | null {
+  if (!summary) return null;
+  const expectedName = normalizedClubName(clubName);
+  return (
+    deriveAflTradeStatlyGrades(summary).clubs.find(
+      (club) => normalizedClubName(club.clubName) === expectedName
+    ) ?? null
+  );
+}
+
+function StatlyGradeValue({ grade }: { grade: AflTradeStatlyClubGrade | null }) {
+  if (!grade?.grade) {
+    return <span className="text-muted-foreground">Grade unavailable</span>;
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+      <span className="rounded-md border border-border bg-background px-2 py-0.5 font-semibold text-foreground shadow-sm">
+        {grade.grade}
+      </span>
+      {grade.state === 'provisional' ? (
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Provisional
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 function clubLinkLabel(ref: DraftClubTradeRefRow): string {
   return `${ref.title} (${ref.year}). View trade detail.`;
@@ -21,11 +70,13 @@ export function DraftClubTradeHistory({
   clubName,
   refs,
   exportYear,
+  statlyValuesByTradeId = {},
 }: {
   clubSlug: string;
   clubName: string;
   refs: DraftClubTradeRefRow[];
   exportYear: number | null;
+  statlyValuesByTradeId?: Readonly<Record<string, DraftClubTradeStatlyValues>>;
 }) {
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
@@ -157,6 +208,25 @@ export function DraftClubTradeHistory({
         </div>
       </div>
 
+      <aside
+        id="statly-trade-grade-note"
+        aria-label="Statly grade note"
+        className="rounded-2xl border border-border bg-card p-4 text-sm leading-6 text-muted-foreground shadow-sm md:p-5"
+      >
+        <p>
+          At-trade grades use information available when the deal occurred. Current grades reflect
+          the latest included outcomes. Provisional grades identify incomplete or lower-confidence
+          evidence, while unavailable means coverage is below the grading threshold.{' '}
+          <Link
+            href={AFL_TRADE_METHODOLOGY_HREF}
+            className="font-semibold text-foreground underline decoration-border underline-offset-4 transition hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            Read methodology and current limits
+          </Link>
+          .
+        </p>
+      </aside>
+
       <div className="space-y-3 md:hidden">
         {filtered.map((ref) => (
           <article
@@ -182,15 +252,17 @@ export function DraftClubTradeHistory({
               {ref.assetsRaw || 'No raw club return recorded.'}
             </p>
             <div className="mt-3 flex flex-wrap justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-              <span>
-                Expected:{' '}
-                <span className="font-medium tabular-nums text-foreground">
-                  {ref.expected ?? '—'}
-                </span>
+              <span className="space-y-1">
+                <span className="block">At-trade grade</span>
+                <StatlyGradeValue
+                  grade={clubGrade(statlyValuesByTradeId[ref.tradeId]?.atTrade, clubName)}
+                />
               </span>
-              <span>
-                Actual:{' '}
-                <span className="font-medium tabular-nums text-foreground">{ref.actual ?? '—'}</span>
+              <span className="space-y-1 text-right">
+                <span className="block">Current grade</span>
+                <StatlyGradeValue
+                  grade={clubGrade(statlyValuesByTradeId[ref.tradeId]?.current, clubName)}
+                />
               </span>
             </div>
           </article>
@@ -224,7 +296,10 @@ export function DraftClubTradeHistory({
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
-            <table className="table table-sm w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3">
+            <table
+              aria-describedby="statly-trade-grade-note"
+              className="table table-sm w-full border-collapse text-base [&_thead]:whitespace-normal [&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3"
+            >
               <thead>
                 <tr className="border-b border-border bg-muted [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
                   <th scope="col" className="text-left">
@@ -239,11 +314,11 @@ export function DraftClubTradeHistory({
                   <th scope="col" className="text-left">
                     Club return (raw)
                   </th>
-                  <th scope="col" className="text-right tabular-nums">
-                    Expected
+                  <th scope="col" className="text-right leading-tight tabular-nums">
+                    At-trade grade
                   </th>
-                  <th scope="col" className="text-right tabular-nums">
-                    Actual
+                  <th scope="col" className="text-right leading-tight tabular-nums">
+                    Current grade
                   </th>
                 </tr>
               </thead>
@@ -261,11 +336,19 @@ export function DraftClubTradeHistory({
                         {ref.title}
                       </Link>
                     </td>
-                    <td className="min-w-48 text-sm text-muted-foreground">{ref.assetsRaw || '—'}</td>
-                    <td className="text-right tabular-nums text-foreground">
-                      {ref.expected ?? '—'}
+                    <td className="min-w-48 text-sm text-muted-foreground">
+                      {ref.assetsRaw || 'No raw club return recorded'}
                     </td>
-                    <td className="text-right tabular-nums text-foreground">{ref.actual ?? '—'}</td>
+                    <td className="text-right tabular-nums text-foreground">
+                      <StatlyGradeValue
+                        grade={clubGrade(statlyValuesByTradeId[ref.tradeId]?.atTrade, clubName)}
+                      />
+                    </td>
+                    <td className="text-right tabular-nums text-foreground">
+                      <StatlyGradeValue
+                        grade={clubGrade(statlyValuesByTradeId[ref.tradeId]?.current, clubName)}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

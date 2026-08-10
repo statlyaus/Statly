@@ -1,6 +1,6 @@
 import { DraftHubState } from '@/components/draft/DraftHubState';
 import { DraftClubsDirectory } from '@/components/draft/DraftClubsDirectory';
-import { listDraftClubs } from '@/lib/draftTrades/firestore';
+import { listDraftClubs } from '@/lib/draftTrades/read';
 
 export const dynamic = 'force-dynamic';
 

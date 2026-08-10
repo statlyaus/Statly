@@ -26,6 +26,11 @@ export default defineConfig({
     exclude: ['node_modules'],
     globals: true,
     clearMocks: true,
+    // Replay, canonicalization, and hostile-size contract tests run under full V8 coverage in CI.
+    // Keep them bounded, while allowing realistic shared-runner instrumentation overhead.
+    testTimeout: 30_000,
+    pool: 'threads',
+    maxWorkers: 2,
     setupFiles: ['tests/setup/unit.setup.ts'],
     coverage: {
       enabled: true,

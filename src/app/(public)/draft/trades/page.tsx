@@ -2,7 +2,9 @@ import { Suspense } from 'react';
 
 import { DraftHubState } from '@/components/draft/DraftHubState';
 import { DraftTradesExplorer } from '@/components/draft/DraftTradesExplorer';
-import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/firestore';
+import { listDraftTradeYears, listDraftTradesByYear } from '@/lib/draftTrades/read';
+import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publication/publicationReadContracts';
+import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 
 export const dynamic = 'force-dynamic';
 
@@ -106,6 +108,27 @@ export default async function DraftTradesPage({
       type,
       q: q || undefined,
     });
+    const runtime = await getPublicAflTradeReadRuntime();
+    const valuationTradeIds = trades.slice(0, 100).map(({ tradeId }) => tradeId);
+    const [atTradeValueResponse, currentValueResponse] =
+      valuationTradeIds.length === 0
+        ? [null, null]
+        : await Promise.all([
+            runtime.valueReadService.list({
+              scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
+              requestedView: 'at_trade',
+              tradeIds: valuationTradeIds,
+              limit: valuationTradeIds.length,
+              cursor: null,
+            }),
+            runtime.valueReadService.list({
+              scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
+              requestedView: 'current',
+              tradeIds: valuationTradeIds,
+              limit: valuationTradeIds.length,
+              cursor: null,
+            }),
+          ]);
 
     const initialSearchString = buildTradesSearchString({
       club,
@@ -123,6 +146,8 @@ export default async function DraftTradesPage({
             yearOptions={yearOptions}
             trades={trades}
             initialSearchString={initialSearchString}
+            atTradeValueResponse={atTradeValueResponse}
+            currentValueResponse={currentValueResponse}
           />
         </Suspense>
       </div>

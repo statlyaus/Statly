@@ -5,7 +5,7 @@ const { getDraftTradeByIdMock } = vi.hoisted(() => ({
   getDraftTradeByIdMock: vi.fn(),
 }));
 
-vi.mock('@/lib/draftTrades/firestore', () => ({
+vi.mock('@/lib/draftTrades/read', () => ({
   getDraftTradeById: getDraftTradeByIdMock,
 }));
 
@@ -25,9 +25,10 @@ describe('GET /api/draft-trades/[tradeId]/export', () => {
   });
 
   it('exports trade detail as csv for valid id', async () => {
+    const tradeId = `external-transaction:${'a'.repeat(64)}`;
     getDraftTradeByIdMock.mockResolvedValue({
       trade: {
-        tradeId: 't1',
+        tradeId,
         year: 1988,
         seqInYear: 1,
         title: 'Trade 1',
@@ -54,13 +55,18 @@ describe('GET /api/draft-trades/[tradeId]/export', () => {
       ],
     });
 
-    const req = new NextRequest('http://localhost/api/draft-trades/t1/export');
-    const res = await GET(req, { params: Promise.resolve({ tradeId: 't1' }) });
+    const req = new NextRequest(
+      `http://localhost/api/draft-trades/${encodeURIComponent(tradeId)}/export`
+    );
+    const res = await GET(req, {
+      params: Promise.resolve({ tradeId: encodeURIComponent(tradeId) }),
+    });
     const body = await res.text();
 
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('text/csv; charset=utf-8');
-    expect(body).toContain('tradeId,t1');
+    expect(getDraftTradeByIdMock).toHaveBeenCalledWith(tradeId);
+    expect(body).toContain(`tradeId,${tradeId}`);
     expect(body).toContain('asset,Carlton,1,pick,Pick 1,Player 1,12');
   });
 

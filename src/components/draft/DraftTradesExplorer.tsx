@@ -4,6 +4,8 @@ import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headless
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { AflTradeValueSummaryCard } from '@/components/draft/AflTradeValueSummaryCard';
+import { AflTradeValueUnavailablePanel } from '@/components/draft/AflTradeValueUnavailablePanel';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
 import {
   draftHubClubLogoStripOrder,
@@ -13,6 +15,11 @@ import {
   draftHubHeroTopAccentClass,
   draftHubSkyPillClass,
 } from '@/components/draft/draftHubChrome';
+import type {
+  AflTradeValueBearingSummary,
+  AflTradeValueListResponse,
+  AflTradeValueSummary,
+} from '@/types/aflTradeIntelligence';
 import { DraftTradeDetail } from './DraftTradeDetail';
 
 type DraftTradeHeader = {
@@ -85,6 +92,8 @@ type DraftTradesExplorerProps = {
   trades: DraftTradeHeader[];
   /** RSC snapshot of the URL query — must match the request so SSR and first client paint agree (useSearchParams differs on the server). */
   initialSearchString: string;
+  atTradeValueResponse: AflTradeValueListResponse | null;
+  currentValueResponse: AflTradeValueListResponse | null;
 };
 
 const detailCache = new Map<string, DraftTradeDetailData>();
@@ -92,6 +101,12 @@ const detailRequestCache = new Map<string, Promise<DraftTradeDetailData>>();
 
 function normalizeQuery(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function isValueBearingSummary(
+  valuation: AflTradeValueSummary
+): valuation is AflTradeValueBearingSummary {
+  return 'clubValues' in valuation;
 }
 
 function buildClubOptions(trades: DraftTradeHeader[]): Array<{ slug: string; name: string }> {
@@ -272,6 +287,8 @@ export function DraftTradesExplorer({
   yearOptions,
   trades,
   initialSearchString,
+  atTradeValueResponse,
+  currentValueResponse,
 }: DraftTradesExplorerProps): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
@@ -366,6 +383,24 @@ export function DraftTradesExplorer({
   }, [expandedTradeId]);
 
   const clubOptions = useMemo(() => buildClubOptions(trades), [trades]);
+  const atTradeValueByTradeId = useMemo(
+    () =>
+      new Map(
+        atTradeValueResponse?.items.map((item) => [item.tradeId, item.valuation] as const) ?? []
+      ),
+    [atTradeValueResponse]
+  );
+  const currentValueByTradeId = useMemo(
+    () =>
+      new Map(
+        currentValueResponse?.items.map((item) => [item.tradeId, item.valuation] as const) ?? []
+      ),
+    [currentValueResponse]
+  );
+  const showPerTradeValuations = [
+    ...atTradeValueByTradeId.values(),
+    ...currentValueByTradeId.values(),
+  ].some(isValueBearingSummary);
   const filteredTrades = useMemo(() => {
     // Keep in sync with `listDraftTradesByYear` (firestore.ts): trim/lowercase q only;
     // do not trim trade title/club strings so SSR trade list and client filter agree.
@@ -472,7 +507,6 @@ export function DraftTradesExplorer({
         }
         return;
       }
-
     }
 
     window.addEventListener('keydown', onKeydown);
@@ -593,6 +627,16 @@ export function DraftTradesExplorer({
   const selectedTrade = expandedTradeId
     ? (filteredTrades.find((trade) => trade.tradeId === expandedTradeId) ?? null)
     : null;
+  const selectedAtTradeValue = selectedTrade
+    ? atTradeValueByTradeId.get(selectedTrade.tradeId)
+    : undefined;
+  const selectedCurrentValue = selectedTrade
+    ? currentValueByTradeId.get(selectedTrade.tradeId)
+    : undefined;
+  const selectedStatlyValues =
+    selectedAtTradeValue && selectedCurrentValue
+      ? { atTrade: selectedAtTradeValue, current: selectedCurrentValue }
+      : null;
 
   return (
     <section className="space-y-6">
@@ -934,6 +978,15 @@ export function DraftTradesExplorer({
         </div>
       </div>
 
+      {!showPerTradeValuations &&
+      currentValueResponse?.items[0] &&
+      !isValueBearingSummary(currentValueResponse.items[0].valuation) ? (
+        <AflTradeValueUnavailablePanel
+          availability={currentValueResponse.items[0].valuation}
+          variant="compact"
+        />
+      ) : null}
+
       <div className="space-y-3 lg:hidden">
         <div className="flex items-end justify-between gap-3">
           <div>
@@ -949,6 +1002,8 @@ export function DraftTradesExplorer({
         {filteredTrades.map((trade) => {
           const isExpanded = expandedTradeId === trade.tradeId;
           const isLoadingDetail = isExpanded && loadingTradeId === trade.tradeId;
+          const atTradeValue = atTradeValueByTradeId.get(trade.tradeId);
+          const currentValue = currentValueByTradeId.get(trade.tradeId);
           const receives =
             trade.receivesByClub.length > 0
               ? trade.receivesByClub
@@ -1008,6 +1063,22 @@ export function DraftTradesExplorer({
                   </span>
                 </button>
               </div>
+              {showPerTradeValuations && (atTradeValue || currentValue) ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {atTradeValue ? (
+                    <AflTradeValueSummaryCard
+                      valuation={atTradeValue}
+                      calculationAsOf={atTradeValueResponse?.consistency.calculationAsOf ?? null}
+                    />
+                  ) : null}
+                  {currentValue ? (
+                    <AflTradeValueSummaryCard
+                      valuation={currentValue}
+                      calculationAsOf={currentValueResponse?.consistency.calculationAsOf ?? null}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
               <div className="mt-2 space-y-1 rounded-md border border-base-300 bg-base-200/35 p-2">
                 {renderReceiveSummary(receives, `mobile-receives-${trade.tradeId}`)}
               </div>
@@ -1033,20 +1104,21 @@ export function DraftTradesExplorer({
               </div>
 
               {isExpanded && (
-                <section
-                  id={`mobile-trade-panel-${trade.tradeId}`}
-                  className="mt-3"
-                  aria-live="polite"
-                >
+                <section id={`mobile-trade-panel-${trade.tradeId}`} className="mt-3">
                   {isLoadingDetail && (
-                    <div className="space-y-2">
+                    <div
+                      className="space-y-2"
+                      role="status"
+                      aria-live="polite"
+                      aria-label="Loading trade details"
+                    >
                       <div className="h-4 w-1/3 animate-pulse rounded bg-base-300" />
                       <div className="h-4 w-2/3 animate-pulse rounded bg-base-300" />
                       <div className="h-24 animate-pulse rounded bg-base-300" />
                     </div>
                   )}
                   {!isLoadingDetail && detailError && (
-                    <p className="text-sm text-error">
+                    <p className="text-sm text-error" role="alert">
                       Could not load trade details: {detailError}
                     </p>
                   )}
@@ -1056,6 +1128,11 @@ export function DraftTradesExplorer({
                         detail={expandedDetail}
                         showOpenFullPageLink
                         mode="inline"
+                        statlyValues={
+                          atTradeValue && currentValue
+                            ? { atTrade: atTradeValue, current: currentValue }
+                            : null
+                        }
                       />
                     </div>
                   )}
@@ -1108,6 +1185,8 @@ export function DraftTradesExplorer({
               {filteredTrades.map((trade) => {
                 const isExpanded = expandedTradeId === trade.tradeId;
                 const isActive = activeTradeId === trade.tradeId;
+                const atTradeValue = atTradeValueByTradeId.get(trade.tradeId);
+                const currentValue = currentValueByTradeId.get(trade.tradeId);
                 const receives =
                   trade.receivesByClub.length > 0
                     ? trade.receivesByClub
@@ -1165,6 +1244,27 @@ export function DraftTradesExplorer({
                         </button>
                       </div>
                     </div>
+
+                    {showPerTradeValuations && (atTradeValue || currentValue) ? (
+                      <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                        {atTradeValue ? (
+                          <AflTradeValueSummaryCard
+                            valuation={atTradeValue}
+                            calculationAsOf={
+                              atTradeValueResponse?.consistency.calculationAsOf ?? null
+                            }
+                          />
+                        ) : null}
+                        {currentValue ? (
+                          <AflTradeValueSummaryCard
+                            valuation={currentValue}
+                            calculationAsOf={
+                              currentValueResponse?.consistency.calculationAsOf ?? null
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {trade.clubNames.map((clubName, index) => {
@@ -1339,10 +1439,14 @@ export function DraftTradesExplorer({
                   ref={railBodyRef}
                   id={`trade-panel-${selectedTrade.tradeId}`}
                   className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3 md:px-5 [scrollbar-gutter:stable]"
-                  aria-live="polite"
                 >
                   {loadingTradeId === selectedTrade.tradeId ? (
-                    <div className="space-y-2 rounded-2xl border border-base-300 bg-base-100 p-4">
+                    <div
+                      className="space-y-2 rounded-2xl border border-base-300 bg-base-100 p-4"
+                      role="status"
+                      aria-live="polite"
+                      aria-label="Loading trade details"
+                    >
                       <div className="h-4 w-1/3 animate-pulse rounded bg-base-300" />
                       <div className="h-4 w-2/3 animate-pulse rounded bg-base-300" />
                       <div className="h-40 animate-pulse rounded bg-base-300" />
@@ -1350,7 +1454,10 @@ export function DraftTradesExplorer({
                   ) : null}
 
                   {loadingTradeId !== selectedTrade.tradeId && detailError ? (
-                    <div className="rounded-2xl border border-error/30 bg-error/5 p-4 text-sm text-error">
+                    <div
+                      className="rounded-2xl border border-error/30 bg-error/5 p-4 text-sm text-error"
+                      role="alert"
+                    >
                       Could not load trade details: {detailError}
                     </div>
                   ) : null}
@@ -1358,7 +1465,12 @@ export function DraftTradesExplorer({
                   {loadingTradeId !== selectedTrade.tradeId &&
                   !detailError &&
                   expandedDetail?.trade.tradeId === selectedTrade.tradeId ? (
-                    <DraftTradeDetail detail={expandedDetail} showOpenFullPageLink mode="inline" />
+                    <DraftTradeDetail
+                      detail={expandedDetail}
+                      showOpenFullPageLink
+                      mode="inline"
+                      statlyValues={selectedStatlyValues}
+                    />
                   ) : null}
                 </div>
               </>

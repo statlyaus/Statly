@@ -6,7 +6,7 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <main className="max-w-3xl mx-auto px-4 py-10">
+    <div className="max-w-3xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold mb-6">Terms of Service</h1>
       <p className="text-sm text-base-content/60 mb-8">
         Last updated: {new Date().toLocaleDateString()}
@@ -38,6 +38,6 @@ export default function TermsPage() {
           website.
         </p>
       </section>
-    </main>
+    </div>
   );
 }

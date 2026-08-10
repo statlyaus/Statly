@@ -14,8 +14,9 @@ import {
 } from '@/components/draft/draftHubChrome';
 
 export const metadata: Metadata = {
-  title: 'AFL Draft & Trade Archive | Statly',
-  description: 'Public AFL draft and trade records, club movement, and pick analysis.',
+  title: 'AFL Draft & Trade Outcomes | Statly',
+  description:
+    'Explore public AFL draft and trade records, club movement, and the status of checked numerical outcome publications.',
 };
 
 export default function DraftLayout({ children }: { children: ReactNode }) {
@@ -26,21 +27,31 @@ export default function DraftLayout({ children }: { children: ReactNode }) {
         <div className="flex flex-col gap-5 border-b border-info/20 pb-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <p className={draftHubHeaderKickerClass}>Statly Public Research Hub</p>
-            <h1 className={draftHubHeaderTitleClass}>AFL Draft &amp; Trade Archive</h1>
+            <h1 className={draftHubHeaderTitleClass}>AFL Draft &amp; Trade Outcomes</h1>
             <p className={draftHubHeaderDescriptionClass}>
-              A public research workspace for historical AFL trade intelligence, club movement, and
-              draft asset records. Use it to scan the market quickly, compare club patterns, and
-              keep detail in view while you explore.
+              Explore AFL trades, draft selections, pick movement, and club history in a public
+              research workspace separate from Statly Fantasy. Factual records and numerical
+              valuations remain independently release-gated.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className={draftHubSectionPillClass}>Historical trade records</span>
+              <span className={draftHubSectionPillClass}>Historical trade archive</span>
+              <span className={draftHubSectionPillClass}>Draft selection history</span>
               <span className={draftHubSectionPillClass}>Club movement analysis</span>
-              <span className={draftHubSectionPillClass}>Public draft asset research</span>
+              <span className={draftHubSectionPillClass}>Outcome methodology</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <Link href="/dashboard" className="btn btn-outline btn-sm bg-background">
-              Return to Fantasy
+            <Link
+              href="/draft/outcomes"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Outcome publication status
+            </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Open Statly Fantasy
             </Link>
           </div>
         </div>

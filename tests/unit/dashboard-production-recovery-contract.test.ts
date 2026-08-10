@@ -28,20 +28,26 @@ describe('dashboard production recovery route contract', () => {
     expect(appLayout).toContain('Skip to content');
   });
 
-  it('keeps public AFL archive separate from fantasy Trade Centre', () => {
+  it('keeps public AFL Draft and Trade Outcomes separate from the fantasy Trade Centre', () => {
     const tradeCentreRoute = readRepoFile('src/app/tradecentre/page.tsx');
     expect(tradeCentreRoute).toContain("redirect('/draft/trades')");
     expect(tradeCentreRoute).not.toContain('/leagues/');
     expect(tradeCentreRoute).not.toContain('leagueMember.findFirst');
 
     const publicHome = readRepoFile('src/app/(public)/page.tsx');
-    expect(publicHome).toContain('AFL Draft & Trade Archive');
+    expect(publicHome).toContain('AFL Draft & Trade Outcomes');
     expect(publicHome).toContain("href: '/draft/trades'");
+    expect(publicHome).toContain("secondaryHref: '/draft/outcomes'");
+    expect(publicHome).toContain('are not owned by Statly users or fantasy teams');
     expect(publicHome).not.toContain('Draft & Trade Hub');
 
     const publicLayout = readRepoFile('src/app/(public)/layout.tsx');
-    expect(publicLayout).toContain('AFL Archive');
+    const publicNavigation = readRepoFile('src/components/navigation/PublicNavigation.tsx');
+    expect(publicLayout).toContain('PublicNavigation');
+    expect(publicNavigation).toContain('AFL Outcomes');
+    expect(publicNavigation).toContain("href: '/draft/trades'");
     expect(publicLayout).not.toContain('Draft & Trade Hub');
+    expect(publicNavigation).not.toContain('Draft & Trade Hub');
 
     const navigation = readRepoFile('src/components/navigation/MainNavigation.tsx');
     expect(navigation).not.toContain("href: '/tradecentre'");
