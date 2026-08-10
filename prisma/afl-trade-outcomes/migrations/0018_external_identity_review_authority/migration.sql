@@ -223,7 +223,7 @@ BEGIN
     IF target_status IS DISTINCT FROM 'approved'
        OR target_label IS DISTINCT FROM NEW.decision_json->'content'->'canonicalTarget'->>'recordedLabel'
        OR NEW.canonical_target_canonical_json::jsonb IS DISTINCT FROM
-          (NEW.decision_json->'content'->'canonicalTarget' - 'snapshotSha256'::text)
+          ((NEW.decision_json->'content'->'canonicalTarget') - 'snapshotSha256'::text)
        OR encode(sha256(convert_to(NEW.canonical_target_canonical_json,'UTF8')),'hex') <>
           NEW.canonical_target_snapshot_sha256
     THEN RAISE EXCEPTION 'External identity decision requires an exact approved canonical target snapshot'; END IF;
