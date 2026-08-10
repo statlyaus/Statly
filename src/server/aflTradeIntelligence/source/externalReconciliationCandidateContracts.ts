@@ -35,9 +35,9 @@ const transactionSchema = z
     occurredOn: z.iso.date().nullable(),
     transactionType: z.enum(['trade', 'free_agency', 'other']),
     title: z.string().trim().min(1).max(1_000).nullable(),
-    parties: sortedUniqueIdsSchema.pipe(z.array(z.string()).min(2)),
+    parties: sortedUniqueIdsSchema,
     transferIds: sortedUniqueIdsSchema.pipe(
-      z.array(aflTradeContentAddressedIdSchema('external-transfer')).min(1)
+      z.array(aflTradeContentAddressedIdSchema('external-transfer'))
     ),
     status: statusSchema,
     evidenceIds: evidenceIdsSchema,
@@ -245,6 +245,7 @@ const contentSchema = z
         .filter(({ transactionId }) => transactionId === transaction.transactionId)
         .map(({ transferId }) => transferId)
         .sort();
+      const incomplete = transaction.parties.length < 2 || transaction.transferIds.length === 0;
       if (
         transaction.transferIds.some((transferId) => !transferIds.has(transferId)) ||
         JSON.stringify(transaction.transferIds) !== JSON.stringify(ownedTransferIds)
@@ -253,6 +254,22 @@ const contentSchema = z
           code: 'custom',
           path: ['transactions', index, 'transferIds'],
           message: 'Transaction transfer membership must equal its exact owned transfer set.',
+        });
+      }
+      if (
+        incomplete &&
+        (transaction.status !== 'unresolved' ||
+          !content.issues.some(
+            (issue) =>
+              issue.code === 'transaction_incomplete' &&
+              issue.subjectKey === `transaction:${transaction.providerEventId}`
+          ))
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['transactions', index],
+          message:
+            'Incomplete transactions must remain unresolved with an exact blocking issue.',
         });
       }
     });

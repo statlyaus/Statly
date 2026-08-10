@@ -13,6 +13,7 @@ import {
   createAflTradeExternalIdentityResolution,
   reconcileAflTradeExternalEvidence,
 } from '@/server/aflTradeIntelligence/source/externalEvidenceReconciliation';
+import { parseAflTradeExternalReconciliationCandidate } from '@/server/aflTradeIntelligence/source/externalReconciliationCandidateContracts';
 import {
   AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION,
   AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
@@ -321,6 +322,59 @@ describe('external draft and trade evidence reconciliation', () => {
     ]);
     expect(candidate.content.issues).toEqual([]);
     expect(candidate.content.publicationEligible).toBe(false);
+  });
+
+  it('preserves an incomplete transaction as unresolved blocking evidence', () => {
+    const incompleteBatch = batch('draftguru', 'e', [
+      {
+        kind: 'transaction',
+        nativeEventId: 'incomplete-trade',
+        seasonYear: 2025,
+        occurredOn: null,
+        transactionType: 'trade',
+        title: null,
+      },
+    ]);
+    const sourceAuthority = createAflTradeHistoricalCompletionReconciliationAuthority({
+      schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SOURCE_AUTHORITY_SCHEMA_VERSION,
+      kind: 'historical_plan_completion',
+      completionId: `external-historical-capture-completion:${digest('9')}`,
+      completionSha256: digest('9'),
+      planId: `external-historical-capture-plan:${digest('8')}`,
+      planSha256: digest('7'),
+      targetSetSha256: digest('6'),
+      resultSetSha256: digest('5'),
+      completionSourceBatchSetSha256: digest('4'),
+      candidateSourceBatchSetSha256: sha256AflTradeCanonicalJson([incompleteBatch.batchId]),
+      completedAt: '2026-08-09T04:30:00.000Z',
+    });
+
+    const candidate = parseAflTradeExternalReconciliationCandidate(
+      reconcileAflTradeExternalEvidence({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [incompleteBatch],
+        identityResolutions: [],
+        sourceAuthority,
+        reconciledAt: '2026-08-09T05:00:00.000Z',
+      })
+    );
+
+    expect(candidate.content.transactions).toEqual([
+      expect.objectContaining({
+        providerEventId: 'incomplete-trade',
+        parties: [],
+        transferIds: [],
+        status: 'unresolved',
+      }),
+    ]);
+    expect(candidate.content.issues).toEqual([
+      expect.objectContaining({
+        code: 'transaction_incomplete',
+        subjectKey: 'transaction:incomplete-trade',
+      }),
+    ]);
   });
 
   it('preserves one entitlement through multiple on-trades before draft selection', () => {
