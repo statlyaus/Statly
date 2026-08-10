@@ -155,7 +155,7 @@ describe('external identity review contracts', () => {
         }),
       },
       rationale: 'Reviewed against the official draft selection and player record.',
-      authorityEvidenceId: `governed-evidence:${digest('8')}`,
+      authorityEvidenceId: `reviewer-authority-evidence:${digest('8')}`,
       decidedBy: 'reviewer:fixture',
       decidedAt: '2026-08-10T00:00:03.000Z',
     });
@@ -191,7 +191,7 @@ describe('external identity review contracts', () => {
         }),
       },
       rationale: 'Invalid cross-kind mapping.',
-      authorityEvidenceId: `governed-evidence:${digest('8')}`,
+      authorityEvidenceId: `reviewer-authority-evidence:${digest('8')}`,
       decidedBy: 'reviewer:fixture',
       decidedAt: '2026-08-10T00:00:03.000Z',
     };

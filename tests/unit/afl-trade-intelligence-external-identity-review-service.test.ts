@@ -145,7 +145,7 @@ describe('external identity review service', () => {
         decision: 'approved',
         canonicalId: 'player:harry-kyle',
         rationale: 'Reviewed against the official player record.',
-        authorityEvidenceId: `governed-evidence:${sha('8')}`,
+        authorityEvidenceId: `reviewer-authority-evidence:${sha('8')}`,
         decidedBy: 'reviewer:fixture',
         decidedAt: '2026-08-10T00:00:04.000Z',
       },

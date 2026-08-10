@@ -73,7 +73,7 @@ function fixture() {
       recordedLabel: 'Harry Kyle',
     }),
     rationale: 'Reviewed against the official draft selection.',
-    authorityEvidenceId: `governed-evidence:${sha('6')}`,
+    authorityEvidenceId: `reviewer-authority-evidence:${sha('6')}`,
     decidedBy: 'reviewer:fixture',
     decidedAt: '2026-08-10T00:00:04.000Z',
   });
@@ -135,7 +135,7 @@ class IdentityReviewSql implements AflOutcomeSqlClient, AflOutcomeSqlTransaction
       ] as T[]);
     }
     if (sql.includes('FROM outcome_operational_principal_authority')) {
-      return result([{ authority_evidence_id: `governed-evidence:${sha('6')}` }] as T[]);
+      return result([{ authority_evidence_id: `reviewer-authority-evidence:${sha('6')}` }] as T[]);
     }
     if (sql.includes('FROM outcome_external_identity_subject') && sql.includes('subject_json')) {
       const { subject } = fixture();

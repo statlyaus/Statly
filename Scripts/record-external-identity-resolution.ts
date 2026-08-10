@@ -41,7 +41,7 @@ const commandSchema = z
     decision: z.enum(['approved', 'rejected', 'withdrawn']),
     canonicalId: z.string().trim().min(1).max(240).optional(),
     reviewer: z.string().trim().min(1).max(240),
-    authorityEvidence: z.string().regex(/^governed-evidence:[a-f0-9]{64}$/),
+    authorityEvidence: z.string().regex(/^reviewer-authority-evidence:[a-f0-9]{64}$/),
     rationale: z.string().trim().min(1).max(4_000),
   })
   .strict()

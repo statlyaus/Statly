@@ -272,7 +272,7 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    Provision the reviewer independently with current environment/provider/competition/season-scoped
    `afl_trade_external_identity_reviewer` authority for capability
    `external_identity_resolution`. Record each reviewed outcome with
-   `npm run outcomes:sources:record-external-identity-resolution -- --completion <completion-id> --subject <subject-id> --decision approved --canonical-id <approved-player-or-club-id> --reviewer <principal-ref> --authority-evidence <governed-evidence-id> --rationale <text>`.
+   `npm run outcomes:sources:record-external-identity-resolution -- --completion <completion-id> --subject <subject-id> --decision approved --canonical-id <approved-player-or-club-id> --reviewer <principal-ref> --authority-evidence <reviewer-authority-evidence-id> --rationale <text>`.
    Rejection and withdrawal omit `--canonical-id`. The command derives the exact work item, current
    revision, predecessor and approved canonical-record snapshot from PostgreSQL; operators cannot
    submit those chain fields. A later completion may reuse a current decision only when its exact

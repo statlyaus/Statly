@@ -31,7 +31,7 @@ const recordInputSchema = queueInputSchema
     decision: z.enum(['approved', 'rejected', 'withdrawn']),
     canonicalId: z.string().trim().min(1).max(240).nullable().optional(),
     rationale: z.string().trim().min(1).max(4_000),
-    authorityEvidenceId: aflTradeContentAddressedIdSchema('governed-evidence'),
+    authorityEvidenceId: aflTradeContentAddressedIdSchema('reviewer-authority-evidence'),
     decidedBy: z.string().trim().min(1).max(240),
     decidedAt: instantSchema,
   })

@@ -329,7 +329,7 @@ const reviewDecisionContentSchema = z
     decision: z.enum(['approved', 'rejected', 'withdrawn']),
     canonicalTarget: canonicalTargetSchema.nullable(),
     rationale: z.string().trim().min(1).max(4_000),
-    authorityEvidenceId: aflTradeContentAddressedIdSchema('governed-evidence'),
+    authorityEvidenceId: aflTradeContentAddressedIdSchema('reviewer-authority-evidence'),
     decidedBy: z.string().trim().min(1).max(240),
     decidedAt: instantSchema,
     publicationEligible: z.literal(false),

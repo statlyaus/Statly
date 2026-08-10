@@ -6,7 +6,7 @@ import { runAflTradeRecordExternalIdentityResolutionCommand } from '../../Script
 const sha = (character: string) => character.repeat(64);
 const completionId = `external-historical-capture-completion:${sha('1')}`;
 const subjectId = `external-identity-subject:${sha('2')}`;
-const authorityEvidenceId = `governed-evidence:${sha('3')}`;
+const authorityEvidenceId = `reviewer-authority-evidence:${sha('3')}`;
 
 describe('external identity review operator commands', () => {
   it('exports the deterministic review queue for one historical completion', async () => {
