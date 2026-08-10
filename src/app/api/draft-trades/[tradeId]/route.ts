@@ -1,33 +1,25 @@
 import type { NextRequest } from 'next/server';
-import { z } from 'zod';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
-import { getDraftTradeById } from '@/lib/draftTrades/firestore';
+import { getDraftTradeById } from '@/lib/draftTrades/read';
 import { logger } from '@/lib/logger';
+import { parseAflTradePublicRouteParam } from '@/server/aflTradeIntelligence/runtime/publicTradeRouteParam';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const paramsSchema = z.object({
-  tradeId: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
-});
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ tradeId: string }> }
 ) {
   try {
-    const parsed = paramsSchema.safeParse(await params);
-    if (!parsed.success) {
+    const { tradeId: rawTradeId } = await params;
+    const tradeId = parseAflTradePublicRouteParam(rawTradeId);
+    if (tradeId === null) {
       return commonErrors.badRequest('Invalid trade id');
     }
 
-    const detail = await getDraftTradeById(parsed.data.tradeId);
+    const detail = await getDraftTradeById(tradeId);
     if (!detail) {
       return commonErrors.notFound('Trade not found');
     }

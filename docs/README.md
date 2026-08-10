@@ -5,6 +5,11 @@ authority when a document and implementation disagree; fix the document in the s
 
 ## Architecture
 
+- [Public AFL Draft & Trade Outcomes](architecture/afl-trade-intelligence.md) — separate
+  public/non-fantasy boundary, immutable source evidence, isolated PostgreSQL target, reviewed factual
+  releases, optional valuation publication, and rollback.
+- [AFL trade source-rights assessment](architecture/afl-trade-source-rights-assessment.md) — Gate 0A
+  candidate findings, rejection reasons, provider evidence request, and minimum approval criteria.
 - [Runtime and data platform](architecture/data-platform.md) — current ownership boundaries and the
   accepted production target.
 - [Realtime delivery](architecture/realtime.md) — Socket.IO, Redis, BullMQ, reconnect, and authority
@@ -34,6 +39,9 @@ authority when a document and implementation disagree; fix the document in the s
 
 ## Runbooks
 
+- [Public AFL Draft & Trade Outcomes operations](runbooks/afl-trade-intelligence-operations.md) —
+  workbook/fitzRoy capture, factual release operations, optional valuation scheduling, health,
+  incidents, recovery, and model-change review.
 - [PostgreSQL cutover](runbooks/postgresql-cutover.md) — planned, not yet executed.
 - [Player identity consolidation](runbooks/player-identity.md) — reviewed production data operation.
 

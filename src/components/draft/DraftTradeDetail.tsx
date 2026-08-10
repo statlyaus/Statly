@@ -1,6 +1,16 @@
 import Link from 'next/link';
 
+import { AflTradeValueDetailPanel } from '@/components/draft/AflTradeValueDetailPanel';
 import { DraftTeamLogo } from '@/components/draft/DraftHubState';
+import {
+  deriveAflTradeStatlyGrades,
+  type AflTradeStatlyClubGrade,
+  type AflTradeStatlyGradeResult,
+} from '@/server/aflTradeIntelligence/valuation/statlyGradePolicy';
+import type {
+  AflTradeValueDetailResponse,
+  AflTradeValueSummary,
+} from '@/types/aflTradeIntelligence';
 
 export type DraftTradeHeaderView = {
   tradeId: string;
@@ -40,6 +50,11 @@ type DraftTradeDetailProps = {
   detail: DraftTradeDetailView;
   showOpenFullPageLink?: boolean;
   mode?: 'full' | 'inline';
+  valueAnalysis?: AflTradeValueDetailResponse;
+  statlyValues?: Readonly<{
+    atTrade: AflTradeValueSummary;
+    current: AflTradeValueSummary;
+  }> | null;
 };
 
 function assetTypeLabel(assetType: DraftTradeAssetView['assetType']): string {
@@ -71,6 +86,46 @@ function stripTrailingReceivesLabel(raw: string): string {
   if (!t) return t;
   const stripped = t.replace(/\s+receives\s*$/i, '').trim();
   return stripped.length > 0 ? stripped : t;
+}
+
+function normalizedClubName(raw: string): string {
+  return stripTrailingReceivesLabel(raw).trim().toLocaleLowerCase('en-AU');
+}
+
+function gradeForClub(
+  result: AflTradeStatlyGradeResult | null,
+  clubName: string
+): AflTradeStatlyClubGrade | null {
+  if (!result) return null;
+  const normalized = normalizedClubName(clubName);
+  return result.clubs.find((club) => normalizedClubName(club.clubName) === normalized) ?? null;
+}
+
+function StatlyGradeValue({ grade }: { grade: AflTradeStatlyClubGrade | null }) {
+  if (!grade?.grade) {
+    return (
+      <span className="text-sm text-base-content/55">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">Grade not available</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex flex-col items-end gap-1">
+      <span
+        className="badge badge-primary badge-outline min-w-10 justify-center font-semibold"
+        aria-label={`Grade ${grade.grade}`}
+      >
+        {grade.grade}
+      </span>
+      {grade.state === 'provisional' ? (
+        <span className="text-[10px] font-medium uppercase tracking-wide text-base-content/55">
+          Provisional
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 function groupAssetsByClub(
@@ -192,6 +247,8 @@ export function DraftTradeDetail({
   detail,
   showOpenFullPageLink = false,
   mode = 'full',
+  valueAnalysis,
+  statlyValues,
 }: DraftTradeDetailProps) {
   const groupedAssets = groupAssetsByClub(detail.assets);
   const playerAssetCount = detail.assets.filter((asset) => asset.assetType === 'player').length;
@@ -212,9 +269,16 @@ export function DraftTradeDetail({
 
   const sectionHeaderPad = isInline ? 'px-4 py-3' : 'px-5 py-3.5';
   const sectionEyebrow = 'text-xs font-semibold uppercase tracking-[0.14em]';
-  const partyTablePad = isInline
-    ? '[&_th]:px-4 [&_td]:px-4 [&_th]:py-3 [&_td]:py-3'
-    : '[&_th]:px-5 [&_td]:px-5 [&_th]:py-3.5 [&_td]:py-3.5';
+  const atTradeGrades = statlyValues ? deriveAflTradeStatlyGrades(statlyValues.atTrade) : null;
+  const currentGrades = statlyValues ? deriveAflTradeStatlyGrades(statlyValues.current) : null;
+  const partyGrades = detail.parties
+    .slice()
+    .sort((a, b) => a.rowOrder - b.rowOrder)
+    .map((party) => ({
+      party,
+      atTradeGrade: gradeForClub(atTradeGrades, party.clubName),
+      currentGrade: gradeForClub(currentGrades, party.clubName),
+    }));
 
   return (
     <div className={isInline ? 'space-y-4' : 'space-y-6'}>
@@ -315,6 +379,8 @@ export function DraftTradeDetail({
         </div>
       </section>
 
+      {!isInline && valueAnalysis ? <AflTradeValueDetailPanel analysis={valueAnalysis} /> : null}
+
       {/* Parties: same card language as Summary — sequential section, not a selected tab */}
       <section id="trade-detail-parties" aria-labelledby="trade-parties-heading">
         <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
@@ -323,7 +389,7 @@ export function DraftTradeDetail({
             eyebrow="Parties"
             titleId="trade-parties-heading"
             title="Who was in the deal"
-            description="Each row is one club side. Raw assets are shown as recorded in the source feed."
+            description="Each row is one club side. Statly grades compare the assets received using the selected model view."
             pad={sectionHeaderPad}
             eyebrowClass={`${sectionEyebrow} text-base-content/55`}
             isInline={isInline}
@@ -331,43 +397,92 @@ export function DraftTradeDetail({
           <div className="bg-base-100 px-2 pb-2 pt-2 sm:px-3 sm:pb-3">
             <div className="relative overflow-hidden rounded-xl bg-base-100 shadow-sm ring-1 ring-base-200/50">
               <TradeModuleAccent tone="parties" />
-              <div className="overflow-x-auto pt-2">
-                <table
-                  className={`table w-full table-fixed border-collapse text-base [&_thead]:whitespace-normal ${partyTablePad}`}
-                >
-                  <colgroup>
-                    <col className={isInline ? 'w-38' : 'w-46'} />
-                    <col />
-                    <col className="w-22 sm:w-24" />
-                    <col className="w-22 sm:w-24" />
-                  </colgroup>
-                  <thead>
-                    <tr className="border-b border-base-200 bg-base-200/50 [&>th]:align-bottom [&>th]:text-sm [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-base-content/65">
-                      <th scope="col" className="whitespace-nowrap text-left">
-                        Club
-                      </th>
-                      <th scope="col" className="min-w-0 text-left">
-                        Assets (raw)
-                      </th>
-                      <th scope="col" className="whitespace-nowrap text-right tabular-nums">
-                        Expected
-                      </th>
-                      <th scope="col" className="whitespace-nowrap text-right tabular-nums">
-                        Actual
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="[&>tr]:border-b [&>tr]:border-base-200/80 [&>tr:last-child]:border-b-0">
-                    {detail.parties
-                      .slice()
-                      .sort((a, b) => a.rowOrder - b.rowOrder)
-                      .map((party) => (
+              <p className="px-4 pb-3 pt-4 text-sm leading-6 text-base-content/65 sm:px-5">
+                At trade uses information available at the time. Current combines observed
+                contribution with remaining uncertainty. Provisional grades are shown while careers
+                or pick outcomes remain open.
+              </p>
+              <div
+                role="list"
+                aria-label="Trade parties and grades"
+                className={`grid gap-3 px-3 pb-3 ${isInline ? '' : 'sm:hidden'}`}
+              >
+                {partyGrades.map(({ party, atTradeGrade, currentGrade }) => (
+                  <article
+                    key={party.id}
+                    role="listitem"
+                    aria-label={party.clubName}
+                    className="rounded-xl border border-base-300 bg-base-100 p-3"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <DraftTeamLogo team={party.clubName} size={24} withCircle decorative />
+                      <h4 className="min-w-0 text-base font-semibold leading-snug text-base-content">
+                        {party.clubName}
+                      </h4>
+                    </div>
+                    <div className="mt-3 border-t border-base-200 pt-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-base-content/55">
+                        Assets received
+                      </p>
+                      <p className="mt-1 wrap-break-word whitespace-pre-wrap text-sm leading-relaxed text-base-content/90">
+                        {party.assetsRaw}
+                      </p>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-base-200 pt-3">
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-base-content/55">
+                          At-trade grade
+                        </dt>
+                        <dd className="mt-1 text-base tabular-nums">
+                          <StatlyGradeValue grade={atTradeGrade} />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-base-content/55">
+                          Current grade
+                        </dt>
+                        <dd className="mt-1 text-base tabular-nums">
+                          <StatlyGradeValue grade={currentGrade} />
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+              {!isInline ? (
+                <div className="hidden overflow-x-auto pb-1 sm:block">
+                  <table className="table w-full table-fixed border-collapse text-base [&_td]:px-5 [&_td]:py-3.5 [&_th]:px-5 [&_th]:py-3.5 [&_thead]:whitespace-normal">
+                    <caption className="sr-only">Trade parties grade comparison</caption>
+                    <colgroup>
+                      <col className="w-46" />
+                      <col />
+                      <col className="w-24 sm:w-28" />
+                      <col className="w-24 sm:w-28" />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-base-200 bg-base-200/50 [&>th]:align-bottom [&>th]:text-sm [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-base-content/65">
+                        <th scope="col" className="whitespace-nowrap text-left">
+                          Club
+                        </th>
+                        <th scope="col" className="min-w-0 text-left">
+                          Assets (raw)
+                        </th>
+                        <th scope="col" className="text-right leading-tight tabular-nums">
+                          At-trade grade
+                        </th>
+                        <th scope="col" className="text-right leading-tight tabular-nums">
+                          Current grade
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="[&>tr]:border-b [&>tr]:border-base-200/80 [&>tr:last-child]:border-b-0">
+                      {partyGrades.map(({ party, atTradeGrade, currentGrade }) => (
                         <tr key={party.id} className="transition-colors hover:bg-base-200/25">
                           <td className="align-top text-left text-base font-medium leading-snug">
                             <div className="flex items-start gap-2.5">
                               <DraftTeamLogo
                                 team={party.clubName}
-                                size={isInline ? 24 : 28}
+                                size={28}
                                 withCircle
                                 decorative
                                 className="mt-0.5"
@@ -379,16 +494,17 @@ export function DraftTradeDetail({
                             {party.assetsRaw}
                           </td>
                           <td className="align-top text-right text-base tabular-nums">
-                            {party.expected ?? '—'}
+                            <StatlyGradeValue grade={atTradeGrade} />
                           </td>
                           <td className="align-top text-right text-base tabular-nums">
-                            {party.actual ?? '—'}
+                            <StatlyGradeValue grade={currentGrade} />
                           </td>
                         </tr>
                       ))}
-                  </tbody>
-                </table>
-              </div>
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

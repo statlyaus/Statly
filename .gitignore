@@ -30,6 +30,7 @@ dist/
 *.tsbuildinfo
 .cache/
 public/auth-service-worker.js
+src/generated/aflTradeOutcomesPrisma/
 
 # --- Firebase ---
 .firebase/
@@ -66,3 +67,5 @@ buildinfo
 Statly.worktrees/**
 lint.config.js
 .eslintrc.js
+.gstack/
+.statly-local/

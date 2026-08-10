@@ -97,7 +97,7 @@ describe('dependency and runtime hygiene', () => {
     expect(workflow).toContain('name: Functions');
     expect(workflow).toContain('name: ETL');
     expect(workflow).toContain('r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6');
-    expect(workflow).toContain("r-version: '4.6.1'");
+    expect(workflow).toContain("r-version: '4.5.1'");
     expect(workflow).toContain('name: Unit tests');
     expect(workflow).toContain('name: Integration tests');
     expect(workflow).toContain('name: Browser tests');
