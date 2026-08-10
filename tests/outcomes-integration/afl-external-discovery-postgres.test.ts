@@ -319,6 +319,7 @@ async function seedExternalIdentityReviewerAuthority(input: {
     environment: 'test_fixture',
     principalRef: input.principalRef,
     role: 'afl_trade_external_identity_reviewer',
+    scopeKey: 'public-afl-draft-trade-outcomes',
     provider: input.provider,
     capabilityId: 'external_identity_resolution',
     competition: 'AFLM',

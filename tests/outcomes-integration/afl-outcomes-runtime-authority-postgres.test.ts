@@ -347,7 +347,13 @@ describe('PostgreSQL AFL trade runtime authority', () => {
     expect(rejected.registry.publications[manifest.publicationId]?.state).toBe('rejected');
 
     await expect(
-      restarted.apply({ expectedRevision: registered.registry.revision, command: rejectionCommand })
+      restarted.apply({
+        expectedRevision: registered.registry.revision,
+        command: {
+          ...rejectionCommand,
+          reason: 'A conflicting stale command must not replay the committed rejection.',
+        },
+      })
     ).rejects.toMatchObject({ code: 'STALE_REVISION' });
     expect(await createPostgresAflTradePublicationRepository(client).load()).toEqual(
       rejected.registry

@@ -634,8 +634,8 @@ describe('PostgreSQL external candidate canonical promotion', () => {
     await expect(
       outcomesPool.query(
         `INSERT INTO outcome_release_event_asset
-          (release_id,ordinal,event_asset_id,record_sha256,record_canonical_json)
-         VALUES ($1,99,'late-event-asset',$2,'{}')`,
+          (release_id,ordinal,asset_version_id,record_sha256,record_canonical_json,membership_json)
+         VALUES ($1,99,'late-event-asset',$2,'{}','{}')`,
         [release.releaseId, digest('f')]
       )
     ).rejects.toThrow(/finalized release candidate|registered release/i);
