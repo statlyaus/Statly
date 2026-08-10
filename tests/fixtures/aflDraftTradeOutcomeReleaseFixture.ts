@@ -110,7 +110,7 @@ export function createAflDraftTradeOutcomeReleaseFixture(
 ) {
   const sourceSnapshotId = `source-snapshot:${aflDraftTradeOutcomeFixtureHash(key)}`;
   const sourceRightsContent = {
-    schemaVersion: 'afl-trade-source-rights/v1' as const,
+    schemaVersion: 'afl-trade-source-rights/v2' as const,
     registerId: `fixture-rights-${key}`,
     provider: 'Fixture provider',
     dataset: 'Fixture AFL player outcomes',
@@ -120,6 +120,11 @@ export function createAflDraftTradeOutcomeReleaseFixture(
       competitions: ['AFL'],
       seasonRanges: [{ from: 2026, to: 2026 }],
       accessMechanism: 'provider_export' as const,
+    },
+    acquisition: {
+      kind: 'provided_artifact' as const,
+      mediaType: 'application/x-ndjson',
+      deliveryMethod: 'Fabricated fixture export',
     },
     operations: {
       bounded_evaluation_capture: 'allowed' as const,
@@ -218,7 +223,7 @@ export function createAflDraftTradeOutcomeReleaseFixture(
     affectedArtifacts: [{ kind: 'source_rights', artifactId: sourceRightsArtifactId }],
   });
   const gate0aReceiptContent = {
-    schemaVersion: 'afl-trade-gate0a-evaluation/v1' as const,
+    schemaVersion: 'afl-trade-gate0a-evaluation/v2' as const,
     request: {
       decisionKey: `fixture-source-rights-${key}`,
       environment: 'test_fixture',
@@ -227,6 +232,7 @@ export function createAflDraftTradeOutcomeReleaseFixture(
       competition: 'AFL',
       season: 2026,
       accessMechanism: 'provider_export',
+      capabilityId: null,
       geography: 'Australia',
       commercialContext: 'test-only-fixture',
       audience: 'public-afl-readers',

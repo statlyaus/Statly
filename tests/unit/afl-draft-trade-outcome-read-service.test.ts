@@ -77,6 +77,7 @@ const item: AflDraftTradeOutcomeListItem = aflDraftTradeOutcomeListItemSchema.pa
 const selection: AflDraftTradeOutcomeReleaseSelection = {
   registryRevision: 3,
   scopeKey: AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
+  environment: 'test_fixture',
   release,
   metricDefinitions: AFL_DRAFT_TRADE_OUTCOME_METRIC_DEFINITIONS.filter(
     ({ metric }) => metric === 'games' || metric === 'goals'
@@ -323,6 +324,60 @@ describe('AFL Draft & Trade outcome read service', () => {
     expect(response.consistency.release).toEqual(release);
     expect(response.metricDefinitions.map(({ metric }) => metric)).toEqual(['games', 'goals']);
     expect(response.items[0]?.checks[0]?.recordedValue).toBe(0);
+  });
+
+  it('serves distinct acquisitions from the same draft event', async () => {
+    const secondItem = aflDraftTradeOutcomeListItemSchema.parse({
+      ...item,
+      assetId: 'asset:fixture-2',
+      aflClubId: 'club:fixture-b',
+      clubName: 'Fixture Club B',
+      player: {
+        aflPlayerId: 'player:fixture-2',
+        displayName: 'Second Fixture Player',
+        identityStatus: 'resolved',
+      },
+    });
+    const service = createAflDraftTradeOutcomeReadService({
+      now: () => '2025-09-03T00:00:00.000Z',
+      releaseSelector: {
+        async capture() {
+          return { registryRevision: selection.registryRevision, selection };
+        },
+      },
+      repository: {
+        async list() {
+          return projection({ items: [item, secondItem], total: 2 });
+        },
+      },
+    });
+
+    const response = await service.list(request);
+
+    expect(response.items.map(({ player }) => player.displayName)).toEqual([
+      'Fixture Player',
+      'Second Fixture Player',
+    ]);
+  });
+
+  it('rejects duplicate acquisition rows within one response', async () => {
+    const service = createAflDraftTradeOutcomeReadService({
+      now: () => '2025-09-03T00:00:00.000Z',
+      releaseSelector: {
+        async capture() {
+          return { registryRevision: selection.registryRevision, selection };
+        },
+      },
+      repository: {
+        async list() {
+          return projection({ items: [item, item], total: 2 });
+        },
+      },
+    });
+
+    await expect(service.list(request)).rejects.toMatchObject({
+      code: 'INVALID_PROJECTION_PAYLOAD',
+    } satisfies Partial<AflDraftTradeOutcomeReadError>);
   });
 
   it('serves the captured release definitions rather than current hard-coded copy', async () => {

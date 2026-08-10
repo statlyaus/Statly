@@ -18,15 +18,16 @@ describe('AflTradeValueUnavailablePanel', () => {
     const panel = screen.getByRole('region', {
       name: 'Current outcome trade value status',
     });
-    expect(panel).toHaveAttribute('data-afl-trade-value-availability', 'source_blocked');
+    expect(panel).toHaveAttribute('data-afl-trade-value-availability', 'not_calculated');
     expect(
-      within(panel).getByRole('heading', { level: 2, name: 'Trade value unavailable' })
+      within(panel).getByRole('heading', { level: 2, name: 'Trade value not calculated' })
     ).toBeVisible();
     expect(within(panel).getByText('No numerical result')).toBeVisible();
     expect(within(panel).getAllByRole('link')).toHaveLength(1);
-    expect(
-      within(panel).getByRole('link', { name: 'Read methodology and current limits' })
-    ).toHaveAttribute('href', AFL_TRADE_METHODOLOGY_HREF);
+    expect(within(panel).getByRole('link', { name: 'Await reviewed calculation' })).toHaveAttribute(
+      'href',
+      AFL_TRADE_METHODOLOGY_HREF
+    );
     expect(panel).not.toHaveAttribute('aria-live');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
@@ -50,7 +51,7 @@ describe('AflTradeValueUnavailablePanel', () => {
       name: 'Current outcome trade value status',
     });
     expect(
-      within(panel).getByRole('heading', { level: 3, name: 'Trade value unavailable' })
+      within(panel).getByRole('heading', { level: 3, name: 'Trade value not calculated' })
     ).toBeVisible();
     expect(
       within(panel).getByRole('list', { name: 'Trade value availability warnings' })

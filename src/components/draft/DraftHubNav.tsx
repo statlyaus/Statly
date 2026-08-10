@@ -15,6 +15,7 @@ export function DraftHubNav() {
     pathname === '/draft/trades/methodology' || pathname.startsWith('/draft/trades/methodology/');
   const tradesActive =
     !methodologyActive && (pathname === '/draft/trades' || pathname.startsWith('/draft/trades/'));
+  const draftsActive = pathname === '/draft/drafts' || pathname.startsWith('/draft/drafts/');
   const clubsActive = pathname === '/draft/clubs' || pathname.startsWith('/draft/clubs/');
   const sections = [
     {
@@ -30,6 +31,13 @@ export function DraftHubNav() {
       label: 'Trade archive',
       description: 'Scan historical deals by season, club, and asset profile.',
       active: tradesActive,
+    },
+    {
+      href: '/draft/drafts',
+      kicker: 'Selections',
+      label: 'Draft history',
+      description: 'Follow official selections, original clubs, players, and pick movement.',
+      active: draftsActive,
     },
     {
       href: '/draft/clubs',
@@ -49,7 +57,9 @@ export function DraftHubNav() {
 
   return (
     <nav className="mt-5" aria-label="AFL Draft and Trade Outcomes sections">
-      <div className={`${draftHubSubtlePanelClass} grid grid-cols-2 gap-2 p-2 lg:grid-cols-4`}>
+      <div
+        className={`${draftHubSubtlePanelClass} grid grid-cols-2 gap-2 p-2 lg:grid-cols-3 xl:grid-cols-5`}
+      >
         {sections.map((section) => (
           <Link
             key={section.href}

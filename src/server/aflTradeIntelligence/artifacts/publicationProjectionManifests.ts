@@ -113,6 +113,26 @@ export const aflTradeValuationOutputInventoryIndexBindingSchema = z
   })
   .strict();
 
+export const aflTradeValuationOutputCustodyIndexBindingSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-valuation-output-custody-index/v1'),
+    valuationOutputCustodyIndexId: aflTradeContentAddressedIdSchema(
+      'valuation-output-custody-index'
+    ),
+    artifactRef: canonicalJsonArtifactRefSchema,
+    environment: z.enum(AFL_TRADE_DECISION_ENVIRONMENTS),
+    valuationBundleId: aflTradeContentAddressedIdSchema('valuation-bundle'),
+    valuationOutputInventoryIndexId: aflTradeContentAddressedIdSchema(
+      'valuation-output-inventory-index'
+    ),
+    inventorySetSha256: aflTradeSha256Schema,
+    scopeKey: publicIdSchema,
+    valueUnitId: publicIdSchema,
+    entryCount: z.number().int().positive().max(MAX_PUBLICATION_ENTRIES),
+    custodyReceiptSetSha256: aflTradeSha256Schema,
+  })
+  .strict();
+
 export const aflTradePublicationFreshnessPolicyBindingSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-publication-freshness-policy/v1'),
@@ -235,6 +255,60 @@ export const aflTradePublicationManifestV3ContentSchema = z
     }
   });
 
+export const aflTradePublicationManifestV4ContentSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-publication/v4'),
+    ...publicationManifestCommonShape,
+    publicAssetBoundary: z.literal(PUBLIC_ASSET_BOUNDARY),
+    entryCount: z.number().int().positive().max(MAX_PUBLICATION_ENTRIES),
+    valuationOutputInventoryIndex: aflTradeValuationOutputInventoryIndexBindingSchema,
+    valuationOutputCustodyIndex: aflTradeValuationOutputCustodyIndexBindingSchema,
+    freshnessPolicy: aflTradePublicationFreshnessPolicyBindingSchema,
+    projectionPresentationPolicy: aflTradeProjectionPresentationPolicyBindingSchema,
+  })
+  .strict()
+  .superRefine(addPublicationCommonIssues)
+  .superRefine((manifest, context) => {
+    const { valuationOutputCustodyIndex: custody, ...shared } = manifest;
+    const v3 = aflTradePublicationManifestV3ContentSchema.safeParse({
+      ...shared,
+      schemaVersion: 'afl-trade-publication/v3',
+    });
+    if (!v3.success) {
+      for (const issue of v3.error.issues) {
+        context.addIssue({ code: 'custom', path: issue.path, message: issue.message });
+      }
+    }
+    const inventory = manifest.valuationOutputInventoryIndex;
+    if (
+      custody.environment !== manifest.environment ||
+      custody.valuationBundleId !== manifest.valuationBundleId ||
+      custody.valuationOutputInventoryIndexId !== inventory.valuationOutputInventoryIndexId ||
+      custody.inventorySetSha256 !== inventory.inventorySetSha256 ||
+      custody.scopeKey !== manifest.scopeKey ||
+      custody.valueUnitId !== manifest.valueUnitId ||
+      custody.entryCount !== manifest.entryCount
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['valuationOutputCustodyIndex'],
+        message:
+          'Publication custody index must bind the exact environment, bundle, inventory, scope, value unit, and entry set.',
+      });
+    }
+    if (
+      Date.parse(custody.artifactRef.createdAt) > Date.parse(manifest.createdAt) ||
+      Date.parse(custody.artifactRef.createdAt) >
+        Date.parse(manifest.publicationBundleArtifact.createdAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['valuationOutputCustodyIndex', 'artifactRef', 'createdAt'],
+        message: 'Publication materialization cannot predate completed valuation-output custody.',
+      });
+    }
+  });
+
 function addPublicationContentAddressIssue(
   manifest: { publicationId: string; content: unknown },
   context: z.RefinementCtx
@@ -260,14 +334,24 @@ export const aflTradePublicationManifestV3Schema = z
   .strict()
   .superRefine(addPublicationContentAddressIssue);
 
+export const aflTradePublicationManifestV4Schema = z
+  .object({
+    publicationId: aflTradeContentAddressedIdSchema('publication'),
+    content: aflTradePublicationManifestV4ContentSchema,
+  })
+  .strict()
+  .superRefine(addPublicationContentAddressIssue);
+
 export const aflTradePublicationManifestContentSchema = z.discriminatedUnion('schemaVersion', [
   aflTradePublicationManifestV2ContentSchema,
   aflTradePublicationManifestV3ContentSchema,
+  aflTradePublicationManifestV4ContentSchema,
 ]);
 
 export const aflTradePublicationManifestSchema = z.union([
   aflTradePublicationManifestV2Schema,
   aflTradePublicationManifestV3Schema,
+  aflTradePublicationManifestV4Schema,
 ]);
 
 export const aflTradeProjectionDocumentSetBindingSchema = z
@@ -341,6 +425,23 @@ export const aflTradeProjectionSchemaBundleBindingSchema = z
     valuationExportContractVersion: z.literal(VALUATION_EXPORT_CONTRACT_VERSION),
   })
   .strict();
+
+export const aflTradeProjectionSchemaBundleV2BindingSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-projection-schema-bundle/v2'),
+    projectionSchemaBundleId: aflTradeContentAddressedIdSchema('projection-schema-bundle'),
+    artifactRef: canonicalJsonArtifactRefSchema,
+    responseContractVersion: z.literal(RESPONSE_CONTRACT_VERSION),
+    valuationExportContractVersion: z.literal(VALUATION_EXPORT_CONTRACT_VERSION),
+    publicationManifestSchemaVersion: z.literal('afl-trade-publication/v4'),
+    projectionManifestSchemaVersion: z.literal('afl-trade-projection/v3'),
+  })
+  .strict();
+
+export const aflTradeAnyProjectionSchemaBundleBindingSchema = z.union([
+  aflTradeProjectionSchemaBundleBindingSchema,
+  aflTradeProjectionSchemaBundleV2BindingSchema,
+]);
 
 export const aflTradeProjectionParityReportBindingSchema = z
   .object({
@@ -559,6 +660,82 @@ export const aflTradeProjectionManifestV2ContentSchema = z
     }
   });
 
+export const aflTradeProjectionManifestV3ContentSchema = z
+  .object({
+    schemaVersion: z.literal('afl-trade-projection/v3'),
+    environment: z.enum(AFL_TRADE_DECISION_ENVIRONMENTS),
+    scopeKey: publicIdSchema,
+    createdAt: isoDateTimeSchema,
+    publicationId: aflTradeContentAddressedIdSchema('publication'),
+    buildJobId: publicIdSchema,
+    publicAssetBoundary: z.literal(PUBLIC_ASSET_BOUNDARY),
+    responseContractVersion: z.literal(RESPONSE_CONTRACT_VERSION),
+    valuationExportContractVersion: z.literal(VALUATION_EXPORT_CONTRACT_VERSION),
+    valueUnitId: publicIdSchema,
+    supportedViews: z.array(z.enum(AFL_TRADE_VALUATION_VIEWS)).min(1),
+    documentCount: z.number().int().positive(),
+    valuationOutputInventoryIndex: aflTradeValuationOutputInventoryIndexBindingSchema,
+    valuationOutputCustodyIndex: aflTradeValuationOutputCustodyIndexBindingSchema,
+    freshnessPolicy: aflTradePublicationFreshnessPolicyBindingSchema,
+    projectionPresentationPolicy: aflTradeProjectionPresentationPolicyBindingSchema,
+    projectionPublicEvidenceIndex: aflTradeProjectionPublicEvidenceIndexBindingSchema,
+    projectionMaterialization: aflTradeProjectionMaterializationBindingSchema,
+    projectionDocumentSet: aflTradeProjectionDocumentSetBindingSchema,
+    projectionSchemaBundle: aflTradeProjectionSchemaBundleV2BindingSchema,
+    parityReport: aflTradeProjectionParityReportBindingSchema,
+  })
+  .strict()
+  .superRefine((manifest, context) => {
+    const {
+      valuationOutputCustodyIndex: custody,
+      projectionSchemaBundle: schemaBundle,
+      ...shared
+    } = manifest;
+    const v2 = aflTradeProjectionManifestV2ContentSchema.safeParse({
+      ...shared,
+      schemaVersion: 'afl-trade-projection/v2',
+      projectionSchemaBundle: {
+        schemaVersion: 'afl-trade-projection-schema-bundle/v1',
+        projectionSchemaBundleId: schemaBundle.projectionSchemaBundleId,
+        artifactRef: schemaBundle.artifactRef,
+        responseContractVersion: schemaBundle.responseContractVersion,
+        valuationExportContractVersion: schemaBundle.valuationExportContractVersion,
+      },
+    });
+    if (!v2.success) {
+      for (const issue of v2.error.issues) {
+        context.addIssue({ code: 'custom', path: issue.path, message: issue.message });
+      }
+    }
+    const inventory = manifest.valuationOutputInventoryIndex;
+    if (
+      custody.environment !== manifest.environment ||
+      custody.valuationOutputInventoryIndexId !== inventory.valuationOutputInventoryIndexId ||
+      custody.inventorySetSha256 !== inventory.inventorySetSha256 ||
+      custody.scopeKey !== manifest.scopeKey ||
+      custody.valueUnitId !== manifest.valueUnitId ||
+      custody.entryCount !== manifest.projectionDocumentSet.tradeCount
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['valuationOutputCustodyIndex'],
+        message:
+          'Projection custody index must bind the exact environment, inventory, scope, value unit, and trade set.',
+      });
+    }
+    if (
+      Date.parse(custody.artifactRef.createdAt) >
+        Date.parse(manifest.projectionDocumentSet.artifactRef.createdAt) ||
+      Date.parse(custody.artifactRef.createdAt) > Date.parse(manifest.createdAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['valuationOutputCustodyIndex', 'artifactRef', 'createdAt'],
+        message: 'Projection documents cannot predate completed valuation-output custody.',
+      });
+    }
+  });
+
 function addProjectionContentAddressIssue(
   manifest: { projectionId: string; content: unknown },
   context: z.RefinementCtx
@@ -584,14 +761,24 @@ export const aflTradeProjectionManifestV2Schema = z
   .strict()
   .superRefine(addProjectionContentAddressIssue);
 
+export const aflTradeProjectionManifestV3Schema = z
+  .object({
+    projectionId: aflTradeContentAddressedIdSchema('projection'),
+    content: aflTradeProjectionManifestV3ContentSchema,
+  })
+  .strict()
+  .superRefine(addProjectionContentAddressIssue);
+
 export const aflTradeProjectionManifestContentSchema = z.discriminatedUnion('schemaVersion', [
   aflTradeProjectionManifestV1ContentSchema,
   aflTradeProjectionManifestV2ContentSchema,
+  aflTradeProjectionManifestV3ContentSchema,
 ]);
 
 export const aflTradeProjectionManifestSchema = z.union([
   aflTradeProjectionManifestV1Schema,
   aflTradeProjectionManifestV2Schema,
+  aflTradeProjectionManifestV3Schema,
 ]);
 
 export type AflTradePublicationManifestV2Content = z.infer<
@@ -600,8 +787,12 @@ export type AflTradePublicationManifestV2Content = z.infer<
 export type AflTradePublicationManifestV3Content = z.infer<
   typeof aflTradePublicationManifestV3ContentSchema
 >;
+export type AflTradePublicationManifestV4Content = z.infer<
+  typeof aflTradePublicationManifestV4ContentSchema
+>;
 export type AflTradePublicationManifestV2 = z.infer<typeof aflTradePublicationManifestV2Schema>;
 export type AflTradePublicationManifestV3 = z.infer<typeof aflTradePublicationManifestV3Schema>;
+export type AflTradePublicationManifestV4 = z.infer<typeof aflTradePublicationManifestV4Schema>;
 export type AflTradePublicationManifest = z.infer<typeof aflTradePublicationManifestSchema>;
 
 export type AflTradeProjectionManifestV1Content = z.infer<
@@ -610,16 +801,28 @@ export type AflTradeProjectionManifestV1Content = z.infer<
 export type AflTradeProjectionManifestV2Content = z.infer<
   typeof aflTradeProjectionManifestV2ContentSchema
 >;
+export type AflTradeProjectionManifestV3Content = z.infer<
+  typeof aflTradeProjectionManifestV3ContentSchema
+>;
 export type AflTradeProjectionManifestV1 = z.infer<typeof aflTradeProjectionManifestV1Schema>;
 export type AflTradeProjectionManifestV2 = z.infer<typeof aflTradeProjectionManifestV2Schema>;
+export type AflTradeProjectionManifestV3 = z.infer<typeof aflTradeProjectionManifestV3Schema>;
 export type AflTradeProjectionManifest = z.infer<typeof aflTradeProjectionManifestSchema>;
 
-export const aflTradePublicationProjectionManifestPairSchema = z
-  .object({
-    publicationManifest: aflTradePublicationManifestV3Schema,
-    projectionManifest: aflTradeProjectionManifestV2Schema,
-  })
-  .strict();
+export const aflTradePublicationProjectionManifestPairSchema = z.union([
+  z
+    .object({
+      publicationManifest: aflTradePublicationManifestV3Schema,
+      projectionManifest: aflTradeProjectionManifestV2Schema,
+    })
+    .strict(),
+  z
+    .object({
+      publicationManifest: aflTradePublicationManifestV4Schema,
+      projectionManifest: aflTradeProjectionManifestV3Schema,
+    })
+    .strict(),
+]);
 
 export type AflTradePublicationProjectionManifestPair = z.infer<
   typeof aflTradePublicationProjectionManifestPairSchema
@@ -635,6 +838,7 @@ export const AFL_TRADE_PUBLICATION_PROJECTION_PAIR_ISSUE_CODES = [
   'VALUE_UNIT_MISMATCH',
   'SUPPORTED_VIEW_MISMATCH',
   'INVENTORY_INDEX_MISMATCH',
+  'CUSTODY_INDEX_MISMATCH',
   'FRESHNESS_POLICY_MISMATCH',
   'PRESENTATION_POLICY_MISMATCH',
   'PUBLIC_EVIDENCE_INDEX_PUBLICATION_MISMATCH',
@@ -666,7 +870,8 @@ export interface AflTradePublicationProjectionPairValidation {
 const PAIR_ISSUE_MESSAGES: Readonly<Record<AflTradePublicationProjectionPairIssueCode, string>> =
   Object.freeze({
     INVALID_INPUT: 'The publication-projection pair input is invalid.',
-    UNSUPPORTED_VERSION_PAIR: 'Serving requires publication v3 paired with projection v2.',
+    UNSUPPORTED_VERSION_PAIR:
+      'Serving requires publication v4 with projection v3, or the retained publication v3 with projection v2 pair.',
     PUBLICATION_MISMATCH: 'The projection does not bind the selected publication.',
     ENVIRONMENT_MISMATCH: 'Publication and projection environments do not match.',
     SCOPE_MISMATCH: 'Publication and projection scopes do not match.',
@@ -676,6 +881,8 @@ const PAIR_ISSUE_MESSAGES: Readonly<Record<AflTradePublicationProjectionPairIssu
     SUPPORTED_VIEW_MISMATCH: 'Publication and projection supported views do not match.',
     INVENTORY_INDEX_MISMATCH:
       'Publication and projection do not bind the same detached inventory index.',
+    CUSTODY_INDEX_MISMATCH:
+      'Publication and projection do not bind the same completed valuation-output custody set.',
     FRESHNESS_POLICY_MISMATCH: 'Publication and projection do not bind the same freshness policy.',
     PRESENTATION_POLICY_MISMATCH:
       'Publication and projection do not bind the same presentation policy.',
@@ -771,9 +978,10 @@ export function validateAflTradePublicationProjectionManifestPair(
     if (!genericPublication.success || !genericProjection.success) {
       return singlePairIssue('INVALID_INPUT');
     }
+    const versionPair = `${genericPublication.data.content.schemaVersion}|${genericProjection.data.content.schemaVersion}`;
     if (
-      genericPublication.data.content.schemaVersion !== 'afl-trade-publication/v3' ||
-      genericProjection.data.content.schemaVersion !== 'afl-trade-projection/v2'
+      versionPair !== 'afl-trade-publication/v3|afl-trade-projection/v2' &&
+      versionPair !== 'afl-trade-publication/v4|afl-trade-projection/v3'
     ) {
       return singlePairIssue('UNSUPPORTED_VERSION_PAIR');
     }
@@ -811,6 +1019,16 @@ export function validateAflTradePublicationProjectionManifestPair(
       )
     ) {
       addPairIssue(issues, 'INVENTORY_INDEX_MISMATCH');
+    }
+    if (
+      publicationContent.schemaVersion === 'afl-trade-publication/v4' &&
+      projectionContent.schemaVersion === 'afl-trade-projection/v3' &&
+      !sameCanonicalJson(
+        projectionContent.valuationOutputCustodyIndex,
+        publicationContent.valuationOutputCustodyIndex
+      )
+    ) {
+      addPairIssue(issues, 'CUSTODY_INDEX_MISMATCH');
     }
     if (!sameCanonicalJson(projectionContent.freshnessPolicy, publicationContent.freshnessPolicy)) {
       addPairIssue(issues, 'FRESHNESS_POLICY_MISMATCH');

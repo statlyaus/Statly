@@ -1,6 +1,10 @@
 import 'server-only';
 
 import {
+  projectAflOutcomesDevelopmentWorkbookValues,
+  type AflTradeDevelopmentWorkbookValueProjection,
+} from '@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection';
+import {
   projectAflOutcomesDevelopmentWorkbookAcquisitions,
   type AflOutcomesDevelopmentAcquisitionCategory,
   type AflOutcomesDevelopmentAcquisitionItem,
@@ -70,6 +74,8 @@ interface DevelopmentWorkbookProjectionBundle {
   trades: AflOutcomesDevelopmentTradeProjection;
   acquisitions: AflOutcomesDevelopmentAcquisitionProjection;
   tradeGrades: ReadonlyMap<string, AflOutcomesDevelopmentTradeGradeEvidence>;
+  observedAt: string;
+  statlyValueCache: Map<string, Promise<AflTradeDevelopmentWorkbookValueProjection>>;
 }
 
 const projectionCache = new Map<string, Promise<DevelopmentWorkbookProjectionBundle>>();
@@ -117,11 +123,9 @@ async function loadProjectionBundle(
     return {
       trades,
       acquisitions,
-      tradeGrades: projectAflOutcomesDevelopmentWorkbookTradeGrades(
-        workbook,
-        trades,
-        acquisitions
-      ),
+      tradeGrades: projectAflOutcomesDevelopmentWorkbookTradeGrades(workbook, trades, acquisitions),
+      observedAt: workbook.report.source.observedAt,
+      statlyValueCache: new Map(),
     };
   });
   projectionCache.set(cacheKey, pending);
@@ -215,6 +219,40 @@ export async function getDevelopmentWorkbookTradeGradeEvidence(
 ): Promise<AflOutcomesDevelopmentTradeGradeEvidence | null> {
   if (!isDevelopmentWorkbookDraftTradeReadEnabled(environment)) return null;
   return (await loadProjectionBundle(environment)).tradeGrades.get(tradeId) ?? null;
+}
+
+export async function getDevelopmentWorkbookStatlyTradeValues(
+  tradeIds: readonly string[],
+  environment: DevelopmentWorkbookDraftTradeEnvironment = process.env
+): Promise<AflTradeDevelopmentWorkbookValueProjection | null> {
+  if (!isDevelopmentWorkbookDraftTradeReadEnabled(environment)) return null;
+  const bundle = await loadProjectionBundle(environment);
+  const requestedTradeIds = [...new Set(tradeIds)].filter((tradeId) =>
+    bundle.trades.detailsById.has(tradeId)
+  );
+  if (requestedTradeIds.length > 100) {
+    throw new Error('Development Statly value reads are bounded to 100 trades per request.');
+  }
+  const cacheKey = [...requestedTradeIds].sort().join('\0');
+  const cached = bundle.statlyValueCache.get(cacheKey);
+  if (cached) return cached;
+  const pending = Promise.resolve().then(() =>
+    projectAflOutcomesDevelopmentWorkbookValues({
+      trades: bundle.trades,
+      acquisitions: bundle.acquisitions,
+      providerSeasons: [],
+      createdAt: bundle.observedAt,
+      minimumCohortSize: 20,
+      tradeIds: requestedTradeIds,
+    })
+  );
+  bundle.statlyValueCache.set(cacheKey, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    bundle.statlyValueCache.delete(cacheKey);
+    throw error;
+  }
 }
 
 export function clearDevelopmentWorkbookDraftTradeReadCacheForTests(): void {

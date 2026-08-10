@@ -81,14 +81,14 @@ export default function AflDraftTradeOutcomeMethodologyPage() {
         className="rounded-2xl border border-border bg-muted/35 p-6 sm:p-8"
       >
         <h2 id="source-boundary-heading" className="text-2xl font-bold text-foreground">
-          Workbook, fitzRoy, and database roles
+          Source, fitzRoy, and database roles
         </h2>
         <div className="mt-4 grid gap-5 text-sm leading-7 text-muted-foreground lg:grid-cols-3">
           <div>
-            <h3 className="font-semibold text-foreground">Original workbook</h3>
+            <h3 className="font-semibold text-foreground">Transaction and draft sources</h3>
             <p className="mt-1">
-              Immutable import evidence and an audit/export format. It is never read by public page
-              requests and its player names are not canonical identity.
+              Captured Draftguru, Footywire and official AFL pages provide source-native claims.
+              Every response is retained immutably and reconciled field by field before publication.
             </p>
           </div>
           <div>

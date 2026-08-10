@@ -11,7 +11,7 @@ describe('GET /api/draft-trades/methodology', () => {
     expect(body.success).toBe(true);
     expect(body.data).toMatchObject({
       availability: 'unavailable',
-      reasonCode: 'source-approval-required',
+      reasonCode: 'no-active-publication',
       methodologyHref: '/draft/trades/methodology',
       methodology: null,
       consistency: {
@@ -25,7 +25,7 @@ describe('GET /api/draft-trades/methodology', () => {
         freshness: 'unavailable',
       },
       nextAction: {
-        kind: 'await_source_approval',
+        kind: 'await_calculation',
         href: '/draft/trades/methodology',
         expectedAfter: null,
       },

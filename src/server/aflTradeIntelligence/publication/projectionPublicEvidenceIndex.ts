@@ -19,8 +19,10 @@ import {
 } from '../artifacts/contentAddress';
 import {
   aflTradePublicationManifestV3Schema,
+  aflTradePublicationManifestV4Schema,
   aflTradeValuationOutputInventoryIndexBindingSchema,
   type AflTradePublicationManifestV3,
+  type AflTradePublicationManifestV4,
 } from '../artifacts/publicationProjectionManifests';
 import {
   AFL_TRADE_VALUATION_OUTPUT_INVENTORY_INDEX_MAX_ENTRIES,
@@ -89,10 +91,15 @@ const evidenceInputsSchema = z
   .array(aflTradeProjectionPublicEvidenceIndexEvidenceInputSchema)
   .min(1)
   .max(AFL_TRADE_PROJECTION_PUBLIC_EVIDENCE_INDEX_MAX_ENTRIES);
+const publicationManifestSchema = z.union([
+  aflTradePublicationManifestV3Schema,
+  aflTradePublicationManifestV4Schema,
+]);
+type PublicationManifest = AflTradePublicationManifestV3 | AflTradePublicationManifestV4;
 
 export const aflTradeProjectionPublicEvidenceIndexCreateInputSchema = z
   .object({
-    publicationManifest: aflTradePublicationManifestV3Schema,
+    publicationManifest: publicationManifestSchema,
     publicationManifestArtifactRef: canonicalJsonArtifactRefSchema,
     valuationOutputInventoryIndex: aflTradeValuationOutputInventoryIndexSchema,
     valuationOutputInventoryIndexArtifactRef: canonicalJsonArtifactRefSchema,
@@ -122,7 +129,7 @@ export type AflTradeProjectionPublicEvidenceIndexCreateInput = z.infer<
 
 const publicationBindingSchema = z
   .object({
-    schemaVersion: z.literal('afl-trade-publication/v3'),
+    schemaVersion: z.enum(['afl-trade-publication/v3', 'afl-trade-publication/v4']),
     publicationId: aflTradeContentAddressedIdSchema('publication'),
     artifactRef: canonicalJsonArtifactRefSchema,
   })
@@ -402,7 +409,7 @@ export type AflTradeProjectionPublicEvidenceIndexResult = z.infer<
 
 export const aflTradeProjectionPublicEvidenceIndexVerifyInputSchema = z
   .object({
-    publicationManifest: aflTradePublicationManifestV3Schema,
+    publicationManifest: publicationManifestSchema,
     publicationManifestArtifactRef: canonicalJsonArtifactRefSchema,
     valuationOutputInventoryIndex: aflTradeValuationOutputInventoryIndexSchema,
     valuationOutputInventoryIndexArtifactRef: canonicalJsonArtifactRefSchema,
@@ -605,7 +612,7 @@ function expectedInventoryIndexBinding(
 }
 
 function assertParentBindings(
-  publication: AflTradePublicationManifestV3,
+  publication: PublicationManifest,
   publicationRef: AflTradeArtifactRef,
   inventoryIndex: AflTradeValuationOutputInventoryIndex,
   inventoryIndexRef: AflTradeArtifactRef,
@@ -667,7 +674,7 @@ interface InventoryBinding {
 }
 
 function assertInventoryBindings(
-  publication: AflTradePublicationManifestV3,
+  publication: PublicationManifest,
   inventoryIndex: AflTradeValuationOutputInventoryIndex,
   inventoryBindings: readonly InventoryBinding[]
 ): Map<string, InventoryBinding> {
@@ -734,7 +741,7 @@ function assertInventoryBindings(
 function assertEvidenceBinding(
   evidence: AflTradeProjectionPublicEvidence,
   evidenceRef: AflTradeArtifactRef,
-  publication: AflTradePublicationManifestV3,
+  publication: PublicationManifest,
   publicationRef: AflTradeArtifactRef,
   inventoryIndex: AflTradeValuationOutputInventoryIndex,
   inventoryIndexRef: AflTradeArtifactRef,
@@ -799,7 +806,7 @@ function assertEvidenceBinding(
 }
 
 function createEntries(
-  publication: AflTradePublicationManifestV3,
+  publication: PublicationManifest,
   publicationRef: AflTradeArtifactRef,
   inventoryIndex: AflTradeValuationOutputInventoryIndex,
   inventoryIndexRef: AflTradeArtifactRef,
@@ -872,7 +879,7 @@ export function createAflTradeProjectionPublicEvidenceIndex(
       'INVALID_MATERIALIZED_AT'
     );
     const publication = parseOrThrow(
-      aflTradePublicationManifestV3Schema,
+      publicationManifestSchema,
       snapshot.publicationManifest,
       'INVALID_PUBLICATION_MANIFEST'
     );

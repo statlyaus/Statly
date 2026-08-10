@@ -3,7 +3,7 @@ import {
   type AflTradeValueProjectionRepository,
 } from './valueReadService';
 
-export const AFL_TRADE_PUBLIC_VALUE_SCOPE = 'public-afl-trades-current' as const;
+export { AFL_TRADE_PUBLIC_VALUE_SCOPE } from './publicationReadContracts';
 
 const unavailableProjectionRepository: AflTradeValueProjectionRepository = {
   async list() {
@@ -21,7 +21,11 @@ const unavailableProjectionRepository: AflTradeValueProjectionRepository = {
 export const aflTradePrePublicationValueReadService = createAflTradeValueReadService({
   publicationSelector: {
     async capture() {
-      return { registryRevision: 0, selection: null };
+      return {
+        registryRevision: 0,
+        selection: null,
+        unavailabilityReason: 'no_active_publication',
+      };
     },
   },
   projectionRepository: unavailableProjectionRepository,

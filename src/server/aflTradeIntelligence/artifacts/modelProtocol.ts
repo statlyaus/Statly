@@ -2,7 +2,12 @@ import { z } from 'zod';
 
 import { AFL_TRADE_DECISION_ENVIRONMENTS } from '../governance/gateDecisionTypes';
 import { aflTradeArtifactRefSchema } from './artifactReference';
-import { addAflTradeContentAddressIssue, aflTradeContentAddressedIdSchema } from './contentAddress';
+import {
+  addAflTradeContentAddressIssue,
+  aflTradeContentAddressedIdSchema,
+  createAflTradeContentAddress,
+} from './contentAddress';
+import { AFL_TRADE_VALUATION_DATASET_ADMISSION_SCHEMA_VERSION } from './valuationDatasetAdmissionContracts';
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const boundedTextSchema = z.string().trim().min(1).max(1000);
@@ -30,6 +35,9 @@ export const AFL_TRADE_PICK_MODEL_SUBGROUPS = [
   'age_at_draft',
   'evidence_quality',
 ] as const;
+
+export const AFL_TRADE_PLAYER_MODEL_PROTOCOL_SCHEMA_VERSION_V2 =
+  'afl-trade-model-protocol/v2' as const;
 
 const temporalWindowSchema = z
   .object({ from: isoDateTimeSchema, to: isoDateTimeSchema })
@@ -172,9 +180,7 @@ export const aflTradePlayerContributionModelProtocolContentSchema = z
     const subgroupDimensions = protocol.validationPlan.subgroupDimensions;
     if (
       new Set(subgroupDimensions).size !== subgroupDimensions.length ||
-      AFL_TRADE_PLAYER_MODEL_SUBGROUPS.some(
-        (dimension) => !subgroupDimensions.includes(dimension)
-      )
+      AFL_TRADE_PLAYER_MODEL_SUBGROUPS.some((dimension) => !subgroupDimensions.includes(dimension))
     ) {
       context.addIssue({
         code: 'custom',
@@ -201,9 +207,102 @@ export const aflTradePlayerContributionModelProtocolSchema = z
     );
   });
 
+const admittedDatasetBindingSchema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_VALUATION_DATASET_ADMISSION_SCHEMA_VERSION),
+    admissionId: aflTradeContentAddressedIdSchema('dataset-admission'),
+    admittedAt: isoDateTimeSchema,
+  })
+  .strict();
+
+export const aflTradePlayerContributionModelProtocolV2ContentSchema = z
+  .object({
+    ...aflTradePlayerContributionModelProtocolContentSchema.shape,
+    schemaVersion: z.literal(AFL_TRADE_PLAYER_MODEL_PROTOCOL_SCHEMA_VERSION_V2),
+    datasetAdmission: admittedDatasetBindingSchema,
+    observationGrain: z.literal('player_acquisition_spell_prediction'),
+    sourceOutcomeVector: z.tuple([
+      z.literal('brownlow_votes'),
+      z.literal('coaches_votes'),
+      z.literal('games'),
+      z.literal('goals'),
+    ]),
+    scalarValueTransformArtifact: aflTradeArtifactRefSchema,
+    scalarValueDerivation: z.literal('requires_separately_governed_value_unit_transform'),
+  })
+  .strict()
+  .superRefine((protocol, context) => {
+    const {
+      datasetAdmission: _datasetAdmission,
+      observationGrain: _observationGrain,
+      sourceOutcomeVector: _sourceOutcomeVector,
+      scalarValueTransformArtifact: _scalarValueTransformArtifact,
+      scalarValueDerivation: _scalarValueDerivation,
+      ...legacyContent
+    } = protocol;
+    const legacyResult = aflTradePlayerContributionModelProtocolContentSchema.safeParse({
+      ...legacyContent,
+      schemaVersion: 'afl-trade-model-protocol/v1',
+    });
+    if (!legacyResult.success) {
+      for (const issue of legacyResult.error.issues) {
+        context.addIssue({ code: 'custom', path: issue.path, message: issue.message });
+      }
+    }
+    if (Date.parse(protocol.preparedAt) < Date.parse(protocol.datasetAdmission.admittedAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['preparedAt'],
+        message: 'An admitted model protocol cannot predate its dataset admission.',
+      });
+    }
+  });
+
+export const aflTradePlayerContributionModelProtocolV2Schema = z
+  .object({
+    protocolId: aflTradeContentAddressedIdSchema('model-protocol'),
+    content: aflTradePlayerContributionModelProtocolV2ContentSchema,
+  })
+  .strict()
+  .superRefine((protocol, context) => {
+    addAflTradeContentAddressIssue(
+      'model-protocol',
+      protocol.protocolId,
+      protocol.content,
+      context,
+      ['protocolId']
+    );
+  });
+
+export const aflTradeAnyPlayerContributionModelProtocolSchema = z.union([
+  aflTradePlayerContributionModelProtocolSchema,
+  aflTradePlayerContributionModelProtocolV2Schema,
+]);
+
 export type AflTradePlayerContributionModelProtocol = z.infer<
   typeof aflTradePlayerContributionModelProtocolSchema
 >;
+export type AflTradePlayerContributionModelProtocolV2 = z.infer<
+  typeof aflTradePlayerContributionModelProtocolV2Schema
+>;
+
+export function createAflTradePlayerContributionModelProtocolV2(
+  input: Omit<
+    z.input<typeof aflTradePlayerContributionModelProtocolV2ContentSchema>,
+    'observationGrain' | 'sourceOutcomeVector' | 'scalarValueDerivation'
+  >
+): AflTradePlayerContributionModelProtocolV2 {
+  const content = aflTradePlayerContributionModelProtocolV2ContentSchema.parse({
+    ...input,
+    observationGrain: 'player_acquisition_spell_prediction',
+    sourceOutcomeVector: ['brownlow_votes', 'coaches_votes', 'games', 'goals'],
+    scalarValueDerivation: 'requires_separately_governed_value_unit_transform',
+  });
+  return aflTradePlayerContributionModelProtocolV2Schema.parse({
+    protocolId: createAflTradeContentAddress('model-protocol', content),
+    content,
+  });
+}
 
 export const aflTradePickDistributionModelProtocolContentSchema = z
   .object({
@@ -216,9 +315,7 @@ export const aflTradePickDistributionModelProtocolContentSchema = z
     preparedAt: isoDateTimeSchema,
     preparedBy: publicIdSchema,
     proposalOrigin: z.enum(['human_authored', 'agent_assisted']),
-    publicAssetBoundary: z.literal(
-      'source_native_afl_draft_entitlement_no_fantasy_ownership'
-    ),
+    publicAssetBoundary: z.literal('source_native_afl_draft_entitlement_no_fantasy_ownership'),
     estimands: z
       .array(z.enum(['draft_pick_outcome_distribution', 'future_pick_landing_distribution']))
       .length(2),
@@ -318,9 +415,7 @@ export const aflTradePickDistributionModelProtocolContentSchema = z
     const subgroupDimensions = protocol.validationPlan.subgroupDimensions;
     if (
       new Set(subgroupDimensions).size !== subgroupDimensions.length ||
-      AFL_TRADE_PICK_MODEL_SUBGROUPS.some(
-        (dimension) => !subgroupDimensions.includes(dimension)
-      )
+      AFL_TRADE_PICK_MODEL_SUBGROUPS.some((dimension) => !subgroupDimensions.includes(dimension))
     ) {
       context.addIssue({
         code: 'custom',
@@ -353,6 +448,7 @@ export type AflTradePickDistributionModelProtocol = z.infer<
 
 export const aflTradeModelProtocolSchema = z.union([
   aflTradePlayerContributionModelProtocolSchema,
+  aflTradePlayerContributionModelProtocolV2Schema,
   aflTradePickDistributionModelProtocolSchema,
 ]);
 

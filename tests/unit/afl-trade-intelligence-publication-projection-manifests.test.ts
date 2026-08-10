@@ -335,7 +335,7 @@ describe('AFL trade publication and projection manifests', () => {
     ]) {
       const result = invalidPairIssue(pair, 'UNSUPPORTED_VERSION_PAIR');
       expect(result.issues[0].message).toBe(
-        'Serving requires publication v3 paired with projection v2.'
+        'Serving requires publication v4 with projection v3, or the retained publication v3 with projection v2 pair.'
       );
     }
   });
@@ -1006,6 +1006,7 @@ describe('AFL trade publication and projection manifests', () => {
       'VALUE_UNIT_MISMATCH',
       'SUPPORTED_VIEW_MISMATCH',
       'INVENTORY_INDEX_MISMATCH',
+      'CUSTODY_INDEX_MISMATCH',
       'FRESHNESS_POLICY_MISMATCH',
       'PRESENTATION_POLICY_MISMATCH',
       'PUBLIC_EVIDENCE_INDEX_PUBLICATION_MISMATCH',

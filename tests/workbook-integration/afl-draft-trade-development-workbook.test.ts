@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { evaluateAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookEvaluation';
@@ -6,6 +8,8 @@ import { loadAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligenc
 import type { AflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookStructure';
 import { projectAflOutcomesDevelopmentWorkbookTradeGrades } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeOutcomeProjection';
 import { projectAflOutcomesDevelopmentWorkbookTrades } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeProjection';
+import { parseAflTradeWorkbookForStaging } from '@/server/aflTradeIntelligence/source/workbookStagingParser';
+import type { AflTradeWorkbookStagingPackage } from '@/server/aflTradeIntelligence/source/workbookImportContracts';
 
 const workbookPath = process.env.AFL_OUTCOMES_DEV_WORKBOOK_PATH;
 const expectedSha256 = process.env.AFL_OUTCOMES_DEV_WORKBOOK_SHA256;
@@ -16,12 +20,18 @@ if (!workbookPath || !expectedSha256) {
 }
 
 let workbook: AflOutcomesDevelopmentWorkbook;
+let staging: AflTradeWorkbookStagingPackage;
 
 beforeAll(async () => {
   workbook = await loadAflOutcomesDevelopmentWorkbook({
     workbookPath,
     expectedSha256,
     runtimeEnvironment: 'development',
+  });
+  staging = await parseAflTradeWorkbookForStaging({
+    bytes: await readFile(workbookPath),
+    sourceArtifact: workbook.sourceArtifact,
+    originalFilename: workbook.report.source.originalFilename,
   });
 });
 
@@ -92,12 +102,8 @@ describe('AFL Draft and Trade development workbook', () => {
     const evidence = Array.from(tradeGrades.values());
 
     expect(tradeGrades.size).toBe(975);
-    expect(
-      evidence.reduce((total, trade) => total + trade.coverage.gradedAssets, 0)
-    ).toBe(1344);
-    expect(
-      evidence.reduce((total, trade) => total + trade.coverage.matchedAssets, 0)
-    ).toBe(1344);
+    expect(evidence.reduce((total, trade) => total + trade.coverage.gradedAssets, 0)).toBe(1344);
+    expect(evidence.reduce((total, trade) => total + trade.coverage.matchedAssets, 0)).toBe(1344);
     expect(
       evidence.reduce((total, trade) => total + trade.coverage.matchedWithoutGradeAssets, 0)
     ).toBe(0);
@@ -139,5 +145,66 @@ describe('AFL Draft and Trade development workbook', () => {
         evaluation.totalRecords
       );
     }
+  });
+
+  it('builds the exact immutable year-partitioned staging package', () => {
+    expect(staging.sourceArtifact).toEqual(workbook.sourceArtifact);
+    expect(staging.publicationEligible).toBe(false);
+    expect(staging.partitions).toHaveLength(64);
+    expect(staging.counts).toEqual({
+      sheets: 29,
+      physicalRows: 7250,
+      physicalCells: 71674,
+      hyperlinks: 1055,
+      annualSheets: 26,
+      annualAcquisitions: 4139,
+      tradeTransactions: 975,
+      tradeParties: 1987,
+      supplementaryRows: 84,
+      quarantinedRows: 0,
+      blockingIssues: 0,
+      reviewIssues: 9901,
+      acquisitionMechanisms: {
+        national_draft: 1813,
+        rookie_draft: 1019,
+        midseason_draft: 102,
+        preseason_draft: 103,
+        mini_draft: 4,
+        trade: 642,
+        free_agency: 138,
+        pre_draft: 129,
+        post_draft: 188,
+        training_squad: 1,
+      },
+    });
+    const tradePartitions = staging.partitions.filter(
+      ({ importKind }) => importKind === 'workbook_trade_ledger'
+    );
+    expect(tradePartitions).toHaveLength(38);
+    expect(tradePartitions.every(({ rows }) => rows[0]?.recordKind === 'trade_ledger_title')).toBe(
+      true
+    );
+    expect(staging.rawAuthority).toBe('immutable_xlsx_artifact');
+    expect(staging.interpretedCellSemantics).toBe('cooked_observable_values');
+    expect(staging.rawEvidence.sheets.map(({ sheet }) => sheet)).toEqual(
+      staging.sheetInventory.map(({ sheet }) => sheet)
+    );
+    expect(
+      staging.rawEvidence.sheets
+        .flatMap(({ hyperlinks }) => hyperlinks)
+        .some(({ target }) => target?.includes('draftguru.com.au'))
+    ).toBe(true);
+
+    const partyCountsByTransaction = new Map<string, number>();
+    for (const row of staging.rows) {
+      if (row.recordKind !== 'trade_party' || row.sourceGroupId === null) continue;
+      partyCountsByTransaction.set(
+        row.sourceGroupId,
+        (partyCountsByTransaction.get(row.sourceGroupId) ?? 0) + 1
+      );
+    }
+    expect([...partyCountsByTransaction.values()].filter((count) => count === 2)).toHaveLength(944);
+    expect([...partyCountsByTransaction.values()].filter((count) => count === 3)).toHaveLength(25);
+    expect([...partyCountsByTransaction.values()].filter((count) => count === 4)).toHaveLength(6);
   });
 });

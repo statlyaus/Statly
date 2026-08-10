@@ -21,25 +21,25 @@ function collectObjectKeys(value: unknown, keys = new Set<string>()): Set<string
 }
 
 describe('AFL trade pre-publication availability', () => {
-  it('returns the exact schema-validated source blocker for the current view', () => {
+  it('returns the exact schema-validated no-publication state for the current view', () => {
     const availability = createAflTradePrePublicationAvailability();
 
     expect(aflTradeValueUnavailableSchema.parse(availability)).toEqual(availability);
     expect(availability).toMatchObject({
-      availability: 'source_blocked',
+      availability: 'not_calculated',
       view: 'current',
       modelVintage: null,
       temporalContext: null,
-      reasonCode: 'valuation-source-use-not-approved',
+      reasonCode: 'no-active-publication',
       methodologyHref: AFL_TRADE_METHODOLOGY_HREF,
       nextAction: {
-        kind: 'view_methodology',
+        kind: 'await_calculation',
         href: AFL_TRADE_METHODOLOGY_HREF,
         expectedAfter: null,
       },
       warnings: [],
     });
-    expect(availability.message).toContain('historical archive remains available');
+    expect(availability.message).toContain('no active numerical publication');
   });
 
   it('contains no numerical, publication, or fantasy ownership payload', () => {
@@ -86,6 +86,14 @@ describe('AFL trade pre-publication availability', () => {
     expect(publicCopy).not.toMatch(
       /approved model|calculating|coming soon|estimated winner|fair trade|release date|scheduled/i
     );
-    expect(availability.nextAction?.kind).not.toBe('await_calculation');
+    expect(availability.nextAction?.kind).toBe('await_calculation');
+  });
+
+  it('uses source blocked only for an explicit current authority failure', () => {
+    expect(createAflTradePrePublicationAvailability('current', 'source_blocked')).toMatchObject({
+      availability: 'source_blocked',
+      reasonCode: 'valuation-source-authority-not-current',
+      nextAction: { kind: 'view_methodology' },
+    });
   });
 });

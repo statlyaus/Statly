@@ -38,6 +38,7 @@ const AFL_TRADE_GATE0A_BLOCKER_CODES = [
   'competition_not_permitted',
   'season_not_permitted',
   'access_not_permitted',
+  'capability_not_permitted',
   'geography_not_permitted',
   'commercial_context_not_permitted',
   'audience_not_permitted',
@@ -59,6 +60,7 @@ export const aflTradeGate0AReceiptRequestSchema = z
     competition: publicIdSchema,
     season: z.number().int().min(1897).max(2200),
     accessMechanism: z.enum(['manual_review', 'provider_export', 'provider_api', 'automated_web']),
+    capabilityId: publicIdSchema.nullable(),
     geography: boundedTextSchema,
     commercialContext: boundedTextSchema,
     audience: boundedTextSchema,
@@ -81,7 +83,7 @@ export const aflTradeGate0AReceiptRequestSchema = z
 
 export const aflTradeGate0AReceiptContentSchema = z
   .object({
-    schemaVersion: z.literal('afl-trade-gate0a-evaluation/v1'),
+    schemaVersion: z.literal('afl-trade-gate0a-evaluation/v2'),
     request: aflTradeGate0AReceiptRequestSchema,
     result: z
       .object({
@@ -160,7 +162,7 @@ export function createAflTradeGate0AReceipt(
   const request = aflTradeGate0AReceiptRequestSchema.parse(unparsedRequest);
   const result = evaluateAflTradeGate0A(ledger, rights, request);
   const content = aflTradeGate0AReceiptContentSchema.parse({
-    schemaVersion: 'afl-trade-gate0a-evaluation/v1',
+    schemaVersion: 'afl-trade-gate0a-evaluation/v2',
     request,
     result,
     recordedAt,

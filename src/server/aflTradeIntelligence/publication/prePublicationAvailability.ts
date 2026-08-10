@@ -5,26 +5,26 @@ import {
   type AflTradeValueUnavailable,
 } from '@/types/aflTradeIntelligence';
 
-/**
- * Fail-closed public state before valuation source use and publication are approved.
- *
- * This is a temporary pre-publication boundary, not a fallback for a failed WP6 read service. Once
- * an approved publication can be selected, the owning read service must return its exact state.
- */
+export type AflTradeNoPublicationReason = 'no_active_publication' | 'source_blocked';
+
+/** Fail-closed public state when no exact governed valuation publication can be selected. */
 export function createAflTradePrePublicationAvailability(
-  view: AflTradeValuationView = 'current'
+  view: AflTradeValuationView = 'current',
+  reason: AflTradeNoPublicationReason = 'no_active_publication'
 ): AflTradeValueUnavailable {
+  const blocked = reason === 'source_blocked';
   return aflTradeValueUnavailableSchema.parse({
-    availability: 'source_blocked',
+    availability: blocked ? 'source_blocked' : 'not_calculated',
     view,
     modelVintage: null,
     temporalContext: null,
-    reasonCode: 'valuation-source-use-not-approved',
-    message:
-      'Statly cannot calculate this trade-value view because the additional evidence required for valuation has not been approved for that use. The historical archive remains available.',
+    reasonCode: blocked ? 'valuation-source-authority-not-current' : 'no-active-publication',
+    message: blocked
+      ? 'The active trade-value publication is unavailable because its exact source authority is no longer current.'
+      : 'There is no active numerical publication for this trade-value view yet. Approved evidence remains separate from a reviewed calculation and release.',
     nextAction: {
-      kind: 'view_methodology',
-      label: 'Read methodology and current limits',
+      kind: blocked ? 'view_methodology' : 'await_calculation',
+      label: blocked ? 'Read methodology and current limits' : 'Await reviewed calculation',
       href: AFL_TRADE_METHODOLOGY_HREF,
       expectedAfter: null,
     },

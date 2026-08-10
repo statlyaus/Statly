@@ -17,7 +17,7 @@ const unavailableOutcomeRepository: AflDraftTradeOutcomeRepository = {
 export const aflDraftTradePrePublicationOutcomeReadService = createAflDraftTradeOutcomeReadService({
   releaseSelector: {
     async capture() {
-      return { registryRevision: 0, selection: null };
+      return { registryRevision: 0, selection: null, unavailabilityReason: 'no_active_release' };
     },
   },
   repository: unavailableOutcomeRepository,

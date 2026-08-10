@@ -16,10 +16,15 @@ import {
   AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_RESPONSE_CONTRACT_VERSION,
   AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_RUNTIME_FALLBACK,
   AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION,
+  AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_DESCRIPTORS,
+  AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PROJECTION_MANIFEST_SCHEMA_VERSION,
+  AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PUBLICATION_MANIFEST_SCHEMA_VERSION,
+  AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_SCHEMA_VERSION,
   AflTradeProjectionSchemaBundleConstructionError,
   aflTradeProjectionSchemaBundleContentSchema,
   aflTradeProjectionSchemaBundleResultSchema,
   createAflTradeProjectionSchemaBundle,
+  createAflTradeProjectionSchemaBundleV2,
   isAflTradeProjectionSchemaBundleConstructionError,
   verifyAflTradeProjectionSchemaBundleDerivation,
   type AflTradeProjectionSchemaBundleConstructionErrorCode,
@@ -80,6 +85,54 @@ function collectKeys(value: unknown, keys = new Set<string>(), seen = new WeakSe
 }
 
 describe('AFL trade-intelligence projection schema bundle', () => {
+  it('adds a v2 bundle for publication v4 and projection v3 without changing v1', () => {
+    const legacy = createBundle();
+    const current = createAflTradeProjectionSchemaBundleV2({ createdAt });
+
+    expect(legacy.projectionSchemaBundle.content.schemaVersion).toBe(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION
+    );
+    expect(
+      legacy.projectionSchemaBundle.content.descriptors.find(
+        ({ role }) => role === 'publication_manifest'
+      )?.version
+    ).toBe('afl-trade-publication/v3');
+    expect(legacy.projectionSchemaBundle.content.projectionManifestSchemaVersion).toBe(
+      'afl-trade-projection/v2'
+    );
+    expect(current.projectionSchemaBundle.content).toMatchObject({
+      schemaVersion: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_SCHEMA_VERSION,
+      publicationManifestSchemaVersion:
+        AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PUBLICATION_MANIFEST_SCHEMA_VERSION,
+      projectionManifestSchemaVersion:
+        AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PROJECTION_MANIFEST_SCHEMA_VERSION,
+      predecessorPolicy: {
+        predecessorSchemaVersion: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION,
+        compatibility: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PREDECESSOR_COMPATIBILITY,
+        runtimeFallback: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_RUNTIME_FALLBACK,
+      },
+    });
+    expect(
+      current.projectionSchemaBundle.content.descriptors.map(({ role, version }) => [role, version])
+    ).toEqual(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_DESCRIPTORS.map(({ role, version }) => [role, version])
+    );
+    expect(
+      current.projectionSchemaBundle.content.descriptors.find(
+        ({ role }) => role === 'publication_manifest'
+      )?.version
+    ).toBe('afl-trade-publication/v4');
+    expect(
+      current.projectionSchemaBundle.content.descriptors.find(
+        ({ role }) => role === 'projection_manifest'
+      )?.version
+    ).toBe('afl-trade-projection/v3');
+    expect(current.projectionSchemaBundle.projectionSchemaBundleId).not.toBe(
+      legacy.projectionSchemaBundle.projectionSchemaBundleId
+    );
+    expect(isDeeplyFrozen(current)).toBe(true);
+  });
+
   it('declares all nineteen frozen release-DAG descriptors in governed topological order', () => {
     const output = createBundle();
     const expected = [

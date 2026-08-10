@@ -10,6 +10,7 @@ export * from './sourceSnapshotManifest';
 export * from './coverageReport';
 export * from './corpusManifest';
 export * from './datasetManifest';
+export * from './valuationDatasetAdmissionContracts';
 export * from './evidenceManifest';
 export * from './manifestProvenance';
 export * from './modelProtocol';

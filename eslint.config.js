@@ -51,6 +51,7 @@ export default [
       '.vibe/**',
       '**/.vibe/**',
       '**/build/**',
+      'src/generated/aflTradeOutcomesPrisma/**',
       '**/coverage/**',
       '**/playwright-report/**',
       '**/test-results/**',

@@ -16,8 +16,14 @@ import {
 } from '../artifacts/contentAddress';
 import {
   aflTradeProjectionManifestV2Schema,
+  aflTradeProjectionManifestV3Schema,
   type AflTradeProjectionManifestV2,
+  type AflTradeProjectionManifestV3,
 } from '../artifacts/publicationProjectionManifests';
+import {
+  aflTradeValuationOutputCustodyIndexVerificationSchema,
+  verifyAflTradeValuationOutputCustodyIndex,
+} from '../valuation/valuationOutputCustodyIndex';
 import {
   aflTradeFreshnessPolicyResultSchema,
   verifyAflTradeFreshnessPolicy,
@@ -92,9 +98,44 @@ export const aflTradeProjectionManifestMaterializationResultSchema = z
     }
   });
 
+export const aflTradeCustodiedProjectionManifestMaterializationResultSchema = z
+  .object({
+    projectionManifest: aflTradeProjectionManifestV3Schema,
+    projectionManifestArtifactRef: canonicalJsonArtifactRefSchema,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    const reference = result.projectionManifestArtifactRef;
+    if (
+      !doesAflTradeArtifactRefMatchCanonicalJson(reference, result.projectionManifest) ||
+      reference.createdAt !== result.projectionManifest.content.createdAt ||
+      reference.byteLength < 1 ||
+      reference.byteLength > AFL_TRADE_PROJECTION_MANIFEST_MATERIALIZATION_MAX_ARTIFACT_BYTES
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['projectionManifestArtifactRef'],
+        message: 'Custodied projection-manifest artifact must authenticate exact bounded bytes.',
+      });
+    }
+  });
+
 export type AflTradeProjectionManifestMaterializationResult = z.infer<
   typeof aflTradeProjectionManifestMaterializationResultSchema
 >;
+export type AflTradeCustodiedProjectionManifestMaterializationResult = z.infer<
+  typeof aflTradeCustodiedProjectionManifestMaterializationResultSchema
+>;
+
+export const aflTradeCustodiedProjectionManifestMaterializationCreateInputSchema =
+  aflTradeProjectionManifestMaterializationCreateInputSchema.safeExtend({
+    custodyIndexVerification: aflTradeValuationOutputCustodyIndexVerificationSchema,
+  });
+
+export const aflTradeCustodiedProjectionManifestMaterializationVerifyInputSchema =
+  aflTradeCustodiedProjectionManifestMaterializationCreateInputSchema.safeExtend({
+    output: aflTradeCustodiedProjectionManifestMaterializationResultSchema,
+  });
 
 export const aflTradeProjectionManifestMaterializationVerifyInputSchema =
   aflTradeProjectionManifestMaterializationCreateInputSchema.safeExtend({
@@ -104,6 +145,9 @@ export const aflTradeProjectionManifestMaterializationVerifyInputSchema =
 export type AflTradeProjectionManifestMaterializationVerifyInput = z.infer<
   typeof aflTradeProjectionManifestMaterializationVerifyInputSchema
 >;
+export type AflTradeCustodiedProjectionManifestMaterializationVerifyInput = z.infer<
+  typeof aflTradeCustodiedProjectionManifestMaterializationVerifyInputSchema
+>;
 
 export const AFL_TRADE_PROJECTION_MANIFEST_MATERIALIZATION_ERROR_CODES = Object.freeze([
   'INVALID_INPUT_ENVELOPE',
@@ -112,6 +156,7 @@ export const AFL_TRADE_PROJECTION_MANIFEST_MATERIALIZATION_ERROR_CODES = Object.
   'INVALID_PROJECTION_PARITY_VERIFICATION',
   'PARITY_NOT_PASSED',
   'FRESHNESS_BINDING_MISMATCH',
+  'INVALID_CUSTODY_INDEX_VERIFICATION',
   'PROJECTION_CHAIN_MISMATCH',
   'ARTIFACT_SIZE_LIMIT_EXCEEDED',
   'INTERNAL_ARTIFACT_CONTRACT_VIOLATION',
@@ -132,6 +177,8 @@ const ERROR_MESSAGES: Readonly<Record<AflTradeProjectionManifestMaterializationE
       'Projection-manifest materialization requires complete passing document parity.',
     FRESHNESS_BINDING_MISMATCH:
       'The freshness-policy result does not equal the publication freshness binding.',
+    INVALID_CUSTODY_INDEX_VERIFICATION:
+      'The valuation-output custody index is invalid or does not replay exactly.',
     PROJECTION_CHAIN_MISMATCH:
       'The verified projection artifacts do not form one exact publication chain.',
     ARTIFACT_SIZE_LIMIT_EXCEEDED: 'The projection manifest exceeds its 256 KiB artifact limit.',
@@ -217,9 +264,27 @@ function authenticateFreshnessPolicy(value: unknown): AflTradeFreshnessPolicyRes
   return freshness;
 }
 
+type CustodyIndexVerification = z.infer<
+  typeof aflTradeValuationOutputCustodyIndexVerificationSchema
+>;
+
+function authenticateCustodyIndex(value: unknown): CustodyIndexVerification {
+  const custody = parseOrThrow(
+    aflTradeValuationOutputCustodyIndexVerificationSchema,
+    value,
+    'INVALID_CUSTODY_INDEX_VERIFICATION'
+  );
+  if (!verifyAflTradeValuationOutputCustodyIndex(custody)) {
+    throw materializationError('INVALID_CUSTODY_INDEX_VERIFICATION');
+  }
+  return custody;
+}
+
 function assertPassingExactChain(
   parityVerification: AflTradeProjectionParityVerifyInput,
-  freshness: AflTradeFreshnessPolicyResult
+  freshness: AflTradeFreshnessPolicyResult,
+  generation: 'legacy' | 'custodied',
+  custodyVerification?: CustodyIndexVerification
 ): void {
   const report = parityVerification.output.projectionParityReport.content;
   const documentSetResult = parityVerification.projectionDocumentSetVerification.output;
@@ -291,7 +356,12 @@ function assertPassingExactChain(
   };
 
   if (
-    publication.content.schemaVersion !== 'afl-trade-publication/v3' ||
+    (generation === 'legacy' &&
+      (publication.content.schemaVersion !== 'afl-trade-publication/v3' ||
+        schemaContent.schemaVersion !== 'afl-trade-projection-schema-bundle/v1')) ||
+    (generation === 'custodied' &&
+      (publication.content.schemaVersion !== 'afl-trade-publication/v4' ||
+        schemaContent.schemaVersion !== 'afl-trade-projection-schema-bundle/v2')) ||
     !sameCanonicalJson(policyBinding, publication.content.projectionPresentationPolicy) ||
     !sameCanonicalJson(report.presentationPolicy, {
       schemaVersion: policyContent.schemaVersion,
@@ -343,12 +413,41 @@ function assertPassingExactChain(
   ) {
     throw materializationError('PROJECTION_CHAIN_MISMATCH');
   }
+  if (generation === 'custodied') {
+    if (custodyVerification === undefined) {
+      throw materializationError('INVALID_CUSTODY_INDEX_VERIFICATION');
+    }
+    const custodyResult = custodyVerification.output;
+    const custody = custodyResult.valuationOutputCustodyIndex.content;
+    const binding = {
+      schemaVersion: custody.schemaVersion,
+      valuationOutputCustodyIndexId:
+        custodyResult.valuationOutputCustodyIndex.valuationOutputCustodyIndexId,
+      artifactRef: custodyResult.artifactRef,
+      environment: custody.environment,
+      valuationBundleId: custody.valuationBundleId,
+      valuationOutputInventoryIndexId:
+        custody.valuationOutputInventoryIndex.valuationOutputInventoryIndexId,
+      inventorySetSha256: custody.valuationOutputInventoryIndex.inventorySetSha256,
+      scopeKey: custody.scopeKey,
+      valueUnitId: custody.valueUnitId,
+      entryCount: custody.entryCount,
+      custodyReceiptSetSha256: custody.custodyReceiptSetSha256,
+    };
+    if (
+      publication.content.schemaVersion !== 'afl-trade-publication/v4' ||
+      !sameCanonicalJson(binding, publication.content.valuationOutputCustodyIndex)
+    ) {
+      throw materializationError('PROJECTION_CHAIN_MISMATCH');
+    }
+  }
 }
 
 function createManifestContent(
   buildJobId: string,
   freshness: AflTradeFreshnessPolicyResult,
-  parityVerification: AflTradeProjectionParityVerifyInput
+  parityVerification: AflTradeProjectionParityVerifyInput,
+  generation: 'legacy' | 'custodied'
 ) {
   const publication = parityVerification.projectionDocumentSetVerification.publicationManifest;
   const publicationContent = publication.content;
@@ -363,8 +462,7 @@ function createManifestContent(
   const parityResult = parityVerification.output;
   const parityContent = parityResult.projectionParityReport.content;
 
-  return {
-    schemaVersion: 'afl-trade-projection/v2' as const,
+  const common = {
     environment: publicationContent.environment,
     scopeKey: publicationContent.scopeKey,
     createdAt: parityContent.checkedAt,
@@ -419,6 +517,12 @@ function createManifestContent(
       artifactRef: schemaBundle.projectionSchemaBundleArtifactRef,
       responseContractVersion: schemaContent.responseContractVersion,
       valuationExportContractVersion: schemaContent.valuationExportContractVersion,
+      ...(schemaContent.schemaVersion === 'afl-trade-projection-schema-bundle/v2'
+        ? {
+            publicationManifestSchemaVersion: schemaContent.publicationManifestSchemaVersion,
+            projectionManifestSchemaVersion: schemaContent.projectionManifestSchemaVersion,
+          }
+        : {}),
     },
     parityReport: {
       schemaVersion: parityContent.schemaVersion,
@@ -430,6 +534,17 @@ function createManifestContent(
       checkedDocumentCount: parityContent.checkedDocumentCount,
     },
   };
+  if (generation === 'custodied') {
+    if (publicationContent.schemaVersion !== 'afl-trade-publication/v4') {
+      throw materializationError('PROJECTION_CHAIN_MISMATCH');
+    }
+    return {
+      ...common,
+      schemaVersion: 'afl-trade-projection/v3' as const,
+      valuationOutputCustodyIndex: publicationContent.valuationOutputCustodyIndex,
+    };
+  }
+  return { ...common, schemaVersion: 'afl-trade-projection/v2' as const };
 }
 
 function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
@@ -617,9 +732,13 @@ const CREATE_INPUT_KEYS = [
   'projectionParityVerification',
 ] as const;
 const VERIFY_INPUT_KEYS = [...CREATE_INPUT_KEYS, 'output'] as const;
+const CUSTODIED_CREATE_INPUT_KEYS = [...CREATE_INPUT_KEYS, 'custodyIndexVerification'] as const;
+const CUSTODIED_VERIFY_INPUT_KEYS = [...CUSTODIED_CREATE_INPUT_KEYS, 'output'] as const;
 
 type AdmittedCreateInput = Record<(typeof CREATE_INPUT_KEYS)[number], unknown>;
 type AdmittedVerifyInput = Record<(typeof VERIFY_INPUT_KEYS)[number], unknown>;
+type AdmittedCustodiedCreateInput = Record<(typeof CUSTODIED_CREATE_INPUT_KEYS)[number], unknown>;
+type AdmittedCustodiedVerifyInput = Record<(typeof CUSTODIED_VERIFY_INPUT_KEYS)[number], unknown>;
 
 function createFromAdmittedInput(
   snapshot: AdmittedCreateInput
@@ -638,9 +757,9 @@ function createFromAdmittedInput(
     snapshot.projectionParityVerification,
     'INVALID_PROJECTION_PARITY_VERIFICATION'
   );
-  assertPassingExactChain(parityVerification, freshness);
+  assertPassingExactChain(parityVerification, freshness, 'legacy');
 
-  const content = createManifestContent(buildJobId, freshness, parityVerification);
+  const content = createManifestContent(buildJobId, freshness, parityVerification, 'legacy');
   const projectionManifest = aflTradeProjectionManifestV2Schema.safeParse({
     projectionId: createAflTradeContentAddress('projection', content),
     content,
@@ -669,6 +788,54 @@ function createFromAdmittedInput(
   return deepFreeze(result.data);
 }
 
+function createCustodiedFromAdmittedInput(
+  snapshot: AdmittedCustodiedCreateInput
+): AflTradeCustodiedProjectionManifestMaterializationResult {
+  const buildJobId = parseOrThrow(
+    aflTradePublicIdSchema,
+    snapshot.buildJobId,
+    'INVALID_BUILD_JOB_ID'
+  );
+  const freshness = authenticateFreshnessPolicy(snapshot.freshnessPolicyResult);
+  const custody = authenticateCustodyIndex(snapshot.custodyIndexVerification);
+  if (!verifyAflTradeProjectionParityReport(snapshot.projectionParityVerification)) {
+    throw materializationError('INVALID_PROJECTION_PARITY_VERIFICATION');
+  }
+  const parityVerification = parseOrThrow(
+    aflTradeProjectionParityVerifyInputSchema,
+    snapshot.projectionParityVerification,
+    'INVALID_PROJECTION_PARITY_VERIFICATION'
+  );
+  assertPassingExactChain(parityVerification, freshness, 'custodied', custody);
+  const content = createManifestContent(buildJobId, freshness, parityVerification, 'custodied');
+  const projectionManifest = aflTradeProjectionManifestV3Schema.safeParse({
+    projectionId: createAflTradeContentAddress('projection', content),
+    content,
+  });
+  if (!projectionManifest.success) {
+    throw materializationError('INTERNAL_ARTIFACT_CONTRACT_VIOLATION');
+  }
+  const projectionManifestArtifactRef = createAflTradeCanonicalJsonArtifactRef(
+    projectionManifest.data,
+    parityVerification.output.projectionParityReport.content.checkedAt
+  );
+  if (
+    projectionManifestArtifactRef.byteLength < 1 ||
+    projectionManifestArtifactRef.byteLength >
+      AFL_TRADE_PROJECTION_MANIFEST_MATERIALIZATION_MAX_ARTIFACT_BYTES
+  ) {
+    throw materializationError('ARTIFACT_SIZE_LIMIT_EXCEEDED');
+  }
+  const result = aflTradeCustodiedProjectionManifestMaterializationResultSchema.safeParse({
+    projectionManifest: projectionManifest.data,
+    projectionManifestArtifactRef,
+  });
+  if (!result.success) {
+    throw materializationError('INTERNAL_ARTIFACT_CONTRACT_VIOLATION');
+  }
+  return deepFreeze(result.data);
+}
+
 export function createAflTradeProjectionManifestMaterialization(
   unparsedInput: unknown
 ): AflTradeProjectionManifestMaterializationResult {
@@ -681,6 +848,24 @@ export function createAflTradeProjectionManifestMaterialization(
       'INVALID_INPUT_ENVELOPE'
     ) as AdmittedCreateInput;
     return createFromAdmittedInput(admitted);
+  } catch (error) {
+    if (isAflTradeProjectionManifestMaterializationError(error)) throw error;
+    throw materializationError('INTERNAL_ARTIFACT_CONTRACT_VIOLATION');
+  }
+}
+
+export function createAflTradeCustodiedProjectionManifestMaterialization(
+  unparsedInput: unknown
+): AflTradeCustodiedProjectionManifestMaterializationResult {
+  try {
+    const shallowSnapshot = snapshotExactEnvelope(unparsedInput, CUSTODIED_CREATE_INPUT_KEYS);
+    if (shallowSnapshot === null) throw materializationError('INVALID_INPUT_ENVELOPE');
+    parseOrThrow(aflTradePublicIdSchema, shallowSnapshot.buildJobId, 'INVALID_BUILD_JOB_ID');
+    const admitted = admitEnvelope(
+      shallowSnapshot,
+      'INVALID_INPUT_ENVELOPE'
+    ) as AdmittedCustodiedCreateInput;
+    return createCustodiedFromAdmittedInput(admitted);
   } catch (error) {
     if (isAflTradeProjectionManifestMaterializationError(error)) throw error;
     throw materializationError('INTERNAL_ARTIFACT_CONTRACT_VIOLATION');
@@ -727,4 +912,33 @@ export function verifyAflTradeProjectionManifestMaterialization(input: unknown):
   return authenticateAflTradeProjectionManifestMaterialization(input) !== null;
 }
 
-export type { AflTradeProjectionManifestV2 };
+export function authenticateAflTradeCustodiedProjectionManifestMaterialization(
+  input: unknown
+): AflTradeCustodiedProjectionManifestMaterializationResult | null {
+  try {
+    const shallowSnapshot = snapshotExactEnvelope(input, CUSTODIED_VERIFY_INPUT_KEYS);
+    if (shallowSnapshot === null) return null;
+    const snapshot = admitEnvelope(
+      shallowSnapshot,
+      'INVALID_INPUT_ENVELOPE'
+    ) as AdmittedCustodiedVerifyInput;
+    const verification =
+      aflTradeCustodiedProjectionManifestMaterializationVerifyInputSchema.safeParse(snapshot);
+    if (!verification.success) return null;
+    const replayed = createCustodiedFromAdmittedInput({
+      buildJobId: verification.data.buildJobId,
+      freshnessPolicyResult: verification.data.freshnessPolicyResult,
+      projectionParityVerification: verification.data.projectionParityVerification,
+      custodyIndexVerification: verification.data.custodyIndexVerification,
+    });
+    return sameCanonicalJson(replayed, verification.data.output) ? replayed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function verifyAflTradeCustodiedProjectionManifestMaterialization(input: unknown): boolean {
+  return authenticateAflTradeCustodiedProjectionManifestMaterialization(input) !== null;
+}
+
+export type { AflTradeProjectionManifestV2, AflTradeProjectionManifestV3 };

@@ -11,6 +11,12 @@ import {
   aflTradeContentAddressedIdSchema,
   createAflTradeContentAddress,
 } from './contentAddress';
+import {
+  aflTradeArtifactCustodyProfileSchema,
+  type AflTradeArtifactCustodyClass,
+  type AflTradeArtifactCustodyEnvironment,
+  type AflTradeArtifactCustodyProfile,
+} from './artifactCustodyProfile';
 
 export const AFL_TRADE_ARTIFACT_CUSTODY_ERROR_CODES = [
   'INVALID_REFERENCE',
@@ -18,6 +24,8 @@ export const AFL_TRADE_ARTIFACT_CUSTODY_ERROR_CODES = [
   'ARTIFACT_TOO_LARGE',
   'IMMUTABLE_CONFLICT',
   'READBACK_MISMATCH',
+  'STORAGE_POLICY_MISMATCH',
+  'STORAGE_UNAVAILABLE',
 ] as const;
 
 export type AflTradeArtifactCustodyErrorCode =
@@ -34,6 +42,9 @@ export class AflTradeArtifactCustodyError extends Error {
 }
 
 export interface AflTradeImmutableArtifactRepository {
+  readonly assurance: 'fixture_memory' | 'durable_object_storage';
+  readonly artifactClass: AflTradeArtifactCustodyClass;
+  readonly custodyProfile: AflTradeArtifactCustodyProfile | null;
   putIfAbsent(
     reference: AflTradeArtifactRef,
     bytes: Uint8Array
@@ -49,8 +60,18 @@ export interface AflTradeImmutableArtifactRepository {
 
 export const aflTradeArtifactReadbackReceiptContentSchema = z
   .object({
-    schemaVersion: z.literal('afl-trade-artifact-readback/v1'),
+    schemaVersion: z.literal('afl-trade-artifact-readback/v4'),
     artifact: aflTradeArtifactRefSchema,
+    repositoryAssurance: z.enum(['fixture_memory', 'durable_object_storage']),
+    artifactClass: z.enum([
+      'raw_source',
+      'capture_metadata',
+      'derived_private',
+      'public_projection',
+    ]),
+    custodyProfileId: aflTradeContentAddressedIdSchema('artifact-custody-profile').nullable(),
+    custodyProfile: aflTradeArtifactCustodyProfileSchema.nullable(),
+    custodyEnvironment: z.enum(['test_fixture', 'non_production', 'production']),
     verifiedAt: z.iso.datetime({ offset: true }),
     verification: z.literal('exact_reference_and_sha256_bytes'),
     status: z.literal('passed'),
@@ -62,6 +83,25 @@ export const aflTradeArtifactReadbackReceiptContentSchema = z
         code: 'custom',
         path: ['verifiedAt'],
         message: 'Read-back verification cannot predate artifact creation.',
+      });
+    }
+    if (
+      (receipt.repositoryAssurance === 'fixture_memory' &&
+        (receipt.custodyProfileId !== null ||
+          receipt.custodyProfile !== null ||
+          receipt.custodyEnvironment !== 'test_fixture')) ||
+      (receipt.repositoryAssurance === 'durable_object_storage' &&
+        (receipt.custodyProfileId === null ||
+          receipt.custodyProfile === null ||
+          receipt.custodyProfile.profileId !== receipt.custodyProfileId ||
+          receipt.custodyProfile.content.environment !== receipt.custodyEnvironment ||
+          receipt.custodyProfile.content.artifactClass !== receipt.artifactClass))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['custodyProfileId'],
+        message:
+          'Fixture custody must remain test-only; durable custody must bind its complete content-addressed profile, class, and environment.',
       });
     }
   });
@@ -129,8 +169,14 @@ export async function verifyAflTradeArtifactReadback(
     );
   }
   const content = aflTradeArtifactReadbackReceiptContentSchema.parse({
-    schemaVersion: 'afl-trade-artifact-readback/v1',
+    schemaVersion: 'afl-trade-artifact-readback/v4',
     artifact: parsedReference.data,
+    repositoryAssurance: repository.assurance,
+    artifactClass: repository.artifactClass,
+    custodyProfileId: repository.custodyProfile?.profileId ?? null,
+    custodyProfile: repository.custodyProfile,
+    custodyEnvironment: (repository.custodyProfile?.content.environment ??
+      'test_fixture') satisfies AflTradeArtifactCustodyEnvironment,
     verifiedAt,
     verification: 'exact_reference_and_sha256_bytes',
     status: 'passed',
@@ -142,9 +188,14 @@ export async function verifyAflTradeArtifactReadback(
 }
 
 /** Test-only reference implementation. It is never a production fallback or public data source. */
-export function createAflTradeFixtureArtifactRepository(): AflTradeImmutableArtifactRepository {
+export function createAflTradeFixtureArtifactRepository(options?: {
+  artifactClass?: AflTradeArtifactCustodyClass;
+}): AflTradeImmutableArtifactRepository {
   const stored = new Map<string, { reference: AflTradeArtifactRef; bytes: Uint8Array }>();
   return {
+    assurance: 'fixture_memory',
+    artifactClass: options?.artifactClass ?? 'capture_metadata',
+    custodyProfile: null,
     async putIfAbsent(reference, bytes) {
       const parsedReference = aflTradeArtifactRefSchema.safeParse(reference);
       if (!parsedReference.success) {

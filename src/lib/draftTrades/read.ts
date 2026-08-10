@@ -1,15 +1,12 @@
 import 'server-only';
 
-import {
-  getDevelopmentWorkbookDraftTradeReadRepository,
-  type DraftTradeReadRepository,
-} from './developmentWorkbook';
-import {
-  getDraftTradeById as getFirestoreDraftTradeById,
-  listDraftClubs as listFirestoreDraftClubs,
-  listDraftTradeRefsByClub as listFirestoreDraftTradeRefsByClub,
-  listDraftTradesByYear as listFirestoreDraftTradesByYear,
-  listDraftTradeYears as listFirestoreDraftTradeYears,
+import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
+
+import type {
+  DraftClubListItem,
+  DraftClubTradeRefItem,
+  DraftTradeDetail,
+  DraftTradeListItem,
 } from './firestore';
 
 export type {
@@ -21,16 +18,23 @@ export type {
   DraftTradePartyItem,
 } from './firestore';
 
-const firestoreRepository: DraftTradeReadRepository = {
-  listTradesByYear: listFirestoreDraftTradesByYear,
-  listYears: listFirestoreDraftTradeYears,
-  getById: getFirestoreDraftTradeById,
-  listRefsByClub: listFirestoreDraftTradeRefsByClub,
-  listClubs: listFirestoreDraftClubs,
-};
+export interface DraftTradeReadRepository {
+  listTradesByYear(
+    year: number,
+    options?: {
+      clubSlug?: string;
+      type?: 'player' | 'pick' | 'future_pick';
+      q?: string;
+    }
+  ): Promise<DraftTradeListItem[]>;
+  listYears(): Promise<number[]>;
+  getById(tradeId: string): Promise<DraftTradeDetail | null>;
+  listRefsByClub(clubSlug: string): Promise<DraftClubTradeRefItem[]>;
+  listClubs(): Promise<DraftClubListItem[]>;
+}
 
 async function resolveDraftTradeReadRepository(): Promise<DraftTradeReadRepository> {
-  return (await getDevelopmentWorkbookDraftTradeReadRepository()) ?? firestoreRepository;
+  return (await getPublicAflTradeReadRuntime()).archiveReadRepository;
 }
 
 export async function listDraftTradesByYear(

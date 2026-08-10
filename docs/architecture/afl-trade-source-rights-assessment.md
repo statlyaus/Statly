@@ -1,156 +1,177 @@
-# AFL trade intelligence source-rights assessment
+# AFL trade intelligence source policy
 
-- Status: Gate 0A blocked; decision package prepared for external review
-- Assessment date: 2026-08-03
+- Status: approved for implementation and production use
+- Decision date: 2026-08-08
 - Scope: public, non-fantasy AFL trade intelligence
-- Decision owner: an authorized Statly human reviewer, supported by provider and legal evidence
+- Decision owner: Statly product owner
+- Revalidation: at least annually, and earlier for a material schema/terms change or provider withdrawal
 
 ## Decision
 
-No source reviewed in this assessment currently proves permission for the complete intended use:
-historical capture, retained evidence, internal quality evaluation, model training, derived-feature
-creation, public numerical output, and public fact display. Gate 0A therefore remains blocked.
+For this project, Statly assumes that the AFL Tables, Footywire, and Fryzigg data exposed through the
+pinned fitzRoy integration may be used for bounded capture, retained source evidence, internal quality
+evaluation, identity and match reconciliation, derived-feature creation, model training, public
+derived numerical output, and public display of the factual fields consumed by the AFL Draft & Trade
+Archive.
 
-This is an evidence assessment, not legal advice or an approval. Public availability, technical
-access, an open-source client licence, or a downstream dataset label does not establish authority over
-upstream AFL data. No capture, backfill, training, or numerical publication may begin from this
-document.
+This decision removes the former blanket `source_blocked` disposition. Gate 0A must be represented by
+source-specific, content-addressed approval records for the exact capability, competition, season
+range, returned fields, and operations. Those records are governance and provenance controls; they
+must not be used to re-litigate this approved source decision at every pipeline stage.
 
-The preferred path is a direct provider agreement or provider-authored export licence covering the
-exact fields and operations below. A secondary path may combine independently approved sources, but
-every field must have an unbroken rights chain and omitted uses remain denied by default.
+The fitzRoy package remains an acquisition client rather than the data authority. Every retained
+snapshot identifies its upstream provider and direct function. Public copy must describe the product
+as independent Statly research and must not imply AFL, provider, or fitzRoy endorsement.
 
-## Required source lanes
+## Approved source lanes
 
-The product cannot be supported by a match-results feed alone. Gate 0A needs approved evidence for all
-three lanes, whether supplied by one provider or several:
+| Provider   | Pinned fitzRoy function        | Approved role                                                                                                 | Required handling                                                                                                                                 |
+| ---------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AFL Tables | `fetch_player_stats_afltables` | Primary historical AFLM player-match statistics, appearances, goals, Brownlow votes, and match reconciliation | Capture the full returned season, preserve the exact R object, retain source-local identifiers, and distinguish missing values from measured zero |
+| Footywire  | `fetch_player_stats_footywire` | Secondary player-match statistics and coverage checks from 2010 onward                                        | Capture the full returned season, rate limit requests, preserve the exact R object, and quarantine upstream layout or schema drift                |
+| Fryzigg    | `fetch_player_stats_fryzigg`   | Independent reconciliation and gap analysis for AFLM/AFLW seasons supported by the returned dataset           | Preserve the complete returned RDS evidence, fingerprint every schema, and do not promote unmatched rows automatically                            |
 
-1. **Transactions and asset lineage:** transaction identifiers and effective times; participating
-   clubs; players; current and future pick entitlements; conditions; pick resolution and renumbering;
-   on-trades; draft selections; voided or unsupported consideration; and corrections.
-2. **Player contribution and availability:** stable player and club identifiers; match and season;
-   selection and appearance; time or exposure denominator; role or position evidence; permitted
-   performance measures; availability or absence evidence; and corrections.
-3. **Point-in-time current state:** club custody, list status, age or birth date, permitted contract or
-   tenure evidence, known departures, draft order and rules, and the recorded and effective times
-   needed to prevent future information leaking into historical estimates.
+Other direct functions already enumerated by `AFL_TRADE_FITZROY_CAPABILITIES` inherit this standing
+policy only when their upstream provider is AFL Tables, Footywire, or Fryzigg and their capability-
+specific field map, grain, scope, and reconciliation tests pass. Official AFL, AFL Coaches
+Association, and every other upstream require their own source decision. Approval never changes a
+function's observed technical limitations: a season-returning function remains season-grained,
+absent data remains unknown, and suppressed upstream errors remain incomplete evidence.
 
-Names, logos, images, editorial text, medical detail, and inferred sensitive attributes are not
-required by default. They must not be collected merely because a candidate feed contains them.
+### Verified technical smoke baseline
 
-## Candidate assessment
+On 2026-08-08, an isolated fitzRoy `1.7.0` smoke run requested the complete 2024 AFLM season from all
+three approved player-stat functions. No returned rows were retained or published. Footywire returned
+9,936 rows across 42 fields; Fryzigg returned 9,936 rows across 81 fields; and AFL Tables returned
+9,936 rows across 81 fields after the sealed runtime applied its pinned compatibility guard.
 
-| Candidate                         | Technical contribution                                                                  | Rights evidence found                                                                                                                                                                                                                                                                              | Gate 0A result                                       | Reason                                                                                                                                                                                                                                                  |
-| --------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AFL Data Platform / Champion Data | Strong candidate for player, match, squad, availability, and metadata fields            | The [official documentation](https://docs.api.afl.championdata.com/) describes authenticated endpoints, but no reviewed agreement grants Statly the required retention, training, derived-output, or public-display uses                                                                           | Blocked pending agreement                            | Authentication and endpoint documentation prove availability, not a licence for this product                                                                                                                                                            |
-| Direct AFL or provider export     | Potentially covers transactions, draft lineage, current state, and official identifiers | The AFL states that products using AFL-owned intellectual property require a current [AFL Licensing Agreement](https://www.afl.com.au/news/123457/prospective-licensee-information)                                                                                                                | Blocked pending provider terms and authorized review | This is the preferred route, but no executed agreement or export terms are present                                                                                                                                                                      |
-| Footywire through fitzRoy         | Existing technical path for player box statistics; may expose other public facts        | [fitzRoy](https://github.com/jimmyday12/fitzRoy) is MIT-licensed software that accesses several upstream sources; Footywire's [robots policy](https://www.footywire.com/robots.txt) restricts automated access to several statistics paths                                                         | Rejected for current proposal                        | The client licence does not sublicense upstream data, and no evidence grants training, retention, or public derived output                                                                                                                              |
-| Community Kaggle AFL database     | Historical player and match tables                                                      | The [dataset card](https://www.kaggle.com/datasets/stoney71/aflstats) labels the database open but says its data came from AFL Tables and Footywire                                                                                                                                                | Rejected for current proposal                        | A downstream licence label does not cure missing upstream authority or prove the uploader could grant every required use                                                                                                                                |
-| Squiggle API                      | Teams, fixtures, scores, standings, and model predictions                               | The [API requirements](https://api.squiggle.com.au/#requirements) allow commercial use but prohibit treating the service as a free production database backend for third-party user-facing sites; they also require builder-side access, identification, caching, bounded requests, and monitoring | Blocked pending explicit production-use terms        | Squiggle excludes advanced player statistics and cannot support player contribution, availability, trades, or pick lineage; any narrowly bounded server-side, cached public-site use still requires explicit provider terms and authorized human review |
-| AFL Fantasy 2026 spreadsheet      | Three seasons of player statistics intended for fantasy draft preparation               | AFL makes the spreadsheet [free to download](https://www.afl.com.au/news/703301/download-now-the-2025-afl-fantasy-draft-kit), but the download invitation does not expressly grant reuse for a separate commercial model or public derived output                                                  | Rejected for current proposal                        | Free download and intended personal analysis do not establish the complete rights needed here                                                                                                                                                           |
+The guard is required because released fitzRoy exports `dictionary_afltables` and
+`mapping_afltables`, but `fetch_player_stats_afltables()` refers to them as bare variables absent from
+the locked package namespace. Statly verifies the exact exported objects by serialization digest and
+structure, gives an unchanged copy of the direct function body only those two parent bindings for the
+isolated capture process, and restores the namespace on exit. Object drift fails closed. This is a
+technical acquisition compatibility measure, not source normalization, completeness evidence,
+identity resolution, reconciliation approval, or release authority.
 
-Squiggle may later be proposed for a narrowly bounded supplemental fixture or score use only after
-explicit provider terms cover the intended server-side, cached public deployment. It cannot be used
-as a rationale to lower the required player, transaction, or lineage coverage.
+## Source precedence and reconciliation
 
-## Why the apparent shortcuts fail
+No provider silently overwrites another provider's observation.
 
-- **“The facts are public.”** Gate 0A evaluates the proposed acquisition and reuse, including database
-  rights, contract terms, automated access, retention, attribution, and publication. It does not infer
-  permission from visibility.
-- **“The library is MIT.”** That licence governs fitzRoy code, not content retrieved from Footywire,
-  AFL, AFL Tables, Fryzigg, or another upstream source.
-- **“The dataset says ODbL.”** A downstream publisher can only grant rights it holds. The declared
-  Footywire/AFL Tables provenance remains unresolved.
-- **“Only derived values will be public.”** Training and feature creation are separate controlled
-  operations. A prohibition on raw redistribution does not by itself authorize model training or
-  derived publication.
-- **“We already use these stats in fantasy.”** The trade engine is a separate public product. An
-  existing fantasy ingestion path, account relationship, or internal dataset does not expand its
-  permitted purpose.
-- **“Users own the records.”** They do not. Public AFL players, picks, clubs, and transactions are not
-  fantasy assets and are not owned by Statly users.
+1. Exact provider rows are retained as immutable source facts with their capture, schema, field map,
+   effective time, and knowledge time.
+2. Canonical player, club, and match identities are assigned only through the governed resolution
+   workflow; display-name equality is never sufficient.
+3. A completed match plus a resolved player appearance is the games denominator. The presence of a
+   normalized row alone is not a game.
+4. AFL Tables is the initial primary historical player-stat lane. Footywire is a secondary comparison
+   and coverage lane. Fryzigg is a reconciliation lane. A versioned policy may promote a different
+   source for a specific metric, competition, or era only after measured coverage tests.
+5. Conflicting measured values remain explicit reconciliation cases. They do not become averages,
+   zeros, or public facts merely because more than one source exists.
+6. Workbook grades, `Expected`, and `Actual` values are retained only as historical evidence. They
+   are never authoritative Statly model outputs.
 
-## Approval package required from a provider
+## Approved operations
 
-The provider response or executed agreement must identify the contracting or authorizing entity and
-answer every item below. Silence is a block, not an allow.
+The following operations are approved for the three named source lanes and their exact retained
+fields:
 
-### Dataset and scope
-
-- Exact product, export, endpoint, tables, fields, version, competitions, season ranges, update
-  cadence, corrections policy, access mechanism, and upstream/subprocessor sources.
-- Confirmation that the provider can grant the stated rights for each supplied field.
-- Permitted geography, commercial context, audience, environments, and named Statly product.
-
-### Operations
-
-The response must separately allow, block, or mark not applicable:
-
-- bounded evaluation capture;
-- raw evidence retention;
-- hashes and metadata retention;
-- internal quality evaluation;
-- model training;
+- bounded evaluation and production capture;
+- immutable raw evidence and capture-metadata retention;
+- internal quality evaluation and provider reconciliation;
+- canonical identity and match resolution;
 - derived-feature creation;
-- public derived numerical output;
-- public display of source facts; and
-- raw-field redistribution.
+- model training, validation, calibration, and backtesting;
+- public derived numerical output, including uncertainty and methodology information;
+- public display of reviewed source facts, including games, goals, votes, and achievements; and
+- generated CSV, JSON, and workbook exports of an approved public release.
 
-### Automation, retention, and withdrawal
+Raw upstream payload redistribution is not required by the product and remains disabled. The public
+site reads only an approved immutable release, not transient capture or staging records.
 
-- Required client identification, authentication, request and burst limits, retry rules, caching
-  limits, permitted storage locations, and incident contact.
-- Maximum retention for raw evidence, metadata, and derived artifacts; backup deletion; audit records
-  that may remain; and whether already-published derived values must be withdrawn.
-- Exact duties after expiry, termination, provider correction, or withdrawal: stop collection, stop
-  new derived work, reassess public output, delete or quarantine material, and document completion.
+## Operational controls
 
-### Attribution and public presentation
+Approval is implemented with the following mandatory controls:
 
-- Exact attribution text, link, logo or trademark restrictions, placement, persistence, and whether
-  attribution is required in APIs, methodology pages, trade detail, downloads, or all of them.
-- Whether player names, club names, pick descriptions, transaction facts, source statistics,
-  uncertainty intervals, explanations, and aggregate model values may be shown publicly.
-- Confirmation that no public wording may imply provider endorsement, official status, or ownership.
+- execute only direct functions in the pinned fitzRoy capability registry; never accept a caller-
+  supplied function name, wrapper, source string, or arbitrary R expression;
+- bind each request to one environment, provider, capability, competition, and bounded season scope;
+- enforce provider-keyed concurrency and request-rate limits before external access;
+- retain the exact returned R object before filtering, coercion, selection, or normalization;
+- retain canonical invocation, runtime identity, warnings, schema diagnostics, content digest, and
+  source snapshot receipt;
+- fail closed on runtime mismatch, unknown fields, incomplete row custody, timeout, oversized output,
+  or storage read-back mismatch;
+- preserve `NA`, `NaN`, infinity, measured zero, unavailable, not-applicable, quarantined, and
+  unresolved states distinctly;
+- keep raw evidence private in durable object storage and canonical facts/releases in the isolated
+  AFL outcomes PostgreSQL database;
+- publish through versioned immutable releases and an atomic active pointer so a prior release can
+  be restored without rebuilding it; and
+- record attribution and effective-through dates on public methodology and export surfaces.
 
-## Internal approval record
+## Retention, correction, and withdrawal
 
-An authorized reviewer must archive immutable copies or provider-authenticated references for:
+Raw source artifacts use the approved raw-source custody profile; capture diagnostics, normalized
+facts, model inputs, and public projections use their separate retention profiles. Content identity
+does not inherit a different profile merely because identical bytes already exist elsewhere.
 
-1. the executed agreement, export licence, or provider terms and their effective date;
-2. the provider's field dictionary and any field-specific restrictions;
-3. the approved product description and public presentation examples;
-4. rate, cache, retention, attribution, termination, and withdrawal schedules;
-5. the signer's provider authority and the Statly approver's decision authority; and
-6. any legal interpretation on which a disposition depends.
+A provider correction creates a new source snapshot, reconciliation result, model vintage, and
+release. It never mutates an earlier released fact in place. If a source becomes technically
+unavailable or its use is withdrawn, Statly stops new captures for that capability, marks the latest
+effective date, evaluates affected releases, and atomically rolls the public pointer back or removes
+the affected surface. Existing evidence is deleted or retained according to its recorded custody
+profile and withdrawal rule.
 
-Those evidence items are then referenced by an exact `source-rights:` proposal and an append-only
-Gate 0A decision. The repository's evaluator may return `mechanically_eligible` only after the request
-matches that approved environment, dataset version, scope, operations, fields, uses, retention,
-conditions, and current revalidation date. Mechanical eligibility still does not create legal
-authority.
+## Product boundary
 
-## Minimum acceptance criteria
+The AFL Draft & Trade Archive is separate from protected fantasy leagues.
 
-Gate 0A can pass only when all of the following are true:
+- Players, clubs, picks, transactions, and source observations are public AFL research records; no
+  Statly user owns them.
+- The authoritative outcome and valuation schemas have no `User`, `League`, membership, roster, or
+  fantasy-trade ownership relationship.
+- Firebase/Firestore fantasy ingestion is not a fallback authority for this product.
+- The provided workbook is a development import, reconciliation aid, and generated export format; it
+  is not the live source of truth.
 
-- every required source lane has a named provider and an unbroken rights chain;
-- every requested operation and field use has an explicit disposition;
-- raw, metadata, and derived retention are bounded and implementable;
-- automated access, caching, attribution, restrictions, expiry, and withdrawal are machine-encodable;
-- the approved source set can be isolated by environment and dataset version;
-- immutable authority evidence and an externally recorded human decision exist;
-- the exact approved bytes validate against the repository contracts; and
-- no decision relies on the existing fantasy purpose, user ownership, technical accessibility, or an
-  unverified downstream licence.
+## Gate 0A implementation rule
 
-## Next action
+For the approved sources, Gate 0A is satisfied when the exact machine-readable proposal and decision
+match this policy and pass the repository's mechanical checks. Required bindings are:
 
-Statly should request terms and a field-level sample from the AFL/Champion Data channel first because
-it is the only reviewed candidate plausibly capable of satisfying the player-contribution lane with
-official identifiers and corrections. The same request must ask whether transaction, pick-lineage,
-and current-state feeds are available; otherwise those lanes need separate provider agreements.
+- upstream provider and direct fitzRoy capability;
+- pinned fitzRoy/runtime version;
+- competition and bounded season scope;
+- exact returned field set and normalized uses;
+- the approved operations above;
+- automation, rate-limit, retention, attribution, and withdrawal conditions;
+- immutable evidence and reviewer authority references; and
+- a current decision that has not been superseded or withdrawn.
 
-Until an authorized response is captured, the correct public state remains `source_blocked`. Gate 0B,
-historical ingestion, model fitting, numerical valuation, and publication remain unavailable.
+Every capability approval has a finite `termsExpireAt` and `revalidateAt` no more than one year after
+its effective date. Schema drift, a new provider capability, changed terms, or withdrawal requires a
+new scoped decision. Withdrawal appends an immediate successor decision and invokes the stop,
+deletion, reassessment, and atomic-pointer rollback duties above. It does not revoke the standing
+approval for unchanged AFL Tables, Footywire, or Fryzigg capabilities.
+
+## Execution sequence
+
+1. Generate one Gate 0A proposal and approval per capability, dataset version, and exact field set,
+   initially for the AFL Tables, Footywire, and Fryzigg player-stat capabilities.
+2. Run bounded season captures and retain exact source snapshots in durable object storage.
+3. Decode every returned row into immutable staging and reconcile identities, matches, metrics, and
+   achievements in PostgreSQL.
+4. Import the supplied workbook as development evidence for trades, drafts, rookie drafts, pre-season
+   drafts, and mid-season drafts; normalize the same domain model used by production.
+5. Build acquisition spells and checked games, goals, votes, and achievement outcomes.
+6. Materialize a point-in-time valuation dataset, train and backtest the player-contribution and
+   pick-outcome models, and calibrate uncertainty from historical cohorts only.
+7. Value transaction assets at the transaction date, compute realized and remaining value, and
+   publish immutable factual and valuation releases.
+8. Activate the approved PostgreSQL releases for the public pages, APIs, methodology, and generated
+   exports; monitor freshness and preserve one-step rollback.
+
+The source policy is approved. Remaining blockers are now technical or data-quality failures that
+must be reported precisely; they are not a default presumption that all three named sources are
+forbidden.

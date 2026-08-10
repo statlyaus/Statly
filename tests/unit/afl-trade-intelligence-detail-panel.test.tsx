@@ -62,6 +62,11 @@ function numericalResponse(): AflTradeValueDetailResponse {
             explanation: 'The fabricated current projection retains more future value.',
           },
         ],
+        packageValue: {
+          received: { median: 120, interval: { lower: 95, upper: 145 } },
+          givenUp: { median: 90, interval: { lower: 72, upper: 110 } },
+          net: { median: 30, interval: { lower: 8, upper: 55 } },
+        },
       },
       {
         aflClubId: 'club-b',
@@ -77,6 +82,11 @@ function numericalResponse(): AflTradeValueDetailResponse {
           eliteOutcome: { threshold: 12, probability: 0.1 },
         },
         factors: [],
+        packageValue: {
+          received: { median: 90, interval: { lower: 72, upper: 110 } },
+          givenUp: { median: 120, interval: { lower: 95, upper: 145 } },
+          net: { median: -30, interval: { lower: -55, upper: -8 } },
+        },
       },
     ],
     comparison: {
@@ -220,8 +230,18 @@ describe('AFL trade value detail panel', () => {
     expect(screen.getByText('Calculated as at 5 Aug 2026')).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Value by AFL club' })).toBeVisible();
     const clubValue = screen.getByRole('heading', { name: 'Fabricated Club A' }).closest('article');
+    expect(screen.getByLabelText('Fabricated Club A Statly grade B+')).toBeVisible();
+    expect(screen.getByLabelText('Fabricated Club B Statly grade C+')).toBeVisible();
+    expect(clubValue).toHaveTextContent('Net +30');
+    expect(clubValue).toHaveTextContent('120 received − 90 given up');
+    expect(clubValue).toHaveTextContent('Received value');
+    expect(clubValue).toHaveTextContent('95–145');
+    expect(clubValue).toHaveTextContent('Given-up value');
+    expect(clubValue).toHaveTextContent('72–110');
+    expect(clubValue).toHaveTextContent('Net advantage');
+    expect(clubValue).toHaveTextContent('+8–+55');
     expect(clubValue).toHaveTextContent('55% chance to finish ahead');
-    expect(clubValue).toHaveTextContent('20% low-return · 15% elite outcome');
+    expect(clubValue).not.toHaveTextContent('20% low-return · 15% elite outcome');
     expect(screen.getByRole('heading', { name: 'Club-by-club asset breakdown' })).toBeVisible();
     expect(screen.getByText(/player · received by Fabricated Club A/i)).toBeVisible();
     expect(
@@ -252,7 +272,7 @@ describe('AFL trade value detail panel', () => {
     ).toBeVisible();
   });
 
-  it('shows the verified source blocker without numerical claims', async () => {
+  it('shows the no-publication state without numerical claims', async () => {
     const analysis = await aflTradePrePublicationValueReadService.detail({
       scopeKey: 'public-afl-trades-current',
       tradeId: 'fixture-trade',
@@ -261,7 +281,7 @@ describe('AFL trade value detail panel', () => {
 
     render(<AflTradeValueDetailPanel analysis={analysis} />);
 
-    expect(screen.getByText('Trade value unavailable')).toBeVisible();
+    expect(screen.getByText('Trade value not calculated')).toBeVisible();
     expect(screen.getByText('No numerical result')).toBeVisible();
     expect(screen.queryByText(/chance to finish ahead/)).not.toBeInTheDocument();
   });

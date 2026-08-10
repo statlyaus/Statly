@@ -1,4 +1,5 @@
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeArtifactCustodyProfile } from '@/server/aflTradeIntelligence/artifacts/artifactCustodyProfile';
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -6,8 +7,9 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   aflTradePublicationManifestV3Schema,
-  type AflTradePublicationManifestV3,
+  type AflTradePublicationManifest,
 } from '@/server/aflTradeIntelligence/artifacts/publicationProjectionManifests';
+import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import { createAflTradeValuationOutputInventoryIndex } from '@/server/aflTradeIntelligence/artifacts/valuationOutputInventoryIndex';
 import {
   AFL_TRADE_VALUATION_OUTPUT_INVENTORY_BINDING_DIRECTION,
@@ -67,7 +69,8 @@ import {
 import { createAflTradeProjectionPublicEvidenceIndex } from '@/server/aflTradeIntelligence/publication/projectionPublicEvidenceIndex';
 import {
   createAflTradeProjectionSchemaBundle,
-  type AflTradeProjectionSchemaBundleResult,
+  createAflTradeProjectionSchemaBundleV2,
+  type AflTradeAnyProjectionSchemaBundleResult,
 } from '@/server/aflTradeIntelligence/publication/projectionSchemaBundle';
 import { createAflTradeProjectionTradeMaterialization } from '@/server/aflTradeIntelligence/publication/projectionTradeMaterializer';
 import { createAflTradeComponentDrawSet } from '@/server/aflTradeIntelligence/valuation/componentDrawSet';
@@ -110,6 +113,12 @@ import {
   type AflTradeValuationDistributionSubject,
 } from '@/server/aflTradeIntelligence/valuation/valuationDistributionArtifact';
 import { createAflTradeValuationOutputInventory } from '@/server/aflTradeIntelligence/valuation/valuationOutputInventory';
+import { persistAflTradeValuationOutputInventory } from '@/server/aflTradeIntelligence/valuation/valuationOutputCustody';
+import {
+  aflTradeValuationOutputCustodyIndexVerificationSchema,
+  createAflTradeCustodiedPublicationManifest,
+  createAflTradeValuationOutputCustodyIndex,
+} from '@/server/aflTradeIntelligence/valuation/valuationOutputCustodyIndex';
 import {
   AFL_TRADE_CONFIDENCE_DIMENSIONS,
   AFL_TRADE_METHODOLOGY_HREF,
@@ -117,12 +126,16 @@ import {
   type AflTradePublishedMethodology,
 } from '@/types/aflTradeIntelligence';
 
+import { createAflTradeCompleteAssessmentVerificationFixture } from './aflTradeCompleteAssessmentFixture';
+
 const CONTRACT_AT = '2026-08-05T00:30:00.000Z';
 const SOURCE_AT = '2026-08-05T03:00:00.000Z';
 const BUNDLE_REF_AT = '2026-08-05T03:10:00.000Z';
 const ROOT_AT = '2026-08-05T04:00:00.000Z';
 const INDEX_AT = '2026-08-05T05:00:00.000Z';
 export const POLICY_AT = '2026-08-05T05:10:00.000Z';
+const CUSTODY_AT = '2026-08-05T05:10:00.000Z';
+const CUSTODY_INDEX_AT = '2026-08-05T05:15:00.000Z';
 const PUBLICATION_ARTIFACT_AT = '2026-08-05T05:20:00.000Z';
 const PUBLICATION_AT = '2026-08-05T06:00:00.000Z';
 const EVIDENCE_AT = '2026-08-05T06:10:00.000Z';
@@ -480,7 +493,7 @@ function sourceBinding(
 
 function realEvidenceContent(
   fixture: ReturnType<typeof boundValuationFixture>,
-  publication: AflTradePublicationManifestV3,
+  publication: AflTradePublicationManifest,
   inventoryIndexId: string,
   inventoryId: string,
   sources: readonly AflTradeProjectionEvidenceSourceArtifact[]
@@ -612,7 +625,8 @@ function materializationBindingFor(result: AflTradeProjectionMaterializationResu
 }
 
 function buildVerifiedProjectionPipeline(
-  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap'
+  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap',
+  custodyIndexVerification?: z.infer<typeof aflTradeValuationOutputCustodyIndexVerificationSchema>
 ) {
   const fixture = boundValuationFixture(fixtureKind);
   const numeric = numericArtifacts(fixture);
@@ -625,7 +639,7 @@ function buildVerifiedProjectionPipeline(
   });
   const bundleArtifactRef = createAflTradeCanonicalJsonArtifactRef(fixture.bundle, BUNDLE_REF_AT);
   const caseArtifactRef = createAflTradeCanonicalJsonArtifactRef(fixture.valuationCase, SOURCE_AT);
-  const inventory = createAflTradeValuationOutputInventory({
+  const valuationOutputInventoryInput = {
     valuationBundle: {
       valuationBundleManifest: fixture.bundle,
       artifactRef: bundleArtifactRef,
@@ -648,7 +662,17 @@ function buildVerifiedProjectionPipeline(
       artifactRef: createAflTradeCanonicalJsonArtifactRef(explanation, SOURCE_AT),
     },
     materializedAt: ROOT_AT,
-  });
+  };
+  const inventory = createAflTradeValuationOutputInventory(valuationOutputInventoryInput);
+  const valuationOutputInventoryVerification = {
+    ...valuationOutputInventoryInput,
+    output: inventory,
+  };
+  const completeTradeAssessmentVerification =
+    createAflTradeCompleteAssessmentVerificationFixture(
+      valuationOutputInventoryVerification,
+      fixtureKind
+    );
   const inventoryIndex = createAflTradeValuationOutputInventoryIndex({
     valuationBundleManifest: fixture.bundle,
     valuationBundleArtifactRef: bundleArtifactRef,
@@ -742,14 +766,20 @@ function buildVerifiedProjectionPipeline(
         projectionPresentationPolicy.projectionPresentationPolicy.content.supportedViews,
     },
   };
-  const publicationManifest = aflTradePublicationManifestV3Schema.parse({
+  const publicationCandidate = aflTradePublicationManifestV3Schema.parse({
     publicationId: createAflTradeContentAddress('publication', publicationContent),
     content: publicationContent,
   });
-  const publication = {
-    publicationManifest,
-    artifactRef: createAflTradeCanonicalJsonArtifactRef(publicationManifest, PUBLICATION_AT),
-  };
+  const publication = custodyIndexVerification
+    ? createAflTradeCustodiedPublicationManifest({
+        publicationCandidate,
+        custodyIndexVerification,
+      })
+    : {
+        publicationManifest: publicationCandidate,
+        artifactRef: createAflTradeCanonicalJsonArtifactRef(publicationCandidate, PUBLICATION_AT),
+      };
+  const publicationManifest = publication.publicationManifest;
   const sources = sourceArtifacts();
   const evidence = createAflTradeProjectionPublicEvidence({
     content: realEvidenceContent(
@@ -814,13 +844,21 @@ function buildVerifiedProjectionPipeline(
       ...evidenceVerificationInput,
       output: createAflTradeProjectionEvidenceSourceVerification(evidenceVerificationInput),
     },
+    ...(custodyIndexVerification
+      ? {
+          valuationOutputCustodyIndexVerification: custodyIndexVerification,
+          completeTradeAssessmentVerification,
+        }
+      : {}),
     materializedAt: DOCUMENT_AT,
   };
   const tradeOutput = createAflTradeProjectionTradeMaterialization(tradeInput);
   const tradeVerification = { ...tradeInput, output: tradeOutput };
-  const projectionSchemaBundle = createAflTradeProjectionSchemaBundle({
-    createdAt: fixtureKind === 'future_pick_resolution' ? '2026-08-05T06:30:01.000Z' : SCHEMA_AT,
-  });
+  const schemaCreatedAt =
+    fixtureKind === 'future_pick_resolution' ? '2026-08-05T06:30:01.000Z' : SCHEMA_AT;
+  const projectionSchemaBundle = custodyIndexVerification
+    ? createAflTradeProjectionSchemaBundleV2({ createdAt: schemaCreatedAt })
+    : createAflTradeProjectionSchemaBundle({ createdAt: schemaCreatedAt });
   const commonParents = {
     publication,
     valuationOutputInventoryIndex: inventoryIndex,
@@ -844,6 +882,7 @@ function buildVerifiedProjectionPipeline(
   const projectionMaterializationVerification = { ...rootInput, output: rootOutput };
   return {
     fixture,
+    valuationOutputInventoryVerification,
     publicationManifest,
     inventoryIndex,
     freshness,
@@ -857,6 +896,104 @@ function buildVerifiedProjectionPipeline(
   };
 }
 
+/** Fabricated Stage-5 verification envelope for immutable-custody tests only. */
+export function createAflTradeValuationOutputInventoryVerificationFixture(
+  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap'
+) {
+  return buildVerifiedProjectionPipeline(fixtureKind).valuationOutputInventoryVerification;
+}
+
+function durableCustodyFixtureRepository() {
+  const delegate = createAflTradeFixtureArtifactRepository({ artifactClass: 'derived_private' });
+  return {
+    ...delegate,
+    assurance: 'durable_object_storage' as const,
+    custodyProfile: createAflTradeArtifactCustodyProfile({
+      schemaVersion: 'afl-trade-artifact-custody-profile/v1',
+      subject: 'afl-trade-intelligence',
+      contractRole: 'requirements_only_not_readiness_or_authorization',
+      repositoryId: 'projection-custody-fixture',
+      environment: 'non_production',
+      artifactClass: 'derived_private',
+      maximumObjectBytes: 128 * 1024 * 1024,
+      keyDerivation: 'profile_sha256_two_level_fanout_v1',
+      conditionalCreate: 'if_none_match_star_required',
+      encryption: {
+        inTransit: 'tls_required',
+        atRest: { mode: 'customer_managed', keyReferenceSha256: 'a'.repeat(64) },
+      },
+      retention: {
+        deletion: {
+          kind: 'no_scheduled_deletion',
+          maximumDays: null,
+          enforcement: 'not_applicable',
+        },
+        deleteOnWithdrawal: false,
+        worm: { mode: 'compliance', minimumDays: 365 },
+      },
+      residency: {
+        allowedJurisdictions: ['Australia'],
+        crossJurisdictionTransfer: 'prohibited',
+      },
+      infrastructureEvidenceIds: [`storage-policy:${'b'.repeat(64)}`],
+    }),
+  };
+}
+
+export async function createAflTradeValuationOutputCustodyIndexVerificationFixture(
+  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap'
+) {
+  const verification = createAflTradeValuationOutputInventoryVerificationFixture(fixtureKind);
+  const assessmentVerification = createAflTradeCompleteAssessmentVerificationFixture(
+    verification,
+    fixtureKind
+  );
+  const inventory = {
+    valuationOutputInventory: verification.output.valuationOutputInventory,
+    artifactRef: verification.output.valuationOutputInventoryArtifactRef,
+  };
+  const inventoryIndex = createAflTradeValuationOutputInventoryIndex({
+    valuationBundleManifest: verification.valuationBundle.valuationBundleManifest,
+    valuationBundleArtifactRef: verification.valuationBundle.artifactRef,
+    valuationOutputInventories: [inventory],
+    createdAt: INDEX_AT,
+  });
+  const custody = await persistAflTradeValuationOutputInventory(
+    { verification, assessmentVerification },
+    {
+      repository: durableCustodyFixtureRepository(),
+      operationAuthority: {
+        async acquire(scope) {
+          const content = {
+            schemaVersion: 'afl-trade-valuation-output-custody-operation/v1' as const,
+            ...scope,
+            verifiedAt: CUSTODY_AT,
+          };
+          return {
+            operationId: createAflTradeContentAddress(
+              'valuation-output-custody-operation',
+              content
+            ),
+            content,
+          };
+        },
+        async complete() {},
+      },
+    }
+  );
+  const request = {
+    inventoryIndexVerification: {
+      valuationBundleManifest: verification.valuationBundle.valuationBundleManifest,
+      valuationBundleArtifactRef: verification.valuationBundle.artifactRef,
+      valuationOutputInventories: [inventory],
+      output: inventoryIndex,
+    },
+    custodyReceipts: [custody],
+    createdAt: CUSTODY_INDEX_AT,
+  };
+  return { ...request, output: createAflTradeValuationOutputCustodyIndex(request) };
+}
+
 /**
  * Fabricated test evidence only. This fixture proves deterministic contract wiring and does not
  * claim source approval, real-AFL provenance, publication activation, or serving authority.
@@ -866,7 +1003,7 @@ export interface AflTradeProjectionManifestFixture {
   tradeIds: string[];
   projectionPresentationPolicy: AflTradeProjectionPresentationPolicyResult;
   projectionPublicEvidenceIndex: AflTradeProjectionPublicEvidenceIndexResult;
-  projectionSchemaBundle: AflTradeProjectionSchemaBundleResult;
+  projectionSchemaBundle: AflTradeAnyProjectionSchemaBundleResult;
   projectionDocumentSet: AflTradeProjectionDocumentSetResult;
   projectionDocumentSetVerification: AflTradeProjectionParityCreateInput['projectionDocumentSetVerification'];
   documents: AflTradeProjectionDocumentArtifact[];
@@ -875,10 +1012,9 @@ export interface AflTradeProjectionManifestFixture {
   projectionParityVerification: AflTradeProjectionParityVerifyInput;
 }
 
-export function createAflTradeProjectionManifestFixture(
-  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap'
+function createProjectionManifestFixtureFromPipeline(
+  pipeline: ReturnType<typeof buildVerifiedProjectionPipeline>
 ): AflTradeProjectionManifestFixture {
-  const pipeline = buildVerifiedProjectionPipeline(fixtureKind);
   const binding = materializationBindingFor(pipeline.rootOutput);
   if (
     pipeline.methodologyPayload.calculationAsOf !== binding.calculationAsOf ||
@@ -964,6 +1100,20 @@ export function createAflTradeProjectionManifestFixture(
     projectionParityVerification,
   };
 }
+
+export function createAflTradeProjectionManifestFixture(
+  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap'
+): AflTradeProjectionManifestFixture {
+  return createProjectionManifestFixtureFromPipeline(buildVerifiedProjectionPipeline(fixtureKind));
+}
+
+export function createAflTradeCustodiedProjectionManifestFixture(
+  custodyIndexVerification: z.infer<typeof aflTradeValuationOutputCustodyIndexVerificationSchema>,
+  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap'
+): AflTradeProjectionManifestFixture {
+  const pipeline = buildVerifiedProjectionPipeline(fixtureKind, custodyIndexVerification);
+  return createProjectionManifestFixtureFromPipeline(pipeline);
+}
 export function createAflTradeProjectionManifestMaterializationInput(
   fixture: AflTradeProjectionManifestFixture
 ): AflTradeProjectionManifestMaterializationCreateInput {
@@ -973,3 +1123,4 @@ export function createAflTradeProjectionManifestMaterializationInput(
     projectionParityVerification: fixture.projectionParityVerification,
   };
 }
+import { z } from 'zod';

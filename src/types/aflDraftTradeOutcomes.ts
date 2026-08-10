@@ -360,6 +360,19 @@ export const aflDraftTradeOutcomeListItemSchema = z
     }
   });
 
+export function aflDraftTradeOutcomeAcquisitionKey(
+  item: z.infer<typeof aflDraftTradeOutcomeListItemSchema>
+): string {
+  return JSON.stringify([
+    item.eventId,
+    item.tradeId,
+    item.assetId,
+    item.aflClubId,
+    item.player.aflPlayerId,
+    item.player.displayName,
+  ]);
+}
+
 export const aflDraftTradeOutcomeReleaseRefSchema = z
   .object({
     releaseId: z.string().regex(/^outcome-release:[a-f0-9]{64}$/),
@@ -574,12 +587,12 @@ export const aflDraftTradeOutcomeListResponseSchema = z
       }
     }
 
-    const eventIds = response.items.map(({ eventId }) => eventId);
-    if (new Set(eventIds).size !== eventIds.length) {
+    const acquisitionKeys = response.items.map(aflDraftTradeOutcomeAcquisitionKey);
+    if (new Set(acquisitionKeys).size !== acquisitionKeys.length) {
       context.addIssue({
         code: 'custom',
         path: ['items'],
-        message: 'Outcome list items must be unique by event identifier.',
+        message: 'Outcome list items must be unique by acquisition identity.',
       });
     }
   });

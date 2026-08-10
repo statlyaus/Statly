@@ -7,7 +7,7 @@ import {
   AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
   AflDraftTradeOutcomeReadError,
 } from '@/server/aflTradeIntelligence/outcomes/outcomeReadService';
-import { aflDraftTradePrePublicationOutcomeReadService } from '@/server/aflTradeIntelligence/outcomes/prePublicationOutcomeReadService';
+import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 import {
   aflDraftTradeOutcomeCheckStatusSchema,
   aflDraftTradeOutcomeMetricSchema,
@@ -63,7 +63,8 @@ export async function GET(request: NextRequest) {
       return commonErrors.badRequest('Invalid AFL Draft & Trade outcome query');
     }
 
-    const response = await aflDraftTradePrePublicationOutcomeReadService.list({
+    const { outcomeReadService } = await getPublicAflTradeReadRuntime();
+    const response = await outcomeReadService.list({
       scopeKey: AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
       ...parsed.data,
     });

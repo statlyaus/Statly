@@ -25,10 +25,12 @@ import {
 import {
   aflTradeProjectionPresentationPolicyBindingSchema,
   aflTradeProjectionPublicEvidenceIndexBindingSchema,
-  aflTradeProjectionSchemaBundleBindingSchema,
+  aflTradeAnyProjectionSchemaBundleBindingSchema,
   aflTradePublicationManifestV3Schema,
+  aflTradePublicationManifestV4Schema,
   aflTradeValuationOutputInventoryIndexBindingSchema,
   type AflTradePublicationManifestV3,
+  type AflTradePublicationManifestV4,
 } from '../artifacts/publicationProjectionManifests';
 import {
   aflTradeValuationOutputInventoryIndexResultSchema,
@@ -46,8 +48,8 @@ import {
   type AflTradeProjectionPublicEvidenceIndexResult,
 } from './projectionPublicEvidenceIndex';
 import {
-  aflTradeProjectionSchemaBundleResultSchema,
-  type AflTradeProjectionSchemaBundleResult,
+  aflTradeAnyProjectionSchemaBundleResultSchema,
+  type AflTradeAnyProjectionSchemaBundleResult,
 } from './projectionSchemaBundle';
 import {
   aflTradeProjectionTradeMaterializationVerifyInputSchema,
@@ -84,7 +86,10 @@ const canonicalJsonArtifactRefSchema = aflTradeArtifactRefSchema.refine(
 
 const publicationInputSchema = z
   .object({
-    publicationManifest: aflTradePublicationManifestV3Schema,
+    publicationManifest: z.union([
+      aflTradePublicationManifestV3Schema,
+      aflTradePublicationManifestV4Schema,
+    ]),
     artifactRef: canonicalJsonArtifactRefSchema,
   })
   .strict();
@@ -221,7 +226,7 @@ const parentShape = {
   valuationOutputInventoryIndex: aflTradeValuationOutputInventoryIndexBindingSchema,
   projectionPublicEvidenceIndex: aflTradeProjectionPublicEvidenceIndexBindingSchema,
   projectionPresentationPolicy: aflTradeProjectionPresentationPolicyBindingSchema,
-  projectionSchemaBundle: aflTradeProjectionSchemaBundleBindingSchema,
+  projectionSchemaBundle: aflTradeAnyProjectionSchemaBundleBindingSchema,
   scopeKey: aflTradePublicIdSchema,
   valueUnitId: aflTradePublicIdSchema,
 } as const;
@@ -585,7 +590,7 @@ const commonInputShape = {
   valuationOutputInventoryIndex: aflTradeValuationOutputInventoryIndexResultSchema,
   projectionPublicEvidenceIndex: aflTradeProjectionPublicEvidenceIndexResultSchema,
   projectionPresentationPolicy: aflTradeProjectionPresentationPolicyResultSchema,
-  projectionSchemaBundle: aflTradeProjectionSchemaBundleResultSchema,
+  projectionSchemaBundle: aflTradeAnyProjectionSchemaBundleResultSchema,
 } as const;
 
 export const aflTradeProjectionMaterializationShardCreateInputSchema = z
@@ -1120,11 +1125,11 @@ function admitCapturedInput(
 }
 
 interface Parents {
-  publication: AflTradePublicationManifestV3;
+  publication: AflTradePublicationManifestV3 | AflTradePublicationManifestV4;
   inventoryIndex: AflTradeValuationOutputInventoryIndexResult;
   evidenceIndex: AflTradeProjectionPublicEvidenceIndexResult;
   policy: AflTradeProjectionPresentationPolicyResult;
-  schemaBundle: AflTradeProjectionSchemaBundleResult;
+  schemaBundle: AflTradeAnyProjectionSchemaBundleResult;
   bindings: Pick<
     AflTradeProjectionMaterializationShardResult['projectionMaterializationShard']['content'],
     | 'publication'
@@ -1144,7 +1149,7 @@ function authenticateParents(
     valuationOutputInventoryIndex: AflTradeValuationOutputInventoryIndexResult;
     projectionPublicEvidenceIndex: AflTradeProjectionPublicEvidenceIndexResult;
     projectionPresentationPolicy: AflTradeProjectionPresentationPolicyResult;
-    projectionSchemaBundle: AflTradeProjectionSchemaBundleResult;
+    projectionSchemaBundle: AflTradeAnyProjectionSchemaBundleResult;
   },
   materializedAt: string
 ): Parents {
@@ -1195,14 +1200,29 @@ function authenticateParents(
     entryCount: evidenceContent.entryCount,
     evidenceBindingSetSha256: evidenceContent.evidenceBindingSetSha256,
   };
-  const completeSchemaBundleBinding = {
-    schemaVersion: schemaBundleContent.schemaVersion,
+  const commonSchemaBundleBinding = {
     projectionSchemaBundleId: schemaBundle.projectionSchemaBundle.projectionSchemaBundleId,
     artifactRef: schemaBundle.projectionSchemaBundleArtifactRef,
     responseContractVersion: schemaBundleContent.responseContractVersion,
     valuationExportContractVersion: schemaBundleContent.valuationExportContractVersion,
   };
+  const completeSchemaBundleBinding =
+    schemaBundleContent.schemaVersion === 'afl-trade-projection-schema-bundle/v2'
+      ? {
+          ...commonSchemaBundleBinding,
+          schemaVersion: schemaBundleContent.schemaVersion,
+          publicationManifestSchemaVersion: schemaBundleContent.publicationManifestSchemaVersion,
+          projectionManifestSchemaVersion: schemaBundleContent.projectionManifestSchemaVersion,
+        }
+      : {
+          ...commonSchemaBundleBinding,
+          schemaVersion: schemaBundleContent.schemaVersion,
+        };
   if (
+    (publication.content.schemaVersion === 'afl-trade-publication/v3' &&
+      schemaBundleContent.schemaVersion !== 'afl-trade-projection-schema-bundle/v1') ||
+    (publication.content.schemaVersion === 'afl-trade-publication/v4' &&
+      schemaBundleContent.schemaVersion !== 'afl-trade-projection-schema-bundle/v2') ||
     inventoryContent.scopeKey !== publication.content.scopeKey ||
     inventoryContent.valueUnitId !== publication.content.valueUnitId ||
     inventoryContent.valuationBundle.valuationBundleId !== publication.content.valuationBundleId ||
@@ -1447,7 +1467,7 @@ function parseCommon(snapshotValue: Record<string, unknown>) {
       'INVALID_PRESENTATION_POLICY'
     ),
     projectionSchemaBundle: parse(
-      aflTradeProjectionSchemaBundleResultSchema,
+      aflTradeAnyProjectionSchemaBundleResultSchema,
       snapshotValue.projectionSchemaBundle,
       'INVALID_SCHEMA_BUNDLE'
     ),

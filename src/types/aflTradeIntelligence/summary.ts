@@ -15,9 +15,12 @@ import {
   aflTradeAssessmentSchema,
   aflTradeConfidenceSchema,
   aflTradeModelVintageSchema,
+  aflTradePackageValueSummarySchema,
   aflTradeValuationViewSchema,
   aflTradeValueUnavailableSchema,
 } from './value';
+
+export { aflTradePackageValueSummarySchema } from './value';
 
 export const aflTradeClubValueSummarySchema = z
   .object({
@@ -33,6 +36,7 @@ export const aflTradeClubValueSummarySchema = z
       })
       .strict(),
     finishesAheadProbability: z.number().finite().min(0).max(1),
+    packageValue: aflTradePackageValueSummarySchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {

@@ -19,8 +19,9 @@ import {
   aflTradeValueListResponseSchema,
 } from '@/types/aflTradeIntelligence';
 
-import type { AflTradePublicationReadSelection } from './publicationState';
 import { createAflTradePrePublicationAvailability } from './prePublicationAvailability';
+import type { AflTradeNoPublicationReason } from './prePublicationAvailability';
+import type { AflTradePublicationReadSelection } from './publicationReadContracts';
 
 const listRequestSchema = z
   .object({
@@ -81,6 +82,7 @@ export type AflTradeValueDetailReadRequest = z.infer<typeof detailRequestSchema>
 export interface AflTradePublicationSelectionSnapshot {
   registryRevision: number;
   selection: AflTradePublicationReadSelection | null;
+  unavailabilityReason?: AflTradeNoPublicationReason;
 }
 
 export interface AflTradeProjectionReadMetadata {
@@ -160,7 +162,11 @@ function createNoPublicationConsistency(
     knowledgeCutoffAt: null,
     freshness: 'unavailable',
     supportedScope: [],
-    excludedScope: ['Numerical AFL trade valuation pending approved evidence use'],
+    excludedScope: [
+      snapshot.unavailabilityReason === 'source_blocked'
+        ? 'Numerical AFL trade valuation blocked by non-current source authority'
+        : 'Numerical AFL trade valuation pending a reviewed active publication',
+    ],
     warnings: [],
   };
 }
@@ -175,7 +181,10 @@ function createNoPublicationListResponse(
     requestedView: request.requestedView,
     items: request.tradeIds.map((tradeId) => ({
       tradeId,
-      valuation: createAflTradePrePublicationAvailability(request.requestedView),
+      valuation: createAflTradePrePublicationAvailability(
+        request.requestedView,
+        snapshot.unavailabilityReason
+      ),
     })),
     page: { limit: request.limit, nextCursor: null, total: null },
   };
@@ -190,7 +199,7 @@ function createNoPublicationDetailResponse(
     consistency: createNoPublicationConsistency(snapshot, servedAt),
     tradeId: request.tradeId,
     valuations: request.requestedViews.map((view: AflTradeValuationView) =>
-      createAflTradePrePublicationAvailability(view)
+      createAflTradePrePublicationAvailability(view, snapshot.unavailabilityReason)
     ),
     assets: [],
     lineageSummary: {
@@ -206,8 +215,7 @@ function createNoPublicationDetailResponse(
 
 function sameOrderedValues(actual: readonly string[], expected: readonly string[]): boolean {
   return (
-    actual.length === expected.length &&
-    actual.every((member, index) => member === expected[index])
+    actual.length === expected.length && actual.every((member, index) => member === expected[index])
   );
 }
 
@@ -228,9 +236,7 @@ function requireSelection(
       'The publication selection and registry revision do not match.'
     );
   }
-  const unsupportedView = requestedViews.find(
-    (view) => !selection.supportedViews.includes(view)
-  );
+  const unsupportedView = requestedViews.find((view) => !selection.supportedViews.includes(view));
   if (unsupportedView) {
     throw new AflTradeValueReadError(
       'UNSUPPORTED_VIEW',
@@ -310,7 +316,10 @@ export function createAflTradeValueReadService(dependencies: {
     async list(input) {
       const parsedRequest = listRequestSchema.safeParse(input);
       if (!parsedRequest.success) {
-        throw new AflTradeValueReadError('INVALID_REQUEST', 'The valuation list request is invalid.');
+        throw new AflTradeValueReadError(
+          'INVALID_REQUEST',
+          'The valuation list request is invalid.'
+        );
       }
       const request = parsedRequest.data;
       const snapshot = await dependencies.publicationSelector.capture(request.scopeKey);

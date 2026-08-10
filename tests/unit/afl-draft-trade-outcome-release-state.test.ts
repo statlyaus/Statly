@@ -96,7 +96,11 @@ describe('AFL Draft & Trade factual release lifecycle', () => {
         value.release.content.scopeKey,
         selectionEvaluation(value)
       )
-    ).toEqual({ registryRevision: 1, selection: null });
+    ).toEqual({
+      registryRevision: 1,
+      selection: null,
+      unavailabilityReason: 'no_active_release',
+    });
     const original = structuredClone(registry);
     expect(() =>
       registerAflDraftTradeOutcomeRelease(registry, {
@@ -133,16 +137,21 @@ describe('AFL Draft & Trade factual release lifecycle', () => {
     const selector = createAflDraftTradeOutcomeRegistryReleaseSelector(
       async () => registry,
       async () => first.rights.ledger,
-      () => '2026-08-06T13:00:00.000Z'
+      () => '2026-08-06T13:00:00.000Z',
+      'test_fixture'
     );
     await expect(selector.capture(AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE)).resolves.toEqual(snapshot);
-    expect(() =>
+    expect(
       captureAflDraftTradeOutcomeReleaseSelection(
         registry,
         AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
         selectionEvaluation(first, '2027-01-01T00:00:00.000Z')
       )
-    ).toThrow(expect.objectContaining({ code: 'INEFFECTIVE_DECISION' }));
+    ).toEqual({
+      registryRevision: 4,
+      selection: null,
+      unavailabilityReason: 'source_blocked',
+    });
 
     const original = structuredClone(registry);
     expect(() =>
@@ -171,7 +180,11 @@ describe('AFL Draft & Trade factual release lifecycle', () => {
         value.release.content.scopeKey,
         selectionEvaluation(value)
       )
-    ).toEqual({ registryRevision: 1, selection: null });
+    ).toEqual({
+      registryRevision: 1,
+      selection: null,
+      unavailabilityReason: 'no_active_release',
+    });
 
     const expiredTerms = fixture('c', undefined, '2026-08-06T04:30:00.000Z');
     const termsRegistry = register(
@@ -272,7 +285,11 @@ describe('AFL Draft & Trade factual release lifecycle', () => {
         AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
         selectionEvaluation(second)
       )
-    ).toEqual({ registryRevision: registry.revision, selection: null });
+    ).toEqual({
+      registryRevision: registry.revision,
+      selection: null,
+      unavailabilityReason: 'no_active_release',
+    });
     expect(() =>
       applyAflDraftTradeOutcomeReleaseCommand(registry, {
         action: 'activate',
@@ -489,11 +506,19 @@ function sqlResult<Row>(
 
 function createStatefulOutcomeSqlClient(initial: AflDraftTradeOutcomeReleaseRegistry) {
   let registry = structuredClone(initial);
-  const projections = new Map<string, { releaseId: string; manifest: unknown }>();
+  const projections = new Map<
+    string,
+    { releaseId: string; publicArchiveId: string | null; manifest: unknown }
+  >();
   for (const record of Object.values(registry.releases)) {
     if (record.projectionManifest) {
       projections.set(record.projectionManifest.projectionId, {
         releaseId: record.releaseId,
+        publicArchiveId:
+          record.projectionManifest.content.schemaVersion ===
+          'afl-draft-trade-factual-projection/v3'
+            ? record.projectionManifest.content.publicArchiveId
+            : null,
         manifest: structuredClone(record.projectionManifest),
       });
     }
@@ -504,7 +529,10 @@ function createStatefulOutcomeSqlClient(initial: AflDraftTradeOutcomeReleaseRegi
   function createQuery(
     getRegistry: () => AflDraftTradeOutcomeReleaseRegistry,
     setRegistry: (next: AflDraftTradeOutcomeReleaseRegistry) => void,
-    projectionStore: Map<string, { releaseId: string; manifest: unknown }>
+    projectionStore: Map<
+      string,
+      { releaseId: string; publicArchiveId: string | null; manifest: unknown }
+    >
   ) {
     return async function query<Row>(sql: string, parameters: readonly unknown[] = []) {
       calls.push(sql);
@@ -518,26 +546,37 @@ function createStatefulOutcomeSqlClient(initial: AflDraftTradeOutcomeReleaseRegi
           } as Row,
         ]);
       }
+      if (sql.includes('SELECT release_id FROM outcome_release_manifest')) {
+        return sqlResult<Row>([{ release_id: parameters[0] } as Row]);
+      }
       if (sql.includes('INSERT INTO outcome_projection_manifest')) {
-        const [projectionId, releaseId, , manifest] = parameters as [
+        const [projectionId, releaseId, publicArchiveId, , manifest] = parameters as [
           string,
           string,
+          string | null,
           string,
           unknown,
         ];
         if (!projectionStore.has(projectionId)) {
           projectionStore.set(projectionId, {
             releaseId,
+            publicArchiveId,
             manifest: structuredClone(manifest),
           });
         }
         return sqlResult<Row>([], 1);
       }
       if (sql.includes('FROM outcome_projection_manifest')) {
-        const [projectionId, releaseId, manifest] = parameters as [string, string, unknown];
+        const [projectionId, releaseId, publicArchiveId, manifest] = parameters as [
+          string,
+          string,
+          string | null,
+          unknown,
+        ];
         const persisted = projectionStore.get(projectionId);
         const matches =
           persisted?.releaseId === releaseId &&
+          persisted.publicArchiveId === publicArchiveId &&
           JSON.stringify(persisted.manifest) === JSON.stringify(manifest);
         return sqlResult<Row>(matches ? ([{ projection_id: projectionId }] as Row[]) : []);
       }
@@ -674,6 +713,7 @@ describe('AFL Draft & Trade PostgreSQL release adapter behavior', () => {
     expect(database.loadRegistry()).toEqual(registry);
     expect(database.projections.get(value.projection.projectionId)).toEqual({
       releaseId: value.release.releaseId,
+      publicArchiveId: null,
       manifest: value.projection,
     });
     expect(database.calls.some((sql) => sql.includes('FOR UPDATE'))).toBe(true);

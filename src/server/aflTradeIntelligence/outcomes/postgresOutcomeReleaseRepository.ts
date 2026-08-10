@@ -7,6 +7,7 @@ import {
   type AflDraftTradeOutcomeRegistrySnapshotStore,
   type AflDraftTradeOutcomeReleaseRepository,
 } from './outcomeReleaseRepository';
+import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 
 export interface AflOutcomeSqlQueryResult<Row> {
   rows: readonly Row[];
@@ -44,19 +45,56 @@ async function insertRegisteredManifest(
   if (!event || event.content.action !== 'register') return;
   const record = registry.releases[event.content.releaseId];
   const manifest = record.releaseManifest;
+  await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+    `outcome-release-membership:${manifest.releaseId}`,
+  ]);
   await transaction.query(
     `INSERT INTO outcome_release_manifest
       (release_id, scope_key, environment, created_at, effective_through, manifest_json)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+     ON CONFLICT (release_id) DO NOTHING`,
     [
       manifest.releaseId,
       manifest.content.scopeKey,
       manifest.content.environment,
       manifest.content.createdAt,
       manifest.content.effectiveThrough,
-      manifest,
+      canonicalizeAflTradeJson(manifest),
     ]
   );
+  const persisted = await transaction.query(
+    `SELECT release_id FROM outcome_release_manifest
+      WHERE release_id=$1 AND scope_key=$2 AND environment=$3 AND created_at=$4
+        AND effective_through=$5 AND manifest_json=$6::jsonb FOR KEY SHARE`,
+    [
+      manifest.releaseId,
+      manifest.content.scopeKey,
+      manifest.content.environment,
+      manifest.content.createdAt,
+      manifest.content.effectiveThrough,
+      canonicalizeAflTradeJson(manifest),
+    ]
+  );
+  if (persisted.rows.length !== 1) {
+    throw new Error('The registered factual manifest conflicts with staged evidence.');
+  }
+  if (manifest.content.schemaVersion === 'afl-draft-trade-outcome-release/v2') {
+    const candidate = await transaction.query(
+      `SELECT candidate_id FROM outcome_factual_release_candidate
+        WHERE target_release_id=$1 AND member_set_sha256=$2 AND status='approved'
+          AND finalized_at IS NOT NULL
+          AND candidate_json->'targetReleaseManifest'=$3::jsonb
+        FOR KEY SHARE`,
+      [
+        manifest.releaseId,
+        manifest.content.sourceMemberSetSha256,
+        canonicalizeAflTradeJson(manifest),
+      ]
+    );
+    if (candidate.rows.length !== 1) {
+      throw new Error('Factual release v2 requires one exact finalized candidate.');
+    }
+  }
 }
 
 async function insertValidatedProjection(
@@ -68,18 +106,49 @@ async function insertValidatedProjection(
   const record = registry.releases[event.content.releaseId];
   const projection = record.projectionManifest;
   if (!projection) throw new Error('A validated factual release has no projection manifest.');
+  if (projection.content.schemaVersion === 'afl-draft-trade-outcome-projection/v2') {
+    const candidate = await transaction.query(
+      `SELECT candidate_id FROM outcome_factual_release_candidate
+        WHERE candidate_id=$1 AND target_release_id=$2 AND member_set_sha256=$3
+          AND status='approved' AND finalized_at IS NOT NULL FOR KEY SHARE`,
+      [
+        projection.content.factualCandidateId,
+        projection.content.releaseId,
+        projection.content.sourceMemberSetSha256,
+      ]
+    );
+    if (candidate.rows.length !== 1) {
+      throw new Error('Factual projection v2 requires its exact finalized release candidate.');
+    }
+  }
   await transaction.query(
     `INSERT INTO outcome_projection_manifest
-      (projection_id, release_id, created_at, manifest_json)
-     VALUES ($1, $2, $3, $4)
+      (projection_id, release_id, public_archive_id, created_at, manifest_json)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (projection_id) DO NOTHING`,
-    [projection.projectionId, record.releaseId, projection.content.createdAt, projection]
+    [
+      projection.projectionId,
+      record.releaseId,
+      projection.content.schemaVersion === 'afl-draft-trade-factual-projection/v3'
+        ? projection.content.publicArchiveId
+        : null,
+      projection.content.createdAt,
+      projection,
+    ]
   );
   const persisted = await transaction.query(
     `SELECT projection_id
      FROM outcome_projection_manifest
-     WHERE projection_id = $1 AND release_id = $2 AND manifest_json = $3`,
-    [projection.projectionId, record.releaseId, projection]
+     WHERE projection_id = $1 AND release_id = $2 AND public_archive_id IS NOT DISTINCT FROM $3
+       AND manifest_json = $4`,
+    [
+      projection.projectionId,
+      record.releaseId,
+      projection.content.schemaVersion === 'afl-draft-trade-factual-projection/v3'
+        ? projection.content.publicArchiveId
+        : null,
+      projection,
+    ]
   );
   if (persisted.rows.length !== 1) {
     throw new Error('The validated factual projection conflicts with persisted evidence.');

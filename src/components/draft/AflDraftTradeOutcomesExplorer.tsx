@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { aflDraftTradeOutcomeAcquisitionKey } from '@/types/aflDraftTradeOutcomes';
 import type {
   AflDraftTradeOutcomeCheckStatus,
   AflDraftTradeOutcomeListResponse,
@@ -200,10 +201,9 @@ export function AflDraftTradeOutcomesExplorer({ response, query, filterNotice = 
             >
               <h3 className="text-base font-semibold">Checks are implemented but not activated</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Statly will not label the supplied workbook as verified data. A public row appears
-                only after stable player identity, source rights, matching metric scope, and one
-                exact reviewed release are all available. Missing evidence stays unavailable; zero
-                remains a real checked value.
+                A public row appears only after stable player identity, source rights, matching
+                metric scope, and one exact reviewed release are all available. Missing evidence
+                stays unavailable; zero remains a real checked value.
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
                 <Link
@@ -403,8 +403,8 @@ export function AflDraftTradeOutcomesExplorer({ response, query, filterNotice = 
             What Statly checks
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Each number keeps its own definition and evidence. A workbook total with an undocumented
-            scope cannot silently become an AFL career or receiving-club total.
+            Each number keeps its own definition and evidence. An upstream total with an
+            undocumented scope cannot silently become an AFL career or receiving-club total.
           </p>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -433,7 +433,7 @@ export function AflDraftTradeOutcomesExplorer({ response, query, filterNotice = 
           <div className="mt-5 space-y-5">
             {response.items.map((item) => (
               <article
-                key={item.eventId}
+                key={aflDraftTradeOutcomeAcquisitionKey(item)}
                 className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">

@@ -29,15 +29,15 @@ export default function DraftLayout({ children }: { children: ReactNode }) {
             <p className={draftHubHeaderKickerClass}>Statly Public Research Hub</p>
             <h1 className={draftHubHeaderTitleClass}>AFL Draft &amp; Trade Outcomes</h1>
             <p className={draftHubHeaderDescriptionClass}>
-              Explore the historical AFL trade archive and club movement in a public research
-              workspace separate from Statly Fantasy. Checked numerical outcome releases are not yet
-              published.
+              Explore AFL trades, draft selections, pick movement, and club history in a public
+              research workspace separate from Statly Fantasy. Factual records and numerical
+              valuations remain independently release-gated.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className={draftHubSectionPillClass}>Historical trade archive</span>
+              <span className={draftHubSectionPillClass}>Draft selection history</span>
               <span className={draftHubSectionPillClass}>Club movement analysis</span>
               <span className={draftHubSectionPillClass}>Outcome methodology</span>
-              <span className={draftHubSectionPillClass}>Numerical outcomes not published</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">

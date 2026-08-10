@@ -57,7 +57,10 @@ import {
   type AflTradeProjectionPublicEvidenceContent,
 } from '@/server/aflTradeIntelligence/publication/projectionPublicEvidence';
 import { createAflTradeProjectionPublicEvidenceIndex } from '@/server/aflTradeIntelligence/publication/projectionPublicEvidenceIndex';
-import { createAflTradeProjectionSchemaBundle } from '@/server/aflTradeIntelligence/publication/projectionSchemaBundle';
+import {
+  createAflTradeProjectionSchemaBundle,
+  createAflTradeProjectionSchemaBundleV2,
+} from '@/server/aflTradeIntelligence/publication/projectionSchemaBundle';
 import {
   createAflTradeProjectionTradeMaterialization,
   type AflTradeProjectionTradeMaterializerCreateInput,
@@ -897,6 +900,17 @@ describe('AFL trade projection aggregate materialization', () => {
 
   it('rejects forged source verification, receipt output, and common-parent bindings before aggregation', () => {
     const pipeline = buildPipeline();
+
+    expectAggregateError(
+      () =>
+        createAflTradeProjectionMaterializationShard({
+          ...pipeline.shardInput,
+          projectionSchemaBundle: createAflTradeProjectionSchemaBundleV2({
+            createdAt: SCHEMA_AT,
+          }),
+        }),
+      'PARENT_BINDING_MISMATCH'
+    );
 
     const forgedVerification = structuredClone(pipeline.tradeVerification);
     forgedVerification.evidenceSourceVerification.output.projectionEvidenceSourceVerification.content.sourceArtifactSetSha256 =

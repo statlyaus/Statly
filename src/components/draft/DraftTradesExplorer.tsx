@@ -92,7 +92,8 @@ type DraftTradesExplorerProps = {
   trades: DraftTradeHeader[];
   /** RSC snapshot of the URL query — must match the request so SSR and first client paint agree (useSearchParams differs on the server). */
   initialSearchString: string;
-  valueResponse: AflTradeValueListResponse | null;
+  atTradeValueResponse: AflTradeValueListResponse | null;
+  currentValueResponse: AflTradeValueListResponse | null;
 };
 
 const detailCache = new Map<string, DraftTradeDetailData>();
@@ -286,7 +287,8 @@ export function DraftTradesExplorer({
   yearOptions,
   trades,
   initialSearchString,
-  valueResponse,
+  atTradeValueResponse,
+  currentValueResponse,
 }: DraftTradesExplorerProps): ReactElement {
   const router = useRouter();
   const pathname = usePathname();
@@ -381,12 +383,24 @@ export function DraftTradesExplorer({
   }, [expandedTradeId]);
 
   const clubOptions = useMemo(() => buildClubOptions(trades), [trades]);
-  const valuationByTradeId = useMemo(
-    () => new Map(valueResponse?.items.map((item) => [item.tradeId, item.valuation]) ?? []),
-    [valueResponse]
+  const atTradeValueByTradeId = useMemo(
+    () =>
+      new Map(
+        atTradeValueResponse?.items.map((item) => [item.tradeId, item.valuation] as const) ?? []
+      ),
+    [atTradeValueResponse]
   );
-  const showPerTradeValuations =
-    valueResponse?.items.some((item) => isValueBearingSummary(item.valuation)) ?? false;
+  const currentValueByTradeId = useMemo(
+    () =>
+      new Map(
+        currentValueResponse?.items.map((item) => [item.tradeId, item.valuation] as const) ?? []
+      ),
+    [currentValueResponse]
+  );
+  const showPerTradeValuations = [
+    ...atTradeValueByTradeId.values(),
+    ...currentValueByTradeId.values(),
+  ].some(isValueBearingSummary);
   const filteredTrades = useMemo(() => {
     // Keep in sync with `listDraftTradesByYear` (firestore.ts): trim/lowercase q only;
     // do not trim trade title/club strings so SSR trade list and client filter agree.
@@ -613,6 +627,16 @@ export function DraftTradesExplorer({
   const selectedTrade = expandedTradeId
     ? (filteredTrades.find((trade) => trade.tradeId === expandedTradeId) ?? null)
     : null;
+  const selectedAtTradeValue = selectedTrade
+    ? atTradeValueByTradeId.get(selectedTrade.tradeId)
+    : undefined;
+  const selectedCurrentValue = selectedTrade
+    ? currentValueByTradeId.get(selectedTrade.tradeId)
+    : undefined;
+  const selectedStatlyValues =
+    selectedAtTradeValue && selectedCurrentValue
+      ? { atTrade: selectedAtTradeValue, current: selectedCurrentValue }
+      : null;
 
   return (
     <section className="space-y-6">
@@ -955,10 +979,10 @@ export function DraftTradesExplorer({
       </div>
 
       {!showPerTradeValuations &&
-      valueResponse?.items[0] &&
-      !isValueBearingSummary(valueResponse.items[0].valuation) ? (
+      currentValueResponse?.items[0] &&
+      !isValueBearingSummary(currentValueResponse.items[0].valuation) ? (
         <AflTradeValueUnavailablePanel
-          availability={valueResponse.items[0].valuation}
+          availability={currentValueResponse.items[0].valuation}
           variant="compact"
         />
       ) : null}
@@ -978,7 +1002,8 @@ export function DraftTradesExplorer({
         {filteredTrades.map((trade) => {
           const isExpanded = expandedTradeId === trade.tradeId;
           const isLoadingDetail = isExpanded && loadingTradeId === trade.tradeId;
-          const valuation = valuationByTradeId.get(trade.tradeId);
+          const atTradeValue = atTradeValueByTradeId.get(trade.tradeId);
+          const currentValue = currentValueByTradeId.get(trade.tradeId);
           const receives =
             trade.receivesByClub.length > 0
               ? trade.receivesByClub
@@ -1038,12 +1063,20 @@ export function DraftTradesExplorer({
                   </span>
                 </button>
               </div>
-              {showPerTradeValuations && valuation ? (
-                <div className="mt-3">
-                  <AflTradeValueSummaryCard
-                    valuation={valuation}
-                    calculationAsOf={valueResponse?.consistency.calculationAsOf ?? null}
-                  />
+              {showPerTradeValuations && (atTradeValue || currentValue) ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {atTradeValue ? (
+                    <AflTradeValueSummaryCard
+                      valuation={atTradeValue}
+                      calculationAsOf={atTradeValueResponse?.consistency.calculationAsOf ?? null}
+                    />
+                  ) : null}
+                  {currentValue ? (
+                    <AflTradeValueSummaryCard
+                      valuation={currentValue}
+                      calculationAsOf={currentValueResponse?.consistency.calculationAsOf ?? null}
+                    />
+                  ) : null}
                 </div>
               ) : null}
               <div className="mt-2 space-y-1 rounded-md border border-base-300 bg-base-200/35 p-2">
@@ -1095,6 +1128,11 @@ export function DraftTradesExplorer({
                         detail={expandedDetail}
                         showOpenFullPageLink
                         mode="inline"
+                        statlyValues={
+                          atTradeValue && currentValue
+                            ? { atTrade: atTradeValue, current: currentValue }
+                            : null
+                        }
                       />
                     </div>
                   )}
@@ -1147,7 +1185,8 @@ export function DraftTradesExplorer({
               {filteredTrades.map((trade) => {
                 const isExpanded = expandedTradeId === trade.tradeId;
                 const isActive = activeTradeId === trade.tradeId;
-                const valuation = valuationByTradeId.get(trade.tradeId);
+                const atTradeValue = atTradeValueByTradeId.get(trade.tradeId);
+                const currentValue = currentValueByTradeId.get(trade.tradeId);
                 const receives =
                   trade.receivesByClub.length > 0
                     ? trade.receivesByClub
@@ -1206,12 +1245,24 @@ export function DraftTradesExplorer({
                       </div>
                     </div>
 
-                    {showPerTradeValuations && valuation ? (
-                      <div className="mt-4">
-                        <AflTradeValueSummaryCard
-                          valuation={valuation}
-                          calculationAsOf={valueResponse?.consistency.calculationAsOf ?? null}
-                        />
+                    {showPerTradeValuations && (atTradeValue || currentValue) ? (
+                      <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                        {atTradeValue ? (
+                          <AflTradeValueSummaryCard
+                            valuation={atTradeValue}
+                            calculationAsOf={
+                              atTradeValueResponse?.consistency.calculationAsOf ?? null
+                            }
+                          />
+                        ) : null}
+                        {currentValue ? (
+                          <AflTradeValueSummaryCard
+                            valuation={currentValue}
+                            calculationAsOf={
+                              currentValueResponse?.consistency.calculationAsOf ?? null
+                            }
+                          />
+                        ) : null}
                       </div>
                     ) : null}
 
@@ -1414,7 +1465,12 @@ export function DraftTradesExplorer({
                   {loadingTradeId !== selectedTrade.tradeId &&
                   !detailError &&
                   expandedDetail?.trade.tradeId === selectedTrade.tradeId ? (
-                    <DraftTradeDetail detail={expandedDetail} showOpenFullPageLink mode="inline" />
+                    <DraftTradeDetail
+                      detail={expandedDetail}
+                      showOpenFullPageLink
+                      mode="inline"
+                      statlyValues={selectedStatlyValues}
+                    />
                   ) : null}
                 </div>
               </>

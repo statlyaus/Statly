@@ -25,7 +25,9 @@ import {
 } from '../artifacts/contentAddress';
 import {
   aflTradePublicationManifestV3Schema,
+  aflTradePublicationManifestV4Schema,
   type AflTradePublicationManifestV3,
+  type AflTradePublicationManifestV4,
 } from '../artifacts/publicationProjectionManifests';
 import {
   AFL_TRADE_VALUATION_OUTPUT_INVENTORY_INDEX_MAX_ENTRIES,
@@ -61,7 +63,7 @@ export const AFL_TRADE_PROJECTION_DOCUMENT_SET_PREDECESSOR_COMPATIBILITY =
   'no_predecessor_no_latest_alias_no_implicit_conversion_v1' as const;
 export const AFL_TRADE_PROJECTION_DOCUMENT_SET_RUNTIME_FALLBACK = 'prohibited' as const;
 export const AFL_TRADE_PROJECTION_DOCUMENT_SET_PUBLICATION_AUTHORITY =
-  'publication_registry_and_verified_v3_publication_remain_sole_serving_authority_v1' as const;
+  'publication_registry_and_verified_v3_or_v4_publication_remain_sole_serving_authority_v1' as const;
 export const AFL_TRADE_PROJECTION_DOCUMENT_SET_LIMITATION =
   'This immutable set totally replays the aggregate projection materialization and authenticates ordered detached projection-document membership plus one exact publication methodology. It does not persist document bytes, prove source rights or model validity, activate a publication, authorize fantasy state, or establish user or fantasy ownership.' as const;
 
@@ -907,7 +909,10 @@ type ProjectionDocumentInput = z.infer<typeof projectionDocumentInputSchema>;
 
 export const aflTradeProjectionDocumentSetCreateInputSchema = z
   .object({
-    publicationManifest: aflTradePublicationManifestV3Schema,
+    publicationManifest: z.union([
+      aflTradePublicationManifestV3Schema,
+      aflTradePublicationManifestV4Schema,
+    ]),
     valuationOutputInventoryIndex: aflTradeValuationOutputInventoryIndexSchema,
     valuationOutputInventoryIndexArtifactRef: canonicalJsonArtifactRefSchema,
     projectionMaterializationVerification: aflTradeProjectionMaterializationVerifyInputSchema,
@@ -1138,7 +1143,7 @@ function materializationBindingFor(
 
 function assertProjectionMaterialization(
   unparsedVerification: unknown,
-  publication: AflTradePublicationManifestV3,
+  publication: AflTradePublicationManifestV3 | AflTradePublicationManifestV4,
   index: AflTradeValuationOutputInventoryIndex,
   indexArtifactRef: AflTradeArtifactRef,
   documentSetMaterializedAt: string
@@ -1198,7 +1203,7 @@ function assertProjectionMaterialization(
 }
 
 function assertIndexAndPublication(
-  publication: AflTradePublicationManifestV3,
+  publication: AflTradePublicationManifestV3 | AflTradePublicationManifestV4,
   index: AflTradeValuationOutputInventoryIndex,
   indexArtifactRef: AflTradeArtifactRef,
   materializedAt: string
@@ -1256,7 +1261,7 @@ function assertIndexAndPublication(
 }
 
 function assertDocuments(
-  publication: AflTradePublicationManifestV3,
+  publication: AflTradePublicationManifestV3 | AflTradePublicationManifestV4,
   index: AflTradeValuationOutputInventoryIndex,
   inputs: readonly ProjectionDocumentInput[],
   materialization: {
@@ -1596,7 +1601,7 @@ export function createAflTradeProjectionDocumentSet(
     const snapshot = snapshotExactEnvelope(unparsedInput, CREATE_INPUT_KEYS);
     if (snapshot === null) throw constructionError('INVALID_INPUT_ENVELOPE');
     const publication = parseOrThrow(
-      aflTradePublicationManifestV3Schema,
+      z.union([aflTradePublicationManifestV3Schema, aflTradePublicationManifestV4Schema]),
       snapshot.publicationManifest,
       'INVALID_PUBLICATION_MANIFEST'
     );

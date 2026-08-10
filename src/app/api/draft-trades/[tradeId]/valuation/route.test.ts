@@ -1,21 +1,31 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getDraftTradeByIdMock } = vi.hoisted(() => ({
+const { getDraftTradeByIdMock, valueReadService } = vi.hoisted(() => ({
   getDraftTradeByIdMock: vi.fn(),
+  valueReadService: { detail: vi.fn() },
 }));
 
 vi.mock('@/lib/draftTrades/read', () => ({
   getDraftTradeById: getDraftTradeByIdMock,
 }));
 
+vi.mock('@/server/aflTradeIntelligence/runtime/publicReadRuntime', () => ({
+  getPublicAflTradeReadRuntime: async () => ({ valueReadService }),
+}));
+
 import { GET } from './route';
+import { aflTradePrePublicationValueReadService } from '@/server/aflTradeIntelligence/publication/prePublicationValueReadService';
 
 const context = (tradeId: string) => ({ params: Promise.resolve({ tradeId }) });
+const canonicalTradeId = `external-transaction:${'a'.repeat(64)}`;
 
 describe('GET /api/draft-trades/[tradeId]/valuation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    valueReadService.detail.mockImplementation((request) =>
+      aflTradePrePublicationValueReadService.detail(request)
+    );
   });
 
   it.each([
@@ -46,26 +56,26 @@ describe('GET /api/draft-trades/[tradeId]/valuation', () => {
       ['at_trade', 'current'],
     ],
   ])(
-    'returns source-blocked detail for a known archive trade',
+    'returns not-calculated detail for a known archive trade',
     async (queryViews, expectedViews) => {
       getDraftTradeByIdMock.mockResolvedValue({
-        trade: { tradeId: 't1' },
+        trade: { tradeId: canonicalTradeId },
         parties: [],
         assets: [],
       });
       const query = queryViews.map((view) => `view=${view}`).join('&');
       const response = await GET(
         new NextRequest(
-          `http://localhost/api/draft-trades/t1/valuation${query ? `?${query}` : ''}`
+          `http://localhost/api/draft-trades/${encodeURIComponent(canonicalTradeId)}/valuation${query ? `?${query}` : ''}`
         ),
-        context('t1')
+        context(encodeURIComponent(canonicalTradeId))
       );
       const body = await response.json();
 
       expect(response.status).toBe(200);
       expect(body.success).toBe(true);
       expect(body.data).toMatchObject({
-        tradeId: 't1',
+        tradeId: canonicalTradeId,
         assets: [],
         lineageSummary: {
           status: 'unavailable',
@@ -85,9 +95,13 @@ describe('GET /api/draft-trades/[tradeId]/valuation', () => {
       expect(body.data.valuations.map((valuation: { view: string }) => valuation.view)).toEqual(
         expectedViews
       );
+      expect(getDraftTradeByIdMock).toHaveBeenCalledWith(canonicalTradeId);
+      expect(valueReadService.detail).toHaveBeenCalledWith(
+        expect.objectContaining({ tradeId: canonicalTradeId })
+      );
       expect(
         body.data.valuations.every(
-          (valuation: { availability: string }) => valuation.availability === 'source_blocked'
+          (valuation: { availability: string }) => valuation.availability === 'not_calculated'
         )
       ).toBe(true);
       expect(JSON.stringify(body.data)).not.toMatch(

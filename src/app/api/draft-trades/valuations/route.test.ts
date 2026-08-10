@@ -1,9 +1,24 @@
 import { NextRequest } from 'next/server';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { valueReadService } = vi.hoisted(() => ({
+  valueReadService: { list: vi.fn() },
+}));
+
+vi.mock('@/server/aflTradeIntelligence/runtime/publicReadRuntime', () => ({
+  getPublicAflTradeReadRuntime: async () => ({ valueReadService }),
+}));
 
 import { GET } from './route';
+import { aflTradePrePublicationValueReadService } from '@/server/aflTradeIntelligence/publication/prePublicationValueReadService';
 
 describe('GET /api/draft-trades/valuations', () => {
+  beforeEach(() => {
+    valueReadService.list.mockImplementation((request) =>
+      aflTradePrePublicationValueReadService.list(request)
+    );
+  });
+
   it.each([
     'http://localhost/api/draft-trades/valuations',
     'http://localhost/api/draft-trades/valuations?tradeId=t1&tradeId=t1',
@@ -15,7 +30,7 @@ describe('GET /api/draft-trades/valuations', () => {
   });
 
   it.each(['current', 'at_trade'] as const)(
-    'returns a v2 source blocker for the %s view',
+    'returns a v2 not-calculated state for the %s view',
     async (view) => {
       const response = await GET(
         new NextRequest(
@@ -38,7 +53,7 @@ describe('GET /api/draft-trades/valuations', () => {
       expect(
         body.data.items.every(
           (item: { valuation: { availability: string; view: string } }) =>
-            item.valuation.availability === 'source_blocked' && item.valuation.view === view
+            item.valuation.availability === 'not_calculated' && item.valuation.view === view
         )
       ).toBe(true);
       expect(JSON.stringify(body.data)).not.toMatch(

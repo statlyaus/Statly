@@ -4,11 +4,10 @@ import { z } from 'zod';
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { getDraftTradeById } from '@/lib/draftTrades/read';
 import { logger } from '@/lib/logger';
-import {
-  AFL_TRADE_PUBLIC_VALUE_SCOPE,
-  aflTradePrePublicationValueReadService,
-} from '@/server/aflTradeIntelligence/publication/prePublicationValueReadService';
+import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publication/publicationReadContracts';
 import { AflTradeValueReadError } from '@/server/aflTradeIntelligence/publication/valueReadService';
+import { parseAflTradePublicRouteParam } from '@/server/aflTradeIntelligence/runtime/publicTradeRouteParam';
+import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 import {
   AFL_TRADE_VALUATION_VIEWS,
   aflTradePublicIdSchema,
@@ -40,8 +39,13 @@ export async function GET(
 ) {
   const url = new URL(request.url);
   const requestedViews = url.searchParams.getAll('view');
+  const { tradeId: rawTradeId } = await params;
+  const tradeId = parseAflTradePublicRouteParam(rawTradeId);
+  if (tradeId === null) {
+    return commonErrors.badRequest('Invalid AFL trade valuation request');
+  }
   const parsed = requestSchema.safeParse({
-    ...(await params),
+    tradeId,
     views: requestedViews.length > 0 ? requestedViews : AFL_TRADE_VALUATION_VIEWS,
   });
   if (!parsed.success) {
@@ -54,7 +58,8 @@ export async function GET(
       return commonErrors.notFound('Trade not found');
     }
 
-    const response = await aflTradePrePublicationValueReadService.detail({
+    const { valueReadService } = await getPublicAflTradeReadRuntime();
+    const response = await valueReadService.detail({
       scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
       tradeId: parsed.data.tradeId,
       requestedViews: parsed.data.views,

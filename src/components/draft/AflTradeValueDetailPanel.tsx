@@ -1,8 +1,10 @@
 import Link from 'next/link';
 
 import { AflTradeValueUnavailablePanel } from '@/components/draft/AflTradeValueUnavailablePanel';
+import { deriveAflTradeStatlyGradesFromDetail } from '@/server/aflTradeIntelligence/valuation/statlyGradePolicy';
 import type {
   AflTradeAssetValueResult,
+  AflTradeClubValue,
   AflTradeValueBearing,
   AflTradeValueDetailResponse,
   AflTradeValueResult,
@@ -25,6 +27,11 @@ function isValueBearing(value: AflTradeValueResult): value is AflTradeValueBeari
 
 function formatValue(value: number): string {
   return new Intl.NumberFormat('en-AU', { maximumFractionDigits: 1 }).format(value);
+}
+
+function formatSignedValue(value: number): string {
+  const normalized = Object.is(value, -0) ? 0 : value;
+  return `${normalized > 0 ? '+' : ''}${formatValue(normalized)}`;
 }
 
 function formatProbability(value: number): string {
@@ -89,6 +96,49 @@ function AssetValue({ value }: { value: AflTradeAssetValueResult }) {
           {formatValue(value.currentComponents.remainingValue)} remaining
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function PackageValueBreakdown({
+  packageValue,
+  unitLabel,
+}: {
+  packageValue: NonNullable<AflTradeClubValue['packageValue']>;
+  unitLabel: string;
+}) {
+  return (
+    <div className="mt-2 text-sm leading-6 text-muted-foreground">
+      <p>
+        {formatValue(packageValue.received.median)} received −{' '}
+        {formatValue(packageValue.givenUp.median)} given up
+      </p>
+      <details className="group mt-2 border-t border-border pt-2">
+        <summary className="cursor-pointer font-semibold text-foreground marker:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          How this is calculated
+        </summary>
+        <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+          <dt>Received value</dt>
+          <dd className="text-right tabular-nums text-foreground">
+            {formatValue(packageValue.received.interval.lower)}–
+            {formatValue(packageValue.received.interval.upper)}
+          </dd>
+          <dt>Given-up value</dt>
+          <dd className="text-right tabular-nums text-foreground">
+            {formatValue(packageValue.givenUp.interval.lower)}–
+            {formatValue(packageValue.givenUp.interval.upper)}
+          </dd>
+          <dt>Net advantage</dt>
+          <dd className="text-right tabular-nums text-foreground">
+            {formatSignedValue(packageValue.net.interval.lower)}–
+            {formatSignedValue(packageValue.net.interval.upper)}
+          </dd>
+        </dl>
+        <p className="mt-2 text-xs">
+          Net is received value minus given-up value in {unitLabel} units. Ranges show uncertainty
+          in the complete package rather than a precise point score.
+        </p>
+      </details>
     </div>
   );
 }
@@ -163,49 +213,93 @@ export function AflTradeValueDetailPanel({ analysis }: AflTradeValueDetailPanelP
           Value by AFL club
         </h3>
         <div className="mt-4 space-y-4">
-          {numerical.map((value) => (
-            <section key={value.view} aria-labelledby={`trade-value-${value.view}-heading`}>
-              <h4
-                id={`trade-value-${value.view}-heading`}
-                className="text-sm font-semibold text-foreground"
-              >
-                {viewLabels[value.view]}
-              </h4>
-              <div className="mt-2 grid gap-3 md:grid-cols-2">
-                {value.clubValues.map((club) => {
-                  const finishesAhead = value.comparison.probabilities.find(
-                    (probability) => probability.aflClubId === club.aflClubId
-                  )?.finishesAhead;
-                  return (
-                    <article
-                      key={club.aflClubId}
-                      className="rounded-xl border border-border bg-background p-4"
-                    >
-                      <div className="flex items-baseline justify-between gap-3">
-                        <h5 className="font-semibold text-foreground">{club.clubName}</h5>
-                        <span className="font-semibold tabular-nums text-foreground">
-                          {formatValue(club.estimate)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        Median {formatValue(club.uncertainty.median)} ·{' '}
-                        {formatProbability(club.uncertainty.intervalLevel)} range{' '}
-                        {formatValue(club.uncertainty.lower)}–{formatValue(club.uncertainty.upper)}
-                        <br />
-                        {finishesAhead === undefined
-                          ? 'Winner probability unavailable'
-                          : `${formatProbability(finishesAhead)} chance to finish ahead`}
-                        <br />
-                        {formatProbability(club.distribution.lowReturn.probability)} low-return ·{' '}
-                        {formatProbability(club.distribution.eliteOutcome.probability)} elite
-                        outcome
-                      </p>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+          {numerical.map((value) => {
+            const statlyGrades = deriveAflTradeStatlyGradesFromDetail(value);
+            return (
+              <section key={value.view} aria-labelledby={`trade-value-${value.view}-heading`}>
+                <h4
+                  id={`trade-value-${value.view}-heading`}
+                  className="text-sm font-semibold text-foreground"
+                >
+                  {viewLabels[value.view]}
+                </h4>
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  {value.clubValues.map((club) => {
+                    const finishesAhead = value.comparison.probabilities.find(
+                      (probability) => probability.aflClubId === club.aflClubId
+                    )?.finishesAhead;
+                    const statlyGrade = statlyGrades.clubs.find(
+                      (candidate) => candidate.aflClubId === club.aflClubId
+                    );
+                    return (
+                      <article
+                        key={club.aflClubId}
+                        className="rounded-xl border border-border bg-background p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <h5 className="font-semibold text-foreground">{club.clubName}</h5>
+                          <span className="inline-flex shrink-0 items-center gap-2">
+                            {statlyGrade?.grade ? (
+                              <span className="inline-flex flex-col items-end gap-0.5">
+                                <span
+                                  className="badge badge-primary badge-outline min-w-10 justify-center font-semibold"
+                                  aria-label={`${club.clubName} Statly grade ${statlyGrade.grade}`}
+                                >
+                                  {statlyGrade.grade}
+                                </span>
+                                {statlyGrade.state === 'provisional' ? (
+                                  <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                                    Provisional
+                                  </span>
+                                ) : null}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-medium text-muted-foreground">
+                                Grade unavailable
+                              </span>
+                            )}
+                            <span className="font-semibold tabular-nums text-foreground">
+                              {club.packageValue
+                                ? `Net ${formatSignedValue(club.packageValue.net.median)}`
+                                : formatValue(club.estimate)}
+                            </span>
+                          </span>
+                        </div>
+                        {club.packageValue ? (
+                          <>
+                            <PackageValueBreakdown
+                              packageValue={club.packageValue}
+                              unitLabel={value.unit.label}
+                            />
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                              {finishesAhead === undefined
+                                ? 'Finish-ahead probability unavailable'
+                                : `${formatProbability(finishesAhead)} chance to finish ahead`}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                            Median {formatValue(club.uncertainty.median)} ·{' '}
+                            {formatProbability(club.uncertainty.intervalLevel)} range{' '}
+                            {formatValue(club.uncertainty.lower)}–
+                            {formatValue(club.uncertainty.upper)}
+                            <br />
+                            {finishesAhead === undefined
+                              ? 'Winner probability unavailable'
+                              : `${formatProbability(finishesAhead)} chance to finish ahead`}
+                            <br />
+                            {formatProbability(club.distribution.lowReturn.probability)} low-return
+                            · {formatProbability(club.distribution.eliteOutcome.probability)} elite
+                            outcome
+                          </p>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
         </div>
       </section>
 

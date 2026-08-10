@@ -8,6 +8,8 @@ import {
   draftHubSectionPillClass,
   draftHubSubtlePanelClass,
 } from '@/components/draft/draftHubChrome';
+import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publication/publicationReadContracts';
+import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 
 export const metadata: Metadata = {
   title: 'AFL Trade Value Methodology | Statly',
@@ -19,22 +21,22 @@ const plannedViews = [
   {
     title: 'At the trade',
     description:
-      'Would assess the decision using only evidence that was available when the trade occurred.',
+      'Assesses the decision using only evidence that was available when the trade occurred.',
   },
   {
     title: 'Realized outcome',
     description:
-      'Would describe contribution already delivered while each asset was in the receiving AFL club’s custody.',
+      'Describes contribution already delivered while each asset was in the receiving AFL club’s custody.',
   },
   {
     title: 'Remaining outcome',
     description:
-      'Would describe the uncertain future contribution still attached to active, supported assets.',
+      'Describes the uncertain future contribution still attached to active, supported assets.',
   },
   {
     title: 'Current outcome',
     description:
-      'Would combine realized and remaining outcomes under one approved, current model publication.',
+      'Combines realized and remaining outcomes under one approved, current model publication.',
   },
 ] as const;
 
@@ -46,7 +48,12 @@ const releaseRequirements = [
   'Responsive, accessible, and comprehensible product evidence',
 ] as const;
 
-export default function AflTradeMethodologyPage() {
+export default async function AflTradeMethodologyPage() {
+  const { methodologyReadService } = await getPublicAflTradeReadRuntime();
+  const response = await methodologyReadService.read({ scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE });
+  const published = response.availability === 'published' ? response.methodology : null;
+  const unavailableMessage = response.availability === 'unavailable' ? response.message : null;
+
   return (
     <div className="space-y-6">
       <section aria-labelledby="trade-methodology-heading" className={draftHubHeroShellClass}>
@@ -57,16 +64,19 @@ export default function AflTradeMethodologyPage() {
             id="trade-methodology-heading"
             className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl"
           >
-            How Statly intends to explain AFL trade value
+            {published
+              ? 'How Statly explains AFL trade value'
+              : 'How Statly will explain AFL trade value'}
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground md:text-base">
-            The historical archive is available, but Statly trade-value calculations are not. The
-            additional evidence needed to calculate and publish them has not been approved for that
-            use. No model result, estimated winner, or release date should be inferred from this
-            page.
+            {published
+              ? `${published.primaryOutcome.definition} Calculations use model ${published.modelVersion} and evidence through ${published.calculationAsOf}.`
+              : unavailableMessage}
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <span className={draftHubSectionPillClass}>Valuation unavailable</span>
+            <span className={draftHubSectionPillClass}>
+              {published ? 'Published methodology' : 'Valuation not yet published'}
+            </span>
             <Link
               href="/draft/trades"
               className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -79,13 +89,13 @@ export default function AflTradeMethodologyPage() {
 
       <section aria-labelledby="methodology-views-heading" className={draftHubSubtlePanelClass}>
         <div className="border-b border-border p-5 md:p-6">
-          <p className={draftHubHeaderKickerClass}>Planned views</p>
+          <p className={draftHubHeaderKickerClass}>Valuation views</p>
           <h3 id="methodology-views-heading" className="mt-2 text-xl font-semibold text-foreground">
             Four questions that must remain distinct
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            These views describe the intended product contract. They are not calculations that are
-            currently operating.
+            These views remain distinct in every publication. Their availability is determined by
+            the exact active release selected above.
           </p>
         </div>
         <dl className="grid gap-3 p-5 sm:grid-cols-2 md:p-6">
@@ -97,6 +107,48 @@ export default function AflTradeMethodologyPage() {
           ))}
         </dl>
       </section>
+
+      {published ? (
+        <section
+          aria-labelledby="published-methodology-heading"
+          className={draftHubSubtlePanelClass}
+        >
+          <div className="border-b border-border p-5 md:p-6">
+            <p className={draftHubHeaderKickerClass}>Active release</p>
+            <h3
+              id="published-methodology-heading"
+              className="mt-2 text-xl font-semibold text-foreground"
+            >
+              {published.primaryOutcome.label}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Training seasons {published.trainingPeriod.firstSeason}–
+              {published.trainingPeriod.lastSeason}. Value unit: {published.valueUnit.label}.
+            </p>
+          </div>
+          <div className="grid gap-6 p-5 md:grid-cols-2 md:p-6">
+            <div>
+              <h4 className="font-semibold text-foreground">Model components</h4>
+              <ul className="mt-3 space-y-3 text-sm leading-6 text-muted-foreground">
+                {published.components.map((component) => (
+                  <li key={component.role}>
+                    <span className="font-medium text-foreground">{component.modelVersion}:</span>{' '}
+                    {component.summary}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-foreground">Known limitations</h4>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
+                {published.knownLimitations.map((limitation) => (
+                  <li key={limitation}>{limitation}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section
@@ -132,23 +184,24 @@ export default function AflTradeMethodologyPage() {
           </div>
         </section>
 
-        <section aria-labelledby="methodology-legacy-heading" className={draftHubSubtlePanelClass}>
+        <section aria-labelledby="methodology-grades-heading" className={draftHubSubtlePanelClass}>
           <div className="p-5 md:p-6">
-            <p className={draftHubHeaderKickerClass}>Legacy archive fields</p>
+            <p className={draftHubHeaderKickerClass}>Statly grades</p>
             <h3
-              id="methodology-legacy-heading"
+              id="methodology-grades-heading"
               className="mt-2 text-xl font-semibold text-foreground"
             >
-              Expected and Actual are not Statly trade value
+              How Statly assigns a grade
             </h3>
             <p className="mt-4 text-sm leading-6 text-muted-foreground">
-              The archive preserves imported fields labelled Expected and Actual. Their original
-              source definition and methodology have not been verified by Statly. The stored values
-              remain unchanged, but they must not be interpreted as Statly estimates, fairness
-              scores, or conclusions about which AFL club won a trade.
+              Grades run from A+ to D and summarize each club&apos;s position in the validated trade
+              outcome distribution. They use an equal-party baseline and account for outcomes that
+              are practically indistinguishable instead of forcing a winner.
             </p>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              A dash means the imported archive did not record a value; it does not mean zero.
+              At-trade and current grades remain separate. Coverage below 70% produces Grade
+              unavailable; partial, stale, retained, or low-confidence evidence produces a clearly
+              labelled provisional grade.
             </p>
           </div>
         </section>
@@ -175,9 +228,9 @@ export default function AflTradeMethodologyPage() {
             ))}
           </ol>
           <p className="mt-5 max-w-4xl text-sm leading-6 text-muted-foreground">
-            This page records general product rules, not an approved model methodology. If a
-            numerical publication is later approved, each result must link to the exact
-            publication-specific methodology and limitations used to produce it.
+            {published
+              ? 'This page is bound to the exact active publication-specific methodology and its stated limitations.'
+              : 'These are the general product rules. A numerical result appears only after its sourced facts, model version, validation evidence, and methodology are reviewed and activated together.'}
           </p>
         </div>
       </section>

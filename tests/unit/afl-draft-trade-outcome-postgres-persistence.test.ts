@@ -66,14 +66,14 @@ describe('isolated AFL outcome PostgreSQL persistence architecture', () => {
       schema.indexOf('model OutcomeRegistryEvent {', projectionModelStart)
     );
 
-    expect(schema).toContain('projections      OutcomeProjectionManifest[]');
+    expect(schema).toMatch(/projections\s+OutcomeProjectionManifest\[\]/);
     expect(projectionModel).not.toMatch(/releaseId\s+String\s+@unique\s+@map\("release_id"\)/);
-    expect(schema).toContain('itemKey      String');
+    expect(schema).toMatch(/itemKey\s+String\s+@map\("item_key"\)/);
     expect(schema).toContain('@@unique([projectionId, itemKey], map:');
     expect(schema).toContain('@@index([metricCodes], type: Gin, map:');
     expect(schema).toContain('@@index([statusCodes], type: Gin, map:');
     expect(schema).toContain('@outcomes.Timestamptz(3)');
-    expect(schema).toContain('metricCodes  String[]                  @default([])');
+    expect(schema).toMatch(/metricCodes\s+String\[\]\s+@default\(\[\]\)/);
     expect(migration).not.toContain('outcome_projection_manifest_release_id_key');
     expect(migration).toContain('outcome_projection_item_projection_item_key');
     expect(migration).toContain('outcome_projection_item_release_player_ordinal_idx');

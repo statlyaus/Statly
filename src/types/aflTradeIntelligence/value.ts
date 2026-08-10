@@ -205,6 +205,35 @@ export const aflTradeValueFactorSchema = z
   })
   .strict();
 
+export const aflTradePackageValueComponentSchema = z
+  .object({
+    median: z.number().finite(),
+    interval: z
+      .object({
+        lower: z.number().finite(),
+        upper: z.number().finite(),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.interval.lower > value.median || value.median > value.interval.upper) {
+      context.addIssue({
+        code: 'custom',
+        path: ['interval'],
+        message: 'Package-value interval bounds must contain the median value.',
+      });
+    }
+  });
+
+export const aflTradePackageValueSummarySchema = z
+  .object({
+    received: aflTradePackageValueComponentSchema,
+    givenUp: aflTradePackageValueComponentSchema,
+    net: aflTradePackageValueComponentSchema,
+  })
+  .strict();
+
 export const aflTradeClubValueSchema = z
   .object({
     aflClubId: aflTradePublicIdSchema,
@@ -214,6 +243,7 @@ export const aflTradeClubValueSchema = z
     uncertainty: aflTradeUncertaintySchema,
     distribution: aflTradeOutcomeDistributionSummarySchema,
     factors: z.array(aflTradeValueFactorSchema).max(20),
+    packageValue: aflTradePackageValueSummarySchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {

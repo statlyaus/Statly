@@ -1,17 +1,16 @@
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import {
-  AflTradeMethodologyReadError,
-  aflTradePrePublicationMethodologyReadService,
-} from '@/server/aflTradeIntelligence/publication/methodologyReadService';
-import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publication/prePublicationValueReadService';
+import { AflTradeMethodologyReadError } from '@/server/aflTradeIntelligence/publication/methodologyReadService';
+import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publication/publicationReadContracts';
+import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const response = await aflTradePrePublicationMethodologyReadService.read({
+    const { methodologyReadService } = await getPublicAflTradeReadRuntime();
+    const response = await methodologyReadService.read({
       scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
     });
     return successResponse(response);

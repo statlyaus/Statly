@@ -36,11 +36,14 @@ import type {
 } from './methodologyReadService';
 import {
   AFL_TRADE_PROJECTION_MANIFEST_MATERIALIZATION_MAX_INPUT_BYTES,
-  authenticateAflTradeProjectionManifestMaterializationVerification,
-  type AflTradeProjectionManifestMaterializationVerifyInput,
   type AflTradeProjectionManifestV2,
+  type AflTradeProjectionManifestV3,
 } from './projectionManifestMaterialization';
-import type { AflTradePublicationReadSelection } from './publicationState';
+import {
+  authenticateAflTradeProjectionReleaseArtifact,
+  type AflTradeProjectionReleaseVerification,
+} from './projectionReleaseArtifact';
+import type { AflTradePublicationReadSelection } from './publicationReadContracts';
 import type {
   AflTradeProjectionDetail,
   AflTradeProjectionListPage,
@@ -78,6 +81,10 @@ export interface AflTradeProjectionFailedCandidateProvider {
   capture(
     selection: AflTradePublicationReadSelection
   ): Promise<AflTradeFreshnessFailedCandidate | null>;
+}
+
+export interface AflTradeProjectionFreshnessHighWaterStore {
+  advance(projectionId: string, evaluatedAt: string): Promise<void>;
 }
 
 export type AflTradeValuationProjectionExportRow =
@@ -293,8 +300,8 @@ type ExportRowsByView = ReadonlyMap<
 >;
 
 interface MountedProjection {
-  projectionManifest: AflTradeProjectionManifestV2;
-  publicationManifest: AflTradeProjectionManifestMaterializationVerifyInput['projectionParityVerification']['projectionDocumentSetVerification']['publicationManifest'];
+  projectionManifest: AflTradeProjectionManifestV2 | AflTradeProjectionManifestV3;
+  publicationManifest: AflTradeProjectionReleaseVerification['projectionParityVerification']['projectionDocumentSetVerification']['publicationManifest'];
   freshnessPolicyResult: AflTradeFreshnessPolicyResult;
   calculationAsOf: string;
   knowledgeCutoffAt: string;
@@ -351,8 +358,8 @@ function parseReleaseJson(raw: string): unknown {
 }
 
 function assertExactReleaseChain(
-  release: AflTradeProjectionManifestMaterializationVerifyInput,
-  projectionManifest: AflTradeProjectionManifestV2
+  release: AflTradeProjectionReleaseVerification,
+  projectionManifest: AflTradeProjectionManifestV2 | AflTradeProjectionManifestV3
 ): void {
   const documentSetVerification =
     release.projectionParityVerification.projectionDocumentSetVerification;
@@ -445,8 +452,8 @@ function assertDocumentCoordinates(
 }
 
 function buildMountedProjection(
-  release: AflTradeProjectionManifestMaterializationVerifyInput,
-  projectionManifest: AflTradeProjectionManifestV2
+  release: AflTradeProjectionReleaseVerification,
+  projectionManifest: AflTradeProjectionManifestV2 | AflTradeProjectionManifestV3
 ): MountedProjection {
   assertExactReleaseChain(release, projectionManifest);
   const documentSetVerification =
@@ -705,6 +712,8 @@ async function evaluateMetadata(
   runtime: {
     clock: AflTradeFreshnessClock;
     failedCandidateProvider: AflTradeProjectionFailedCandidateProvider | undefined;
+    highWaterStore: AflTradeProjectionFreshnessHighWaterStore | undefined;
+    projectionId: string;
     lastEvaluatedAtMs: number | null;
   }
 ): Promise<AflTradeProjectionReadMetadata> {
@@ -747,6 +756,13 @@ async function evaluateMetadata(
     (runtime.lastEvaluatedAtMs !== null && evaluatedAtMs < runtime.lastEvaluatedAtMs)
   ) {
     throw readError('FRESHNESS_EVALUATION_FAILED');
+  }
+  if (runtime.highWaterStore !== undefined) {
+    try {
+      await runtime.highWaterStore.advance(runtime.projectionId, evaluatedAt);
+    } catch {
+      throw readError('FRESHNESS_EVALUATION_FAILED');
+    }
   }
   runtime.lastEvaluatedAtMs = evaluatedAtMs;
   try {
@@ -803,6 +819,7 @@ export async function createAflTradeProjectionArtifactReadRepository(input: {
   projectionId: unknown;
   releaseSource: AflTradeProjectionArtifactReleaseSource;
   failedCandidateProvider?: AflTradeProjectionFailedCandidateProvider;
+  freshnessHighWaterStore?: AflTradeProjectionFreshnessHighWaterStore;
   clock?: AflTradeFreshnessClock;
 }): Promise<AflTradeProjectionArtifactReadRepository> {
   const releaseSource = input.releaseSource;
@@ -823,8 +840,7 @@ export async function createAflTradeProjectionArtifactReadRepository(input: {
     throw mountError('INVALID_RELEASE_TYPE');
   }
   const decodedRelease = parseReleaseJson(decodeRelease(rawRelease));
-  const authenticated =
-    authenticateAflTradeProjectionManifestMaterializationVerification(decodedRelease);
+  const authenticated = authenticateAflTradeProjectionReleaseArtifact(decodedRelease);
   if (authenticated === null) throw mountError('RELEASE_AUTHENTICATION_FAILED');
   if (authenticated.output.projectionManifest.projectionId !== projectionId.data) {
     throw mountError('PROJECTION_ID_MISMATCH');
@@ -836,6 +852,8 @@ export async function createAflTradeProjectionArtifactReadRepository(input: {
   const freshnessRuntime = {
     clock,
     failedCandidateProvider,
+    highWaterStore: input.freshnessHighWaterStore,
+    projectionId: projectionId.data,
     lastEvaluatedAtMs: null as number | null,
   };
 

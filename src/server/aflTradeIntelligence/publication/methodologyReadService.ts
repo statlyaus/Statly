@@ -12,7 +12,7 @@ import {
   aflTradePublicIdSchema,
 } from '@/types/aflTradeIntelligence';
 
-import type { AflTradePublicationReadSelection } from './publicationState';
+import type { AflTradePublicationReadSelection } from './publicationReadContracts';
 import type {
   AflTradeProjectionReadMetadata,
   AflTradePublicationSelector,
@@ -69,7 +69,11 @@ function createNoPublicationConsistency(
     knowledgeCutoffAt: null,
     freshness: 'unavailable',
     supportedScope: [],
-    excludedScope: ['Numerical AFL trade valuation pending approved evidence use'],
+    excludedScope: [
+      snapshot.unavailabilityReason === 'source_blocked'
+        ? 'Numerical AFL trade valuation blocked by non-current source authority'
+        : 'Numerical AFL trade valuation pending a reviewed active publication',
+    ],
     warnings: [],
   };
 }
@@ -152,14 +156,16 @@ export function createAflTradeMethodologyReadService(dependencies: {
       const snapshot = await dependencies.publicationSelector.capture(parsedRequest.data.scopeKey);
       const servedAt = now().toISOString();
       if (!snapshot.selection) {
+        const blocked = snapshot.unavailabilityReason === 'source_blocked';
         return parseResponse({
           consistency: createNoPublicationConsistency(snapshot, servedAt),
           availability: 'unavailable',
-          reasonCode: 'source-approval-required',
-          message:
-            'AFL trade-value methodology is not published because the required evidence use has not been approved.',
+          reasonCode: blocked ? 'source-authority-not-current' : 'no-active-publication',
+          message: blocked
+            ? 'The published methodology is unavailable because its exact source authority is no longer current.'
+            : 'There is no active reviewed AFL trade-value methodology publication yet.',
           nextAction: {
-            kind: 'await_source_approval',
+            kind: blocked ? 'view_methodology' : 'await_calculation',
             label: 'Read methodology and current limits',
             href: AFL_TRADE_METHODOLOGY_HREF,
             expectedAfter: null,
@@ -206,12 +212,15 @@ const unavailableMethodologyProjectionRepository: AflTradeMethodologyProjectionR
   },
 };
 
-export const aflTradePrePublicationMethodologyReadService =
-  createAflTradeMethodologyReadService({
-    publicationSelector: {
-      async capture() {
-        return { registryRevision: 0, selection: null };
-      },
+export const aflTradePrePublicationMethodologyReadService = createAflTradeMethodologyReadService({
+  publicationSelector: {
+    async capture() {
+      return {
+        registryRevision: 0,
+        selection: null,
+        unavailabilityReason: 'no_active_publication',
+      };
     },
-    projectionRepository: unavailableMethodologyProjectionRepository,
-  });
+  },
+  projectionRepository: unavailableMethodologyProjectionRepository,
+});

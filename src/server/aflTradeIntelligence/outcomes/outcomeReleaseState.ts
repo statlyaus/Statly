@@ -8,12 +8,12 @@ import type {
 } from './outcomeReadService';
 import {
   aflDraftTradeOutcomeActivationAuthorizationSchema,
-  aflDraftTradeOutcomeProjectionManifestSchema,
-  aflDraftTradeOutcomeReleaseManifestSchema,
+  aflDraftTradeOutcomeAnyProjectionManifestSchema as aflDraftTradeOutcomeProjectionManifestSchema,
+  aflDraftTradeOutcomeAnyReleaseManifestSchema as aflDraftTradeOutcomeReleaseManifestSchema,
   validateAflDraftTradeOutcomeReleaseProjectionPair,
   type AflDraftTradeOutcomeActivationAuthorization,
-  type AflDraftTradeOutcomeProjectionManifest,
-  type AflDraftTradeOutcomeReleaseManifest,
+  type AflDraftTradeOutcomeAnyProjectionManifest as AflDraftTradeOutcomeProjectionManifest,
+  type AflDraftTradeOutcomeAnyReleaseManifest as AflDraftTradeOutcomeReleaseManifest,
 } from './outcomeReleaseContracts';
 import {
   createAflTradeContentAddress,
@@ -1022,6 +1022,43 @@ function requireSourceRights(
     evaluatedAt: string;
   }
 ) {
+  if (record.releaseManifest.content.schemaVersion === 'afl-draft-trade-factual-release/v3') {
+    for (const capture of record.releaseManifest.content.sourceCaptures) {
+      const decision = input.ledger.decisions.find(
+        ({ decisionId }) => decisionId === capture.gateDecisionId
+      );
+      if (
+        decision === undefined ||
+        decision.content.gate !== 'gate_0a_permission_to_evaluate' ||
+        decision.content.environment !== input.environment ||
+        !decision.content.affectedArtifacts.some(
+          ({ kind, artifactId }) =>
+            kind === 'source_rights' && artifactId === capture.rightsArtifactId
+        )
+      ) {
+        throw new AflDraftTradeOutcomeReleaseStateError(
+          'INEFFECTIVE_DECISION',
+          'Every promotion-backed source capture requires its exact current Gate 0A decision.'
+        );
+      }
+      const eligibility = resolveAflTradeGateEligibility(input.ledger, {
+        gate: 'gate_0a_permission_to_evaluate',
+        decisionKey: decision.content.decisionKey,
+        environment: input.environment,
+        evaluatedAt: input.evaluatedAt,
+      });
+      if (
+        eligibility.status !== 'mechanically_eligible' ||
+        eligibility.decision?.decisionId !== decision.decisionId
+      ) {
+        throw new AflDraftTradeOutcomeReleaseStateError(
+          'INEFFECTIVE_DECISION',
+          'A promotion-backed source decision is expired, withdrawn, or superseded.'
+        );
+      }
+    }
+    return;
+  }
   for (const binding of record.releaseManifest.content.sourceRightsBindings) {
     const currentEvaluation = evaluateAflTradeGate0A(input.ledger, binding.sourceRightsProposal, {
       ...binding.gate0aReceipt.content.request,
@@ -1081,6 +1118,7 @@ export function registerAflDraftTradeOutcomeRelease(
     manifest: AflDraftTradeOutcomeReleaseManifest;
     actor: string;
     evidenceId: string;
+    occurredAt?: string;
   }
 ): AflDraftTradeOutcomeReleaseRegistry {
   authenticateRegistry(registry);
@@ -1093,6 +1131,17 @@ export function registerAflDraftTradeOutcomeRelease(
     );
   }
   const manifest = parsedManifest.data;
+  const occurredAt = input.occurredAt ?? manifest.content.createdAt;
+  if (
+    (manifest.content.schemaVersion === 'afl-draft-trade-factual-release/v3' &&
+      input.occurredAt === undefined) ||
+    Date.parse(occurredAt) < Date.parse(manifest.content.createdAt)
+  ) {
+    throw new AflDraftTradeOutcomeReleaseStateError(
+      'INVALID_MANIFEST',
+      'Promotion-backed registration requires an explicit causal registration instant.'
+    );
+  }
   if (registry.releases[manifest.releaseId]) {
     throw new AflDraftTradeOutcomeReleaseStateError(
       'DUPLICATE_RELEASE',
@@ -1100,7 +1149,7 @@ export function registerAflDraftTradeOutcomeRelease(
     );
   }
   requireMetadata({
-    occurredAt: manifest.content.createdAt,
+    occurredAt,
     actor: input.actor,
     evidenceId: input.evidenceId,
   });
@@ -1120,7 +1169,7 @@ export function registerAflDraftTradeOutcomeRelease(
         action: 'register',
         from: null,
         to: 'candidate',
-        occurredAt: manifest.content.createdAt,
+        occurredAt,
         actor: input.actor,
         evidenceId: input.evidenceId,
         gateDecisionId: null,
@@ -1137,7 +1186,7 @@ export function registerAflDraftTradeOutcomeRelease(
     action: 'register',
     releaseId: record.releaseId,
     scopeKey: record.scopeKey,
-    occurredAt: manifest.content.createdAt,
+    occurredAt,
     actor: input.actor,
     evidenceId: input.evidenceId,
     from: null,
@@ -1423,7 +1472,13 @@ export function captureAflDraftTradeOutcomeReleaseSelection(
   authenticateRegistry(registry);
   requireTimestamp(evaluation.evaluatedAt);
   const pointer = registry.activeByScope[scopeKey];
-  if (!pointer) return { registryRevision: registry.revision, selection: null };
+  if (!pointer) {
+    return {
+      registryRevision: registry.revision,
+      selection: null,
+      unavailabilityReason: 'no_active_release',
+    };
+  }
   const record = registry.releases[pointer.releaseId];
   if (
     !record ||
@@ -1441,17 +1496,39 @@ export function captureAflDraftTradeOutcomeReleaseSelection(
       'The active factual pointer is inconsistent with its exact release projection.'
     );
   }
-  requireSourceRights(record, {
-    ledger: evaluation.sourceRightsDecisionLedger,
-    environment: record.releaseManifest.content.environment,
-    evaluatedAt: evaluation.evaluatedAt,
-  });
+  try {
+    requireSourceRights(record, {
+      ledger: evaluation.sourceRightsDecisionLedger,
+      environment: record.releaseManifest.content.environment,
+      evaluatedAt: evaluation.evaluatedAt,
+    });
+  } catch (error) {
+    if (
+      error instanceof AflDraftTradeOutcomeReleaseStateError &&
+      error.code === 'INEFFECTIVE_DECISION'
+    ) {
+      return {
+        registryRevision: registry.revision,
+        selection: null,
+        unavailabilityReason: 'source_blocked',
+      };
+    }
+    throw error;
+  }
   const content = record.releaseManifest.content;
+  if (content.schemaVersion === 'afl-draft-trade-factual-release/v3') {
+    return {
+      registryRevision: registry.revision,
+      selection: null,
+      unavailabilityReason: 'no_active_release',
+    };
+  }
   return {
     registryRevision: registry.revision,
     selection: {
       registryRevision: registry.revision,
       scopeKey,
+      environment: content.environment,
       release: {
         releaseId: record.releaseManifest.releaseId,
         projectionId: record.projectionManifest.projectionId,
@@ -1470,7 +1547,8 @@ export function captureAflDraftTradeOutcomeReleaseSelection(
 export function createAflDraftTradeOutcomeRegistryReleaseSelector(
   loadRegistry: () => Promise<AflDraftTradeOutcomeReleaseRegistry>,
   loadSourceRightsDecisionLedger: () => Promise<AflTradeGateDecisionLedger>,
-  now: () => string
+  now: () => string,
+  expectedEnvironment: AflTradeDecisionEnvironment
 ): AflDraftTradeOutcomeReleaseSelector {
   return {
     async capture(scopeKey) {
@@ -1478,10 +1556,17 @@ export function createAflDraftTradeOutcomeRegistryReleaseSelector(
         loadRegistry(),
         loadSourceRightsDecisionLedger(),
       ]);
-      return captureAflDraftTradeOutcomeReleaseSelection(registry, scopeKey, {
+      const snapshot = captureAflDraftTradeOutcomeReleaseSelection(registry, scopeKey, {
         evaluatedAt: now(),
         sourceRightsDecisionLedger,
       });
+      if (snapshot.selection && snapshot.selection.environment !== expectedEnvironment) {
+        throw new AflDraftTradeOutcomeReleaseStateError(
+          'INVALID_ACTIVE_POINTER',
+          `The active factual release belongs to ${snapshot.selection.environment}, not ${expectedEnvironment}.`
+        );
+      }
+      return snapshot;
     },
   };
 }

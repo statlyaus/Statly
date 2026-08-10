@@ -48,8 +48,9 @@ import {
 } from './projectionPublicEvidenceIndex';
 import {
   AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION,
-  aflTradeProjectionSchemaBundleResultSchema,
-  type AflTradeProjectionSchemaBundleResult,
+  AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_SCHEMA_VERSION,
+  aflTradeAnyProjectionSchemaBundleResultSchema,
+  type AflTradeAnyProjectionSchemaBundleResult,
 } from './projectionSchemaBundle';
 
 export const AFL_TRADE_PROJECTION_PARITY_REPORT_SCHEMA_VERSION =
@@ -102,7 +103,7 @@ export const aflTradeProjectionParityCreateInputSchema = z
   .object({
     projectionPresentationPolicy: aflTradeProjectionPresentationPolicyResultSchema,
     projectionPublicEvidenceIndex: aflTradeProjectionPublicEvidenceIndexResultSchema,
-    projectionSchemaBundle: aflTradeProjectionSchemaBundleResultSchema,
+    projectionSchemaBundle: aflTradeAnyProjectionSchemaBundleResultSchema,
     projectionDocumentSetVerification: aflTradeProjectionDocumentSetVerifyInputSchema,
     storedDocuments: projectionDocumentsSchema,
     checkedAt: aflTradeIsoDateTimeSchema,
@@ -177,7 +178,10 @@ const parentBindingSchemas = {
     .strict(),
   schemaBundle: z
     .object({
-      schemaVersion: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION),
+      schemaVersion: z.union([
+        z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION),
+        z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_SCHEMA_VERSION),
+      ]),
       projectionSchemaBundleId: aflTradeContentAddressedIdSchema('projection-schema-bundle'),
       artifactRef: canonicalJsonArtifactRefSchema,
     })
@@ -559,7 +563,7 @@ function addParentChecks(
   accumulator: ComparisonAccumulator,
   policy: AflTradeProjectionPresentationPolicyResult,
   evidenceIndex: AflTradeProjectionPublicEvidenceIndexResult,
-  schemaBundle: AflTradeProjectionSchemaBundleResult,
+  schemaBundle: AflTradeAnyProjectionSchemaBundleResult,
   documentSet: AflTradeProjectionDocumentSetResult,
   bindings: readonly AflTradeProjectionDocumentSetBinding[],
   checkedAt: string
@@ -864,7 +868,7 @@ function boundedFailureDetails(
 interface PreparedProjectionParityInput {
   projectionPresentationPolicy: AflTradeProjectionPresentationPolicyResult;
   projectionPublicEvidenceIndex: AflTradeProjectionPublicEvidenceIndexResult;
-  projectionSchemaBundle: AflTradeProjectionSchemaBundleResult;
+  projectionSchemaBundle: AflTradeAnyProjectionSchemaBundleResult;
   projectionDocumentSet: AflTradeProjectionDocumentSetResult;
   expectedDocuments: AflTradeProjectionDocumentArtifact[];
   storedDocuments: AflTradeProjectionDocumentArtifact[];
@@ -1318,7 +1322,7 @@ export function createAflTradeProjectionParityReport(
       'INVALID_PUBLIC_EVIDENCE_INDEX_RESULT'
     );
     const projectionSchemaBundle = parseOrThrow(
-      aflTradeProjectionSchemaBundleResultSchema,
+      aflTradeAnyProjectionSchemaBundleResultSchema,
       snapshot.projectionSchemaBundle,
       'INVALID_SCHEMA_BUNDLE_RESULT'
     );

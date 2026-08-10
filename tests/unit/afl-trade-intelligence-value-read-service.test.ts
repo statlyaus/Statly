@@ -133,7 +133,7 @@ const detailRequest = {
 };
 
 describe('AFL trade-value read service', () => {
-  it('serves view-correct source blockers without reading a projection when none is active', async () => {
+  it('serves view-correct no-publication states without reading a projection when none is active', async () => {
     const context = service(null);
     const list = await context.value.list({ ...listRequest, requestedView: 'at_trade' });
     const detail = await context.value.detail(detailRequest);
@@ -147,12 +147,12 @@ describe('AFL trade-value read service', () => {
       freshness: 'unavailable',
     });
     expect(list.items.map((item) => item.valuation.view)).toEqual(['at_trade', 'at_trade']);
-    expect(list.items.every((item) => item.valuation.availability === 'source_blocked')).toBe(true);
+    expect(list.items.every((item) => item.valuation.availability === 'not_calculated')).toBe(true);
     expect(detail.valuations.map((valuation) => valuation.view)).toEqual(
       detailRequest.requestedViews
     );
     expect(
-      detail.valuations.every((valuation) => valuation.availability === 'source_blocked')
+      detail.valuations.every((valuation) => valuation.availability === 'not_calculated')
     ).toBe(true);
     expect(context.projectionRepository.list).not.toHaveBeenCalled();
     expect(context.projectionRepository.detail).not.toHaveBeenCalled();

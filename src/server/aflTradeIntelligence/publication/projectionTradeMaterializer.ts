@@ -28,9 +28,17 @@ import {
 } from '../artifacts/contentAddress';
 import {
   aflTradePublicationManifestV3Schema,
+  aflTradePublicationManifestV4Schema,
   type AflTradePublicationManifestV3,
+  type AflTradePublicationManifestV4,
 } from '../artifacts/publicationProjectionManifests';
 import { aflTradeValuationOutputInventoryIndexResultSchema } from '../artifacts/valuationOutputInventoryIndex';
+import {
+  aflTradeCompleteAssessmentV2Schema,
+  verifyAflTradeCompleteAssessmentV2,
+  type AflTradeCompleteAssessmentV2,
+  type AflTradeCompleteAssessmentV2VerificationInput,
+} from '../valuation/completeTradeAssessment';
 import type { AflTradeValuationComparison } from '../valuation/jointOutcomeComparisonArtifact';
 import { compareAflTradeCodeUnits } from '../valuation/deterministicProbabilityMeasure';
 import {
@@ -47,6 +55,10 @@ import {
   aflTradeValuationOutputInventoryDistributionInputSchema,
   aflTradeValuationOutputInventoryResultSchema,
 } from '../valuation/valuationOutputInventory';
+import {
+  aflTradeValuationOutputCustodyIndexVerificationSchema,
+  verifyAflTradeValuationOutputCustodyIndex,
+} from '../valuation/valuationOutputCustodyIndex';
 import {
   AFL_TRADE_PROJECTION_DOCUMENT_MAX_BYTES,
   AFL_TRADE_PROJECTION_DOCUMENT_SCHEMA_VERSION,
@@ -99,7 +111,10 @@ const canonicalJsonArtifactRefSchema = aflTradeArtifactRefSchema.refine(
 
 const publicationInputSchema = z
   .object({
-    publicationManifest: aflTradePublicationManifestV3Schema,
+    publicationManifest: z.union([
+      aflTradePublicationManifestV3Schema,
+      aflTradePublicationManifestV4Schema,
+    ]),
     artifactRef: canonicalJsonArtifactRefSchema,
   })
   .strict();
@@ -108,6 +123,13 @@ const valuationCaseInputSchema = z
   .object({
     valuationCase: aflTradeValuationCaseSchema,
     artifactRef: canonicalJsonArtifactRefSchema,
+  })
+  .strict();
+
+const completeTradeAssessmentVerificationSchema = z
+  .object({
+    assessmentInput: z.unknown(),
+    output: aflTradeCompleteAssessmentV2Schema,
   })
   .strict();
 
@@ -128,9 +150,25 @@ export const aflTradeProjectionTradeMaterializerCreateInputSchema = z
       .length(AFL_TRADE_PROJECTION_TRADE_MATERIALIZATION_SELECTED_COMPARISON_COUNT),
     projectionPublicEvidence: aflTradeProjectionPublicEvidenceResultSchema,
     evidenceSourceVerification: aflTradeProjectionEvidenceSourceVerificationVerifyInputSchema,
+    valuationOutputCustodyIndexVerification:
+      aflTradeValuationOutputCustodyIndexVerificationSchema.optional(),
+    completeTradeAssessmentVerification: completeTradeAssessmentVerificationSchema.optional(),
     materializedAt: aflTradeIsoDateTimeSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((input, context) => {
+    const custodyBound =
+      input.publication.publicationManifest.content.schemaVersion === 'afl-trade-publication/v4';
+    const hasCustody = input.valuationOutputCustodyIndexVerification !== undefined;
+    const hasAssessment = input.completeTradeAssessmentVerification !== undefined;
+    if (hasCustody !== hasAssessment || custodyBound !== hasCustody) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Custodied v4 materialization requires the exact custody index and complete-trade assessment; legacy v3 accepts neither.',
+      });
+    }
+  });
 
 export type AflTradeProjectionTradeMaterializerCreateInput = z.infer<
   typeof aflTradeProjectionTradeMaterializerCreateInputSchema
@@ -238,6 +276,7 @@ export const aflTradeProjectionTradeMaterializationContentSchema = z
     projectionPresentationPolicy: parentBindingSchema('projection-presentation-policy'),
     valuationOutputInventory: parentBindingSchema('valuation-output-inventory'),
     valuationCase: parentBindingSchema('valuation-case'),
+    completeTradeAssessment: parentBindingSchema('complete-trade-assessment').optional(),
     projectionPublicEvidence: parentBindingSchema('projection-public-evidence'),
     evidenceSourceVerification: z
       .object({
@@ -565,6 +604,8 @@ export const AFL_TRADE_PROJECTION_TRADE_MATERIALIZATION_ERROR_CODES = [
   'INVALID_PRESENTATION_POLICY',
   'INVALID_INVENTORY',
   'INVALID_VALUATION_CASE_BINDING',
+  'INVALID_CUSTODY_INDEX',
+  'INVALID_COMPLETE_TRADE_ASSESSMENT',
   'INVALID_SELECTED_DISTRIBUTIONS',
   'INVALID_SELECTED_COMPARISONS',
   'INVALID_PUBLIC_EVIDENCE',
@@ -595,6 +636,8 @@ const ERROR_MESSAGES: Readonly<Record<AflTradeProjectionTradeMaterializationErro
     INVALID_PRESENTATION_POLICY: 'The projection presentation-policy result is invalid.',
     INVALID_INVENTORY: 'The full valuation-output inventory result is invalid.',
     INVALID_VALUATION_CASE_BINDING: 'The valuation-case binding is invalid.',
+    INVALID_CUSTODY_INDEX: 'The valuation-output custody-index verification is invalid.',
+    INVALID_COMPLETE_TRADE_ASSESSMENT: 'The complete-trade assessment verification is invalid.',
     INVALID_SELECTED_DISTRIBUTIONS: 'The selected-layer distribution bindings are invalid.',
     INVALID_SELECTED_COMPARISONS: 'The selected-layer comparison bindings are invalid.',
     INVALID_PUBLIC_EVIDENCE: 'The projection public-evidence result is invalid.',
@@ -684,23 +727,31 @@ const CREATE_INPUT_KEYS = [
   'evidenceSourceVerification',
   'materializedAt',
 ] as const;
+const CUSTODIED_CREATE_INPUT_KEYS = [
+  ...CREATE_INPUT_KEYS.slice(0, -1),
+  'valuationOutputCustodyIndexVerification',
+  'completeTradeAssessmentVerification',
+  'materializedAt',
+] as const;
 const VERIFY_INPUT_KEYS = [...CREATE_INPUT_KEYS, 'output'] as const;
+const CUSTODIED_VERIFY_INPUT_KEYS = [...CUSTODIED_CREATE_INPUT_KEYS, 'output'] as const;
 
-function snapshotExactEnvelope<const Key extends string>(
+function snapshotExactEnvelope(
   value: unknown,
-  keys: readonly Key[]
-): Record<Key, unknown> | null {
+  keyAlternatives: readonly (readonly string[])[]
+): Record<string, unknown> | null {
   if (value === null || typeof value !== 'object') return null;
   try {
-    const expected = new Set<string>(keys);
     const ownKeys = Reflect.ownKeys(value);
-    if (
-      ownKeys.length !== keys.length ||
-      ownKeys.some((key) => typeof key !== 'string' || !expected.has(key))
-    ) {
-      return null;
-    }
-    const snapshot = {} as Record<Key, unknown>;
+    const keys = keyAlternatives.find((candidate) => {
+      const expected = new Set<string>(candidate);
+      return (
+        ownKeys.length === candidate.length &&
+        ownKeys.every((key) => typeof key === 'string' && expected.has(key))
+      );
+    });
+    if (keys === undefined) return null;
+    const snapshot: Record<string, unknown> = {};
     for (const key of keys) snapshot[key] = Reflect.get(value, key, value);
     return snapshot;
   } catch {
@@ -757,8 +808,11 @@ function documentBindingFor(artifact: AflTradeProjectionDocumentArtifact) {
 
 interface AuthenticatedTradeInputs {
   input: AflTradeProjectionTradeMaterializerCreateInput;
-  publication: AflTradePublicationManifestV3;
+  publication: AflTradePublicationManifestV3 | AflTradePublicationManifestV4;
   valuationCase: AflTradeValuationCase;
+  completeTradeAssessment: AflTradeCompleteAssessmentV2 | null;
+  completeTradeAssessmentArtifactRef: AflTradeArtifactRef | null;
+  custodyIndexArtifactRef: AflTradeArtifactRef | null;
   selectedDistributions: AflTradeValuationDistribution[];
   selectedComparisons: AflTradeValuationComparison[];
   distributionSetSha256: string;
@@ -766,65 +820,87 @@ interface AuthenticatedTradeInputs {
 }
 
 function parseCreateInput(
-  snapshot: Record<(typeof CREATE_INPUT_KEYS)[number], unknown>
+  snapshot: Record<string, unknown>
 ): AflTradeProjectionTradeMaterializerCreateInput {
-  return {
-    publication: parseOrThrow(
-      publicationInputSchema,
-      snapshot.publication,
-      'INVALID_PUBLICATION_BINDING'
-    ),
-    valuationOutputInventoryIndex: parseOrThrow(
-      aflTradeValuationOutputInventoryIndexResultSchema,
-      snapshot.valuationOutputInventoryIndex,
-      'INVALID_INVENTORY_INDEX'
-    ),
-    projectionPublicEvidenceIndex: parseOrThrow(
-      aflTradeProjectionPublicEvidenceIndexResultSchema,
-      snapshot.projectionPublicEvidenceIndex,
-      'INVALID_EVIDENCE_INDEX'
-    ),
-    projectionPresentationPolicy: parseOrThrow(
-      aflTradeProjectionPresentationPolicyResultSchema,
-      snapshot.projectionPresentationPolicy,
-      'INVALID_PRESENTATION_POLICY'
-    ),
-    valuationOutputInventory: parseOrThrow(
-      aflTradeValuationOutputInventoryResultSchema,
-      snapshot.valuationOutputInventory,
-      'INVALID_INVENTORY'
-    ),
-    valuationCase: parseOrThrow(
-      valuationCaseInputSchema,
-      snapshot.valuationCase,
-      'INVALID_VALUATION_CASE_BINDING'
-    ),
-    selectedDistributions: parseOrThrow(
-      aflTradeProjectionTradeMaterializerCreateInputSchema.shape.selectedDistributions,
-      snapshot.selectedDistributions,
-      'INVALID_SELECTED_DISTRIBUTIONS'
-    ),
-    selectedComparisons: parseOrThrow(
-      aflTradeProjectionTradeMaterializerCreateInputSchema.shape.selectedComparisons,
-      snapshot.selectedComparisons,
-      'INVALID_SELECTED_COMPARISONS'
-    ),
-    projectionPublicEvidence: parseOrThrow(
-      aflTradeProjectionPublicEvidenceResultSchema,
-      snapshot.projectionPublicEvidence,
-      'INVALID_PUBLIC_EVIDENCE'
-    ),
-    evidenceSourceVerification: parseOrThrow(
-      aflTradeProjectionEvidenceSourceVerificationVerifyInputSchema,
-      snapshot.evidenceSourceVerification,
-      'INVALID_SOURCE_VERIFICATION_REPLAY'
-    ),
-    materializedAt: parseOrThrow(
-      aflTradeIsoDateTimeSchema,
-      snapshot.materializedAt,
-      'INVALID_INPUT_ENVELOPE'
-    ),
-  };
+  const valuationOutputCustodyIndexVerification =
+    snapshot.valuationOutputCustodyIndexVerification === undefined
+      ? undefined
+      : parseOrThrow(
+          aflTradeValuationOutputCustodyIndexVerificationSchema,
+          snapshot.valuationOutputCustodyIndexVerification,
+          'INVALID_CUSTODY_INDEX'
+        );
+  const completeTradeAssessmentVerification =
+    snapshot.completeTradeAssessmentVerification === undefined
+      ? undefined
+      : parseOrThrow(
+          completeTradeAssessmentVerificationSchema,
+          snapshot.completeTradeAssessmentVerification,
+          'INVALID_COMPLETE_TRADE_ASSESSMENT'
+        );
+  return parseOrThrow(
+    aflTradeProjectionTradeMaterializerCreateInputSchema,
+    {
+      publication: parseOrThrow(
+        publicationInputSchema,
+        snapshot.publication,
+        'INVALID_PUBLICATION_BINDING'
+      ),
+      valuationOutputInventoryIndex: parseOrThrow(
+        aflTradeValuationOutputInventoryIndexResultSchema,
+        snapshot.valuationOutputInventoryIndex,
+        'INVALID_INVENTORY_INDEX'
+      ),
+      projectionPublicEvidenceIndex: parseOrThrow(
+        aflTradeProjectionPublicEvidenceIndexResultSchema,
+        snapshot.projectionPublicEvidenceIndex,
+        'INVALID_EVIDENCE_INDEX'
+      ),
+      projectionPresentationPolicy: parseOrThrow(
+        aflTradeProjectionPresentationPolicyResultSchema,
+        snapshot.projectionPresentationPolicy,
+        'INVALID_PRESENTATION_POLICY'
+      ),
+      valuationOutputInventory: parseOrThrow(
+        aflTradeValuationOutputInventoryResultSchema,
+        snapshot.valuationOutputInventory,
+        'INVALID_INVENTORY'
+      ),
+      valuationCase: parseOrThrow(
+        valuationCaseInputSchema,
+        snapshot.valuationCase,
+        'INVALID_VALUATION_CASE_BINDING'
+      ),
+      selectedDistributions: parseOrThrow(
+        aflTradeProjectionTradeMaterializerCreateInputSchema.shape.selectedDistributions,
+        snapshot.selectedDistributions,
+        'INVALID_SELECTED_DISTRIBUTIONS'
+      ),
+      selectedComparisons: parseOrThrow(
+        aflTradeProjectionTradeMaterializerCreateInputSchema.shape.selectedComparisons,
+        snapshot.selectedComparisons,
+        'INVALID_SELECTED_COMPARISONS'
+      ),
+      projectionPublicEvidence: parseOrThrow(
+        aflTradeProjectionPublicEvidenceResultSchema,
+        snapshot.projectionPublicEvidence,
+        'INVALID_PUBLIC_EVIDENCE'
+      ),
+      evidenceSourceVerification: parseOrThrow(
+        aflTradeProjectionEvidenceSourceVerificationVerifyInputSchema,
+        snapshot.evidenceSourceVerification,
+        'INVALID_SOURCE_VERIFICATION_REPLAY'
+      ),
+      valuationOutputCustodyIndexVerification,
+      completeTradeAssessmentVerification,
+      materializedAt: parseOrThrow(
+        aflTradeIsoDateTimeSchema,
+        snapshot.materializedAt,
+        'INVALID_INPUT_ENVELOPE'
+      ),
+    },
+    'INVALID_INPUT_ENVELOPE'
+  );
 }
 
 function requireExactArtifactReference(reference: AflTradeArtifactRef, value: unknown): void {
@@ -1010,6 +1086,85 @@ function authenticateSelectedComparisons(input: AflTradeProjectionTradeMateriali
   };
 }
 
+function assessmentLayerForPresentation(
+  layer: 'gross' | 'list_spot_adjusted' | 'scarcity_adjusted'
+): 'gross' | 'listSpotAdjusted' | 'scarcityAdjusted' {
+  return layer === 'list_spot_adjusted'
+    ? 'listSpotAdjusted'
+    : layer === 'scarcity_adjusted'
+      ? 'scarcityAdjusted'
+      : 'gross';
+}
+
+function authenticateCustodiedAssessment(input: AflTradeProjectionTradeMaterializerCreateInput): {
+  assessment: AflTradeCompleteAssessmentV2;
+  assessmentArtifactRef: AflTradeArtifactRef;
+  custodyIndexArtifactRef: AflTradeArtifactRef;
+} | null {
+  const publication = input.publication.publicationManifest;
+  if (publication.content.schemaVersion === 'afl-trade-publication/v3') return null;
+  const custodyVerification = input.valuationOutputCustodyIndexVerification;
+  const assessmentVerification = input.completeTradeAssessmentVerification;
+  if (
+    custodyVerification === undefined ||
+    assessmentVerification === undefined ||
+    !verifyAflTradeValuationOutputCustodyIndex(custodyVerification) ||
+    !verifyAflTradeCompleteAssessmentV2(
+      assessmentVerification as AflTradeCompleteAssessmentV2VerificationInput
+    )
+  ) {
+    throw constructionError('INVALID_COMPLETE_TRADE_ASSESSMENT');
+  }
+  const custodyResult = custodyVerification.output;
+  const custodyIndex = custodyResult.valuationOutputCustodyIndex;
+  const publicationCustody = publication.content.valuationOutputCustodyIndex;
+  if (
+    custodyIndex.valuationOutputCustodyIndexId !==
+      publicationCustody.valuationOutputCustodyIndexId ||
+    !sameCanonicalJson(custodyResult.artifactRef, publicationCustody.artifactRef)
+  ) {
+    throw constructionError('PARENT_BINDING_MISMATCH');
+  }
+  const inventoryId =
+    input.valuationOutputInventory.valuationOutputInventory.valuationOutputInventoryId;
+  const custodyEvidence = custodyVerification.custodyReceipts.find(
+    ({ receipt }) => receipt.content.valuationOutputInventoryId === inventoryId
+  );
+  const assessment = assessmentVerification.output;
+  const assessmentBinding = custodyEvidence?.receipt.content.artifacts.find(
+    ({ role }) => role === 'complete_trade_assessment'
+  );
+  const valuationCase = input.valuationCase.valuationCase;
+  const inventory = input.valuationOutputInventory.valuationOutputInventory.content;
+  const policy = input.projectionPresentationPolicy.projectionPresentationPolicy.content;
+  if (
+    custodyEvidence === undefined ||
+    assessmentBinding === undefined ||
+    assessmentBinding.semanticId !== assessment.assessmentId ||
+    !doesAflTradeArtifactRefMatchCanonicalJson(assessmentBinding.artifact, assessment) ||
+    custodyEvidence.receipt.content.tradeId !== valuationCase.content.tradeId ||
+    custodyEvidence.receipt.content.valuationCaseId !== valuationCase.valuationCaseId ||
+    custodyEvidence.receipt.content.valuationCalculationId !==
+      inventory.valuationCalculation.valuationCalculationId ||
+    assessment.content.tradeId !== valuationCase.content.tradeId ||
+    assessment.content.source.valuationCaseId !== valuationCase.valuationCaseId ||
+    assessment.content.source.valuationCalculationId !==
+      inventory.valuationCalculation.valuationCalculationId ||
+    assessment.content.valueUnit.valueUnitId !== valuationCase.content.valueUnitId ||
+    assessment.content.source.selectedLayer !==
+      assessmentLayerForPresentation(policy.universalLayer) ||
+    Date.parse(assessment.content.assessedAt) >
+      Date.parse(custodyEvidence.receipt.content.verifiedAt)
+  ) {
+    throw constructionError('PARENT_BINDING_MISMATCH');
+  }
+  return {
+    assessment,
+    assessmentArtifactRef: assessmentBinding.artifact,
+    custodyIndexArtifactRef: custodyResult.artifactRef,
+  };
+}
+
 function authenticateParents(
   input: AflTradeProjectionTradeMaterializerCreateInput
 ): AuthenticatedTradeInputs {
@@ -1028,6 +1183,7 @@ function authenticateParents(
   const valuationCaseRef = input.valuationCase.artifactRef;
   const evidence = input.projectionPublicEvidence.projectionPublicEvidence;
   const evidenceRef = input.projectionPublicEvidence.projectionPublicEvidenceArtifactRef;
+  const custodiedAssessment = authenticateCustodiedAssessment(input);
 
   requireExactArtifactReference(publicationRef, publication);
   requireExactArtifactReference(valuationCaseRef, valuationCase);
@@ -1154,6 +1310,9 @@ function authenticateParents(
     valuationCaseRef,
     evidenceRef,
     input.evidenceSourceVerification.output.projectionEvidenceSourceVerificationArtifactRef,
+    ...(custodiedAssessment === null
+      ? []
+      : [custodiedAssessment.assessmentArtifactRef, custodiedAssessment.custodyIndexArtifactRef]),
     ...input.selectedDistributions.map(({ artifactRef }) => artifactRef),
     ...input.selectedComparisons.map(({ artifactRef }) => artifactRef),
   ];
@@ -1165,6 +1324,9 @@ function authenticateParents(
     input,
     publication,
     valuationCase,
+    completeTradeAssessment: custodiedAssessment?.assessment ?? null,
+    completeTradeAssessmentArtifactRef: custodiedAssessment?.assessmentArtifactRef ?? null,
+    custodyIndexArtifactRef: custodiedAssessment?.custodyIndexArtifactRef ?? null,
     selectedDistributions: selectedDistributions.artifacts,
     selectedComparisons: selectedComparisons.artifacts,
     distributionSetSha256: selectedDistributions.setSha256,
@@ -1384,7 +1546,29 @@ function createValueForView(
       explanation: dimension.explanation,
     })),
   };
-  const probabilities = comparison.probabilities;
+  const completeAssessmentParties =
+    authenticated.completeTradeAssessment?.content.partyAssessments ?? null;
+  const completeAssessmentByClub =
+    completeAssessmentParties === null
+      ? null
+      : new Map(completeAssessmentParties.map((party) => [party.clubId, party] as const));
+  const completeAssessmentProbabilities =
+    completeAssessmentParties === null
+      ? null
+      : completeAssessmentParties.map((party) => {
+          const partyView = party.views.find((candidate) => candidate.view === view);
+          if (partyView === undefined) {
+            throw constructionError('PARENT_BINDING_MISMATCH');
+          }
+          return { aflClubId: party.clubId, probability: partyView.finishAheadProbability };
+        });
+  const probabilities =
+    completeAssessmentProbabilities === null
+      ? comparison.probabilities
+      : {
+          clubClearLeaderProbabilities: completeAssessmentProbabilities,
+          noClearLeaderProbability: 0,
+        };
   const assessment = evaluateAflTradeProjectionAssessment({
     policy,
     comparisonProbabilities: probabilities,
@@ -1400,6 +1584,16 @@ function createValueForView(
         aflClubId,
       })
     );
+    const completeAssessmentParty = completeAssessmentByClub?.get(aflClubId) ?? null;
+    const completeAssessmentView = completeAssessmentParty?.views.find(
+      (candidate) => candidate.view === view
+    );
+    if (
+      completeAssessmentByClub !== null &&
+      (completeAssessmentParty === null || completeAssessmentView === undefined)
+    ) {
+      throw constructionError('PARENT_BINDING_MISMATCH');
+    }
     return {
       aflClubId,
       clubName: party.clubName,
@@ -1408,6 +1602,33 @@ function createValueForView(
       uncertainty: { ...parts.uncertainty, components: uncertaintyComponents },
       distribution: parts.distribution,
       factors: [],
+      ...(completeAssessmentView === undefined
+        ? {}
+        : {
+            packageValue: {
+              received: {
+                median: completeAssessmentView.received.median,
+                interval: {
+                  lower: completeAssessmentView.received.p10,
+                  upper: completeAssessmentView.received.p90,
+                },
+              },
+              givenUp: {
+                median: completeAssessmentView.givenUp.median,
+                interval: {
+                  lower: completeAssessmentView.givenUp.p10,
+                  upper: completeAssessmentView.givenUp.p90,
+                },
+              },
+              net: {
+                median: completeAssessmentView.netAdvantage.median,
+                interval: {
+                  lower: completeAssessmentView.netAdvantage.p10,
+                  upper: completeAssessmentView.netAdvantage.p90,
+                },
+              },
+            },
+          }),
     };
   });
   return {
@@ -1607,6 +1828,7 @@ function summaryFromValue(value: AflTradeValueResult): AflTradeValueSummary {
           level: club.uncertainty.intervalLevel,
         },
         finishesAheadProbability: probability.finishesAhead,
+        ...(club.packageValue === undefined ? {} : { packageValue: club.packageValue }),
       };
     }),
     practicalEquivalenceProbability: value.comparison.practicalEquivalenceProbability,
@@ -1800,6 +2022,15 @@ function createReceipt(
       status: 'passed' as const,
       sourceArtifactSetSha256: verification.content.sourceArtifactSetSha256,
     },
+    ...(authenticated.completeTradeAssessment === null ||
+    authenticated.completeTradeAssessmentArtifactRef === null
+      ? {}
+      : {
+          completeTradeAssessment: {
+            semanticId: authenticated.completeTradeAssessment.assessmentId,
+            artifactRef: authenticated.completeTradeAssessmentArtifactRef,
+          },
+        }),
     tradeId: evidence.content.tradeId,
     scopeKey: publication.content.scopeKey,
     valueUnitId: publication.content.valueUnitId,
@@ -1832,7 +2063,10 @@ export function createAflTradeProjectionTradeMaterialization(
   unparsedInput: unknown
 ): AflTradeProjectionTradeMaterializationResult {
   try {
-    const snapshot = snapshotExactEnvelope(unparsedInput, CREATE_INPUT_KEYS);
+    const snapshot = snapshotExactEnvelope(unparsedInput, [
+      CREATE_INPUT_KEYS,
+      CUSTODIED_CREATE_INPUT_KEYS,
+    ]);
     if (snapshot === null) throw constructionError('INVALID_INPUT_ENVELOPE');
     const input = parseCreateInput(snapshot);
     const authenticated = authenticateParents(input);
@@ -1865,12 +2099,16 @@ export function createAflTradeProjectionTradeMaterialization(
 
 export function verifyAflTradeProjectionTradeMaterialization(input: unknown): boolean {
   try {
-    const snapshot = snapshotExactEnvelope(input, VERIFY_INPUT_KEYS);
+    const snapshot = snapshotExactEnvelope(input, [VERIFY_INPUT_KEYS, CUSTODIED_VERIFY_INPUT_KEYS]);
     if (snapshot === null) return false;
     const output = aflTradeProjectionTradeMaterializationResultSchema.safeParse(snapshot.output);
     if (!output.success) return false;
+    const replayKeys =
+      snapshot.completeTradeAssessmentVerification === undefined
+        ? CREATE_INPUT_KEYS
+        : CUSTODIED_CREATE_INPUT_KEYS;
     const replayed = createAflTradeProjectionTradeMaterialization(
-      Object.fromEntries(CREATE_INPUT_KEYS.map((key) => [key, snapshot[key]]))
+      Object.fromEntries(replayKeys.map((key) => [key, snapshot[key]]))
     );
     return canonicalizeAflTradeJson(replayed) === canonicalizeAflTradeJson(output.data);
   } catch {

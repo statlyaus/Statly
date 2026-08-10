@@ -11,11 +11,14 @@ import {
   AFL_TRADE_PROJECTION_MANIFEST_MATERIALIZATION_LIMITATION,
   AFL_TRADE_PROJECTION_MANIFEST_MATERIALIZATION_MAX_ARTIFACT_BYTES,
   AflTradeProjectionManifestMaterializationError,
+  aflTradeCustodiedProjectionManifestMaterializationResultSchema,
   aflTradeProjectionManifestMaterializationCreateInputSchema,
   aflTradeProjectionManifestMaterializationResultSchema,
   authenticateAflTradeProjectionManifestMaterialization,
+  createAflTradeCustodiedProjectionManifestMaterialization,
   createAflTradeProjectionManifestMaterialization,
   isAflTradeProjectionManifestMaterializationError,
+  verifyAflTradeCustodiedProjectionManifestMaterialization,
   verifyAflTradeProjectionManifestMaterialization,
   type AflTradeProjectionManifestMaterializationErrorCode,
 } from '@/server/aflTradeIntelligence/publication/projectionManifestMaterialization';
@@ -28,8 +31,10 @@ import {
   POLICY_AT,
   SCOPE_KEY,
   VALUE_UNIT_ID,
+  createAflTradeCustodiedProjectionManifestFixture,
   createAflTradeProjectionManifestFixture,
   createAflTradeProjectionManifestMaterializationInput,
+  createAflTradeValuationOutputCustodyIndexVerificationFixture,
 } from '../fixtures/aflTradeProjectionManifestFixture';
 
 function expectManifestError(
@@ -58,6 +63,45 @@ function objectKeys(value: unknown, keys = new Set<string>(), seen = new WeakSet
 }
 
 describe('AFL trade projection manifest materialization', () => {
+  it('materializes and replays a custody-bound publication v4 as projection v3', async () => {
+    const custodyIndexVerification =
+      await createAflTradeValuationOutputCustodyIndexVerificationFixture();
+    const fixture = createAflTradeCustodiedProjectionManifestFixture(custodyIndexVerification);
+    const input = {
+      ...createAflTradeProjectionManifestMaterializationInput(fixture),
+      custodyIndexVerification,
+    };
+
+    const output = createAflTradeCustodiedProjectionManifestMaterialization(input);
+
+    expect(output.projectionManifest.content).toMatchObject({
+      schemaVersion: 'afl-trade-projection/v3',
+      publicationId: fixture.identity.publicationId,
+      projectionSchemaBundle: {
+        schemaVersion: 'afl-trade-projection-schema-bundle/v2',
+        publicationManifestSchemaVersion: 'afl-trade-publication/v4',
+        projectionManifestSchemaVersion: 'afl-trade-projection/v3',
+      },
+      valuationOutputCustodyIndex: {
+        valuationOutputCustodyIndexId:
+          custodyIndexVerification.output.valuationOutputCustodyIndex.valuationOutputCustodyIndexId,
+      },
+    });
+    expect(aflTradeCustodiedProjectionManifestMaterializationResultSchema.parse(output)).toEqual(
+      output
+    );
+    expect(verifyAflTradeCustodiedProjectionManifestMaterialization({ ...input, output })).toBe(
+      true
+    );
+
+    const tampered = structuredClone(output);
+    tampered.projectionManifest.content.valuationOutputCustodyIndex.custodyReceiptSetSha256 =
+      'f'.repeat(64);
+    expect(
+      verifyAflTradeCustodiedProjectionManifestMaterialization({ ...input, output: tampered })
+    ).toBe(false);
+  });
+
   it('creates deterministically from a fully replayed passing chain and authenticates exact bytes', () => {
     const fixture = createAflTradeProjectionManifestFixture();
     const input = createAflTradeProjectionManifestMaterializationInput(fixture);

@@ -16,6 +16,7 @@ import {
   aflTradeGateDecisionRecordSchema,
 } from '../governance/gateDecisionTypes';
 import { evaluateAflTradeGate0A } from '../source/gate0aEvaluation';
+import { aflTradeFitzRoyCaptureReceiptSchema } from '../source/fitzRoyCaptureReceipt';
 import { aflTradeGate0AReceiptSchema } from '../source/gate0aReceipt';
 import { aflTradeSourceRightsProposalSchema } from '../source/sourceRights';
 
@@ -77,9 +78,7 @@ const workbookCaptureSchema = z
       });
     }
     const expected =
-      capture.workbookFormat === 'xlsx'
-        ? { extension: '.xlsx' }
-        : { extension: '.xls' };
+      capture.workbookFormat === 'xlsx' ? { extension: '.xlsx' } : { extension: '.xls' };
     if (!capture.originalFilename.toLowerCase().endsWith(expected.extension)) {
       context.addIssue({
         code: 'custom',
@@ -96,10 +95,11 @@ const fitzRoyCaptureSchema = z
     upstreamProvider: z.string().trim().min(1).max(200),
     upstreamDataset: z.string().trim().min(1).max(300),
     upstreamDatasetVersion: z.string().trim().min(1).max(300),
+    capabilityId: publicIdSchema,
     packageVersion: publicIdSchema,
     functionName: publicIdSchema,
     argumentsArtifact: aflTradeArtifactRefSchema,
-    accessMechanism: z.enum(['provider_api', 'automated_web', 'provider_export']),
+    accessMechanism: z.enum(['provider_api', 'automated_web']),
     rateLimitContext: z.string().trim().min(1).max(1000),
     cacheContext: z.string().trim().min(1).max(1000),
   })
@@ -116,7 +116,7 @@ const fitzRoyCaptureSchema = z
 
 export const aflTradeSourceSnapshotManifestContentSchema = z
   .object({
-    schemaVersion: z.literal('afl-trade-source-snapshot/v1'),
+    schemaVersion: z.literal('afl-trade-source-snapshot/v3'),
     sourceArtifact: aflTradeArtifactRefSchema,
     readbackReceipt: aflTradeArtifactReadbackReceiptSchema,
     capture: z.discriminatedUnion('kind', [workbookCaptureSchema, fitzRoyCaptureSchema]),
@@ -124,6 +124,7 @@ export const aflTradeSourceSnapshotManifestContentSchema = z
     gate0aProposal: aflTradeGateDecisionProposalSchema,
     gate0aDecision: aflTradeGateDecisionRecordSchema,
     gate0aReceipt: aflTradeGate0AReceiptSchema,
+    fitzRoyCaptureReceipt: aflTradeFitzRoyCaptureReceiptSchema.nullable(),
     capturedFields: exactSortedFieldsSchema,
     retrievedAt: isoDateTimeSchema,
     effectiveAt: isoDateTimeSchema,
@@ -154,7 +155,6 @@ export const aflTradeSourceSnapshotManifestContentSchema = z
       Date.parse(snapshot.effectiveAt),
       Date.parse(snapshot.gate0aReceipt.content.recordedAt),
       Date.parse(snapshot.retrievedAt),
-      Date.parse(snapshot.sourceArtifact.createdAt),
       Date.parse(snapshot.readbackReceipt.content.verifiedAt),
       Date.parse(snapshot.createdAt),
     ];
@@ -168,15 +168,53 @@ export const aflTradeSourceSnapshotManifestContentSchema = z
           'Snapshot evidence must follow effective, authorization, retrieval, and custody time.',
       });
     }
-    if (!doAflTradeArtifactRefsExactlyMatch(
-      snapshot.readbackReceipt.content.artifact,
-      snapshot.sourceArtifact
-    )) {
+    if (
+      !doAflTradeArtifactRefsExactlyMatch(
+        snapshot.readbackReceipt.content.artifact,
+        snapshot.sourceArtifact
+      )
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['readbackReceipt'],
         message: 'The read-back receipt must verify the exact source artifact.',
       });
+    }
+    const expectedAssurance =
+      receiptRequest.environment === 'test_fixture' ? 'fixture_memory' : 'durable_object_storage';
+    if (
+      snapshot.readbackReceipt.content.artifactClass !== 'raw_source' ||
+      snapshot.readbackReceipt.content.repositoryAssurance !== expectedAssurance ||
+      snapshot.readbackReceipt.content.custodyEnvironment !== receiptRequest.environment
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['readbackReceipt'],
+        message:
+          'Source snapshots require raw-source custody with assurance and an exact profile environment matching the Gate decision.',
+      });
+    }
+    const custodyProfile = snapshot.readbackReceipt.content.custodyProfile;
+    if (receiptRequest.environment !== 'test_fixture') {
+      const deletion = custodyProfile?.content.retention.deletion;
+      const retentionMatches =
+        receiptRequest.rawRetentionDays === null
+          ? deletion?.kind === 'no_scheduled_deletion'
+          : deletion?.kind === 'maximum_age' &&
+            deletion.maximumDays === receiptRequest.rawRetentionDays;
+      if (
+        custodyProfile === null ||
+        !retentionMatches ||
+        custodyProfile.content.retention.deleteOnWithdrawal !==
+          snapshot.sourceRightsProposal.content.retention.rawEvidence.deleteOnWithdrawal
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['readbackReceipt', 'content', 'custodyProfile'],
+          message:
+            'Durable raw-source custody must bind retention and withdrawal controls exactly matching the authorized capture.',
+        });
+      }
     }
     if (
       REQUIRED_SOURCE_CAPTURE_OPERATIONS.some(
@@ -277,15 +315,115 @@ export const aflTradeSourceSnapshotManifestContentSchema = z
           message: 'Workbook artifact media type must match its declared workbook format.',
         });
       }
-    } else if (
-      Date.parse(snapshot.capture.argumentsArtifact.createdAt) >
-      Date.parse(receiptRequest.evaluatedAt)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['capture', 'argumentsArtifact', 'createdAt'],
-        message: 'fitzRoy arguments must be content-addressed before capture authorization.',
-      });
+      if (
+        snapshot.sourceRightsProposal.content.acquisition.kind !== 'provided_artifact' ||
+        snapshot.sourceRightsProposal.content.acquisition.mediaType !== expectedMediaType
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['capture'],
+          message: 'Workbook capture must match an approved provided-artifact acquisition profile.',
+        });
+      }
+      if (snapshot.fitzRoyCaptureReceipt !== null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fitzRoyCaptureReceipt'],
+          message: 'Workbook snapshots cannot bind a fitzRoy capture receipt.',
+        });
+      }
+    } else {
+      const capture = snapshot.capture;
+      const captureReceipt = snapshot.fitzRoyCaptureReceipt;
+      const acquisition = snapshot.sourceRightsProposal.content.acquisition;
+      const binding =
+        acquisition.kind === 'fitzroy'
+          ? acquisition.capabilities.find(
+              (capability) => capability.capabilityId === capture.capabilityId
+            )
+          : undefined;
+      if (
+        acquisition.kind !== 'fitzroy' ||
+        binding === undefined ||
+        receiptRequest.capabilityId !== capture.capabilityId ||
+        capture.upstreamProvider !== binding.provider ||
+        capture.packageVersion !== acquisition.fitzRoyVersion ||
+        capture.functionName !== binding.directFunction
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['capture'],
+          message:
+            'fitzRoy capture must match the evaluated capability, pinned package, and approved direct function.',
+        });
+      }
+      if (
+        captureReceipt === null ||
+        captureReceipt.content.authorizationReceipt.receiptId !==
+          snapshot.gate0aReceipt.receiptId ||
+        !doAflTradeArtifactRefsExactlyMatch(
+          captureReceipt.content.sourceCustody.artifact,
+          snapshot.sourceArtifact
+        ) ||
+        captureReceipt.content.sourceCustody.readback.receiptId !==
+          snapshot.readbackReceipt.receiptId ||
+        !doAflTradeArtifactRefsExactlyMatch(
+          captureReceipt.content.invocationCustody.artifact,
+          capture.argumentsArtifact
+        ) ||
+        captureReceipt.content.invocation.capabilityId !== capture.capabilityId ||
+        captureReceipt.content.invocation.provider !== binding?.provider ||
+        captureReceipt.content.invocation.fitzRoyVersion !== capture.packageVersion ||
+        captureReceipt.content.invocation.directFunction !== capture.functionName ||
+        captureReceipt.content.capturedAt !== snapshot.retrievedAt ||
+        Date.parse(captureReceipt.content.capturedAt) > Date.parse(snapshot.createdAt)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fitzRoyCaptureReceipt'],
+          message:
+            'A fitzRoy snapshot must bind the exact authorized invocation, returned bytes, read-back, and capture time.',
+        });
+      }
+      if (receiptRequest.environment !== 'test_fixture') {
+        const execution = captureReceipt?.content.egressExecutionReceipt?.content;
+        const reviewedRate = snapshot.sourceRightsProposal.content.automatedAccess.rateLimit;
+        const reviewedEgressEvidenceIds = [
+          ...new Set(
+            snapshot.sourceRightsProposal.content.conditions
+              .filter(({ conditionId }) => conditionId === 'provider-egress-control')
+              .flatMap(({ verificationEvidenceIds }) => verificationEvidenceIds)
+          ),
+        ];
+        if (
+          execution === undefined ||
+          reviewedRate === null ||
+          reviewedEgressEvidenceIds.length !== 1 ||
+          execution.provider !== snapshot.sourceRightsProposal.content.provider ||
+          execution.capabilityId !== capture.capabilityId ||
+          execution.enforcedPolicy.upstreamRate.requests !== reviewedRate.requests ||
+          execution.enforcedPolicy.upstreamRate.perSeconds !== reviewedRate.perSeconds ||
+          execution.enforcedPolicy.upstreamRate.burst !== reviewedRate.burst ||
+          execution.enforcedPolicy.cacheSeconds !== receiptRequest.cacheSeconds ||
+          execution.enforcedPolicy.egressPolicyEvidenceId !== reviewedEgressEvidenceIds[0]
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['fitzRoyCaptureReceipt', 'egressExecutionReceipt'],
+            message:
+              'Provider-egress execution must match the exact source-rights rate, cache, capability, provider, and policy evidence.',
+          });
+        }
+      }
+      if (
+        Date.parse(capture.argumentsArtifact.createdAt) > Date.parse(receiptRequest.evaluatedAt)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['capture', 'argumentsArtifact', 'createdAt'],
+          message: 'fitzRoy arguments must be content-addressed before capture authorization.',
+        });
+      }
     }
     if (
       snapshot.capturedFields.length !== evaluatedFields.length ||

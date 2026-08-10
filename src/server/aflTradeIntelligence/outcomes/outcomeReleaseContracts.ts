@@ -10,11 +10,18 @@ import { aflTradeArtifactRefSchema } from '../artifacts/artifactReference';
 import {
   addAflTradeContentAddressIssue,
   aflTradeContentAddressedIdSchema,
+  aflTradeSha256Schema,
   createAflTradeContentAddress,
+  sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
 import { AFL_TRADE_DECISION_ENVIRONMENTS } from '../governance/gateDecisionTypes';
 import { aflTradeGate0AReceiptSchema } from '../source/gate0aReceipt';
 import { aflTradeSourceRightsProposalSchema } from '../source/sourceRights';
+import {
+  AFL_TRADE_PROMOTION_BACKED_FACTUAL_PROJECTION_SCHEMA_VERSION,
+  aflTradePromotionBackedFactualProjectionSchema,
+} from './promotionBackedFactualProjectionContracts';
+import { aflTradePromotionBackedFactualReleaseSchema } from './promotionBackedFactualReleaseContracts';
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const boundedScopeTextSchema = z.string().trim().min(1).max(500);
@@ -140,6 +147,10 @@ export const AFL_DRAFT_TRADE_OUTCOME_RELEASE_SCHEMA_VERSION =
   'afl-draft-trade-outcome-release/v1' as const;
 export const AFL_DRAFT_TRADE_OUTCOME_PROJECTION_SCHEMA_VERSION =
   'afl-draft-trade-outcome-projection/v1' as const;
+export const AFL_DRAFT_TRADE_OUTCOME_FACTUAL_RELEASE_SCHEMA_VERSION =
+  'afl-draft-trade-outcome-release/v2' as const;
+export const AFL_DRAFT_TRADE_OUTCOME_FACTUAL_PROJECTION_SCHEMA_VERSION =
+  'afl-draft-trade-outcome-projection/v2' as const;
 
 export const aflDraftTradeOutcomeReleaseManifestContentSchema = z
   .object({
@@ -245,6 +256,50 @@ export const aflDraftTradeOutcomeReleaseManifestSchema = z
     ]);
   });
 
+export const aflDraftTradeOutcomeFactualReleaseManifestContentSchema = z
+  .object({
+    ...aflDraftTradeOutcomeReleaseManifestContentSchema.shape,
+    schemaVersion: z.literal(AFL_DRAFT_TRADE_OUTCOME_FACTUAL_RELEASE_SCHEMA_VERSION),
+    factualCandidateSchemaVersion: z.literal('afl-trade-factual-release-candidate/v3'),
+    sourceMemberSetSha256: aflTradeSha256Schema,
+  })
+  .strict()
+  .superRefine((release, context) => {
+    const {
+      factualCandidateSchemaVersion: _candidateSchemaVersion,
+      sourceMemberSetSha256: _sourceMemberSetSha256,
+      ...legacyFields
+    } = release;
+    const legacyCompatible = aflDraftTradeOutcomeReleaseManifestContentSchema.safeParse({
+      ...legacyFields,
+      schemaVersion: AFL_DRAFT_TRADE_OUTCOME_RELEASE_SCHEMA_VERSION,
+    });
+    if (!legacyCompatible.success) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Factual release must satisfy every legacy release evidence invariant.',
+      });
+    }
+  });
+
+export const aflDraftTradeOutcomeFactualReleaseManifestSchema = z
+  .object({
+    releaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+    content: aflDraftTradeOutcomeFactualReleaseManifestContentSchema,
+  })
+  .strict()
+  .superRefine((release, context) => {
+    addAflTradeContentAddressIssue('outcome-release', release.releaseId, release.content, context, [
+      'releaseId',
+    ]);
+  });
+
+export const aflDraftTradeOutcomeAnyReleaseManifestSchema = z.union([
+  aflDraftTradeOutcomeReleaseManifestSchema,
+  aflDraftTradeOutcomeFactualReleaseManifestSchema,
+  aflTradePromotionBackedFactualReleaseSchema,
+]);
+
 const projectionViewArtifactsSchema = z
   .object({
     list: aflTradeArtifactRefSchema,
@@ -328,6 +383,71 @@ export const aflDraftTradeOutcomeProjectionManifestSchema = z
     );
   });
 
+export const aflDraftTradeOutcomeFactualProjectionManifestContentSchema = z
+  .object({
+    ...aflDraftTradeOutcomeProjectionManifestContentSchema.shape,
+    schemaVersion: z.literal(AFL_DRAFT_TRADE_OUTCOME_FACTUAL_PROJECTION_SCHEMA_VERSION),
+    factualCandidateId: aflTradeContentAddressedIdSchema('factual-release-candidate'),
+    sourceMemberSetSha256: aflTradeSha256Schema,
+    publicListItemSetSha256: aflTradeSha256Schema,
+    derivationSha256: aflTradeSha256Schema,
+  })
+  .strict()
+  .superRefine((projection, context) => {
+    const {
+      factualCandidateId: _factualCandidateId,
+      sourceMemberSetSha256: _sourceMemberSetSha256,
+      publicListItemSetSha256: _publicListItemSetSha256,
+      derivationSha256: _derivationSha256,
+      ...legacyFields
+    } = projection;
+    const legacyCompatible = aflDraftTradeOutcomeProjectionManifestContentSchema.safeParse({
+      ...legacyFields,
+      schemaVersion: AFL_DRAFT_TRADE_OUTCOME_PROJECTION_SCHEMA_VERSION,
+    });
+    if (!legacyCompatible.success) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Factual projection must satisfy every legacy projection evidence invariant.',
+      });
+    }
+    const expected = sha256AflTradeCanonicalJson({
+      factualCandidateId: projection.factualCandidateId,
+      logicalDatasetSha256: projection.parityReport.logicalDatasetSha256,
+      publicListItemSetSha256: projection.publicListItemSetSha256,
+      sourceMemberSetSha256: projection.sourceMemberSetSha256,
+    });
+    if (projection.derivationSha256 !== expected) {
+      context.addIssue({
+        code: 'custom',
+        path: ['derivationSha256'],
+        message: 'Projection derivation must bind the private source root to the public root.',
+      });
+    }
+  });
+
+export const aflDraftTradeOutcomeFactualProjectionManifestSchema = z
+  .object({
+    projectionId: aflTradeContentAddressedIdSchema('outcome-projection'),
+    content: aflDraftTradeOutcomeFactualProjectionManifestContentSchema,
+  })
+  .strict()
+  .superRefine((projection, context) => {
+    addAflTradeContentAddressIssue(
+      'outcome-projection',
+      projection.projectionId,
+      projection.content,
+      context,
+      ['projectionId']
+    );
+  });
+
+export const aflDraftTradeOutcomeAnyProjectionManifestSchema = z.union([
+  aflDraftTradeOutcomeProjectionManifestSchema,
+  aflDraftTradeOutcomeFactualProjectionManifestSchema,
+  aflTradePromotionBackedFactualProjectionSchema,
+]);
+
 export const aflDraftTradeOutcomeActivationAuthorizationContentSchema = z
   .object({
     schemaVersion: z.literal('afl-draft-trade-outcome-activation-authorization/v1'),
@@ -395,6 +515,18 @@ export type AflDraftTradeOutcomeReleaseManifest = z.infer<
 export type AflDraftTradeOutcomeProjectionManifest = z.infer<
   typeof aflDraftTradeOutcomeProjectionManifestSchema
 >;
+export type AflDraftTradeOutcomeFactualReleaseManifest = z.infer<
+  typeof aflDraftTradeOutcomeFactualReleaseManifestSchema
+>;
+export type AflDraftTradeOutcomeFactualProjectionManifest = z.infer<
+  typeof aflDraftTradeOutcomeFactualProjectionManifestSchema
+>;
+export type AflDraftTradeOutcomeAnyReleaseManifest = z.infer<
+  typeof aflDraftTradeOutcomeAnyReleaseManifestSchema
+>;
+export type AflDraftTradeOutcomeAnyProjectionManifest = z.infer<
+  typeof aflDraftTradeOutcomeAnyProjectionManifestSchema
+>;
 export type AflDraftTradeOutcomeActivationAuthorization = z.infer<
   typeof aflDraftTradeOutcomeActivationAuthorizationSchema
 >;
@@ -419,6 +551,26 @@ export function createAflDraftTradeOutcomeProjectionManifest(
   });
 }
 
+export function createAflDraftTradeOutcomeFactualReleaseManifest(
+  content: z.input<typeof aflDraftTradeOutcomeFactualReleaseManifestContentSchema>
+): AflDraftTradeOutcomeFactualReleaseManifest {
+  const parsedContent = aflDraftTradeOutcomeFactualReleaseManifestContentSchema.parse(content);
+  return aflDraftTradeOutcomeFactualReleaseManifestSchema.parse({
+    releaseId: createAflTradeContentAddress('outcome-release', parsedContent),
+    content: parsedContent,
+  });
+}
+
+export function createAflDraftTradeOutcomeFactualProjectionManifest(
+  content: z.input<typeof aflDraftTradeOutcomeFactualProjectionManifestContentSchema>
+): AflDraftTradeOutcomeFactualProjectionManifest {
+  const parsedContent = aflDraftTradeOutcomeFactualProjectionManifestContentSchema.parse(content);
+  return aflDraftTradeOutcomeFactualProjectionManifestSchema.parse({
+    projectionId: createAflTradeContentAddress('outcome-projection', parsedContent),
+    content: parsedContent,
+  });
+}
+
 export function createAflDraftTradeOutcomeActivationAuthorization(
   content: z.input<typeof aflDraftTradeOutcomeActivationAuthorizationContentSchema>
 ): AflDraftTradeOutcomeActivationAuthorization {
@@ -433,19 +585,54 @@ export function createAflDraftTradeOutcomeActivationAuthorization(
 }
 
 export function validateAflDraftTradeOutcomeReleaseProjectionPair(
-  release: AflDraftTradeOutcomeReleaseManifest,
-  projection: AflDraftTradeOutcomeProjectionManifest
+  release: AflDraftTradeOutcomeAnyReleaseManifest,
+  projection: AflDraftTradeOutcomeAnyProjectionManifest
 ): boolean {
-  const parsedRelease = aflDraftTradeOutcomeReleaseManifestSchema.safeParse(release);
-  const parsedProjection = aflDraftTradeOutcomeProjectionManifestSchema.safeParse(projection);
+  const parsedRelease = aflDraftTradeOutcomeAnyReleaseManifestSchema.safeParse(release);
+  const parsedProjection = aflDraftTradeOutcomeAnyProjectionManifestSchema.safeParse(projection);
   if (!parsedRelease.success || !parsedProjection.success) return false;
 
   const releaseContent = parsedRelease.data.content;
   const projectionContent = parsedProjection.data.content;
+  if (releaseContent.schemaVersion === 'afl-draft-trade-factual-release/v3') {
+    if (
+      projectionContent.schemaVersion !==
+      AFL_TRADE_PROMOTION_BACKED_FACTUAL_PROJECTION_SCHEMA_VERSION
+    ) {
+      return false;
+    }
+    return (
+      projectionContent.releaseId === parsedRelease.data.releaseId &&
+      projectionContent.scopeKey === releaseContent.scopeKey &&
+      projectionContent.environment === releaseContent.environment &&
+      projectionContent.competition === releaseContent.competition &&
+      projectionContent.validFromSeason === releaseContent.validFromSeason &&
+      projectionContent.validThroughSeason === releaseContent.validThroughSeason &&
+      projectionContent.corpusId === releaseContent.corpusId &&
+      projectionContent.sourceMemberSetSha256 === releaseContent.sourceMemberSetSha256 &&
+      projectionContent.canonicalMemberSetSha256 === releaseContent.canonicalMemberSetSha256 &&
+      projectionContent.effectiveThrough === releaseContent.effectiveThrough &&
+      projectionContent.parityReport.checkedCanonicalRecordCount ===
+        releaseContent.canonicalMemberCount &&
+      Date.parse(projectionContent.createdAt) >= Date.parse(releaseContent.createdAt)
+    );
+  }
+  if (
+    projectionContent.schemaVersion ===
+    AFL_TRADE_PROMOTION_BACKED_FACTUAL_PROJECTION_SCHEMA_VERSION
+  ) {
+    return false;
+  }
+  if (
+    (releaseContent.schemaVersion === AFL_DRAFT_TRADE_OUTCOME_RELEASE_SCHEMA_VERSION) !==
+    (projectionContent.schemaVersion === AFL_DRAFT_TRADE_OUTCOME_PROJECTION_SCHEMA_VERSION)
+  ) {
+    return false;
+  }
   const metricDefinitionIds = releaseContent.metricDefinitions
     .map(({ metricDefinitionId }) => metricDefinitionId)
     .sort();
-  return (
+  const sharedParity =
     projectionContent.releaseId === parsedRelease.data.releaseId &&
     projectionContent.scopeKey === releaseContent.scopeKey &&
     projectionContent.environment === releaseContent.environment &&
@@ -459,6 +646,13 @@ export function validateAflDraftTradeOutcomeReleaseProjectionPair(
     metricDefinitionIds.every(
       (metricDefinitionId, index) =>
         metricDefinitionId === projectionContent.metricDefinitionIds[index]
-    )
-  );
+    );
+  if (!sharedParity) return false;
+  if (
+    releaseContent.schemaVersion === AFL_DRAFT_TRADE_OUTCOME_FACTUAL_RELEASE_SCHEMA_VERSION &&
+    projectionContent.schemaVersion === AFL_DRAFT_TRADE_OUTCOME_FACTUAL_PROJECTION_SCHEMA_VERSION
+  ) {
+    return releaseContent.sourceMemberSetSha256 === projectionContent.sourceMemberSetSha256;
+  }
+  return true;
 }

@@ -15,6 +15,8 @@ import {
 } from '@/types/aflDraftTradeOutcomes';
 import { aflTradePublicIdSchema, type AflTradePublicWarning } from '@/types/aflTradeIntelligence';
 
+import type { AflTradeDecisionEnvironment } from '../governance/gateDecisionTypes';
+
 export const AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE = 'public-afl-draft-trade-outcomes' as const;
 export const AFL_DRAFT_TRADE_OUTCOME_METRIC_REGISTRY_VERSION = 'afl-outcome-metrics-v1' as const;
 
@@ -87,6 +89,7 @@ export type AflDraftTradeOutcomeListReadRequest = z.infer<typeof listRequestSche
 export interface AflDraftTradeOutcomeReleaseSelection {
   registryRevision: number;
   scopeKey: string;
+  environment: AflTradeDecisionEnvironment;
   release: AflDraftTradeOutcomeReleaseRef;
   metricDefinitions: readonly AflDraftTradeOutcomeMetricDefinition[];
   supportedScope: readonly string[];
@@ -96,6 +99,7 @@ export interface AflDraftTradeOutcomeReleaseSelection {
 export interface AflDraftTradeOutcomeSelectionSnapshot {
   registryRevision: number;
   selection: AflDraftTradeOutcomeReleaseSelection | null;
+  unavailabilityReason?: 'no_active_release' | 'source_blocked';
 }
 
 export interface AflDraftTradeOutcomeReleaseSelector {
@@ -185,7 +189,9 @@ function createUnavailableResponse(
       freshness: 'unavailable',
       supportedScope: [],
       excludedScope: [
-        'Checked AFL Draft & Trade outcomes pending approved identity, source-rights, and factual release evidence',
+        snapshot.unavailabilityReason === 'source_blocked'
+          ? 'Checked AFL Draft & Trade outcomes blocked by non-current source authority'
+          : 'Checked AFL Draft & Trade outcomes pending a reviewed active factual release',
       ],
       warnings: [],
     },

@@ -3,15 +3,10 @@ import { z } from 'zod';
 
 import { commonErrors, successResponse } from '@/lib/apiResponse';
 import { logger } from '@/lib/logger';
-import {
-  AFL_TRADE_PUBLIC_VALUE_SCOPE,
-  aflTradePrePublicationValueReadService,
-} from '@/server/aflTradeIntelligence/publication/prePublicationValueReadService';
+import { AFL_TRADE_PUBLIC_VALUE_SCOPE } from '@/server/aflTradeIntelligence/publication/publicationReadContracts';
 import { AflTradeValueReadError } from '@/server/aflTradeIntelligence/publication/valueReadService';
-import {
-  aflTradePublicIdSchema,
-  aflTradeValuationViewSchema,
-} from '@/types/aflTradeIntelligence';
+import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
+import { aflTradePublicIdSchema, aflTradeValuationViewSchema } from '@/types/aflTradeIntelligence';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,7 +34,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await aflTradePrePublicationValueReadService.list({
+    const { valueReadService } = await getPublicAflTradeReadRuntime();
+    const response = await valueReadService.list({
       scopeKey: AFL_TRADE_PUBLIC_VALUE_SCOPE,
       requestedView: parsed.data.view,
       tradeIds: parsed.data.tradeIds,

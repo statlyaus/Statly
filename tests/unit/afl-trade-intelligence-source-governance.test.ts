@@ -29,7 +29,7 @@ const evidence = {
 
 function rightsContent() {
   return {
-    schemaVersion: 'afl-trade-source-rights/v1' as const,
+    schemaVersion: 'afl-trade-source-rights/v2' as const,
     registerId: 'fixture-source-v1',
     provider: 'Fabricated Provider',
     dataset: 'Fabricated historical evidence',
@@ -39,6 +39,11 @@ function rightsContent() {
       competitions: ['fixture-competition'],
       seasonRanges: [{ from: 2021, to: 2025 }],
       accessMechanism: 'provider_api' as const,
+    },
+    acquisition: {
+      kind: 'provider_direct' as const,
+      clientName: 'Fabricated provider test client',
+      clientVersion: 'fixture-v1',
     },
     operations: {
       bounded_evaluation_capture: 'allowed' as const,
@@ -150,6 +155,20 @@ function gateProposal(
   sourceRights: AflTradeSourceRightsProposal,
   version = 1
 ): AflTradeGateDecisionProposal {
+  const seasons = sourceRights.content.scope.seasonRanges.flatMap(({ from, to }) =>
+    Array.from({ length: to - from + 1 }, (_, index) => String(from + index))
+  );
+  const fitzRoyCapabilityDimension =
+    sourceRights.content.acquisition.kind === 'fitzroy'
+      ? [
+          {
+            name: 'fitzroy_capability',
+            values: sourceRights.content.acquisition.capabilities.map(
+              ({ capabilityId }) => capabilityId
+            ),
+          },
+        ]
+      : [];
   const content = {
     schemaVersion: 'afl-trade-gate-proposal/v1' as const,
     gate: 'gate_0a_permission_to_evaluate' as const,
@@ -161,9 +180,10 @@ function gateProposal(
       description: 'Bounded fabricated evaluation scope.',
       dimensions: [
         { name: 'source_rights_artifact', values: [sourceRights.rightsArtifactId] },
-        { name: 'competition', values: ['fixture-competition'] },
-        { name: 'season', values: ['2021', '2022', '2023', '2024', '2025'] },
-        { name: 'access_mechanism', values: ['provider_api'] },
+        { name: 'competition', values: sourceRights.content.scope.competitions },
+        { name: 'season', values: seasons },
+        { name: 'access_mechanism', values: [sourceRights.content.scope.accessMechanism] },
+        ...fitzRoyCapabilityDimension,
         { name: 'geography', values: ['fixture-region'] },
         { name: 'commercial_context', values: ['fixture-non-commercial'] },
         { name: 'audience', values: ['fixture-reviewers'] },
@@ -275,14 +295,20 @@ function fixtures() {
 }
 
 function request(sourceRights: AflTradeSourceRightsProposal): AflTradeGate0ARequest {
+  const seasonRange = sourceRights.content.scope.seasonRanges.at(-1);
+  if (seasonRange === undefined) throw new Error('Fixture source rights require a season range.');
   return {
     decisionKey: 'fixture-gate-0a',
     environment: 'test_fixture',
     rightsArtifactId: sourceRights.rightsArtifactId,
     evaluatedAt: '2026-08-03T00:00:00.000Z',
-    competition: 'fixture-competition',
-    season: 2025,
-    accessMechanism: 'provider_api',
+    competition: sourceRights.content.scope.competitions[0],
+    season: seasonRange.to,
+    accessMechanism: sourceRights.content.scope.accessMechanism,
+    capabilityId:
+      sourceRights.content.acquisition.kind === 'fitzroy'
+        ? sourceRights.content.acquisition.capabilities[0].capabilityId
+        : null,
     geography: 'fixture-region',
     commercialContext: 'fixture-non-commercial',
     audience: 'fixture-reviewers',
@@ -393,6 +419,117 @@ describe('AFL trade-intelligence Gate 0A source governance', () => {
       aflTradeSourceRightsProposalSchema.safeParse({
         rightsArtifactId: createAflTradeContentAddress('source-rights', invalid),
         content: invalid,
+      }).success
+    ).toBe(false);
+  });
+
+  it('represents bounded provider web capture without mislabelling it as an API', () => {
+    const content = rightsContent();
+    const providerWeb = {
+      ...content,
+      scope: { ...content.scope, accessMechanism: 'automated_web' as const },
+      acquisition: {
+        kind: 'provider_web' as const,
+        clientName: 'Statly bounded external-source capture',
+        clientVersion: 'external-source-capture/v1',
+        capabilityId: 'draftguru-trade-detail',
+      },
+    };
+
+    expect(aflTradeSourceRightsProposalContentSchema.parse(providerWeb).acquisition).toEqual(
+      providerWeb.acquisition
+    );
+    expect(() =>
+      aflTradeSourceRightsProposalContentSchema.parse({
+        ...providerWeb,
+        scope: { ...providerWeb.scope, accessMechanism: 'provider_api' },
+      })
+    ).toThrow(/automated-web access mechanism/);
+  });
+
+  it('pins fitzRoy rights to the reviewed capability version, provider, and direct function', () => {
+    const content = {
+      ...rightsContent(),
+      provider: 'footywire',
+      scope: {
+        competitions: ['AFLM'],
+        seasonRanges: [{ from: 2010, to: 2025 }],
+        accessMechanism: 'automated_web' as const,
+      },
+      acquisition: {
+        kind: 'fitzroy' as const,
+        capabilitySchemaVersion: 'afl-trade-fitzroy-capabilities/v1' as const,
+        fitzRoyVersion: '1.7.0' as const,
+        capabilities: [
+          {
+            capabilityId: 'footywire-player-stats',
+            provider: 'footywire' as const,
+            directFunction: 'fetch_player_stats_footywire',
+          },
+        ],
+      },
+    };
+
+    const parsedContent = aflTradeSourceRightsProposalContentSchema.parse(content);
+    const sourceRights = rights(parsedContent);
+    const proposal = gateProposal(sourceRights);
+    const decision = gateDecision(proposal);
+    const ledger = { proposals: [proposal], decisions: [decision] };
+
+    expect(evaluateAflTradeGate0A(ledger, sourceRights, request(sourceRights)).status).toBe(
+      'mechanically_eligible'
+    );
+    expect(
+      evaluateAflTradeGate0A(ledger, sourceRights, {
+        ...request(sourceRights),
+        capabilityId: 'official-afl-player-stats',
+      }).blockers
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'decision_scope_mismatch' }),
+        expect.objectContaining({ code: 'capability_not_permitted' }),
+      ])
+    );
+    expect(
+      aflTradeSourceRightsProposalContentSchema.safeParse({
+        ...content,
+        acquisition: {
+          ...content.acquisition,
+          capabilities: [
+            {
+              ...content.acquisition.capabilities[0],
+              directFunction: 'fetch_player_stats',
+            },
+          ],
+        },
+      }).success
+    ).toBe(false);
+    expect(
+      aflTradeSourceRightsProposalContentSchema.safeParse({
+        ...content,
+        acquisition: {
+          ...content.acquisition,
+          capabilities: [
+            ...content.acquisition.capabilities,
+            {
+              capabilityId: 'afl-tables-player-stats',
+              provider: 'afl_tables' as const,
+              directFunction: 'fetch_player_stats_afltables',
+            },
+          ],
+        },
+      }).success
+    ).toBe(false);
+    expect(
+      aflTradeSourceRightsProposalContentSchema.safeParse({
+        ...content,
+        provider: 'afl_tables',
+      }).success
+    ).toBe(false);
+    expect(
+      aflTradeSourceRightsProposalContentSchema.safeParse({
+        ...content,
+        scope: { ...content.scope, accessMechanism: 'provider_export' as const },
       }).success
     ).toBe(false);
   });

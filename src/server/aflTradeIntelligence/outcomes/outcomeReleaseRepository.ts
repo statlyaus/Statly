@@ -8,7 +8,7 @@ import {
   type AflDraftTradeOutcomeReleaseCommand,
   type AflDraftTradeOutcomeReleaseRegistry,
 } from './outcomeReleaseState';
-import type { AflDraftTradeOutcomeReleaseManifest } from './outcomeReleaseContracts';
+import type { AflDraftTradeOutcomeAnyReleaseManifest as AflDraftTradeOutcomeReleaseManifest } from './outcomeReleaseContracts';
 import type { AflDraftTradeOutcomeSelectionSnapshot } from './outcomeReadService';
 
 export type AflDraftTradeOutcomeReleaseRepositoryErrorCode =
@@ -40,6 +40,7 @@ export interface AflDraftTradeOutcomeReleaseRepository {
     manifest: AflDraftTradeOutcomeReleaseManifest;
     actor: string;
     evidenceId: string;
+    occurredAt?: string;
   }): Promise<AflDraftTradeOutcomeReleaseRegistry>;
   apply(command: AflDraftTradeOutcomeReleaseCommand): Promise<AflDraftTradeOutcomeReleaseRegistry>;
   captureSelection(

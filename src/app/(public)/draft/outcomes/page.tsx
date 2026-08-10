@@ -1,17 +1,11 @@
 import type { Metadata } from 'next';
 
 import { AflDraftTradeOutcomesExplorer } from '@/components/draft/AflDraftTradeOutcomesExplorer';
-import { DevelopmentWorkbookAcquisitionPreview } from '@/components/draft/DevelopmentWorkbookAcquisitionPreview';
-import { getDevelopmentWorkbookAcquisitionPreview } from '@/lib/draftTrades/developmentWorkbook';
 import {
   AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
   AflDraftTradeOutcomeReadError,
 } from '@/server/aflTradeIntelligence/outcomes/outcomeReadService';
-import { aflDraftTradePrePublicationOutcomeReadService } from '@/server/aflTradeIntelligence/outcomes/prePublicationOutcomeReadService';
-import {
-  AFL_OUTCOMES_DEVELOPMENT_ACQUISITION_CATEGORIES,
-  type AflOutcomesDevelopmentAcquisitionCategory,
-} from '@/server/aflTradeIntelligence/source/developmentWorkbookAcquisitionProjection';
+import { getPublicAflTradeReadRuntime } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 import {
   AFL_DRAFT_TRADE_OUTCOME_CHECK_STATUSES,
   AFL_DRAFT_TRADE_OUTCOME_METRICS,
@@ -60,20 +54,12 @@ function parseCursor(value: string | string[] | undefined): string | null {
   return raw.length > 0 && raw.length <= 1000 ? raw : null;
 }
 
-function parseAcquisitionCategory(
-  value: string | string[] | undefined
-): AflOutcomesDevelopmentAcquisitionCategory | null {
-  const raw = first(value) as AflOutcomesDevelopmentAcquisitionCategory;
-  return AFL_OUTCOMES_DEVELOPMENT_ACQUISITION_CATEGORIES.includes(raw) ? raw : null;
-}
-
 export default async function AflDraftTradeOutcomesPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
   const resolved = await searchParams;
-  const acquisitionCategory = parseAcquisitionCategory(resolved.acquisition);
   let query = {
     year: parseYear(resolved.year),
     club: boundedText(resolved.club),
@@ -84,8 +70,9 @@ export default async function AflDraftTradeOutcomesPage({
   };
   let filterNotice: string | null = null;
   let response: AflDraftTradeOutcomeListResponse;
+  const { outcomeReadService } = await getPublicAflTradeReadRuntime();
   try {
-    response = await aflDraftTradePrePublicationOutcomeReadService.list({
+    response = await outcomeReadService.list({
       scopeKey: AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
       ...query,
       limit: 25,
@@ -97,35 +84,14 @@ export default async function AflDraftTradeOutcomesPage({
     const requestedMetric = query.metric?.replaceAll('_', ' ') ?? 'requested metric';
     filterNotice = `The active factual release does not include ${requestedMetric}. Showing all metrics supported by that release instead.`;
     query = { ...query, metric: null, cursor: null };
-    response = await aflDraftTradePrePublicationOutcomeReadService.list({
+    response = await outcomeReadService.list({
       scopeKey: AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE,
       ...query,
       limit: 25,
     });
   }
 
-  const developmentQuery = {
-    year: query.year,
-    club: query.club,
-    q: query.q,
-    category: acquisitionCategory,
-    limit: 25,
-  };
-  const developmentPreview = await getDevelopmentWorkbookAcquisitionPreview(developmentQuery);
-
   return (
-    <>
-      {developmentPreview ? (
-        <DevelopmentWorkbookAcquisitionPreview
-          preview={developmentPreview}
-          query={developmentQuery}
-        />
-      ) : null}
-      <AflDraftTradeOutcomesExplorer
-        response={response}
-        query={query}
-        filterNotice={filterNotice}
-      />
-    </>
+    <AflDraftTradeOutcomesExplorer response={response} query={query} filterNotice={filterNotice} />
   );
 }

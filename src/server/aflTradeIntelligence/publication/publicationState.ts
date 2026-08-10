@@ -1,10 +1,6 @@
 import { types as nodeUtilTypes } from 'node:util';
 
-import type {
-  AflTradePublicationRef,
-  AflTradePublicationState,
-  AflTradeValuationView,
-} from '@/types/aflTradeIntelligence';
+import type { AflTradePublicationState, AflTradeValuationView } from '@/types/aflTradeIntelligence';
 import { z } from 'zod';
 
 import {
@@ -20,9 +16,14 @@ import type {
   AflTradeGateCode,
 } from '../governance/gateDecisionTypes';
 import {
+  authenticateAflTradeCustodiedProjectionManifestMaterialization,
   authenticateAflTradeProjectionManifestMaterialization,
+  type AflTradeCustodiedProjectionManifestMaterializationVerifyInput,
   type AflTradeProjectionManifestMaterializationVerifyInput,
 } from './projectionManifestMaterialization';
+import type { AflTradePublicationReadSelection } from './publicationReadContracts';
+
+export type { AflTradePublicationReadSelection } from './publicationReadContracts';
 
 export interface AflTradePublicationEvent {
   from: AflTradePublicationState | null;
@@ -63,16 +64,6 @@ export interface AflTradePublicationRegistry {
   activeByScope: Readonly<Record<string, AflTradeActivePublicationPointer>>;
 }
 
-export interface AflTradePublicationReadSelection {
-  publication: AflTradePublicationRef;
-  projectionBuildId: string;
-  registryRevision: number;
-  scopeKey: string;
-  supportedViews: readonly AflTradeValuationView[];
-  supportedCohorts: readonly string[];
-  excludedCohorts: readonly string[];
-}
-
 interface CommandMetadata {
   publicationId: string;
   occurredAt: string;
@@ -89,7 +80,9 @@ export type AflTradePublicationCommand =
           }
         | {
             projectionManifest?: never;
-            projectionManifestVerification: AflTradeProjectionManifestMaterializationVerifyInput;
+            projectionManifestVerification:
+              | AflTradeProjectionManifestMaterializationVerifyInput
+              | AflTradeCustodiedProjectionManifestMaterializationVerifyInput;
           }
       ))
   | (CommandMetadata & {
@@ -422,10 +415,13 @@ function resolveProjectionForValidation(
   }
 
   const verification = verificationDescriptor?.value;
-  const authenticated = authenticateAflTradeProjectionManifestMaterialization(verification);
+  const authenticated =
+    record.publicationManifestSchemaVersion === 'afl-trade-publication/v4'
+      ? authenticateAflTradeCustodiedProjectionManifestMaterialization(verification)
+      : authenticateAflTradeProjectionManifestMaterialization(verification);
   if (authenticated === null) {
     return invalidProjectionManifest(
-      'Projection v2 validation requires a valid total materialization verification.'
+      'Projection validation requires an exact generation-matched total materialization verification.'
     );
   }
   return authenticated.projectionManifest;

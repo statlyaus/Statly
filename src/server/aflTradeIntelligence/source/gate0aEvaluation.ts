@@ -12,6 +12,7 @@ import {
   type AflTradeSourceRightsProposal,
   type AflTradeSourceUse,
 } from './sourceRights';
+import { AFL_TRADE_FITZROY_CAPABILITIES } from './fitzRoyProviderCapabilities';
 
 const gate0aEvaluationTimeSchema = z.iso.datetime({ offset: true });
 
@@ -23,6 +24,7 @@ export interface AflTradeGate0ARequest {
   competition: string;
   season: number;
   accessMechanism: AflTradeSourceRightsProposal['content']['scope']['accessMechanism'];
+  capabilityId: string | null;
   geography: string;
   commercialContext: string;
   audience: string;
@@ -43,6 +45,7 @@ export type AflTradeGate0ABlockerCode =
   | 'competition_not_permitted'
   | 'season_not_permitted'
   | 'access_not_permitted'
+  | 'capability_not_permitted'
   | 'geography_not_permitted'
   | 'commercial_context_not_permitted'
   | 'audience_not_permitted'
@@ -102,7 +105,7 @@ function collectDecisionScopeBlockers(
   request: AflTradeGate0ARequest
 ): AflTradeGate0ABlocker[] {
   const blockers: AflTradeGate0ABlocker[] = [];
-  const scopeChecks: ReadonlyArray<[string, string]> = [
+  const scopeChecks: Array<[string, string]> = [
     ['source_rights_artifact', request.rightsArtifactId],
     ['competition', request.competition],
     ['season', String(request.season)],
@@ -111,6 +114,9 @@ function collectDecisionScopeBlockers(
     ['commercial_context', request.commercialContext],
     ['audience', request.audience],
   ];
+  if (request.capabilityId !== null) {
+    scopeChecks.push(['fitzroy_capability', request.capabilityId]);
+  }
   for (const [dimensionName, requestedValue] of scopeChecks) {
     const permittedValues = scopeDimensionValues(decision.content.scope.dimensions, dimensionName);
     if (permittedValues === null || !permittedValues.includes(requestedValue)) {
@@ -227,6 +233,36 @@ function collectSourceScopeBlockers(
       'access_not_permitted',
       request.accessMechanism,
       `Access mechanism ${request.accessMechanism} is not permitted by this rights artifact.`
+    );
+  }
+  if (rights.content.acquisition.kind === 'fitzroy') {
+    const binding = rights.content.acquisition.capabilities.find(
+      (capability) => capability.capabilityId === request.capabilityId
+    );
+    const capability = AFL_TRADE_FITZROY_CAPABILITIES.find(
+      (candidate) => candidate.capabilityId === request.capabilityId
+    );
+    if (
+      request.capabilityId === null ||
+      binding === undefined ||
+      capability === undefined ||
+      !(capability.competitions as readonly string[]).includes(request.competition) ||
+      (capability.documentedMinimumSeason !== null &&
+        request.season < capability.documentedMinimumSeason)
+    ) {
+      addBlocker(
+        blockers,
+        'capability_not_permitted',
+        request.capabilityId ?? 'missing',
+        'The requested fitzRoy capability is not bound to this source scope, competition, and season.'
+      );
+    }
+  } else if (request.capabilityId !== null) {
+    addBlocker(
+      blockers,
+      'capability_not_permitted',
+      request.capabilityId,
+      'A non-fitzRoy source scope cannot authorize a fitzRoy capability.'
     );
   }
   const restrictionChecks: ReadonlyArray<{

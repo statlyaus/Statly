@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   aflTradeArtifactRefSchema,
   createAflTradeByteArtifactRef,
-  createAflTradeCanonicalJsonArtifactRef,
   doesAflTradeArtifactRefMatchBytes,
 } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { createAflTradeArtifactCustodyProfile } from '@/server/aflTradeIntelligence/artifacts/artifactCustodyProfile';
 import {
   AflTradeArtifactCustodyError,
   createAflTradeFixtureArtifactRepository,
@@ -21,25 +24,58 @@ import {
   aflTradeGateDecisionRecordSchema,
 } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { createAflTradeGate0AReceipt } from '@/server/aflTradeIntelligence/source/gate0aReceipt';
+import {
+  createAflTradeFitzRoyInvocation,
+  createAflTradeFitzRoySchemaFingerprint,
+} from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
+import { createAflTradeFitzRoyCaptureReceipt } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureReceipt';
 import { aflTradeSourceRightsProposalSchema } from '@/server/aflTradeIntelligence/source/sourceRights';
 
 const sha = (character: string) => character.repeat(64);
 const evidenceId = `artifact:${sha('a')}`;
 
-function governanceFixture(accessMechanism: 'provider_export' | 'provider_api') {
+function governanceFixture(
+  accessMechanism: 'provider_export' | 'provider_api',
+  useFitzRoy = false,
+  environment: 'test_fixture' | 'non_production' = 'test_fixture'
+) {
   const automated = accessMechanism === 'provider_api';
   const rightsContent = {
-    schemaVersion: 'afl-trade-source-rights/v1' as const,
+    schemaVersion: 'afl-trade-source-rights/v2' as const,
     registerId: `fixture-${accessMechanism}`,
-    provider: 'Fabricated provider',
+    provider: useFitzRoy ? 'official_afl' : 'Fabricated provider',
     dataset: 'Fabricated AFL outcomes',
     datasetVersion: 'fixture-v1',
     intendedPurpose: 'Exercise immutable source custody with fabricated bytes.',
     scope: {
-      competitions: ['AFL'],
+      competitions: [useFitzRoy ? 'AFLM' : 'AFL'],
       seasonRanges: [{ from: 2026, to: 2026 }],
       accessMechanism,
     },
+    acquisition: useFitzRoy
+      ? {
+          kind: 'fitzroy' as const,
+          capabilitySchemaVersion: 'afl-trade-fitzroy-capabilities/v1' as const,
+          fitzRoyVersion: '1.7.0' as const,
+          capabilities: [
+            {
+              capabilityId: 'official-afl-player-stats',
+              provider: 'official_afl' as const,
+              directFunction: 'fetch_player_stats_afl',
+            },
+          ],
+        }
+      : accessMechanism === 'provider_api'
+        ? {
+            kind: 'provider_direct' as const,
+            clientName: 'Fabricated provider test client',
+            clientVersion: 'fixture-v1',
+          }
+        : {
+            kind: 'provided_artifact' as const,
+            mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            deliveryMethod: 'Fabricated fixture export',
+          },
     operations: {
       bounded_evaluation_capture: 'allowed' as const,
       raw_evidence_retention: 'allowed' as const,
@@ -127,9 +163,19 @@ function governanceFixture(accessMechanism: 'provider_export' | 'provider_api') 
     description: 'Fabricated source-custody scope.',
     dimensions: [
       { name: 'source_rights_artifact', values: [rights.rightsArtifactId] },
-      { name: 'competition', values: ['AFL'] },
+      { name: 'competition', values: rights.content.scope.competitions },
       { name: 'season', values: ['2026'] },
       { name: 'access_mechanism', values: [accessMechanism] },
+      ...(rights.content.acquisition.kind === 'fitzroy'
+        ? [
+            {
+              name: 'fitzroy_capability',
+              values: rights.content.acquisition.capabilities.map(
+                ({ capabilityId }) => capabilityId
+              ),
+            },
+          ]
+        : []),
       { name: 'geography', values: ['Australia'] },
       { name: 'commercial_context', values: ['test-only'] },
       { name: 'audience', values: ['public-afl-readers'] },
@@ -142,7 +188,7 @@ function governanceFixture(accessMechanism: 'provider_export' | 'provider_api') 
     gate: 'gate_0a_permission_to_evaluate' as const,
     decisionKey: `fixture-${accessMechanism}`,
     version: 1,
-    environment: 'test_fixture' as const,
+    environment,
     scope,
     proposal: 'Permit only this fabricated source-custody test.',
     alternativesConsidered: ['Keep fabricated capture blocked.'],
@@ -166,10 +212,11 @@ function governanceFixture(accessMechanism: 'provider_export' | 'provider_api') 
     gate: proposal.content.gate,
     decisionKey: proposal.content.decisionKey,
     version: 1,
-    environment: 'test_fixture' as const,
+    environment,
     scope,
     state: 'approved' as const,
-    authorityKind: 'fixture' as const,
+    authorityKind:
+      environment === 'test_fixture' ? ('fixture' as const) : ('external_human_record' as const),
     accountableOwner: 'fixture-owner',
     decidedBy: 'fixture-owner',
     reviewers: [],
@@ -194,12 +241,16 @@ function governanceFixture(accessMechanism: 'provider_export' | 'provider_api') 
     rights,
     {
       decisionKey: proposal.content.decisionKey,
-      environment: 'test_fixture',
+      environment,
       rightsArtifactId: rights.rightsArtifactId,
       evaluatedAt: '2026-08-05T01:50:00.000Z',
-      competition: 'AFL',
+      competition: rights.content.scope.competitions[0],
       season: 2026,
       accessMechanism,
+      capabilityId:
+        rights.content.acquisition.kind === 'fitzroy'
+          ? rights.content.acquisition.capabilities[0].capabilityId
+          : null,
       geography: 'Australia',
       commercialContext: 'test-only',
       audience: 'public-afl-readers',
@@ -217,14 +268,22 @@ function governanceFixture(accessMechanism: 'provider_export' | 'provider_api') 
   return { rights, proposal, decision, receipt };
 }
 
-async function custodyFixture(bytes: Uint8Array, mediaType: string) {
-  const artifact = createAflTradeByteArtifactRef(bytes, mediaType, '2026-08-05T02:00:00.000Z');
-  const repository = createAflTradeFixtureArtifactRepository();
+async function custodyFixture(
+  bytes: Uint8Array,
+  mediaType: string,
+  timestamps = {
+    createdAt: '2026-08-05T02:00:00.000Z',
+    verifiedAt: '2026-08-05T02:01:00.000Z',
+  },
+  artifactClass: 'raw_source' | 'capture_metadata' = 'capture_metadata'
+) {
+  const artifact = createAflTradeByteArtifactRef(bytes, mediaType, timestamps.createdAt);
+  const repository = createAflTradeFixtureArtifactRepository({ artifactClass });
   const stored = await repository.putIfAbsent(artifact, bytes);
   const readbackReceipt = await verifyAflTradeArtifactReadback(
     repository,
     stored.reference,
-    '2026-08-05T02:01:00.000Z',
+    timestamps.verifiedAt,
     10_000
   );
   return { artifact: stored.reference, repository, readbackReceipt };
@@ -318,10 +377,12 @@ describe('AFL trade-intelligence source snapshots', () => {
     const governance = governanceFixture('provider_export');
     const custody = await custodyFixture(
       Uint8Array.from([80, 75, 3, 4]),
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      undefined,
+      'raw_source'
     );
     const snapshot = createAflTradeSourceSnapshotManifest({
-      schemaVersion: 'afl-trade-source-snapshot/v1',
+      schemaVersion: 'afl-trade-source-snapshot/v3',
       sourceArtifact: custody.artifact,
       readbackReceipt: custody.readbackReceipt,
       capture: {
@@ -340,6 +401,7 @@ describe('AFL trade-intelligence source snapshots', () => {
       gate0aProposal: governance.proposal,
       gate0aDecision: governance.decision,
       gate0aReceipt: governance.receipt,
+      fitzRoyCaptureReceipt: null,
       capturedFields: ['games', 'goals'],
       retrievedAt: '2026-08-05T02:00:00.000Z',
       effectiveAt: '2026-08-05T00:00:00.000Z',
@@ -412,6 +474,32 @@ describe('AFL trade-intelligence source snapshots', () => {
         ])
       );
     }
+    const wrongEnvironmentReceiptContent = {
+      ...snapshot.content.readbackReceipt.content,
+      custodyEnvironment: 'non_production' as const,
+    };
+    const wrongEnvironmentReadback = aflTradeSourceSnapshotManifestContentSchema.safeParse({
+      ...snapshot.content,
+      readbackReceipt: {
+        receiptId: createAflTradeContentAddress(
+          'artifact-readback',
+          wrongEnvironmentReceiptContent
+        ),
+        content: wrongEnvironmentReceiptContent,
+      },
+    });
+    expect(wrongEnvironmentReadback.success).toBe(false);
+    if (!wrongEnvironmentReadback.success) {
+      expect(wrongEnvironmentReadback.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['readbackReceipt'],
+            message:
+              'Source snapshots require raw-source custody with assurance and an exact profile environment matching the Gate decision.',
+          }),
+        ])
+      );
+    }
     for (const [retrievedAt, expectedMessage] of [
       [
         '2026-12-31T00:00:00.000Z',
@@ -478,18 +566,196 @@ describe('AFL trade-intelligence source snapshots', () => {
     ).toThrow();
   });
 
+  it('binds non-production snapshots to the complete authorized custody profile', async () => {
+    const governance = governanceFixture('provider_export', false, 'non_production');
+    const sourceArtifact = createAflTradeByteArtifactRef(
+      Uint8Array.from([80, 75, 3, 4]),
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '2026-08-05T02:00:00.000Z'
+    );
+    const makeProfile = (maximumDays: number, deleteOnWithdrawal: boolean) =>
+      createAflTradeArtifactCustodyProfile({
+        schemaVersion: 'afl-trade-artifact-custody-profile/v1',
+        subject: 'afl-trade-intelligence',
+        contractRole: 'requirements_only_not_readiness_or_authorization',
+        repositoryId: 'fixture-non-production-raw-source',
+        environment: 'non_production',
+        artifactClass: 'raw_source',
+        maximumObjectBytes: 10_000,
+        keyDerivation: 'profile_sha256_two_level_fanout_v1',
+        conditionalCreate: 'if_none_match_star_required',
+        encryption: {
+          inTransit: 'tls_required',
+          atRest: { mode: 'provider_managed', keyReferenceSha256: null },
+        },
+        retention: {
+          deletion: {
+            kind: 'maximum_age',
+            maximumDays,
+            enforcement: 'provider_lifecycle_required',
+          },
+          deleteOnWithdrawal,
+          worm: null,
+        },
+        residency: {
+          allowedJurisdictions: ['Australia'],
+          crossJurisdictionTransfer: 'prohibited',
+        },
+        infrastructureEvidenceIds: [`storage-policy:${sha('e')}`],
+      });
+    const makeReadback = (maximumDays: number, deleteOnWithdrawal: boolean) => {
+      const custodyProfile = makeProfile(maximumDays, deleteOnWithdrawal);
+      const content = {
+        schemaVersion: 'afl-trade-artifact-readback/v4' as const,
+        artifact: sourceArtifact,
+        repositoryAssurance: 'durable_object_storage' as const,
+        artifactClass: 'raw_source' as const,
+        custodyProfileId: custodyProfile.profileId,
+        custodyProfile,
+        custodyEnvironment: 'non_production' as const,
+        verifiedAt: '2026-08-05T02:01:00.000Z',
+        verification: 'exact_reference_and_sha256_bytes' as const,
+        status: 'passed' as const,
+      };
+      return {
+        receiptId: createAflTradeContentAddress('artifact-readback', content),
+        content,
+      };
+    };
+    const input = {
+      schemaVersion: 'afl-trade-source-snapshot/v3' as const,
+      sourceArtifact,
+      readbackReceipt: makeReadback(30, true),
+      capture: {
+        kind: 'workbook' as const,
+        sourceRegisterId: governance.rights.content.registerId,
+        upstreamProvider: governance.rights.content.provider,
+        upstreamDataset: governance.rights.content.dataset,
+        upstreamDatasetVersion: governance.rights.content.datasetVersion,
+        originalFilename: 'AFL Drafts Trades.xlsx',
+        workbookFormat: 'xlsx' as const,
+        worksheetNames: ['Trades'],
+        importFormatVersion: 'fixture-v1',
+        accessMechanism: 'provider_export' as const,
+      },
+      sourceRightsProposal: governance.rights,
+      gate0aProposal: governance.proposal,
+      gate0aDecision: governance.decision,
+      gate0aReceipt: governance.receipt,
+      fitzRoyCaptureReceipt: null,
+      capturedFields: ['games', 'goals'],
+      retrievedAt: '2026-08-05T02:00:00.000Z',
+      effectiveAt: '2026-08-05T00:00:00.000Z',
+      retention: { rawRetentionDays: 30, deleteOnWithdrawal: true },
+      createdAt: '2026-08-05T02:02:00.000Z',
+    };
+
+    const validResult = aflTradeSourceSnapshotManifestContentSchema.safeParse(input);
+    expect(
+      validResult.success,
+      validResult.success ? undefined : JSON.stringify(validResult.error.issues)
+    ).toBe(true);
+    for (const readbackReceipt of [makeReadback(31, true), makeReadback(30, false)]) {
+      const result = aflTradeSourceSnapshotManifestContentSchema.safeParse({
+        ...input,
+        readbackReceipt,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: ['readbackReceipt', 'content', 'custodyProfile'],
+            }),
+          ])
+        );
+      }
+    }
+  });
+
   it('keeps fitzRoy upstream and canonical arguments distinct from workbook metadata', async () => {
-    const governance = governanceFixture('provider_api');
+    const governance = governanceFixture('provider_api', true);
     const custody = await custodyFixture(
-      new TextEncoder().encode('{"fixture":true}'),
+      Uint8Array.from([88, 10, 0, 0, 0, 3]),
+      'application/x-r-rds',
+      {
+        createdAt: '2026-08-05T02:00:00.000Z',
+        verifiedAt: '2026-08-05T02:02:00.000Z',
+      },
+      'raw_source'
+    );
+    const invocation = createAflTradeFitzRoyInvocation({
+      schemaVersion: 'afl-trade-fitzroy-capture-request/v1',
+      capabilityId: 'official-afl-player-stats',
+      competition: 'AFLM',
+      authorizationSeason: 2026,
+      parameters: { season: 2026, roundNumber: null },
+    });
+    const invocationCustody = await custodyFixture(
+      new TextEncoder().encode(canonicalizeAflTradeJson(invocation)),
+      'application/json',
+      {
+        createdAt: '2026-08-05T01:30:00.000Z',
+        verifiedAt: '2026-08-05T01:52:00.000Z',
+      }
+    );
+    const diagnostics = {
+      schemaVersion: 'afl-trade-fitzroy-diagnostics/v1' as const,
+      capabilityId: invocation.capabilityId,
+      fitzRoyVersion: '1.7.0' as const,
+      directFunction: invocation.directFunction,
+      invocationSha256: invocationCustody.artifact.contentSha256,
+      runtime: {
+        rVersion: '4.5.1' as const,
+        platform: 'aarch64-unknown-linux-gnu',
+        dependencyLockSha256: sha('c'),
+        imageDigest: `sha256:${sha('d')}`,
+      },
+      rowCount: 2,
+      duplicateRowCount: 0,
+      fields: ['games', 'goals'].map((name) => ({
+        name,
+        classes: ['numeric'],
+        storageType: 'double',
+        missingCount: 0,
+        nanCount: 0,
+        positiveInfinityCount: 0,
+        negativeInfinityCount: 0,
+        levels: null,
+        timezone: null,
+      })),
+      observedSeasonValues: ['2026'],
+      observedRoundValues: ['1'],
+      observedDateRange: ['2026-03-19', '2026-03-20'] as [string, string],
+      originObservation: 'not_exposed_by_fitzroy' as const,
+      conditions: [],
+    };
+    const diagnosticsCustody = await custodyFixture(
+      new TextEncoder().encode(canonicalizeAflTradeJson(diagnostics)),
       'application/json'
     );
-    const argumentsArtifact = createAflTradeCanonicalJsonArtifactRef(
-      { season: 2026, comp: 'AFL' },
-      '2026-08-05T01:30:00.000Z'
-    );
+    const captureReceipt = createAflTradeFitzRoyCaptureReceipt({
+      schemaVersion: 'afl-trade-fitzroy-capture/v2',
+      invocation,
+      authorizationReceipt: governance.receipt,
+      invocationCustody: {
+        artifact: invocationCustody.artifact,
+        readback: invocationCustody.readbackReceipt,
+      },
+      sourceCustody: { artifact: custody.artifact, readback: custody.readbackReceipt },
+      diagnosticsCustody: {
+        artifact: diagnosticsCustody.artifact,
+        readback: diagnosticsCustody.readbackReceipt,
+      },
+      egressExecutionCustody: null,
+      egressExecutionReceipt: null,
+      diagnostics,
+      schemaFingerprint: createAflTradeFitzRoySchemaFingerprint(diagnostics),
+      capturedAt: '2026-08-05T02:02:00.000Z',
+      status: 'captured',
+    });
     const snapshot = createAflTradeSourceSnapshotManifest({
-      schemaVersion: 'afl-trade-source-snapshot/v1',
+      schemaVersion: 'afl-trade-source-snapshot/v3',
       sourceArtifact: custody.artifact,
       readbackReceipt: custody.readbackReceipt,
       capture: {
@@ -498,9 +764,10 @@ describe('AFL trade-intelligence source snapshots', () => {
         upstreamProvider: governance.rights.content.provider,
         upstreamDataset: governance.rights.content.dataset,
         upstreamDatasetVersion: governance.rights.content.datasetVersion,
-        packageVersion: '2.0.0',
-        functionName: 'fetch_player_stats',
-        argumentsArtifact,
+        capabilityId: 'official-afl-player-stats',
+        packageVersion: '1.7.0',
+        functionName: 'fetch_player_stats_afl',
+        argumentsArtifact: invocationCustody.artifact,
         accessMechanism: 'provider_api',
         rateLimitContext: 'Ten fabricated requests per minute.',
         cacheContext: 'Cache fabricated responses for at most 300 seconds.',
@@ -509,13 +776,15 @@ describe('AFL trade-intelligence source snapshots', () => {
       gate0aProposal: governance.proposal,
       gate0aDecision: governance.decision,
       gate0aReceipt: governance.receipt,
+      fitzRoyCaptureReceipt: captureReceipt,
       capturedFields: ['games', 'goals'],
-      retrievedAt: '2026-08-05T02:00:00.000Z',
+      retrievedAt: '2026-08-05T02:02:00.000Z',
       effectiveAt: '2026-08-05T00:00:00.000Z',
       retention: { rawRetentionDays: 30, deleteOnWithdrawal: true },
       createdAt: '2026-08-05T02:02:00.000Z',
     });
     expect(snapshot.content.capture.kind).toBe('fitzroy');
+    expect(snapshot.content.sourceArtifact.createdAt).not.toBe(snapshot.content.retrievedAt);
     if (snapshot.content.capture.kind !== 'fitzroy') {
       throw new Error('Expected a fitzRoy capture fixture.');
     }
@@ -525,6 +794,9 @@ describe('AFL trade-intelligence source snapshots', () => {
       { ...fitzRoyCapture, upstreamProvider: 'Another provider' },
       { ...fitzRoyCapture, upstreamDataset: 'Another dataset' },
       { ...fitzRoyCapture, upstreamDatasetVersion: 'another-version' },
+      { ...fitzRoyCapture, capabilityId: 'afl-tables-player-stats' },
+      { ...fitzRoyCapture, packageVersion: '1.6.0' },
+      { ...fitzRoyCapture, functionName: 'fetch_player_stats' },
     ]) {
       expect(
         aflTradeSourceSnapshotManifestContentSchema.safeParse({

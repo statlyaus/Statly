@@ -78,11 +78,39 @@ describe('AFL trade value summary card', () => {
     expect(screen.getByText('Moderate confidence')).toBeVisible();
     expect(screen.getByText(/55% chance to finish ahead/)).toBeVisible();
     expect(screen.getByText(/10% practical-equivalence chance/)).toBeVisible();
+    expect(screen.getByLabelText('Fabricated Club A Statly grade B+')).toBeVisible();
+    expect(screen.getByLabelText('Fabricated Club B Statly grade C+')).toBeVisible();
     expect(screen.getByText(/Calculated 5 Aug 2026/)).toBeVisible();
     expect(screen.getByRole('link', { name: 'Methodology' })).toHaveAttribute(
       'href',
       '/draft/trades/methodology/publication-fixture'
     );
+  });
+
+  it('leads with complete-package net value and explains received and given-up totals', () => {
+    const valuation = numericalSummary();
+    valuation.clubValues[0]!.packageValue = {
+      received: { median: 75, interval: { lower: 60, upper: 92 } },
+      givenUp: { median: 45, interval: { lower: 32, upper: 58 } },
+      net: { median: 30, interval: { lower: 8, upper: 55 } },
+    };
+
+    render(<AflTradeValueSummaryCard valuation={valuation} calculationAsOf={null} />);
+
+    expect(screen.getByText('Net +30')).toBeVisible();
+    expect(screen.getByText('75 received − 45 given up')).toBeVisible();
+
+    const explanation = screen.getByText('How this is calculated');
+    expect(explanation.closest('details')).toBeInTheDocument();
+    expect(screen.getByText('Received value')).toBeInTheDocument();
+    expect(screen.getByText('60–92')).toBeInTheDocument();
+    expect(screen.getByText('Given-up value')).toBeInTheDocument();
+    expect(screen.getByText('32–58')).toBeInTheDocument();
+    expect(screen.getByText('Net advantage')).toBeInTheDocument();
+    expect(screen.getByText('+8–+55')).toBeInTheDocument();
+    expect(
+      screen.getByText('Net is received value minus given-up value in Fixture value units.')
+    ).toBeInTheDocument();
   });
 
   it('does not force a winner for a balanced result', () => {
@@ -105,7 +133,7 @@ describe('AFL trade value summary card', () => {
       />
     );
 
-    expect(screen.getByText('Trade value unavailable')).toBeVisible();
+    expect(screen.getByText('Trade value not calculated')).toBeVisible();
     expect(screen.getByText('No numerical result')).toBeVisible();
     expect(screen.queryByText(/chance to finish ahead/)).not.toBeInTheDocument();
   });
@@ -135,5 +163,22 @@ describe('AFL trade value summary card', () => {
     render(<AflTradeValueSummaryCard valuation={valuation} calculationAsOf={null} />);
 
     expect(screen.getByText('One fabricated asset is excluded.')).toBeVisible();
+    expect(screen.getAllByText('Grade unavailable')).toHaveLength(2);
   });
+
+  it('labels grades as provisional while confidence is low', () => {
+    const valuation = numericalSummary();
+    valuation.confidence.level = 'low';
+    valuation.confidence.dimensions[0] = {
+      ...valuation.confidence.dimensions[0]!,
+      level: 'low',
+      reasonCode: 'fixture-model-low',
+      explanation: 'Fabricated low model confidence.',
+    };
+
+    render(<AflTradeValueSummaryCard valuation={valuation} calculationAsOf={null} />);
+
+    expect(screen.getAllByText('Provisional')).toHaveLength(2);
+  });
+
 });

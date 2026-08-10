@@ -149,7 +149,7 @@ describe('AflDraftTradeOutcomesExplorer', () => {
     ).toBeVisible();
     expect(screen.getByText('Outcome release not published')).toBeVisible();
     expect(
-      screen.getByText(/will not label the supplied workbook as verified data/i)
+      screen.getByText(/A public row appears only after stable player identity/i)
     ).toBeVisible();
     expect(screen.getByRole('link', { name: 'Explore trade archive' })).toHaveAttribute(
       'href',
@@ -177,6 +177,30 @@ describe('AflDraftTradeOutcomesExplorer', () => {
       'href',
       '/draft/outcomes?cursor=release-bound-cursor-2'
     );
+  });
+
+  it('renders multiple acquisitions from the same draft event', () => {
+    const secondItem = {
+      ...activeResponse.items[0],
+      assetId: 'asset:fixture-2',
+      aflClubId: 'club:fixture-b',
+      clubName: 'Fixture Club B',
+      player: {
+        aflPlayerId: 'player:fixture-2',
+        displayName: 'Second Fixture Player',
+        identityStatus: 'resolved' as const,
+      },
+    };
+    const sameEventResponse = aflDraftTradeOutcomeListResponseSchema.parse({
+      ...activeResponse,
+      items: [activeResponse.items[0], secondItem],
+      page: { limit: 25, nextCursor: null, total: 2 },
+    });
+
+    render(<AflDraftTradeOutcomesExplorer response={sameEventResponse} query={query} />);
+
+    expect(screen.getByRole('heading', { name: 'Fixture Player' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Second Fixture Player' })).toBeVisible();
   });
 
   it('renders an honest active-release empty state and unsupported-filter notice', () => {

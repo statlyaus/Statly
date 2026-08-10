@@ -19,6 +19,8 @@ import {
 
 export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION =
   'afl-trade-projection-schema-bundle/v1' as const;
+export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_SCHEMA_VERSION =
+  'afl-trade-projection-schema-bundle/v2' as const;
 export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PUBLIC_ASSET_BOUNDARY =
   'source_native_afl_assets_no_user_or_fantasy_ownership' as const;
 export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_RESPONSE_CONTRACT_VERSION =
@@ -35,6 +37,10 @@ export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PROJECTION_MANIFEST_SCHEMA_VERSI
   'afl-trade-projection/v2' as const;
 export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PUBLICATION_MANIFEST_SCHEMA_VERSION =
   'afl-trade-publication/v3' as const;
+export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PROJECTION_MANIFEST_SCHEMA_VERSION =
+  'afl-trade-projection/v3' as const;
+export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PUBLICATION_MANIFEST_SCHEMA_VERSION =
+  'afl-trade-publication/v4' as const;
 export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PRESENTATION_POLICY_SCHEMA_VERSION =
   'afl-trade-projection-presentation-policy/v1' as const;
 export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PUBLIC_EVIDENCE_SCHEMA_VERSION =
@@ -188,6 +194,20 @@ export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DESCRIPTORS = Object.freeze([
   }),
 ] as const);
 
+export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_DESCRIPTORS = Object.freeze(
+  AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DESCRIPTORS.map((descriptor) =>
+    Object.freeze({
+      ...descriptor,
+      version:
+        descriptor.role === 'publication_manifest'
+          ? AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PUBLICATION_MANIFEST_SCHEMA_VERSION
+          : descriptor.role === 'projection_manifest'
+            ? AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PROJECTION_MANIFEST_SCHEMA_VERSION
+            : descriptor.version,
+    })
+  )
+);
+
 const canonicalJsonArtifactRefSchema = aflTradeArtifactRefSchema.refine(
   (reference) => reference.mediaType === AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE,
   'Projection schema bundles require canonical JSON artifact references.'
@@ -202,12 +222,12 @@ export const aflTradeProjectionSchemaBundleDescriptorSchema = z
   .strict();
 
 function descriptorsMatchGovernedDefinition(
-  descriptors: readonly z.infer<typeof aflTradeProjectionSchemaBundleDescriptorSchema>[]
+  descriptors: readonly z.infer<typeof aflTradeProjectionSchemaBundleDescriptorSchema>[],
+  governedDescriptors: readonly z.infer<
+    typeof aflTradeProjectionSchemaBundleDescriptorSchema
+  >[] = AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DESCRIPTORS
 ): boolean {
-  return (
-    canonicalizeAflTradeJson(descriptors) ===
-    canonicalizeAflTradeJson(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DESCRIPTORS)
-  );
+  return canonicalizeAflTradeJson(descriptors) === canonicalizeAflTradeJson(governedDescriptors);
 }
 
 export const aflTradeProjectionSchemaBundleContentSchema = z
@@ -279,10 +299,103 @@ export const aflTradeProjectionSchemaBundleContentSchema = z
     }
   });
 
+export const aflTradeProjectionSchemaBundleV2ContentSchema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_SCHEMA_VERSION),
+    publicAssetBoundary: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PUBLIC_ASSET_BOUNDARY),
+    responseContractVersion: z.literal(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_RESPONSE_CONTRACT_VERSION
+    ),
+    valuationExportContractVersion: z.literal(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_EXPORT_CONTRACT_VERSION
+    ),
+    projectionDocumentSchemaVersion: z.literal(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DOCUMENT_SCHEMA_VERSION
+    ),
+    projectionDocumentSetSchemaVersion: z.literal(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DOCUMENT_SET_SCHEMA_VERSION
+    ),
+    publicationManifestSchemaVersion: z.literal(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PUBLICATION_MANIFEST_SCHEMA_VERSION
+    ),
+    projectionManifestSchemaVersion: z.literal(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PROJECTION_MANIFEST_SCHEMA_VERSION
+    ),
+    supportedViews: z.tuple([
+      z.literal('at_trade'),
+      z.literal('realized'),
+      z.literal('remaining'),
+      z.literal('current'),
+    ]),
+    descriptorOrdering: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DESCRIPTOR_ORDERING),
+    descriptorDigestDefinition: z.literal(
+      AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DESCRIPTOR_DIGEST_DEFINITION
+    ),
+    descriptorCount: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_DESCRIPTORS.length),
+    descriptorSetSha256: aflTradeSha256Schema,
+    descriptors: z
+      .array(aflTradeProjectionSchemaBundleDescriptorSchema)
+      .length(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_DESCRIPTORS.length),
+    predecessorPolicy: z
+      .object({
+        predecessorSchemaVersion: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION),
+        compatibility: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PREDECESSOR_COMPATIBILITY),
+        runtimeFallback: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_RUNTIME_FALLBACK),
+      })
+      .strict(),
+    createdAt: aflTradeIsoDateTimeSchema,
+    limitation: z.literal(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_LIMITATION),
+  })
+  .strict()
+  .superRefine((content, context) => {
+    if (content.supportedViews.some((view, index) => view !== AFL_TRADE_VALUATION_VIEWS[index])) {
+      context.addIssue({
+        code: 'custom',
+        path: ['supportedViews'],
+        message: 'Projection schema-bundle views must use the complete canonical order.',
+      });
+    }
+    if (
+      !descriptorsMatchGovernedDefinition(
+        content.descriptors,
+        AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_DESCRIPTORS
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['descriptors'],
+        message: 'Projection schema-bundle descriptors must match the governed declaration.',
+      });
+    }
+    if (content.descriptorSetSha256 !== sha256AflTradeCanonicalJson(content.descriptors)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['descriptorSetSha256'],
+        message: 'Descriptor digest must authenticate the ordered declarative descriptors.',
+      });
+    }
+  });
+
 export const aflTradeProjectionSchemaBundleSchema = z
   .object({
     projectionSchemaBundleId: aflTradeContentAddressedIdSchema('projection-schema-bundle'),
     content: aflTradeProjectionSchemaBundleContentSchema,
+  })
+  .strict()
+  .superRefine((bundle, context) => {
+    addAflTradeContentAddressIssue(
+      'projection-schema-bundle',
+      bundle.projectionSchemaBundleId,
+      bundle.content,
+      context,
+      ['projectionSchemaBundleId']
+    );
+  });
+
+export const aflTradeProjectionSchemaBundleV2Schema = z
+  .object({
+    projectionSchemaBundleId: aflTradeContentAddressedIdSchema('projection-schema-bundle'),
+    content: aflTradeProjectionSchemaBundleV2ContentSchema,
   })
   .strict()
   .superRefine((bundle, context) => {
@@ -302,6 +415,12 @@ export type AflTradeProjectionSchemaBundleContent = z.infer<
   typeof aflTradeProjectionSchemaBundleContentSchema
 >;
 export type AflTradeProjectionSchemaBundle = z.infer<typeof aflTradeProjectionSchemaBundleSchema>;
+export type AflTradeProjectionSchemaBundleV2Content = z.infer<
+  typeof aflTradeProjectionSchemaBundleV2ContentSchema
+>;
+export type AflTradeProjectionSchemaBundleV2 = z.infer<
+  typeof aflTradeProjectionSchemaBundleV2Schema
+>;
 
 export const aflTradeProjectionSchemaBundleResultSchema = z
   .object({
@@ -337,8 +456,53 @@ export const aflTradeProjectionSchemaBundleResultSchema = z
     }
   });
 
+export const aflTradeProjectionSchemaBundleV2ResultSchema = z
+  .object({
+    projectionSchemaBundle: aflTradeProjectionSchemaBundleV2Schema,
+    projectionSchemaBundleArtifactRef: canonicalJsonArtifactRefSchema,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    const reference = result.projectionSchemaBundleArtifactRef;
+    if (!doesAflTradeArtifactRefMatchCanonicalJson(reference, result.projectionSchemaBundle)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['projectionSchemaBundleArtifactRef'],
+        message: 'Schema-bundle artifact reference must authenticate the complete artifact.',
+      });
+    }
+    if (reference.createdAt !== result.projectionSchemaBundle.content.createdAt) {
+      context.addIssue({
+        code: 'custom',
+        path: ['projectionSchemaBundleArtifactRef', 'createdAt'],
+        message: 'Schema-bundle artifact time must match its declared creation time.',
+      });
+    }
+    if (
+      reference.byteLength < 1 ||
+      reference.byteLength > AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_MAX_BYTES
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['projectionSchemaBundleArtifactRef', 'byteLength'],
+        message: 'Projection schema-bundle canonical bytes exceed the 64 KiB limit.',
+      });
+    }
+  });
+
+export const aflTradeAnyProjectionSchemaBundleResultSchema = z.union([
+  aflTradeProjectionSchemaBundleResultSchema,
+  aflTradeProjectionSchemaBundleV2ResultSchema,
+]);
+
 export type AflTradeProjectionSchemaBundleResult = z.infer<
   typeof aflTradeProjectionSchemaBundleResultSchema
+>;
+export type AflTradeProjectionSchemaBundleV2Result = z.infer<
+  typeof aflTradeProjectionSchemaBundleV2ResultSchema
+>;
+export type AflTradeAnyProjectionSchemaBundleResult = z.infer<
+  typeof aflTradeAnyProjectionSchemaBundleResultSchema
 >;
 
 export const AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_CONSTRUCTION_ERROR_CODES = [
@@ -494,6 +658,71 @@ export function createAflTradeProjectionSchemaBundle(
   }
 }
 
+export function createAflTradeProjectionSchemaBundleV2(
+  unparsedInput: unknown
+): AflTradeProjectionSchemaBundleV2Result {
+  try {
+    const snapshot = snapshotExactInput(unparsedInput, CREATE_INPUT_KEYS);
+    if (snapshot === null) throw constructionError('INVALID_INPUT_ENVELOPE');
+    const createdAt = aflTradeIsoDateTimeSchema.safeParse(snapshot.createdAt);
+    if (!createdAt.success) throw constructionError('INVALID_CREATED_AT');
+
+    const descriptors = structuredClone(AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_DESCRIPTORS);
+    const content = {
+      schemaVersion: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_SCHEMA_VERSION,
+      publicAssetBoundary: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PUBLIC_ASSET_BOUNDARY,
+      responseContractVersion: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_RESPONSE_CONTRACT_VERSION,
+      valuationExportContractVersion: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_EXPORT_CONTRACT_VERSION,
+      projectionDocumentSchemaVersion: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DOCUMENT_SCHEMA_VERSION,
+      projectionDocumentSetSchemaVersion:
+        AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DOCUMENT_SET_SCHEMA_VERSION,
+      publicationManifestSchemaVersion:
+        AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PUBLICATION_MANIFEST_SCHEMA_VERSION,
+      projectionManifestSchemaVersion:
+        AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_PROJECTION_MANIFEST_SCHEMA_VERSION,
+      supportedViews: [...AFL_TRADE_VALUATION_VIEWS],
+      descriptorOrdering: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DESCRIPTOR_ORDERING,
+      descriptorDigestDefinition: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_DESCRIPTOR_DIGEST_DEFINITION,
+      descriptorCount: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_V2_DESCRIPTORS.length,
+      descriptorSetSha256: sha256AflTradeCanonicalJson(descriptors),
+      descriptors,
+      predecessorPolicy: {
+        predecessorSchemaVersion: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_SCHEMA_VERSION,
+        compatibility: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_PREDECESSOR_COMPATIBILITY,
+        runtimeFallback: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_RUNTIME_FALLBACK,
+      },
+      createdAt: createdAt.data,
+      limitation: AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_LIMITATION,
+    };
+    const projectionSchemaBundle = aflTradeProjectionSchemaBundleV2Schema.safeParse({
+      projectionSchemaBundleId: createAflTradeContentAddress('projection-schema-bundle', content),
+      content,
+    });
+    if (!projectionSchemaBundle.success) {
+      throw constructionError('INTERNAL_ARTIFACT_CONTRACT_VIOLATION');
+    }
+    const projectionSchemaBundleArtifactRef = createAflTradeCanonicalJsonArtifactRef(
+      projectionSchemaBundle.data,
+      createdAt.data
+    );
+    if (
+      projectionSchemaBundleArtifactRef.byteLength < 1 ||
+      projectionSchemaBundleArtifactRef.byteLength > AFL_TRADE_PROJECTION_SCHEMA_BUNDLE_MAX_BYTES
+    ) {
+      throw constructionError('ARTIFACT_SIZE_LIMIT_EXCEEDED');
+    }
+    const result = aflTradeProjectionSchemaBundleV2ResultSchema.safeParse({
+      projectionSchemaBundle: projectionSchemaBundle.data,
+      projectionSchemaBundleArtifactRef,
+    });
+    if (!result.success) throw constructionError('INTERNAL_ARTIFACT_CONTRACT_VIOLATION');
+    return deepFreeze(result.data);
+  } catch (error) {
+    if (isAflTradeProjectionSchemaBundleConstructionError(error)) throw error;
+    throw constructionError('INTERNAL_ARTIFACT_CONTRACT_VIOLATION');
+  }
+}
+
 export function verifyAflTradeProjectionSchemaBundleDerivation(input: unknown): boolean {
   try {
     const snapshot = snapshotExactInput(input, VERIFY_INPUT_KEYS);
@@ -501,6 +730,19 @@ export function verifyAflTradeProjectionSchemaBundleDerivation(input: unknown): 
     const output = aflTradeProjectionSchemaBundleResultSchema.safeParse(snapshot.output);
     if (!output.success) return false;
     const replayed = createAflTradeProjectionSchemaBundle({ createdAt: snapshot.createdAt });
+    return canonicalizeAflTradeJson(replayed) === canonicalizeAflTradeJson(output.data);
+  } catch {
+    return false;
+  }
+}
+
+export function verifyAflTradeProjectionSchemaBundleV2Derivation(input: unknown): boolean {
+  try {
+    const snapshot = snapshotExactInput(input, VERIFY_INPUT_KEYS);
+    if (snapshot === null) return false;
+    const output = aflTradeProjectionSchemaBundleV2ResultSchema.safeParse(snapshot.output);
+    if (!output.success) return false;
+    const replayed = createAflTradeProjectionSchemaBundleV2({ createdAt: snapshot.createdAt });
     return canonicalizeAflTradeJson(replayed) === canonicalizeAflTradeJson(output.data);
   } catch {
     return false;

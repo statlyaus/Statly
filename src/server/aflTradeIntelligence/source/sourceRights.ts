@@ -4,6 +4,11 @@ import {
   addAflTradeContentAddressIssue,
   aflTradeContentAddressedIdSchema,
 } from '../artifacts/contentAddress';
+import {
+  AFL_TRADE_FITZROY_CAPABILITIES,
+  AFL_TRADE_FITZROY_CAPABILITY_SCHEMA_VERSION,
+  AFL_TRADE_FITZROY_PINNED_VERSION,
+} from './fitzRoyProviderCapabilities';
 
 export const AFL_TRADE_SOURCE_USES = [
   'archive_fact',
@@ -44,6 +49,53 @@ const immutableReferenceSchema = z.string().regex(/^[a-z][a-z0-9-]*:[a-f0-9]{64}
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const boundedTextSchema = z.string().trim().min(1).max(1000);
 const dispositionSchema = z.enum(AFL_TRADE_SOURCE_FIELD_DISPOSITIONS);
+
+const fitzRoyCapabilityBindingSchema = z
+  .object({
+    capabilityId: publicIdSchema,
+    provider: z.enum([
+      'official_afl',
+      'afl_tables',
+      'footywire',
+      'fryzigg',
+      'afl_coaches_association',
+    ]),
+    directFunction: publicIdSchema,
+  })
+  .strict();
+
+const sourceAcquisitionSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('fitzroy'),
+      capabilitySchemaVersion: z.literal(AFL_TRADE_FITZROY_CAPABILITY_SCHEMA_VERSION),
+      fitzRoyVersion: z.literal(AFL_TRADE_FITZROY_PINNED_VERSION),
+      capabilities: z.array(fitzRoyCapabilityBindingSchema).length(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('provider_direct'),
+      clientName: boundedTextSchema,
+      clientVersion: boundedTextSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('provider_web'),
+      clientName: boundedTextSchema,
+      clientVersion: boundedTextSchema,
+      capabilityId: publicIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('provided_artifact'),
+      mediaType: boundedTextSchema,
+      deliveryMethod: boundedTextSchema,
+    })
+    .strict(),
+]);
 
 const operationPermissionsSchema = z
   .object({
@@ -121,7 +173,7 @@ const sourceConditionSchema = z
 
 const aflTradeSourceRightsProposalContentBaseSchema = z
   .object({
-    schemaVersion: z.literal('afl-trade-source-rights/v1'),
+    schemaVersion: z.literal('afl-trade-source-rights/v2'),
     registerId: publicIdSchema,
     provider: z.string().trim().min(1).max(200),
     dataset: z.string().trim().min(1).max(300),
@@ -149,6 +201,7 @@ const aflTradeSourceRightsProposalContentBaseSchema = z
         ]),
       })
       .strict(),
+    acquisition: sourceAcquisitionSchema,
     operations: operationPermissionsSchema,
     automatedAccess: z
       .object({
@@ -286,6 +339,46 @@ function refineSourceAccessRequirements(
     });
   }
   if (
+    rights.acquisition.kind === 'fitzroy' &&
+    !['automated_web', 'provider_api'].includes(rights.scope.accessMechanism)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['acquisition'],
+      message: 'A fitzRoy acquisition requires an automated-web or provider-API access mechanism.',
+    });
+  }
+  if (
+    rights.acquisition.kind === 'provider_direct' &&
+    rights.scope.accessMechanism !== 'provider_api'
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['acquisition'],
+      message: 'A direct provider client requires the provider-API access mechanism.',
+    });
+  }
+  if (
+    rights.acquisition.kind === 'provider_web' &&
+    rights.scope.accessMechanism !== 'automated_web'
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['acquisition'],
+      message: 'A provider-web client requires the automated-web access mechanism.',
+    });
+  }
+  if (
+    rights.acquisition.kind === 'provided_artifact' &&
+    !['provider_export', 'manual_review'].includes(rights.scope.accessMechanism)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['acquisition'],
+      message: 'A provided artifact requires provider-export or manual-review access.',
+    });
+  }
+  if (
     rights.automatedAccess.cache.permitted &&
     rights.automatedAccess.cache.maximumSeconds === null
   ) {
@@ -304,6 +397,62 @@ function refineSourceAccessRequirements(
       path: ['attribution'],
       message: 'Required attribution needs exact text and placement.',
     });
+  }
+}
+
+function refineFitzRoyCapabilityBindings(
+  rights: AflTradeSourceRightsProposalContent,
+  context: z.RefinementCtx
+) {
+  if (rights.acquisition.kind !== 'fitzroy') return;
+
+  const [binding] = rights.acquisition.capabilities;
+  if (binding !== undefined && rights.provider !== binding.provider) {
+    context.addIssue({
+      code: 'custom',
+      path: ['provider'],
+      message: 'A fitzRoy source-rights provider must match its one capability provider.',
+    });
+  }
+
+  const capabilityIds = rights.acquisition.capabilities.map(
+    (capability) => capability.capabilityId
+  );
+  if (new Set(capabilityIds).size !== capabilityIds.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['acquisition', 'capabilities'],
+      message: 'fitzRoy capability bindings must be unique.',
+    });
+  }
+
+  for (const [index, binding] of rights.acquisition.capabilities.entries()) {
+    const capability = AFL_TRADE_FITZROY_CAPABILITIES.find(
+      (candidate) => candidate.capabilityId === binding.capabilityId
+    );
+    if (
+      capability === undefined ||
+      capability.provider !== binding.provider ||
+      capability.directFunction !== binding.directFunction
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['acquisition', 'capabilities', index],
+        message: 'The fitzRoy capability binding does not match the pinned capability contract.',
+      });
+      continue;
+    }
+    if (
+      !capability.competitions.some((competition) =>
+        rights.scope.competitions.includes(competition)
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['acquisition', 'capabilities', index],
+        message: 'The fitzRoy capability does not support a competition in this rights scope.',
+      });
+    }
   }
 }
 
@@ -353,10 +502,7 @@ function refineSourceOperationConsistency(
   }
 }
 
-function refineSourceTerms(
-  rights: AflTradeSourceRightsProposalContent,
-  context: z.RefinementCtx
-) {
+function refineSourceTerms(rights: AflTradeSourceRightsProposalContent, context: z.RefinementCtx) {
   if (
     rights.termsEffectiveAt !== null &&
     rights.termsExpireAt !== null &&
@@ -375,6 +521,7 @@ export const aflTradeSourceRightsProposalContentSchema =
     refineSourceRightsUniqueness(rights, context);
     refineSourceRightsScope(rights, context);
     refineSourceAccessRequirements(rights, context);
+    refineFitzRoyCapabilityBindings(rights, context);
     refineSourceOperationConsistency(rights, context);
     refineSourceTerms(rights, context);
   });
