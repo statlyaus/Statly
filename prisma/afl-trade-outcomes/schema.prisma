@@ -567,7 +567,7 @@ model OutcomeExternalReconciliationDraftSelection {
   draftYear       Int                                    @map("draft_year")
   draftType       String                                 @map("draft_type")
   selectionNumber Int                                    @map("selection_number")
-  pickId          String?                                @map("pick_id")
+  pickId          String                                 @map("pick_id")
   status          String
   selectionJson   Json                                   @map("selection_json")
   candidate       OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
@@ -582,7 +582,7 @@ model OutcomeExternalReconciliationPickCustody {
   candidateId String                                 @map("candidate_id")
   ordinal     Int
   custodyId   String                                 @map("custody_id")
-  pickId      String?                                @map("pick_id")
+  pickId      String                                 @map("pick_id")
   status      String
   custodyJson Json                                   @map("custody_json")
   candidate   OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
@@ -598,7 +598,7 @@ model OutcomeExternalReconciliationPickLineage {
   lineageId   String                                 @map("lineage_id")
   transferId  String                                 @map("transfer_id")
   selectionId String                                 @map("selection_id")
-  pickId      String?                                @map("pick_id")
+  pickId      String                                 @map("pick_id")
   status      String
   lineageJson Json                                   @map("lineage_json")
   candidate   OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)

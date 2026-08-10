@@ -141,7 +141,7 @@ describe('local source-native AFL archive seed', () => {
         projectionId: expect.stringMatching(/^outcome-projection:/),
         publicArchiveId: expect.stringMatching(/^public-factual-archive:/),
         corpusId: expect.stringMatching(/^corpus:/),
-        sourceCandidateId: expect.stringMatching(/^external-reconciliation-candidate:/),
+        sourceCandidateId: expect.stringMatching(/^external-reconciliation:/),
         promotionId: expect.stringMatching(/^external-canonical-promotion:/),
       })
     );

@@ -357,7 +357,7 @@ DECLARE
   dataset_row RECORD;
   authority_row RECORD;
   content JSONB;
-  current_time TIMESTAMPTZ(3):=clock_timestamp();
+  trusted_now TIMESTAMPTZ(3):=clock_timestamp();
 BEGIN
   SELECT * INTO intent_row FROM "outcome_valuation_model_run_intent"
    WHERE "intent_id"=NEW."intent_id" FOR SHARE;
@@ -384,7 +384,7 @@ BEGIN
      NEW."protocol_id"<>intent_row."protocol_id" OR
      NEW."observation_set_id"<>intent_row."observation_set_id" OR
      NEW."authorized_at">intent_row."started_at" OR
-     NEW."authorized_at">current_time OR NEW."valid_through"<=current_time OR
+     NEW."authorized_at">trusted_now OR NEW."valid_through"<=trusted_now OR
      authority_row."authority_evidence_id" IS NULL OR
      authority_row."principal_ref"<>NEW."principal_ref" OR
      authority_row."role"<>'afl_trade_model_run_operator' OR
@@ -397,9 +397,9 @@ BEGIN
        authority_row."valid_from" OR
      (authority_row."evidence_json"->>'validThrough')::TIMESTAMPTZ IS DISTINCT FROM
        authority_row."valid_through" OR
-     authority_row."valid_from">current_time OR
+     authority_row."valid_from">trusted_now OR
      (authority_row."valid_through" IS NOT NULL AND
-       authority_row."valid_through"<=current_time) OR
+       authority_row."valid_through"<=trusted_now) OR
      (authority_row."valid_through" IS NOT NULL AND
        NEW."valid_through">authority_row."valid_through") OR
      EXISTS (SELECT 1 FROM "outcome_valuation_dataset_row" dataset_member
@@ -450,7 +450,7 @@ DECLARE
   dataset_row RECORD;
   admission_gate2 RECORD;
   gate2 RECORD;
-  current_time TIMESTAMPTZ(3):=clock_timestamp();
+  trusted_now TIMESTAMPTZ(3):=clock_timestamp();
   current_revision INTEGER;
   requested_receipt_count INTEGER;
   current_receipt_count INTEGER;
@@ -518,8 +518,8 @@ BEGIN
      AND receipt."recorded_at"=intent_row."started_at"
      AND decision."gate"='gate_0a_permission_to_evaluate'
      AND decision."state"='approved'
-     AND decision."effective_at"<=current_time
-     AND decision."revalidate_at">current_time
+     AND decision."effective_at"<=trusted_now
+     AND decision."revalidate_at">trusted_now
      AND NEW."valid_through"<=decision."revalidate_at"
      AND (receipt."receipt_json"->'content'->'request'-'evaluatedAt') IS NOT DISTINCT FROM
        (admission_receipt."receipt_json"->'content'->'request'-'evaluatedAt')
@@ -531,7 +531,7 @@ BEGIN
      AND NOT EXISTS (SELECT 1 FROM "outcome_gate_decision" successor
        WHERE successor."supersedes_decision_id"=decision."decision_id")
      AND (rights."content_json"->'content'->>'termsExpireAt' IS NULL OR
-       ((rights."content_json"->'content'->>'termsExpireAt')::TIMESTAMPTZ>current_time AND
+       ((rights."content_json"->'content'->>'termsExpireAt')::TIMESTAMPTZ>trusted_now AND
         NEW."valid_through"<=
           (rights."content_json"->'content'->>'termsExpireAt')::TIMESTAMPTZ));
   SELECT jsonb_array_length(
@@ -553,14 +553,14 @@ BEGIN
   IF NEW."authorization_id" <> 'model-run-authorization:' ||
        encode(sha256(convert_to(NEW."authorization_canonical_json",'UTF8')),'hex') OR
      NEW."gate_ledger_revision"<>current_revision OR
-     NEW."authorized_at">current_time OR current_time>=NEW."valid_through" OR
-     current_time-intent_row."started_at">INTERVAL '5 seconds' OR
-     current_time<intent_row."started_at" OR
+     NEW."authorized_at">trusted_now OR trusted_now>=NEW."valid_through" OR
+     trusted_now-intent_row."started_at">INTERVAL '5 seconds' OR
+     trusted_now<intent_row."started_at" OR
      analytical_authority."authority_kind"<>'analytical_authority' OR
      analytical_authority."environment"<>intent_row."environment" OR
      analytical_authority."dataset_id"<>intent_row."dataset_id" OR
-     analytical_authority."authorized_at">current_time OR
-     analytical_authority."valid_through"<=current_time OR
+     analytical_authority."authorized_at">trusted_now OR
+     analytical_authority."valid_through"<=trusted_now OR
      NEW."valid_through">analytical_authority."valid_through" OR
      operational_authority."receipt_id" IS NULL OR
      operational_authority."intent_id"<>intent_row."intent_id" OR
@@ -570,8 +570,8 @@ BEGIN
      operational_authority."protocol_id"<>intent_row."protocol_id" OR
      operational_authority."observation_set_id"<>intent_row."observation_set_id" OR
      operational_authority."authorized_at">intent_row."started_at" OR
-     operational_authority."authorized_at">current_time OR
-     operational_authority."valid_through"<=current_time OR
+     operational_authority."authorized_at">trusted_now OR
+     operational_authority."valid_through"<=trusted_now OR
      NEW."valid_through">operational_authority."valid_through" OR
      operator_trust."authority_evidence_id" IS NULL OR
      operator_trust."principal_ref"<>operational_authority."principal_ref" OR
@@ -581,9 +581,9 @@ BEGIN
      operator_trust."capability_id"<>'execute_model_run' OR
      operator_trust."competition"<>dataset_row."competition" OR
      operator_trust."evidence_environment"<>intent_row."environment" OR
-     operator_trust."valid_from">current_time OR
+     operator_trust."valid_from">trusted_now OR
      (operator_trust."valid_through" IS NOT NULL AND
-       operator_trust."valid_through"<=current_time) OR
+       operator_trust."valid_through"<=trusted_now) OR
      (operator_trust."valid_through" IS NOT NULL AND
        NEW."valid_through">operator_trust."valid_through") OR
      (operator_trust."evidence_json"->>'validFrom')::TIMESTAMPTZ IS DISTINCT FROM
@@ -608,8 +608,8 @@ BEGIN
        gate2."decision_json"->'content'->'scope'->'dimensions') dimension
        WHERE dimension->>'name'='competition'
          AND dimension->'values'=jsonb_build_array(dataset_row."competition"))<>1 OR
-     gate2."effective_at">current_time OR gate2."revalidate_at" IS NULL OR
-     gate2."revalidate_at"<=current_time OR
+     gate2."effective_at">trusted_now OR gate2."revalidate_at" IS NULL OR
+     gate2."revalidate_at"<=trusted_now OR
      NEW."valid_through">gate2."revalidate_at" OR
      EXISTS (SELECT 1 FROM "outcome_gate_decision" successor
        WHERE successor."supersedes_decision_id"=gate2."decision_id") OR
@@ -688,14 +688,14 @@ CREATE TRIGGER "outcome_valuation_model_authorization_insert_guard"
   FOR EACH ROW EXECUTE FUNCTION "validate_outcome_valuation_model_authorization_insert"();
 
 CREATE FUNCTION "consume_outcome_valuation_model_authorization"() RETURNS TRIGGER AS $$
-DECLARE current_time TIMESTAMPTZ(3):=clock_timestamp();
+DECLARE trusted_now TIMESTAMPTZ(3):=clock_timestamp();
 BEGIN
   IF OLD."consumed_at" IS NOT NULL OR NEW."consumed_at" IS NULL OR
      (to_jsonb(NEW)-'consumed_at') IS DISTINCT FROM (to_jsonb(OLD)-'consumed_at') OR
-     current_time<OLD."authorized_at" OR current_time>=OLD."valid_through" THEN
+     trusted_now<OLD."authorized_at" OR trusted_now>=OLD."valid_through" THEN
     RAISE EXCEPTION 'Model-run authorization is immutable, expired, or already consumed';
   END IF;
-  NEW."consumed_at":=current_time;
+  NEW."consumed_at":=trusted_now;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

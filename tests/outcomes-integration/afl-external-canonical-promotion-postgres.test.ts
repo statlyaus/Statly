@@ -474,7 +474,7 @@ describe('PostgreSQL external candidate canonical promotion', () => {
     expect([left.idempotentReplay, right.idempotentReplay].sort()).toEqual([false, true]);
     await expect(
       outcomesPool.query<{ event_date: string }>(
-        `SELECT event_date FROM outcome_event_version WHERE event_id=$1`,
+        `SELECT event_date::TEXT AS event_date FROM outcome_event_version WHERE event_id=$1`,
         [transactionId]
       )
     ).resolves.toMatchObject({ rows: [{ event_date: '2025-10-15' }] });

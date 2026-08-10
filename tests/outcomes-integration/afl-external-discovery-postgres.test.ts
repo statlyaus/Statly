@@ -113,7 +113,7 @@ async function seedIndexBatch() {
   const batch = evidenceBatch();
   await outcomesPool.query(
     `INSERT INTO outcome_competition_season (competition,season_year)
-     VALUES ('AFLM',2025) ON CONFLICT DO NOTHING`
+     VALUES ('AFLM',2024),('AFLM',2025) ON CONFLICT DO NOTHING`
   );
   await outcomesPool.query(
     `INSERT INTO outcome_artifact_custody

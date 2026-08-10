@@ -803,7 +803,10 @@ async function seedNormalizedEventRelease(suffix: string) {
     assetRowId: `row-asset-${suffix}`,
     lateAssetRowId: `row-late-asset-${suffix}`,
   };
-  const contentSha256 = suffix.repeat(64).slice(0, 64);
+  const contentSha256 = sha256AflTradeCanonicalJson({
+    fixture: 'normalized-event-artifact',
+    suffix,
+  });
   await query(
     `INSERT INTO outcome_release_manifest
       (release_id, scope_key, environment, created_at, effective_through, manifest_json)
@@ -1157,7 +1160,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_provider_review_requires_typed_resolution',
       'validate_outcome_provider_fact_batch_trigger',
       'validate_outcome_achievement_run_trigger',
-      'validate_outcome_factual_release_candidate_trigger',
+      'validate_outcome_factual_release_candidate_v3_trigger',
       'validate_outcome_factual_projection_item_insert_trigger',
       'validate_outcome_factual_projection_item_set_insert_trigger',
       'ab_validate_outcome_factual_projection_item_set_event',
@@ -2445,7 +2448,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
           releaseId,
         ]
       )
-    ).rejects.toMatchObject({ code: '23503' });
+    ).rejects.toThrow(/Factual release event requires its exact projection-v2 record state/);
   });
 
   it('normalizes projection-item identity without nullable-key ambiguity', async () => {

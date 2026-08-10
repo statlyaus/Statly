@@ -5,7 +5,10 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import { aflTradePublicationManifestSchema } from '@/server/aflTradeIntelligence/artifacts/manifestContracts';
+import {
+  aflTradeProjectionManifestSchema,
+  aflTradePublicationManifestSchema,
+} from '@/server/aflTradeIntelligence/artifacts/manifestContracts';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository';
 import { recordApprovedAflTradeFitzRoySources } from '@/server/aflTradeIntelligence/governance/recordApprovedFitzRoySources';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
@@ -44,19 +47,19 @@ const artifactReference = (letter: string) => ({
   createdAt: '2026-08-08T00:00:00.000Z',
 });
 
-function publicationManifest() {
+function publicationManifest(scopeKey = 'runtime-authority-fixture') {
   const content = {
     schemaVersion: 'afl-trade-publication/v2' as const,
     environment: 'test_fixture' as const,
-    scopeKey: 'runtime-authority-fixture',
+    scopeKey,
     createdAt: '2026-08-08T00:00:00.000Z',
     valuationBundleId: `valuation-bundle:${'1'.repeat(64)}`,
     gate3DecisionId: `gate-decision:${'2'.repeat(64)}`,
-    sourceRegisterIds: ['runtime-authority-fixture-source'],
+    sourceRegisterIds: [`${scopeKey}-source`],
     supportedViews: ['current' as const],
-    supportedCohorts: ['runtime-authority-fixture-supported'],
+    supportedCohorts: [`${scopeKey}-supported`],
     excludedCohorts: [],
-    valueUnitId: 'runtime-authority-fixture-unit',
+    valueUnitId: `${scopeKey}-unit`,
     entryCount: 1,
     publicationBundleArtifact: artifactReference('3'),
     methodologyArtifact: artifactReference('4'),
@@ -221,10 +224,31 @@ describe('PostgreSQL AFL trade runtime authority', () => {
   });
 
   it('persists projection freshness across repository restarts and rejects clock rollback', async () => {
-    const projectionId = `projection:${'9'.repeat(64)}`;
-    const publicationId = `publication:${'9'.repeat(64)}`;
+    const publication = publicationManifest('runtime-freshness-fixture');
+    const publicationId = publication.publicationId;
     const projectionArtifactId = `artifact:${'9'.repeat(64)}`;
     const projectionCreatedAt = '2026-08-08T01:00:00.000Z';
+    const projectionContent = {
+      schemaVersion: 'afl-trade-projection/v1' as const,
+      environment: 'test_fixture' as const,
+      scopeKey: 'runtime-freshness-fixture',
+      createdAt: projectionCreatedAt,
+      publicationId,
+      buildJobId: 'runtime-freshness-fixture-build',
+      responseContractVersion: 'afl-trade-value/v2' as const,
+      documentCount: 1,
+      projectionArtifact: {
+        ...artifactReference('9'),
+        createdAt: projectionCreatedAt,
+      },
+      schemaArtifact: artifactReference('a'),
+      parityReportArtifact: artifactReference('b'),
+    };
+    const projection = aflTradeProjectionManifestSchema.parse({
+      projectionId: createAflTradeContentAddress('projection', projectionContent),
+      content: projectionContent,
+    });
+    const projectionId = projection.projectionId;
     await outcomesPool.query(
       `INSERT INTO outcome_artifact_custody
         (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
@@ -234,26 +258,14 @@ describe('PostgreSQL AFL trade runtime authority', () => {
         projectionArtifactId,
         '9'.repeat(64),
         `artifact://sha256/${'9'.repeat(64)}`,
-        '2026-08-08T00:30:00.000Z',
+        projectionCreatedAt,
       ]
     );
     await outcomesPool.query(
       `INSERT INTO outcome_valuation_publication_manifest
         (publication_id,scope_key,created_at,manifest_json)
        VALUES ($1,'runtime-freshness-fixture',$2,$3::jsonb)`,
-      [
-        publicationId,
-        '2026-08-08T00:00:00.000Z',
-        JSON.stringify({
-          publicationId,
-          content: {
-            schemaVersion: 'afl-trade-publication/v2',
-            environment: 'test_fixture',
-            scopeKey: 'runtime-freshness-fixture',
-            createdAt: '2026-08-08T00:00:00.000Z',
-          },
-        }),
-      ]
+      [publicationId, '2026-08-08T00:00:00.000Z', JSON.stringify(publication)]
     );
     await outcomesPool.query(
       `INSERT INTO outcome_valuation_projection_manifest
@@ -264,16 +276,7 @@ describe('PostgreSQL AFL trade runtime authority', () => {
         publicationId,
         projectionArtifactId,
         projectionCreatedAt,
-        JSON.stringify({
-          projectionId,
-          content: {
-            schemaVersion: 'afl-trade-projection/v1',
-            publicationId,
-            environment: 'test_fixture',
-            scopeKey: 'runtime-freshness-fixture',
-            createdAt: projectionCreatedAt,
-          },
-        }),
+        JSON.stringify(projection),
       ]
     );
     const client = createPgAflOutcomeSqlClient(outcomesPool);
