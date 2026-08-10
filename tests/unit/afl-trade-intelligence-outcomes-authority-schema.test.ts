@@ -102,6 +102,17 @@ const externalCanonicalPromotionMigration = readFileSync(
   ),
   'utf8'
 );
+const operationalAuthorityRoleUnionMigration = readFileSync(
+  join(
+    process.cwd(),
+    'prisma',
+    'afl-trade-outcomes',
+    'migrations',
+    '0038_restore_operational_authority_role_union',
+    'migration.sql'
+  ),
+  'utf8'
+);
 
 describe('isolated AFL outcomes analytical authority schema', () => {
   it('admits the separately scoped canonical promoter role at the database boundary', () => {
@@ -114,6 +125,17 @@ describe('isolated AFL outcomes analytical authority schema', () => {
     expect(externalCanonicalPromotionMigration).toContain(
       "authority.capability_id='external_candidate_promotion'"
     );
+  });
+
+  it('preserves every governed operational role when extending the shared authority table', () => {
+    for (const role of [
+      'afl_trade_identity_reviewer',
+      'afl_trade_canonical_promoter',
+      'afl_trade_external_identity_reviewer',
+      'afl_trade_model_run_operator',
+    ]) {
+      expect(operationalAuthorityRoleUnionMigration).toContain(`'${role}'`);
+    }
   });
 
   it('owns the complete public provenance, factual, review, lineage, and release chain', () => {

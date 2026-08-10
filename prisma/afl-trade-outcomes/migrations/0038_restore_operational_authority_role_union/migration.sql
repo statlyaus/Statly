@@ -1,6 +1,7 @@
 -- Preserve every independently governed operational role when extending this
 -- shared trust table. Migration 0031 introduced the model-run operator but
--- accidentally replaced the canonical-promoter role added by migration 0014.
+-- accidentally replaced the canonical-promoter and external-identity-reviewer
+-- roles added by migrations 0014 and 0018.
 
 ALTER TABLE "outcome_operational_principal_authority"
   DROP CONSTRAINT "outcome_operational_authority_shape_check";
@@ -11,6 +12,7 @@ ALTER TABLE "outcome_operational_principal_authority"
     AND "role" IN (
       'afl_trade_identity_reviewer',
       'afl_trade_canonical_promoter',
+      'afl_trade_external_identity_reviewer',
       'afl_trade_model_run_operator'
     )
     AND "competition" IN ('AFLM','AFLW')
@@ -18,7 +20,11 @@ ALTER TABLE "outcome_operational_principal_authority"
     AND "valid_through_season" BETWEEN "valid_from_season" AND 2200
     AND ("valid_through" IS NULL OR "valid_through" >= "valid_from")
     AND (
-      ("role" IN ('afl_trade_identity_reviewer','afl_trade_canonical_promoter')
+      ("role" IN (
+          'afl_trade_identity_reviewer',
+          'afl_trade_canonical_promoter',
+          'afl_trade_external_identity_reviewer'
+        )
         AND "scope_key" = 'public-afl-draft-trade-outcomes')
       OR
       ("role" = 'afl_trade_model_run_operator'

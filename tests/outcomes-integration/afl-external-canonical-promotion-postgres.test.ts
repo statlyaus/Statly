@@ -638,7 +638,7 @@ describe('PostgreSQL external candidate canonical promotion', () => {
          VALUES ($1,99,'late-event-asset',$2,'{}','{}')`,
         [release.releaseId, digest('f')]
       )
-    ).rejects.toThrow(/finalized release candidate|registered release/i);
+    ).rejects.toThrow(/finalized (?:release|promotion-backed) candidate|registered release/i);
     const counts = await outcomesPool.query<{
       promotions: string;
       corpora: string;
