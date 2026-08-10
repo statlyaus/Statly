@@ -233,8 +233,10 @@ BEGIN
 
   SELECT count(*) INTO authority_count
     FROM outcome_operational_principal_authority authority
-    JOIN outcome_governed_evidence_reference evidence ON evidence.reference_id=authority.authority_evidence_id
-    JOIN outcome_review_decision approval ON approval.decision_id=evidence.approval_decision_id
+    JOIN outcome_governed_evidence_reference governed_evidence
+      ON governed_evidence.reference_id=authority.authority_evidence_id
+    JOIN outcome_review_decision approval
+      ON approval.decision_id=governed_evidence.approval_decision_id
    WHERE authority.authority_evidence_id=NEW.authority_evidence_id
      AND authority.principal_ref=generic.decided_by
      AND authority.role='afl_trade_external_identity_reviewer'
@@ -246,7 +248,7 @@ BEGIN
      AND (NEW.decision_json->'content'->'workItem'->'content'->>'validThroughSeason')::integer <= authority.valid_through_season
      AND authority.valid_from<=statement_timestamp()
      AND (authority.valid_through IS NULL OR authority.valid_through>statement_timestamp())
-     AND evidence.environment=subject.environment AND evidence.status='approved'
+     AND governed_evidence.environment=subject.environment AND governed_evidence.status='approved'
      AND approval.decision='approved'
      AND NOT EXISTS (SELECT 1 FROM outcome_review_decision successor WHERE successor.supersedes_decision_id=approval.decision_id);
   IF authority_count<>1 THEN
