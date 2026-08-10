@@ -1708,6 +1708,62 @@ may approve or activate a release. The [public AFL trade-intelligence operations
 runbook](../runbooks/afl-trade-intelligence-operations.md) owns scheduling, execution, health, incident,
 withdrawal, recovery, recalibration, and exact-commit verification procedure.
 
+## Remaining production delivery milestones
+
+The repository contains the governed engineering foundation for source custody, reconciliation,
+factual releases, point-in-time valuation inputs, player approximate value, pick-value observations,
+model-execution evidence, complete-trade assessment contracts, and independent publication state.
+That foundation is not equivalent to a live factual dataset or an approved trade grade. Completion is
+reported by milestone, never as one blended percentage:
+
+| Milestone                 | Current state | Completion evidence                                                                                                                            |
+| ------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Engineering foundation    | Complete      | Focused and full unit checks, schema validation, review, and committed migrations/contracts pass.                                              |
+| Non-production operations | Partial       | Hosted services, scheduled real-source capture, historical reconciliation, restore rehearsal, and alert burn-in still need execution evidence. |
+| Factual production        | Not complete  | No reviewed real-data factual release has been activated and verified across every public read/export surface.                                 |
+| Valuation production      | Not complete  | No locked real-data player/pick model and complete-trade valuation publication has passed Gates 3, 4, and 5 and been activated.                |
+
+The remaining work proceeds through these independently verifiable gates:
+
+1. **Provision the isolated production boundary.** Create hosted outcomes PostgreSQL, immutable object
+   storage, Redis-backed scheduling/leases, least-privilege service roles, secrets, backups, restore
+   targets, dashboards, alerts, and a tested deployment path. Provisioning grants no data or
+   publication authority.
+2. **Operate recurring source capture.** Load the exact current Gate 0A records and field manifests,
+   then schedule Draftguru trade/draft capture and fitzRoy-backed player-detail/stat capture with
+   conditional requests, rate limits, immutable readback, drift quarantine, retries, and complete
+   historical backfill accounting.
+3. **Reconcile and promote canonical facts.** Resolve provider identities and clubs without display-name
+   joins; conserve every source row and issue; promote reviewed transactions, directed assets, draft
+   selections, pick entitlements, and stable pick lineage. A future pick remains unresolved until its
+   exact selection and player are authenticated.
+4. **Activate factual production independently.** Build the exact factual corpus and candidate,
+   generate sealed public projections and exports, complete factual and operational review, activate
+   the pointer atomically, and verify trades, drafts, outcomes, clubs, years, APIs, and exports resolve
+   the same release and effective-through instant. Valuation may remain unavailable.
+5. **Lock real-data player and pick models.** Run the admitted Stage 3 player-contribution model and
+   Stage 4 selection-specific pick distribution through chronological train, calibration, validation,
+   and untouched final-test partitions. Add separately validated future-pick distributions using
+   season, entitlement, club trajectory, draft mechanism, and correlated ladder uncertainty.
+6. **Assess the complete exchange.** Value each party from joint draws of all assets received minus all
+   assets surrendered, including multi-party correlations and pooled lineage. Publish no grade when
+   identity, lineage, coverage, or numerical validation is unresolved. The explanation must expose
+   expected net value, uncertainty range, finish-ahead probability, source coverage, original pick
+   value, eventual selection, observed contribution, and remaining uncertainty.
+7. **Approve and activate valuation separately.** Gate 3 pins the reproducible model run and bundle;
+   Gate 4 accepts numerical validity; Gate 5 accepts product comprehension. Only then may an immutable
+   valuation publication bind to the exact active factual release and be activated under its own
+   pointer and rollback path.
+8. **Retire migration-era runtime paths.** Remove workbook and Firestore selection from public runtime,
+   remove legacy wording and spreadsheet access, and retain the workbook only as private offline
+   reconciliation evidence when its retention decision permits it. Finish real-PostgreSQL concurrency,
+   browser, accessibility, load, security, canary, withdrawal, rollback, and restore verification.
+
+The program is complete only when both factual and valuation production milestones pass, the public UI
+can reconstruct and explain every assessment from immutable database members, scheduled capture no
+longer depends on a workbook, and withdrawal/last-good recovery has been rehearsed against the exact
+deployed release.
+
 ## Migration and rollback
 
 After the exact Gate 1 package and a real isolated analytical target are separately approved, the
