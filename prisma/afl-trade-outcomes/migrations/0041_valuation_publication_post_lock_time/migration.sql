@@ -25,7 +25,7 @@ BEGIN
      event_content->>'action' IS DISTINCT FROM NEW."action" OR
      (event_content->>'occurredAt')::timestamptz IS DISTINCT FROM NEW."occurred_at" OR
      NEW."event_id" IS DISTINCT FROM 'publication-event:' ||
-       encode(digest("outcome_afl_trade_canonical_json"(event_content),'sha256'),'hex') OR
+       encode(sha256(convert_to("outcome_afl_trade_canonical_json"(event_content),'UTF8')),'hex') OR
      target_record IS NULL OR
      target_record->>'publicationId' IS DISTINCT FROM NEW."publication_id" OR
      NEW."occurred_at" > trusted_now THEN

@@ -354,7 +354,7 @@ BEGIN
         reviewed(field)
       GROUP BY field HAVING count(*)>1
     )
-    OR encode(digest(NEW."field_map_canonical_json",'sha256'),'hex')<>NEW."field_map_sha256"
+    OR encode(sha256(convert_to(NEW."field_map_canonical_json",'UTF8')),'hex')<>NEW."field_map_sha256"
     OR NEW."field_map_canonical_json"::JSONB IS DISTINCT FROM NEW."map_json"->'content' THEN
     RAISE EXCEPTION 'HPN PAV field map lacks an exact current approval';
   END IF;
@@ -509,7 +509,7 @@ BEGIN
     OR (NEW."input_set_json"#>>'{content,createdAt}')::TIMESTAMPTZ<>NEW."created_at" THEN
     RAISE EXCEPTION 'HPN PAV input-set envelope mismatch';
   END IF;
-  IF encode(digest(NEW."input_set_canonical_json",'sha256'),'hex')<>NEW."input_set_sha256"
+  IF encode(sha256(convert_to(NEW."input_set_canonical_json",'UTF8')),'hex')<>NEW."input_set_sha256"
     OR NEW."input_set_canonical_json"::JSONB IS DISTINCT FROM NEW."input_set_json"->'content' THEN
     RAISE EXCEPTION 'HPN PAV input-set canonical bytes mismatch';
   END IF;
@@ -786,7 +786,7 @@ BEGIN
         row_member."typed_payload_sha256"
       OR row_member."row_json"->>'kind'<>row_member."row_kind"
       OR row_member."row_json"->>'role' IS DISTINCT FROM row_member."role"
-      OR encode(digest(row_member."row_canonical_json",'sha256'),'hex')<>
+      OR encode(sha256(convert_to(row_member."row_canonical_json",'UTF8')),'hex')<>
         row_member."row_sha256"
       OR row_member."row_canonical_json"::JSONB IS DISTINCT FROM row_member."row_json"
       OR NOT (NEW."input_set_json"#>'{content,rows}' @> jsonb_build_array(row_member."row_json"))
@@ -807,7 +807,7 @@ BEGIN
     ) source_keys
     WHERE row_member."input_set_id"=NEW."input_set_id" AND (
       row_member."typed_payload_sha256"<>
-        encode(digest("outcome_hpn_pav_canonical_json"(decoded."typed_payload"),'sha256'),'hex')
+        encode(sha256(convert_to("outcome_hpn_pav_canonical_json"(decoded."typed_payload"),'UTF8')),'hex')
       OR row_member."row_json"#>'{source,sourceFields}' IS DISTINCT FROM
         "outcome_hpn_pav_reviewed_fields"(map."map_json")
       OR source_keys.fields IS DISTINCT FROM "outcome_hpn_pav_reviewed_fields"(map."map_json")
@@ -975,7 +975,7 @@ BEGIN
       OR result."row_json"#>>'{homeClub,canonicalId}'<>member."home_club_id"
       OR result."row_json"#>>'{awayClub,canonicalId}'<>member."away_club_id"
       OR (result."row_json"->>'effectiveAt')::TIMESTAMPTZ<>member."effective_at"
-      OR encode(digest(member."match_canonical_json",'sha256'),'hex')<>member."match_sha256"
+      OR encode(sha256(convert_to(member."match_canonical_json",'UTF8')),'hex')<>member."match_sha256"
       OR member."match_canonical_json"::JSONB IS DISTINCT FROM jsonb_build_object(
         'matchId',member."match_id",'effectiveAt',to_char(member."effective_at" AT TIME ZONE 'UTC',
           'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'homeClubId',member."home_club_id",

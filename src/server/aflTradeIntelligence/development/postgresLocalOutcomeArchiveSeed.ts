@@ -200,7 +200,7 @@ export async function seedLocalAflTradeOutcomeArchive(client: AflOutcomeSqlClien
     corpusId: corpus.corpusId,
     sourceCandidateId: source.candidate.candidateId,
     promotionId: promotion.promotionId,
-    tradeId: source.fixture.trades[0]!.id,
+    tradeId: source.candidate.content.transactions[0]!.transactionId,
     idempotentReplay:
       alreadyPublished &&
       sourceGate.idempotentReplay &&

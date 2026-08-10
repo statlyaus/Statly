@@ -86,7 +86,7 @@ BEGIN
      NEW."execution_content_canonical_json"::jsonb IS DISTINCT FROM execution_content OR
      NEW."execution_canonical_json"::jsonb IS DISTINCT FROM NEW."execution_json" OR
      NEW."execution_id" IS DISTINCT FROM 'pick-pav-model-execution:' ||
-       encode(digest(convert_to(NEW."execution_content_canonical_json",'UTF8'),'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."execution_content_canonical_json",'UTF8')),'hex') OR
      NEW."execution_json"->>'executionId' IS DISTINCT FROM NEW."execution_id" OR
      execution_content->>'schemaVersion' IS DISTINCT FROM
        'afl-trade-pick-pav-model-execution/v1' OR
@@ -125,7 +125,7 @@ BEGIN
      NEW."custody_content_canonical_json"::jsonb IS DISTINCT FROM custody_content OR
      NEW."custody_canonical_json"::jsonb IS DISTINCT FROM NEW."custody_json" OR
      NEW."custody_receipt_id" IS DISTINCT FROM 'pick-pav-model-custody:' ||
-       encode(digest(convert_to(NEW."custody_content_canonical_json",'UTF8'),'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."custody_content_canonical_json",'UTF8')),'hex') OR
      NEW."custody_json"->>'custodyReceiptId' IS DISTINCT FROM NEW."custody_receipt_id" OR
      custody_content->>'schemaVersion' IS DISTINCT FROM
        'afl-trade-pick-pav-model-custody/v1' OR
@@ -151,7 +151,7 @@ BEGIN
      (custody_content->'executionArtifact'->>'createdAt')::timestamptz IS DISTINCT FROM
        NEW."completed_at" OR
      NEW."execution_artifact_sha256" IS DISTINCT FROM
-       encode(digest(convert_to(NEW."execution_canonical_json",'UTF8'),'sha256'),'hex') THEN
+       encode(sha256(convert_to(NEW."execution_canonical_json",'UTF8')),'hex') THEN
     RAISE EXCEPTION 'Pick-PAV model custody identity or execution artifact mismatch';
   END IF;
 
@@ -164,7 +164,7 @@ BEGIN
        custody_content->'executionReadback' OR
      custody_content->'executionReadback'->>'receiptId' IS DISTINCT FROM
        'artifact-readback:' ||
-         encode(digest(convert_to(NEW."execution_readback_content_canonical_json",'UTF8'),'sha256'),'hex') OR
+         encode(sha256(convert_to(NEW."execution_readback_content_canonical_json",'UTF8')),'hex') OR
      readback_content->>'schemaVersion' IS DISTINCT FROM 'afl-trade-artifact-readback/v4' OR
      readback_content->'artifact' IS DISTINCT FROM custody_content->'executionArtifact' OR
      readback_content->>'repositoryAssurance' IS DISTINCT FROM NEW."repository_assurance" OR
@@ -188,7 +188,7 @@ BEGIN
      (custody_content->'readbackReceiptArtifact'->>'createdAt')::timestamptz IS DISTINCT FROM
        (readback_content->>'verifiedAt')::timestamptz OR
      NEW."readback_receipt_artifact_sha256" IS DISTINCT FROM
-       encode(digest(convert_to(NEW."execution_readback_canonical_json",'UTF8'),'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."execution_readback_canonical_json",'UTF8')),'hex') OR
      NEW."retained_at" > date_trunc('milliseconds',transaction_timestamp()) THEN
     RAISE EXCEPTION 'Pick-PAV model custody readback or trusted chronology mismatch';
   END IF;

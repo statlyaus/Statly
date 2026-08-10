@@ -34,9 +34,9 @@ END $$;
 CREATE TABLE outcome_external_capture_dispatch_cursor (
   schedule_id TEXT PRIMARY KEY REFERENCES outcome_external_capture_schedule(schedule_id)
     ON DELETE RESTRICT,
-  next_due_at TIMESTAMPTZ NOT NULL,
+  next_due_at TIMESTAMPTZ(3) NOT NULL,
   revision INTEGER NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ(3) NOT NULL,
   CONSTRAINT outcome_external_capture_dispatch_cursor_revision_check CHECK (revision>0)
 );
 

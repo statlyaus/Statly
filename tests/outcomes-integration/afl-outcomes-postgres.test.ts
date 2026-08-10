@@ -783,7 +783,7 @@ const secondProjectionId = `outcome-projection:${'c'.repeat(64)}`;
 
 async function seedNormalizedEventRelease(suffix: string) {
   const ids = {
-    releaseId: `outcome-release:${suffix.repeat(64).slice(0, 64)}`,
+    releaseId: `outcome-release:${sha256AflTradeCanonicalJson({ fixture: 'normalized-event-release', suffix })}`,
     artifactId: `artifact-${suffix}`,
     attemptId: `attempt-${suffix}`,
     captureId: `capture-${suffix}`,
@@ -935,7 +935,7 @@ async function seedNormalizedEventRelease(suffix: string) {
   await query(
     `INSERT INTO outcome_event_party
       (event_version_id, club_id, source_import_row_id, role, ordinal)
-     VALUES ($1, $2, $3, 'party', 0), ($1, $4, $5, 'party', 1)`,
+     VALUES ($1, $2, $3, 'party', 1), ($1, $4, $5, 'party', 2)`,
     [ids.eventVersionId, ids.fromClubId, ids.fromPartyRowId, ids.toClubId, ids.toPartyRowId]
   );
   await query(
@@ -1057,6 +1057,12 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0035_external_capture_dispatch_cursor',
       '0036_valuation_output_custody_authority',
       '0037_valuation_publication_custody_index',
+      '0038_restore_operational_authority_role_union',
+      '0038_valuation_publication_preparation',
+      '0039_public_projection_release_chronology',
+      '0040_valuation_publication_gate_currentness',
+      '0041_valuation_publication_post_lock_time',
+      '0042_pick_pav_model_execution_registry',
     ]);
 
     const tables = await query<{ table_name: string }>(
@@ -2420,7 +2426,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
          VALUES (1, $1, NULL, $2, 'scope', 'register', CURRENT_TIMESTAMP, '{}'::jsonb)`,
         [`outcome-release-event:${'d'.repeat(64)}`, `outcome-release:${'e'.repeat(64)}`]
       )
-    ).rejects.toMatchObject({ code: '23503' });
+    ).rejects.toThrow(/Registry event scope must match its release manifest/);
 
     await query(
       `INSERT INTO outcome_registry_event

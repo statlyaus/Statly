@@ -230,7 +230,7 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended(
     'outcome-review-subject:pick_pav_policy:'||NEW."competition"||':'||NEW."policy_version",0));
   IF NEW."policy_id"<>'pick-pav-policy:'||NEW."policy_sha256"
-    OR encode(digest(NEW."policy_canonical_json",'sha256'),'hex')<>NEW."policy_sha256"
+    OR encode(sha256(convert_to(NEW."policy_canonical_json",'UTF8')),'hex')<>NEW."policy_sha256"
     OR NEW."policy_canonical_json"::JSONB IS DISTINCT FROM NEW."policy_json"->'content'
     OR NEW."policy_json"#>>'{content,environment}'<>NEW."environment"::TEXT
     OR NEW."policy_json"#>>'{content,competition}'<>NEW."competition"
@@ -367,7 +367,7 @@ BEGIN
   IF NEW."status"<>'building' OR NEW."finalized_at" IS NOT NULL
     OR NEW."created_at"<>date_trunc('milliseconds',transaction_timestamp())
     OR NEW."observation_set_id"<>'pick-pav-observation-set:'||NEW."observation_set_sha256"
-    OR encode(digest(NEW."observation_set_canonical_json",'sha256'),'hex')<>NEW."observation_set_sha256"
+    OR encode(sha256(convert_to(NEW."observation_set_canonical_json",'UTF8')),'hex')<>NEW."observation_set_sha256"
     OR NEW."observation_set_canonical_json"::JSONB IS DISTINCT FROM NEW."observation_set_json"->'content'
     OR NEW."observation_set_json"->>'observationSetId'<>NEW."observation_set_id"
     OR NEW."observation_set_json"#>>'{content,schemaVersion}'<>'afl-trade-pick-pav-observation-set/v1'
@@ -468,8 +468,9 @@ BEGIN
   SELECT COALESCE(jsonb_agg("observation_json" ORDER BY "ordinal"),'[]'::JSONB)
     INTO expected_observations FROM "outcome_pick_pav_observation"
    WHERE "observation_set_id"=NEW."observation_set_id";
-  SELECT encode(digest('['||COALESCE(string_agg("observation_canonical_json",',' ORDER BY "ordinal"),'')||']',
-      'sha256'),'hex') INTO expected_observation_sha256
+  SELECT encode(sha256(convert_to(
+      '['||COALESCE(string_agg("observation_canonical_json",',' ORDER BY "ordinal"),'')||']','UTF8')),
+      'hex') INTO expected_observation_sha256
     FROM "outcome_pick_pav_observation"
    WHERE "observation_set_id"=NEW."observation_set_id";
   IF NEW."observation_set_json"#>'{content,calculations}' IS DISTINCT FROM expected_calculations
@@ -506,7 +507,7 @@ BEGIN
     WHERE "observation_set_id"=NEW."observation_set_id" ORDER BY "ordinal"
   LOOP
     IF observation_row."observation_id"<>'pick-pav-observation:'||observation_row."observation_sha256"
-      OR encode(digest(observation_row."observation_canonical_json",'sha256'),'hex')<>
+      OR encode(sha256(convert_to(observation_row."observation_canonical_json",'UTF8')),'hex')<>
         observation_row."observation_sha256"
       OR observation_row."observation_canonical_json"::JSONB IS DISTINCT FROM
         (observation_row."observation_json"-'observationId')

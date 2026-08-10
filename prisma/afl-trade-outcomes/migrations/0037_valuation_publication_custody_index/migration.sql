@@ -92,7 +92,7 @@ CREATE FUNCTION "validate_outcome_valuation_output_custody_index_insert"() RETUR
 DECLARE content JSONB; artifact_sha TEXT;
 BEGIN
   content := NEW."index_json"->'content';
-  artifact_sha := encode(digest(NEW."index_canonical_json",'sha256'),'hex');
+  artifact_sha := encode(sha256(convert_to(NEW."index_canonical_json",'UTF8')),'hex');
   IF NEW."finalized_at" IS NOT NULL OR
      NEW."index_content_canonical_json" IS DISTINCT FROM
        "outcome_afl_trade_canonical_json"(content) OR
@@ -101,7 +101,7 @@ BEGIN
      NEW."index_content_canonical_json"::jsonb IS DISTINCT FROM content OR
      NEW."index_canonical_json"::jsonb IS DISTINCT FROM NEW."index_json" OR
      NEW."custody_index_id" <> 'valuation-output-custody-index:' ||
-       encode(digest(NEW."index_content_canonical_json",'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."index_content_canonical_json",'UTF8')),'hex') OR
      NEW."index_json"->>'valuationOutputCustodyIndexId' IS DISTINCT FROM
        NEW."custody_index_id" OR
      content->>'schemaVersion' IS DISTINCT FROM
@@ -215,7 +215,7 @@ BEGIN
    WHERE "custody_index_id"=NEW."custody_index_id";
   IF stored_count IS DISTINCT FROM NEW."entry_count" OR
      stored_entries IS DISTINCT FROM NEW."index_json"->'content'->'entries' OR
-     encode(digest("outcome_afl_trade_canonical_json"(stored_entries),'sha256'),'hex')
+     encode(sha256(convert_to("outcome_afl_trade_canonical_json"(stored_entries),'UTF8')),'hex')
        IS DISTINCT FROM NEW."custody_receipt_set_sha256" THEN
     RAISE EXCEPTION 'Valuation-output custody index does not have its exact ordered entry set';
   END IF;

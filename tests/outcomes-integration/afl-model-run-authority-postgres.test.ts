@@ -285,7 +285,7 @@ describe('durable PostgreSQL model-run authority', () => {
            factual_release_id,factual_candidate_id,corpus_id,lineage_id,source_member_set_sha256,
            row_count,row_set_sha256,row_set_canonical_json,artifact_count,status,
            dataset_canonical_json,dataset_json,finalized_at)
-         VALUES ($1,'test_fixture','model-run-fixture','AFLM',$2,$2,$3,$4,$5,$6,$7,1,$8,'[]',1,
+         VALUES ($1,'test_fixture','model-run-fixture','AFLM',$2,$2,$3,$4,$5,$6,$7,1,$8,'[]',10,
                  'finalized','{}','{}'::jsonb,$2)`,
         [
           datasetId,

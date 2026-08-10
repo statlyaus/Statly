@@ -50,7 +50,7 @@ BEGIN
      NEW."candidate_content_canonical_json"::jsonb IS DISTINCT FROM content OR
      NEW."candidate_canonical_json"::jsonb IS DISTINCT FROM NEW."candidate_json" OR
      NEW."candidate_id" IS DISTINCT FROM 'publication:' ||
-       encode(digest(NEW."candidate_content_canonical_json",'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."candidate_content_canonical_json",'UTF8')),'hex') OR
      NEW."candidate_json"->>'publicationId' IS DISTINCT FROM NEW."candidate_id" OR
      content->>'schemaVersion' IS DISTINCT FROM 'afl-trade-publication/v3' OR
      content->>'environment' IS DISTINCT FROM NEW."environment"::text OR

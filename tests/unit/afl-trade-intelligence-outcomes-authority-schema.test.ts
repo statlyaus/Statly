@@ -379,7 +379,12 @@ describe('isolated AFL outcomes analytical authority schema', () => {
       /\b(?:user_id|league_id|membership_id|roster_id|fantasy_team_id|firestore)\b/i
     );
     const matchModel = schema.match(/model OutcomeMatch \{([\s\S]*?)\n\}/)?.[1];
-    expect(matchModel).not.toMatch(/\bprovider\b|nativeMatchId/);
+    expect(matchModel).not.toMatch(/^\s*provider\s/m);
+    expect(matchModel).not.toMatch(/^\s*nativeMatchId\s/m);
+    expect(matchModel).toMatch(/^\s*legacyProvider\s+String\?.*@map\("provider"\) @ignore$/m);
+    expect(matchModel).toMatch(
+      /^\s*legacyNativeMatchId\s+String\?.*@map\("native_match_id"\) @ignore$/m
+    );
   });
 
   it('keeps source facts separate from reconciled facts and derives games only from evidence', () => {

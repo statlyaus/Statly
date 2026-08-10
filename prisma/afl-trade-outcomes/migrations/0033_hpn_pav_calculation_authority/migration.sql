@@ -158,7 +158,7 @@ BEGIN
       'attribution','HPN Player Approximate Value method, reimplemented from published formulae',
       'limitations','Supported from 1998 only; an attributed approximation, not Champion Data ratings or a player projection.',
       'publicationEligible',false)
-    OR encode(digest(NEW."method_canonical_json",'sha256'),'hex')<>NEW."method_sha256"
+    OR encode(sha256(convert_to(NEW."method_canonical_json",'UTF8')),'hex')<>NEW."method_sha256"
     OR NEW."method_canonical_json"::JSONB IS DISTINCT FROM NEW."method_json"->'content' THEN
     RAISE EXCEPTION 'HPN PAV method envelope mismatch: registered %, id %, schema %, artifact %, captured %, unit %, publication %, digest %, canonical %',
       NEW."registered_at"=date_trunc('milliseconds',transaction_timestamp()),
@@ -168,7 +168,7 @@ BEGIN
       (NEW."method_json"#>>'{content,capturedAt}')::TIMESTAMPTZ=NEW."captured_at",
       NEW."method_json"#>>'{content,valueUnit}'='season_pav',
       NEW."method_json"#>'{content,publicationEligible}' IS NOT DISTINCT FROM 'false'::JSONB,
-      encode(digest(NEW."method_canonical_json",'sha256'),'hex')=NEW."method_sha256",
+      encode(sha256(convert_to(NEW."method_canonical_json",'UTF8')),'hex')=NEW."method_sha256",
       NEW."method_canonical_json"::JSONB IS NOT DISTINCT FROM NEW."method_json"->'content';
   END IF;
   SELECT * INTO artifact FROM "outcome_artifact_custody"
@@ -208,7 +208,7 @@ BEGIN
     OR NEW."calculation_json"#>>'{content,valueUnit}'<>NEW."value_unit"
     OR jsonb_array_length(NEW."calculation_json"#>'{content,teams}')<>NEW."team_count"
     OR jsonb_array_length(NEW."calculation_json"#>'{content,players}')<>NEW."player_count"
-    OR encode(digest(NEW."calculation_canonical_json",'sha256'),'hex')<>NEW."calculation_sha256"
+    OR encode(sha256(convert_to(NEW."calculation_canonical_json",'UTF8')),'hex')<>NEW."calculation_sha256"
     OR NEW."calculation_canonical_json"::JSONB IS DISTINCT FROM NEW."calculation_json"->'content' THEN
     RAISE EXCEPTION 'HPN PAV calculation envelope mismatch';
   END IF;
@@ -250,7 +250,7 @@ BEGIN
      WHERE value->>'teamId'=NEW."team_id";
     IF item IS NULL OR item_ordinal<>NEW."ordinal"
       OR NEW."team_canonical_json"::JSONB IS DISTINCT FROM item
-      OR encode(digest(NEW."team_canonical_json",'sha256'),'hex')<>NEW."team_sha256"
+      OR encode(sha256(convert_to(NEW."team_canonical_json",'UTF8')),'hex')<>NEW."team_sha256"
       OR NEW."offensive_pav" IS DISTINCT FROM (item->>'offensivePav')::DOUBLE PRECISION
       OR NEW."midfield_pav" IS DISTINCT FROM (item->>'midfieldPav')::DOUBLE PRECISION
       OR NEW."defensive_pav" IS DISTINCT FROM (item->>'defensivePav')::DOUBLE PRECISION
@@ -265,7 +265,7 @@ BEGIN
     IF item IS NULL OR item_ordinal<>NEW."ordinal"
       OR item->>'playerId'<>NEW."player_id" OR item->>'teamId'<>NEW."team_id"
       OR NEW."player_canonical_json"::JSONB IS DISTINCT FROM item
-      OR encode(digest(NEW."player_canonical_json",'sha256'),'hex')<>NEW."player_sha256"
+      OR encode(sha256(convert_to(NEW."player_canonical_json",'UTF8')),'hex')<>NEW."player_sha256"
       OR NEW."offensive_pav" IS DISTINCT FROM (item->>'offensivePav')::DOUBLE PRECISION
       OR NEW."midfield_pav" IS DISTINCT FROM (item->>'midfieldPav')::DOUBLE PRECISION
       OR NEW."defensive_pav" IS DISTINCT FROM (item->>'defensivePav')::DOUBLE PRECISION

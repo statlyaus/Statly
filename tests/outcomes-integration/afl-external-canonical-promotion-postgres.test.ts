@@ -251,22 +251,32 @@ async function seedPromotionAuthority(
              'test_fixture','2026-08-09T11:01:00.000Z','2026-08-09T11:01:01.000Z','{}'::jsonb)`,
     [authoritySha, `artifact://sha256/${authoritySha}`, Buffer.byteLength(authorityCanonical)]
   );
-  await outcomesPool.query(
-    `INSERT INTO outcome_review_decision
-      (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
-     VALUES ($1,'governed_evidence_reference',$2,'approved','Fixture authority approval',
-             jsonb_build_object('referenceSha256',$3::text),'fixture-governance-reviewer',
-             '2026-08-09T11:02:00.000Z')`,
-    [authorityApprovalId, authorityId, authoritySha]
-  );
-  await outcomesPool.query(
-    `INSERT INTO outcome_governed_evidence_reference
-      (reference_id,reference_sha256,evidence_kind,artifact_id,environment,status,
-       approval_decision_id,created_at,evidence_canonical_json,evidence_json)
-     VALUES ($1,$2,'reviewer_authority_evidence','artifact-promotion-authority','test_fixture',
-             'approved',$3,'2026-08-09T11:02:00.000Z',$4,$5::jsonb)`,
-    [authorityId, authoritySha, authorityApprovalId, authorityCanonical, authorityCanonical]
-  );
+  const authorityClient = await outcomesPool.connect();
+  try {
+    await authorityClient.query('BEGIN');
+    await authorityClient.query(
+      `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+       VALUES ($1,'governed_evidence_reference',$2,'approved','Fixture authority approval',
+               jsonb_build_object('referenceSha256',$3::text),'fixture-governance-reviewer',
+               '2026-08-09T11:02:00.000Z')`,
+      [authorityApprovalId, authorityId, authoritySha]
+    );
+    await authorityClient.query(
+      `INSERT INTO outcome_governed_evidence_reference
+        (reference_id,reference_sha256,evidence_kind,artifact_id,environment,status,
+         approval_decision_id,created_at,evidence_canonical_json,evidence_json)
+       VALUES ($1,$2,'reviewer_authority_evidence','artifact-promotion-authority','test_fixture',
+               'approved',$3,'2026-08-09T11:02:00.000Z',$4,$5::jsonb)`,
+      [authorityId, authoritySha, authorityApprovalId, authorityCanonical, authorityCanonical]
+    );
+    await authorityClient.query('COMMIT');
+  } catch (error) {
+    await authorityClient.query('ROLLBACK');
+    throw error;
+  } finally {
+    authorityClient.release();
+  }
   await outcomesPool.query(
     `INSERT INTO outcome_operational_principal_authority
       (authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,competition,

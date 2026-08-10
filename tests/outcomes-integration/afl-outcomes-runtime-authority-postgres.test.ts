@@ -198,7 +198,9 @@ describe('PostgreSQL AFL trade runtime authority', () => {
     expect(afterFailure.revision).toBe(3);
     expect(afterFailure.ledger.decisions).toHaveLength(3);
     expect(
-      await outcomesPool.query('SELECT count(*)::INTEGER AS count FROM outcome_source_rights')
+      await outcomesPool.query(
+        'SELECT count(*)::INTEGER AS count FROM outcome_source_rights_proposal'
+      )
     ).toMatchObject({ rows: [{ count: 3 }] });
   });
 
@@ -220,6 +222,60 @@ describe('PostgreSQL AFL trade runtime authority', () => {
 
   it('persists projection freshness across repository restarts and rejects clock rollback', async () => {
     const projectionId = `projection:${'9'.repeat(64)}`;
+    const publicationId = `publication:${'9'.repeat(64)}`;
+    const projectionArtifactId = `artifact:${'9'.repeat(64)}`;
+    const projectionCreatedAt = '2026-08-08T01:00:00.000Z';
+    await outcomesPool.query(
+      `INSERT INTO outcome_artifact_custody
+        (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+         environment,created_at,verified_at,custody_json)
+       VALUES ($1,$2,$3,'application/json',1,'public_projection','test_fixture',$4,$4,'{}'::jsonb)`,
+      [
+        projectionArtifactId,
+        '9'.repeat(64),
+        `artifact://sha256/${'9'.repeat(64)}`,
+        '2026-08-08T00:30:00.000Z',
+      ]
+    );
+    await outcomesPool.query(
+      `INSERT INTO outcome_valuation_publication_manifest
+        (publication_id,scope_key,created_at,manifest_json)
+       VALUES ($1,'runtime-freshness-fixture',$2,$3::jsonb)`,
+      [
+        publicationId,
+        '2026-08-08T00:00:00.000Z',
+        JSON.stringify({
+          publicationId,
+          content: {
+            schemaVersion: 'afl-trade-publication/v2',
+            environment: 'test_fixture',
+            scopeKey: 'runtime-freshness-fixture',
+            createdAt: '2026-08-08T00:00:00.000Z',
+          },
+        }),
+      ]
+    );
+    await outcomesPool.query(
+      `INSERT INTO outcome_valuation_projection_manifest
+        (projection_id,publication_id,artifact_id,created_at,manifest_json)
+       VALUES ($1,$2,$3,$4,$5::jsonb)`,
+      [
+        projectionId,
+        publicationId,
+        projectionArtifactId,
+        projectionCreatedAt,
+        JSON.stringify({
+          projectionId,
+          content: {
+            schemaVersion: 'afl-trade-projection/v1',
+            publicationId,
+            environment: 'test_fixture',
+            scopeKey: 'runtime-freshness-fixture',
+            createdAt: projectionCreatedAt,
+          },
+        }),
+      ]
+    );
     const client = createPgAflOutcomeSqlClient(outcomesPool);
     const firstProcess = createPostgresAflTradeProjectionFreshnessHighWaterStore(client);
     await firstProcess.advance(projectionId, '2026-08-08T02:00:00.000Z');

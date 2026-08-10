@@ -112,6 +112,10 @@ function evidenceBatch() {
 async function seedIndexBatch() {
   const batch = evidenceBatch();
   await outcomesPool.query(
+    `INSERT INTO outcome_competition_season (competition,season_year)
+     VALUES ('AFLM',2025) ON CONFLICT DO NOTHING`
+  );
+  await outcomesPool.query(
     `INSERT INTO outcome_artifact_custody
       (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
        environment,created_at,verified_at,custody_json)

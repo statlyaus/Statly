@@ -29,7 +29,11 @@ function scopedDatabaseUrl(): string {
 }
 
 const digest = (character: string) => character.repeat(64);
-const anchor = '2026-08-09T12:00:00.000Z';
+let anchor = '';
+
+function afterAnchor(seconds: number): string {
+  return new Date(Date.parse(anchor) + seconds * 1_000).toISOString();
+}
 
 function schedule() {
   return createAflTradeExternalCaptureSchedule({
@@ -91,6 +95,10 @@ beforeAll(async () => {
       stdio: 'pipe',
     }
   );
+  const trustedTime = await outcomesPool.query<{ anchor: Date }>(
+    `SELECT date_trunc('second',clock_timestamp() - interval '1 second') AS anchor`
+  );
+  anchor = trustedTime.rows[0]!.anchor.toISOString();
 });
 
 afterAll(async () => {
@@ -125,14 +133,14 @@ describe('PostgreSQL external capture scheduling', () => {
       repository.claim({
         scheduleId: definition.scheduleId,
         dueAt,
-        observedAt: '2026-08-09T12:00:01.000Z',
+        observedAt: afterAnchor(1),
         workerId: 'worker-a',
         leaseTokenSha256: digest('c'),
       }),
       repository.claim({
         scheduleId: definition.scheduleId,
         dueAt,
-        observedAt: '2026-08-09T12:00:01.000Z',
+        observedAt: afterAnchor(1),
         workerId: 'worker-b',
         leaseTokenSha256: digest('d'),
       }),
@@ -143,7 +151,7 @@ describe('PostgreSQL external capture scheduling', () => {
 
     await repository.complete({
       claim: claimed!.proposedClaim!,
-      completedAt: '2026-08-09T12:00:02.000Z',
+      completedAt: afterAnchor(2),
       outcome: { status: 'failed', failureCode: 'TRANSPORT_FAILURE' },
     });
     const retry = await outcomesPool.query<{ available_at: Date }>(
@@ -198,12 +206,10 @@ describe('PostgreSQL external capture scheduling', () => {
     await expect(
       repository.listDue({
         environment: 'test_fixture',
-        observedAt: '2026-08-09T13:00:00.000Z',
+        observedAt: afterAnchor(3_600),
         limit: 10,
       })
-    ).resolves.toEqual([
-      { scheduleId: definition.scheduleId, dueAt: '2026-08-09T13:00:00.000Z' },
-    ]);
+    ).resolves.toEqual([{ scheduleId: definition.scheduleId, dueAt: afterAnchor(3_600) }]);
     await expect(
       outcomesPool.query(`UPDATE outcome_external_capture_attempt SET worker_id='tampered'`)
     ).rejects.toThrow(/append-only/i);
@@ -216,8 +222,8 @@ describe('PostgreSQL external capture scheduling', () => {
     const definition = schedule();
     const decision = await repository.claim({
       scheduleId: definition.scheduleId,
-      dueAt: '2026-08-09T13:00:00.000Z',
-      observedAt: '2026-08-09T13:30:01.000Z',
+      dueAt: afterAnchor(3_600),
+      observedAt: afterAnchor(5_401),
       workerId: 'late-worker',
       leaseTokenSha256: digest('1'),
     });

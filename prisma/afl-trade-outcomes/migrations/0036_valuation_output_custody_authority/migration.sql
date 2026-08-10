@@ -69,7 +69,7 @@ BEGIN
   IF NEW."operation_content_canonical_json"::jsonb IS DISTINCT FROM content OR
      NEW."operation_canonical_json"::jsonb IS DISTINCT FROM NEW."operation_json" OR
      NEW."operation_id" <> 'valuation-output-custody-operation:' ||
-       encode(digest(NEW."operation_content_canonical_json",'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."operation_content_canonical_json",'UTF8')),'hex') OR
      NEW."operation_json"->>'operationId' IS DISTINCT FROM NEW."operation_id" OR
      content->>'schemaVersion' IS DISTINCT FROM
        'afl-trade-valuation-output-custody-operation/v1' OR
@@ -114,8 +114,8 @@ BEGIN
 
   receipt_content := NEW."receipt_json"->'content';
   readback_content := NEW."receipt_readback_json"->'content';
-  receipt_sha := encode(digest(NEW."receipt_canonical_json",'sha256'),'hex');
-  readback_sha := encode(digest(NEW."receipt_readback_canonical_json",'sha256'),'hex');
+  receipt_sha := encode(sha256(convert_to(NEW."receipt_canonical_json",'UTF8')),'hex');
+  readback_sha := encode(sha256(convert_to(NEW."receipt_readback_canonical_json",'UTF8')),'hex');
 
   IF NEW."completed_at" IS DISTINCT FROM
        date_trunc('milliseconds',transaction_timestamp()) OR
@@ -123,7 +123,7 @@ BEGIN
      NEW."receipt_content_canonical_json"::jsonb IS DISTINCT FROM receipt_content OR
      NEW."receipt_canonical_json"::jsonb IS DISTINCT FROM NEW."receipt_json" OR
      NEW."receipt_id" <> 'valuation-output-custody:' ||
-       encode(digest(NEW."receipt_content_canonical_json",'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."receipt_content_canonical_json",'UTF8')),'hex') OR
      NEW."receipt_json"->>'receiptId' IS DISTINCT FROM NEW."receipt_id" OR
      receipt_content->>'schemaVersion' IS DISTINCT FROM
        'afl-trade-valuation-output-custody/v1' OR
@@ -155,7 +155,7 @@ BEGIN
        NEW."receipt_readback_json" OR
      NEW."receipt_readback_json"->>'receiptId' IS DISTINCT FROM
        'artifact-readback:' ||
-         encode(digest(NEW."receipt_readback_content_canonical_json",'sha256'),'hex') OR
+         encode(sha256(convert_to(NEW."receipt_readback_content_canonical_json",'UTF8')),'hex') OR
      readback_content->>'schemaVersion' IS DISTINCT FROM 'afl-trade-artifact-readback/v4' OR
      readback_content->'artifact' IS DISTINCT FROM NEW."receipt_artifact_json" OR
      readback_content->>'repositoryAssurance' IS DISTINCT FROM NEW."repository_assurance" OR

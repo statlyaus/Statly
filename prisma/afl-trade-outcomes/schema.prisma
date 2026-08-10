@@ -549,6 +549,7 @@ model OutcomeExternalReconciliationTransfer {
   ordinal       Int
   transferId    String                                 @map("transfer_id")
   transactionId String                                 @map("transaction_id")
+  pickId        String?                                @map("pick_id")
   status        String
   transferJson  Json                                   @map("transfer_json")
   candidate     OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
@@ -566,6 +567,7 @@ model OutcomeExternalReconciliationDraftSelection {
   draftYear       Int                                    @map("draft_year")
   draftType       String                                 @map("draft_type")
   selectionNumber Int                                    @map("selection_number")
+  pickId          String?                                @map("pick_id")
   status          String
   selectionJson   Json                                   @map("selection_json")
   candidate       OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
@@ -580,6 +582,7 @@ model OutcomeExternalReconciliationPickCustody {
   candidateId String                                 @map("candidate_id")
   ordinal     Int
   custodyId   String                                 @map("custody_id")
+  pickId      String?                                @map("pick_id")
   status      String
   custodyJson Json                                   @map("custody_json")
   candidate   OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
@@ -595,6 +598,7 @@ model OutcomeExternalReconciliationPickLineage {
   lineageId   String                                 @map("lineage_id")
   transferId  String                                 @map("transfer_id")
   selectionId String                                 @map("selection_id")
+  pickId      String?                                @map("pick_id")
   status      String
   lineageJson Json                                   @map("lineage_json")
   candidate   OutcomeExternalReconciliationCandidate @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
@@ -1650,7 +1654,7 @@ model OutcomePickPavModelExecution {
   readbackReceiptArtifactId             String                       @map("readback_receipt_artifact_id")
   readbackReceiptArtifactSha256         String                       @map("readback_receipt_artifact_sha256") @outcomes.Char(64)
   status                                String
-  registeredAt                          DateTime                     @default(now()) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredAt                          DateTime                     @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy                          String                       @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   observationSet                        OutcomePickPavObservationSet @relation(fields: [observationSetId], references: [observationSetId], onDelete: Restrict)
 
@@ -2038,6 +2042,8 @@ model OutcomeMatch {
   matchId                   String                           @id @map("match_id")
   competition               String
   seasonYear                Int                              @map("season_year")
+  legacyProvider            String?                          @map("provider") @ignore
+  legacyNativeMatchId       String?                          @map("native_match_id") @ignore
   roundLabel                String                           @map("round_label")
   matchDate                 DateTime                         @map("match_date") @outcomes.Timestamptz(3)
   homeClubId                String                           @map("home_club_id")
@@ -2059,7 +2065,7 @@ model OutcomeLegacyMatchProviderKey {
   provider      String
   nativeMatchId String       @map("native_match_id")
   matchId       String       @unique @map("match_id")
-  migratedAt    DateTime     @map("migrated_at") @outcomes.Timestamptz(3)
+  migratedAt    DateTime     @default(now()) @map("migrated_at") @outcomes.Timestamptz(3)
   match         OutcomeMatch @relation(fields: [matchId], references: [matchId], onDelete: Restrict)
 
   @@id([provider, nativeMatchId])
@@ -3714,7 +3720,7 @@ model OutcomeValuationDatasetOperationAuthority {
   principalRef          String                             @map("principal_ref")
   receiptCanonicalJson  String                             @map("receipt_canonical_json") @outcomes.Text
   receiptJson           Json                               @map("receipt_json")
-  registeredAt          DateTime                           @default(now()) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredAt          DateTime                           @default(dbgenerated("clock_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy          String                             @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   dataset               OutcomeValuationDatasetCandidate   @relation(fields: [datasetId], references: [datasetId], onDelete: Restrict)
   factualRelease        OutcomeReleaseManifest             @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
@@ -3791,7 +3797,7 @@ model OutcomeValuationModelProtocol {
   preparedAt                        DateTime                                           @map("prepared_at") @outcomes.Timestamptz(3)
   protocolCanonicalJson             String                                             @map("protocol_canonical_json") @outcomes.Text
   protocolJson                      Json                                               @map("protocol_json")
-  registeredAt                      DateTime                                           @default(now()) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredAt                      DateTime                                           @default(dbgenerated("clock_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy                      String                                             @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   dataset                           OutcomeValuationDatasetCandidate                   @relation(fields: [datasetId], references: [datasetId], onDelete: Restrict)
   admission                         OutcomeValuationDatasetAdmission                   @relation(fields: [admissionId], references: [admissionId], onDelete: Restrict)
@@ -3815,7 +3821,7 @@ model OutcomeValuationPlayerObservationSet {
   observationCount                  Int                                                @map("observation_count")
   observationCanonicalJson          String                                             @map("observation_canonical_json") @outcomes.Text
   observationJson                   Json                                               @map("observation_json")
-  createdAt                         DateTime                                           @map("created_at") @outcomes.Timestamptz(3)
+  createdAt                         DateTime                                           @default(dbgenerated("clock_timestamp()")) @map("created_at") @outcomes.Timestamptz(3)
   dataset                           OutcomeValuationDatasetCandidate                   @relation(fields: [datasetId], references: [datasetId], onDelete: Restrict)
   admission                         OutcomeValuationDatasetAdmission                   @relation(fields: [admissionId], references: [admissionId], onDelete: Restrict)
   protocol                          OutcomeValuationModelProtocol                      @relation(fields: [protocolId], references: [protocolId], onDelete: Restrict)
@@ -3837,7 +3843,7 @@ model OutcomeValuationModelRunIntent {
   startedAt                DateTime                                          @map("started_at") @outcomes.Timestamptz(3)
   intentCanonicalJson      String                                            @map("intent_canonical_json") @outcomes.Text
   intentJson               Json                                              @map("intent_json")
-  registeredAt             DateTime                                          @default(now()) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredAt             DateTime                                          @default(dbgenerated("clock_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy             String                                            @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   dataset                  OutcomeValuationDatasetCandidate                  @relation(fields: [datasetId], references: [datasetId], onDelete: Restrict)
   admission                OutcomeValuationDatasetAdmission                  @relation(fields: [admissionId], references: [admissionId], onDelete: Restrict)
@@ -3866,7 +3872,7 @@ model OutcomeValuationModelRunOperationalAuthorization {
   authorityEvidenceId  String                                 @map("authority_evidence_id")
   receiptCanonicalJson String                                 @map("receipt_canonical_json") @outcomes.Text
   receiptJson          Json                                   @map("receipt_json")
-  registeredAt         DateTime                               @default(now()) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredAt         DateTime                               @default(dbgenerated("clock_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy         String                                 @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   intent               OutcomeValuationModelRunIntent         @relation(fields: [intentId], references: [intentId], onDelete: Restrict)
   dataset              OutcomeValuationDatasetCandidate       @relation(fields: [datasetId], references: [datasetId], onDelete: Restrict)
@@ -3939,7 +3945,7 @@ model OutcomeValuationOutputCustodyOperation {
   receiptReadbackJson                 Json?                                     @map("receipt_readback_json")
   receiptReadbackArtifactJson         Json?                                     @map("receipt_readback_artifact_json")
   completedAt                         DateTime?                                 @map("completed_at") @outcomes.Timestamptz(3)
-  registeredAt                        DateTime                                  @default(now()) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredAt                        DateTime                                  @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy                        String                                    @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   custodyIndexEntries                 OutcomeValuationOutputCustodyIndexEntry[]
 
@@ -4003,7 +4009,7 @@ model OutcomeValuationPublicationPreparation {
   candidateCanonicalJson        String                             @map("candidate_canonical_json") @outcomes.Text
   candidateJson                 Json                               @map("candidate_json")
   createdAt                     DateTime                           @map("created_at") @outcomes.Timestamptz(3)
-  registeredAt                  DateTime                           @default(now()) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredAt                  DateTime                           @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy                  String                             @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   custodyIndex                  OutcomeValuationOutputCustodyIndex @relation(fields: [custodyIndexId], references: [custodyIndexId], onDelete: Restrict)
 

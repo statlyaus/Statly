@@ -223,7 +223,7 @@ CREATE FUNCTION "validate_outcome_valuation_model_protocol_insert"() RETURNS TRI
 DECLARE dataset_row RECORD; admission_row RECORD; authority_row RECORD;
 BEGIN
   IF NEW."protocol_id" <> 'model-protocol:' ||
-       encode(digest(NEW."protocol_canonical_json",'sha256'),'hex') THEN
+       encode(sha256(convert_to(NEW."protocol_canonical_json",'UTF8')),'hex') THEN
     RAISE EXCEPTION 'Model protocol identity mismatch';
   END IF;
   SELECT * INTO dataset_row FROM "outcome_valuation_dataset_candidate"
@@ -259,7 +259,7 @@ CREATE FUNCTION "validate_outcome_valuation_observation_set_insert"() RETURNS TR
 DECLARE dataset_row RECORD; admission_row RECORD; protocol_row RECORD;
 BEGIN
   IF NEW."observation_set_id" <> 'player-observation-set:' ||
-       encode(digest(NEW."observation_canonical_json",'sha256'),'hex') THEN
+       encode(sha256(convert_to(NEW."observation_canonical_json",'UTF8')),'hex') THEN
     RAISE EXCEPTION 'Player observation-set identity mismatch';
   END IF;
   SELECT * INTO dataset_row FROM "outcome_valuation_dataset_candidate"
@@ -295,7 +295,7 @@ CREATE FUNCTION "validate_outcome_valuation_model_intent_insert"() RETURNS TRIGG
 DECLARE protocol_row RECORD; observation_row RECORD;
 BEGIN
   IF NEW."intent_id" <> 'model-run-intent:' ||
-       encode(digest(NEW."intent_canonical_json",'sha256'),'hex') THEN
+       encode(sha256(convert_to(NEW."intent_canonical_json",'UTF8')),'hex') THEN
     RAISE EXCEPTION 'Model-run intent identity mismatch';
   END IF;
   SELECT * INTO protocol_row FROM "outcome_valuation_model_protocol"
@@ -376,7 +376,7 @@ BEGIN
    WHERE operational."authority_evidence_id"=NEW."authority_evidence_id" FOR SHARE;
   content:=NEW."receipt_json"->'content';
   IF NEW."receipt_id" <> 'architecture-operation-receipt:' ||
-       encode(digest(NEW."receipt_canonical_json",'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."receipt_canonical_json",'UTF8')),'hex') OR
      intent_row."intent_id" IS NULL OR dataset_row."dataset_id" IS NULL OR
      NEW."environment"<>intent_row."environment" OR
      NEW."dataset_id"<>intent_row."dataset_id" OR
@@ -551,7 +551,7 @@ BEGIN
       WHERE receipt."rights_artifact_id"=required."evaluation"->>'proposalId'
    );
   IF NEW."authorization_id" <> 'model-run-authorization:' ||
-       encode(digest(NEW."authorization_canonical_json",'sha256'),'hex') OR
+       encode(sha256(convert_to(NEW."authorization_canonical_json",'UTF8')),'hex') OR
      NEW."gate_ledger_revision"<>current_revision OR
      NEW."authorized_at">current_time OR current_time>=NEW."valid_through" OR
      current_time-intent_row."started_at">INTERVAL '5 seconds' OR
@@ -713,7 +713,7 @@ BEGIN
    WHERE "intent_id"=NEW."intent_id" FOR SHARE;
   run_content:=NEW."run_json"->'content';
   intent_content:=intent_row."intent_json"->'content';
-  IF NEW."run_id" <> 'model-run:' || encode(digest(NEW."run_canonical_json",'sha256'),'hex') OR
+  IF NEW."run_id" <> 'model-run:' || encode(sha256(convert_to(NEW."run_canonical_json",'UTF8')),'hex') OR
      authorization_row."intent_id"<>NEW."intent_id" OR authorization_row."consumed_at" IS NULL OR
      NEW."run_json"->>'runId'<>NEW."run_id" OR
      run_content->>'schemaVersion'<>'afl-trade-model-run/v3' OR
