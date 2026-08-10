@@ -300,7 +300,10 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    candidate. The source selection rows own membership; operators cannot supply selection IDs,
    counts, candidate scope, proposal identity, revision or predecessor. With current scoped
    `afl_trade_canonical_promoter` authority, record the review with
-   `npm run outcomes:sources:review-external-promotion -- --candidate <candidate-id> --draft-events <reviewed-json-path> --decision approved --rationale <text> --authority-evidence <governed-evidence-id> --reviewer <principal-ref> --decided-at <UTC-millisecond-instant>`.
+   `npm run outcomes:sources:review-external-promotion -- --candidate <candidate-id> --draft-events <reviewed-json-path> --transaction-dates <reviewed-json-path> --decision approved --rationale <text> --authority-evidence <governed-evidence-id> --reviewer <principal-ref> --decided-at <UTC-millisecond-instant>`.
+   The transaction-date file must exactly cover every candidate transaction. A source-recorded date
+   must be repeated exactly; an undated Draftguru transaction requires an independently reviewed date
+   here. The content-addressed proposal and approval bind those dates before canonical promotion.
    Retain that timestamp with the review record: an exact retry must reuse it and return the same
    content-addressed decision rather than manufacture a successor.
    PostgreSQL derives and authenticates the proposal, appends one typed decision, and advances its

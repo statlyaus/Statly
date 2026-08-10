@@ -26,6 +26,7 @@ const reviewerAuthorityEvidenceIdSchema = aflTradeContentAddressedIdSchema(
   'reviewer-authority-evidence'
 );
 const selectionIdSchema = aflTradeContentAddressedIdSchema('external-draft-selection');
+const transactionIdSchema = aflTradeContentAddressedIdSchema('external-transaction');
 
 const draftEventMetadataSchema = z
   .object({
@@ -69,6 +70,19 @@ const draftEventCoverageSchema = z
     }
   });
 
+const reviewedTransactionDateSchema = z
+  .object({
+    transactionId: transactionIdSchema,
+    occurredOn: z.iso.date(),
+  })
+  .strict();
+
+const transactionDateCoverageSchema = reviewedTransactionDateSchema
+  .extend({
+    seasonYear: z.number().int().min(1897).max(2200),
+  })
+  .strict();
+
 const proposalContentSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION),
@@ -78,6 +92,7 @@ const proposalContentSchema = z
     competition: z.string().trim().min(1).max(40),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
     draftEventCoverage: z.array(draftEventCoverageSchema).max(100),
+    transactionDateCoverage: z.array(transactionDateCoverageSchema).max(10_000),
     proposedAt: instantSchema,
     publicationEligible: z.literal(false),
   })
@@ -107,6 +122,46 @@ const proposalContentSchema = z
         message: 'Draft-event coverage must be canonically sorted.',
       });
     }
+    const transactionIds = proposal.transactionDateCoverage.map(
+      ({ transactionId }) => transactionId
+    );
+    if (new Set(transactionIds).size !== transactionIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['transactionDateCoverage'],
+        message: 'Each transaction may have exactly one reviewed occurrence date.',
+      });
+    }
+    if (
+      transactionIds.some(
+        (transactionId, index) => index > 0 && transactionIds[index - 1] > transactionId
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['transactionDateCoverage'],
+        message: 'Transaction-date coverage must be canonically sorted.',
+      });
+    }
+    const proposedOn = new Date(proposal.proposedAt).toLocaleDateString('en-CA', {
+      timeZone: 'Australia/Melbourne',
+    });
+    proposal.transactionDateCoverage.forEach(({ occurredOn, seasonYear }, index) => {
+      if (Number(occurredOn.slice(0, 4)) !== seasonYear) {
+        context.addIssue({
+          code: 'custom',
+          path: ['transactionDateCoverage', index, 'occurredOn'],
+          message: 'Transaction occurrence date must fall within its exact transaction season.',
+        });
+      }
+      if (occurredOn > proposedOn) {
+        context.addIssue({
+          code: 'custom',
+          path: ['transactionDateCoverage', index, 'occurredOn'],
+          message: 'Transaction occurrence date cannot postdate the promotion proposal.',
+        });
+      }
+    });
   });
 
 export const aflTradeExternalCanonicalPromotionProposalSchema = z
@@ -220,6 +275,7 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
   candidate: unknown;
   proposedAt: string;
   draftEvents: readonly z.input<typeof draftEventMetadataSchema>[];
+  transactionDates?: readonly z.input<typeof reviewedTransactionDateSchema>[];
 }): AflTradeExternalCanonicalPromotionProposal {
   const candidate = parseAflTradeExternalReconciliationCandidate(input.candidate);
   const proposedAt = instantSchema.parse(input.proposedAt);
@@ -249,6 +305,43 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
     );
   }
 
+  const suppliedTransactionDates = z
+    .array(reviewedTransactionDateSchema)
+    .max(10_000)
+    .parse(input.transactionDates ?? []);
+  const suppliedDateByTransaction = new Map(
+    suppliedTransactionDates.map((value) => [value.transactionId, value.occurredOn])
+  );
+  if (suppliedDateByTransaction.size !== suppliedTransactionDates.length) {
+    throw new TypeError('Reviewed transaction-date keys must be unique.');
+  }
+  const transactionDateCoverage = candidate.content.transactions
+    .map((transaction) => {
+      const supplied = suppliedDateByTransaction.get(transaction.transactionId);
+      if (transaction.occurredOn !== null && supplied && supplied !== transaction.occurredOn) {
+        throw new TypeError('Reviewed transaction date conflicts with exact source evidence.');
+      }
+      const occurredOn = transaction.occurredOn ?? supplied;
+      if (!occurredOn) {
+        throw new TypeError('Every promoted transaction requires one reviewed transaction date.');
+      }
+      return {
+        transactionId: transaction.transactionId,
+        seasonYear: transaction.seasonYear,
+        occurredOn,
+      };
+    })
+    .sort((left, right) => left.transactionId.localeCompare(right.transactionId));
+  if (
+    suppliedDateByTransaction.size > 0 &&
+    !exactStringSet(
+      transactionDateCoverage.map(({ transactionId }) => transactionId),
+      [...suppliedDateByTransaction.keys()].sort()
+    )
+  ) {
+    throw new TypeError('Reviewed transaction dates must exactly cover candidate transactions.');
+  }
+
   const proposal = createAflTradeExternalCanonicalPromotionProposal({
     schemaVersion: AFL_TRADE_EXTERNAL_CANONICAL_PROMOTION_PROPOSAL_SCHEMA_VERSION,
     candidateId: candidate.candidateId,
@@ -267,6 +360,7 @@ export function deriveAflTradeExternalCanonicalPromotionProposal(input: {
         status: 'complete' as const,
       };
     }),
+    transactionDateCoverage,
     proposedAt,
     publicationEligible: false,
   });
@@ -335,8 +429,7 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
   }
   if (
     content.transactions.some(
-      ({ occurredOn, parties, transferIds, title, transactionType }) =>
-        occurredOn === null ||
+      ({ parties, transferIds, title, transactionType }) =>
         title === null ||
         transactionType === 'other' ||
         parties.length < 2 ||
@@ -362,6 +455,25 @@ export function authenticateAflTradeExternalCanonicalPromotionProposal(input: {
       coverage.selectionIds,
     ])
   );
+  const transactionDateById = new Map(
+    proposal.content.transactionDateCoverage.map(({ transactionId, seasonYear, occurredOn }) => [
+      transactionId,
+      { seasonYear, occurredOn },
+    ])
+  );
+  if (
+    transactionDateById.size !== content.transactions.length ||
+    content.transactions.some(({ transactionId, seasonYear, occurredOn }) => {
+      const coverage = transactionDateById.get(transactionId);
+      return (
+        coverage === undefined ||
+        coverage.seasonYear !== seasonYear ||
+        (occurredOn !== null && coverage.occurredOn !== occurredOn)
+      );
+    })
+  ) {
+    throw new TypeError('Promotion proposal transaction dates must exactly cover the candidate.');
+  }
   const actualCoverage = new Map<string, string[]>();
   content.draftSelections.forEach((selection) => {
     const key = coverageKey(selection.draftYear, selection.draftType);

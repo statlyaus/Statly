@@ -35,6 +35,17 @@ const inputSchema = z
           .strict()
       )
       .max(100),
+    transactionDates: z
+      .array(
+        z
+          .object({
+            transactionId: aflTradeContentAddressedIdSchema('external-transaction'),
+            occurredOn: z.iso.date(),
+          })
+          .strict()
+      )
+      .max(10_000)
+      .optional(),
     decision: z.enum(['approved', 'rejected', 'withdrawn']),
     rationale: z.string().trim().min(1).max(4_000),
     authorityEvidenceId: aflTradeContentAddressedIdSchema('reviewer-authority-evidence'),
@@ -83,6 +94,7 @@ export async function recordAflTradeExternalCanonicalPromotionReview(
     candidate,
     proposedAt: input.proposedAt,
     draftEvents: input.draftEvents,
+    transactionDates: input.transactionDates,
   });
   const current = await repository.loadCurrentDecision(candidate.candidateId);
   const decision = createAflTradeExternalCanonicalPromotionReviewDecision({

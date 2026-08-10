@@ -44,6 +44,7 @@ interface ArchiveHeaderRow extends Record<string, unknown> {
   finalized_at: Date | string | null;
 }
 interface RecordRow extends Record<string, unknown> {
+  ordinal: number;
   record_json: unknown;
 }
 
@@ -61,6 +62,10 @@ export interface AflTradePromotionBackedPublicArchiveReadRepository {
   listRecords(
     selection: AflTradePromotionBackedArchiveSelection,
     query: AflTradePromotionBackedPublicArchiveRecordQuery
+  ): Promise<readonly AflTradePromotionBackedPublicArchiveRecordInput[]>;
+  listAllRecords(
+    selection: AflTradePromotionBackedArchiveSelection,
+    query: Omit<AflTradePromotionBackedPublicArchiveRecordQuery, 'limit'>
   ): Promise<readonly AflTradePromotionBackedPublicArchiveRecordInput[]>;
 }
 
@@ -92,48 +97,90 @@ function requireExactHeader(
 
 export function createPostgresAflTradePromotionBackedPublicArchiveReadRepository(dependencies: {
   client: AflOutcomeSqlClient;
+  pageSize?: number;
 }): AflTradePromotionBackedPublicArchiveReadRepository {
+  const pageSize = z
+    .number()
+    .int()
+    .positive()
+    .max(10_000)
+    .parse(dependencies.pageSize ?? 5_000);
+
+  async function requireHeader(selection: AflTradePromotionBackedArchiveSelection): Promise<void> {
+    const header = await dependencies.client.query<ArchiveHeaderRow>(
+      `SELECT archive.archive_id,archive.release_id,archive.candidate_id,archive.corpus_id,
+              archive.environment::text,archive.scope_key,archive.competition,
+              archive.source_member_set_sha256,archive.canonical_member_set_sha256,
+              archive.record_count,archive.record_set_sha256,archive.status::text,
+              archive.finalized_at
+         FROM outcome_public_factual_archive archive
+         JOIN outcome_projection_manifest projection
+           ON projection.public_archive_id=archive.archive_id
+          AND projection.projection_id=$2 AND projection.release_id=archive.release_id
+        WHERE archive.archive_id=$1 FOR SHARE OF archive,projection`,
+      [selection.publicArchiveId, selection.projectionId]
+    );
+    requireExactHeader(header.rows[0], header.rows.length, selection);
+  }
+
+  async function readPage(
+    selection: AflTradePromotionBackedArchiveSelection,
+    query: z.infer<typeof querySchema>,
+    afterOrdinal: number,
+    limit: number
+  ): Promise<readonly RecordRow[]> {
+    const rows = await dependencies.client.query<RecordRow>(
+      `SELECT ordinal,record_json FROM outcome_public_factual_archive_record
+        WHERE archive_id=$1 AND record_kind=ANY($2::text[])
+          AND ($3::integer IS NULL OR season_year=$3)
+          AND ($4::text IS NULL OR club_ids @> ARRAY[$4]::text[])
+          AND ($5::text IS NULL OR player_ids @> ARRAY[$5]::text[])
+          AND (cardinality($6::text[])=0 OR event_version_id=ANY($6::text[]))
+          AND (cardinality($7::text[])=0 OR pick_id=ANY($7::text[]))
+          AND ordinal>$8
+        ORDER BY ordinal LIMIT $9`,
+      [
+        selection.publicArchiveId,
+        query.recordKinds,
+        query.seasonYear ?? null,
+        query.clubId ?? null,
+        query.playerId ?? null,
+        query.eventVersionIds,
+        query.pickIds,
+        afterOrdinal,
+        limit,
+      ]
+    );
+    return rows.rows;
+  }
+
+  function parseRows(rows: readonly RecordRow[]) {
+    return rows.map(
+      (row) => aflTradePromotionBackedPublicArchiveRecordSchema.parse(row.record_json).record
+    );
+  }
+
   return {
     async listRecords(selection, unparsedQuery) {
       const query = querySchema.parse(unparsedQuery);
-      const header = await dependencies.client.query<ArchiveHeaderRow>(
-        `SELECT archive.archive_id,archive.release_id,archive.candidate_id,archive.corpus_id,
-                archive.environment::text,archive.scope_key,archive.competition,
-                archive.source_member_set_sha256,archive.canonical_member_set_sha256,
-                archive.record_count,archive.record_set_sha256,archive.status::text,
-                archive.finalized_at
-           FROM outcome_public_factual_archive archive
-           JOIN outcome_projection_manifest projection
-             ON projection.public_archive_id=archive.archive_id
-            AND projection.projection_id=$2 AND projection.release_id=archive.release_id
-          WHERE archive.archive_id=$1 FOR SHARE OF archive,projection`,
-        [selection.publicArchiveId, selection.projectionId]
-      );
-      requireExactHeader(header.rows[0], header.rows.length, selection);
-
-      const rows = await dependencies.client.query<RecordRow>(
-        `SELECT record_json FROM outcome_public_factual_archive_record
-          WHERE archive_id=$1 AND record_kind=ANY($2::text[])
-            AND ($3::integer IS NULL OR season_year=$3)
-            AND ($4::text IS NULL OR club_ids @> ARRAY[$4]::text[])
-            AND ($5::text IS NULL OR player_ids @> ARRAY[$5]::text[])
-            AND (cardinality($6::text[])=0 OR event_version_id=ANY($6::text[]))
-            AND (cardinality($7::text[])=0 OR pick_id=ANY($7::text[]))
-          ORDER BY ordinal LIMIT $8`,
-        [
-          selection.publicArchiveId,
-          query.recordKinds,
-          query.seasonYear ?? null,
-          query.clubId ?? null,
-          query.playerId ?? null,
-          query.eventVersionIds,
-          query.pickIds,
-          query.limit,
-        ]
-      );
-      return rows.rows.map(
-        (row) => aflTradePromotionBackedPublicArchiveRecordSchema.parse(row.record_json).record
-      );
+      await requireHeader(selection);
+      return parseRows(await readPage(selection, query, 0, query.limit));
+    },
+    async listAllRecords(selection, unparsedQuery) {
+      const query = querySchema.parse({ ...unparsedQuery, limit: pageSize });
+      await requireHeader(selection);
+      const records: AflTradePromotionBackedPublicArchiveRecordInput[] = [];
+      let afterOrdinal = 0;
+      for (;;) {
+        const rows = await readPage(selection, query, afterOrdinal, pageSize);
+        records.push(...parseRows(rows));
+        if (rows.length < pageSize) return records;
+        const nextOrdinal = Number(rows.at(-1)?.ordinal);
+        if (!Number.isInteger(nextOrdinal) || nextOrdinal <= afterOrdinal) {
+          throw new Error('The selected public factual archive cursor did not advance.');
+        }
+        afterOrdinal = nextOrdinal;
+      }
     },
   };
 }

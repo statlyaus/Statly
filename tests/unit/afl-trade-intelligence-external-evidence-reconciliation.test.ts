@@ -323,6 +323,223 @@ describe('external draft and trade evidence reconciliation', () => {
     expect(candidate.content.publicationEligible).toBe(false);
   });
 
+  it('preserves one entitlement through multiple on-trades before draft selection', () => {
+    const onTradedDraftguru = batch('draftguru', 'b', [
+      {
+        kind: 'transaction',
+        nativeEventId: '2025-gws-richmond',
+        seasonYear: 2025,
+        occurredOn: '2025-10-09',
+        transactionType: 'trade',
+        title: 'GWS trades pick 14 to Richmond',
+      },
+      {
+        kind: 'transaction_party',
+        nativeEventId: '2025-gws-richmond',
+        nativePartyId: 'gws',
+        club: { nativeId: null, recordedName: 'GWS' },
+      },
+      {
+        kind: 'transaction_party',
+        nativeEventId: '2025-gws-richmond',
+        nativePartyId: 'richmond',
+        club: { nativeId: null, recordedName: 'Richmond' },
+      },
+      {
+        kind: 'directed_transfer',
+        nativeEventId: '2025-gws-richmond',
+        nativeTransferId: 'pick-14-to-richmond',
+        fromClub: { nativeId: null, recordedName: 'GWS' },
+        toClub: { nativeId: null, recordedName: 'Richmond' },
+        asset: {
+          kind: 'current_pick',
+          draftYear: 2025,
+          draftType: 'national',
+          recordedPickNumber: 14,
+          recordedRoundNumber: 1,
+          recordedLabel: 'Pick 14',
+        },
+      },
+      {
+        kind: 'transaction',
+        nativeEventId: '2025-richmond-bulldogs',
+        seasonYear: 2025,
+        occurredOn: '2025-10-15',
+        transactionType: 'trade',
+        title: 'Richmond on-trades pick 14 to Western Bulldogs',
+      },
+      {
+        kind: 'transaction_party',
+        nativeEventId: '2025-richmond-bulldogs',
+        nativePartyId: 'richmond',
+        club: { nativeId: null, recordedName: 'Richmond' },
+      },
+      {
+        kind: 'transaction_party',
+        nativeEventId: '2025-richmond-bulldogs',
+        nativePartyId: 'western-bulldogs',
+        club: { nativeId: null, recordedName: 'Western Bulldogs' },
+      },
+      {
+        kind: 'directed_transfer',
+        nativeEventId: '2025-richmond-bulldogs',
+        nativeTransferId: 'pick-14-to-bulldogs',
+        fromClub: { nativeId: null, recordedName: 'Richmond' },
+        toClub: { nativeId: null, recordedName: 'Western Bulldogs' },
+        asset: {
+          kind: 'current_pick',
+          draftYear: 2025,
+          draftType: 'national',
+          recordedPickNumber: 14,
+          recordedRoundNumber: 1,
+          recordedLabel: 'Pick 14',
+        },
+      },
+      draftguru.content.evidence.find(({ content }) => content.claim.kind === 'draft_selection')!
+        .content.claim,
+    ]);
+    const onTradedOrder = batch('official_afl', 'c', [
+      {
+        kind: 'pick_custody',
+        observedAt: '2025-10-10T00:00:00.000Z',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: 14,
+        originalClub: { nativeId: null, recordedName: 'GWS' },
+        currentClub: { nativeId: null, recordedName: 'Richmond' },
+      },
+      {
+        kind: 'pick_custody',
+        observedAt: '2025-11-01T00:00:00.000Z',
+        draftYear: 2025,
+        draftType: 'national',
+        roundNumber: 1,
+        recordedPickNumber: 14,
+        originalClub: { nativeId: null, recordedName: 'GWS' },
+        currentClub: { nativeId: null, recordedName: 'Western Bulldogs' },
+      },
+    ]);
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [onTradedDraftguru, footywire, fitzroy, onTradedOrder],
+      identityResolutions: [
+        ...resolutions,
+        resolution('draftguru', 'club', 'Richmond', 'club-richmond'),
+        resolution('official_afl', 'club', 'Richmond', 'club-richmond'),
+      ],
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+
+    expect(candidate.content.transfers).toHaveLength(2);
+    expect(
+      new Set(
+        candidate.content.transfers.map(({ asset }) =>
+          asset.kind === 'pick_entitlement' ? asset.pickId : null
+        )
+      ).size
+    ).toBe(1);
+    expect(candidate.content.transfers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: 'single_source',
+          asset: expect.objectContaining({ originalClubId: 'club-gws' }),
+        }),
+      ])
+    );
+    expect(candidate.content.pickLineage).toHaveLength(2);
+    expect(new Set(candidate.content.pickLineage.map(({ selectionId }) => selectionId)).size).toBe(
+      1
+    );
+    expect(candidate.content.issues).toEqual([]);
+
+    const undatedDraftguru = batch(
+      'draftguru',
+      '9',
+      onTradedDraftguru.content.evidence.map(({ content }) =>
+        content.claim.kind === 'transaction'
+          ? { ...content.claim, occurredOn: null }
+          : content.claim
+      )
+    );
+    const undatedCandidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [undatedDraftguru, footywire, fitzroy, onTradedOrder],
+      identityResolutions: [
+        ...resolutions,
+        resolution('draftguru', 'club', 'Richmond', 'club-richmond'),
+        resolution('official_afl', 'club', 'Richmond', 'club-richmond'),
+      ],
+      reconciledAt: '2026-08-09T05:00:00.000Z',
+    });
+    expect(undatedCandidate.content.pickLineage).toHaveLength(2);
+    expect(undatedCandidate.content.issues).toEqual([]);
+
+    const reconcileWithCustody = (
+      suffix: string,
+      custodyClaims: AflTradeExternalEvidenceContent['claim'][],
+      extraResolutions: ReturnType<typeof resolution>[] = []
+    ) =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'test_fixture',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [
+          onTradedDraftguru,
+          footywire,
+          fitzroy,
+          batch('official_afl', suffix, custodyClaims),
+        ],
+        identityResolutions: [
+          ...resolutions,
+          resolution('draftguru', 'club', 'Richmond', 'club-richmond'),
+          resolution('official_afl', 'club', 'Richmond', 'club-richmond'),
+          ...extraResolutions,
+        ],
+        reconciledAt: '2026-08-09T05:00:00.000Z',
+      });
+    const custodyClaim = (
+      observedAt: string,
+      currentClub: string
+    ): AflTradeExternalEvidenceContent['claim'] => ({
+      kind: 'pick_custody',
+      observedAt,
+      draftYear: 2025,
+      draftType: 'national',
+      roundNumber: 1,
+      recordedPickNumber: 14,
+      originalClub: { nativeId: null, recordedName: 'GWS' },
+      currentClub: { nativeId: null, recordedName: currentClub },
+    });
+
+    const prematureCustody = reconcileWithCustody('e', [
+      custodyClaim('2025-10-01T00:00:00.000Z', 'Richmond'),
+      custodyClaim('2025-11-01T00:00:00.000Z', 'Western Bulldogs'),
+    ]);
+    expect(prematureCustody.content.pickLineage).toHaveLength(1);
+    expect(prematureCustody.content.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'lineage_unresolved' })])
+    );
+
+    const interruptedCustody = reconcileWithCustody(
+      'f',
+      [
+        custodyClaim('2025-10-10T00:00:00.000Z', 'Richmond'),
+        custodyClaim('2025-10-20T00:00:00.000Z', 'Carlton'),
+        custodyClaim('2025-11-01T00:00:00.000Z', 'Western Bulldogs'),
+      ],
+      [resolution('official_afl', 'club', 'Carlton', 'club-carlton')]
+    );
+    expect(interruptedCustody.content.pickLineage).toHaveLength(1);
+    expect(interruptedCustody.content.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'lineage_unresolved' })])
+    );
+  });
+
   it('keeps an unmatured future-pick entitlement open without inventing a selection', () => {
     const candidate = reconcileAflTradeExternalEvidence({
       environment: 'test_fixture',

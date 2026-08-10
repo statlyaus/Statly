@@ -39,7 +39,11 @@ const lineageId = createAflTradeContentAddress('external-pick-lineage', {
   selectionId,
 });
 
-function candidate(overrides?: { issues?: 'blocking'; transactionStatus?: 'disputed' }) {
+function candidate(overrides?: {
+  issues?: 'blocking';
+  transactionStatus?: 'disputed';
+  undated?: boolean;
+}) {
   return createAflTradeExternalReconciliationCandidate({
     schemaVersion: AFL_TRADE_EXTERNAL_RECONCILIATION_SCHEMA_VERSION,
     environment: 'test_fixture',
@@ -52,7 +56,7 @@ function candidate(overrides?: { issues?: 'blocking'; transactionStatus?: 'dispu
         transactionId,
         providerEventId: '2025-gws-bulldogs',
         seasonYear: 2025,
-        occurredOn: '2025-10-15',
+        occurredOn: overrides?.undated ? null : '2025-10-15',
         transactionType: 'trade',
         title: 'GWS and Western Bulldogs exchange picks',
         parties: ['club-gws', 'club-western-bulldogs'],
@@ -157,6 +161,7 @@ function proposal(selectionIds: string[] = [selectionId], source = candidate()) 
         status: 'complete',
       },
     ],
+    transactionDateCoverage: [{ transactionId, seasonYear: 2025, occurredOn: '2025-10-15' }],
     proposedAt: '2026-08-09T07:31:00.000Z',
     publicationEligible: false,
   });
@@ -214,6 +219,68 @@ describe('external canonical promotion contracts', () => {
         draftEvents: [{ ...event, draftYear: 2024 }],
       })
     ).toThrow(/exactly match/i);
+  });
+
+  it('requires reviewed exact transaction dates when source evidence has no occurrence date', () => {
+    const source = candidate({ undated: true });
+    const base = {
+      candidate: source,
+      proposedAt: '2026-08-09T07:31:00.000Z',
+      draftEvents: [
+        {
+          draftYear: 2025,
+          draftType: 'national',
+          eventDate: '2025-11-19',
+          officialName: '2025 AFL National Draft',
+        },
+      ],
+    } as const;
+
+    expect(() => deriveAflTradeExternalCanonicalPromotionProposal(base)).toThrow(
+      /transaction date/i
+    );
+    const derived = deriveAflTradeExternalCanonicalPromotionProposal({
+      ...base,
+      transactionDates: [{ transactionId, occurredOn: '2025-10-15' }],
+    });
+    expect(derived.content.transactionDateCoverage).toEqual([
+      { transactionId, seasonYear: 2025, occurredOn: '2025-10-15' },
+    ]);
+    expect(
+      authenticateAflTradeExternalCanonicalPromotionProposal({
+        candidate: source,
+        proposal: derived,
+      })
+    ).toMatchObject({ candidateId: source.candidateId });
+  });
+
+  it('rejects reviewed dates outside the transaction season or after proposal time', () => {
+    const source = candidate({ undated: true });
+    const base = {
+      candidate: source,
+      proposedAt: '2026-08-09T07:31:00.000Z',
+      draftEvents: [
+        {
+          draftYear: 2025,
+          draftType: 'national',
+          eventDate: '2025-11-19',
+          officialName: '2025 AFL National Draft',
+        },
+      ],
+    } as const;
+
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        ...base,
+        transactionDates: [{ transactionId, occurredOn: '2024-10-15' }],
+      })
+    ).toThrow(/transaction season/i);
+    expect(() =>
+      deriveAflTradeExternalCanonicalPromotionProposal({
+        ...base,
+        transactionDates: [{ transactionId, occurredOn: '2099-01-01' }],
+      })
+    ).toThrow(/transaction season|postdate/i);
   });
 
   it('authenticates an issue-free candidate with exact complete draft-event coverage', () => {

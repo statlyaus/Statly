@@ -43,7 +43,7 @@ function fixture() {
         transactionId,
         providerEventId: '2025-gws-bulldogs',
         seasonYear: 2025,
-        occurredOn: '2025-10-15',
+        occurredOn: null,
         transactionType: 'trade',
         title: 'GWS and Western Bulldogs exchange picks',
         parties: ['club-gws', 'club-western-bulldogs'],
@@ -101,6 +101,7 @@ function fixture() {
     competition: 'AFLM',
     anchorSeasonYear: 2025,
     draftEventCoverage: [],
+    transactionDateCoverage: [{ transactionId, seasonYear: 2025, occurredOn: '2025-10-15' }],
     proposedAt: '2026-08-09T07:31:00.000Z',
     publicationEligible: false,
   });
@@ -248,6 +249,10 @@ describe('PostgresAflTradeExternalCanonicalPromotionRepository', () => {
       pickCustodyCount: 1,
     });
     expect(statements.some((sql) => sql.includes('INSERT INTO outcome_event_version'))).toBe(true);
+    const eventInsert = queries.find(({ sql }) =>
+      sql.includes('INSERT INTO outcome_event_version')
+    );
+    expect(eventInsert?.parameters[5]).toBe('2025-10-15');
     expect(
       statements.some((sql) => sql.includes('INSERT INTO outcome_pick_custody_observation'))
     ).toBe(true);

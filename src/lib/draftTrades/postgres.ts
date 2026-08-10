@@ -219,9 +219,8 @@ async function loadArchive(
   selection: AflTradePromotionBackedArchiveSelection,
   repository: AflTradePromotionBackedPublicArchiveReadRepository
 ): Promise<ArchiveBundle> {
-  const records = await repository.listRecords(selection, {
+  const records = await repository.listAllRecords(selection, {
     recordKinds: ['transaction', 'transfer', 'draft_selection', 'pick_realization'],
-    limit: 10_000,
   });
   return buildBundle(records);
 }
@@ -275,6 +274,28 @@ export function createPostgresDraftTradeReadRepository(dependencies: {
       return (await archive()).clubs.sort((left, right) =>
         left.clubName.localeCompare(right.clubName)
       );
+    },
+    async searchTrades(query, limit) {
+      const normalizedQuery = query.trim().toLowerCase();
+      const boundedLimit = Math.max(1, Math.min(limit, 200));
+      return (await archive()).trades
+        .map((trade) => ({
+          trade,
+          score:
+            (trade.title.toLowerCase().includes(normalizedQuery) ? 3 : 0) +
+            (trade.clubNames.some((name) => name.toLowerCase().includes(normalizedQuery)) ? 2 : 0) +
+            (trade.tradeId.toLowerCase().includes(normalizedQuery) ? 1 : 0),
+        }))
+        .filter(({ score }) => score > 0)
+        .sort(
+          (left, right) =>
+            right.score - left.score ||
+            right.trade.year - left.trade.year ||
+            left.trade.seqInYear - right.trade.seqInYear ||
+            left.trade.tradeId.localeCompare(right.trade.tradeId)
+        )
+        .slice(0, boundedLimit)
+        .map(({ trade }) => trade);
     },
   };
 }

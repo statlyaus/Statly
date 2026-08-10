@@ -29,6 +29,8 @@ const commandSchema = z
     z.string().regex(/^external-reconciliation:[a-f0-9]{64}$/),
     z.literal('--draft-events'),
     z.string().trim().min(1),
+    z.literal('--transaction-dates'),
+    z.string().trim().min(1),
     z.literal('--decision'),
     z.enum(['approved', 'rejected', 'withdrawn']),
     z.literal('--rationale'),
@@ -47,6 +49,8 @@ const commandSchema = z
       ,
       draftEventsPath,
       ,
+      transactionDatesPath,
+      ,
       decision,
       ,
       rationale,
@@ -59,6 +63,7 @@ const commandSchema = z
     ]) => ({
       candidateId,
       draftEventsPath,
+      transactionDatesPath,
       decision,
       rationale,
       authorityEvidenceId,
@@ -99,10 +104,11 @@ export async function runAflTradeExternalCanonicalPromotionReviewCommand(
   const parsed = commandSchema.safeParse(input.argv);
   if (!parsed.success) {
     throw new TypeError(
-      'The command requires --candidate <ID> --draft-events <JSON path> --decision <approved|rejected|withdrawn> --rationale <text> --authority-evidence <ID> --reviewer <principal> --decided-at <UTC millisecond instant>.'
+      'The command requires --candidate <ID> --draft-events <JSON path> --transaction-dates <JSON path> --decision <approved|rejected|withdrawn> --rationale <text> --authority-evidence <ID> --reviewer <principal> --decided-at <UTC millisecond instant>.'
     );
   }
   const draftEvents = await dependencies.readJson(parsed.data.draftEventsPath);
+  const transactionDates = await dependencies.readJson(parsed.data.transactionDatesPath);
   const connection = await dependencies.connect(databaseUrl(input.env));
   try {
     const result = await recordAflTradeExternalCanonicalPromotionReview(
@@ -110,6 +116,7 @@ export async function runAflTradeExternalCanonicalPromotionReviewCommand(
         candidateId: parsed.data.candidateId,
         proposedAt: parsed.data.decidedAt,
         draftEvents,
+        transactionDates,
         decision: parsed.data.decision,
         rationale: parsed.data.rationale,
         authorityEvidenceId: parsed.data.authorityEvidenceId,

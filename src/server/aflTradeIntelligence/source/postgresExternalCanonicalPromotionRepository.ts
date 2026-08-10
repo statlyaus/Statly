@@ -644,6 +644,22 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
       }
 
       const content = candidate.content;
+      const reviewedTransactionDateById = new Map(
+        approval.proposal.content.transactionDateCoverage.map(({ transactionId, occurredOn }) => [
+          transactionId,
+          occurredOn,
+        ])
+      );
+      const promotedTransactions = content.transactions.map((record) => {
+        const occurredOn = reviewedTransactionDateById.get(record.transactionId);
+        if (!occurredOn) {
+          throw new AflTradeExternalCanonicalPromotionError(
+            'CANDIDATE_UNAVAILABLE',
+            `Transaction ${record.transactionId} has no reviewed occurrence date.`
+          );
+        }
+        return { ...record, occurredOn };
+      });
       const identityDecisionByPlayer = await requireReferenceRows(
         transaction,
         candidate.candidateId,
@@ -855,7 +871,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
 
       const promotionRecords: PromotionRecord[] = [];
       const eventVersionByTransaction = new Map<string, string>();
-      for (const record of content.transactions) {
+      for (const record of promotedTransactions) {
         const row = await sourceRow({
           key: `transaction:${record.transactionId}`,
           recordKind: 'external_transaction',
@@ -924,7 +940,7 @@ export class PostgresAflTradeExternalCanonicalPromotionRepository {
 
       const assetByTransfer = new Map<string, string>();
       for (const record of content.transfers) {
-        const sourceTransaction = content.transactions.find(
+        const sourceTransaction = promotedTransactions.find(
           ({ transactionId }) => transactionId === record.transactionId
         );
         const eventVersionId = eventVersionByTransaction.get(record.transactionId);

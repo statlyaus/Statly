@@ -197,6 +197,9 @@ async function createPostgresRuntime(config: PostgresConfig): Promise<AflTradePu
   } catch (error) {
     s3.destroy();
     await pool.end();
+    if (!ownsPool && globalWithLocalPool.__statlyAflTradeLocalOutcomePool === pool) {
+      delete globalWithLocalPool.__statlyAflTradeLocalOutcomePool;
+    }
     throw error;
   }
 }
@@ -220,6 +223,9 @@ const disabledRuntime: AflTradePublicReadRuntime = Object.freeze({
       return [];
     },
     async listClubs() {
+      return [];
+    },
+    async searchTrades() {
       return [];
     },
   },

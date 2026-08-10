@@ -5,8 +5,16 @@ import type {
   AflTradePromotionBackedArchiveSelection,
   AflTradePromotionBackedArchiveSelector,
 } from '@/server/aflTradeIntelligence/outcomes/promotionBackedArchiveSelection';
-import type { AflTradePromotionBackedPublicArchiveRecordInput } from '@/server/aflTradeIntelligence/outcomes/promotionBackedPublicArchiveContracts';
-import type { AflTradePromotionBackedPublicArchiveReadRepository } from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedPublicArchiveReadRepository';
+import { sha256AflTradeCanonicalJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  AFL_TRADE_PROMOTION_BACKED_PUBLIC_ARCHIVE_RECORD_SCHEMA_VERSION,
+  type AflTradePromotionBackedPublicArchiveRecordInput,
+} from '@/server/aflTradeIntelligence/outcomes/promotionBackedPublicArchiveContracts';
+import {
+  createPostgresAflTradePromotionBackedPublicArchiveReadRepository,
+  type AflTradePromotionBackedPublicArchiveReadRepository,
+} from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedPublicArchiveReadRepository';
+import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 
 const hash = (value: string) => value.repeat(64);
 const selection = {
@@ -115,12 +123,88 @@ function activeSelector(active = true) {
 
 function archiveReader() {
   const listRecords = vi.fn(async () => records);
-  return { listRecords } as unknown as AflTradePromotionBackedPublicArchiveReadRepository & {
+  const listAllRecords = vi.fn(async () => records);
+  return {
+    listRecords,
+    listAllRecords,
+  } as unknown as AflTradePromotionBackedPublicArchiveReadRepository & {
     listRecords: typeof listRecords;
+    listAllRecords: typeof listAllRecords;
   };
 }
 
 describe('PostgreSQL AFL draft and trade archive reads', () => {
+  it('keyset-pages every matching immutable archive record without truncation', async () => {
+    const transactions = [1, 2, 3].map(
+      (ordinal) =>
+        ({
+          ...transaction,
+          recordId: `event-version-${ordinal}`,
+          eventId: `trade-${ordinal}`,
+          eventVersionId: `event-version-${ordinal}`,
+          officialName: `Trade ${ordinal}`,
+        }) satisfies AflTradePromotionBackedPublicArchiveRecordInput
+    );
+    const cursors: number[] = [];
+    const client = {
+      query: vi.fn(async (sql: string, params: readonly unknown[] = []) => {
+        if (sql.includes('FROM outcome_public_factual_archive archive')) {
+          return {
+            rows: [
+              {
+                archive_id: selection.publicArchiveId,
+                release_id: selection.releaseId,
+                candidate_id: selection.factualCandidateId,
+                corpus_id: selection.corpusId,
+                environment: selection.environment,
+                scope_key: selection.scopeKey,
+                competition: selection.competition,
+                source_member_set_sha256: selection.sourceMemberSetSha256,
+                canonical_member_set_sha256: selection.canonicalMemberSetSha256,
+                record_count: selection.publicRecordCount,
+                record_set_sha256: selection.publicRecordSetSha256,
+                status: 'approved',
+                finalized_at: selection.publishedAt,
+              },
+            ],
+          };
+        }
+        const afterOrdinal = Number(params[7]);
+        cursors.push(afterOrdinal);
+        const page = transactions.slice(afterOrdinal, afterOrdinal + 2);
+        return {
+          rows: page.map((record, index) => {
+            const ordinal = afterOrdinal + index + 1;
+            const canonicalRecordSha256 = hash('c');
+            return {
+              ordinal,
+              record_json: {
+                ordinal,
+                canonicalRecordSha256,
+                recordSha256: sha256AflTradeCanonicalJson({
+                  schemaVersion: AFL_TRADE_PROMOTION_BACKED_PUBLIC_ARCHIVE_RECORD_SCHEMA_VERSION,
+                  recordKind: record.recordKind,
+                  canonicalRecordSha256,
+                  record,
+                }),
+                record,
+              },
+            };
+          }),
+        };
+      }),
+    } as unknown as AflOutcomeSqlClient;
+    const repository = createPostgresAflTradePromotionBackedPublicArchiveReadRepository({
+      client,
+      pageSize: 2,
+    });
+
+    await expect(
+      repository.listAllRecords(selection, { recordKinds: ['transaction'] })
+    ).resolves.toEqual(transactions);
+    expect(cursors).toEqual([0, 2]);
+  });
+
   it('fails closed to an empty archive when no governed archive is active', async () => {
     const archiveSelector = activeSelector(false);
     const archiveRepository = archiveReader();
@@ -131,7 +215,7 @@ describe('PostgreSQL AFL draft and trade archive reads', () => {
 
     await expect(repository.listYears()).resolves.toEqual([]);
     await expect(repository.getById('trade-1')).resolves.toBeNull();
-    expect(archiveRepository.listRecords).not.toHaveBeenCalled();
+    expect(archiveRepository.listAllRecords).not.toHaveBeenCalled();
   });
 
   it('maps sealed facts into trade/detail/club views and resolves the selected player', async () => {
@@ -168,7 +252,7 @@ describe('PostgreSQL AFL draft and trade archive reads', () => {
       expect.objectContaining({ clubSlug: 'carlton', assetCount: 1 }),
       expect.objectContaining({ clubSlug: 'fremantle', assetCount: 1 }),
     ]);
-    expect(archiveRepository.listRecords).toHaveBeenCalledTimes(1);
+    expect(archiveRepository.listAllRecords).toHaveBeenCalledTimes(1);
   });
 
   it('applies existing public filters to one cached immutable archive', async () => {
@@ -183,6 +267,21 @@ describe('PostgreSQL AFL draft and trade archive reads', () => {
     await expect(repository.listTradesByYear(2025, { type: 'pick' })).resolves.toHaveLength(1);
     await expect(repository.listTradesByYear(2025, { q: 'reidy' })).resolves.toHaveLength(1);
     await expect(repository.listTradesByYear(2024)).resolves.toEqual([]);
-    expect(archiveRepository.listRecords).toHaveBeenCalledTimes(1);
+    expect(archiveRepository.listAllRecords).toHaveBeenCalledTimes(1);
+  });
+
+  it('searches one captured release instead of combining independently captured years', async () => {
+    const archiveRepository = archiveReader();
+    const archiveSelector = activeSelector();
+    const repository = createPostgresDraftTradeReadRepository({
+      archiveSelector,
+      archiveRepository,
+    });
+
+    await expect(repository.searchTrades('carlton', 50)).resolves.toEqual([
+      expect.objectContaining({ tradeId: 'trade-1' }),
+    ]);
+    expect(archiveSelector.capture).toHaveBeenCalledOnce();
+    expect(archiveRepository.listAllRecords).toHaveBeenCalledOnce();
   });
 });

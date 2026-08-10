@@ -109,9 +109,31 @@ const realization = {
   draftSelectionId: pick14.selectionId,
   relationKind: 'exercised_as',
 } satisfies AflTradePromotionBackedPublicArchiveRecordInput;
+const onTrade = {
+  ...trade,
+  recordId: 'event-version:2025-pick-on-trade-v1',
+  eventId: 'event:2025-pick-on-trade',
+  eventVersionId: 'event-version:2025-pick-on-trade-v1',
+  seasonYear: 2025,
+  occurredOn: '2025-10-10',
+  officialName: '2025 Draft Pick On-Trade: Western Bulldogs and GWS',
+} satisfies AflTradePromotionBackedPublicArchiveRecordInput;
+const onTradedTransfer = {
+  ...transfer,
+  recordId: 'asset:2025-on-traded-pick-14',
+  assetVersionId: 'asset:2025-on-traded-pick-14',
+  eventVersionId: onTrade.eventVersionId,
+  assetKey: 'on-traded-pick-14',
+} satisfies AflTradePromotionBackedPublicArchiveRecordInput;
+const onTradeRealization = {
+  ...realization,
+  recordId: 'realization:on-traded-pick-14',
+  realizationId: 'realization:on-traded-pick-14',
+  transferAssetVersionId: onTradedTransfer.assetVersionId,
+} satisfies AflTradePromotionBackedPublicArchiveRecordInput;
 
 function archiveReader() {
-  const listRecords = vi.fn(
+  const readRecords = vi.fn(
     async (
       _selection: AflTradePromotionBackedArchiveSelection,
       query: { recordKinds: string[] }
@@ -122,13 +144,19 @@ function archiveReader() {
       ) {
         return [draftEvent, pick14, pick19];
       }
-      if (query.recordKinds.includes('transfer')) return [transfer, realization];
-      if (query.recordKinds.length === 1 && query.recordKinds[0] === 'transaction') return [trade];
+      if (query.recordKinds.includes('transfer'))
+        return [transfer, realization, onTradedTransfer, onTradeRealization];
+      if (query.recordKinds.length === 1 && query.recordKinds[0] === 'transaction')
+        return [trade, onTrade];
       return [];
     }
   );
-  return { listRecords } as unknown as AflTradePromotionBackedPublicArchiveReadRepository & {
-    listRecords: typeof listRecords;
+  return {
+    listRecords: readRecords,
+    listAllRecords: readRecords,
+  } as unknown as AflTradePromotionBackedPublicArchiveReadRepository & {
+    listRecords: typeof readRecords;
+    listAllRecords: typeof readRecords;
   };
 }
 
@@ -154,8 +182,11 @@ describe('PostgreSQL AFL draft-history reads', () => {
       originalClub: { name: 'GWS' },
       lineage: {
         status: 'linked_to_trade',
-        edgeCount: 1,
-        tradeRefs: [{ tradeId: trade.eventId, year: 2024 }],
+        edgeCount: 2,
+        tradeRefs: [
+          { tradeId: trade.eventId, year: 2024 },
+          { tradeId: onTrade.eventId, year: 2025 },
+        ],
       },
     });
     expect(rows[1]).toMatchObject({
@@ -163,6 +194,6 @@ describe('PostgreSQL AFL draft-history reads', () => {
       player: { aflPlayerId: 'player:josh-lindsay', displayName: 'Josh Lindsay' },
       lineage: { status: 'selection_only', edgeCount: 0, tradeRefs: [] },
     });
-    expect(archiveRepository.listRecords).toHaveBeenCalledTimes(4);
+    expect(archiveRepository.listAllRecords).toHaveBeenCalledTimes(4);
   });
 });

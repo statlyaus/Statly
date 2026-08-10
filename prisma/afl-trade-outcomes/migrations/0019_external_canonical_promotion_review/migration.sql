@@ -166,6 +166,33 @@ BEGIN
         FROM outcome_external_reconciliation_draft_selection WHERE candidate_id=NEW.candidate_id) events)
   THEN RAISE EXCEPTION 'Promotion review coverage must equal the candidate selection set'; END IF;
 
+  WITH proposed AS (
+    SELECT coverage->>'transactionId' AS transaction_id,
+           (coverage->>'seasonYear')::integer AS season_year,
+           (coverage->>'occurredOn')::date AS occurred_on
+      FROM jsonb_array_elements(content->'transactionDateCoverage') coverage
+  ), actual AS (
+    SELECT transaction_id,(transaction_json->>'seasonYear')::integer AS season_year,
+           (transaction_json->>'occurredOn')::date AS occurred_on
+      FROM outcome_external_reconciliation_transaction WHERE candidate_id=NEW.candidate_id
+  ), gaps AS (
+    SELECT transaction_id FROM proposed EXCEPT SELECT transaction_id FROM actual
+    UNION ALL SELECT transaction_id FROM actual EXCEPT SELECT transaction_id FROM proposed
+    UNION ALL SELECT proposed.transaction_id FROM proposed JOIN actual USING (transaction_id)
+      WHERE proposed.season_year IS DISTINCT FROM actual.season_year
+         OR extract(year FROM proposed.occurred_on)::integer IS DISTINCT FROM actual.season_year
+         OR (actual.occurred_on IS NOT NULL
+             AND proposed.occurred_on IS DISTINCT FROM actual.occurred_on)
+         OR proposed.occurred_on >
+            ((content->>'proposedAt')::timestamptz
+              AT TIME ZONE 'Australia/Melbourne')::date
+         OR proposed.occurred_on > (NEW.decided_at AT TIME ZONE 'Australia/Melbourne')::date
+  ) SELECT count(*) INTO coverage_gap_count FROM gaps;
+  IF coverage_gap_count<>0 OR
+     (SELECT count(*) FROM jsonb_array_elements(content->'transactionDateCoverage')) <>
+     (SELECT count(*) FROM outcome_external_reconciliation_transaction WHERE candidate_id=NEW.candidate_id)
+  THEN RAISE EXCEPTION 'Promotion review transaction dates must equal the candidate transaction set in season and chronology'; END IF;
+
   SELECT count(*) INTO authority_count
     FROM outcome_operational_principal_authority authority
     JOIN outcome_governed_evidence_reference evidence ON evidence.reference_id=authority.authority_evidence_id

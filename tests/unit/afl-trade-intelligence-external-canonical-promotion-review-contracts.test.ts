@@ -18,6 +18,7 @@ const proposal = createAflTradeExternalCanonicalPromotionProposal({
   competition: 'AFLM',
   anchorSeasonYear: 2025,
   draftEventCoverage: [],
+  transactionDateCoverage: [],
   proposedAt: '2026-08-09T07:31:00.000Z',
   publicationEligible: false,
 });

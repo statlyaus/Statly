@@ -359,6 +359,13 @@ export function reconcileAflTradeExternalEvidence(input: {
     ): row is Evidence & { content: { claim: Extract<Claim, { kind: 'directed_transfer' }> } } =>
       row.content.provider === 'draftguru' && row.content.claim.kind === 'directed_transfer'
   );
+  const transactionClaimsByNativeEventId = new Map<string, typeof transactionClaims>();
+  for (const transaction of transactionClaims) {
+    const values =
+      transactionClaimsByNativeEventId.get(transaction.content.claim.nativeEventId) ?? [];
+    values.push(transaction);
+    transactionClaimsByNativeEventId.set(transaction.content.claim.nativeEventId, values);
+  }
 
   const custodyClaims = evidence.filter(
     (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'pick_custody' }> } } =>
@@ -503,33 +510,52 @@ export function reconcileAflTradeExternalEvidence(input: {
       };
     } else {
       const currentPick = claim.asset;
-      const custodyMatches = pickCustody.filter(
-        (custody) =>
-          isUsableCustody(custody) &&
-          custody.draftYear === currentPick.draftYear &&
-          custody.draftType === currentPick.draftType &&
-          custody.originalClubId === fromClubId &&
-          custody.currentClubId === toClubId &&
-          (currentPick.recordedRoundNumber === undefined ||
-            custody.roundNumber === null ||
-            custody.roundNumber === currentPick.recordedRoundNumber)
-      );
+      const eventClaims = transactionClaimsByNativeEventId.get(claim.nativeEventId) ?? [];
+      const eventClaim = eventClaims.length === 1 ? eventClaims[0].content.claim : null;
+      const occurredOn = eventClaim?.occurredOn ?? null;
+      const custodyMatches = pickCustody.filter((custody) => {
+        if (
+          !eventClaim ||
+          !isUsableCustody(custody) ||
+          custody.draftYear !== currentPick.draftYear ||
+          custody.draftType !== currentPick.draftType ||
+          custody.currentClubId !== toClubId ||
+          (occurredOn !== null && custody.observedAt.slice(0, 10) < occurredOn) ||
+          (currentPick.recordedRoundNumber !== undefined &&
+            custody.roundNumber !== null &&
+            custody.roundNumber !== currentPick.recordedRoundNumber)
+        ) {
+          return false;
+        }
+        const priorCustody = pickCustody
+          .filter(
+            (prior) =>
+              isUsableCustody(prior) &&
+              prior.pickId === custody.pickId &&
+              prior.observedAt < custody.observedAt
+          )
+          .sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0];
+        return priorCustody
+          ? priorCustody.currentClubId === fromClubId &&
+              (occurredOn === null || priorCustody.observedAt.slice(0, 10) <= occurredOn)
+          : custody.originalClubId === fromClubId;
+      });
+      const exactCustody = custodyMatches.length === 1 ? custodyMatches[0] : null;
       asset = {
         kind: 'pick_entitlement',
-        pickId:
-          custodyMatches.length === 1
-            ? custodyMatches[0].pickId
-            : pickId(
-                currentPick.draftYear,
-                currentPick.draftType,
-                currentPick.recordedPickNumber,
-                currentPick.recordedRoundNumber ?? null
-              ),
+        pickId: exactCustody
+          ? exactCustody.pickId
+          : pickId(
+              currentPick.draftYear,
+              currentPick.draftType,
+              currentPick.recordedPickNumber,
+              currentPick.recordedRoundNumber ?? null
+            ),
         draftYear: currentPick.draftYear,
         draftType: currentPick.draftType,
         nominalRound: currentPick.recordedRoundNumber ?? null,
         nominalPick: currentPick.recordedPickNumber,
-        originalClubId: null,
+        originalClubId: exactCustody?.originalClubId ?? null,
         recordedLabel: currentPick.recordedLabel ?? null,
       };
     }

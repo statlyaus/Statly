@@ -24,6 +24,8 @@ const argv = [
   candidateId,
   '--draft-events',
   '/reviewed/draft-events.json',
+  '--transaction-dates',
+  '/reviewed/transaction-dates.json',
   '--decision',
   'approved',
   '--rationale',
@@ -48,6 +50,7 @@ describe('record external canonical promotion review command', () => {
       )
     ).rejects.toThrow('sentinel');
     expect(target.readJson).toHaveBeenCalledWith('/reviewed/draft-events.json');
+    expect(target.readJson).toHaveBeenCalledWith('/reviewed/transaction-dates.json');
     expect(target.connect).toHaveBeenCalledWith('postgres://outcomes');
   });
 

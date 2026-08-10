@@ -31,6 +31,7 @@ export interface DraftTradeReadRepository {
   getById(tradeId: string): Promise<DraftTradeDetail | null>;
   listRefsByClub(clubSlug: string): Promise<DraftClubTradeRefItem[]>;
   listClubs(): Promise<DraftClubListItem[]>;
+  searchTrades(query: string, limit: number): Promise<DraftTradeListItem[]>;
 }
 
 async function resolveDraftTradeReadRepository(): Promise<DraftTradeReadRepository> {
@@ -66,4 +67,8 @@ export async function listDraftTradeRefsByClub(clubSlug: string) {
 
 export async function listDraftClubs() {
   return (await resolveDraftTradeReadRepository()).listClubs();
+}
+
+export async function searchDraftTradeArchive(query: string, limit: number) {
+  return (await resolveDraftTradeReadRepository()).searchTrades(query, limit);
 }

@@ -322,6 +322,35 @@ BEGIN
               WHERE candidate_id=NEW.candidate_id) draft_events) THEN
     RAISE EXCEPTION 'Promotion draft coverage must equal the exact candidate selection set';
   END IF;
+  WITH proposed AS (
+    SELECT coverage->>'transactionId' AS transaction_id,
+           (coverage->>'seasonYear')::integer AS season_year,
+           (coverage->>'occurredOn')::date AS occurred_on
+      FROM jsonb_array_elements(NEW.proposal_json->'content'->'transactionDateCoverage') coverage
+  ), actual AS (
+    SELECT transaction_id,(transaction_json->>'seasonYear')::integer AS season_year,
+           (transaction_json->>'occurredOn')::date AS occurred_on
+      FROM outcome_external_reconciliation_transaction WHERE candidate_id=NEW.candidate_id
+  ), gaps AS (
+    SELECT transaction_id FROM proposed EXCEPT SELECT transaction_id FROM actual
+    UNION ALL SELECT transaction_id FROM actual EXCEPT SELECT transaction_id FROM proposed
+    UNION ALL
+    SELECT proposed.transaction_id FROM proposed JOIN actual USING (transaction_id)
+     WHERE proposed.season_year IS DISTINCT FROM actual.season_year
+        OR extract(year FROM proposed.occurred_on)::integer IS DISTINCT FROM actual.season_year
+        OR (actual.occurred_on IS NOT NULL
+            AND proposed.occurred_on IS DISTINCT FROM actual.occurred_on)
+        OR proposed.occurred_on >
+           ((NEW.proposal_json->'content'->>'proposedAt')::timestamptz
+             AT TIME ZONE 'Australia/Melbourne')::date
+        OR proposed.occurred_on > (NEW.promoted_at AT TIME ZONE 'Australia/Melbourne')::date
+  ) SELECT count(*) INTO coverage_gap_count FROM gaps;
+  IF coverage_gap_count <> 0 OR
+     (SELECT count(*) FROM jsonb_array_elements(NEW.proposal_json->'content'->'transactionDateCoverage'))
+       <> (SELECT count(*) FROM outcome_external_reconciliation_transaction
+            WHERE candidate_id=NEW.candidate_id) THEN
+    RAISE EXCEPTION 'Promotion transaction dates must exactly cover candidate transactions in season and chronology';
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -461,6 +490,18 @@ BEGIN
    );
   IF missing_count <> 0 THEN
     RAISE EXCEPTION 'Promotion records must resolve exact approved canonical records';
+  END IF;
+  SELECT count(*) INTO missing_count
+    FROM jsonb_array_elements(NEW.proposal_json->'content'->'transactionDateCoverage') coverage
+   WHERE NOT EXISTS (
+     SELECT 1 FROM outcome_external_canonical_promotion_record record
+     JOIN outcome_event_version value ON value.event_version_id=record.canonical_record_id
+    WHERE record.promotion_id=NEW.promotion_id AND record.record_kind='transaction'
+      AND record.source_record_id=coverage->>'transactionId'
+      AND value.event_date=(coverage->>'occurredOn')::date
+   );
+  IF missing_count <> 0 THEN
+    RAISE EXCEPTION 'Promotion transaction event dates must equal reviewed coverage';
   END IF;
   IF (SELECT count(*) FROM outcome_external_canonical_promotion_record
        WHERE promotion_id=NEW.promotion_id AND record_kind='transaction') <> NEW.transaction_count

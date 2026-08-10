@@ -18,6 +18,10 @@ type Custody = Extract<
   AflTradePromotionBackedPublicArchiveRecordInput,
   { recordKind: 'pick_custody' }
 >;
+type PickRealization = Extract<
+  AflTradePromotionBackedPublicArchiveRecordInput,
+  { recordKind: 'pick_realization' }
+>;
 
 const supportedKinds = new Set<string>(AFL_DRAFT_HISTORY_DRAFT_KINDS);
 
@@ -64,22 +68,39 @@ function selectionRows(
     values.push(custody);
     custodyByPick.set(custody.pickId, values);
   }
-  const realizationBySelection = new Map(
-    recordsByKind(records, 'pick_realization').map((value) => [value.draftSelectionId, value])
-  );
+  const realizationsBySelection = new Map<string, PickRealization[]>();
+  for (const realization of recordsByKind(records, 'pick_realization')) {
+    const values = realizationsBySelection.get(realization.draftSelectionId) ?? [];
+    values.push(realization);
+    realizationsBySelection.set(realization.draftSelectionId, values);
+  }
 
   return recordsByKind(records, 'draft_selection').map((selection) => {
     const event = events.get(selection.eventVersionId);
     if (!event)
       throw new Error(`Released draft selection ${selection.selectionId} has no draft event.`);
-    const realization = realizationBySelection.get(selection.selectionId);
-    const transfer = realization ? transfers.get(realization.transferAssetVersionId) : undefined;
-    const transaction = transfer ? transactions.get(transfer.eventVersionId) : undefined;
-    if (realization && (!transfer || !transaction || transfer.pick?.pickId !== selection.pickId)) {
-      throw new Error(
-        `Released draft selection ${selection.selectionId} has incomplete trade lineage.`
+    const lineage = (realizationsBySelection.get(selection.selectionId) ?? [])
+      .map((realization) => {
+        const transfer = transfers.get(realization.transferAssetVersionId);
+        const transaction = transfer ? transactions.get(transfer.eventVersionId) : undefined;
+        if (!transfer || !transaction || transfer.pick?.pickId !== selection.pickId) {
+          throw new Error(
+            `Released draft selection ${selection.selectionId} has incomplete trade lineage.`
+          );
+        }
+        return { realization, transfer, transaction };
+      })
+      .sort(
+        (left, right) =>
+          left.transaction.occurredOn.localeCompare(right.transaction.occurredOn) ||
+          left.transaction.eventId.localeCompare(right.transaction.eventId) ||
+          left.realization.realizationId.localeCompare(right.realization.realizationId)
       );
+    const tradeIds = lineage.map(({ transaction }) => transaction.eventId);
+    if (new Set(tradeIds).size !== tradeIds.length) {
+      throw new Error(`Released draft selection ${selection.selectionId} repeats a trade lineage.`);
     }
+    const transfer = lineage[0]?.transfer;
     const custody = selection.pickId
       ? (custodyByPick.get(selection.pickId) ?? []).sort((left, right) =>
           right.observedAt.localeCompare(left.observedAt)
@@ -105,21 +126,18 @@ function selectionRows(
         identityStatus: 'resolved',
       },
       lineage: {
-        status: transaction
-          ? 'linked_to_trade'
-          : selection.pickId
-            ? 'selection_only'
-            : 'unresolved',
-        edgeCount: realization ? 1 : 0,
-        tradeRefs: transaction
-          ? [
-              {
-                tradeId: transaction.eventId,
-                year: transaction.seasonYear,
-                title: transaction.officialName,
-              },
-            ]
-          : [],
+        status:
+          lineage.length > 0
+            ? 'linked_to_trade'
+            : selection.pickId
+              ? 'selection_only'
+              : 'unresolved',
+        edgeCount: lineage.length,
+        tradeRefs: lineage.map(({ transaction }) => ({
+          tradeId: transaction.eventId,
+          year: transaction.seasonYear,
+          title: transaction.officialName,
+        })),
       },
     };
   });
@@ -130,9 +148,8 @@ export function createPostgresAflDraftHistoryRepository(dependencies: {
 }): AflDraftHistoryRepository {
   return {
     async listYears(selection): Promise<readonly AflDraftHistoryYearSummary[]> {
-      const records = await dependencies.archiveRepository.listRecords(selection, {
+      const records = await dependencies.archiveRepository.listAllRecords(selection, {
         recordKinds: ['draft_event', 'draft_selection'],
-        limit: 10_000,
       });
       const events = recordsByKind(records, 'draft_event');
       const selections = recordsByKind(records, 'draft_selection');
@@ -164,20 +181,18 @@ export function createPostgresAflDraftHistoryRepository(dependencies: {
     },
 
     async readYear(selection, year): Promise<readonly AflDraftHistorySelection[]> {
-      const draftRecords = await dependencies.archiveRepository.listRecords(selection, {
+      const draftRecords = await dependencies.archiveRepository.listAllRecords(selection, {
         recordKinds: ['draft_event', 'draft_selection', 'pick_custody'],
         seasonYear: year,
-        limit: 10_000,
       });
       const pickIds = recordsByKind(draftRecords, 'draft_selection')
         .flatMap((record) => (record.pickId ? [record.pickId] : []))
         .sort();
       const pickRecords =
         pickIds.length > 0
-          ? await dependencies.archiveRepository.listRecords(selection, {
+          ? await dependencies.archiveRepository.listAllRecords(selection, {
               recordKinds: ['transfer', 'pick_realization'],
               pickIds,
-              limit: 10_000,
             })
           : [];
       const eventVersionIds = recordsByKind(pickRecords, 'transfer')
@@ -185,10 +200,9 @@ export function createPostgresAflDraftHistoryRepository(dependencies: {
         .sort();
       const transactions =
         eventVersionIds.length > 0
-          ? await dependencies.archiveRepository.listRecords(selection, {
+          ? await dependencies.archiveRepository.listAllRecords(selection, {
               recordKinds: ['transaction'],
               eventVersionIds,
-              limit: 10_000,
             })
           : [];
       return selectionRows([...draftRecords, ...pickRecords, ...transactions]);
