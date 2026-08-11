@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { resolve } from 'node:path';
+
+import { assertNoSchemaAdjacentPrismaEnvironmentFile } from './prismaEnvironmentGuard';
 
 export interface AflTradeOutcomesHarnessCommand {
   command: string;
@@ -256,12 +257,10 @@ export async function runDisposableAflTradeOutcomesTests(
     const databaseUrl = `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${hostPort}/${POSTGRES_DATABASE}`;
     const testEnvironment = createTestEnvironment(environment, databaseUrl);
     const schemaPath = resolve(options.workspaceRoot, 'prisma/afl-trade-outcomes/schema.prisma');
-    const schemaEnvironmentPath = join(dirname(schemaPath), '.env');
-    if ((options.schemaEnvironmentFileExists ?? existsSync)(schemaEnvironmentPath)) {
-      throw new Error(
-        `Refusing to run Prisma because a protected schema-adjacent environment file exists at ${schemaEnvironmentPath}.`
-      );
-    }
+    assertNoSchemaAdjacentPrismaEnvironmentFile(
+      schemaPath,
+      options.schemaEnvironmentFileExists
+    );
     const commands = [
       {
         args: [

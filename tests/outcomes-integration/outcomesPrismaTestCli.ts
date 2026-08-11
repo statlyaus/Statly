@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmdirSync } from 'node:fs';
+import { mkdtempSync, rmdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+
+import { assertNoSchemaAdjacentPrismaEnvironmentFile } from '@/server/aflTradeIntelligence/development/prismaEnvironmentGuard';
 
 const DEFAULT_WORKSPACE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const OUTCOMES_PRISMA_SCHEMA_PATH = join(
@@ -93,12 +95,10 @@ export function runOutcomesPrismaTestCommand(
   let output: string | undefined;
 
   try {
-    const schemaEnvironmentPath = join(dirname(schemaPath), '.env');
-    if ((dependencies.schemaEnvironmentFileExists ?? existsSync)(schemaEnvironmentPath)) {
-      throw new Error(
-        `Refusing to run Prisma because a protected schema-adjacent environment file exists at ${schemaEnvironmentPath}.`
-      );
-    }
+    assertNoSchemaAdjacentPrismaEnvironmentFile(
+      schemaPath,
+      dependencies.schemaEnvironmentFileExists
+    );
     output = (dependencies.execute ?? execute)({
       command: dependencies.nodeExecutable ?? process.execPath,
       args: [
