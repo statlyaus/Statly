@@ -50,7 +50,6 @@ interface AflTradeNonproductionPlanInputs {
   readonly captureRetentionDays: string;
   readonly databaseBackupRetentionDays: string;
   readonly enableMigrationSecretAccess: boolean;
-  readonly operatorEmail: string;
   readonly permissionsBoundaryArn: string | null;
   readonly statePath: string | null;
 }
@@ -132,7 +131,6 @@ function parsePlanInputs(argv: readonly string[]): AflTradeNonproductionPlanInpu
       option !== '--aws-account-id' &&
       option !== '--capture-retention-days' &&
       option !== '--database-backup-retention-days' &&
-      option !== '--operator-email' &&
       option !== '--permissions-boundary-arn' &&
       option !== '--state'
     ) {
@@ -147,15 +145,8 @@ function parsePlanInputs(argv: readonly string[]): AflTradeNonproductionPlanInpu
   }
   const awsAccountId = values.get('--aws-account-id');
   const captureRetentionDays = values.get('--capture-retention-days');
-  const operatorEmail = values.get('--operator-email');
-  if (
-    awsAccountId === undefined ||
-    captureRetentionDays === undefined ||
-    operatorEmail === undefined
-  ) {
-    throw new TypeError(
-      'Plan validation requires --aws-account-id, --operator-email and --capture-retention-days.'
-    );
+  if (awsAccountId === undefined || captureRetentionDays === undefined) {
+    throw new TypeError('Plan validation requires --aws-account-id and --capture-retention-days.');
   }
   const statePath = values.get('--state') ?? null;
   if (enableMigrationSecretAccess && statePath === null) {
@@ -166,7 +157,6 @@ function parsePlanInputs(argv: readonly string[]): AflTradeNonproductionPlanInpu
     captureRetentionDays,
     databaseBackupRetentionDays: values.get('--database-backup-retention-days') ?? '7',
     enableMigrationSecretAccess,
-    operatorEmail,
     permissionsBoundaryArn: values.get('--permissions-boundary-arn') ?? null,
     statePath,
   };
@@ -189,16 +179,12 @@ function planArguments(
     `-var=aws_account_id=${inputs.awsAccountId}`,
     '-var=aws_region=ap-southeast-2',
     '-var=environment=non_production',
-    `-var=operator_email=${inputs.operatorEmail}`,
     '-var=vpc_cidr=10.64.0.0/16',
     '-var=database_instance_class=db.t4g.micro',
     `-var=database_backup_retention_days=${inputs.databaseBackupRetentionDays}`,
     `-var=enable_migration_secret_access=${String(inputs.enableMigrationSecretAccess)}`,
     `-var=capture_retention_days=${inputs.captureRetentionDays}`,
     '-var=cache_node_type=cache.t4g.micro',
-    '-var=capture_schedule_expression=rate(15 minutes)',
-    '-var=dispatcher_cpu=512',
-    '-var=dispatcher_memory=1024',
     `-var=permissions_boundary_arn=${inputs.permissionsBoundaryArn ?? 'null'}`,
     '-var=tags={}',
   ];

@@ -56,8 +56,6 @@ const roleName = (name: string) => `statly-afl-trade-non-production-${name}`;
 const boundedPlanArgv = [
   '--aws-account-id',
   '111122223333',
-  '--operator-email',
-  'operator@example.com',
   '--capture-retention-days',
   '365',
 ] as const;
@@ -2350,16 +2348,12 @@ describe('AFL trade non-production infrastructure plan policy', () => {
         '-var=aws_account_id=111122223333',
         '-var=aws_region=ap-southeast-2',
         '-var=environment=non_production',
-        '-var=operator_email=operator@example.com',
         '-var=vpc_cidr=10.64.0.0/16',
         '-var=database_instance_class=db.t4g.micro',
         '-var=database_backup_retention_days=7',
         '-var=enable_migration_secret_access=false',
         '-var=capture_retention_days=365',
         '-var=cache_node_type=cache.t4g.micro',
-        '-var=capture_schedule_expression=rate(15 minutes)',
-        '-var=dispatcher_cpu=512',
-        '-var=dispatcher_memory=1024',
         '-var=permissions_boundary_arn=null',
         '-var=tags={}',
       ],
@@ -2416,6 +2410,17 @@ describe('AFL trade non-production infrastructure plan policy', () => {
         argv: ['--plan', '/tmp/foreign.tfplan'],
       })
     ).rejects.toThrow(/Unsupported plan validation option/);
+
+    const deferredInputExecute = vi.fn(async () => {
+      throw new Error('OpenTofu execution must not start for a deferred foundation input.');
+    });
+    await expect(
+      runAflTradeNonproductionPlanValidationCommand({
+        argv: [...boundedPlanArgv, '--operator-email', 'operator@example.com'],
+        execute: deferredInputExecute,
+      })
+    ).rejects.toThrow(/Unsupported plan validation option/);
+    expect(deferredInputExecute).not.toHaveBeenCalled();
 
     const computeConfigurationSourceDigest = vi
       .fn<() => Promise<string>>()

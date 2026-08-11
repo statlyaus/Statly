@@ -30,19 +30,6 @@ variable "environment" {
   }
 }
 
-variable "operator_email" {
-  description = "Accountable operator address for critical infrastructure alerts."
-  type        = string
-
-  validation {
-    condition = can(regex(
-      "^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$",
-      var.operator_email
-    ))
-    error_message = "operator_email must be a syntactically valid email address."
-  }
-}
-
 variable "vpc_cidr" {
   description = "Private address space dedicated to the non-production outcomes stack."
   type        = string
@@ -104,42 +91,6 @@ variable "cache_node_type" {
   validation {
     condition     = startswith(var.cache_node_type, "cache.")
     error_message = "cache_node_type must be an ElastiCache node type."
-  }
-}
-
-variable "capture_schedule_expression" {
-  description = "Dormant EventBridge schedule expression prepared for a later Gate-approved activation."
-  type        = string
-  default     = "rate(15 minutes)"
-
-  validation {
-    condition = can(regex(
-      "^(rate\\([1-9][0-9]* (minute|minutes|hour|hours|day|days)\\)|cron\\([^\\r\\n]+\\))$",
-      var.capture_schedule_expression
-    ))
-    error_message = "capture_schedule_expression must be a bounded EventBridge rate or cron expression."
-  }
-}
-
-variable "dispatcher_cpu" {
-  description = "Fargate CPU units reserved for one bounded dispatcher tick."
-  type        = number
-  default     = 512
-
-  validation {
-    condition     = contains([256, 512, 1024, 2048, 4096], var.dispatcher_cpu)
-    error_message = "dispatcher_cpu must be a supported Fargate CPU size."
-  }
-}
-
-variable "dispatcher_memory" {
-  description = "Fargate memory in MiB reserved for one bounded dispatcher tick."
-  type        = number
-  default     = 1024
-
-  validation {
-    condition     = var.dispatcher_memory >= 512 && var.dispatcher_memory <= 30720
-    error_message = "dispatcher_memory must be between 512 and 30720 MiB."
   }
 }
 

@@ -73,19 +73,19 @@ bindings, a disabled schedule, failure monitoring, and a separately reviewed val
 current foundation gate rejects every compute, schedule and alarm resource rather than partially
 approving a future runtime graph.
 
-Every plan must supply `aws_account_id`, `operator_email`, and `capture_retention_days`. The capture
-retention value is the reviewed maximum age for both current and noncurrent objects under
-`captures/`; the lifecycle implements that ceiling as current expiration after `N - 1` days and
-noncurrent expiration after one further day. There is no default from which capture-retention
-authority can be inferred. The validator also binds the effective RDS backup retention to the reviewed
-`database_backup_retention_days` plan value, whose default and minimum are seven days. Use the bounded
-command to snapshot the reviewed configuration, initialize its locked provider, and validate one
-exact temporary plan:
+Every plan must supply `aws_account_id` and `capture_retention_days`. The capture retention value is
+the reviewed maximum age for both current and noncurrent objects under `captures/`; the lifecycle
+implements that ceiling as current expiration after `N - 1` days and noncurrent expiration after one
+further day. There is no default from which capture-retention authority can be inferred. An
+accountable alert recipient belongs to the later compute-bearing plan that creates failure monitoring;
+the current foundation exposes no dormant operator, schedule, CPU, or memory input. The validator
+also binds the effective RDS backup retention to the reviewed `database_backup_retention_days` plan
+value, whose default and minimum are seven days. Use the bounded command to snapshot the reviewed
+configuration, initialize its locked provider, and validate one exact temporary plan:
 
 ```sh
 npm run infra:afl-trade:validate-plan -- \
   --aws-account-id REVIEWED_ACCOUNT_ID \
-  --operator-email ACCOUNTABLE_OPERATOR_EMAIL \
   --capture-retention-days REVIEWED_MAXIMUM_DAYS
 ```
 
@@ -136,7 +136,6 @@ run the bounded command a second time with one explicitly reviewed prior-state f
 ```sh
 npm run infra:afl-trade:validate-plan -- \
   --aws-account-id REVIEWED_ACCOUNT_ID \
-  --operator-email ACCOUNTABLE_OPERATOR_EMAIL \
   --capture-retention-days REVIEWED_MAXIMUM_DAYS \
   --enable-migration-secret-access \
   --state REVIEWED_PRIOR_STATE_PATH
