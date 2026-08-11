@@ -1,6 +1,3 @@
-import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
-
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -36,6 +33,7 @@ import { createAflTradeExternalReconciliationCandidate } from '@/server/aflTrade
 import { PostgresAflTradeExternalCanonicalPromotionRepository } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionRepository';
 import { PostgresAflTradeExternalCanonicalPromotionReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalCanonicalPromotionReviewRepository';
 import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTradeIntelligence/source/postgresExternalReconciliationRepository';
+import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -43,7 +41,6 @@ const databaseUrl =
     throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
   })();
 const schemaName = `afl_external_promotion_${process.pid}_${Date.now()}`;
-const prismaSchemaPath = join(process.cwd(), 'prisma', 'afl-trade-outcomes', 'schema.prisma');
 const adminPool = new Pool({ connectionString: databaseUrl });
 const outcomesPool = new Pool({
   connectionString: databaseUrl,
@@ -426,11 +423,9 @@ async function seedGate2Authority(lineage: AflTradePromotionBackedFactualLineage
 
 beforeAll(async () => {
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
-  execFileSync(
-    'npx',
-    ['--no-install', 'prisma', 'migrate', 'deploy', '--schema', prismaSchemaPath],
-    { env: { ...process.env, AFL_OUTCOMES_DATABASE_URL: scopedDatabaseUrl() }, stdio: 'pipe' }
-  );
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
+    databaseUrl: scopedDatabaseUrl(),
+  });
   await seedCaptureAndEvidence();
 });
 

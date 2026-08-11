@@ -1,6 +1,4 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
 
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -28,6 +26,7 @@ import {
   createAflTradeExternalIdentityReviewDecision,
 } from '@/server/aflTradeIntelligence/source/externalIdentityReviewContracts';
 import { PostgresAflTradeExternalIdentityReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalIdentityReviewRepository';
+import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -35,7 +34,6 @@ const databaseUrl =
     throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
   })();
 const schemaName = `afl_external_discovery_${process.pid}_${Date.now()}`;
-const prismaSchemaPath = join(process.cwd(), 'prisma', 'afl-trade-outcomes', 'schema.prisma');
 const adminPool = new Pool({ connectionString: databaseUrl });
 const outcomesPool = new Pool({
   connectionString: databaseUrl,
@@ -398,14 +396,9 @@ async function seedExternalIdentityReviewerAuthority(input: {
 
 beforeAll(async () => {
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
-  execFileSync(
-    'npx',
-    ['--no-install', 'prisma', 'migrate', 'deploy', '--schema', prismaSchemaPath],
-    {
-      env: { ...process.env, AFL_OUTCOMES_DATABASE_URL: scopedDatabaseUrl() },
-      stdio: 'pipe',
-    }
-  );
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
+    databaseUrl: scopedDatabaseUrl(),
+  });
 });
 
 afterAll(async () => {

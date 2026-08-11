@@ -290,15 +290,16 @@ append-only. Projection manifests remain append-only versions so a superseded re
 fresh validation cycle, and projection items carry an explicit non-null identity key within their
 exact projection.
 The injected `pg` pool adapter commits or rolls back as one unit and never discovers configuration.
-This persistence slice is dormant and synthetic-only: the normalized migration has been generated and
-validated but has not been applied to an approved disposable or hosted target, no provider credentials
-are configured, and application composition still selects no factual release. There is no provisioned
-durable object repository, hosted factual PostgreSQL target, production registry, or trusted external
-decision-evidence registry for this capability. These local contracts prove schema and admission
-invariants only; they do not establish production durability, approve any fixture decision, or make a
-release active in the application. Do not describe the analytical PostgreSQL target, object storage,
-factual release views, or valuation artifact source as ready; do not apply the protected fantasy schema
-or SQLite migration history to them or introduce the public schema into an unapproved target.
+This persistence slice remains inactive for production. The normalized migration history and
+disposable-PostgreSQL harness exist, but Stage 1 completion still requires an exact-commit rehearsal of
+that harness plus the full repository checks and review. No provider credentials are configured, and
+application composition still selects no factual release. There is no provisioned durable object
+repository, hosted factual PostgreSQL target, production registry, or trusted external
+decision-evidence registry for this capability. These local contracts and rehearsals do not establish
+production durability, approve any fixture decision, or make a release active in the application. Do
+not describe the analytical PostgreSQL target, object storage, factual release views, or valuation
+artifact source as ready; do not apply the protected fantasy schema or SQLite migration history to them
+or introduce the public schema into an unapproved target.
 
 ### Maturity-review acceptance criteria
 
@@ -1718,7 +1719,7 @@ reported by milestone, never as one blended percentage:
 
 | Milestone                 | Current state | Completion evidence                                                                                                                            |
 | ------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Engineering foundation    | Complete      | Focused and full unit checks, schema validation, review, and committed migrations/contracts pass.                                              |
+| Engineering foundation    | Partial       | Migrations and contracts exist; an exact-commit disposable-PostgreSQL rehearsal, full checks, and final diff review remain required.           |
 | Non-production operations | Partial       | Hosted services, scheduled real-source capture, historical reconciliation, restore rehearsal, and alert burn-in still need execution evidence. |
 | Factual production        | Not complete  | No reviewed real-data factual release has been activated and verified across every public read/export surface.                                 |
 | Valuation production      | Not complete  | No locked real-data player/pick model and complete-trade valuation publication has passed Gates 3, 4, and 5 and been activated.                |

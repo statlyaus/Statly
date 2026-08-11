@@ -1,6 +1,3 @@
-import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
-
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -14,6 +11,7 @@ import { recordApprovedAflTradeFitzRoySources } from '@/server/aflTradeIntellige
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createPostgresAflTradeProjectionFreshnessHighWaterStore } from '@/server/aflTradeIntelligence/publication/postgresProjectionFreshnessHighWaterStore';
 import { createPostgresAflTradePublicationRepository } from '@/server/aflTradeIntelligence/publication/postgresPublicationRepository';
+import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -24,7 +22,6 @@ const databaseUrl =
   })();
 
 const schemaName = `afl_outcomes_runtime_${process.pid}_${Date.now()}`;
-const prismaSchemaPath = join(process.cwd(), 'prisma', 'afl-trade-outcomes', 'schema.prisma');
 const adminPool = new Pool({ connectionString: databaseUrl });
 const outcomesPool = new Pool({
   connectionString: databaseUrl,
@@ -135,14 +132,9 @@ const initialApproval = {
 
 beforeAll(async () => {
   await adminPool.query(`CREATE SCHEMA ${schemaName}`);
-  execFileSync(
-    'npx',
-    ['--no-install', 'prisma', 'migrate', 'deploy', '--schema', prismaSchemaPath],
-    {
-      env: { ...process.env, AFL_OUTCOMES_DATABASE_URL: scopedDatabaseUrl() },
-      stdio: 'pipe',
-    }
-  );
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
+    databaseUrl: scopedDatabaseUrl(),
+  });
 });
 
 afterAll(async () => {

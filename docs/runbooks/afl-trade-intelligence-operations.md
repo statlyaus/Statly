@@ -97,12 +97,15 @@ target environment:
 6. Source reconciliation, factual release parity, API/view parity, projection parity,
    both release rollback paths, source withdrawal, and last-good recovery have been rehearsed on
    disposable infrastructure as applicable.
-   Run `npm run test:outcomes:int` only with `AFL_OUTCOMES_TEST_DATABASE_URL` pointing to an explicitly
-   provisioned disposable PostgreSQL database. The harness creates and removes one uniquely named test
-   schema, applies the complete ordered history with Prisma Migrate, verifies both migration ledger
-   entries, checks native registry, custody, version-chain, typed-membership, and append-only controls,
-   and exercises transaction rollback and expected-revision concurrency. Reapplying the history must
-   be a no-op. A schema-only validation or unit test is not a substitute for this rehearsal.
+   Run `npm run test:outcomes:int` locally; it provisions and removes its own loopback-only disposable
+   PostgreSQL container. Controlled CI already owns a disposable PostgreSQL service, supplies both
+   explicit test URLs, and runs `npm run test:outcomes:int:provisioned` instead. The integration suite
+   creates and removes uniquely named test schemas, applies the complete ordered history with Prisma
+   Migrate, verifies both migration ledger entries, checks native registry, custody, version-chain,
+   typed-membership, and append-only controls, and exercises transaction rollback and
+   expected-revision concurrency. Reapplying the history must be a no-op. A schema-only validation or
+   unit test is not a substitute for this rehearsal. Never use the provisioned command against shared
+   or production PostgreSQL.
 7. Monitoring routes every critical health alert to an accountable operator.
 8. Preview behavior is verified from the exact candidate commit. Production behavior is verified only
    after a deployment record identifies that same commit.

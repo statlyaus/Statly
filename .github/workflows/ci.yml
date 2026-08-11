@@ -158,7 +158,7 @@ jobs:
       - name: Generate isolated outcomes client
         run: npm run outcomes:prisma:generate
       - name: PostgreSQL integration tests
-        run: npm run test:outcomes:int
+        run: npm run test:outcomes:int:provisioned
 
   tests:
     name: Tests

@@ -1,6 +1,4 @@
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -41,6 +39,10 @@ import {
   aflDraftTradeOutcomeFixtureHash,
   createAflDraftTradeOutcomeReleaseFixture,
 } from '../fixtures/aflDraftTradeOutcomeReleaseFixture';
+import {
+  OUTCOMES_PRISMA_SCHEMA_PATH,
+  runOutcomesPrismaTestCommand,
+} from './outcomesPrismaTestCli';
 
 interface QueryResultLike<Row = Record<string, unknown>> {
   rows: readonly Row[];
@@ -56,7 +58,6 @@ const databaseUrl =
   })();
 
 const schemaName = `afl_outcomes_test_${process.pid}_${Date.now()}`;
-const prismaSchemaPath = join(process.cwd(), 'prisma', 'afl-trade-outcomes', 'schema.prisma');
 const adminPool = new Pool({ connectionString: databaseUrl });
 const outcomesPool = new Pool({
   connectionString: databaseUrl,
@@ -77,17 +78,9 @@ function scopedDatabaseUrl(targetSchema: string) {
 }
 
 function deployOutcomeMigrations(targetSchema: string) {
-  execFileSync(
-    'npx',
-    ['--no-install', 'prisma', 'migrate', 'deploy', '--schema', prismaSchemaPath],
-    {
-      env: {
-        ...process.env,
-        AFL_OUTCOMES_DATABASE_URL: scopedDatabaseUrl(targetSchema),
-      },
-      stdio: 'pipe',
-    }
-  );
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
+    databaseUrl: scopedDatabaseUrl(targetSchema),
+  });
 }
 
 function createTwoPartyBarrier() {
@@ -993,26 +986,19 @@ afterAll(async () => {
 
 describe('isolated AFL outcomes PostgreSQL migration', () => {
   it('deploys the complete ordered migration history and has no structural datamodel drift', () => {
-    const applied = execFileSync(
-      'npx',
+    const applied = runOutcomesPrismaTestCommand(
       [
-        '--no-install',
-        'prisma',
         'migrate',
         'diff',
         '--from-schema-datasource',
-        prismaSchemaPath,
+        OUTCOMES_PRISMA_SCHEMA_PATH,
         '--to-schema-datamodel',
-        prismaSchemaPath,
+        OUTCOMES_PRISMA_SCHEMA_PATH,
         '--script',
       ],
       {
-        env: {
-          ...process.env,
-          AFL_OUTCOMES_DATABASE_URL: scopedDatabaseUrl(schemaName),
-        },
-        stdio: 'pipe',
-        encoding: 'utf8',
+        appendSchemaArgument: false,
+        databaseUrl: scopedDatabaseUrl(schemaName),
       }
     );
     expect(applied).not.toMatch(/(?:CREATE|DROP)\s+(?:TABLE|TYPE)|(?:ADD|DROP|ALTER)\s+COLUMN/i);
@@ -2370,12 +2356,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
 
   it('validates the checked-in isolated Prisma schema', () => {
     expect(() =>
-      execFileSync('npx', ['--no-install', 'prisma', 'validate', '--schema', prismaSchemaPath], {
-        env: {
-          ...process.env,
-          AFL_OUTCOMES_DATABASE_URL: scopedDatabaseUrl(schemaName),
-        },
-        stdio: 'pipe',
+      runOutcomesPrismaTestCommand(['validate'], {
+        databaseUrl: scopedDatabaseUrl(schemaName),
       })
     ).not.toThrow();
   });
