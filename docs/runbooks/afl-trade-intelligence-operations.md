@@ -63,6 +63,101 @@ PostgreSQL mode fails startup if any value is missing or malformed. It does not 
 mode and never discovers a fantasy database or Firestore source. The application role needs only the
 isolated outcomes queries and the exact object-prefix read operations described below.
 
+## Non-production infrastructure plan validation
+
+`infrastructure/afl-trade-nonproduction` defines the isolated Stage 2A foundation only. It does not
+define a dispatcher task, trusted signed-egress endpoint, recurring schedule, or failure alarm. The
+worker subnets therefore have no NAT gateway, internet route, or unrestricted HTTPS egress. A later
+compute-bearing plan must add the trusted endpoint, private AWS service access, exact task and role
+bindings, a disabled schedule, failure monitoring, and a separately reviewed validator revision. The
+current foundation gate rejects every compute, schedule and alarm resource rather than partially
+approving a future runtime graph.
+
+Every plan must supply `aws_account_id`, `operator_email`, and `capture_retention_days`. The capture
+retention value is the reviewed maximum age for both current and noncurrent objects under
+`captures/`; the lifecycle implements that ceiling as current expiration after `N - 1` days and
+noncurrent expiration after one further day. There is no default from which capture-retention
+authority can be inferred. The validator also binds the effective RDS backup retention to the reviewed
+`database_backup_retention_days` plan value, whose default and minimum are seven days. Use the bounded
+command to snapshot the reviewed configuration, initialize its locked provider, and validate one
+exact temporary plan:
+
+```sh
+npm run infra:afl-trade:validate-plan -- \
+  --aws-account-id REVIEWED_ACCOUNT_ID \
+  --operator-email ACCOUNTABLE_OPERATOR_EMAIL \
+  --capture-retention-days REVIEWED_MAXIMUM_DAYS
+```
+
+The command does not accept a pre-existing plan and does not run OpenTofu against the mutable
+checkout. It verifies the exact workspace manifest, copies the reviewed source, lockfile and CLI
+configuration into a unique owned source snapshot, independently hashes the copied bytes, and makes
+that source tree read-only. It gives the snapshot separate provider-data, plan-output and writable
+local-state directories, runs `tofu init -backend=true -lockfile=readonly`, and creates one temporary
+plan with state locking enabled and `-state` fixed to the owned state path. It reads that same plan
+through `tofu show -json` without printing its contents, validates it, and recursively removes the
+exact owned snapshot root before reporting success with the snapshot digest and the optional input
+state digest. Workspace changes after copying cannot alter the bytes consumed by OpenTofu. It admits
+only the default OpenTofu workspace, strips
+ambient `TF_*`, `TOFU_*`, AWS endpoint overrides, home-directory configuration and unrelated
+environment values, and supplies explicit refresh, state-lock and parallelism semantics. Only the
+explicit AWS credential/profile file variables listed by the runner are forwarded; configured AWS
+endpoint overrides are forcibly disabled. The command sets `TF_CLI_CONFIG_FILE` to the reviewed empty
+`review.tfrc`, preventing user-level provider development overrides. Workspace inspection is limited
+to 30 seconds, snapshot initialization to five minutes, planning to 10 minutes and JSON rendering to
+60 seconds. `SIGINT` or `SIGTERM` aborts the active child, remains handled through repeated signals,
+and waits for exact snapshot cleanup before the wrapper exits. The copied-source digest is checked
+before planning, after planning and after plan-policy validation, then emitted only after cleanup. It
+covers the exact eight Terraform source files, `.terraform.lock.hcl` and `review.tfrc`. Changing
+source, provider selection or CLI provider configuration therefore requires a newly created snapshot
+and plan. Additional `.tf`, `.tf.json`, `.tofu` or
+`.tofu.json` files, including OpenTofu same-basename precedence files, and symlink/non-regular source
+entries are rejected until a reviewed manifest revision explicitly admits them. It derives custody
+and logging bucket names from the reviewed account and region rather than trusting mutually
+consistent plan-selected names. It also proves the VPC CIDR, private worker/data subnets, route tables
+with explicitly managed empty inline-route sets, associations, S3 gateway endpoint, security groups
+and database/cache subnet groups remain one exact isolated graph. The validator then binds capture
+grants to that plan's custody prefix, Redis group/user and custody key; binds runtime and
+migration roles to distinct credentials; requires the runtime role to read only its operator-populated
+runtime secret; and rejects open internet egress. It also requires the complete singleton and keyed
+foundation graph, rejects deletion or replacement actions, and proves the exact logging-bucket,
+custody-bucket, IAM-role, database-ingress and cache-ingress boundaries. Every custody and IAM policy
+must be fully rendered in the saved plan and match its complete reviewed statement semantics. Unknown
+policy JSON is rejected, so omitted dynamic or merged statements cannot be approved. Unknown
+provider-assigned network identifiers are accepted only when the plan created by the bounded command
+embeds the digest of the same read-only source snapshot and provider lock that OpenTofu consumed.
+
+The base foundation plan must leave `enable_migration_secret_access=false`, which creates the RDS
+instance and migration role without granting any secret read. It starts with the owned local state
+path absent and produces a first-create plan without reading mutable checkout state. Only after a
+separately approved apply has created the database and its RDS-managed master secret may an operator
+run the bounded command a second time with one explicitly reviewed prior-state file:
+
+```sh
+npm run infra:afl-trade:validate-plan -- \
+  --aws-account-id REVIEWED_ACCOUNT_ID \
+  --operator-email ACCOUNTABLE_OPERATOR_EMAIL \
+  --capture-retention-days REVIEWED_MAXIMUM_DAYS \
+  --enable-migration-secret-access \
+  --state REVIEWED_PRIOR_STATE_PATH
+```
+
+The migration flag is rejected without `--state`. The state input must be an exact regular,
+non-symlink file no larger than 64 MiB from the separately approved foundation apply. The command
+opens it once without following links and in non-blocking mode, rejects special files before reading,
+streams only from that admitted handle with cancellation checks, verifies stable source metadata and
+matching source/copy digests, makes the owned copy
+owner-readable only, and uses only that copy as the locked local-backend state. A pathname swap,
+in-place change, oversized input or incomplete copy fails closed before OpenTofu execution. It emits
+`inputStateDigest` for review evidence but never prints state contents. Treat the source state as
+sensitive operational material: do not
+place it in the repository, commit it, attach it to review output, or reuse an unreviewed mutable
+checkout state file. The later plan must expose the exact RDS-managed secret ARN and may grant the
+migration role access only to that ARN and the reviewed database KMS alias. Do not copy the RDS
+credential into an operator-maintained duplicate secret: the RDS-managed secret is the rotation
+boundary. Both command executions still require independent review. A passing plan is review
+evidence only. It does not authorize `tofu apply`, source capture, schedule enablement, or a release.
+
 ## Before enabling live work
 
 Do not configure a recurring job or analytical writer until all of the following are evidenced for the
@@ -197,14 +292,20 @@ creates an observation linked to the prior immutable object; a changed body crea
 `404`, missing link or page disappearance never deletes an earlier fact. Schema drift and partial
 coverage quarantine the capture and retain the last good release.
 
-The production command boundary keeps discovery, individual retrieval and reconciliation as separate
+The deployed command boundary keeps discovery, individual retrieval and reconciliation as separate
 content-addressed authorities rather than hiding them inside an unreviewed scraper:
+
+Set `AFL_TRADE_CAPTURE_ENVIRONMENT` explicitly to `non_production` or `production` for every
+external-source capture job. The runtime has no default: its value must exactly match the reviewed
+request environment, Gate-request environment and environment suffix in the Gate decision key.
+`test_fixture` is not a deployed capture environment. A non-production job cannot resolve or
+supersede production Gate authority, and production execution cannot reuse non-production authority.
 
 1. Prepare one reviewed external-source approval JSON containing the exact field set and dataset
    version for each of `draftguru-trade-index`, `draftguru-trade-detail`, `draftguru-year-page`,
    `footywire-draft-results`, and `official-afl-indicative-draft-order`, dedicated evidence for every
-   source condition, finite terms and revalidation times, and the independent reviewer. Record all
-   five atomically with
+   source condition, finite terms and revalidation times, the explicit `non_production` or
+   `production` Gate environment, and the independent reviewer. Record all five atomically with
    `npm run outcomes:sources:record-approved-external -- --input <reviewed-json-path>`. Exact replay
    is idempotent; a changed annual approval appends one linear successor per capability; a partial
    approval batch never becomes current.
@@ -250,7 +351,9 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    exact capability/provider/year/dataset/version/parser/field-manifest digest, factual effective time,
    maximum bytes, and matching Gate request. Run
    `npm run outcomes:sources:ingest-external -- --input <reviewed-page-json-path>` from the isolated
-   production job. The command derives capture time from its trusted clock, resolves current durable
+   job for the configured authority environment. The command derives capture time from its trusted
+   clock, rejects an envelope whose request, Gate environment or environment-specific decision key
+   differs from `AFL_TRADE_CAPTURE_ENVIRONMENT`, resolves current durable
    authority before and after retrieval, acquires a provider-keyed Redis lease, uses identified HTTPS
    egress, stores exact bytes in KMS-backed raw custody, persists `304` observations, and stages every
    parsed claim and issue in PostgreSQL. Both changed and `304` observations retain a content-addressed
@@ -322,7 +425,8 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    promotion receipt. Conflict, missing coverage or stale authority rolls back the entire transaction.
    Promotion does not register, validate or activate a factual release and cannot publish a grade.
 8. Register each immutable reviewed URL schedule once with
-   `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. This
+   `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. The
+   schedule request-template environment must match `AFL_TRADE_CAPTURE_ENVIRONMENT`. This
    registration command may also execute the envelope's first exact occurrence for an operator-led
    rehearsal, but it is not the recurring production scheduler. PostgreSQL creates one trigger-owned
    dispatch cursor at the schedule anchor. The cursor advances only after a terminal occurrence event
@@ -330,7 +434,7 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    manufacture a later occurrence that skips unfinished work.
 9. A deployment scheduler runs bounded ticks with
    `npm run outcomes:sources:dispatch-due-external -- --worker <deployment-worker-id> --limit <1..1000>`.
-   The command loads the oldest due active schedules from PostgreSQL for the configured production
+   The command loads the oldest due active schedules from PostgreSQL for the configured authority
    environment. It selects only new occurrences, retry-ready failures, or expired leases and delegates
    each selected occurrence to the existing Gate-resolved, Redis-admitted, HTTPS/custody/staging use
    case. One occurrence failure is reported without abandoning later selected work. PostgreSQL owns
@@ -341,8 +445,9 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    rerun.
 10. Build the separately deployable one-shot operator with
     `docker build --target afl-trade-external-dispatcher .`. The deployment injects
-    `AFL_TRADE_CAPTURE_WORKER_ID`, an optional `AFL_TRADE_CAPTURE_DISPATCH_LIMIT`, and the exact
-    production ingestion secrets at runtime; no secret belongs in the image. The container runs as the
+    `AFL_TRADE_CAPTURE_WORKER_ID`, an optional `AFL_TRADE_CAPTURE_DISPATCH_LIMIT`, the explicit
+    `AFL_TRADE_CAPTURE_ENVIRONMENT`, and the exact deployed ingestion secrets at runtime; no secret
+    belongs in the image. The container runs as the
     non-root Node user and exits after one bounded tick so the deployment scheduler, rather than a web
     request or hidden process loop, owns cadence and failure observation. Production automation is not
     operational until the selected scheduler actually runs this image, alerts on failed/saturated

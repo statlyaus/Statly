@@ -140,6 +140,7 @@ const sourceRights = createApprovedAflTradeExternalSourcePolicies({
 
 const records = createApprovedAflTradeExternalGateRecords({
   sourceRights,
+  environment: 'production',
   version: 1,
   supersedesDecisionId: null,
   decidedAt: '2026-08-09T00:02:00.000Z',

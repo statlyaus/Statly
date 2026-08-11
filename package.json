@@ -46,6 +46,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "docs:check": "node Scripts/check-docs.mjs",
+    "infra:afl-trade:validate-plan": "tsx Scripts/infra/validate-afl-trade-nonproduction-plan.ts",
     "test": "vitest run",
     "update:check": "npx npm-check-updates",
     "update:interactive": "npx npm-check-updates -u",

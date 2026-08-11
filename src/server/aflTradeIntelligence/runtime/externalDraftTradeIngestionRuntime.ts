@@ -41,13 +41,15 @@ export interface AflTradeExternalIngestionRuntime {
   close(): Promise<void>;
 }
 
-function custodyProfile(config: AflTradeExternalIngestionConfig) {
+export function createAflTradeExternalIngestionCustodyProfile(
+  config: AflTradeExternalIngestionConfig
+) {
   return createAflTradeArtifactCustodyProfile({
     schemaVersion: 'afl-trade-artifact-custody-profile/v1',
     subject: 'afl-trade-intelligence',
     contractRole: 'requirements_only_not_readiness_or_authorization',
     repositoryId: `${config.objectStorage.repositoryId}-raw-source`,
-    environment: 'production',
+    environment: config.environment,
     artifactClass: 'raw_source',
     maximumObjectBytes: config.limits.maximumSourceBytes,
     keyDerivation: 'profile_sha256_two_level_fanout_v1',
@@ -183,7 +185,7 @@ export function createAflTradeExternalIngestionRuntime(
       keyPrefix: config.objectStorage.keyPrefix,
       kmsKeyId: config.objectStorage.kmsKeyId,
     }),
-    custodyProfile: custodyProfile(config),
+    custodyProfile: createAflTradeExternalIngestionCustodyProfile(config),
   });
   const captureRegistry = new PostgresAflTradeExternalCaptureRegistry(sql);
   const staging = new PostgresAflTradeExternalEvidenceRepository(sql);
@@ -198,11 +200,13 @@ export function createAflTradeExternalIngestionRuntime(
     async ingest(command) {
       const capturedAt = clock.now();
       if (
-        command.request.environment !== 'production' ||
+        command.request.environment !== config.environment ||
         command.request.maximumBytes > config.limits.maximumSourceBytes ||
         Date.parse(command.request.effectiveAt) > Date.parse(capturedAt)
       ) {
-        throw new TypeError('Production external ingestion requires bounded production scope.');
+        throw new TypeError(
+          'External ingestion requires a bounded request matching the configured authority environment.'
+        );
       }
       const effectiveCommand = {
         ...command,
@@ -220,8 +224,7 @@ export function createAflTradeExternalIngestionRuntime(
           case 'draftguru-trade-index':
             return parseDraftguruTradeIndexEvidence(html, {
               capture,
-              fromYear:
-                command.request.discoveryFromSeasonYear ?? command.request.anchorSeasonYear,
+              fromYear: command.request.discoveryFromSeasonYear ?? command.request.anchorSeasonYear,
               throughYear: command.request.anchorSeasonYear,
             });
           case 'draftguru-trade-detail':

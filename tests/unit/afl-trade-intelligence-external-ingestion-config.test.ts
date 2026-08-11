@@ -4,6 +4,7 @@ import { parseAflTradeExternalIngestionConfig } from '@/server/aflTradeIntellige
 
 function env(): Record<string, string> {
   return {
+    AFL_TRADE_CAPTURE_ENVIRONMENT: 'non_production',
     AFL_OUTCOMES_DATABASE_URL: 'postgresql://user:pass@localhost:5432/outcomes',
     AFL_TRADE_CAPTURE_REDIS_URL: 'redis://localhost:6379',
     AFL_TRADE_OBJECT_REGION: 'ap-southeast-2',
@@ -47,14 +48,33 @@ function env(): Record<string, string> {
 }
 
 describe('external AFL draft/trade ingestion configuration', () => {
-  it('parses one production-only durable configuration with exact provider policies', () => {
+  it('preserves an explicit non-production authority environment', () => {
     expect(parseAflTradeExternalIngestionConfig(env())).toMatchObject({
-      environment: 'production',
+      environment: 'non_production',
       limits: { timeoutMs: 15000, maximumSourceBytes: 2000000, rawRetentionDays: 365 },
       providerPolicies: {
         draftguru: { upstreamRate: { requests: 1, perSeconds: 2, burst: 1 } },
       },
     });
+  });
+
+  it('preserves an explicit production authority environment', () => {
+    const production = env();
+    production.AFL_TRADE_CAPTURE_ENVIRONMENT = 'production';
+
+    expect(parseAflTradeExternalIngestionConfig(production).environment).toBe('production');
+  });
+
+  it('fails closed when the authority environment is absent or unsupported', () => {
+    const missing = env();
+    delete missing.AFL_TRADE_CAPTURE_ENVIRONMENT;
+    expect(() => parseAflTradeExternalIngestionConfig(missing)).toThrow(
+      /AFL_TRADE_CAPTURE_ENVIRONMENT/
+    );
+
+    const fixture = env();
+    fixture.AFL_TRADE_CAPTURE_ENVIRONMENT = 'test_fixture';
+    expect(() => parseAflTradeExternalIngestionConfig(fixture)).toThrow();
   });
 
   it('fails closed when durable custody, contact identity, or one provider policy is absent', () => {

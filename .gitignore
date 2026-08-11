@@ -43,6 +43,23 @@ firebase-debug.log
 # --- Netlify ---
 .netlify/
 
+# --- Infrastructure State and Local Configuration ---
+.terraform/
+.tofu/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+.terraformrc
+terraform.rc
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
 # --- Editor Configs ---
 .vscode/
 .idea/

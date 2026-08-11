@@ -4,6 +4,7 @@ import { runAflTradeExternalIngestionCommand } from '../../Scripts/ingest-extern
 
 const artifact = (letter: string) => `artifact:${letter.repeat(64)}`;
 const env = {
+  AFL_TRADE_CAPTURE_ENVIRONMENT: 'non_production',
   AFL_OUTCOMES_DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:5432/fixture',
   AFL_TRADE_CAPTURE_REDIS_URL: 'redis://127.0.0.1:6379',
   AFL_TRADE_OBJECT_REGION: 'ap-southeast-2',
@@ -45,10 +46,14 @@ const env = {
   }),
 };
 
-function command(provider = 'draftguru', capabilityId = 'draftguru-trade-detail') {
+function command(
+  provider = 'draftguru',
+  capabilityId = 'draftguru-trade-detail',
+  environment: 'non_production' | 'production' = 'non_production'
+) {
   return JSON.stringify({
     request: {
-      environment: 'production',
+      environment,
       provider,
       competition: 'AFLM',
       anchorSeasonYear: 2026,
@@ -64,8 +69,8 @@ function command(provider = 'draftguru', capabilityId = 'draftguru-trade-detail'
       maximumBytes: 1000000,
     },
     gateRequest: {
-      decisionKey: `${capabilityId}-production`,
-      environment: 'production',
+      decisionKey: `${capabilityId}-${environment}`,
+      environment,
       rightsArtifactId: `source-rights:${'e'.repeat(64)}`,
       competition: 'AFLM',
       season: 2026,
@@ -110,8 +115,15 @@ describe('external source ingestion command', () => {
 
     expect(ingest).toHaveBeenCalledWith(
       expect.objectContaining({
-        request: expect.objectContaining({ capturedAt: '2026-08-10T01:02:03.000Z' }),
-        gateRequest: expect.objectContaining({ evaluatedAt: '2026-08-10T01:02:03.000Z' }),
+        request: expect.objectContaining({
+          environment: 'non_production',
+          capturedAt: '2026-08-10T01:02:03.000Z',
+        }),
+        gateRequest: expect.objectContaining({
+          decisionKey: 'draftguru-trade-detail-non_production',
+          environment: 'non_production',
+          evaluatedAt: '2026-08-10T01:02:03.000Z',
+        }),
       })
     );
     expect(result).toMatchObject({ captureStatus: 'staged', captureId: 'capture-1' });
@@ -133,11 +145,26 @@ describe('external source ingestion command', () => {
     expect(createRuntime).not.toHaveBeenCalled();
   });
 
-  it('requires the isolated production configuration with no fallback', async () => {
+  it('rejects an envelope that does not match the configured authority environment', async () => {
+    const createRuntime = vi.fn();
+
     await expect(
       runAflTradeExternalIngestionCommand({
         argv: ['--input', '/reviewed/input.json'],
-        env: {},
+        env,
+        readInput: async () => command('draftguru', 'draftguru-trade-detail', 'production'),
+        now: () => '2026-08-10T01:02:03.000Z',
+        createRuntime,
+      })
+    ).rejects.toThrow(/configured authority environment/);
+    expect(createRuntime).not.toHaveBeenCalled();
+  });
+
+  it('requires an isolated deployed configuration with no fallback', async () => {
+    await expect(
+      runAflTradeExternalIngestionCommand({
+        argv: ['--input', '/reviewed/input.json'],
+        env: { AFL_TRADE_CAPTURE_ENVIRONMENT: 'non_production' },
         readInput: async () => command(),
       })
     ).rejects.toThrow(/AFL_OUTCOMES_DATABASE_URL/);

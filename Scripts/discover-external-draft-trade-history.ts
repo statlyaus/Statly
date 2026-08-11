@@ -25,6 +25,7 @@ import {
 const instantSchema = z.iso.datetime({ offset: true });
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const sourceRightsIdSchema = z.string().regex(/^source-rights:[a-f0-9]{64}$/);
+const deployedEnvironmentSchema = z.enum(['non_production', 'production']);
 const fieldUseSchema = z
   .object({ sourceField: z.string().trim().min(1).max(300), use: z.enum(AFL_TRADE_SOURCE_USES) })
   .strict();
@@ -32,7 +33,7 @@ const fieldUseSchema = z
 const gateRequestSchema = z
   .object({
     decisionKey: z.string().trim().min(1).max(200),
-    environment: z.literal('production'),
+    environment: deployedEnvironmentSchema,
     rightsArtifactId: sourceRightsIdSchema,
     competition: z.literal('AFLM'),
     season: z.number().int().min(1988).max(2200),
@@ -73,7 +74,7 @@ const inputSchema = z
       .object({
         request: z
           .object({
-            environment: z.literal('production'),
+            environment: deployedEnvironmentSchema,
             provider: z.literal('draftguru'),
             competition: z.literal('AFLM'),
             anchorSeasonYear: z.number().int().min(1988).max(2200),
@@ -140,7 +141,8 @@ const inputSchema = z
     if (
       request.discoveryFromSeasonYear > request.anchorSeasonYear ||
       request.anchorSeasonYear - request.discoveryFromSeasonYear > 100 ||
-      input.index.gateRequest.decisionKey !== 'draftguru-trade-index-production' ||
+      input.index.gateRequest.environment !== request.environment ||
+      input.index.gateRequest.decisionKey !== `draftguru-trade-index-${request.environment}` ||
       input.index.gateRequest.season !== request.anchorSeasonYear ||
       input.index.gateRequest.rightsArtifactId ===
         input.plan.authorities.tradeDetail.rightsArtifactId ||
@@ -189,6 +191,14 @@ export async function runAflTradeExternalHistoricalDiscoveryCommand(input: {
   const reviewed = parseInput(
     await (input.readInput ?? ((path) => readFile(path, 'utf8')))(inputPath(input.argv))
   );
+  if (
+    reviewed.index.request.environment !== config.environment ||
+    reviewed.index.gateRequest.environment !== config.environment
+  ) {
+    throw new TypeError(
+      'Historical discovery request and Gate authority must match the configured authority environment.'
+    );
+  }
   const evaluatedAt = (input.now ?? (() => new Date().toISOString()))();
   const request = parseIngestAflTradeExternalPageRequest({
     ...reviewed.index.request,
@@ -213,7 +223,7 @@ export async function runAflTradeExternalHistoricalDiscoveryCommand(input: {
       return output;
     }
     const batchId = await repository.findLatestFinalizedIndexBatch({
-      environment: 'production',
+      environment: config.environment,
       fromYear: request.discoveryFromSeasonYear!,
       throughYear: request.anchorSeasonYear,
     });

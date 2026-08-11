@@ -12,6 +12,7 @@ import {
 
 export interface ApprovedAflTradeExternalGateRecordsInput {
   sourceRights: AflTradeSourceRightsProposal;
+  environment: 'non_production' | 'production';
   version: number;
   supersedesDecisionId: string | null;
   decidedAt: string;
@@ -61,10 +62,14 @@ export function createApprovedAflTradeExternalGateRecords(
     throw new TypeError('External-source supersession must match its decision version.');
   }
   const capabilityId = sourceRights.content.acquisition.capabilityId;
-  const decisionKey = `${capabilityId}-production`;
+  const decisionKey = `${capabilityId}-${input.environment}`;
+  const environmentLabel = input.environment === 'production' ? 'Production' : 'Non-production';
   const scope = {
-    scopeKey: `afl-trade-${capabilityId}`,
-    description: `Production authority for ${capabilityId} in the public AFL trade-intelligence boundary.`,
+    scopeKey:
+      input.environment === 'production'
+        ? `afl-trade-${capabilityId}`
+        : `afl-trade-${capabilityId}-${input.environment}`,
+    description: `${environmentLabel} authority for ${capabilityId} in the public AFL trade-intelligence boundary.`,
     dimensions: [
       { name: 'source_rights_artifact', values: [sourceRights.rightsArtifactId] },
       { name: 'competition', values: [...sourceRights.content.scope.competitions] },
@@ -83,10 +88,12 @@ export function createApprovedAflTradeExternalGateRecords(
     gate: 'gate_0a_permission_to_evaluate' as const,
     decisionKey,
     version: input.version,
-    environment: 'production' as const,
+    environment: input.environment,
     scope,
     proposal: `Approve bounded ${capabilityId} capture for the exact reviewed fields and governed uses.`,
-    alternativesConsidered: ['Keep this external capability unavailable to production capture.'],
+    alternativesConsidered: [
+      `Keep this external capability unavailable to ${input.environment.replace('_', '-')} capture.`,
+    ],
     accountableOwner: input.accountableOwner,
     reviewRequirement: 'independent_review_required' as const,
     requiredReviewerRoles: [input.reviewer.role],

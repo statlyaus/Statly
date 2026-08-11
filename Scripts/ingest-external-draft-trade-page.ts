@@ -23,7 +23,7 @@ import {
 
 const captureInputSchema = z
   .object({
-    environment: z.literal('production'),
+    environment: z.enum(['non_production', 'production']),
     provider: z.enum(['draftguru', 'footywire', 'official_afl']),
     competition: z.literal('AFLM'),
     anchorSeasonYear: z.number().int().min(1897).max(2200),
@@ -70,7 +70,7 @@ const captureInputSchema = z
 const gateInputSchema = z
   .object({
     decisionKey: z.string().trim().min(1).max(200),
-    environment: z.literal('production'),
+    environment: z.enum(['non_production', 'production']),
     rightsArtifactId: z.string().regex(/^source-rights:[a-f0-9]{64}$/),
     competition: z.literal('AFLM'),
     season: z.number().int().min(1897).max(2200),
@@ -103,7 +103,11 @@ function inputPath(argv: readonly string[]): string {
   return argv[1];
 }
 
-function parseCommand(json: string, now: string): AflTradeExternalProviderIngestionCommand {
+function parseCommand(
+  json: string,
+  now: string,
+  configuredEnvironment: AflTradeExternalIngestionConfig['environment']
+): AflTradeExternalProviderIngestionCommand {
   let value: unknown;
   try {
     value = JSON.parse(json);
@@ -120,10 +124,14 @@ function parseCommand(json: string, now: string): AflTradeExternalProviderIngest
   });
   const gateRequest = { ...gateInputSchema.parse(envelope.gateRequest), evaluatedAt: now };
   if (
-    gateRequest.decisionKey !== `${request.capabilityId}-production` ||
+    request.environment !== configuredEnvironment ||
+    gateRequest.environment !== configuredEnvironment ||
+    gateRequest.decisionKey !== `${request.capabilityId}-${configuredEnvironment}` ||
     gateRequest.season !== request.anchorSeasonYear
   ) {
-    throw new TypeError('Gate decision key and season must match the exact capture capability.');
+    throw new TypeError(
+      'Gate decision key, season and request environment must match the configured authority environment and exact capture capability.'
+    );
   }
   return { request, gateRequest };
 }
@@ -140,7 +148,8 @@ export async function runAflTradeExternalIngestionCommand(input: {
   const now = (input.now ?? (() => new Date().toISOString()))();
   const command = parseCommand(
     await (input.readInput ?? ((path) => readFile(path, 'utf8')))(inputPath(input.argv)),
-    now
+    now,
+    config.environment
   );
   const runtime = (input.createRuntime ?? createAflTradeExternalIngestionRuntime)(config);
   try {

@@ -1,0 +1,2 @@
+# Intentionally empty. The bounded plan validator sets TF_CLI_CONFIG_FILE to this reviewed file so
+# user-level provider development overrides cannot alter the locked OpenTofu execution boundary.
