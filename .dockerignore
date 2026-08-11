@@ -5,11 +5,19 @@ node_modules
 .gitignore
 README.md
 npm-debug.log
+*.log
 .nyc_output
 .cache
 coverage
 dist
-.env.local
-.env.production
-.env
-# keep .env.test and .env.example
+.statly-local
+.gstack
+playwright-report
+test-results
+src/generated/aflTradeOutcomesPrisma
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+.env*
+!.env.example

@@ -19,6 +19,7 @@ FROM deps AS afl-trade-external-dispatcher
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --chown=node:node . .
+RUN npm run outcomes:prisma:generate
 USER node
 CMD ["sh", "-c", "exec npm run outcomes:sources:dispatch-due-external -- --worker \"$AFL_TRADE_CAPTURE_WORKER_ID\" --limit \"${AFL_TRADE_CAPTURE_DISPATCH_LIMIT:-25}\""]
 
@@ -30,10 +31,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Prisma: ensure client generated for alpine (linux-musl)
-# If you have binaryTargets in schema, include "linux-musl"
-# generator client { binaryTargets = ["native","linux-musl"] }
-RUN npx prisma generate || true
+# Generate both application authorities inside the image; generated local output is excluded from the
+# build context so image builds cannot depend on a developer workstation artifact.
+RUN npm run prisma:generate && npm run outcomes:prisma:generate
 
 # Next build
 ENV NEXT_TELEMETRY_DISABLED=1

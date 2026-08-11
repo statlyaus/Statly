@@ -32,6 +32,8 @@ export STATLY_ENABLE_DEV_TOOLS="true"
 export AFL_TRADE_PUBLIC_READ_MODE="postgres"
 export AFL_TRADE_PUBLIC_READ_ENVIRONMENT="test_fixture"
 export AFL_OUTCOMES_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/postgres?sslmode=disable"
+STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+export STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE
 if [[ -z "${AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64:-}" ]]; then
   AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))")"
 fi
@@ -92,13 +94,19 @@ port_is_open() {
 npm run dev:down >/dev/null 2>&1 || true
 
 if port_is_open "127.0.0.1" "55432"; then
-  echo "local stack: reusing the local AFL outcomes database on 127.0.0.1:55432"
-else
-  npm run dev:outcomes-db &
-  OUTCOMES_PID="$!"
+  echo "local stack: refusing to reuse the unidentified service on 127.0.0.1:55432; stop it before starting the local stack" >&2
+  exit 1
 fi
 
+npm run dev:outcomes-db &
+OUTCOMES_PID="$!"
+
 wait_for_port "AFL outcomes database" "127.0.0.1" "55432"
+if [[ -z "$OUTCOMES_PID" ]] || ! kill -0 "$OUTCOMES_PID" >/dev/null 2>&1; then
+  echo "local stack: the Statly AFL outcomes process exited before ownership could be confirmed" >&2
+  exit 1
+fi
+./node_modules/.bin/tsx Scripts/dev/verify-local-afl-trade-outcomes-db.ts
 
 if port_is_open "127.0.0.1" "8080" && port_is_open "127.0.0.1" "9099"; then
   echo "local stack: reusing existing Firebase emulators on 127.0.0.1:8080 and 127.0.0.1:9099"
