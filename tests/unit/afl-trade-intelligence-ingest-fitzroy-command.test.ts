@@ -7,6 +7,7 @@ const sha = (value: string) => value.repeat(64);
 
 function environment(): Record<string, string> {
   return {
+    AFL_TRADE_CAPTURE_ENVIRONMENT: 'non_production',
     AFL_OUTCOMES_DATABASE_URL: 'postgresql://outcomes:secret@db.example.test/outcomes',
     AFL_TRADE_CAPTURE_REDIS_URL: 'rediss://capture:secret@redis.example.test:6380/0',
     AFL_TRADE_FITZROY_EGRESS_ENDPOINT: 'https://egress.example.test/v1/capture',
@@ -38,12 +39,12 @@ function environment(): Record<string, string> {
   };
 }
 
-function command(season = 2026) {
+function command(season = 2026, environment: 'non_production' | 'production' = 'non_production') {
   return {
     capture: {
       gateRequest: {
-        decisionKey: 'footywire-player-stats-production',
-        environment: 'production',
+        decisionKey: `footywire-player-stats-${environment}`,
+        environment,
         rightsArtifactId: `source-rights:${sha('1')}`,
         competition: 'AFLM',
         season,
@@ -149,6 +150,20 @@ describe('fitzRoy provider season ingestion command', () => {
         createRuntime,
       })
     ).rejects.toThrow('same capability scope');
+    expect(createRuntime).not.toHaveBeenCalled();
+  });
+
+  it('rejects a Gate envelope outside the configured authority environment', async () => {
+    const createRuntime = vi.fn();
+
+    await expect(
+      runAflTradeFitzRoyProviderIngestionCommand({
+        argv: ['--input', '/reviewed/production.json'],
+        env: environment(),
+        readInput: async () => JSON.stringify(command(2026, 'production')),
+        createRuntime,
+      })
+    ).rejects.toThrow(/configured authority environment/);
     expect(createRuntime).not.toHaveBeenCalled();
   });
 });

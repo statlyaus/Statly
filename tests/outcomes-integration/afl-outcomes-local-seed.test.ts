@@ -1,6 +1,3 @@
-import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
-
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +13,7 @@ import { AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE } from '@/server/aflTradeIntellige
 import { PostgresAflTradePromotionBackedGate2Repository } from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedGate2Repository';
 import { createPostgresAflTradePromotionBackedPublicArchiveReadRepository } from '@/server/aflTradeIntelligence/outcomes/postgresPromotionBackedPublicArchiveReadRepository';
 import { createAflTradePromotionBackedArchiveSelector } from '@/server/aflTradeIntelligence/outcomes/promotionBackedArchiveSelection';
+import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -23,7 +21,6 @@ const databaseUrl =
     throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
   })();
 const schemaName = `afl_local_seed_${process.pid}_${Date.now()}`;
-const prismaSchemaPath = join(process.cwd(), 'prisma', 'afl-trade-outcomes', 'schema.prisma');
 const adminPool = new Pool({ connectionString: databaseUrl });
 const outcomesPool = new Pool({
   connectionString: databaseUrl,
@@ -39,14 +36,9 @@ function scopedDatabaseUrl(): string {
 
 beforeAll(async () => {
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
-  execFileSync(
-    'npx',
-    ['--no-install', 'prisma', 'migrate', 'deploy', '--schema', prismaSchemaPath],
-    {
-      env: { ...process.env, AFL_OUTCOMES_DATABASE_URL: scopedDatabaseUrl() },
-      stdio: 'pipe',
-    }
-  );
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
+    databaseUrl: scopedDatabaseUrl(),
+  });
 });
 
 afterAll(async () => {

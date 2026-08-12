@@ -112,6 +112,7 @@ const input = {
     proposedBy: 'statly-data-governance-owner',
   },
   gate: {
+    environment: 'non_production' as const,
     decidedAt: '2026-08-08T00:02:00.000Z',
     effectiveAt: '2026-08-08T00:02:00.000Z',
     revalidateAt: '2027-08-08T00:00:00.000Z',
@@ -164,6 +165,37 @@ describe('recordApprovedAflTradeFitzRoySources', () => {
     expect(replay.records.every(({ idempotentReplay }) => idempotentReplay)).toBe(true);
     expect(repository.batches).toHaveLength(2);
     expect(repository.batches[1]).toMatchObject({ expectedRevision: 3 });
+  });
+
+  it('starts production and non-production histories independently at version one', async () => {
+    const repository = new FixtureGateRepository();
+    const nonProduction = await recordApprovedAflTradeFitzRoySources(repository, input);
+
+    const production = await recordApprovedAflTradeFitzRoySources(repository, {
+      ...input,
+      gate: { ...input.gate, environment: 'production' },
+    });
+
+    expect(production.revision).toBe(6);
+    expect(nonProduction.records.map(({ decision }) => decision.content.version)).toEqual([
+      1, 1, 1,
+    ]);
+    expect(production.records.map(({ decision }) => decision.content.version)).toEqual([1, 1, 1]);
+    expect(
+      [...nonProduction.records, ...production.records].every(
+        ({ decision }) => decision.content.supersedesDecisionId === null
+      )
+    ).toBe(true);
+    expect(nonProduction.records.map(({ decision }) => decision.content.decisionKey)).toEqual(
+      APPROVED_AFL_TRADE_FITZROY_PLAYER_STAT_CAPABILITIES.map(
+        (capabilityId) => `${capabilityId}-non_production`
+      )
+    );
+    expect(production.records.map(({ decision }) => decision.content.decisionKey)).toEqual(
+      APPROVED_AFL_TRADE_FITZROY_PLAYER_STAT_CAPABILITIES.map(
+        (capabilityId) => `${capabilityId}-production`
+      )
+    );
   });
 
   it('renews changed approvals as one linear v2 batch for all three capabilities', async () => {

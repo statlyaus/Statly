@@ -83,6 +83,7 @@ const input = {
     proposedBy: 'statly-data-governance-owner',
   },
   gate: {
+    environment: 'production' as const,
     decidedAt: '2026-08-09T00:02:00.000Z',
     effectiveAt: '2026-08-09T00:02:00.000Z',
     revalidateAt: '2027-08-09T00:00:00.000Z',
@@ -187,7 +188,37 @@ describe('approved external draft and trade sources', () => {
       );
 
       expect(result).toMatchObject({ status: 'mechanically_eligible', blockers: [] });
+      expect(records.proposal.content.scope.scopeKey).toBe(
+        `afl-trade-${sourceRights.content.acquisition.capabilityId}`
+      );
     }
+  });
+
+  it('isolates non-production Gate authority from production decisions', () => {
+    const sourceRights = createApprovedAflTradeExternalSourcePolicies(input.policy)[0];
+    if (!sourceRights) throw new Error('Expected one approved external source policy.');
+
+    const records = createApprovedAflTradeExternalGateRecords({
+      ...input.gate,
+      environment: 'non_production',
+      sourceRights,
+      version: 1,
+      supersedesDecisionId: null,
+    });
+
+    expect(records.proposal.content).toMatchObject({
+      decisionKey: 'draftguru-trade-index-non_production',
+      environment: 'non_production',
+      scope: {
+        scopeKey: 'afl-trade-draftguru-trade-index-non_production',
+        description:
+          'Non-production authority for draftguru-trade-index in the public AFL trade-intelligence boundary.',
+      },
+    });
+    expect(records.decision.content).toMatchObject({
+      decisionKey: 'draftguru-trade-index-non_production',
+      environment: 'non_production',
+    });
   });
 
   it('records, replays and renews all capabilities as atomic batches', async () => {
@@ -218,6 +249,33 @@ describe('approved external draft and trade sources', () => {
     ]);
     expect(repository.batches).toHaveLength(3);
     expect(repository.batches.every(({ records }) => records.length === 5)).toBe(true);
+  });
+
+  it('records production and non-production decisions as independent histories', async () => {
+    const repository = new FixtureRepository();
+    await recordApprovedAflTradeExternalSources(repository, input);
+
+    const nonProduction = await recordApprovedAflTradeExternalSources(repository, {
+      ...input,
+      gate: { ...input.gate, environment: 'non_production' },
+    });
+
+    expect(nonProduction.revision).toBe(10);
+    expect(
+      nonProduction.records.map(({ decision }) => ({
+        decisionKey: decision.content.decisionKey,
+        environment: decision.content.environment,
+        version: decision.content.version,
+        supersedesDecisionId: decision.content.supersedesDecisionId,
+      }))
+    ).toEqual(
+      APPROVED_AFL_TRADE_EXTERNAL_CAPABILITIES.map((capabilityId) => ({
+        decisionKey: `${capabilityId}-non_production`,
+        environment: 'non_production',
+        version: 1,
+        supersedesDecisionId: null,
+      }))
+    );
   });
 
   it('rejects missing field or condition authority', () => {

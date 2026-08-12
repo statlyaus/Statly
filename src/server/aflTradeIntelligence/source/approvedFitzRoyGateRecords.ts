@@ -12,6 +12,7 @@ import {
 
 export interface ApprovedAflTradeFitzRoyGateRecordsInput {
   sourceRights: AflTradeSourceRightsProposal;
+  environment: 'non_production' | 'production';
   version: number;
   supersedesDecisionId: string | null;
   decidedAt: string;
@@ -71,10 +72,14 @@ export function createApprovedAflTradeFitzRoyGateRecords(
       'Approved fitzRoy Gate record supersession must match its decision version.'
     );
   }
-  const decisionKey = `${capability.capabilityId}-production`;
+  const decisionKey = `${capability.capabilityId}-${input.environment}`;
+  const environmentLabel = input.environment === 'production' ? 'Production' : 'Non-production';
   const scope = {
-    scopeKey: `afl-trade-${capability.capabilityId}`,
-    description: `Production authority for ${capability.capabilityId} in the public AFL trade-intelligence boundary.`,
+    scopeKey:
+      input.environment === 'production'
+        ? `afl-trade-${capability.capabilityId}`
+        : `afl-trade-${capability.capabilityId}-${input.environment}`,
+    description: `${environmentLabel} authority for ${capability.capabilityId} in the public AFL trade-intelligence boundary.`,
     dimensions: [
       { name: 'source_rights_artifact', values: [sourceRights.rightsArtifactId] },
       { name: 'competition', values: [...sourceRights.content.scope.competitions] },
@@ -93,11 +98,11 @@ export function createApprovedAflTradeFitzRoyGateRecords(
     gate: 'gate_0a_permission_to_evaluate' as const,
     decisionKey,
     version: input.version,
-    environment: 'production' as const,
+    environment: input.environment,
     scope,
     proposal: `Approve ${capability.directFunction} through fitzRoy ${sourceRights.content.acquisition.fitzRoyVersion} for its exact reviewed fields and governed uses.`,
     alternativesConsidered: [
-      'Keep the capability unavailable to production capture and modelling.',
+      `Keep the capability unavailable to ${input.environment.replace('_', '-')} capture and modelling.`,
     ],
     accountableOwner: input.accountableOwner,
     reviewRequirement: 'independent_review_required' as const,

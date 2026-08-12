@@ -32,7 +32,10 @@ export interface RecordApprovedAflTradeFitzRoySourcesResult extends AflTradeStor
   records: readonly RecordedApprovedAflTradeFitzRoySource[];
 }
 
-function decisionKeyFor(sourceRights: AflTradeSourceRightsProposal): string {
+function decisionKeyFor(
+  sourceRights: AflTradeSourceRightsProposal,
+  environment: RecordApprovedAflTradeFitzRoySourcesInput['gate']['environment']
+): string {
   if (sourceRights.content.acquisition.kind !== 'fitzroy') {
     throw new TypeError('Approved fitzRoy source recording requires a fitzRoy policy.');
   }
@@ -40,18 +43,19 @@ function decisionKeyFor(sourceRights: AflTradeSourceRightsProposal): string {
   if (capability === undefined) {
     throw new TypeError('Approved fitzRoy source recording requires exactly one capability.');
   }
-  return `${capability.capabilityId}-production`;
+  return `${capability.capabilityId}-${environment}`;
 }
 
 function currentDecisionFor(
   ledger: AflTradeStoredGateLedger['ledger'],
-  decisionKey: string
+  decisionKey: string,
+  environment: RecordApprovedAflTradeFitzRoySourcesInput['gate']['environment']
 ): AflTradeGateDecisionRecord | undefined {
   return ledger.decisions
     .filter(
       (decision) =>
         decision.content.gate === 'gate_0a_permission_to_evaluate' &&
-        decision.content.environment === 'production' &&
+        decision.content.environment === environment &&
         decision.content.decisionKey === decisionKey
     )
     .sort((left, right) => left.content.version - right.content.version)
@@ -65,7 +69,11 @@ export async function recordApprovedAflTradeFitzRoySources(
   const sourcePolicies = createApprovedAflTradeFitzRoySourcePolicies(input.policy);
   const stored = await repository.load();
   const pending = sourcePolicies.map((sourceRights) => {
-    const current = currentDecisionFor(stored.ledger, decisionKeyFor(sourceRights));
+    const current = currentDecisionFor(
+      stored.ledger,
+      decisionKeyFor(sourceRights, input.gate.environment),
+      input.gate.environment
+    );
     const currentVersionRecords = createApprovedAflTradeFitzRoyGateRecords({
       ...input.gate,
       sourceRights,

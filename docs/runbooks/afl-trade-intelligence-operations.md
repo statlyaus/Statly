@@ -63,6 +63,112 @@ PostgreSQL mode fails startup if any value is missing or malformed. It does not 
 mode and never discovers a fantasy database or Firestore source. The application role needs only the
 isolated outcomes queries and the exact object-prefix read operations described below.
 
+## Non-production infrastructure plan validation
+
+`infrastructure/afl-trade-nonproduction` defines the isolated Stage 2A foundation only. It does not
+define a dispatcher task, trusted signed-egress endpoint, recurring schedule, or failure alarm. The
+worker subnets therefore have no NAT gateway, internet route, or unrestricted HTTPS egress. A later
+compute-bearing plan must add the trusted endpoint, private AWS service access, exact task and role
+bindings, a disabled schedule, failure monitoring, and a separately reviewed validator revision. The
+current foundation gate rejects every compute, schedule and alarm resource rather than partially
+approving a future runtime graph.
+
+Every plan must supply `aws_account_id` and `capture_retention_days`. The capture retention value is
+the reviewed maximum age for both current and noncurrent objects under `captures/`; the lifecycle
+implements that ceiling as current expiration after `N - 1` days and noncurrent expiration after one
+further day. The access-log bucket applies the same bounded lifecycle to `access/`, including the
+seven-day incomplete-upload cleanup. The runner rejects account IDs that are not exactly 12 decimal
+digits, capture retention outside the whole-number range 2–3650, and database backup retention
+outside the whole-number range 7–35 before OpenTofu starts. There is no default from which
+capture-retention authority can be inferred. An
+accountable alert recipient belongs to the later compute-bearing plan that creates failure monitoring;
+the current foundation exposes no dormant operator, schedule, CPU, or memory input. The validator
+also binds the effective RDS backup retention to the reviewed `database_backup_retention_days` plan
+value, whose default and minimum are seven days, and requires the reviewed non-skipped final snapshot
+identity. Use the bounded command to snapshot the reviewed
+configuration, initialize its locked provider, and validate one exact temporary plan:
+
+```sh
+npm run infra:afl-trade:validate-plan -- \
+  --aws-account-id REVIEWED_ACCOUNT_ID \
+  --capture-retention-days REVIEWED_MAXIMUM_DAYS
+```
+
+The command does not accept a pre-existing plan and does not run OpenTofu against the mutable
+checkout. It verifies the exact workspace manifest, copies the reviewed source, lockfile and CLI
+configuration into a unique owned source snapshot, independently hashes the copied bytes, and makes
+that source tree read-only. It gives the snapshot separate provider-data, plan-output and writable
+local-state directories, runs `tofu init -backend=true -lockfile=readonly`, and creates one temporary
+plan with state locking enabled and `-state` fixed to the owned state path. It reads that same plan
+through `tofu show -json` without printing its contents, validates it, and recursively removes the
+exact owned snapshot root before reporting success with the snapshot digest and the optional input
+state digest. Workspace changes after copying cannot alter the bytes consumed by OpenTofu. It admits
+only the default OpenTofu workspace, strips
+ambient `TF_*`, `TOFU_*`, AWS endpoint overrides, home-directory configuration and unrelated
+environment values, and supplies explicit refresh, state-lock and parallelism semantics. Only the
+explicit AWS credential/profile file variables listed by the runner are forwarded; configured AWS
+endpoint overrides are forcibly disabled. The command sets `TF_CLI_CONFIG_FILE` to the reviewed empty
+`review.tfrc`, preventing user-level provider development overrides. Workspace inspection is limited
+to 30 seconds, snapshot initialization to five minutes, planning to 10 minutes and JSON rendering to
+60 seconds. `SIGINT` or `SIGTERM` aborts the active child, remains handled through repeated signals,
+and waits for exact snapshot cleanup before the wrapper exits. The copied-source digest is checked
+before planning, after planning and after plan-policy validation, then emitted only after cleanup. It
+covers the exact eight Terraform source files, `.terraform.lock.hcl` and `review.tfrc`. Changing
+source, provider selection or CLI provider configuration therefore requires a newly created snapshot
+and plan. Additional `.tf`, `.tf.json`, `.tofu` or
+`.tofu.json` files, including OpenTofu same-basename precedence files, and symlink/non-regular source
+entries are rejected until a reviewed manifest revision explicitly admits them. It derives custody
+and logging bucket names from the reviewed account and region rather than trusting mutually
+consistent plan-selected names. It also proves the VPC CIDR, private worker/data subnets, route tables
+with explicitly managed empty inline-route sets, associations, S3 gateway endpoint, security groups
+and database/cache subnet groups remain one exact isolated graph. The validator then binds capture
+grants to that plan's custody prefix, Redis group/user and actual custody-key ARN; admits worker HTTPS
+egress only to the exact regional S3 managed prefix list; binds runtime and
+migration roles to distinct credentials; requires the runtime role to read only its operator-populated
+runtime secret; proves every role has exactly the reviewed optional permissions boundary; and rejects
+open internet egress. It also requires the complete singleton and keyed
+foundation graph, rejects deletion or replacement actions, and proves the exact logging-bucket,
+custody-bucket, IAM-role, database-ingress and cache-ingress boundaries. Every custody and IAM policy
+that is fully rendered in the saved plan must match its complete reviewed statement semantics. The
+first-create custody policy is the sole policy-JSON exception: its exact KMS key ARN is
+provider-computed, so the policy may remain unknown only when the plan uses the hard-pinned reviewed
+source digest, the custody key ARN is itself provider-unknown, and the configuration graph binds the
+bucket policy to the exact five-statement custody document. Any source or lock change requires an
+explicit validator digest revision; every other unknown policy JSON remains rejected, so omitted
+dynamic or merged statements cannot be approved. Unknown provider-assigned network identifiers are
+accepted only when the plan created by the bounded command embeds that same reviewed read-only source
+snapshot and provider lock digest.
+
+The base foundation plan must leave `enable_migration_secret_access=false`, which creates the RDS
+instance and migration role without granting any secret read. It starts with the owned local state
+path absent and produces a first-create plan without reading mutable checkout state. Only after a
+separately approved apply has created the database and its RDS-managed master secret may an operator
+run the bounded command a second time with one explicitly reviewed prior-state file:
+
+```sh
+npm run infra:afl-trade:validate-plan -- \
+  --aws-account-id REVIEWED_ACCOUNT_ID \
+  --capture-retention-days REVIEWED_MAXIMUM_DAYS \
+  --enable-migration-secret-access \
+  --state REVIEWED_PRIOR_STATE_PATH
+```
+
+The migration flag is rejected without `--state`. The state input must be an exact regular,
+non-symlink file no larger than 64 MiB from the separately approved foundation apply. The command
+opens it once without following links and in non-blocking mode, rejects special files before reading,
+streams only from that admitted handle with cancellation checks, verifies stable source metadata and
+matching source/copy digests, makes the owned copy
+owner-readable only, and uses only that copy as the locked local-backend state. A pathname swap,
+in-place change, oversized input or incomplete copy fails closed before OpenTofu execution. It emits
+`inputStateDigest` for review evidence but never prints state contents. Treat the source state as
+sensitive operational material: do not
+place it in the repository, commit it, attach it to review output, or reuse an unreviewed mutable
+checkout state file. The later plan must expose the exact RDS-managed secret ARN and may grant the
+migration role access only to that ARN and the reviewed database KMS alias. Do not copy the RDS
+credential into an operator-maintained duplicate secret: the RDS-managed secret is the rotation
+boundary. Both command executions still require independent review. A passing plan is review
+evidence only. It does not authorize `tofu apply`, source capture, schedule enablement, or a release.
+
 ## Before enabling live work
 
 Do not configure a recurring job or analytical writer until all of the following are evidenced for the
@@ -97,12 +203,15 @@ target environment:
 6. Source reconciliation, factual release parity, API/view parity, projection parity,
    both release rollback paths, source withdrawal, and last-good recovery have been rehearsed on
    disposable infrastructure as applicable.
-   Run `npm run test:outcomes:int` only with `AFL_OUTCOMES_TEST_DATABASE_URL` pointing to an explicitly
-   provisioned disposable PostgreSQL database. The harness creates and removes one uniquely named test
-   schema, applies the complete ordered history with Prisma Migrate, verifies both migration ledger
-   entries, checks native registry, custody, version-chain, typed-membership, and append-only controls,
-   and exercises transaction rollback and expected-revision concurrency. Reapplying the history must
-   be a no-op. A schema-only validation or unit test is not a substitute for this rehearsal.
+   Run `npm run test:outcomes:int` locally; it provisions and removes its own loopback-only disposable
+   PostgreSQL container. Controlled CI already owns a disposable PostgreSQL service, supplies both
+   explicit test URLs, and runs `npm run test:outcomes:int:provisioned` instead. The integration suite
+   creates and removes uniquely named test schemas, applies the complete ordered history with Prisma
+   Migrate, verifies both migration ledger entries, checks native registry, custody, version-chain,
+   typed-membership, and append-only controls, and exercises transaction rollback and
+   expected-revision concurrency. Reapplying the history must be a no-op. A schema-only validation or
+   unit test is not a substitute for this rehearsal. Never use the provisioned command against shared
+   or production PostgreSQL.
 7. Monitoring routes every critical health alert to an accountable operator.
 8. Preview behavior is verified from the exact candidate commit. Production behavior is verified only
    after a deployment record identifies that same commit.
@@ -194,14 +303,20 @@ creates an observation linked to the prior immutable object; a changed body crea
 `404`, missing link or page disappearance never deletes an earlier fact. Schema drift and partial
 coverage quarantine the capture and retain the last good release.
 
-The production command boundary keeps discovery, individual retrieval and reconciliation as separate
+The deployed command boundary keeps discovery, individual retrieval and reconciliation as separate
 content-addressed authorities rather than hiding them inside an unreviewed scraper:
+
+Set `AFL_TRADE_CAPTURE_ENVIRONMENT` explicitly to `non_production` or `production` for every
+external-source capture job. The runtime has no default: its value must exactly match the reviewed
+request environment, Gate-request environment and environment suffix in the Gate decision key.
+`test_fixture` is not a deployed capture environment. A non-production job cannot resolve or
+supersede production Gate authority, and production execution cannot reuse non-production authority.
 
 1. Prepare one reviewed external-source approval JSON containing the exact field set and dataset
    version for each of `draftguru-trade-index`, `draftguru-trade-detail`, `draftguru-year-page`,
    `footywire-draft-results`, and `official-afl-indicative-draft-order`, dedicated evidence for every
-   source condition, finite terms and revalidation times, and the independent reviewer. Record all
-   five atomically with
+   source condition, finite terms and revalidation times, the explicit `non_production` or
+   `production` Gate environment, and the independent reviewer. Record all five atomically with
    `npm run outcomes:sources:record-approved-external -- --input <reviewed-json-path>`. Exact replay
    is idempotent; a changed annual approval appends one linear successor per capability; a partial
    approval batch never becomes current.
@@ -247,7 +362,9 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    exact capability/provider/year/dataset/version/parser/field-manifest digest, factual effective time,
    maximum bytes, and matching Gate request. Run
    `npm run outcomes:sources:ingest-external -- --input <reviewed-page-json-path>` from the isolated
-   production job. The command derives capture time from its trusted clock, resolves current durable
+   job for the configured authority environment. The command derives capture time from its trusted
+   clock, rejects an envelope whose request, Gate environment or environment-specific decision key
+   differs from `AFL_TRADE_CAPTURE_ENVIRONMENT`, resolves current durable
    authority before and after retrieval, acquires a provider-keyed Redis lease, uses identified HTTPS
    egress, stores exact bytes in KMS-backed raw custody, persists `304` observations, and stages every
    parsed claim and issue in PostgreSQL. Both changed and `304` observations retain a content-addressed
@@ -319,7 +436,8 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    promotion receipt. Conflict, missing coverage or stale authority rolls back the entire transaction.
    Promotion does not register, validate or activate a factual release and cannot publish a grade.
 8. Register each immutable reviewed URL schedule once with
-   `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. This
+   `npm run outcomes:sources:run-external-schedule -- --input <reviewed-schedule-json-path>`. The
+   schedule request-template environment must match `AFL_TRADE_CAPTURE_ENVIRONMENT`. This
    registration command may also execute the envelope's first exact occurrence for an operator-led
    rehearsal, but it is not the recurring production scheduler. PostgreSQL creates one trigger-owned
    dispatch cursor at the schedule anchor. The cursor advances only after a terminal occurrence event
@@ -327,7 +445,7 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    manufacture a later occurrence that skips unfinished work.
 9. A deployment scheduler runs bounded ticks with
    `npm run outcomes:sources:dispatch-due-external -- --worker <deployment-worker-id> --limit <1..1000>`.
-   The command loads the oldest due active schedules from PostgreSQL for the configured production
+   The command loads the oldest due active schedules from PostgreSQL for the configured authority
    environment. It selects only new occurrences, retry-ready failures, or expired leases and delegates
    each selected occurrence to the existing Gate-resolved, Redis-admitted, HTTPS/custody/staging use
    case. One occurrence failure is reported without abandoning later selected work. PostgreSQL owns
@@ -338,8 +456,9 @@ content-addressed authorities rather than hiding them inside an unreviewed scrap
    rerun.
 10. Build the separately deployable one-shot operator with
     `docker build --target afl-trade-external-dispatcher .`. The deployment injects
-    `AFL_TRADE_CAPTURE_WORKER_ID`, an optional `AFL_TRADE_CAPTURE_DISPATCH_LIMIT`, and the exact
-    production ingestion secrets at runtime; no secret belongs in the image. The container runs as the
+    `AFL_TRADE_CAPTURE_WORKER_ID`, an optional `AFL_TRADE_CAPTURE_DISPATCH_LIMIT`, the explicit
+    `AFL_TRADE_CAPTURE_ENVIRONMENT`, and the exact deployed ingestion secrets at runtime; no secret
+    belongs in the image. The container runs as the
     non-root Node user and exits after one bounded tick so the deployment scheduler, rather than a web
     request or hidden process loop, owns cadence and failure observation. Production automation is not
     operational until the selected scheduler actually runs this image, alerts on failed/saturated
@@ -387,39 +506,44 @@ provider captures, reviewed resolution decisions and superseding releases.
 
 ### Staging fitzRoy provider observations
 
-The AFL Tables, Footywire, and Fryzigg player-stat policies are approved. Production capture is
+The AFL Tables, Footywire, and Fryzigg player-stat policies are approved. Deployed capture is
 available only through the composed command boundary after its exact current field manifests and Gate
-0A records are loaded, durable custody is provisioned, and the attested executor/decoder/egress
-boundary plus provider-keyed distributed admission are active. Fixture verification does not satisfy
-those runtime controls.
+0A records are loaded for the target `non_production` or `production` environment, durable custody is
+provisioned for that same environment, and the attested executor/decoder/egress boundary plus
+provider-keyed distributed admission are active. Fixture verification does not satisfy those runtime
+controls or grant authority to either deployed environment.
 
 1. Prepare one reviewed JSON input containing the exact field manifest for each of
    `afl-tables-player-stats`, `footywire-player-stats`, and `fryzigg-player-stats`, the retained terms,
-   authority, and egress-policy artifact IDs, finite effective/expiry/revalidation times, and the
-   accountable reviewer. Record it with
+   authority, and egress-policy artifact IDs, finite effective/expiry/revalidation times, the explicit
+   `non_production` or `production` Gate environment, and the accountable reviewer. Each environment
+   owns an independent decision key and version history; neither may supersede the other. Record it with
    `npm run outcomes:sources:record-approved -- --input <reviewed-json-path>`. The command requires an
    explicit `AFL_OUTCOMES_DATABASE_URL`, atomically CAS-appends all three source-rights/Gate records in
    one transaction, reloads and authenticates the ledger, emits only stable IDs, and never treats one
    provider's fields as another provider's authority. A failure commits none of the three approvals.
-2. Prepare one reviewed season-ingestion JSON envelope containing the exact production Gate request,
+2. Prepare one reviewed season-ingestion JSON envelope containing the exact target-environment Gate request,
    direct capability capture request, approved field-map ID and body, and factual `effectiveAt`. The
    Gate and capture sections must name the same capability, competition and season. Run it only from
    the pinned ETL job image with
    `npm run outcomes:sources:ingest-fitzroy -- --input <reviewed-season-json-path>`. The command parses
-   the injected production configuration, resolves current rights and the Gate ledger from the isolated
-   PostgreSQL database, admits provider/capture keys through Redis, calls the reviewed HTTPS egress
+   the injected deployed configuration, rejects a Gate environment or environment-specific decision
+   key that differs from `AFL_TRADE_CAPTURE_ENVIRONMENT`, resolves current rights and the Gate ledger
+   from the isolated PostgreSQL database, admits provider/capture keys through Redis, calls the
+   reviewed HTTPS egress
    endpoint, verifies its Ed25519 receipt, writes exact raw and metadata bytes to separate KMS-backed
    custody profiles, constructs the source snapshot, persists the source capture, decodes the retained
    RDS and stages every row. It emits only stable capture/snapshot/run IDs and status; it never emits raw
    source bytes or secrets. Never decode a local path or separately downloaded provider file.
-3. Inject every required runtime value explicitly: `AFL_OUTCOMES_DATABASE_URL`,
+3. Inject every required runtime value explicitly: `AFL_TRADE_CAPTURE_ENVIRONMENT` set to exactly
+   `non_production` or `production`, `AFL_OUTCOMES_DATABASE_URL`,
    `AFL_TRADE_CAPTURE_REDIS_URL`, `AFL_TRADE_FITZROY_EGRESS_ENDPOINT`, its bearer token and public-key
    JSON, exact egress-policy evidence IDs, object region/bucket/prefix/KMS/repository and infrastructure
    evidence, permitted residency jurisdictions, exact R 4.5.1/renv-lock/image identities and Rscript
    path, plus bounded capture/decoder/source/diagnostic/row/field/cell/output/retention limits. The
    configuration parser rejects absent values, non-HTTPS egress, invalid digests, duplicate evidence,
    and zero or unbounded limits. Do not reuse the web runtime's fantasy database or credentials.
-4. Require the production executor's signed egress receipt to match the exact provider, capability,
+4. Require the deployed executor's signed egress receipt to match the exact provider, capability,
    invocation digest, returned RDS and diagnostics bytes, pinned runtime image and lock, reviewed
    request/burst/cache policy, and egress-policy evidence. Retain it through the capture receipt v2
    metadata-custody binding. The Redis lease coordinates provider-wide concurrency and capture-level
@@ -448,6 +572,42 @@ those runtime controls.
     exact retry is the same run; a conflicting retry is an incident.
 11. Keep missing, NaN, infinities, and ambiguous provider zeroes distinct. Do not calculate games, infer
     no-vote or no-award facts from absence, or approve name-only identity or match fallbacks here.
+
+### Rehearsing the source-independent fitzRoy factual path
+
+Run `npm run test:outcomes:int` before any separately reviewed non-production provider execution. The
+supported command provisions its own loopback-only PostgreSQL 16 container, applies the complete
+ordered outcomes migration history to isolated schemas, runs the fitzRoy factual rehearsal with no
+network/provider access, and removes the exact container afterward. Do not provide a live source,
+shared database, checkout `.env`, protected fantasy database, or `prisma/dev.db` to this rehearsal.
+Before any mutation, the rehearsal requires `current_database()` to be `statly_outcomes_test` and
+`current_schema()` to match its generated `afl_fitzroy_factual_rehearsal_<pid>_<time>` identity. A
+wrong schema fails closed and the real-PostgreSQL oracle proves it leaves zero competition rows.
+
+The rehearsal uses one deterministic `non_production` Footywire-through-fitzRoy envelope and must
+prove all of the following on real PostgreSQL:
+
+1. Gate 0A, per-environment custody, the attested capture receipt, retained RDS decoding, the exact
+   reviewed field map, and normalization all bind to the same capability, competition, season, and
+   source-field set.
+2. One decoded player-stat row produces exactly one staged row and zero normalization issues. The
+   reviewed player and club namespaces, evidence, assignments, and current resolution heads are
+   environment-specific and durable.
+3. Row accounting is exhaustive: the one staged row produces one source-fact batch, one measured
+   goals fact, one factual-reconciliation run, one reconciled goals result, and one current factual
+   head. Missing evidence is never coerced to zero.
+4. An exact rerun returns the same capture, normalization, fact-batch, factual-run, and private
+   candidate identities with an idempotent replay receipt. Changed decoded evidence under the same
+   capture and field-map identity fails closed and adds no accepted normalization run.
+5. Candidate construction remains private and non-authorizing. The rehearsal persists no factual
+   release candidate, release manifest, projection, registry event, active pointer, valuation output,
+   or fantasy record; the release registry remains at revision zero.
+
+The successful Stage 2A rehearsal boundary is 8 integration files and 40 tests, including the full
+migration/drift/reapply suite and four fitzRoy factual-rehearsal checks. Record the exact commit and
+command output in the delivery checkpoint. A later code-only change requires a fresh exact-commit
+run. This evidence does not satisfy real-source, hosted durability, backup/restore, alerting, schedule,
+or activation requirements.
 
 ### Reviewing provider identities and matches
 
@@ -486,7 +646,12 @@ and the protected review interface are provisioned and independently authorized.
 7. Commit the typed resolution, review decision, reusable assignment and occurrence in one
    transaction under the deterministic case, assignment, namespace, evidence and issue locks. Advance
    only gap-free compare-and-swap heads. An exact retry is idempotent; a conflicting retry is an
-   incident.
+   incident. Keep the application and PostgreSQL clocks synchronized. The database admits at most
+   five seconds of positive clock skew for an external-identity subject creation instant or review
+   decision instant; this tolerance covers ordinary distributed-runtime drift only. A timestamp more
+   than five seconds ahead of the relevant database clock fails the transaction, while completion
+   chronology, supersession order, authority validity and every canonical evidence binding remain
+   exact.
 8. To correct or withdraw a result, append one decision that supersedes the sole current leaf. Never
    edit an identity root, occurrence, proposal, closure or historical decision. Confirm the reusable
    assignment head is inactive when a mapping is withdrawn. A remap is deliberately two-step: first

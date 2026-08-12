@@ -179,9 +179,9 @@ describe('approved fitzRoy source policies', () => {
     }
   });
 
-  it('creates effective production Gate decisions for each exact provider policy', () => {
+  it('creates independent deployed-environment Gate decisions for each exact provider policy', () => {
     for (const policy of policies()) {
-      const records = createApprovedAflTradeFitzRoyGateRecords({
+      const reviewedApproval = {
         sourceRights: policy,
         version: 1,
         supersedesDecisionId: null,
@@ -196,6 +196,14 @@ describe('approved fitzRoy source policies', () => {
         },
         authorityEvidenceId: `artifact:${'e'.repeat(64)}`,
         rateLimitEvidenceId: `artifact:${'c'.repeat(64)}`,
+      } as const;
+      const records = createApprovedAflTradeFitzRoyGateRecords({
+        ...reviewedApproval,
+        environment: 'production',
+      });
+      const nonProductionRecords = createApprovedAflTradeFitzRoyGateRecords({
+        ...reviewedApproval,
+        environment: 'non_production',
       });
       if (policy.content.acquisition.kind !== 'fitzroy') {
         throw new Error('Approved fitzRoy policy unexpectedly changed acquisition kind.');
@@ -205,6 +213,15 @@ describe('approved fitzRoy source policies', () => {
       const ledger = { proposals: [records.proposal], decisions: [records.decision] };
 
       expect(records.proposal.content.environment).toBe('production');
+      expect(records.proposal.content.decisionKey).toBe(`${capability.capabilityId}-production`);
+      expect(records.proposal.content.scope.scopeKey).toBe(`afl-trade-${capability.capabilityId}`);
+      expect(nonProductionRecords.proposal.content).toMatchObject({
+        decisionKey: `${capability.capabilityId}-non_production`,
+        environment: 'non_production',
+        version: 1,
+        scope: { scopeKey: `afl-trade-${capability.capabilityId}-non_production` },
+      });
+      expect(nonProductionRecords.decision.content.supersedesDecisionId).toBeNull();
       expect(records.decision.content).toMatchObject({
         state: 'approved',
         authorityKind: 'external_human_record',

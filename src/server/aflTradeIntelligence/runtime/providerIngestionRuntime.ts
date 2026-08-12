@@ -12,6 +12,7 @@ import { createAflTradeS3ConditionalObjectStore } from '../artifacts/s3Condition
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
 import { createAflTradeRedisCaptureAdmission } from '../source/fitzRoyCaptureAdmission';
+import { parseAflTradeFitzRoyCaptureRequest } from '../source/fitzRoyCaptureContracts';
 import type { AflTradeFitzRoyCaptureCommand } from '../source/fitzRoyCaptureRuntime';
 import {
   createAflTradeEd25519EgressExecutionVerifier,
@@ -28,7 +29,7 @@ import { PostgresAflTradeProviderObservationRepository } from '../source/postgre
 import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourceCaptureRepository';
 import type { AflTradeProviderIngestionConfig } from './providerIngestionConfig';
 
-export interface AflTradeProductionProviderIngestionCommand extends Omit<
+export interface AflTradeDeployedProviderIngestionCommand extends Omit<
   AflTradeFitzRoyProviderIngestionCommand,
   'capture'
 > {
@@ -37,12 +38,12 @@ export interface AflTradeProductionProviderIngestionCommand extends Omit<
 
 export interface AflTradeProviderIngestionRuntime {
   ingest(
-    command: AflTradeProductionProviderIngestionCommand
+    command: AflTradeDeployedProviderIngestionCommand
   ): Promise<AflTradeFitzRoyProviderIngestionResult>;
   close(): Promise<void>;
 }
 
-function custodyProfile(
+export function createAflTradeProviderIngestionCustodyProfile(
   config: AflTradeProviderIngestionConfig,
   input: {
     artifactClass: 'raw_source' | 'capture_metadata';
@@ -55,7 +56,7 @@ function custodyProfile(
     subject: 'afl-trade-intelligence',
     contractRole: 'requirements_only_not_readiness_or_authorization',
     repositoryId: `${config.objectStorage.repositoryId}-${input.artifactClass}`,
-    environment: 'production',
+    environment: config.environment,
     artifactClass: input.artifactClass,
     maximumObjectBytes: input.maximumObjectBytes,
     keyDerivation: 'profile_sha256_two_level_fanout_v1',
@@ -106,7 +107,7 @@ export function createAflTradeProviderIngestionRuntime(
   });
   const rawArtifactRepository = createAflTradeDurableObjectArtifactRepository({
     objectStore,
-    custodyProfile: custodyProfile(config, {
+    custodyProfile: createAflTradeProviderIngestionCustodyProfile(config, {
       artifactClass: 'raw_source',
       maximumObjectBytes: config.limits.maximumSourceBytes,
       retentionDays: config.limits.rawRetentionDays,
@@ -114,7 +115,7 @@ export function createAflTradeProviderIngestionRuntime(
   });
   const metadataArtifactRepository = createAflTradeDurableObjectArtifactRepository({
     objectStore,
-    custodyProfile: custodyProfile(config, {
+    custodyProfile: createAflTradeProviderIngestionCustodyProfile(config, {
       artifactClass: 'capture_metadata',
       maximumObjectBytes: Math.max(
         config.limits.maximumDiagnosticsBytes,
@@ -139,6 +140,18 @@ export function createAflTradeProviderIngestionRuntime(
 
   return {
     async ingest(command) {
+      if (command.capture.gateRequest.environment !== config.environment) {
+        throw new TypeError(
+          'Provider ingestion requires a Gate request matching the configured authority environment.'
+        );
+      }
+      const captureRequest = parseAflTradeFitzRoyCaptureRequest(command.capture.captureRequest);
+      const expectedDecisionKey = `${captureRequest.capabilityId}-${config.environment}`;
+      if (command.capture.gateRequest.decisionKey !== expectedDecisionKey) {
+        throw new TypeError(
+          'Provider ingestion requires a Gate request matching the configured authority decision key.'
+        );
+      }
       const authority = await gateRepository.resolveAuthorization(
         command.capture.gateRequest.rightsArtifactId
       );

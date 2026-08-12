@@ -65,15 +65,19 @@ draft worker enabled.
 
 `npm run dev:full:all` starts the normal local web, Socket.IO, draft-worker and Firebase emulator
 boundaries plus a persistent loopback-only PGlite service for the isolated AFL outcomes schema. The
-launcher deploys all outcomes migrations and exact-replays a deterministic `test_fixture` factual
-release before Next starts. Local outcomes bytes live under ignored `.statly-local/`; they are never a
-production database or source authority.
+launcher refuses an already-occupied outcomes port and authenticates its newly spawned database through
+a per-launch nonce stored inside a local-only identity schema before it deploys migrations or seed data.
+It then deploys all outcomes migrations and exact-replays a deterministic `test_fixture` factual release
+before Next starts. Local outcomes bytes live under ignored `.statly-local/`; they are never a production
+database or source authority.
 
 The local AFL fixture is source-shaped rather than workbook-backed. It contains one 2025 GWS–Western
 Bulldogs pick exchange, including nominal Pick 14 resolving through a typed draft selection to Harry
 Kyle and one unresolved 2026 future pick. It intentionally creates no valuation publication, so the
 archive is visible while numerical values and grades remain honestly unavailable. Run the database or
-seed independently with `npm run dev:outcomes-db` and `npm run dev:outcomes:seed`.
+seed independently with `npm run dev:outcomes-db` and `npm run dev:outcomes:seed`; the standalone
+database command generates its own local identity nonce, while the full-stack launcher supplies the
+nonce it subsequently authenticates before writes.
 
 PGlite's PostgreSQL socket compatibility layer is for local development only and is serialized through
 a one-connection `test_fixture` read pool. Migration triggers and concurrent repository behavior remain
@@ -165,19 +169,26 @@ Delete the disposable database after verification only when the explicit path is
 no required evidence. Never use a recursive delete, repository glob, or unresolved environment variable
 for cleanup.
 
-The public AFL outcomes authority uses its own PostgreSQL schema and migration history. Run its real
-integration suite only against an explicitly provisioned disposable database:
+The public AFL outcomes authority uses its own PostgreSQL schema and migration history. Its supported
+local integration command requires a running Docker daemon and provisions PostgreSQL 16 itself:
 
 ```sh
-export AFL_OUTCOMES_TEST_DATABASE_URL='postgresql://<disposable-user>:<password>@127.0.0.1:5432/<disposable-database>'
-npm run outcomes:prisma:validate
-npm run outcomes:prisma:generate
 npm run test:outcomes:int
 ```
 
-The suite creates unique temporary schemas, applies the isolated migrations, exercises trigger and
-repository behavior, and removes those schemas afterward. Never point either
-`AFL_OUTCOMES_TEST_DATABASE_URL` or `AFL_OUTCOMES_DATABASE_URL` at shared or production PostgreSQL.
+The harness invokes Docker directly so Compose cannot load repository environment files. It creates a
+uniquely named `postgres:16-alpine` container with test-only credentials, binds Docker's dynamic port
+to `127.0.0.1`, stores `PGDATA` on `tmpfs`, and replaces both outcomes database URLs only for its child
+checks. It validates and generates the isolated Prisma schema, then runs the PostgreSQL suite. The
+suite creates unique temporary schemas, applies the complete ordered migration history, exercises
+native triggers, rollback, and concurrency behavior, and removes those schemas afterward. The harness
+attempts bounded force-removal by immutable container ID after success, failure, `SIGINT`, or `SIGTERM`,
+and reports cleanup failure alongside any check failure.
+
+CI already owns a disposable PostgreSQL service and therefore runs
+`npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local
+entry point. Never point either `AFL_OUTCOMES_TEST_DATABASE_URL` or `AFL_OUTCOMES_DATABASE_URL` at a
+shared or production PostgreSQL database.
 
 ## Test layers
 

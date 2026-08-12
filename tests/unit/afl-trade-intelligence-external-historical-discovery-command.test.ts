@@ -7,6 +7,7 @@ const sha = (character: string) => character.repeat(64);
 const now = '2026-08-10T00:00:00.000Z';
 
 const env = {
+  AFL_TRADE_CAPTURE_ENVIRONMENT: 'non_production',
   AFL_OUTCOMES_DATABASE_URL: 'postgresql://test:test@127.0.0.1:5432/test',
   AFL_TRADE_CAPTURE_REDIS_URL: 'redis://127.0.0.1:6379',
   AFL_TRADE_OBJECT_REGION: 'ap-southeast-2',
@@ -48,7 +49,7 @@ const env = {
   }),
 } as const;
 
-function reviewedInput() {
+function reviewedInput(environment: 'non_production' | 'production' = 'non_production') {
   const authority = (character: string, sourceField: string) => ({
     rightsArtifactId: `source-rights:${sha(character)}`,
     fieldUses: [{ sourceField, use: 'archive_fact' }],
@@ -58,7 +59,7 @@ function reviewedInput() {
   return {
     index: {
       request: {
-        environment: 'production',
+        environment,
         provider: 'draftguru',
         competition: 'AFLM',
         anchorSeasonYear: 2025,
@@ -75,8 +76,8 @@ function reviewedInput() {
         maximumBytes: 2_000_000,
       },
       gateRequest: {
-        decisionKey: 'draftguru-trade-index-production',
-        environment: 'production',
+        decisionKey: `draftguru-trade-index-${environment}`,
+        environment,
         rightsArtifactId: `source-rights:${sha('2')}`,
         competition: 'AFLM',
         season: 2025,
@@ -125,7 +126,7 @@ describe('external historical discovery command', () => {
   it('captures the index and persists the exact inventory and plan without publishing', async () => {
     const inventory = createAflTradeExternalDiscoveryInventory({
       schemaVersion: 'afl-trade-external-discovery-inventory/v1',
-      environment: 'production',
+      environment: 'non_production',
       provider: 'draftguru',
       competition: 'AFLM',
       sourceCaptureId: `source-capture:${sha('c')}`,
@@ -164,6 +165,9 @@ describe('external historical discovery command', () => {
       targetCount: plan.content.targetCount,
       idempotentReplay: false,
     }));
+    const findLatestFinalizedIndexBatch = vi
+      .fn()
+      .mockResolvedValue(inventory.content.sourceEvidenceBatchId);
     const output = await runAflTradeExternalHistoricalDiscoveryCommand({
       argv: ['--input', 'reviewed.json'],
       env,
@@ -172,9 +176,7 @@ describe('external historical discovery command', () => {
       createRuntime: () => ({ ingest, close: vi.fn().mockResolvedValue(undefined) }),
       createPool: () => ({ end: vi.fn().mockResolvedValue(undefined) }) as never,
       createRepository: () => ({
-        findLatestFinalizedIndexBatch: vi
-          .fn()
-          .mockResolvedValue(inventory.content.sourceEvidenceBatchId),
+        findLatestFinalizedIndexBatch,
         loadInventoryFromBatch: vi.fn().mockResolvedValue(inventory),
         persistInventory: vi.fn().mockResolvedValue({
           inventoryId: inventory.inventoryId,
@@ -194,6 +196,11 @@ describe('external historical discovery command', () => {
         }),
       })
     );
+    expect(findLatestFinalizedIndexBatch).toHaveBeenCalledWith({
+      environment: 'non_production',
+      fromYear: 2024,
+      throughYear: 2025,
+    });
     expect(persistPlan.mock.calls[0]?.[0].content.targets).toHaveLength(3);
     expect(output).toMatchObject({
       status: 'planned',
@@ -224,5 +231,23 @@ describe('external historical discovery command', () => {
 
     expect(output).toEqual({ status: 'deferred', retryAt: '2026-08-10T00:02:00.000Z' });
     expect(repositoryFactory).toHaveBeenCalledOnce();
+  });
+
+  it('rejects discovery authority that does not match the configured environment', async () => {
+    const createRuntime = vi.fn();
+    const createPool = vi.fn();
+
+    await expect(
+      runAflTradeExternalHistoricalDiscoveryCommand({
+        argv: ['--input', 'reviewed.json'],
+        env,
+        readInput: async () => JSON.stringify(reviewedInput('production')),
+        now: () => now,
+        createRuntime,
+        createPool,
+      })
+    ).rejects.toThrow(/configured authority environment/);
+    expect(createRuntime).not.toHaveBeenCalled();
+    expect(createPool).not.toHaveBeenCalled();
   });
 });

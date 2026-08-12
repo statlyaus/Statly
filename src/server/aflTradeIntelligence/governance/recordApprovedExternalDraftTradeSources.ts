@@ -32,22 +32,26 @@ export interface RecordApprovedAflTradeExternalSourcesResult extends AflTradeSto
   records: readonly RecordedApprovedAflTradeExternalSource[];
 }
 
-function decisionKey(sourceRights: AflTradeSourceRightsProposal): string {
+function decisionKey(
+  sourceRights: AflTradeSourceRightsProposal,
+  environment: RecordApprovedAflTradeExternalSourcesInput['gate']['environment']
+): string {
   if (sourceRights.content.acquisition.kind !== 'provider_web') {
     throw new TypeError('External source recording requires provider-web source rights.');
   }
-  return `${sourceRights.content.acquisition.capabilityId}-production`;
+  return `${sourceRights.content.acquisition.capabilityId}-${environment}`;
 }
 
 function currentDecision(
   ledger: AflTradeStoredGateLedger['ledger'],
-  key: string
+  key: string,
+  environment: RecordApprovedAflTradeExternalSourcesInput['gate']['environment']
 ): AflTradeGateDecisionRecord | undefined {
   return ledger.decisions
     .filter(
       (decision) =>
         decision.content.gate === 'gate_0a_permission_to_evaluate' &&
-        decision.content.environment === 'production' &&
+        decision.content.environment === environment &&
         decision.content.decisionKey === key
     )
     .sort((left, right) => left.content.version - right.content.version)
@@ -61,7 +65,11 @@ export async function recordApprovedAflTradeExternalSources(
   const sourcePolicies = createApprovedAflTradeExternalSourcePolicies(input.policy);
   const stored = await repository.load();
   const pending = sourcePolicies.map((sourceRights) => {
-    const current = currentDecision(stored.ledger, decisionKey(sourceRights));
+    const current = currentDecision(
+      stored.ledger,
+      decisionKey(sourceRights, input.gate.environment),
+      input.gate.environment
+    );
     const sameVersion = createApprovedAflTradeExternalGateRecords({
       ...input.gate,
       sourceRights,

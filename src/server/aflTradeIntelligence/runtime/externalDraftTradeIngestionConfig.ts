@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const artifactIdSchema = z.string().regex(/^artifact:[a-f0-9]{64}$/);
 const positiveInteger = z.coerce.number().int().positive();
+const deployedEnvironmentSchema = z.enum(['non_production', 'production']);
 
 const providerPolicySchema = z
   .object({
@@ -25,9 +26,12 @@ const providerPolicySchema = z
 
 const rawConfigSchema = z
   .object({
-    environment: z.literal('production'),
+    environment: deployedEnvironmentSchema,
     databaseUrl: z.string().url().startsWith('postgresql://'),
-    redisUrl: z.string().url().refine((value) => /^rediss?:\/\//.test(value)),
+    redisUrl: z
+      .string()
+      .url()
+      .refine((value) => /^rediss?:\/\//.test(value)),
     objectStorage: z
       .object({
         region: z.string().trim().min(1),
@@ -103,7 +107,7 @@ export type AflTradeExternalIngestionConfig = z.infer<typeof rawConfigSchema>;
 
 function required(env: Readonly<Record<string, string | undefined>>, name: string): string {
   const value = env[name]?.trim();
-  if (!value) throw new TypeError(`${name} is required for production external-source ingestion.`);
+  if (!value) throw new TypeError(`${name} is required for deployed external-source ingestion.`);
   return value;
 }
 
@@ -114,7 +118,9 @@ function csv(value: string): string[] {
     .filter(Boolean)
     .sort();
   if (entries.length === 0 || new Set(entries).size !== entries.length) {
-    throw new TypeError('Comma-separated external ingestion settings must be non-empty and unique.');
+    throw new TypeError(
+      'Comma-separated external ingestion settings must be non-empty and unique.'
+    );
   }
   return entries;
 }
@@ -131,7 +137,7 @@ export function parseAflTradeExternalIngestionConfig(
   env: Readonly<Record<string, string | undefined>>
 ): AflTradeExternalIngestionConfig {
   return rawConfigSchema.parse({
-    environment: 'production',
+    environment: required(env, 'AFL_TRADE_CAPTURE_ENVIRONMENT'),
     databaseUrl: required(env, 'AFL_OUTCOMES_DATABASE_URL'),
     redisUrl: required(env, 'AFL_TRADE_CAPTURE_REDIS_URL'),
     objectStorage: {

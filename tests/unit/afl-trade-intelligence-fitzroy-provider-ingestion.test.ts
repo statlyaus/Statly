@@ -55,6 +55,7 @@ function authorityFixture() {
   const record = (version: number, supersedesDecisionId: string | null, effectiveAt: string) =>
     createApprovedAflTradeFitzRoyGateRecords({
       sourceRights,
+      environment: 'production',
       version,
       supersedesDecisionId,
       decidedAt: effectiveAt,

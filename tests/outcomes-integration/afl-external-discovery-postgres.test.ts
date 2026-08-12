@@ -1,6 +1,4 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
 
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -25,9 +23,11 @@ import { PostgresAflTradeExternalReconciliationRepository } from '@/server/aflTr
 import { buildAflTradeExternalIdentityReviewPackage } from '@/server/aflTradeIntelligence/source/externalIdentityReviewWorkBuilder';
 import {
   createAflTradeExternalCanonicalIdentityTargetSnapshot,
+  createAflTradeExternalIdentitySubject,
   createAflTradeExternalIdentityReviewDecision,
 } from '@/server/aflTradeIntelligence/source/externalIdentityReviewContracts';
 import { PostgresAflTradeExternalIdentityReviewRepository } from '@/server/aflTradeIntelligence/source/postgresExternalIdentityReviewRepository';
+import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
   process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
@@ -35,7 +35,6 @@ const databaseUrl =
     throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
   })();
 const schemaName = `afl_external_discovery_${process.pid}_${Date.now()}`;
-const prismaSchemaPath = join(process.cwd(), 'prisma', 'afl-trade-outcomes', 'schema.prisma');
 const adminPool = new Pool({ connectionString: databaseUrl });
 const outcomesPool = new Pool({
   connectionString: databaseUrl,
@@ -57,6 +56,44 @@ function scopedDatabaseUrl(): string {
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
   return scoped.toString();
+}
+
+async function databaseInstant(secondsFromNow: number): Promise<string> {
+  const result = await outcomesPool.query<{ instant: Date }>(
+    `SELECT clock_timestamp() + ($1::double precision * INTERVAL '1 second') AS instant`,
+    [secondsFromNow]
+  );
+  const instant = result.rows[0]?.instant;
+  if (!(instant instanceof Date)) throw new TypeError('Expected one PostgreSQL clock instant.');
+  return instant.toISOString();
+}
+
+async function insertExternalIdentitySubject(
+  subject: ReturnType<typeof createAflTradeExternalIdentitySubject>,
+  createdAt: string
+) {
+  const scope = subject.content.identityScope;
+  return outcomesPool.query(
+    `INSERT INTO outcome_external_identity_subject
+      (subject_id,environment,competition,provider,entity_kind,scope_kind,native_id,
+       recorded_name,season_year,subject_sha256,subject_canonical_json,subject_json,created_at)
+     VALUES ($1,$2::"OutcomeEnvironment",$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13)`,
+    [
+      subject.subjectId,
+      subject.content.environment,
+      subject.content.competition,
+      subject.content.provider,
+      subject.content.entityKind,
+      scope.kind,
+      scope.kind === 'provider_native_id' ? scope.nativeId : null,
+      scope.kind === 'exact_recorded_name' ? scope.recordedName : null,
+      scope.kind === 'exact_recorded_name' ? scope.seasonYear : null,
+      subject.subjectId.split(':')[1],
+      canonicalizeAflTradeJson(subject.content),
+      canonicalizeAflTradeJson(subject),
+      createdAt,
+    ]
+  );
 }
 
 function evidenceBatch() {
@@ -398,14 +435,9 @@ async function seedExternalIdentityReviewerAuthority(input: {
 
 beforeAll(async () => {
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
-  execFileSync(
-    'npx',
-    ['--no-install', 'prisma', 'migrate', 'deploy', '--schema', prismaSchemaPath],
-    {
-      env: { ...process.env, AFL_OUTCOMES_DATABASE_URL: scopedDatabaseUrl() },
-      stdio: 'pipe',
-    }
-  );
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
+    databaseUrl: scopedDatabaseUrl(),
+  });
 });
 
 afterAll(async () => {
@@ -565,6 +597,29 @@ describe('PostgreSQL external trade discovery', () => {
       ({ workItem }) => workItem.content.subject.content.entityKind === 'player'
     )?.workItem;
     if (!playerItem) throw new TypeError('Expected one reviewable player identity.');
+    const playerSubject = playerItem.content.subject;
+    const boundedSubjectCreatedAt = await databaseInstant(1);
+    await expect(
+      insertExternalIdentitySubject(playerSubject, boundedSubjectCreatedAt)
+    ).resolves.toMatchObject({ rowCount: 1 });
+    const beyondToleranceSubject = createAflTradeExternalIdentitySubject({
+      environment: playerSubject.content.environment,
+      competition: playerSubject.content.competition,
+      provider: playerSubject.content.provider,
+      entityKind: playerSubject.content.entityKind,
+      identityScope: { kind: 'provider_native_id', nativeId: 'player-beyond-clock-tolerance' },
+    });
+    await expect(
+      insertExternalIdentitySubject(beyondToleranceSubject, await databaseInstant(30))
+    ).rejects.toThrow(/does not match its exact canonical scope/i);
+    await expect(
+      outcomesPool.query(
+        `SELECT count(*)::integer AS count
+           FROM outcome_external_identity_subject
+          WHERE subject_id=$1`,
+        [beyondToleranceSubject.subjectId]
+      )
+    ).resolves.toMatchObject({ rows: [{ count: 0 }] });
     const canonicalPlayerId = 'afl-player:external-identity-review';
     await outcomesPool.query(
       `INSERT INTO outcome_player (player_id,display_name,status)
@@ -578,6 +633,7 @@ describe('PostgreSQL external trade discovery', () => {
       validFromSeason: playerItem.content.validFromSeason,
       validThroughSeason: playerItem.content.validThroughSeason,
     });
+    const boundedDecisionAt = await databaseInstant(1);
     const identityDecision = createAflTradeExternalIdentityReviewDecision({
       subject: playerItem.content.subject,
       reviewPackageId: identityReviewPackage.packageId,
@@ -596,7 +652,7 @@ describe('PostgreSQL external trade discovery', () => {
       rationale: 'Disposable PostgreSQL external identity review.',
       authorityEvidenceId,
       decidedBy: principalRef,
-      decidedAt: new Date().toISOString(),
+      decidedAt: boundedDecisionAt,
     });
     const identityRepository = new PostgresAflTradeExternalIdentityReviewRepository(outcomeClient);
     await expect(
@@ -611,6 +667,32 @@ describe('PostgreSQL external trade discovery', () => {
         decision: identityDecision,
       })
     ).resolves.toMatchObject({ decisionId: identityDecision.decisionId, idempotentReplay: true });
+    const beyondToleranceDecision = createAflTradeExternalIdentityReviewDecision({
+      subject: playerItem.content.subject,
+      reviewPackageId: identityReviewPackage.packageId,
+      reviewPackageSha256: identityReviewPackage.packageId.split(':')[1]!,
+      workItemId: playerItem.workItemId,
+      workItemSha256: playerItem.workItemId.split(':')[1]!,
+      workItem: playerItem,
+      revision: 2,
+      supersedesDecisionId: identityDecision.decisionId,
+      decision: 'approved',
+      canonicalTarget: createAflTradeExternalCanonicalIdentityTargetSnapshot({
+        entityKind: 'player',
+        canonicalId: canonicalPlayerId,
+        recordedLabel: 'External Identity Review Player',
+      }),
+      rationale: 'Decision beyond the bounded PostgreSQL clock-skew tolerance.',
+      authorityEvidenceId,
+      decidedBy: principalRef,
+      decidedAt: await databaseInstant(30),
+    });
+    await expect(
+      identityRepository.persistDecision({
+        reviewPackage: identityReviewPackage,
+        decision: beyondToleranceDecision,
+      })
+    ).rejects.toThrow(/requires its exact finalized completion and subject scope/i);
     await expect(identityRepository.loadCurrentResolutions(identityReviewPackage)).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({

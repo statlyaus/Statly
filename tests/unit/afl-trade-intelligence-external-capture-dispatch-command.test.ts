@@ -14,6 +14,7 @@ function environment() {
     egressPolicyEvidenceId: `artifact:${digest('1')}`,
   };
   return {
+    AFL_TRADE_CAPTURE_ENVIRONMENT: 'non_production',
     AFL_OUTCOMES_DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:5432/fixture',
     AFL_TRADE_CAPTURE_REDIS_URL: 'redis://127.0.0.1:6379',
     AFL_TRADE_OBJECT_REGION: 'ap-southeast-2',
@@ -36,7 +37,7 @@ function environment() {
 }
 
 describe('external capture dispatch command', () => {
-  it('composes one bounded production tick and always closes runtime resources', async () => {
+  it('composes one bounded non-production tick and always closes runtime resources', async () => {
     const closeRuntime = vi.fn(async () => undefined);
     const closePool = vi.fn(async () => undefined);
     const writeOutput = vi.fn();
@@ -62,7 +63,7 @@ describe('external capture dispatch command', () => {
     ).resolves.toMatchObject({ observedAt: '2026-08-10T01:00:00.000Z', selectedCount: 0 });
     expect(dispatchDue).toHaveBeenCalledWith(
       {
-        environment: 'production',
+        environment: 'non_production',
         observedAt: '2026-08-10T01:00:00.000Z',
         workerId: 'capture-worker-1',
         maximumOccurrences: 25,

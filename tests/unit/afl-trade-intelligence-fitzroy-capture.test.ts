@@ -356,6 +356,7 @@ function productionGovernanceFixture() {
   if (sourceRights === undefined) throw new Error('Footywire policy fixture is missing.');
   const { proposal, decision } = createApprovedAflTradeFitzRoyGateRecords({
     sourceRights,
+    environment: 'production',
     version: 1,
     supersedesDecisionId: null,
     decidedAt: '2026-08-02T00:10:00.000Z',
