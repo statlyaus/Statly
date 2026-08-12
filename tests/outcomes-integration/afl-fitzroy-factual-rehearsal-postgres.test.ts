@@ -1,0 +1,136 @@
+import { Pool } from 'pg';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { runLocalAflTradeFitzRoyFactualRehearsal } from '@/server/aflTradeIntelligence/development/localFitzRoyFactualRehearsal';
+import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
+
+const databaseUrl =
+  process.env.AFL_OUTCOMES_TEST_DATABASE_URL ??
+  (() => {
+    throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
+  })();
+const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}`;
+const adminPool = new Pool({ connectionString: databaseUrl });
+const outcomesPool = new Pool({
+  connectionString: databaseUrl,
+  options: `-c search_path=${schemaName}`,
+  max: 4,
+});
+
+function scopedDatabaseUrl(): string {
+  const scoped = new URL(databaseUrl);
+  scoped.searchParams.set('schema', schemaName);
+  return scoped.toString();
+}
+
+beforeAll(async () => {
+  await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scopedDatabaseUrl() });
+});
+
+afterAll(async () => {
+  await outcomesPool.end();
+  await adminPool.query(`DROP SCHEMA "${schemaName}" CASCADE`);
+  await adminPool.end();
+});
+
+describe('source-independent non-production fitzRoy factual rehearsal', () => {
+  it('captures, stages, reconciles, and constructs one private factual candidate', async () => {
+    const result = await runLocalAflTradeFitzRoyFactualRehearsal(
+      createPgAflOutcomeSqlClient(outcomesPool)
+    );
+
+    expect(result).toMatchObject({
+      environment: 'non_production',
+      publicationEligible: false,
+      counts: {
+        sourceRows: 1,
+        sourceIssues: 0,
+        factualRuns: 1,
+        candidates: 1,
+      },
+    });
+    expect(result.captureId).toMatch(/^source-capture:/);
+    expect(result.normalizationRunId).toMatch(/^provider-normalization-run:/);
+    expect(result.factBatchId).toMatch(/^source-fact-batch:/);
+    expect(result.factualRunId).toMatch(/^factual-reconciliation-run:/);
+    expect(result.candidateId).toMatch(/^factual-release-candidate:/);
+    expect(result.idempotentReplay).toBe(false);
+  });
+
+  it('replays the exact evidence without adding another durable row', async () => {
+    const client = createPgAflOutcomeSqlClient(outcomesPool);
+    const replay = await runLocalAflTradeFitzRoyFactualRehearsal(client);
+
+    expect(replay.idempotentReplay).toBe(true);
+  });
+
+  it('rejects changed decoded evidence under the same capture and field-map identity', async () => {
+    const client = createPgAflOutcomeSqlClient(outcomesPool);
+
+    await expect(runLocalAflTradeFitzRoyFactualRehearsal(client, { goals: '3' })).rejects.toThrow(
+      /normalized staging failed closed/i
+    );
+
+    const stored = await outcomesPool.query<{ runs: string }>(
+      `SELECT count(*)::text AS runs FROM outcome_provider_normalization_run`
+    );
+    expect(stored.rows[0]?.runs).toBe('1');
+  });
+
+  it('conserves the admitted row and leaves every publication authority untouched', async () => {
+    const stored = await outcomesPool.query<{
+      captures: string;
+      normalization_runs: string;
+      decoded_rows: string;
+      normalization_issues: string;
+      failed_attempts: string;
+      player_resolutions: string;
+      club_resolutions: string;
+      fact_batches: string;
+      metric_facts: string;
+      factual_runs: string;
+      reconciled_metrics: string;
+      factual_candidates: string;
+      release_manifests: string;
+      registry_revision: number;
+      registry_events: string;
+    }>(
+      `SELECT
+        (SELECT count(*)::text FROM outcome_source_capture) AS captures,
+        (SELECT count(*)::text FROM outcome_provider_normalization_run) AS normalization_runs,
+        (SELECT count(*)::text FROM outcome_provider_decoded_row) AS decoded_rows,
+        (SELECT count(*)::text FROM outcome_provider_normalization_issue) AS normalization_issues,
+        (SELECT count(*)::text FROM outcome_provider_normalization_attempt) AS failed_attempts,
+        (SELECT count(*)::text FROM outcome_provider_player_resolution) AS player_resolutions,
+        (SELECT count(*)::text FROM outcome_provider_club_resolution) AS club_resolutions,
+        (SELECT count(*)::text FROM outcome_provider_fact_batch) AS fact_batches,
+        (SELECT count(*)::text FROM outcome_provider_numeric_metric_fact) AS metric_facts,
+        (SELECT count(*)::text FROM outcome_factual_reconciliation_run) AS factual_runs,
+        (SELECT count(*)::text FROM outcome_reconciled_factual_metric) AS reconciled_metrics,
+        (SELECT count(*)::text FROM outcome_factual_release_candidate) AS factual_candidates,
+        (SELECT count(*)::text FROM outcome_release_manifest) AS release_manifests,
+        (SELECT revision FROM outcome_registry_head WHERE singleton_id=1) AS registry_revision,
+        (SELECT count(*)::text FROM outcome_registry_event) AS registry_events`
+    );
+
+    expect(stored.rows[0]).toEqual({
+      captures: '1',
+      normalization_runs: '1',
+      decoded_rows: '1',
+      normalization_issues: '0',
+      failed_attempts: '1',
+      player_resolutions: '1',
+      club_resolutions: '1',
+      fact_batches: '1',
+      metric_facts: '1',
+      factual_runs: '1',
+      reconciled_metrics: '1',
+      factual_candidates: '0',
+      release_manifests: '0',
+      registry_revision: 0,
+      registry_events: '0',
+    });
+  });
+});

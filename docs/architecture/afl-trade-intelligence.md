@@ -302,6 +302,17 @@ PostgreSQL target, object storage, factual release views, or valuation artifact 
 apply the protected fantasy schema or SQLite migration history to them or introduce the public schema
 into an unapproved target.
 
+The source-independent Stage 2A rehearsal now also exercises the complete fitzRoy factual path in the
+disposable real-PostgreSQL harness. A deterministic `non_production` provider envelope passes the
+same Gate, attested capture, custody, decoder, field-map, normalization, governed player/club
+resolution, source-fact, and factual-reconciliation contracts used by the deployed boundary. It
+conserves one decoded row into one numeric fact and one reconciled metric, constructs one private
+content-addressed factual candidate, replays the exact evidence idempotently, and rejects changed
+decoded evidence under the same capture and field-map identity. The candidate is deliberately not
+registered: the rehearsal leaves the release manifest set empty, the registry at revision zero, and
+all public activation state unchanged. It uses no live provider access, cloud service, schedule,
+fixture fallback in a deployed path, valuation model, or protected fantasy data.
+
 ### Maturity-review acceptance criteria
 
 The broader Statly data-platform maturity review identified contract drift, name-derived player IDs,
@@ -1718,12 +1729,12 @@ model-execution evidence, complete-trade assessment contracts, and independent p
 That foundation is not equivalent to a live factual dataset or an approved trade grade. Completion is
 reported by milestone, never as one blended percentage:
 
-| Milestone                 | Current state | Completion evidence                                                                                                                            |
-| ------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Engineering foundation    | Complete      | Normalized migrations and contracts, disposable real-PostgreSQL rehearsal, supported checks, build, cleanup, and review are complete.          |
-| Non-production operations | Partial       | Hosted services, scheduled real-source capture, historical reconciliation, restore rehearsal, and alert burn-in still need execution evidence. |
-| Factual production        | Not complete  | No reviewed real-data factual release has been activated and verified across every public read/export surface.                                 |
-| Valuation production      | Not complete  | No locked real-data player/pick model and complete-trade valuation publication has passed Gates 3, 4, and 5 and been activated.                |
+| Milestone                 | Current state | Completion evidence                                                                                                                                                                                                        |
+| ------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Engineering foundation    | Complete      | Normalized migrations and contracts, disposable real-PostgreSQL rehearsal, supported checks, build, cleanup, and review are complete.                                                                                      |
+| Non-production operations | Partial       | The source-independent fitzRoy-to-private-candidate PostgreSQL rehearsal is complete; hosted services, real-source capture, historical reconciliation, restore rehearsal, and alert burn-in still need execution evidence. |
+| Factual production        | Not complete  | No reviewed real-data factual release has been activated and verified across every public read/export surface.                                                                                                             |
+| Valuation production      | Not complete  | No locked real-data player/pick model and complete-trade valuation publication has passed Gates 3, 4, and 5 and been activated.                                                                                            |
 
 The remaining work proceeds through these independently verifiable gates:
 

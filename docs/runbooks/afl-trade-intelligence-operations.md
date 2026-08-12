@@ -561,6 +561,39 @@ controls or grant authority to either deployed environment.
 11. Keep missing, NaN, infinities, and ambiguous provider zeroes distinct. Do not calculate games, infer
     no-vote or no-award facts from absence, or approve name-only identity or match fallbacks here.
 
+### Rehearsing the source-independent fitzRoy factual path
+
+Run `npm run test:outcomes:int` before any separately reviewed non-production provider execution. The
+supported command provisions its own loopback-only PostgreSQL 16 container, applies the complete
+ordered outcomes migration history to isolated schemas, runs the fitzRoy factual rehearsal with no
+network/provider access, and removes the exact container afterward. Do not provide a live source,
+shared database, checkout `.env`, protected fantasy database, or `prisma/dev.db` to this rehearsal.
+
+The rehearsal uses one deterministic `non_production` Footywire-through-fitzRoy envelope and must
+prove all of the following on real PostgreSQL:
+
+1. Gate 0A, per-environment custody, the attested capture receipt, retained RDS decoding, the exact
+   reviewed field map, and normalization all bind to the same capability, competition, season, and
+   source-field set.
+2. One decoded player-stat row produces exactly one staged row and zero normalization issues. The
+   reviewed player and club namespaces, evidence, assignments, and current resolution heads are
+   environment-specific and durable.
+3. Row accounting is exhaustive: the one staged row produces one source-fact batch, one measured
+   goals fact, one factual-reconciliation run, one reconciled goals result, and one current factual
+   head. Missing evidence is never coerced to zero.
+4. An exact rerun returns the same capture, normalization, fact-batch, factual-run, and private
+   candidate identities with an idempotent replay receipt. Changed decoded evidence under the same
+   capture and field-map identity fails closed and adds no accepted normalization run.
+5. Candidate construction remains private and non-authorizing. The rehearsal persists no factual
+   release candidate, release manifest, projection, registry event, active pointer, valuation output,
+   or fantasy record; the release registry remains at revision zero.
+
+The successful Stage 2A rehearsal boundary is 8 integration files and 40 tests, including the full
+migration/drift/reapply suite and four fitzRoy factual-rehearsal checks. Record the exact commit and
+command output in the delivery checkpoint. A later code-only change requires a fresh exact-commit
+run. This evidence does not satisfy real-source, hosted durability, backup/restore, alerting, schedule,
+or activation requirements.
+
 ### Reviewing provider identities and matches
 
 This workflow is a governed database boundary, not a spreadsheet correction or rendering-layer alias.
