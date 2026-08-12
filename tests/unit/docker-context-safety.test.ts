@@ -13,6 +13,7 @@ describe('Docker build context safety', () => {
 
     for (const requiredPattern of [
       '.env*',
+      '!.env.example',
       '.Renviron',
       '**/.Renviron',
       '**/credentials',
