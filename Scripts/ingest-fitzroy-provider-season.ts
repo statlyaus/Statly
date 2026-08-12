@@ -7,7 +7,7 @@ import { parseAflTradeProviderIngestionConfig } from '../src/server/aflTradeInte
 import {
   createAflTradeProviderIngestionRuntime,
   type AflTradeProviderIngestionRuntime,
-  type AflTradeProductionProviderIngestionCommand,
+  type AflTradeDeployedProviderIngestionCommand,
 } from '../src/server/aflTradeIntelligence/runtime/providerIngestionRuntime';
 import type { AflTradeProviderIngestionConfig } from '../src/server/aflTradeIntelligence/runtime/providerIngestionConfig';
 import { parseAflTradeFitzRoyCaptureRequest } from '../src/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
@@ -56,7 +56,7 @@ function parseInputPath(argv: readonly string[]): string {
 function parseCommand(
   json: string,
   configuredEnvironment: AflTradeProviderIngestionConfig['environment']
-): AflTradeProductionProviderIngestionCommand {
+): AflTradeDeployedProviderIngestionCommand {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);

@@ -66,7 +66,7 @@ export type AflTradeProviderIngestionConfig = z.infer<typeof configSchema>;
 function required(env: Readonly<Record<string, string | undefined>>, name: string): string {
   const value = env[name]?.trim();
   if (value === undefined || value.length === 0) {
-    throw new TypeError(`${name} is required for production provider ingestion.`);
+    throw new TypeError(`${name} is required for deployed provider ingestion.`);
   }
   return value;
 }

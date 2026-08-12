@@ -3,6 +3,16 @@ import { generateKeyPairSync } from 'node:crypto';
 
 vi.mock('server-only', () => ({}));
 
+const runtimeMocks = vi.hoisted(() => ({
+  resolveAuthorization: vi.fn(),
+}));
+
+vi.mock('@/server/aflTradeIntelligence/governance/postgresGateDecisionLedgerRepository', () => ({
+  createPostgresAflTradeGateDecisionLedgerRepository: () => ({
+    resolveAuthorization: runtimeMocks.resolveAuthorization,
+  }),
+}));
+
 import type { AflTradeProviderIngestionConfig } from '@/server/aflTradeIntelligence/runtime/providerIngestionConfig';
 import {
   createAflTradeProviderIngestionCustodyProfile,
@@ -81,6 +91,32 @@ describe('fitzRoy provider ingestion runtime', () => {
       await expect(
         runtime.ingest({ capture: { gateRequest: { environment: 'production' } } } as never)
       ).rejects.toThrow(/configured authority environment/);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it('rejects a mismatched Gate decision key before durable or provider activity', async () => {
+    const runtime = createAflTradeProviderIngestionRuntime(config('non_production'));
+    try {
+      await expect(
+        runtime.ingest({
+          capture: {
+            gateRequest: {
+              environment: 'non_production',
+              decisionKey: 'footywire-player-stats-production',
+            },
+            captureRequest: {
+              schemaVersion: 'afl-trade-fitzroy-capture-request/v1',
+              capabilityId: 'footywire-player-stats',
+              competition: 'AFLM',
+              authorizationSeason: 2026,
+              parameters: { season: 2026, checkExisting: true },
+            },
+          },
+        } as never)
+      ).rejects.toThrow(/configured authority decision key/);
+      expect(runtimeMocks.resolveAuthorization).not.toHaveBeenCalled();
     } finally {
       await runtime.close();
     }
