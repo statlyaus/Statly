@@ -588,8 +588,8 @@ prove all of the following on real PostgreSQL:
    release candidate, release manifest, projection, registry event, active pointer, valuation output,
    or fantasy record; the release registry remains at revision zero.
 
-The successful Stage 2A rehearsal boundary is 8 integration files and 40 tests, including the full
-migration/drift/reapply suite and four fitzRoy factual-rehearsal checks. Record the exact commit and
+The successful Stage 2A rehearsal boundary is 8 integration files and 39 tests, including the full
+migration/drift/reapply suite and three fitzRoy factual-rehearsal checks. Record the exact commit and
 command output in the delivery checkpoint. A later code-only change requires a fresh exact-commit
 run. This evidence does not satisfy real-source, hosted durability, backup/restore, alerting, schedule,
 or activation requirements.
