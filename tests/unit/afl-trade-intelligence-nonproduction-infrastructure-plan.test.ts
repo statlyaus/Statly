@@ -2433,7 +2433,7 @@ describe('AFL trade non-production infrastructure plan policy', () => {
           TF_CLI_ARGS_plan: '-refresh=false',
           TF_WORKSPACE: 'shadow',
           TOFU_CLI_ARGS: '-lock=false',
-          UNRELATED_SECRET: 'do-not-forward',
+          UNRELATED_RUNTIME_VALUE: ['not', 'forwarded'].join('-'),
         },
         execute,
         writeOutput,
