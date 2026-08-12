@@ -36,10 +36,9 @@ afterAll(async () => {
 });
 
 describe('source-independent non-production fitzRoy factual rehearsal', () => {
-  it('captures, stages, reconciles, and constructs one private factual candidate', async () => {
-    const result = await runLocalAflTradeFitzRoyFactualRehearsal(
-      createPgAflOutcomeSqlClient(outcomesPool)
-    );
+  it('captures, stages, reconciles, constructs, and exactly replays one private candidate', async () => {
+    const client = createPgAflOutcomeSqlClient(outcomesPool);
+    const result = await runLocalAflTradeFitzRoyFactualRehearsal(client);
 
     expect(result).toMatchObject({
       environment: 'non_production',
@@ -57,13 +56,16 @@ describe('source-independent non-production fitzRoy factual rehearsal', () => {
     expect(result.factualRunId).toMatch(/^factual-reconciliation-run:/);
     expect(result.candidateId).toMatch(/^factual-release-candidate:/);
     expect(result.idempotentReplay).toBe(false);
-  });
-
-  it('replays the exact evidence without adding another durable row', async () => {
-    const client = createPgAflOutcomeSqlClient(outcomesPool);
     const replay = await runLocalAflTradeFitzRoyFactualRehearsal(client);
 
     expect(replay.idempotentReplay).toBe(true);
+    expect(replay).toMatchObject({
+      captureId: result.captureId,
+      normalizationRunId: result.normalizationRunId,
+      factBatchId: result.factBatchId,
+      factualRunId: result.factualRunId,
+      candidateId: result.candidateId,
+    });
   });
 
   it('rejects changed decoded evidence under the same capture and field-map identity', async () => {
