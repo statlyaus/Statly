@@ -115,6 +115,22 @@ export class AflTradeNonproductionPlanValidationError extends Error {
   }
 }
 
+function validatedWholeDays(
+  option: string,
+  value: string,
+  minimum: number,
+  maximum: number
+): string {
+  if (!/^\d+$/.test(value)) {
+    throw new TypeError(`${option} must be a whole number between ${minimum} and ${maximum}.`);
+  }
+  const days = Number(value);
+  if (!Number.isSafeInteger(days) || days < minimum || days > maximum) {
+    throw new TypeError(`${option} must be a whole number between ${minimum} and ${maximum}.`);
+  }
+  return String(days);
+}
+
 function parsePlanInputs(argv: readonly string[]): AflTradeNonproductionPlanInputs {
   const values = new Map<string, string>();
   let enableMigrationSecretAccess = false;
@@ -148,14 +164,29 @@ function parsePlanInputs(argv: readonly string[]): AflTradeNonproductionPlanInpu
   if (awsAccountId === undefined || captureRetentionDays === undefined) {
     throw new TypeError('Plan validation requires --aws-account-id and --capture-retention-days.');
   }
+  if (!/^\d{12}$/.test(awsAccountId)) {
+    throw new TypeError('--aws-account-id must be exactly 12 decimal digits.');
+  }
+  const reviewedCaptureRetentionDays = validatedWholeDays(
+    '--capture-retention-days',
+    captureRetentionDays,
+    2,
+    3650
+  );
+  const reviewedDatabaseBackupRetentionDays = validatedWholeDays(
+    '--database-backup-retention-days',
+    values.get('--database-backup-retention-days') ?? '7',
+    7,
+    35
+  );
   const statePath = values.get('--state') ?? null;
   if (enableMigrationSecretAccess && statePath === null) {
     throw new TypeError('--enable-migration-secret-access requires one explicit --state path.');
   }
   return {
     awsAccountId,
-    captureRetentionDays,
-    databaseBackupRetentionDays: values.get('--database-backup-retention-days') ?? '7',
+    captureRetentionDays: reviewedCaptureRetentionDays,
+    databaseBackupRetentionDays: reviewedDatabaseBackupRetentionDays,
     enableMigrationSecretAccess,
     permissionsBoundaryArn: values.get('--permissions-boundary-arn') ?? null,
     statePath,

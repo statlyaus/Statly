@@ -333,9 +333,13 @@ export function createLocalAflTradeFitzRoyFactualRehearsalFixture(options?: { go
   const metadataArtifactRepository = durableRepository('capture_metadata');
   const diagnostics = captureDiagnostics();
   const diagnosticsBytes = encoded(diagnostics);
-  const egressPolicyEvidenceId = command.sourceRights.content.conditions.find(
+  const egressCondition = command.sourceRights.content.conditions.find(
     ({ conditionId }) => conditionId === 'provider-egress-control'
-  )!.verificationEvidenceIds[0]!;
+  );
+  const egressPolicyEvidenceId = egressCondition?.verificationEvidenceIds[0];
+  if (egressPolicyEvidenceId === undefined) {
+    throw new Error('The rehearsal requires one provider-egress-control evidence ID.');
+  }
   const captureClockValues = [
     '2026-08-12T00:00:10.000Z',
     '2026-08-12T00:00:20.000Z',

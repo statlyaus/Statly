@@ -92,6 +92,10 @@ resource "aws_vpc_endpoint" "s3" {
   }
 }
 
+data "aws_prefix_list" "s3" {
+  name = "com.amazonaws.${var.aws_region}.s3"
+}
+
 resource "aws_security_group" "worker" {
   description = "No-ingress dispatcher and capture worker security group"
   name        = "${local.name_prefix}-worker"
@@ -165,6 +169,15 @@ resource "aws_vpc_security_group_egress_rule" "worker_cache" {
   referenced_security_group_id = aws_security_group.cache.id
   security_group_id            = aws_security_group.worker.id
   to_port                      = 6379
+}
+
+resource "aws_vpc_security_group_egress_rule" "worker_s3" {
+  description       = "HTTPS access to S3 through the regional gateway endpoint"
+  from_port         = 443
+  ip_protocol       = "tcp"
+  prefix_list_id    = data.aws_prefix_list.s3.id
+  security_group_id = aws_security_group.worker.id
+  to_port           = 443
 }
 
 resource "aws_vpc_security_group_ingress_rule" "cache_worker" {

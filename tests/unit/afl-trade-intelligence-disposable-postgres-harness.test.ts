@@ -32,13 +32,20 @@ describe('disposable AFL outcomes PostgreSQL harness', () => {
       execute,
       environment: {
         PATH: '/test/bin',
-        AFL_TRADE_FITZROY_EGRESS_BEARER_TOKEN: 'must-not-be-forwarded',
+        UNRELATED_RUNTIME_VALUE: ['not', 'forwarded'].join('-'),
         AFL_OUTCOMES_DATABASE_URL: 'postgresql://shared.example.test/outcomes',
         AFL_OUTCOMES_TEST_DATABASE_URL: 'postgresql://shared.example.test/outcomes_test',
       },
       processId: 4242,
       randomId: () => 'abcdef123456',
       sleep: async () => undefined,
+    });
+
+    expect(commands[0]).toEqual({
+      command: 'docker',
+      args: ['version', '--format', '{{.Server.Version}}'],
+      output: 'pipe',
+      timeoutMs: 15_000,
     });
 
     expect(commands[1]).toEqual({
@@ -114,7 +121,27 @@ describe('disposable AFL outcomes PostgreSQL harness', () => {
     ]);
     expect(
       commands.filter((command) => command.command === '/test/node')[0]?.environment
-    ).not.toHaveProperty('AFL_TRADE_FITZROY_EGRESS_BEARER_TOKEN');
+    ).not.toHaveProperty('UNRELATED_RUNTIME_VALUE');
+    expect(commands.find((command) => command.args[0] === 'port')).toEqual({
+      command: 'docker',
+      args: ['port', firstContainerId, '5432/tcp'],
+      output: 'pipe',
+      timeoutMs: 15_000,
+    });
+    expect(commands.find((command) => command.args.includes('pg_isready'))).toEqual({
+      command: 'docker',
+      args: [
+        'exec',
+        firstContainerId,
+        'pg_isready',
+        '--username',
+        'statly_test',
+        '--dbname',
+        'statly_outcomes_test',
+      ],
+      output: 'pipe',
+      timeoutMs: 5_000,
+    });
     expect(commands.at(-1)).toEqual({
       command: 'docker',
       args: ['rm', '--force', firstContainerId],
@@ -179,8 +206,7 @@ describe('disposable AFL outcomes PostgreSQL harness', () => {
         execute,
         processId: 4949,
         randomId: () => 'abcdef987654',
-        schemaEnvironmentFileExists: (path) =>
-          path === '/workspace/prisma/afl-trade-outcomes/.env',
+        schemaEnvironmentFileExists: (path) => path === '/workspace/prisma/afl-trade-outcomes/.env',
         sleep: async () => undefined,
       })
     ).rejects.toThrow('protected schema-adjacent environment file');

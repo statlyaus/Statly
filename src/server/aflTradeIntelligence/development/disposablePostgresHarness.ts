@@ -140,6 +140,7 @@ async function waitForPostgres(options: {
           POSTGRES_DATABASE,
         ],
         output: 'pipe',
+        timeoutMs: 5_000,
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       });
       return;
@@ -174,6 +175,7 @@ export async function runDisposableAflTradeOutcomesTests(
       command: 'docker',
       args: ['version', '--format', '{{.Server.Version}}'],
       output: 'pipe',
+      timeoutMs: 15_000,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
 
@@ -243,6 +245,7 @@ export async function runDisposableAflTradeOutcomesTests(
       command: 'docker',
       args: ['port', containerId, `${POSTGRES_CONTAINER_PORT}/tcp`],
       output: 'pipe',
+      timeoutMs: 15_000,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
     const hostPort = parseLoopbackPort(portResult.stdout);
@@ -257,10 +260,7 @@ export async function runDisposableAflTradeOutcomesTests(
     const databaseUrl = `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${hostPort}/${POSTGRES_DATABASE}`;
     const testEnvironment = createTestEnvironment(environment, databaseUrl);
     const schemaPath = resolve(options.workspaceRoot, 'prisma/afl-trade-outcomes/schema.prisma');
-    assertNoSchemaAdjacentPrismaEnvironmentFile(
-      schemaPath,
-      options.schemaEnvironmentFileExists
-    );
+    assertNoSchemaAdjacentPrismaEnvironmentFile(schemaPath, options.schemaEnvironmentFileExists);
     const commands = [
       {
         args: [

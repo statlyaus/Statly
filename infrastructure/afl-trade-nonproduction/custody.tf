@@ -66,6 +66,36 @@ resource "aws_s3_bucket_versioning" "logging" {
   }
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "logging" {
+  bucket = "${local.bucket_stem}-logs"
+
+  rule {
+    id     = "expire-access-logs-at-approved-maximum-age"
+    status = "Enabled"
+
+    filter {
+      prefix = "access/"
+    }
+
+    expiration {
+      days = var.capture_retention_days - 1
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  rule {
+    id     = "abort-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 data "aws_iam_policy_document" "logging_bucket" {
   statement {
     sid = "RequireTls"
@@ -282,8 +312,8 @@ data "aws_iam_policy_document" "custody_safety" {
     }
 
     condition {
-      test     = "StringNotEquals"
-      values   = [local.custody_key_alias_arn]
+      test     = "ArnNotEqualsIfExists"
+      values   = [aws_kms_key.custody.arn]
       variable = "s3:x-amz-server-side-encryption-aws-kms-key-id"
     }
   }

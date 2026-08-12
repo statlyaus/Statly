@@ -53,6 +53,9 @@ export interface AflTradeNonproductionPlanIssue {
   readonly message: string;
 }
 
+export const AFL_TRADE_NONPRODUCTION_REVIEWED_CONFIGURATION_SOURCE_DIGEST =
+  'ffec293651eef664d144616999bfbe8c9482c3726e769b9004e5649c6a04993e';
+
 export interface AflTradeNonproductionPlanValidationOptions {
   readonly configurationSourceDigest: string;
 }
@@ -457,9 +460,11 @@ function hasEnabledVersioning(after: Readonly<Record<string, unknown>>): boolean
   );
 }
 
-function hasValidCaptureRetention(
+function hasValidRetention(
   after: Readonly<Record<string, unknown>>,
-  reviewedMaximumDays: unknown
+  reviewedMaximumDays: unknown,
+  expectedPrefix: string,
+  expectedRuleId: string
 ): boolean {
   if (
     typeof reviewedMaximumDays !== 'number' ||
@@ -492,7 +497,7 @@ function hasValidCaptureRetention(
   ) {
     return false;
   }
-  const captureRules = after.rule.filter((rawRule) => {
+  const retentionRules = after.rule.filter((rawRule) => {
     if (typeof rawRule !== 'object' || rawRule === null) return false;
     const filters = Array.isArray((rawRule as Readonly<Record<string, unknown>>).filter)
       ? ((rawRule as Readonly<Record<string, unknown>>).filter as readonly unknown[])
@@ -501,11 +506,11 @@ function hasValidCaptureRetention(
       (filter) =>
         typeof filter === 'object' &&
         filter !== null &&
-        (filter as { prefix?: unknown }).prefix === 'captures/'
+        (filter as { prefix?: unknown }).prefix === expectedPrefix
     );
   });
-  if (captureRules.length !== 1) return false;
-  return captureRules.every((rawRule) => {
+  if (retentionRules.length !== 1) return false;
+  return retentionRules.every((rawRule) => {
     if (typeof rawRule !== 'object' || rawRule === null) return false;
     const rule = rawRule as Readonly<Record<string, unknown>>;
     const filters = Array.isArray(rule.filter) ? rule.filter : [];
@@ -517,7 +522,7 @@ function hasValidCaptureRetention(
       (filter) =>
         typeof filter === 'object' &&
         filter !== null &&
-        (filter as { prefix?: unknown }).prefix === 'captures/'
+        (filter as { prefix?: unknown }).prefix === expectedPrefix
     );
     const currentDays = expirations.flatMap((expiration) => {
       if (typeof expiration !== 'object' || expiration === null) return [];
@@ -531,7 +536,7 @@ function hasValidCaptureRetention(
     });
     return (
       rule.status === 'Enabled' &&
-      rule.id === 'expire-captures-at-approved-maximum-age' &&
+      rule.id === expectedRuleId &&
       prefixMatches &&
       currentDays.length === 1 &&
       noncurrentDays.length === 1 &&
@@ -734,6 +739,18 @@ function resolverCidr(vpcCidr: unknown): string | null {
   return range === null ? null : `${ipv4Address(range[0] + 2)}/32`;
 }
 
+function reviewedSubnetCidr(vpcCidr: unknown, subnetIndex: number): string | null {
+  if (typeof vpcCidr !== 'string' || !Number.isInteger(subnetIndex)) return null;
+  const match = /^(\d{1,3})\.(\d{1,3})\.0\.0\/16$/.exec(vpcCidr);
+  if (match === null) return null;
+  const firstOctet = Number(match[1]);
+  const secondOctet = Number(match[2]);
+  if (firstOctet > 255 || secondOctet > 255 || subnetIndex < 0 || subnetIndex > 255) {
+    return null;
+  }
+  return `${firstOctet}.${secondOctet}.${subnetIndex}.0/24`;
+}
+
 function coversAllIpv4(cidrs: readonly string[]): boolean {
   const ranges = cidrs.flatMap((cidr) => {
     const range = ipv4Range(cidr);
@@ -786,7 +803,8 @@ export function validateAflTradeNonproductionPlan(
     'terraform_data.configuration_attestation'
   );
   const configurationIsAttested =
-    /^[a-f0-9]{64}$/.test(options.configurationSourceDigest) &&
+    options.configurationSourceDigest ===
+      AFL_TRADE_NONPRODUCTION_REVIEWED_CONFIGURATION_SOURCE_DIGEST &&
     configurationAttestation?.after.input === options.configurationSourceDigest;
   if (!configurationIsAttested) {
     issues.push(
@@ -875,12 +893,14 @@ export function validateAflTradeNonproductionPlan(
       typeof database.after.backup_retention_period !== 'number' ||
       database.after.backup_retention_period < 7 ||
       database.after.backup_retention_period !==
-        planVariable(plan, 'database_backup_retention_days')
+        planVariable(plan, 'database_backup_retention_days') ||
+      database.after.skip_final_snapshot !== false ||
+      database.after.final_snapshot_identifier !== 'statly-afl-trade-non-production-postgres-final'
     ) {
       issues.push(
         issue(
           'DATABASE_BACKUPS_DISABLED',
-          'The outcomes database must retain automated backups.',
+          'The outcomes database must retain automated backups and an exact final snapshot.',
           database.address
         )
       );
@@ -977,11 +997,12 @@ export function validateAflTradeNonproductionPlan(
     );
   }
 
+  const custodyKey = findByAddress(changes, 'aws_kms_key.custody');
   const encryption = findByAddress(
     changes,
     'aws_s3_bucket_server_side_encryption_configuration.custody'
   );
-  const custodyKeyArn = plannedArn(findByAddress(changes, 'aws_kms_key.custody'));
+  const custodyKeyArn = plannedArn(custodyKey);
   const encryptionUsesKnownCustodyKey =
     encryption !== undefined && hasCustodyKmsEncryption(encryption.after, custodyKeyArn);
   const encryptionUsesReferencedCustodyKey =
@@ -1053,7 +1074,12 @@ export function validateAflTradeNonproductionPlan(
       )
     );
   } else if (
-    !hasValidCaptureRetention(retention.after, planVariable(plan, 'capture_retention_days')) ||
+    !hasValidRetention(
+      retention.after,
+      planVariable(plan, 'capture_retention_days'),
+      'captures/',
+      'expire-captures-at-approved-maximum-age'
+    ) ||
     !plannedStringMatchesExactResource(
       retention,
       configurationResources,
@@ -1081,14 +1107,10 @@ export function validateAflTradeNonproductionPlan(
     );
   } else {
     const accountId = planVariable(plan, 'aws_account_id');
-    const region = planVariable(plan, 'aws_region');
     const bucketArn = plannedArn(custodyBucket);
     const identitiesAreKnown =
-      typeof accountId === 'string' && typeof region === 'string' && bucketArn !== null;
+      typeof accountId === 'string' && bucketArn !== null && custodyKeyArn !== null;
     const exactBucketArn = bucketArn ?? '';
-    const expectedKeyAliasArn = identitiesAreKnown
-      ? `arn:aws:kms:${region}:${accountId}:alias/statly-afl-trade-non-production-custody`
-      : '';
     const expectedRetentionRoleArn = identitiesAreKnown
       ? `arn:aws:iam::${accountId}:role/statly-afl-trade-non-production-retention-admin`
       : '';
@@ -1127,8 +1149,8 @@ export function validateAflTradeNonproductionPlan(
             resources: [`${exactBucketArn}/*`],
             principals: { AWS: ['*'] },
             conditions: {
-              StringNotEquals: {
-                's3:x-amz-server-side-encryption-aws-kms-key-id': [expectedKeyAliasArn],
+              ArnNotEqualsIfExists: {
+                's3:x-amz-server-side-encryption-aws-kms-key-id': [custodyKeyArn ?? ''],
               },
             },
           },
@@ -1142,8 +1164,36 @@ export function validateAflTradeNonproductionPlan(
           },
         ]
       : [];
+    const expectedStatementSids = [
+      'RequireTls',
+      'RequireConditionalCreation',
+      'RequireKmsEncryption',
+      'RequireCustodyKmsKey',
+      'DenyUnreviewedDeletion',
+    ];
+    const renderedPolicyIsExact =
+      identitiesAreKnown &&
+      hasExactPolicyStatements(custodySafety.after.policy, expectedStatements);
+    const reviewedFirstPlanPolicyIsExact =
+      custodyKeyArn === null &&
+      hasUnknownProperty(custodyKey?.afterUnknown, 'arn') &&
+      custodySafety.after.policy === null &&
+      hasUnknownProperty(custodySafety.afterUnknown, 'policy') &&
+      configurationIsAttested &&
+      configurationExpressionReferences(
+        configurationResources,
+        custodySafety.address,
+        'policy',
+        'data.aws_iam_policy_document.custody_safety.json'
+      ) &&
+      exactStringSet(
+        configurationPolicyStatementSids(
+          configurationResources,
+          'data.aws_iam_policy_document.custody_safety'
+        ) ?? [],
+        expectedStatementSids
+      );
     if (
-      !identitiesAreKnown ||
       !plannedStringMatchesExactResource(
         custodySafety,
         configurationResources,
@@ -1151,7 +1201,7 @@ export function validateAflTradeNonproductionPlan(
         custodyBucketId,
         'aws_s3_bucket.custody.id'
       ) ||
-      !hasExactPolicyStatements(custodySafety.after.policy, expectedStatements)
+      (!renderedPolicyIsExact && !reviewedFirstPlanPolicyIsExact)
     ) {
       issues.push(
         issue(
@@ -1185,6 +1235,7 @@ export function validateAflTradeNonproductionPlan(
     'aws_s3_bucket_server_side_encryption_configuration.logging'
   );
   const loggingVersioning = findByAddress(changes, 'aws_s3_bucket_versioning.logging');
+  const loggingRetention = findByAddress(changes, 'aws_s3_bucket_lifecycle_configuration.logging');
   const loggingPolicy = findByAddress(changes, 'aws_s3_bucket_policy.logging');
   const custodyOwnership = findByAddress(changes, 'aws_s3_bucket_ownership_controls.custody');
   const custodyLogging = findByAddress(changes, 'aws_s3_bucket_logging.custody');
@@ -1285,6 +1336,20 @@ export function validateAflTradeNonproductionPlan(
       loggingBucketId,
       'aws_s3_bucket.logging.id'
     ) &&
+    loggingRetention !== undefined &&
+    hasValidRetention(
+      loggingRetention.after,
+      planVariable(plan, 'capture_retention_days'),
+      'access/',
+      'expire-access-logs-at-approved-maximum-age'
+    ) &&
+    plannedStringMatchesExactResource(
+      loggingRetention,
+      configurationResources,
+      'bucket',
+      loggingBucketId,
+      'aws_s3_bucket.logging.id'
+    ) &&
     plannedStringMatchesExactResource(
       loggingPolicy,
       configurationResources,
@@ -1331,7 +1396,7 @@ export function validateAflTradeNonproductionPlan(
     issues.push(
       issue(
         'LOGGING_SAFETY_POLICY_INVALID',
-        'The access-log bucket must retain its exact ownership, encryption, versioning, public-access and delivery policy controls.',
+        'The access-log bucket must retain its exact ownership, encryption, versioning, retention, public-access and delivery policy controls.',
         loggingPolicy?.address ?? 'aws_s3_bucket_policy.logging'
       )
     );
@@ -1690,16 +1755,24 @@ export function validateAflTradeNonproductionPlan(
     ['scheduler', 'scheduler.amazonaws.com'],
     ['task_execution', 'ecs-tasks.amazonaws.com'],
   ] as const;
+  const expectedPermissionsBoundary = planVariable(plan, 'permissions_boundary_arn');
   for (const [name, expectedService] of requiredRoles) {
     const role = findByAddress(changes, `aws_iam_role.${name}`);
+    const permissionsBoundaryIsExact =
+      expectedPermissionsBoundary === null
+        ? role?.after.permissions_boundary === null ||
+          role?.after.permissions_boundary === undefined
+        : typeof expectedPermissionsBoundary === 'string' &&
+          role?.after.permissions_boundary === expectedPermissionsBoundary;
     if (
       role === undefined ||
-      !hasExactServiceTrust(role.after.assume_role_policy, expectedService)
+      !hasExactServiceTrust(role.after.assume_role_policy, expectedService) ||
+      !permissionsBoundaryIsExact
     ) {
       issues.push(
         issue(
           'ROLE_TRUST_INVALID',
-          'Every reviewed role must expose one exact service trust and no additional principal.',
+          'Every reviewed role must expose one exact service trust, permissions boundary and no additional principal.',
           role?.address ?? `aws_iam_role.${name}`
         )
       );
@@ -1949,6 +2022,7 @@ export function validateAflTradeNonproductionPlan(
     'aws_s3_bucket.custody',
     'aws_s3_bucket.logging',
     'aws_s3_bucket_lifecycle_configuration.custody',
+    'aws_s3_bucket_lifecycle_configuration.logging',
     'aws_s3_bucket_logging.custody',
     'aws_s3_bucket_ownership_controls.custody',
     'aws_s3_bucket_ownership_controls.logging',
@@ -1970,6 +2044,7 @@ export function validateAflTradeNonproductionPlan(
     'aws_vpc_security_group_egress_rule.worker_database',
     'aws_vpc_security_group_egress_rule.worker_dns_tcp',
     'aws_vpc_security_group_egress_rule.worker_dns_udp',
+    'aws_vpc_security_group_egress_rule.worker_s3',
     'aws_vpc_security_group_ingress_rule.cache_worker',
     'aws_vpc_security_group_ingress_rule.database_worker',
   ]);
@@ -2056,6 +2131,7 @@ export function validateAflTradeNonproductionPlan(
     'aws_s3_bucket.custody',
     'aws_s3_bucket.logging',
     'aws_s3_bucket_lifecycle_configuration.custody',
+    'aws_s3_bucket_lifecycle_configuration.logging',
     'aws_s3_bucket_logging.custody',
     'aws_s3_bucket_ownership_controls.custody',
     'aws_s3_bucket_ownership_controls.logging',
@@ -2079,6 +2155,7 @@ export function validateAflTradeNonproductionPlan(
     'aws_vpc_security_group_egress_rule.worker_database',
     'aws_vpc_security_group_egress_rule.worker_dns_tcp',
     'aws_vpc_security_group_egress_rule.worker_dns_udp',
+    'aws_vpc_security_group_egress_rule.worker_s3',
     'aws_vpc_security_group_ingress_rule.cache_worker',
     'aws_vpc_security_group_ingress_rule.database_worker',
     'data.aws_iam_policy_document.capture',
@@ -2091,6 +2168,7 @@ export function validateAflTradeNonproductionPlan(
     'data.aws_iam_policy_document.scheduler',
     'data.aws_iam_policy_document.scheduler_assume_role',
     'data.aws_iam_policy_document.task_execution',
+    'data.aws_prefix_list.s3',
   ]);
   const unapprovedResources = changes.filter(
     (change) => !approvedFoundationAddresses.has(canonicalAddress(change.address))
@@ -2173,6 +2251,7 @@ export function validateAflTradeNonproductionPlan(
   const dataRouteTableId =
     typeof dataRouteTable?.after.id === 'string' ? dataRouteTable.after.id : null;
   const topologyRegion = planVariable(plan, 'aws_region');
+  const reviewedVpcCidr = planVariable(plan, 'vpc_cidr');
   const topologyZones =
     typeof topologyRegion === 'string'
       ? [`${topologyRegion}a`, `${topologyRegion}b`]
@@ -2220,14 +2299,23 @@ export function validateAflTradeNonproductionPlan(
   const topologyIsExact =
     configurationIsAttested &&
     topologyZones.length === 2 &&
-    outcomesVpc?.after.cidr_block === '10.64.0.0/16' &&
+    reviewedVpcCidr === '10.64.0.0/16' &&
+    outcomesVpc?.after.cidr_block === reviewedVpcCidr &&
     outcomesVpc.after.enable_dns_hostnames === true &&
     outcomesVpc.after.enable_dns_support === true &&
     workerSubnets.every((subnet, index) =>
-      subnetIsExact(subnet, topologyZones[index]!, `10.64.${16 + index}.0/24`)
+      subnetIsExact(
+        subnet,
+        topologyZones[index]!,
+        reviewedSubnetCidr(reviewedVpcCidr, 16 + index) ?? ''
+      )
     ) &&
     dataSubnets.every((subnet, index) =>
-      subnetIsExact(subnet, topologyZones[index]!, `10.64.${32 + index}.0/24`)
+      subnetIsExact(
+        subnet,
+        topologyZones[index]!,
+        reviewedSubnetCidr(reviewedVpcCidr, 32 + index) ?? ''
+      )
     ) &&
     routeTablesHaveNoInlineRoutes &&
     knownOrAttestedString(workerRouteTable, 'vpc_id', outcomesVpcId) &&
@@ -2275,7 +2363,19 @@ export function validateAflTradeNonproductionPlan(
       )
     );
   }
-  const expectedResolverCidr = resolverCidr(planVariable(plan, 'vpc_cidr'));
+  const expectedResolverCidr = resolverCidr(reviewedVpcCidr);
+  const s3PrefixList = findByAddress(changes, 'data.aws_prefix_list.s3');
+  const expectedS3PrefixListName =
+    typeof topologyRegion === 'string' ? `com.amazonaws.${topologyRegion}.s3` : null;
+  const s3PrefixListConfiguration = findConfigurationByAddress(
+    configurationResources,
+    'data.aws_prefix_list.s3'
+  );
+  const s3PrefixListIsExact =
+    expectedS3PrefixListName !== null &&
+    s3PrefixList?.after.name === expectedS3PrefixListName &&
+    typeof s3PrefixList.after.id === 'string' &&
+    constantString(s3PrefixListConfiguration?.expressions.name) === expectedS3PrefixListName;
   const exactSecurityGroupRule = (input: {
     address: string;
     port: number;
@@ -2285,6 +2385,8 @@ export function validateAflTradeNonproductionPlan(
     targetGroupAddress: string;
     referencedGroupId?: unknown;
     referencedGroupAddress?: string;
+    prefixListId?: unknown;
+    prefixListAddress?: string;
   }): boolean => {
     const rule = findByAddress(changes, input.address);
     if (rule === undefined) return false;
@@ -2309,6 +2411,19 @@ export function validateAflTradeNonproductionPlan(
             'referenced_security_group_id',
             input.referencedGroupAddress
           );
+    const prefixListIsExact =
+      input.prefixListAddress === undefined
+        ? rule.after.prefix_list_id === null || rule.after.prefix_list_id === undefined
+        : typeof rule.after.prefix_list_id === 'string'
+          ? typeof input.prefixListId === 'string' &&
+            rule.after.prefix_list_id === input.prefixListId
+          : hasUnknownProperty(rule.afterUnknown, 'prefix_list_id') &&
+            configurationExpressionReferences(
+              configurationResources,
+              rule.address,
+              'prefix_list_id',
+              input.prefixListAddress
+            );
     return (
       targetIsExact &&
       referencedTargetIsExact &&
@@ -2319,7 +2434,7 @@ export function validateAflTradeNonproductionPlan(
         ? rule.after.cidr_ipv4 === null || rule.after.cidr_ipv4 === undefined
         : rule.after.cidr_ipv4 === input.cidr) &&
       (rule.after.cidr_ipv6 === null || rule.after.cidr_ipv6 === undefined) &&
-      (rule.after.prefix_list_id === null || rule.after.prefix_list_id === undefined)
+      prefixListIsExact
     );
   };
   const workerRulesAreExact =
@@ -2358,6 +2473,16 @@ export function validateAflTradeNonproductionPlan(
       referencedGroupId: cacheSecurityGroup?.after.id,
       referencedGroupAddress: 'aws_security_group.cache.id',
     }) &&
+    s3PrefixListIsExact &&
+    exactSecurityGroupRule({
+      address: 'aws_vpc_security_group_egress_rule.worker_s3',
+      port: 443,
+      protocol: 'tcp',
+      targetGroupId: workerSecurityGroup?.after.id,
+      targetGroupAddress: 'aws_security_group.worker.id',
+      prefixListId: s3PrefixList?.after.id,
+      prefixListAddress: 'data.aws_prefix_list.s3.id',
+    }) &&
     workerSecurityGroup !== undefined &&
     (!Array.isArray(workerSecurityGroup.after.egress) ||
       workerSecurityGroup.after.egress.length === 0);
@@ -2365,7 +2490,7 @@ export function validateAflTradeNonproductionPlan(
     issues.push(
       issue(
         'WORKER_INTERNET_EGRESS_OPEN',
-        'Worker egress must match the exact DNS, database and cache-only rule set.'
+        'Worker egress must match the exact DNS, database, cache and regional S3-only rule set.'
       )
     );
   }

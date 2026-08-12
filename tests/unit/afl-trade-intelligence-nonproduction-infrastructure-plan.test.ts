@@ -27,13 +27,15 @@ import {
   runAflTradeNonproductionPlanValidationCommand,
 } from '../../Scripts/infra/validate-afl-trade-nonproduction-plan';
 
-const configurationSourceDigest = 'a'.repeat(64);
+const configurationSourceDigest =
+  'ffec293651eef664d144616999bfbe8c9482c3726e769b9004e5649c6a04993e';
 const bucketStem = 'statly-afl-trade-np-111122223333-ap-southeast-2';
 const custodyBucketName = `${bucketStem}-custody`;
 const loggingBucketName = `${bucketStem}-logs`;
 const custodyBucketArn = `arn:aws:s3:::${custodyBucketName}`;
 const loggingBucketArn = `arn:aws:s3:::${loggingBucketName}`;
 const custodyKeyArn = 'arn:aws:kms:ap-southeast-2:111122223333:key/custody';
+const s3PrefixListId = 'pl-s3';
 const cacheReplicationArn =
   'arn:aws:elasticache:ap-southeast-2:111122223333:replicationgroup:statly-afl-trade-non-production-admission';
 const cacheUserArn =
@@ -121,9 +123,8 @@ function custodySafetyPolicy(): string {
         Resource: `${custodyBucketArn}/*`,
         Principal: { AWS: '*' },
         Condition: {
-          StringNotEquals: {
-            's3:x-amz-server-side-encryption-aws-kms-key-id':
-              'arn:aws:kms:ap-southeast-2:111122223333:alias/statly-afl-trade-non-production-custody',
+          ArnNotEqualsIfExists: {
+            's3:x-amz-server-side-encryption-aws-kms-key-id': custodyKeyArn,
           },
         },
       },
@@ -258,6 +259,17 @@ function foundationPresenceResources(): readonly Readonly<Record<string, unknown
       vpc_endpoint_type: 'Gateway',
       vpc_id: 'vpc-outcomes',
     }),
+    resource('aws_vpc_security_group_egress_rule.worker_s3', 'aws_vpc_security_group_egress_rule', {
+      from_port: 443,
+      ip_protocol: 'tcp',
+      prefix_list_id: s3PrefixListId,
+      security_group_id: 'sg-worker',
+      to_port: 443,
+    }),
+    resource('data.aws_prefix_list.s3', 'aws_prefix_list', {
+      id: s3PrefixListId,
+      name: 'com.amazonaws.ap-southeast-2.s3',
+    }),
     resource('aws_kms_alias.database', 'aws_kms_alias', {}),
     resource('aws_db_subnet_group.outcomes', 'aws_db_subnet_group', {
       name: roleName('database'),
@@ -306,6 +318,28 @@ function foundationPresenceResources(): readonly Readonly<Record<string, unknown
       bucket: loggingBucketName,
       versioning_configuration: [{ status: 'Enabled' }],
     }),
+    resource(
+      'aws_s3_bucket_lifecycle_configuration.logging',
+      'aws_s3_bucket_lifecycle_configuration',
+      {
+        bucket: loggingBucketName,
+        rule: [
+          {
+            expiration: [{ days: 364 }],
+            filter: [{ prefix: 'access/' }],
+            id: 'expire-access-logs-at-approved-maximum-age',
+            noncurrent_version_expiration: [{ noncurrent_days: 1 }],
+            status: 'Enabled',
+          },
+          {
+            abort_incomplete_multipart_upload: [{ days_after_initiation: 7 }],
+            filter: [],
+            id: 'abort-incomplete-multipart-uploads',
+            status: 'Enabled',
+          },
+        ],
+      }
+    ),
     resource('aws_s3_bucket_policy.logging', 'aws_s3_bucket_policy', {
       bucket: loggingBucketName,
       policy: loggingSafetyPolicy(),
@@ -426,6 +460,11 @@ function planConfiguration(): Readonly<Record<string, unknown>> {
         configurationResource('aws_s3_bucket_versioning.logging', 'aws_s3_bucket_versioning', {
           bucket: deterministicBucketExpression,
         }),
+        configurationResource(
+          'aws_s3_bucket_lifecycle_configuration.logging',
+          'aws_s3_bucket_lifecycle_configuration',
+          { bucket: deterministicBucketExpression }
+        ),
         configurationResource('aws_s3_bucket_policy.logging', 'aws_s3_bucket_policy', {
           bucket: deterministicBucketExpression,
         }),
@@ -555,6 +594,17 @@ function planConfiguration(): Readonly<Record<string, unknown>> {
           'aws_security_group.worker.id',
           'aws_security_group.cache.id'
         ),
+        configurationResource('data.aws_prefix_list.s3', 'aws_prefix_list', {
+          name: { constant_value: 'com.amazonaws.ap-southeast-2.s3' },
+        }),
+        configurationResource(
+          'aws_vpc_security_group_egress_rule.worker_s3',
+          'aws_vpc_security_group_egress_rule',
+          {
+            prefix_list_id: { references: ['data.aws_prefix_list.s3.id'] },
+            security_group_id: { references: ['aws_security_group.worker.id'] },
+          }
+        ),
         securityGroupRule(
           'aws_vpc_security_group_ingress_rule.database_worker',
           'aws_security_group.database.id',
@@ -579,6 +629,7 @@ function safePlan(): Readonly<Record<string, unknown>> {
       capture_retention_days: { value: 365 },
       database_backup_retention_days: { value: 7 },
       enable_migration_secret_access: { value: true },
+      permissions_boundary_arn: { value: null },
       vpc_cidr: { value: '10.64.0.0/16' },
     },
     configuration: planConfiguration(),
@@ -590,11 +641,13 @@ function safePlan(): Readonly<Record<string, unknown>> {
         deletion_protection: true,
         engine: 'postgres',
         engine_version: '16.9',
+        final_snapshot_identifier: 'statly-afl-trade-non-production-postgres-final',
         kms_key_id: databaseKeyArn,
         manage_master_user_password: true,
         master_user_secret_kms_key_id: databaseKeyArn,
         master_user_secret: [{ secret_arn: migrationSecretArn }],
         publicly_accessible: false,
+        skip_final_snapshot: false,
         storage_encrypted: true,
         tags_all: { Environment: 'non_production' },
         username: 'afl_trade_migration',
@@ -845,6 +898,7 @@ function safePlan(): Readonly<Record<string, unknown>> {
           'arn:aws:iam::111122223333:policy/statly-afl-trade-non-production-capture',
         ],
         name: roleName('capture'),
+        permissions_boundary: null,
       }),
       resource('aws_iam_role.migration', 'aws_iam_role', {
         arn: `arn:aws:iam::111122223333:role/${roleName('migration')}`,
@@ -852,6 +906,7 @@ function safePlan(): Readonly<Record<string, unknown>> {
         inline_policy: [],
         managed_policy_arns: [],
         name: roleName('migration'),
+        permissions_boundary: null,
       }),
       resource('aws_iam_role.retention_admin', 'aws_iam_role', {
         arn: retentionRoleArn,
@@ -859,6 +914,7 @@ function safePlan(): Readonly<Record<string, unknown>> {
         inline_policy: [],
         managed_policy_arns: [],
         name: roleName('retention-admin'),
+        permissions_boundary: null,
       }),
       resource('aws_iam_role.scheduler', 'aws_iam_role', {
         arn: `arn:aws:iam::111122223333:role/${roleName('scheduler')}`,
@@ -866,6 +922,7 @@ function safePlan(): Readonly<Record<string, unknown>> {
         inline_policy: [],
         managed_policy_arns: [],
         name: roleName('scheduler'),
+        permissions_boundary: null,
       }),
       resource('aws_iam_role.task_execution', 'aws_iam_role', {
         arn: `arn:aws:iam::111122223333:role/${roleName('task-execution')}`,
@@ -873,6 +930,7 @@ function safePlan(): Readonly<Record<string, unknown>> {
         inline_policy: [],
         managed_policy_arns: [],
         name: roleName('task-execution'),
+        permissions_boundary: null,
       }),
       resource(
         'aws_iam_role_policy_attachments_exclusive.capture',
@@ -1115,7 +1173,6 @@ function freshPreapplyPlan(): Readonly<Record<string, unknown>> {
     if (
       address === 'aws_elasticache_user.capture' ||
       address === 'aws_kms_key.database' ||
-      address === 'aws_kms_key.custody' ||
       address === 'aws_iam_policy.capture' ||
       address === 'aws_secretsmanager_secret.runtime_database_url'
     ) {
@@ -1126,6 +1183,22 @@ function freshPreapplyPlan(): Readonly<Record<string, unknown>> {
         {
           arn: true,
         }
+      );
+    }
+    if (address === 'aws_kms_key.custody') {
+      return resource(
+        address,
+        change.type as string,
+        { ...current.after, arn: null },
+        { arn: true }
+      );
+    }
+    if (address === 'aws_s3_bucket_policy.custody_safety') {
+      return resource(
+        address,
+        change.type as string,
+        { ...current.after, policy: null },
+        { policy: true }
       );
     }
     if (address === 'aws_iam_role.capture') {
@@ -1213,6 +1286,14 @@ function freshPreapplyPlan(): Readonly<Record<string, unknown>> {
 }
 
 describe('AFL trade non-production infrastructure plan policy', () => {
+  it('pins validation to the exact reviewed OpenTofu source digest', async () => {
+    await expect(
+      computeAflTradeNonproductionConfigurationSourceDigest(
+        join(process.cwd(), 'infrastructure/afl-trade-nonproduction')
+      )
+    ).resolves.toBe(configurationSourceDigest);
+  });
+
   it('accepts the isolated foundation without pretending future compute already exists', () => {
     expect(validateAflTradeNonproductionPlan(safePlan())).toEqual([]);
   });
@@ -1288,15 +1369,21 @@ describe('AFL trade non-production infrastructure plan policy', () => {
   });
 
   it('binds the rendered plan to the exact reviewed Terraform source digest', () => {
+    const unreviewedDigest = 'b'.repeat(64);
     const unsafe = withResourceChanges(safePlan(), (change) =>
       change.address === 'terraform_data.configuration_attestation'
-        ? resource(change.address, change.type as string, { input: 'b'.repeat(64) })
+        ? resource(change.address, change.type as string, { input: unreviewedDigest })
         : change
     );
 
     expect(validateAflTradeNonproductionPlan(unsafe).map((issue) => issue.code)).toEqual(
       expect.arrayContaining(['CONFIGURATION_ATTESTATION_INVALID', 'NETWORK_BOUNDARY_INVALID'])
     );
+    expect(
+      validateRawAflTradeNonproductionPlan(unsafe, {
+        configurationSourceDigest: unreviewedDigest,
+      }).map((issue) => issue.code)
+    ).toContain('CONFIGURATION_ATTESTATION_INVALID');
   });
 
   it('rejects consistently renamed custody identities outside the reviewed account-region names', () => {
@@ -1511,6 +1598,37 @@ describe('AFL trade non-production infrastructure plan policy', () => {
     );
   });
 
+  it('requires bounded access-log retention and the exact custody KMS key ARN', () => {
+    const unsafe = withResourceChanges(safePlan(), (change) => {
+      const current = change.change as { after: Readonly<Record<string, unknown>> };
+      if (change.address === 'aws_s3_bucket_lifecycle_configuration.logging') {
+        return resource(change.address, change.type as string, {
+          ...current.after,
+          rule: [
+            {
+              expiration: [{ days: 3650 }],
+              filter: [{ prefix: 'access/' }],
+              id: 'expire-access-logs-at-approved-maximum-age',
+              noncurrent_version_expiration: [{ noncurrent_days: 30 }],
+              status: 'Enabled',
+            },
+          ],
+        });
+      }
+      if (change.address === 'aws_s3_bucket_policy.custody_safety') {
+        return resource(change.address, change.type as string, {
+          ...current.after,
+          policy: custodySafetyPolicy().replace(custodyKeyArn, `${custodyKeyArn}-unreviewed`),
+        });
+      }
+      return change;
+    });
+
+    expect(validateAflTradeNonproductionPlan(unsafe).map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['LOGGING_SAFETY_POLICY_INVALID', 'CUSTODY_SAFETY_POLICY_INVALID'])
+    );
+  });
+
   it('requires every IAM policy and attachment to remain on its reviewed role', () => {
     const unsafe = withResourceChanges(safePlan(), (change) => {
       if (change.address === 'aws_iam_role_policy.capture_kms') {
@@ -1616,6 +1734,21 @@ describe('AFL trade non-production infrastructure plan policy', () => {
 
     expect(issues).toEqual(
       expect.arrayContaining(['WORKER_INTERNET_EGRESS_OPEN', 'UNAPPROVED_COMPUTE'])
+    );
+  });
+
+  it('requires worker HTTPS egress to the exact regional S3 prefix list', () => {
+    const unsafe = withResourceChanges(safePlan(), (change) => {
+      if (change.address !== 'aws_vpc_security_group_egress_rule.worker_s3') return change;
+      const current = change.change as { after: Readonly<Record<string, unknown>> };
+      return resource(change.address, change.type as string, {
+        ...current.after,
+        prefix_list_id: 'pl-unreviewed',
+      });
+    });
+
+    expect(validateAflTradeNonproductionPlan(unsafe).map((issue) => issue.code)).toContain(
+      'WORKER_INTERNET_EGRESS_OPEN'
     );
   });
 
@@ -2144,6 +2277,21 @@ describe('AFL trade non-production infrastructure plan policy', () => {
     ).toContain('DATABASE_KMS_MISSING');
   });
 
+  it('requires the reviewed final RDS snapshot identity', () => {
+    const unsafe = withResourceChanges(safePlan(), (change) => {
+      if (change.address !== 'aws_db_instance.outcomes') return change;
+      const current = change.change as { after: Readonly<Record<string, unknown>> };
+      return resource(change.address, change.type as string, {
+        ...current.after,
+        final_snapshot_identifier: null,
+      });
+    });
+
+    expect(validateAflTradeNonproductionPlan(unsafe).map((issue) => issue.code)).toContain(
+      'DATABASE_BACKUPS_DISABLED'
+    );
+  });
+
   it('rejects alternate compute and schedules regardless of address shape', () => {
     const plan = safePlan();
     const issues = validateAflTradeNonproductionPlan({
@@ -2175,6 +2323,7 @@ describe('AFL trade non-production infrastructure plan policy', () => {
                 },
               ],
             }),
+            permissions_boundary: 'arn:aws:iam::111122223333:policy/unreviewed-boundary',
           })
         : change
     );
@@ -2436,6 +2585,40 @@ describe('AFL trade non-production infrastructure plan policy', () => {
       })
     ).rejects.toThrow(/source changed while the owned plan snapshot was being created/);
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed account and retention inputs before OpenTofu execution', async () => {
+    const invalidArguments = [
+      ['--aws-account-id', '11112222333', '--capture-retention-days', '365'],
+      ['--aws-account-id', '11112222333x', '--capture-retention-days', '365'],
+      ['--aws-account-id', '111122223333', '--capture-retention-days', '1'],
+      ['--aws-account-id', '111122223333', '--capture-retention-days', '3651'],
+      ['--aws-account-id', '111122223333', '--capture-retention-days', '2.5'],
+      [
+        '--aws-account-id',
+        '111122223333',
+        '--capture-retention-days',
+        '365',
+        '--database-backup-retention-days',
+        '6',
+      ],
+      [
+        '--aws-account-id',
+        '111122223333',
+        '--capture-retention-days',
+        '365',
+        '--database-backup-retention-days',
+        '35.5',
+      ],
+    ] as const;
+
+    for (const argv of invalidArguments) {
+      const execute = vi.fn(async () => '');
+      await expect(
+        runAflTradeNonproductionPlanValidationCommand({ argv, execute })
+      ).rejects.toThrow(/must be/);
+      expect(execute).not.toHaveBeenCalled();
+    }
   });
 
   it('rejects foreign workspaces and late source drift before reporting success', async () => {

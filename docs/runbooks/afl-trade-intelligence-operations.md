@@ -76,11 +76,16 @@ approving a future runtime graph.
 Every plan must supply `aws_account_id` and `capture_retention_days`. The capture retention value is
 the reviewed maximum age for both current and noncurrent objects under `captures/`; the lifecycle
 implements that ceiling as current expiration after `N - 1` days and noncurrent expiration after one
-further day. There is no default from which capture-retention authority can be inferred. An
+further day. The access-log bucket applies the same bounded lifecycle to `access/`, including the
+seven-day incomplete-upload cleanup. The runner rejects account IDs that are not exactly 12 decimal
+digits, capture retention outside the whole-number range 2–3650, and database backup retention
+outside the whole-number range 7–35 before OpenTofu starts. There is no default from which
+capture-retention authority can be inferred. An
 accountable alert recipient belongs to the later compute-bearing plan that creates failure monitoring;
 the current foundation exposes no dormant operator, schedule, CPU, or memory input. The validator
 also binds the effective RDS backup retention to the reviewed `database_backup_retention_days` plan
-value, whose default and minimum are seven days. Use the bounded command to snapshot the reviewed
+value, whose default and minimum are seven days, and requires the reviewed non-skipped final snapshot
+identity. Use the bounded command to snapshot the reviewed
 configuration, initialize its locked provider, and validate one exact temporary plan:
 
 ```sh
@@ -117,15 +122,22 @@ and logging bucket names from the reviewed account and region rather than trusti
 consistent plan-selected names. It also proves the VPC CIDR, private worker/data subnets, route tables
 with explicitly managed empty inline-route sets, associations, S3 gateway endpoint, security groups
 and database/cache subnet groups remain one exact isolated graph. The validator then binds capture
-grants to that plan's custody prefix, Redis group/user and custody key; binds runtime and
+grants to that plan's custody prefix, Redis group/user and actual custody-key ARN; admits worker HTTPS
+egress only to the exact regional S3 managed prefix list; binds runtime and
 migration roles to distinct credentials; requires the runtime role to read only its operator-populated
-runtime secret; and rejects open internet egress. It also requires the complete singleton and keyed
+runtime secret; proves every role has exactly the reviewed optional permissions boundary; and rejects
+open internet egress. It also requires the complete singleton and keyed
 foundation graph, rejects deletion or replacement actions, and proves the exact logging-bucket,
 custody-bucket, IAM-role, database-ingress and cache-ingress boundaries. Every custody and IAM policy
-must be fully rendered in the saved plan and match its complete reviewed statement semantics. Unknown
-policy JSON is rejected, so omitted dynamic or merged statements cannot be approved. Unknown
-provider-assigned network identifiers are accepted only when the plan created by the bounded command
-embeds the digest of the same read-only source snapshot and provider lock that OpenTofu consumed.
+that is fully rendered in the saved plan must match its complete reviewed statement semantics. The
+first-create custody policy is the sole policy-JSON exception: its exact KMS key ARN is
+provider-computed, so the policy may remain unknown only when the plan uses the hard-pinned reviewed
+source digest, the custody key ARN is itself provider-unknown, and the configuration graph binds the
+bucket policy to the exact five-statement custody document. Any source or lock change requires an
+explicit validator digest revision; every other unknown policy JSON remains rejected, so omitted
+dynamic or merged statements cannot be approved. Unknown provider-assigned network identifiers are
+accepted only when the plan created by the bounded command embeds that same reviewed read-only source
+snapshot and provider lock digest.
 
 The base foundation plan must leave `enable_migration_secret_access=false`, which creates the RDS
 instance and migration role without granting any secret read. It starts with the owned local state
@@ -568,6 +580,9 @@ supported command provisions its own loopback-only PostgreSQL 16 container, appl
 ordered outcomes migration history to isolated schemas, runs the fitzRoy factual rehearsal with no
 network/provider access, and removes the exact container afterward. Do not provide a live source,
 shared database, checkout `.env`, protected fantasy database, or `prisma/dev.db` to this rehearsal.
+Before any mutation, the rehearsal requires `current_database()` to be `statly_outcomes_test` and
+`current_schema()` to match its generated `afl_fitzroy_factual_rehearsal_<pid>_<time>` identity. A
+wrong schema fails closed and the real-PostgreSQL oracle proves it leaves zero competition rows.
 
 The rehearsal uses one deterministic `non_production` Footywire-through-fitzRoy envelope and must
 prove all of the following on real PostgreSQL:
@@ -588,8 +603,8 @@ prove all of the following on real PostgreSQL:
    release candidate, release manifest, projection, registry event, active pointer, valuation output,
    or fantasy record; the release registry remains at revision zero.
 
-The successful Stage 2A rehearsal boundary is 8 integration files and 39 tests, including the full
-migration/drift/reapply suite and three fitzRoy factual-rehearsal checks. Record the exact commit and
+The successful Stage 2A rehearsal boundary is 8 integration files and 40 tests, including the full
+migration/drift/reapply suite and four fitzRoy factual-rehearsal checks. Record the exact commit and
 command output in the delivery checkpoint. A later code-only change requires a fresh exact-commit
 run. This evidence does not satisfy real-source, hosted durability, backup/restore, alerting, schedule,
 or activation requirements.
@@ -631,7 +646,12 @@ and the protected review interface are provisioned and independently authorized.
 7. Commit the typed resolution, review decision, reusable assignment and occurrence in one
    transaction under the deterministic case, assignment, namespace, evidence and issue locks. Advance
    only gap-free compare-and-swap heads. An exact retry is idempotent; a conflicting retry is an
-   incident.
+   incident. Keep the application and PostgreSQL clocks synchronized. The database admits at most
+   five seconds of positive clock skew for an external-identity subject creation instant or review
+   decision instant; this tolerance covers ordinary distributed-runtime drift only. A timestamp more
+   than five seconds ahead of the relevant database clock fails the transaction, while completion
+   chronology, supersession order, authority validity and every canonical evidence binding remain
+   exact.
 8. To correct or withdraw a result, append one decision that supersedes the sole current leaf. Never
    edit an identity root, occurrence, proposal, closure or historical decision. Confirm the reusable
    assignment head is inactive when a mapping is withdrawn. A remap is deliberately two-step: first

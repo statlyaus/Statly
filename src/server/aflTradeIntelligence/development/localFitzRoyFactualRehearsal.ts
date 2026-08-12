@@ -144,7 +144,30 @@ export interface LocalAflTradeFitzRoyFactualRehearsalReceipt {
 
 function reference(prefix: string, content: unknown) {
   const id = createAflTradeContentAddress(prefix, content);
-  return { id, sha256: id.slice(id.indexOf(':') + 1) };
+  return referenceFromId(id);
+}
+
+function referenceFromId(id: string): { id: string; sha256: string } {
+  const match = /^[^:]+:([a-f0-9]{64})$/.exec(id);
+  if (match === null) {
+    throw new TypeError('The local rehearsal requires one valid content-addressed reference.');
+  }
+  return { id, sha256: match[1]! };
+}
+
+async function assertDisposableRehearsalDatabase(client: AflOutcomeSqlClient): Promise<void> {
+  const identity = await client.query<{ database_name: string; schema_name: string }>(
+    `SELECT current_database() AS database_name, current_schema() AS schema_name`
+  );
+  const current = identity.rows[0];
+  if (
+    current?.database_name !== 'statly_outcomes_test' ||
+    !/^afl_fitzroy_factual_rehearsal_\d+_\d+$/.test(current.schema_name)
+  ) {
+    throw new TypeError(
+      'The local rehearsal requires the named disposable PostgreSQL database and schema.'
+    );
+  }
 }
 
 async function ensureRole(client: AflOutcomeSqlClient, role: string): Promise<void> {
@@ -234,7 +257,7 @@ async function ensureGovernedEvidence(
 ) {
   const payload = { evidenceKind, environment: ENVIRONMENT, ...evidence } as const;
   const referenceId = createAflTradeContentAddress(governedEvidencePrefix[evidenceKind], payload);
-  const referenceSha256 = referenceId.slice(referenceId.indexOf(':') + 1);
+  const referenceSha256 = referenceFromId(referenceId).sha256;
   const existing = await client.query(
     `SELECT reference_id FROM outcome_governed_evidence_reference WHERE reference_id=$1`,
     [referenceId]
@@ -697,7 +720,7 @@ async function createAndPersistFactBatch(
   if (!goalsDefinition) throw new TypeError('The governed goals metric definition is missing.');
   const metricDefinition = {
     id: goalsDefinition.metricDefinitionId,
-    sha256: goalsDefinition.metricDefinitionId.slice('metric-definition:'.length),
+    sha256: referenceFromId(goalsDefinition.metricDefinitionId).sha256,
   };
   const source = {
     captureId,
@@ -900,7 +923,7 @@ async function createAndPersistFactualRun(
       definitionVersion: 'games/v1',
       definition: {
         id: gamesDefinition.metricDefinitionId,
-        sha256: gamesDefinition.metricDefinitionId.slice('metric-definition:'.length),
+        sha256: referenceFromId(gamesDefinition.metricDefinitionId).sha256,
       },
       grain: 'match',
       unit: 'games',
@@ -1114,7 +1137,7 @@ function createPrivateCandidate(input: {
     effectiveThrough: release.content.effectiveThrough,
     targetRelease: {
       id: release.releaseId,
-      sha256: release.releaseId.slice('outcome-release:'.length),
+      sha256: referenceFromId(release.releaseId).sha256,
     },
     targetReleaseManifest: release,
     archiveDataset,
@@ -1134,6 +1157,7 @@ export async function runLocalAflTradeFitzRoyFactualRehearsal(
   client: AflOutcomeSqlClient,
   options?: { goals?: string }
 ): Promise<LocalAflTradeFitzRoyFactualRehearsalReceipt> {
+  await assertDisposableRehearsalDatabase(client);
   await client.query(
     `INSERT INTO outcome_competition_season (competition,season_year)
      VALUES ($1,$2) ON CONFLICT DO NOTHING`,

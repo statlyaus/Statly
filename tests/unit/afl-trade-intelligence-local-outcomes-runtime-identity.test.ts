@@ -43,4 +43,15 @@ describe('local AFL outcomes runtime identity', () => {
     ).rejects.toThrow('64 lowercase hexadecimal characters');
     expect(query).not.toHaveBeenCalled();
   });
+
+  it('rejects unsafe process identifiers before issuing database statements', async () => {
+    for (const processId of [0, -1, Number.MAX_SAFE_INTEGER + 1]) {
+      const query = vi.fn();
+
+      await expect(
+        installLocalAflTradeOutcomesRuntimeIdentity({ query }, 'a'.repeat(64), processId)
+      ).rejects.toThrow('positive process identifier');
+      expect(query).not.toHaveBeenCalled();
+    }
+  });
 });

@@ -21,3 +21,16 @@ src/generated/aflTradeOutcomesPrisma
 *.sqlite3
 .env*
 !.env.example
+.Renviron
+**/.Renviron
+**/credentials
+**/credentials/**
+**/*service-account*.json
+**/*service_account*.json
+**/*serviceAccount*.json
+**/sa.b64
+**/sa.dec.json
+**/key.txt
+**/statly-*.json
+**/firebase-export*
+**/.firebase/**

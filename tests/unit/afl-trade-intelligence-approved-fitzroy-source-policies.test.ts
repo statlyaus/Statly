@@ -214,6 +214,7 @@ describe('approved fitzRoy source policies', () => {
 
       expect(records.proposal.content.environment).toBe('production');
       expect(records.proposal.content.decisionKey).toBe(`${capability.capabilityId}-production`);
+      expect(records.proposal.content.scope.scopeKey).toBe(`afl-trade-${capability.capabilityId}`);
       expect(nonProductionRecords.proposal.content).toMatchObject({
         decisionKey: `${capability.capabilityId}-non_production`,
         environment: 'non_production',

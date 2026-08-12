@@ -11,31 +11,76 @@ const databaseUrl =
     throw new Error('A disposable AFL_OUTCOMES_TEST_DATABASE_URL is required.');
   })();
 const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}`;
+const unreviewedSchemaName = `afl_fitzroy_unreviewed_${process.pid}_${Date.now()}`;
 const adminPool = new Pool({ connectionString: databaseUrl });
 const outcomesPool = new Pool({
   connectionString: databaseUrl,
   options: `-c search_path=${schemaName}`,
   max: 4,
 });
+const unreviewedPool = new Pool({
+  connectionString: databaseUrl,
+  options: `-c search_path=${unreviewedSchemaName}`,
+  max: 1,
+});
 
-function scopedDatabaseUrl(): string {
+function scopedDatabaseUrl(schema = schemaName): string {
   const scoped = new URL(databaseUrl);
-  scoped.searchParams.set('schema', schemaName);
+  scoped.searchParams.set('schema', schema);
   return scoped.toString();
 }
 
 beforeAll(async () => {
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
+  await adminPool.query(`CREATE SCHEMA "${unreviewedSchemaName}"`);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scopedDatabaseUrl() });
+  runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
+    databaseUrl: scopedDatabaseUrl(unreviewedSchemaName),
+  });
 });
 
 afterAll(async () => {
-  await outcomesPool.end();
-  await adminPool.query(`DROP SCHEMA "${schemaName}" CASCADE`);
-  await adminPool.end();
+  const failures: unknown[] = [];
+  for (const pool of [outcomesPool, unreviewedPool]) {
+    try {
+      await pool.end();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  try {
+    for (const disposableSchema of [schemaName, unreviewedSchemaName]) {
+      try {
+        await adminPool.query(`DROP SCHEMA IF EXISTS "${disposableSchema}" CASCADE`);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+  } finally {
+    try {
+      await adminPool.end();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'The factual rehearsal PostgreSQL cleanup failed.');
+  }
 });
 
 describe('source-independent non-production fitzRoy factual rehearsal', () => {
+  it('rejects an unreviewed schema before durable rehearsal mutation', async () => {
+    const client = createPgAflOutcomeSqlClient(unreviewedPool);
+
+    await expect(runLocalAflTradeFitzRoyFactualRehearsal(client)).rejects.toThrow(
+      /named disposable PostgreSQL database and schema/i
+    );
+    const stored = await unreviewedPool.query<{ competitions: string }>(
+      `SELECT count(*)::text AS competitions FROM outcome_competition_season`
+    );
+    expect(stored.rows[0]?.competitions).toBe('0');
+  });
+
   it('captures, stages, reconciles, constructs, and exactly replays one private candidate', async () => {
     const client = createPgAflOutcomeSqlClient(outcomesPool);
     const result = await runLocalAflTradeFitzRoyFactualRehearsal(client);

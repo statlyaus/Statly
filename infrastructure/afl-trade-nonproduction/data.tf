@@ -49,6 +49,7 @@ resource "aws_db_instance" "outcomes" {
   enabled_cloudwatch_logs_exports     = ["postgresql", "upgrade"]
   engine                              = "postgres"
   engine_version                      = "16"
+  final_snapshot_identifier           = "${local.name_prefix}-postgres-final"
   iam_database_authentication_enabled = true
   identifier                          = "${local.name_prefix}-postgres"
   instance_class                      = var.database_instance_class
