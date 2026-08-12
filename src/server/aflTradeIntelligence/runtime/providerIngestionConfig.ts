@@ -4,9 +4,11 @@ const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const imageDigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const artifactIdSchema = z.string().regex(/^artifact:[a-f0-9]{64}$/);
 const positiveInteger = z.coerce.number().int().positive();
+const deployedEnvironmentSchema = z.enum(['non_production', 'production']);
 
 const configSchema = z
   .object({
+    environment: deployedEnvironmentSchema,
     databaseUrl: z
       .string()
       .url()
@@ -103,6 +105,7 @@ export function parseAflTradeProviderIngestionConfig(
   env: Readonly<Record<string, string | undefined>>
 ): AflTradeProviderIngestionConfig {
   return configSchema.parse({
+    environment: required(env, 'AFL_TRADE_CAPTURE_ENVIRONMENT'),
     databaseUrl: required(env, 'AFL_OUTCOMES_DATABASE_URL'),
     redisUrl: required(env, 'AFL_TRADE_CAPTURE_REDIS_URL'),
     egressEndpoint: required(env, 'AFL_TRADE_FITZROY_EGRESS_ENDPOINT'),

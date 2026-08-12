@@ -6,6 +6,7 @@ const sha = (value: string) => value.repeat(64);
 
 function environment(): Record<string, string> {
   return {
+    AFL_TRADE_CAPTURE_ENVIRONMENT: 'non_production',
     AFL_OUTCOMES_DATABASE_URL: 'postgresql://outcomes:secret@db.example.test/outcomes',
     AFL_TRADE_CAPTURE_REDIS_URL: 'rediss://capture:secret@redis.example.test:6380/0',
     AFL_TRADE_FITZROY_EGRESS_ENDPOINT: 'https://egress.example.test/v1/capture',
@@ -37,10 +38,11 @@ function environment(): Record<string, string> {
   };
 }
 
-describe('provider-ingestion production configuration', () => {
+describe('provider-ingestion deployed configuration', () => {
   it('parses every isolated runtime dependency from an injected environment record', () => {
     const config = parseAflTradeProviderIngestionConfig(environment());
 
+    expect(config.environment).toBe('non_production');
     expect(config.runtimeIdentity).toEqual({
       rVersion: '4.5.1',
       dependencyLockSha256: sha('c'),
@@ -56,6 +58,14 @@ describe('provider-ingestion production configuration', () => {
   });
 
   it.each([
+    [
+      'missing environment',
+      (env: Record<string, string>) => delete env.AFL_TRADE_CAPTURE_ENVIRONMENT,
+    ],
+    [
+      'fixture environment',
+      (env: Record<string, string>) => (env.AFL_TRADE_CAPTURE_ENVIRONMENT = 'test_fixture'),
+    ],
     ['missing database', (env: Record<string, string>) => delete env.AFL_OUTCOMES_DATABASE_URL],
     [
       'insecure endpoint',

@@ -20,7 +20,7 @@ import {
 const gateRequestSchema = z
   .object({
     decisionKey: z.string().trim().min(1).max(200),
-    environment: z.literal('production'),
+    environment: z.enum(['non_production', 'production']),
     rightsArtifactId: z.string().regex(/^source-rights:[a-f0-9]{64}$/),
     competition: z.string().trim().min(1).max(100),
     season: z.number().int().min(1897).max(2200),
@@ -53,7 +53,10 @@ function parseInputPath(argv: readonly string[]): string {
   return argv[1];
 }
 
-function parseCommand(json: string): AflTradeProductionProviderIngestionCommand {
+function parseCommand(
+  json: string,
+  configuredEnvironment: AflTradeProviderIngestionConfig['environment']
+): AflTradeProductionProviderIngestionCommand {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
@@ -83,6 +86,14 @@ function parseCommand(json: string): AflTradeProductionProviderIngestionCommand 
   ) {
     throw new TypeError('The Gate and capture requests must identify the same capability scope.');
   }
+  if (
+    gateRequest.environment !== configuredEnvironment ||
+    gateRequest.decisionKey !== `${captureRequest.capabilityId}-${configuredEnvironment}`
+  ) {
+    throw new TypeError(
+      'The Gate decision key and environment must match the configured authority environment.'
+    );
+  }
   return {
     capture: { gateRequest, captureRequest },
     fieldMapId: envelope.fieldMapId,
@@ -101,7 +112,8 @@ export async function runAflTradeFitzRoyProviderIngestionCommand(input: {
   const inputPath = parseInputPath(input.argv);
   const config = parseAflTradeProviderIngestionConfig(input.env);
   const command = parseCommand(
-    await (input.readInput ?? ((path) => readFile(path, 'utf8')))(inputPath)
+    await (input.readInput ?? ((path) => readFile(path, 'utf8')))(inputPath),
+    config.environment
   );
   const runtime = (input.createRuntime ?? createAflTradeProviderIngestionRuntime)(config);
   try {

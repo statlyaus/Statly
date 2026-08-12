@@ -116,6 +116,7 @@ const initialApproval = {
     proposedBy: 'statly-data-governance-owner',
   },
   gate: {
+    environment: 'production' as const,
     decidedAt: '2026-08-08T00:02:00.000Z',
     effectiveAt: '2026-08-08T00:02:00.000Z',
     revalidateAt: '2027-08-08T00:00:00.000Z',

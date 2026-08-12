@@ -494,39 +494,44 @@ provider captures, reviewed resolution decisions and superseding releases.
 
 ### Staging fitzRoy provider observations
 
-The AFL Tables, Footywire, and Fryzigg player-stat policies are approved. Production capture is
+The AFL Tables, Footywire, and Fryzigg player-stat policies are approved. Deployed capture is
 available only through the composed command boundary after its exact current field manifests and Gate
-0A records are loaded, durable custody is provisioned, and the attested executor/decoder/egress
-boundary plus provider-keyed distributed admission are active. Fixture verification does not satisfy
-those runtime controls.
+0A records are loaded for the target `non_production` or `production` environment, durable custody is
+provisioned for that same environment, and the attested executor/decoder/egress boundary plus
+provider-keyed distributed admission are active. Fixture verification does not satisfy those runtime
+controls or grant authority to either deployed environment.
 
 1. Prepare one reviewed JSON input containing the exact field manifest for each of
    `afl-tables-player-stats`, `footywire-player-stats`, and `fryzigg-player-stats`, the retained terms,
-   authority, and egress-policy artifact IDs, finite effective/expiry/revalidation times, and the
-   accountable reviewer. Record it with
+   authority, and egress-policy artifact IDs, finite effective/expiry/revalidation times, the explicit
+   `non_production` or `production` Gate environment, and the accountable reviewer. Each environment
+   owns an independent decision key and version history; neither may supersede the other. Record it with
    `npm run outcomes:sources:record-approved -- --input <reviewed-json-path>`. The command requires an
    explicit `AFL_OUTCOMES_DATABASE_URL`, atomically CAS-appends all three source-rights/Gate records in
    one transaction, reloads and authenticates the ledger, emits only stable IDs, and never treats one
    provider's fields as another provider's authority. A failure commits none of the three approvals.
-2. Prepare one reviewed season-ingestion JSON envelope containing the exact production Gate request,
+2. Prepare one reviewed season-ingestion JSON envelope containing the exact target-environment Gate request,
    direct capability capture request, approved field-map ID and body, and factual `effectiveAt`. The
    Gate and capture sections must name the same capability, competition and season. Run it only from
    the pinned ETL job image with
    `npm run outcomes:sources:ingest-fitzroy -- --input <reviewed-season-json-path>`. The command parses
-   the injected production configuration, resolves current rights and the Gate ledger from the isolated
-   PostgreSQL database, admits provider/capture keys through Redis, calls the reviewed HTTPS egress
+   the injected deployed configuration, rejects a Gate environment or environment-specific decision
+   key that differs from `AFL_TRADE_CAPTURE_ENVIRONMENT`, resolves current rights and the Gate ledger
+   from the isolated PostgreSQL database, admits provider/capture keys through Redis, calls the
+   reviewed HTTPS egress
    endpoint, verifies its Ed25519 receipt, writes exact raw and metadata bytes to separate KMS-backed
    custody profiles, constructs the source snapshot, persists the source capture, decodes the retained
    RDS and stages every row. It emits only stable capture/snapshot/run IDs and status; it never emits raw
    source bytes or secrets. Never decode a local path or separately downloaded provider file.
-3. Inject every required runtime value explicitly: `AFL_OUTCOMES_DATABASE_URL`,
+3. Inject every required runtime value explicitly: `AFL_TRADE_CAPTURE_ENVIRONMENT` set to exactly
+   `non_production` or `production`, `AFL_OUTCOMES_DATABASE_URL`,
    `AFL_TRADE_CAPTURE_REDIS_URL`, `AFL_TRADE_FITZROY_EGRESS_ENDPOINT`, its bearer token and public-key
    JSON, exact egress-policy evidence IDs, object region/bucket/prefix/KMS/repository and infrastructure
    evidence, permitted residency jurisdictions, exact R 4.5.1/renv-lock/image identities and Rscript
    path, plus bounded capture/decoder/source/diagnostic/row/field/cell/output/retention limits. The
    configuration parser rejects absent values, non-HTTPS egress, invalid digests, duplicate evidence,
    and zero or unbounded limits. Do not reuse the web runtime's fantasy database or credentials.
-4. Require the production executor's signed egress receipt to match the exact provider, capability,
+4. Require the deployed executor's signed egress receipt to match the exact provider, capability,
    invocation digest, returned RDS and diagnostics bytes, pinned runtime image and lock, reviewed
    request/burst/cache policy, and egress-policy evidence. Retain it through the capture receipt v2
    metadata-custody binding. The Redis lease coordinates provider-wide concurrency and capture-level
