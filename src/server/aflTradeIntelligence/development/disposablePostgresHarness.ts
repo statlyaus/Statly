@@ -91,7 +91,8 @@ function parseRecoveredContainerId(stdout: string): string | undefined {
 
 function createTestEnvironment(
   environment: NodeJS.ProcessEnv,
-  databaseUrl: string
+  databaseUrl: string,
+  containerId: string
 ): NodeJS.ProcessEnv {
   const allowedKeys = [
     'CI',
@@ -112,6 +113,7 @@ function createTestEnvironment(
   return {
     ...allowedEnvironment,
     AFL_OUTCOMES_DATABASE_URL: databaseUrl,
+    AFL_OUTCOMES_TEST_CONTAINER_ID: containerId,
     AFL_OUTCOMES_TEST_DATABASE_URL: databaseUrl,
     NODE_ENV: 'test',
     PRISMA_HIDE_UPDATE_MESSAGE: '1',
@@ -258,7 +260,7 @@ export async function runDisposableAflTradeOutcomesTests(
     });
 
     const databaseUrl = `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${hostPort}/${POSTGRES_DATABASE}`;
-    const testEnvironment = createTestEnvironment(environment, databaseUrl);
+    const testEnvironment = createTestEnvironment(environment, databaseUrl, containerId);
     const schemaPath = resolve(options.workspaceRoot, 'prisma/afl-trade-outcomes/schema.prisma');
     assertNoSchemaAdjacentPrismaEnvironmentFile(schemaPath, options.schemaEnvironmentFileExists);
     const commands = [

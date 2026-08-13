@@ -620,11 +620,19 @@ disposable command now also exercises a release-specific test that:
 5. authenticates the complete append-only 15-event registry history and leaves the recovered
    replacement active only inside the disposable schema.
 
+The restore-specific test then creates a custom-format `pg_dump` with the PostgreSQL 16 tools inside
+that same harness-owned container, closes the application pool, destroys the exact generated schema,
+and proves `to_regnamespace` can no longer resolve it. A single-transaction `pg_restore` recreates the
+schema from the dump. Fresh connections must reproduce the exact sealed-candidate rows, 15-event
+registry, active release and projection, service result, API response content, archive-page response,
+and authenticated JSON, CSV and OOXML exports observed before destruction. The harness supplies only
+its parsed immutable container ID to the test process and removes that exact container afterward.
+
 Record the exact commit and command output in the delivery checkpoint. A later code-only change
 requires a fresh exact-commit run. This remains local `non_production` engineering evidence. It uses
 no network or live source, creates no hosted or billable resource, grants no reviewer or production
-authority, and does not satisfy real-source custody, hosted durability, backup/restore, alerting,
-scheduling, deployment, or production-activation requirements.
+authority, and does not satisfy real-source custody, hosted durability or hosted backup/restore,
+alerting, scheduling, deployment, or production-activation requirements.
 
 ### Reviewing provider identities and matches
 
