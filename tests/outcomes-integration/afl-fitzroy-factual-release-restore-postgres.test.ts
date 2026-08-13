@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomInt } from 'node:crypto';
 import type { ReactElement } from 'react';
 
 import { NextRequest } from 'next/server';
@@ -52,7 +53,9 @@ if (!/^[a-f0-9]{64}$/u.test(containerId)) {
   throw new Error('The disposable PostgreSQL container identifier is invalid.');
 }
 
-const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}`;
+const schemaName = `afl_fitzroy_factual_rehearsal_${process.pid}_${Date.now()}${randomInt(10_000)
+  .toString()
+  .padStart(4, '0')}`;
 const archivePath = `/tmp/${schemaName}.dump`;
 const adminPool = new Pool({ connectionString: databaseUrl });
 let outcomesPool: Pool | undefined;
@@ -253,9 +256,16 @@ afterAll(async () => {
   publicRuntime.outcomeReadService = null;
   await outcomesPool?.end();
   try {
-    await adminPool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+    execFileSync('docker', ['exec', containerId, 'rm', '-f', '--', archivePath], {
+      stdio: 'pipe',
+      timeout: 30_000,
+    });
   } finally {
-    await adminPool.end();
+    try {
+      await adminPool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+    } finally {
+      await adminPool.end();
+    }
   }
 });
 

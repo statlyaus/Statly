@@ -754,7 +754,7 @@ async function assertCandidateEvidenceWithinCutoff(
        FROM outcome_source_capture
       WHERE capture_id = ANY($1::text[])
      UNION ALL
-     SELECT 'review_decision',decision_id,'approved',decided_at
+     SELECT 'review_decision',decision_id,decision::text,decided_at
        FROM outcome_review_decision
       WHERE decision_id = ANY($2::text[])
      UNION ALL

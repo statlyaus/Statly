@@ -12,6 +12,7 @@ import {
   AFL_TRADE_FACTUAL_RECONCILIATION_POLICY_SCHEMA_VERSION,
   aflTradeFactualReconciliationRunSchema,
   createAflTradeFactualReconciliationPolicy,
+  createAflTradeReconciledSubjectKey,
 } from '../outcomes/factualReconciliationContracts';
 import { reconcileAflTradeFactualFacts } from '../outcomes/factualReconciliationService';
 import {
@@ -511,7 +512,13 @@ async function resolutionDecision(
 ) {
   const replay = await client.query<{ evidence_json: unknown }>(
     `SELECT evidence_json FROM outcome_review_decision
-      WHERE subject_type='provider_resolution_case' AND subject_id=$1`,
+      WHERE subject_type='provider_resolution_case' AND subject_id=$1
+        AND NOT EXISTS (
+          SELECT 1 FROM outcome_review_decision successor
+           WHERE successor.supersedes_decision_id=outcome_review_decision.decision_id
+        )
+      ORDER BY decided_at DESC,decision_id DESC
+      LIMIT 1`,
     [proposal.content.resolutionCaseId]
   );
   if (replay.rows[0]) {
@@ -1351,8 +1358,45 @@ async function createAndPersistFactualRun(
       persisted: { idempotentReplay: true },
     };
   }
+  if (
+    batch.metricFact.content.factKind !== 'player_season_metric' ||
+    batch.metricFact.content.seasonClubScope.kind !== 'resolved_single_club' ||
+    batch.appearanceFact.content.factKind !== 'player_appearance'
+  ) {
+    throw new TypeError('The local factual run requires exact goals and appearance subjects.');
+  }
+  const currentSubjectKeys = [
+    createAflTradeReconciledSubjectKey({
+      environment: ENVIRONMENT,
+      competition: batch.metricFact.content.competition,
+      seasonYear: batch.metricFact.content.seasonYear,
+      playerId: batch.metricFact.content.player.playerId,
+      clubScope: {
+        kind: 'resolved_single_club',
+        clubId: batch.metricFact.content.seasonClubScope.club.clubId,
+      },
+      matchId: null,
+      metricCode: batch.metricFact.content.metricCode,
+      definitionVersion: batch.metricFact.content.definitionVersion,
+    }),
+    createAflTradeReconciledSubjectKey({
+      environment: ENVIRONMENT,
+      competition: batch.appearanceFact.content.competition,
+      seasonYear: batch.appearanceFact.content.seasonYear,
+      playerId: batch.appearanceFact.content.player.playerId,
+      clubScope: {
+        kind: 'resolved_single_club',
+        clubId: batch.appearanceFact.content.representedClub.clubId,
+      },
+      matchId: batch.appearanceFact.content.match.matchId,
+      metricCode: 'games',
+      definitionVersion: 'games/v1',
+    }),
+  ];
   const currentHeads = await client.query<{ subject_key: string; revision: number }>(
-    `SELECT subject_key,revision FROM outcome_reconciled_factual_metric_head`
+    `SELECT subject_key,revision FROM outcome_reconciled_factual_metric_head
+      WHERE subject_key=ANY($1::text[])`,
+    [currentSubjectKeys]
   );
   const sourceMemberships = [batch.matchFact, batch.appearanceFact, batch.metricFact].map(
     (fact) => ({

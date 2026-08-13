@@ -89,7 +89,9 @@ describe('local fitzRoy factual-release lifecycle', () => {
     }>(
       `SELECT action,release_id,event_json
          FROM outcome_registry_event
-        ORDER BY revision`
+        WHERE scope_key=$1
+        ORDER BY revision`,
+      [AFL_DRAFT_TRADE_PUBLIC_OUTCOME_SCOPE]
     );
     expect(lifecycleEvents.rows.map(({ action }) => action)).toEqual([
       'register',
