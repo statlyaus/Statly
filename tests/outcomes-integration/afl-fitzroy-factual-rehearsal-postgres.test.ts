@@ -126,6 +126,38 @@ describe('source-independent non-production fitzRoy factual rehearsal', () => {
     expect(stored.rows[0]?.runs).toBe('1');
   });
 
+  it('records exact player, club-side, and provider-native match reviews before fact promotion', async () => {
+    const reviewed = await outcomesPool.query<{
+      player_id: string | null;
+      club_ids: string[] | null;
+      match_id: string | null;
+      match_outcome: string | null;
+      player_revision: number | null;
+      match_revision: number | null;
+    }>(
+      `SELECT
+        (SELECT player_id FROM outcome_provider_player_resolution
+          WHERE outcome='approved' ORDER BY revision DESC LIMIT 1) AS player_id,
+        (SELECT array_agg(DISTINCT club_id ORDER BY club_id)
+           FROM outcome_provider_club_resolution WHERE outcome='approved') AS club_ids,
+        (SELECT match_id FROM outcome_provider_match_resolution
+          WHERE outcome='approved' ORDER BY revision DESC LIMIT 1) AS match_id,
+        (SELECT outcome::text FROM outcome_provider_match_resolution
+          ORDER BY revision DESC LIMIT 1) AS match_outcome,
+        (SELECT max(revision) FROM outcome_provider_player_resolution) AS player_revision,
+        (SELECT max(revision) FROM outcome_provider_match_resolution) AS match_revision`
+    );
+
+    expect(reviewed.rows[0]).toEqual({
+      player_id: 'afl-player:local-rehearsal',
+      club_ids: ['afl-club:local-rehearsal', 'afl-club:local-rehearsal-away'],
+      match_id: 'afl-match:local-rehearsal-2026-r1',
+      match_outcome: 'approved',
+      player_revision: 1,
+      match_revision: 1,
+    });
+  });
+
   it('conserves the admitted row and leaves every publication authority untouched', async () => {
     const stored = await outcomesPool.query<{
       captures: string;
@@ -135,7 +167,10 @@ describe('source-independent non-production fitzRoy factual rehearsal', () => {
       failed_attempts: string;
       player_resolutions: string;
       club_resolutions: string;
+      match_resolutions: string;
       fact_batches: string;
+      match_universe_facts: string;
+      player_appearance_facts: string;
       metric_facts: string;
       factual_runs: string;
       reconciled_metrics: string;
@@ -152,7 +187,10 @@ describe('source-independent non-production fitzRoy factual rehearsal', () => {
         (SELECT count(*)::text FROM outcome_provider_normalization_attempt) AS failed_attempts,
         (SELECT count(*)::text FROM outcome_provider_player_resolution) AS player_resolutions,
         (SELECT count(*)::text FROM outcome_provider_club_resolution) AS club_resolutions,
+        (SELECT count(*)::text FROM outcome_provider_match_resolution) AS match_resolutions,
         (SELECT count(*)::text FROM outcome_provider_fact_batch) AS fact_batches,
+        (SELECT count(*)::text FROM outcome_provider_match_universe_fact) AS match_universe_facts,
+        (SELECT count(*)::text FROM outcome_provider_player_appearance_fact) AS player_appearance_facts,
         (SELECT count(*)::text FROM outcome_provider_numeric_metric_fact) AS metric_facts,
         (SELECT count(*)::text FROM outcome_factual_reconciliation_run) AS factual_runs,
         (SELECT count(*)::text FROM outcome_reconciled_factual_metric) AS reconciled_metrics,
@@ -169,11 +207,14 @@ describe('source-independent non-production fitzRoy factual rehearsal', () => {
       normalization_issues: '0',
       failed_attempts: '1',
       player_resolutions: '1',
-      club_resolutions: '1',
+      club_resolutions: '3',
+      match_resolutions: '1',
       fact_batches: '1',
+      match_universe_facts: '1',
+      player_appearance_facts: '1',
       metric_facts: '1',
       factual_runs: '1',
-      reconciled_metrics: '1',
+      reconciled_metrics: '2',
       factual_candidates: '0',
       release_manifests: '0',
       registry_revision: 0,
