@@ -157,6 +157,20 @@ jobs:
         run: npm run outcomes:prisma:validate
       - name: Generate isolated outcomes client
         run: npm run outcomes:prisma:generate
+      - name: Resolve disposable PostgreSQL service container
+        shell: bash
+        run: |
+          mapfile -t container_ids < <(
+            docker ps --no-trunc \
+              --filter "ancestor=postgres:16-alpine" \
+              --filter "publish=5432" \
+              --format '{{.ID}}'
+          )
+          if [[ ${#container_ids[@]} -ne 1 || ! ${container_ids[0]} =~ ^[a-f0-9]{64}$ ]]; then
+            echo "Expected one immutable PostgreSQL service container ID; found ${#container_ids[@]}." >&2
+            exit 1
+          fi
+          echo "AFL_OUTCOMES_TEST_CONTAINER_ID=${container_ids[0]}" >> "$GITHUB_ENV"
       - name: PostgreSQL integration tests
         run: npm run test:outcomes:int:provisioned
 
