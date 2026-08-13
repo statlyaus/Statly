@@ -251,6 +251,35 @@ function metricContent(appearanceFactId: string, overrides: Record<string, unkno
   };
 }
 
+function seasonMetricContent(overrides: Record<string, unknown> = {}) {
+  return {
+    ...factBase(),
+    source: sourceEvidence({
+      identity: digest('7'),
+      match: null,
+      metric: digest('3'),
+      achievement: null,
+      appearance: null,
+    }),
+    factKind: 'player_season_metric' as const,
+    player: playerResolution(),
+    seasonClubScope: {
+      kind: 'resolved_single_club' as const,
+      club: clubResolution('afl-club:home'),
+    },
+    metricCode: 'goals' as const,
+    definitionVersion: 'goals/v1',
+    definition: immutableReference('metric-definition', 'goals/v1'),
+    unit: 'goals',
+    availability: {
+      state: 'measured' as const,
+      numericValue: '1',
+      reasonCode: null,
+    },
+    ...overrides,
+  };
+}
+
 function batchContent(facts: readonly AflTradeSourceFact[]) {
   const sortedFacts = [...facts].sort((left, right) => left.factId.localeCompare(right.factId));
   const rowFactIds = sortedFacts.map(({ factId }) => factId).sort();
@@ -430,6 +459,20 @@ describe('AFL trade factual source contracts', () => {
         })
       )
     ).toThrow();
+  });
+
+  it('requires every player-bound fact to bind its exact identity candidate digest', () => {
+    const content = seasonMetricContent();
+
+    expect(() =>
+      createAflTradeSourceFact({
+        ...content,
+        source: {
+          ...content.source,
+          candidateDigests: { ...content.source.candidateDigests, identity: null },
+        },
+      })
+    ).toThrow(/player_season_metric fact must bind only its exact required candidate digests/);
   });
 
   it('admits only an explicit staged appearance claim and never a source games metric', () => {

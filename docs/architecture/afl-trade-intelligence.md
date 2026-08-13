@@ -302,16 +302,27 @@ PostgreSQL target, object storage, factual release views, or valuation artifact 
 apply the protected fantasy schema or SQLite migration history to them or introduce the public schema
 into an unapproved target.
 
-The source-independent Stage 2A rehearsal now also exercises the complete fitzRoy factual path in the
-disposable real-PostgreSQL harness. A deterministic `non_production` provider envelope passes the
-same Gate, attested capture, custody, decoder, field-map, normalization, governed player/club
-resolution, source-fact, and factual-reconciliation contracts used by the deployed boundary. It
-conserves one decoded row into one numeric fact and one reconciled metric, constructs one private
-content-addressed factual candidate, replays the exact evidence idempotently, and rejects changed
-decoded evidence under the same capture and field-map identity. The candidate is deliberately not
-registered: the rehearsal leaves the release manifest set empty, the registry at revision zero, and
-all public activation state unchanged. It uses no live provider access, cloud service, schedule,
-fixture fallback in a deployed path, valuation model, or protected fantasy data.
+The source-independent Stage 2A rehearsal now exercises two explicit fitzRoy factual layers in the
+disposable real-PostgreSQL harness. First, a deterministic `non_production` provider envelope passes
+the Gate, attested capture, custody, decoder, field-map, normalization, governed player/club and match
+resolution, appearance/metric fact, and factual-reconciliation contracts. That layer conserves and
+exactly replays one private content-addressed candidate without publication. Second, the local release
+rehearsal promotes reviewed baseline and replacement generations into separate immutable captures,
+events, assets and gap-free acquisition-spell versions; seals their release candidates; and executes
+registration, validation, approval, activation, supersession, explicit rollback, no-fallback
+withdrawal, and freshly authorized recovery. The recovered replacement is verified across the
+PostgreSQL read service, local API adapter, archive-page response, persisted projection, all declared
+view artifacts, and release-pinned JSON, CSV and valid OOXML export bytes. This activation exists only
+inside the generated disposable schema. It uses no live provider access, cloud service, schedule,
+hosted deployment, valuation model, production authority, or protected fantasy data.
+
+The same disposable harness now proves local database recovery for that exact release state. It uses
+the container's PostgreSQL 16 tools to create a custom-format dump, closes the scoped pool, destroys
+the generated schema, verifies the schema is absent, and restores it in one transaction. New
+connections must reproduce the sealed candidates, full 15-event lifecycle, recovered active pointer,
+projection, service, API, archive response, and authenticated JSON, CSV and OOXML exports byte for
+byte. This is disposable local recovery evidence only; it is not evidence for hosted retention,
+point-in-time recovery, cross-host recovery, disaster recovery, or production restore authority.
 
 ### Maturity-review acceptance criteria
 
@@ -1152,9 +1163,10 @@ state-dependent projection, and Gate 4/Gate 5/activation-authority checks as the
 Activation
 re-evaluates the exact Gate 0A source terms and request, rechecks Gate 4, separately requires the Gate 5
 product decision, and requires an expiring exact-revision operational authorization with an open
-rollback window and the write barrier engaged. This is a conformance contract for the future PostgreSQL
-adapter, not the durable registry itself; fixture decisions and authorizations are accepted only in the
-`test_fixture` environment and carry no real authority.
+rollback window and the write barrier engaged. The PostgreSQL adapter now persists this contract under
+one locked expected-revision chain and is exercised in generated disposable schemas. Those local
+`test_fixture` and `non_production` decisions and authorizations carry no external reviewer or
+production authority.
 
 The factual publication lane uses explicit compatibility versions. Existing archive-only records keep
 the release-v1/projection-v1 contract unchanged. A factual candidate uses
@@ -1729,12 +1741,12 @@ model-execution evidence, complete-trade assessment contracts, and independent p
 That foundation is not equivalent to a live factual dataset or an approved trade grade. Completion is
 reported by milestone, never as one blended percentage:
 
-| Milestone                 | Current state | Completion evidence                                                                                                                                                                                                        |
-| ------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Engineering foundation    | Complete      | Normalized migrations and contracts, disposable real-PostgreSQL rehearsal, supported checks, build, cleanup, and review are complete.                                                                                      |
-| Non-production operations | Partial       | The source-independent fitzRoy-to-private-candidate PostgreSQL rehearsal is complete; hosted services, real-source capture, historical reconciliation, restore rehearsal, and alert burn-in still need execution evidence. |
-| Factual production        | Not complete  | No reviewed real-data factual release has been activated and verified across every public read/export surface.                                                                                                             |
-| Valuation production      | Not complete  | No locked real-data player/pick model and complete-trade valuation publication has passed Gates 3, 4, and 5 and been activated.                                                                                            |
+| Milestone                 | Current state | Completion evidence                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Engineering foundation    | Complete      | Normalized migrations and contracts, disposable real-PostgreSQL rehearsal, supported checks, build, cleanup, and review are complete.                                                                                                                                                                                                                                      |
+| Non-production operations | Partial       | The source-independent fitzRoy private-candidate, full factual-release, and disposable dump/destroy/restore PostgreSQL rehearsals are complete, including local parity, rollback, no-fallback withdrawal, recovery, and restored parity; hosted services, real-source capture, historical reconciliation, hosted restore, and alert burn-in still need execution evidence. |
+| Factual production        | Not complete  | No reviewed real-data factual release has been activated and verified across every public read/export surface.                                                                                                                                                                                                                                                             |
+| Valuation production      | Not complete  | No locked real-data player/pick model and complete-trade valuation publication has passed Gates 3, 4, and 5 and been activated.                                                                                                                                                                                                                                            |
 
 The remaining work proceeds through these independently verifiable gates:
 
@@ -1845,9 +1857,11 @@ evidence, pathway-specific pick support, model validation, complete-party assess
 publication parity, and its own product and release Gates.
 
 Passing the factual manifest and lifecycle fixture tests proves content integrity, transition rules,
-stale-revision rejection, exact selection, and no-fallback withdrawal behavior. It does not prove raw
-source byte custody, PostgreSQL transactions, source rights, human review, public dataset contents,
-parity against a real corpus, cache invalidation, backup/restore, or a production release.
+stale-revision rejection, exact selection, and no-fallback withdrawal behavior. The disposable
+fitzRoy factual-release rehearsal additionally proves the implemented PostgreSQL transactions and
+local API, projection, export, and archive-page parity against its deterministic candidate. Neither
+proves live raw-source custody, current external source rights, human review, parity against a real
+corpus, hosted cache invalidation, hosted backup/restore, disaster recovery, or a production release.
 
 Selecting the isolated target in design does not mean it is provisioned, ready, authoritative, or
 approved. The current external blockers are exact machine-recorded source decisions and field uses,

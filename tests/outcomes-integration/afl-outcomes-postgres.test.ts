@@ -40,10 +40,7 @@ import {
   aflDraftTradeOutcomeFixtureHash,
   createAflDraftTradeOutcomeReleaseFixture,
 } from '../fixtures/aflDraftTradeOutcomeReleaseFixture';
-import {
-  OUTCOMES_PRISMA_SCHEMA_PATH,
-  runOutcomesPrismaTestCommand,
-} from './outcomesPrismaTestCli';
+import { OUTCOMES_PRISMA_SCHEMA_PATH, runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 interface QueryResultLike<Row = Record<string, unknown>> {
   rows: readonly Row[];
@@ -775,7 +772,19 @@ const releaseId = `outcome-release:${'a'.repeat(64)}`;
 const projectionId = `outcome-projection:${'b'.repeat(64)}`;
 const secondProjectionId = `outcome-projection:${'c'.repeat(64)}`;
 
-async function seedNormalizedEventRelease(suffix: string) {
+async function seedNormalizedEventRelease(
+  suffix: string,
+  options: {
+    competition?: string;
+    seasonYear?: number;
+    effectiveThrough?: string;
+    createdAt?: string;
+  } = {}
+) {
+  const competition = options.competition ?? 'AFL';
+  const seasonYear = options.seasonYear ?? 2025;
+  const effectiveThrough = options.effectiveThrough ?? '2025-12-31T23:59:59Z';
+  const createdAt = options.createdAt ?? '2026-01-01T00:00:00Z';
   const ids = {
     releaseId: `outcome-release:${sha256AflTradeCanonicalJson({ fixture: 'normalized-event-release', suffix })}`,
     artifactId: `artifact-${suffix}`,
@@ -804,9 +813,8 @@ async function seedNormalizedEventRelease(suffix: string) {
   await query(
     `INSERT INTO outcome_release_manifest
       (release_id, scope_key, environment, created_at, effective_through, manifest_json)
-     VALUES ($1, 'public-afl-draft-trade-outcomes', 'test_fixture', '2026-01-01T00:00:00Z',
-             '2025-12-31T23:59:59Z', '{}'::jsonb)`,
-    [ids.releaseId]
+     VALUES ($1, 'public-afl-draft-trade-outcomes', 'test_fixture', $2, $3, '{}'::jsonb)`,
+    [ids.releaseId, createdAt, effectiveThrough]
   );
   await query(
     `INSERT INTO outcome_artifact_custody
@@ -826,7 +834,8 @@ async function seedNormalizedEventRelease(suffix: string) {
   );
   await query(
     `INSERT INTO outcome_competition_season (competition, season_year)
-     VALUES ('AFL', 2025) ON CONFLICT DO NOTHING`
+     VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [competition, seasonYear]
   );
   await query(
     `INSERT INTO outcome_source_capture
@@ -834,9 +843,9 @@ async function seedNormalizedEventRelease(suffix: string) {
        dataset, dataset_version, access_mechanism, competition, anchor_season_year, effective_at,
        captured_at, status, manifest_json)
      VALUES ($1, $2, $3, $4, 'test_fixture', 'fixture-workbook', 'annual-and-trades', 'v1',
-             'operator_import', 'AFL', 2025, '2025-01-01T00:00:00Z',
+             'operator_import', $5, $6, '2025-01-01T00:00:00Z',
              '2025-01-01T00:00:01Z', 'approved', '{}'::jsonb)`,
-    [ids.captureId, ids.attemptId, `snapshot-${suffix}`, ids.artifactId]
+    [ids.captureId, ids.attemptId, `snapshot-${suffix}`, ids.artifactId, competition, seasonYear]
   );
   await query(
     `INSERT INTO outcome_import_run
@@ -866,9 +875,16 @@ async function seedNormalizedEventRelease(suffix: string) {
     `INSERT INTO outcome_import_partition
       (import_partition_id, import_run_id, partition_key, partition_kind, competition,
        season_year, row_count, rows_sha256, partition_json)
-     VALUES ($1, $2, 'fixture-events:2025', 'workbook_trade_ledger', 'AFL', 2025,
-             $3, $4, '{}'::jsonb)`,
-    [`partition-${suffix}`, ids.importRunId, importRows.length, contentSha256]
+     VALUES ($1, $2, $3, 'workbook_trade_ledger', $4, $5, $6, $7, '{}'::jsonb)`,
+    [
+      `partition-${suffix}`,
+      ids.importRunId,
+      `fixture-events:${seasonYear}`,
+      competition,
+      seasonYear,
+      importRows.length,
+      contentSha256,
+    ]
   );
   for (const [ordinal, importRowId] of importRows.entries()) {
     await query(
@@ -918,8 +934,8 @@ async function seedNormalizedEventRelease(suffix: string) {
   );
   await query(
     `INSERT INTO outcome_event (event_id, competition, season_year, stable_key)
-     VALUES ($1, 'AFL', 2025, $2)`,
-    [ids.eventId, `fixture-trade-${suffix}`]
+     VALUES ($1, $2, $3, $4)`,
+    [ids.eventId, competition, seasonYear, `fixture-trade-${suffix}`]
   );
   await query(
     `INSERT INTO outcome_event_version
@@ -1054,6 +1070,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0041_valuation_publication_post_lock_time',
       '0042_pick_pav_model_execution_registry',
       '0043_external_identity_clock_skew_tolerance',
+      '0044_governed_provider_release_membership',
     ]);
 
     const tables = await query<{ table_name: string }>(
@@ -1957,6 +1974,60 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       legacy_assignment_count: '0',
       release_membership_count: '0',
     });
+  });
+
+  it('rejects a governed player resolution sourced outside the factual release', async () => {
+    const scenario = providerResolutionScenario;
+    if (!scenario) throw new Error('The provider resolution vertical slice did not initialize.');
+    const ids = await seedNormalizedEventRelease('provider-resolution-outside-release', {
+      competition: 'AFLM',
+      seasonYear: 2026,
+      effectiveThrough: '2026-12-31T23:59:59Z',
+      createdAt: '2027-01-01T00:00:00Z',
+    });
+
+    const connection = await outcomesPool.connect();
+    try {
+      await connection.query('BEGIN');
+      await connection.query(
+        `INSERT INTO outcome_event_asset
+          (asset_version_id, event_version_id, asset_key, kind, player_id, player_identity_id,
+           from_club_id, to_club_id, source_import_row_id, raw_description, status)
+         VALUES ('asset-governed-provider-resolution-outside-release', $1, 'provider-player',
+                 'player', $2, $3, $4, $5, $6, 'Provider Resolution A', 'approved')`,
+        [
+          ids.eventVersionId,
+          'afl-player:provider-resolution-a',
+          scenario.playerIdentityId,
+          ids.fromClubId,
+          ids.toClubId,
+          ids.lateAssetRowId,
+        ]
+      );
+      await connection.query(
+        `INSERT INTO outcome_release_review_decision
+          (release_id, decision_id, ordinal, record_sha256, membership_json)
+         VALUES ($1, $2, 1, $3, '{}'::jsonb)`,
+        [ids.releaseId, scenario.decisionA.decisionId, 'a'.repeat(64)]
+      );
+
+      await expect(
+        connection.query(
+          `INSERT INTO outcome_release_event_version
+            (release_id, event_version_id, ordinal, record_sha256, membership_json)
+           VALUES ($1, $2, 0, $3, '{}'::jsonb)`,
+          [ids.releaseId, ids.eventVersionId, 'b'.repeat(64)]
+        )
+      ).rejects.toMatchObject({
+        code: 'P0001',
+        message: expect.stringMatching(
+          /exact current legacy assignment or governed provider resolution/
+        ),
+      });
+    } finally {
+      await connection.query('ROLLBACK');
+      connection.release();
+    }
   });
 
   it('requires deactivation before remap and admits one concurrent next revision', async () => {

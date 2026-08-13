@@ -12,6 +12,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   root,
   resolve: { alias: { '@': path.resolve(root, 'src') } },
+  esbuild: { jsx: 'automatic' },
   test: {
     name: 'outcomes-postgres-integration',
     environment: 'node',

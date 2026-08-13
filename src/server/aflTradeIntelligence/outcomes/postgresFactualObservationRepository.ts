@@ -336,7 +336,7 @@ function requireCandidateDigests(
     const digests = fact.content.source.candidateDigests;
     if (
       !row ||
-      digests.identity !== row.identity_candidate_sha256 ||
+      (digests.identity !== null && digests.identity !== row.identity_candidate_sha256) ||
       (digests.match !== null && digests.match !== row.match_candidate_sha256)
     ) {
       throw new AflTradeFactualObservationPersistenceError(

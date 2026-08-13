@@ -603,11 +603,36 @@ prove all of the following on real PostgreSQL:
    release candidate, release manifest, projection, registry event, active pointer, valuation output,
    or fantasy record; the release registry remains at revision zero.
 
-The successful Stage 2A rehearsal boundary is 8 integration files and 40 tests, including the full
-migration/drift/reapply suite and four fitzRoy factual-rehearsal checks. Record the exact commit and
-command output in the delivery checkpoint. A later code-only change requires a fresh exact-commit
-run. This evidence does not satisfy real-source, hosted durability, backup/restore, alerting, schedule,
-or activation requirements.
+The private-candidate checks remain a prerequisite, not the end of the local rehearsal. The same
+disposable command now also exercises a release-specific test that:
+
+1. promotes the reviewed identity, match, appearance, goals and games facts into two separate sealed
+   factual-release candidates without mutating the original staged capture;
+2. registers, validates, approves and activates a baseline release, then repeats that governed path
+   for a replacement release with generation-specific capture, event, asset and spell-version
+   membership;
+3. verifies the read service, `/api/draft-trades/outcomes`, archive page, persisted projection, six
+   view artifacts, and release-pinned JSON, CSV and structurally validated OOXML exports all resolve
+   the replacement release and projection;
+4. revalidates and activates the superseded baseline as an explicit rollback, withdraws that active
+   baseline and proves the public selector reports `no_active_release` with no fallback, then
+   revalidates and activates the replacement as explicit recovery; and
+5. authenticates the complete append-only 15-event registry history and leaves the recovered
+   replacement active only inside the disposable schema.
+
+The restore-specific test then creates a custom-format `pg_dump` with the PostgreSQL 16 tools inside
+that same harness-owned container, closes the application pool, destroys the exact generated schema,
+and proves `to_regnamespace` can no longer resolve it. A single-transaction `pg_restore` recreates the
+schema from the dump. Fresh connections must reproduce the exact sealed-candidate rows, 15-event
+registry, active release and projection, service result, API response content, archive-page response,
+and authenticated JSON, CSV and OOXML exports observed before destruction. The harness supplies only
+its parsed immutable container ID to the test process and removes that exact container afterward.
+
+Record the exact commit and command output in the delivery checkpoint. A later code-only change
+requires a fresh exact-commit run. This remains local `non_production` engineering evidence. It uses
+no network or live source, creates no hosted or billable resource, grants no reviewer or production
+authority, and does not satisfy real-source custody, hosted durability or hosted backup/restore,
+alerting, scheduling, deployment, or production-activation requirements.
 
 ### Reviewing provider identities and matches
 
