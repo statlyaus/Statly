@@ -156,6 +156,27 @@ BEGIN
               AND assignment_head."decision_id" = resolution."decision_id"
               AND assignment_head."revision" = resolution."assignment_revision"
               AND assignment_head."status" = 'active'
+             JOIN "outcome_provider_identity_candidate" identity_candidate
+               ON identity_candidate."identity_candidate_id" = resolution."identity_candidate_id"
+             JOIN "outcome_provider_decoded_row" decoded
+               ON decoded."provider_decoded_row_id" = identity_candidate."provider_decoded_row_id"
+             JOIN "outcome_provider_normalization_run" normalization_run
+               ON normalization_run."normalization_run_id" = decoded."normalization_run_id"
+              AND normalization_run."capture_id" = decoded."capture_id"
+             JOIN "outcome_source_capture" resolution_capture
+               ON resolution_capture."capture_id" = normalization_run."capture_id"
+             JOIN "outcome_source_capture_season" resolution_capture_scope
+               ON resolution_capture_scope."capture_id" = resolution_capture."capture_id"
+              AND resolution_capture_scope."competition" = decoded."competition"
+              AND resolution_capture_scope."season_year" = decoded."season_year"
+             JOIN "outcome_release_source_capture" capture_member
+               ON capture_member."release_id" = NEW."release_id"
+             JOIN "outcome_source_capture" release_capture
+               ON release_capture."capture_id" = capture_member."capture_id"
+             JOIN "outcome_source_capture_season" release_capture_scope
+               ON release_capture_scope."capture_id" = release_capture."capture_id"
+              AND release_capture_scope."competition" = decoded."competition"
+              AND release_capture_scope."season_year" = decoded."season_year"
              JOIN "outcome_release_review_decision" review
                ON review."release_id" = NEW."release_id"
               AND review."decision_id" = resolution."decision_id"
@@ -163,6 +184,47 @@ BEGIN
               AND resolution."resolution_scope" = 'provider_identity'
               AND resolution."player_identity_id" = asset."player_identity_id"
               AND resolution."player_id" = asset."player_id"
+              AND resolution_capture."environment" = release_environment
+              AND resolution_capture."effective_at" <= cutoff
+              AND resolution_capture."captured_at" <= cutoff
+              AND release_capture."environment" = release_environment
+              AND release_capture."status" = 'approved'::"OutcomeRecordStatus"
+              AND release_capture."effective_at" <= cutoff
+              AND release_capture."captured_at" <= cutoff
+              AND (
+                (
+                  release_capture."capture_id" = resolution_capture."capture_id"
+                  AND resolution_capture."status" = 'approved'::"OutcomeRecordStatus"
+                )
+                OR (
+                  resolution_capture."status" = 'staged'::"OutcomeRecordStatus"
+                  AND
+                  release_capture."manifest_json"->>'privateCaptureId' =
+                    resolution_capture."capture_id"
+                  AND EXISTS (
+                    SELECT 1
+                      FROM "outcome_review_decision" capture_approval
+                     WHERE capture_approval."decision_id" =
+                             release_capture."manifest_json"->>'approvalDecisionId'
+                       AND capture_approval."subject_type" = 'source_capture'
+                       AND capture_approval."subject_id" = resolution_capture."capture_id"
+                       AND capture_approval."decision" = 'approved'
+                       AND capture_approval."decided_at" <= cutoff
+                       AND NOT EXISTS (
+                         SELECT 1 FROM "outcome_review_decision" approval_successor
+                          WHERE approval_successor."supersedes_decision_id" =
+                                  capture_approval."decision_id"
+                       )
+                  )
+                )
+              )
+              AND normalization_run."status" = 'staged'::"OutcomeRecordStatus"
+              AND normalization_run."finalized_at" IS NOT NULL
+              AND normalization_run."finalized_at" <= cutoff
+              AND decoded."row_status" = 'staged'::"OutcomeRecordStatus"
+              AND decoded."recorded_at" <= cutoff
+              AND decoded."competition" = target_competition
+              AND decoded."season_year" = target_season_year
               AND resolution."decided_at" <= cutoff
               AND resolution."effective_at" <= cutoff
               AND NOT EXISTS (
