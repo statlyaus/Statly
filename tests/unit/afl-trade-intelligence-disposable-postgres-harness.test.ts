@@ -80,6 +80,7 @@ describe('disposable AFL outcomes PostgreSQL harness', () => {
         'postgresql://statly_test:statly_test@127.0.0.1:49152/statly_outcomes_test',
       AFL_OUTCOMES_TEST_DATABASE_URL:
         'postgresql://statly_test:statly_test@127.0.0.1:49152/statly_outcomes_test',
+      AFL_OUTCOMES_TEST_CONTAINER_ID: firstContainerId,
     });
     expect(commands.filter((command) => command.command === '/test/node')).toEqual([
       {
