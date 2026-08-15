@@ -10,7 +10,10 @@ import {
   type AflTradeFitzRoyDecodedTable,
   type AflTradeFitzRoyFieldMap,
 } from './fitzRoyObservationContracts';
-import { AFL_TRADE_FITZROY_CAPABILITIES } from './fitzRoyProviderCapabilities';
+import {
+  AFL_TRADE_FITZROY_CAPABILITIES,
+  type AflTradeFitzRoyCapability,
+} from './fitzRoyProviderCapabilities';
 
 export const AFL_TRADE_FITZROY_NORMALIZER_VERSION =
   'afl-trade-fitzroy-observation-normalizer/v1' as const;
@@ -435,6 +438,209 @@ function makeMetricCandidate(input: {
   };
 }
 
+function validateAuthorizedSeason(input: {
+  table: AflTradeFitzRoyDecodedTable;
+  fieldMap: AflTradeFitzRoyFieldMap;
+  row: Record<string, AflTradeDecodedScalar>;
+  rowNumber: number;
+  issues: AflTradeProviderObservationIssue[];
+}): { observedSeasonText: string | null; observedDateText: string | null } {
+  const observedSeasonText =
+    input.fieldMap.seasonField === null
+      ? null
+      : boundText({
+          row: input.row,
+          binding: input.fieldMap.seasonField,
+          rowNumber: input.rowNumber,
+          issues: input.issues,
+        });
+  const observedDateText = optionalText(
+    input.row,
+    input.fieldMap.observedDateField?.sourceField ?? null
+  );
+  if (
+    input.fieldMap.seasonField !== null &&
+    observedSeasonText !== String(input.table.authorizationSeason)
+  ) {
+    input.issues.push({
+      rowNumber: input.rowNumber,
+      code: 'source_season_mismatch',
+      field: input.fieldMap.seasonField.sourceField,
+      message: 'Observed source season does not equal the authorized capture season.',
+    });
+  }
+  if (
+    input.table.capabilityId === 'official-afl-player-stats' &&
+    input.fieldMap.seasonField === null &&
+    (observedDateText === null ||
+      !Number.isFinite(Date.parse(observedDateText)) ||
+      new Date(observedDateText).getUTCFullYear() !== input.table.authorizationSeason)
+  ) {
+    input.issues.push({
+      rowNumber: input.rowNumber,
+      code: 'source_season_mismatch',
+      field: input.fieldMap.observedDateField?.sourceField ?? null,
+      message: 'Official AFL match time does not prove the authorized capture season.',
+    });
+  }
+  return { observedSeasonText, observedDateText };
+}
+
+function makeAchievementCandidate(input: {
+  table: AflTradeFitzRoyDecodedTable;
+  fieldMap: AflTradeFitzRoyFieldMap;
+  row: Record<string, AflTradeDecodedScalar>;
+  rowNumber: number;
+  interpretationSha256: string;
+}): AflTradeProviderAchievementCandidate | null {
+  if (input.fieldMap.achievement === null) return null;
+  return {
+    candidateId: `achievement-candidate:${sha256({
+      captureReceiptSha256: input.table.captureReceiptSha256,
+      interpretationSha256: input.interpretationSha256,
+      rowNumber: input.rowNumber,
+      achievementCode: input.fieldMap.achievement.achievementCode,
+    })}`,
+    achievementCode: input.fieldMap.achievement.achievementCode,
+    evidenceValue: optionalText(input.row, input.fieldMap.achievement.evidenceField),
+    resolutionState: 'unresolved',
+  };
+}
+
+function makeNaturalKey(input: {
+  table: AflTradeFitzRoyDecodedTable;
+  fieldMap: AflTradeFitzRoyFieldMap;
+  provider: string;
+  row: Record<string, AflTradeDecodedScalar>;
+  rowNumber: number;
+  issues: AflTradeProviderObservationIssue[];
+}): string {
+  const reviewedComponents = input.fieldMap.naturalKeyFields.map((field) => {
+    if (optionalText(input.row, field) === null) {
+      input.issues.push({
+        rowNumber: input.rowNumber,
+        code: 'natural_key_component_missing',
+        field,
+        message: `Reviewed natural-key field ${field} is missing.`,
+      });
+    }
+    return { field, value: input.row[field] };
+  });
+  return sha256({
+    provider: input.provider,
+    competition: input.table.authorizationCompetition,
+    authorizationSeason: input.table.authorizationSeason,
+    capabilityId: input.table.capabilityId,
+    reviewedComponents,
+  });
+}
+
+function normalizeDecodedRow(input: {
+  table: AflTradeFitzRoyDecodedTable;
+  fieldMap: AflTradeFitzRoyFieldMap;
+  capability: AflTradeFitzRoyCapability;
+  fields: readonly string[];
+  values: readonly AflTradeDecodedScalar[];
+  rowNumber: number;
+  interpretationSha256: string;
+  issues: AflTradeProviderObservationIssue[];
+}): AflTradeProviderDecodedRowCandidate {
+  const rowIssueStart = input.issues.length;
+  const typedPayload = buildRow(input.fields, input.values);
+  const sourceRowSha256 = sha256({ rowNumber: input.rowNumber, typedPayload });
+  for (const field of requiredSourceFields(input.fieldMap)) {
+    requiredText({ row: typedPayload, field, rowNumber: input.rowNumber, issues: input.issues });
+  }
+  const { observedSeasonText, observedDateText } = validateAuthorizedSeason({
+    ...input,
+    row: typedPayload,
+  });
+  const candidateInput = {
+    row: typedPayload,
+    rowNumber: input.rowNumber,
+    provider: input.capability.provider,
+    competition: input.table.authorizationCompetition,
+    seasonYear: input.table.authorizationSeason,
+    captureReceiptSha256: input.table.captureReceiptSha256,
+    interpretationSha256: input.interpretationSha256,
+    issues: input.issues,
+  };
+  const matchCandidate =
+    input.fieldMap.match === null
+      ? null
+      : makeMatchCandidate({ ...candidateInput, bindings: input.fieldMap.match });
+  const identityCandidate =
+    input.fieldMap.identity === null
+      ? null
+      : makeIdentityCandidate({ ...candidateInput, bindings: input.fieldMap.identity });
+  const metricCandidates = input.fieldMap.metrics.map((binding) =>
+    makeMetricCandidate({
+      row: typedPayload,
+      rowNumber: input.rowNumber,
+      binding,
+      issues: input.issues,
+    })
+  );
+  const achievementCandidate = makeAchievementCandidate({ ...input, row: typedPayload });
+  const semanticNaturalKeySha256 = makeNaturalKey({
+    ...input,
+    provider: input.capability.provider,
+    row: typedPayload,
+  });
+  return {
+    providerDecodedRowId: `provider-row:${sha256({
+      captureReceiptSha256: input.table.captureReceiptSha256,
+      interpretationSha256: input.interpretationSha256,
+      rowNumber: input.rowNumber,
+      sourceRowSha256,
+    })}`,
+    competition: input.table.authorizationCompetition,
+    seasonYear: input.table.authorizationSeason,
+    observedSeasonText,
+    roundLabel: optionalText(typedPayload, input.fieldMap.roundLabelField?.sourceField ?? null),
+    observedDateText,
+    sourceRowNumber: input.rowNumber,
+    sourceRowSha256,
+    rowStatus: input.issues.length === rowIssueStart ? 'staged' : 'needs_review',
+    typedPayload,
+    identityCandidate,
+    matchCandidate,
+    metricCandidates,
+    achievementCandidate,
+    appearanceCandidate:
+      input.fieldMap.observationKind === 'player_stat' &&
+      matchCandidate !== null &&
+      input.capability.metrics.includes('match_appearance'),
+    semanticNaturalKeySha256,
+  };
+}
+
+function quarantineDuplicateNaturalKeys(
+  rows: AflTradeProviderDecodedRowCandidate[],
+  issues: AflTradeProviderObservationIssue[]
+): void {
+  const naturalKeyRows = new Map<string, number[]>();
+  for (const row of rows) {
+    if (row.semanticNaturalKeySha256 === null) continue;
+    const existing = naturalKeyRows.get(row.semanticNaturalKeySha256) ?? [];
+    existing.push(row.sourceRowNumber);
+    naturalKeyRows.set(row.semanticNaturalKeySha256, existing);
+  }
+  for (const duplicateRows of naturalKeyRows.values()) {
+    if (duplicateRows.length < 2) continue;
+    for (const rowNumber of duplicateRows) {
+      issues.push({
+        rowNumber,
+        code: 'duplicate_natural_key',
+        field: null,
+        message: `Semantic provider key is duplicated on source rows ${duplicateRows.join(', ')}.`,
+      });
+      const row = rows[rowNumber - 1];
+      if (row !== undefined) row.rowStatus = 'needs_review';
+    }
+  }
+}
+
 export function normalizeAflTradeFitzRoyDecodedTable(input: {
   table: AflTradeFitzRoyDecodedTable;
   fieldMap: AflTradeFitzRoyFieldMap;
@@ -458,157 +664,19 @@ export function normalizeAflTradeFitzRoyDecodedTable(input: {
     normalizerVersion: AFL_TRADE_FITZROY_NORMALIZER_VERSION,
   });
   const issues: AflTradeProviderObservationIssue[] = [];
-  const rows: AflTradeProviderDecodedRowCandidate[] = table.rows.map((values, index) => {
-    const rowNumber = index + 1;
-    const rowIssueStart = issues.length;
-    const typedPayload = buildRow(fields, values);
-    const sourceRowSha256 = sha256({ rowNumber, typedPayload });
-    for (const field of requiredSourceFields(fieldMap)) {
-      requiredText({ row: typedPayload, field, rowNumber, issues });
-    }
-    const observedSeasonText =
-      fieldMap.seasonField === null
-        ? null
-        : boundText({ row: typedPayload, binding: fieldMap.seasonField, rowNumber, issues });
-    const observedDateText = optionalText(
-      typedPayload,
-      fieldMap.observedDateField?.sourceField ?? null
-    );
-    if (fieldMap.seasonField !== null && observedSeasonText !== String(table.authorizationSeason)) {
-      issues.push({
-        rowNumber,
-        code: 'source_season_mismatch',
-        field: fieldMap.seasonField.sourceField,
-        message: 'Observed source season does not equal the authorized capture season.',
-      });
-    }
-    if (
-      table.capabilityId === 'official-afl-player-stats' &&
-      fieldMap.seasonField === null &&
-      (observedDateText === null ||
-        !Number.isFinite(Date.parse(observedDateText)) ||
-        new Date(observedDateText).getUTCFullYear() !== table.authorizationSeason)
-    ) {
-      issues.push({
-        rowNumber,
-        code: 'source_season_mismatch',
-        field: fieldMap.observedDateField?.sourceField ?? null,
-        message: 'Official AFL match time does not prove the authorized capture season.',
-      });
-    }
-    const matchCandidate =
-      fieldMap.match === null
-        ? null
-        : makeMatchCandidate({
-            row: typedPayload,
-            rowNumber,
-            provider: capability.provider,
-            competition: table.authorizationCompetition,
-            seasonYear: table.authorizationSeason,
-            captureReceiptSha256: table.captureReceiptSha256,
-            interpretationSha256,
-            bindings: fieldMap.match,
-            issues,
-          });
-    const identityCandidate =
-      fieldMap.identity === null
-        ? null
-        : makeIdentityCandidate({
-            row: typedPayload,
-            rowNumber,
-            provider: capability.provider,
-            competition: table.authorizationCompetition,
-            seasonYear: table.authorizationSeason,
-            captureReceiptSha256: table.captureReceiptSha256,
-            interpretationSha256,
-            bindings: fieldMap.identity,
-            issues,
-          });
-    const metricCandidates = fieldMap.metrics.map((binding) =>
-      makeMetricCandidate({ row: typedPayload, rowNumber, binding, issues })
-    );
-    const achievementCandidate =
-      fieldMap.achievement === null
-        ? null
-        : {
-            candidateId: `achievement-candidate:${sha256({
-              captureReceiptSha256: table.captureReceiptSha256,
-              interpretationSha256,
-              rowNumber,
-              achievementCode: fieldMap.achievement.achievementCode,
-            })}`,
-            achievementCode: fieldMap.achievement.achievementCode,
-            evidenceValue: optionalText(typedPayload, fieldMap.achievement.evidenceField),
-            resolutionState: 'unresolved' as const,
-          };
-    const naturalKey = sha256({
-      provider: capability.provider,
-      competition: table.authorizationCompetition,
-      authorizationSeason: table.authorizationSeason,
-      capabilityId: table.capabilityId,
-      reviewedComponents: fieldMap.naturalKeyFields.map((field) => ({
-        field,
-        value: typedPayload[field],
-      })),
-    });
-    for (const field of fieldMap.naturalKeyFields) {
-      if (optionalText(typedPayload, field) === null) {
-        issues.push({
-          rowNumber,
-          code: 'natural_key_component_missing',
-          field,
-          message: `Reviewed natural-key field ${field} is missing.`,
-        });
-      }
-    }
-    return {
-      providerDecodedRowId: `provider-row:${sha256({
-        captureReceiptSha256: table.captureReceiptSha256,
-        interpretationSha256,
-        rowNumber,
-        sourceRowSha256,
-      })}`,
-      competition: table.authorizationCompetition,
-      seasonYear: table.authorizationSeason,
-      observedSeasonText,
-      roundLabel: optionalText(typedPayload, fieldMap.roundLabelField?.sourceField ?? null),
-      observedDateText,
-      sourceRowNumber: rowNumber,
-      sourceRowSha256,
-      rowStatus: issues.length === rowIssueStart ? 'staged' : 'needs_review',
-      typedPayload,
-      identityCandidate,
-      matchCandidate,
-      metricCandidates,
-      achievementCandidate,
-      appearanceCandidate:
-        fieldMap.observationKind === 'player_stat' &&
-        matchCandidate !== null &&
-        (capability.metrics as readonly string[]).includes('match_appearance'),
-      semanticNaturalKeySha256: naturalKey,
-    };
-  });
-
-  const naturalKeyRows = new Map<string, number[]>();
-  for (const row of rows) {
-    if (row.semanticNaturalKeySha256 === null) continue;
-    const existing = naturalKeyRows.get(row.semanticNaturalKeySha256) ?? [];
-    existing.push(row.sourceRowNumber);
-    naturalKeyRows.set(row.semanticNaturalKeySha256, existing);
-  }
-  for (const duplicateRows of naturalKeyRows.values()) {
-    if (duplicateRows.length < 2) continue;
-    for (const rowNumber of duplicateRows) {
-      issues.push({
-        rowNumber,
-        code: 'duplicate_natural_key',
-        field: null,
-        message: `Semantic provider key is duplicated on source rows ${duplicateRows.join(', ')}.`,
-      });
-      const row = rows[rowNumber - 1];
-      if (row !== undefined) row.rowStatus = 'needs_review';
-    }
-  }
+  const rows = table.rows.map((values, index) =>
+    normalizeDecodedRow({
+      table,
+      fieldMap,
+      capability,
+      fields,
+      values,
+      rowNumber: index + 1,
+      interpretationSha256,
+      issues,
+    })
+  );
+  quarantineDuplicateNaturalKeys(rows, issues);
 
   const quarantinedRowCount = rows.filter((row) => row.rowStatus === 'needs_review').length;
   return {

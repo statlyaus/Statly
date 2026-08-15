@@ -53,6 +53,118 @@ function byteLength(value: string | number | bigint): number {
   return Number(numeric);
 }
 
+type ProjectionReleaseReadLimit = Parameters<
+  AflTradeProjectionArtifactReleaseSource['loadRelease']
+>[1];
+
+function parseProjectionReleaseRequest(
+  projectionId: string,
+  limit: ProjectionReleaseReadLimit
+): string {
+  const parsedProjectionId = aflTradeContentAddressedIdSchema('projection').safeParse(projectionId);
+  if (
+    !parsedProjectionId.success ||
+    limit.maxBytes !== AFL_TRADE_PROJECTION_ARTIFACT_READ_RELEASE_MAX_BYTES
+  ) {
+    throw new AflTradeProjectionReleaseSourceError(
+      'INVALID_REQUEST',
+      'Projection release reads require an exact projection ID and the fixed public bound.'
+    );
+  }
+  return parsedProjectionId.data;
+}
+
+async function loadProjectionCustodyRow(
+  client: AflOutcomeSqlClient,
+  projectionId: string
+): Promise<ProjectionCustodyRow | null> {
+  const result = await client.query<ProjectionCustodyRow>(
+    `SELECT p.projection_id, a.artifact_id, a.content_sha256, a.storage_uri,
+            a.media_type, a.byte_length, a.created_at, a.artifact_class,
+            a.environment, a.custody_profile_id
+       FROM outcome_valuation_projection_manifest p
+       JOIN outcome_artifact_custody a ON a.artifact_id = p.artifact_id
+      WHERE p.projection_id = $1`,
+    [projectionId]
+  );
+  if (result.rows.length === 0) return null;
+  if (result.rows.length !== 1) {
+    throw new AflTradeProjectionReleaseSourceError(
+      'INVALID_CUSTODY',
+      'Projection custody lookup did not resolve exactly one immutable binding.'
+    );
+  }
+  return result.rows[0];
+}
+
+function validateProjectionCustodyBinding(input: {
+  row: ProjectionCustodyRow;
+  projectionId: string;
+  artifactRepository: AflTradeImmutableArtifactRepository;
+}): void {
+  const profile = input.artifactRepository.custodyProfile;
+  const fixtureFilesystem = input.artifactRepository.assurance === 'fixture_filesystem';
+  const environmentMatches = fixtureFilesystem
+    ? input.row.environment === 'test_fixture' && input.row.custody_profile_id === null
+    : input.row.environment === profile?.content.environment &&
+      input.row.custody_profile_id === profile?.profileId;
+  if (
+    input.row.projection_id !== input.projectionId ||
+    input.row.artifact_class !== 'public_projection' ||
+    !environmentMatches
+  ) {
+    throw new AflTradeProjectionReleaseSourceError(
+      'INVALID_CUSTODY',
+      'Projection custody metadata does not match the requested public projection.'
+    );
+  }
+}
+
+function projectionArtifactReference(row: ProjectionCustodyRow) {
+  try {
+    return aflTradeArtifactRefSchema.parse({
+      artifactId: row.artifact_id,
+      contentSha256: row.content_sha256,
+      storageUri: row.storage_uri,
+      mediaType: row.media_type,
+      byteLength: byteLength(row.byte_length),
+      createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    });
+  } catch (cause) {
+    if (cause instanceof AflTradeProjectionReleaseSourceError) throw cause;
+    throw new AflTradeProjectionReleaseSourceError(
+      'INVALID_CUSTODY',
+      'Projection custody metadata does not form an exact artifact reference.',
+      { cause }
+    );
+  }
+}
+
+async function loadVerifiedProjectionBytes(input: {
+  artifactRepository: AflTradeImmutableArtifactRepository;
+  reference: ReturnType<typeof projectionArtifactReference>;
+  maxBytes: number;
+}): Promise<Uint8Array | null> {
+  if (input.reference.byteLength > input.maxBytes) {
+    throw new AflTradeProjectionReleaseSourceError(
+      'ARTIFACT_TOO_LARGE',
+      'Projection artifact exceeds the public release maximum.'
+    );
+  }
+  const loaded = await input.artifactRepository.loadExact(input.reference, input.maxBytes);
+  if (loaded === null) return null;
+  if (
+    !doAflTradeArtifactRefsExactlyMatch(loaded.reference, input.reference) ||
+    !doesAflTradeArtifactRefMatchBytes(input.reference, loaded.bytes)
+  ) {
+    throw new AflTradeProjectionReleaseSourceError(
+      'READBACK_MISMATCH',
+      'Projection artifact read-back does not match its exact custody reference.'
+    );
+  }
+  return Uint8Array.from(loaded.bytes);
+}
+
 export function createPostgresAflTradeProjectionArtifactReleaseSource(input: {
   client: AflOutcomeSqlClient;
   artifactRepository: AflTradeImmutableArtifactRepository;
@@ -76,83 +188,19 @@ export function createPostgresAflTradeProjectionArtifactReleaseSource(input: {
 
   return {
     async loadRelease(projectionId, limit) {
-      const parsedProjectionId =
-        aflTradeContentAddressedIdSchema('projection').safeParse(projectionId);
-      if (
-        !parsedProjectionId.success ||
-        limit.maxBytes !== AFL_TRADE_PROJECTION_ARTIFACT_READ_RELEASE_MAX_BYTES
-      ) {
-        throw new AflTradeProjectionReleaseSourceError(
-          'INVALID_REQUEST',
-          'Projection release reads require an exact projection ID and the fixed public bound.'
-        );
-      }
-      const result = await input.client.query<ProjectionCustodyRow>(
-        `SELECT p.projection_id, a.artifact_id, a.content_sha256, a.storage_uri,
-                a.media_type, a.byte_length, a.created_at, a.artifact_class,
-                a.environment, a.custody_profile_id
-           FROM outcome_valuation_projection_manifest p
-           JOIN outcome_artifact_custody a ON a.artifact_id = p.artifact_id
-          WHERE p.projection_id = $1`,
-        [parsedProjectionId.data]
-      );
-      if (result.rows.length === 0) return null;
-      if (result.rows.length !== 1) {
-        throw new AflTradeProjectionReleaseSourceError(
-          'INVALID_CUSTODY',
-          'Projection custody lookup did not resolve exactly one immutable binding.'
-        );
-      }
-      const row = result.rows[0];
-      if (
-        row.projection_id !== parsedProjectionId.data ||
-        row.artifact_class !== 'public_projection' ||
-        (fixtureFilesystem
-          ? row.environment !== 'test_fixture' || row.custody_profile_id !== null
-          : row.environment !== profile?.content.environment ||
-            row.custody_profile_id !== profile?.profileId)
-      ) {
-        throw new AflTradeProjectionReleaseSourceError(
-          'INVALID_CUSTODY',
-          'Projection custody metadata does not match the requested public projection.'
-        );
-      }
-      let reference;
-      try {
-        reference = aflTradeArtifactRefSchema.parse({
-          artifactId: row.artifact_id,
-          contentSha256: row.content_sha256,
-          storageUri: row.storage_uri,
-          mediaType: row.media_type,
-          byteLength: byteLength(row.byte_length),
-          createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-        });
-      } catch (cause) {
-        if (cause instanceof AflTradeProjectionReleaseSourceError) throw cause;
-        throw new AflTradeProjectionReleaseSourceError(
-          'INVALID_CUSTODY',
-          'Projection custody metadata does not form an exact artifact reference.',
-          { cause }
-        );
-      }
-      if (reference.byteLength > limit.maxBytes) {
-        throw new AflTradeProjectionReleaseSourceError(
-          'ARTIFACT_TOO_LARGE',
-          'Projection artifact exceeds the public release maximum.'
-        );
-      }
-      const loaded = await input.artifactRepository.loadExact(reference, limit.maxBytes);
-      if (loaded === null) return null;
-      if (
-        !doAflTradeArtifactRefsExactlyMatch(loaded.reference, reference) ||
-        !doesAflTradeArtifactRefMatchBytes(reference, loaded.bytes)
-      ) {
-        throw new AflTradeProjectionReleaseSourceError(
-          'READBACK_MISMATCH',
-          'Projection artifact read-back does not match its exact custody reference.'
-        );
-      }
-      return Uint8Array.from(loaded.bytes);
+      const parsedProjectionId = parseProjectionReleaseRequest(projectionId, limit);
+      const row = await loadProjectionCustodyRow(input.client, parsedProjectionId);
+      if (row === null) return null;
+      validateProjectionCustodyBinding({
+        row,
+        projectionId: parsedProjectionId,
+        artifactRepository: input.artifactRepository,
+      });
+      return loadVerifiedProjectionBytes({
+        artifactRepository: input.artifactRepository,
+        reference: projectionArtifactReference(row),
+        maxBytes: limit.maxBytes,
+      });
     },
   };
 }

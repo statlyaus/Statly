@@ -666,69 +666,396 @@ export interface AflTradeProjectionPipelineOverride {
   };
 }
 
-function buildVerifiedProjectionPipeline(
-  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap',
-  custodyIndexVerification?: z.infer<typeof aflTradeValuationOutputCustodyIndexVerificationSchema>,
-  override?: AflTradeProjectionPipelineOverride
-) {
-  const fixture = override?.fixture ?? boundValuationFixture(fixtureKind);
+type ProjectionPipelineFixture = ReturnType<typeof boundValuationFixture>;
+type ProjectionCustodyIndexVerification = z.infer<
+  typeof aflTradeValuationOutputCustodyIndexVerificationSchema
+>;
+
+function resolveProjectionPipelineTimes(override?: AflTradeProjectionPipelineOverride) {
   const stageAt = override?.materializedAt;
-  const sourceAt = override?.inventoryMaterializedAt ?? stageAt ?? SOURCE_AT;
-  const bundleReferenceAt = override?.inventoryMaterializedAt ?? stageAt ?? BUNDLE_REF_AT;
-  const inventoryAt = override?.inventoryMaterializedAt ?? stageAt ?? ROOT_AT;
-  const indexAt = stageAt ?? INDEX_AT;
-  const policyAt = stageAt ?? POLICY_AT;
-  const publicationArtifactAt = stageAt ?? PUBLICATION_ARTIFACT_AT;
-  const publicationAt = stageAt ?? PUBLICATION_AT;
-  const evidenceAt = stageAt ?? EVIDENCE_AT;
-  const evidenceIndexAt = stageAt ?? EVIDENCE_INDEX_AT;
-  const verifiedAt = stageAt ?? VERIFIED_AT;
-  const documentAt = stageAt ?? DOCUMENT_AT;
-  const schemaAt = stageAt ?? SCHEMA_AT;
-  const materializationShardAt = stageAt ?? MATERIALIZATION_SHARD_AT;
-  const materializationRootAt = stageAt ?? MATERIALIZATION_ROOT_AT;
-  const numeric = numericArtifacts(fixture);
+  const inventoryStageAt = override?.inventoryMaterializedAt ?? stageAt;
+  return {
+    stageAt,
+    sourceAt: inventoryStageAt ?? SOURCE_AT,
+    bundleReferenceAt: inventoryStageAt ?? BUNDLE_REF_AT,
+    inventoryAt: inventoryStageAt ?? ROOT_AT,
+    indexAt: stageAt ?? INDEX_AT,
+    policyAt: stageAt ?? POLICY_AT,
+    publicationArtifactAt: stageAt ?? PUBLICATION_ARTIFACT_AT,
+    publicationAt: stageAt ?? PUBLICATION_AT,
+    evidenceAt: stageAt ?? EVIDENCE_AT,
+    evidenceIndexAt: stageAt ?? EVIDENCE_INDEX_AT,
+    verifiedAt: stageAt ?? VERIFIED_AT,
+    documentAt: stageAt ?? DOCUMENT_AT,
+    schemaAt: stageAt ?? SCHEMA_AT,
+    materializationShardAt: stageAt ?? MATERIALIZATION_SHARD_AT,
+    materializationRootAt: stageAt ?? MATERIALIZATION_ROOT_AT,
+  };
+}
+
+function createProjectionInventoryStage(input: {
+  fixture: ProjectionPipelineFixture;
+  sourceAt: string;
+  bundleReferenceAt: string;
+  inventoryAt: string;
+}) {
+  const numeric = numericArtifacts(input.fixture);
   const explanation = createAflTradeStructuredExplanationV2({
-    valuationBundleManifest: fixture.bundle,
-    valuationCase: fixture.valuationCase,
-    valuationCalculation: fixture.calculation,
+    valuationBundleManifest: input.fixture.bundle,
+    valuationCase: input.fixture.valuationCase,
+    valuationCalculation: input.fixture.calculation,
     valuationDistributions: numeric.distributions,
     valuationComparisons: numeric.comparisons,
   });
   const bundleArtifactRef = createAflTradeCanonicalJsonArtifactRef(
-    fixture.bundle,
-    bundleReferenceAt
+    input.fixture.bundle,
+    input.bundleReferenceAt
   );
-  const caseArtifactRef = createAflTradeCanonicalJsonArtifactRef(fixture.valuationCase, sourceAt);
+  const caseArtifactRef = createAflTradeCanonicalJsonArtifactRef(
+    input.fixture.valuationCase,
+    input.sourceAt
+  );
   const valuationOutputInventoryInput = {
     valuationBundle: {
-      valuationBundleManifest: fixture.bundle,
+      valuationBundleManifest: input.fixture.bundle,
       artifactRef: bundleArtifactRef,
     },
-    valuationCase: { valuationCase: fixture.valuationCase, artifactRef: caseArtifactRef },
+    valuationCase: {
+      valuationCase: input.fixture.valuationCase,
+      artifactRef: caseArtifactRef,
+    },
     valuationCalculation: {
-      valuationCalculation: fixture.calculation,
-      artifactRef: createAflTradeCanonicalJsonArtifactRef(fixture.calculation, sourceAt),
+      valuationCalculation: input.fixture.calculation,
+      artifactRef: createAflTradeCanonicalJsonArtifactRef(
+        input.fixture.calculation,
+        input.sourceAt
+      ),
     },
     valuationDistributions: numeric.distributions.map((valuationDistribution) => ({
       valuationDistribution,
-      artifactRef: createAflTradeCanonicalJsonArtifactRef(valuationDistribution, sourceAt),
+      artifactRef: createAflTradeCanonicalJsonArtifactRef(valuationDistribution, input.sourceAt),
     })),
     valuationComparisons: numeric.comparisons.map((valuationComparison) => ({
       valuationComparison,
-      artifactRef: createAflTradeCanonicalJsonArtifactRef(valuationComparison, sourceAt),
+      artifactRef: createAflTradeCanonicalJsonArtifactRef(valuationComparison, input.sourceAt),
     })),
     structuredExplanation: {
       structuredExplanation: explanation,
-      artifactRef: createAflTradeCanonicalJsonArtifactRef(explanation, sourceAt),
+      artifactRef: createAflTradeCanonicalJsonArtifactRef(explanation, input.sourceAt),
     },
-    materializedAt: inventoryAt,
+    materializedAt: input.inventoryAt,
   };
   const inventory = createAflTradeValuationOutputInventory(valuationOutputInventoryInput);
-  const valuationOutputInventoryVerification = {
-    ...valuationOutputInventoryInput,
-    output: inventory,
+  return {
+    numeric,
+    bundleArtifactRef,
+    caseArtifactRef,
+    inventory,
+    valuationOutputInventoryVerification: {
+      ...valuationOutputInventoryInput,
+      output: inventory,
+    },
   };
+}
+
+function createProjectionPolicyStage(input: {
+  fixture: ProjectionPipelineFixture;
+  fixtureKind: AflTradeValuationFixtureKind;
+  override?: AflTradeProjectionPipelineOverride;
+  policyAt: string;
+}) {
+  const freshness = createAflTradeFreshnessPolicy({
+    scopeKey: input.fixture.bundle.content.scopeKey,
+    valueUnitId: input.fixture.bundle.content.valueUnitId,
+    currentDurationSeconds: input.override?.freshnessDurationSeconds?.current ?? 86_400,
+    staleServeDurationSeconds: input.override?.freshnessDurationSeconds?.stale ?? 86_400,
+    createdAt: input.policyAt,
+  });
+  const projectionPresentationPolicy = createAflTradeProjectionPresentationPolicy({
+    valueUnit: {
+      id: input.fixture.bundle.content.valueUnitId,
+      label: 'Fabricated football contribution',
+      description: 'A fabricated cross-club football-contribution unit for parity tests.',
+      direction: 'higher_is_better',
+    },
+    universalLayer: 'scarcity_adjusted',
+    balancedMaximumLeaderMargin: input.fixtureKind === 'future_pick_resolution' ? 0.06 : 0.05,
+    balancedMinimumPracticalEquivalenceProbability: 0.4,
+    strongMinimumLeaderMargin: 0.2,
+    methodologyHref: AFL_TRADE_METHODOLOGY_HREF,
+    createdAt: input.policyAt,
+  });
+  const currentContext = input.fixture.valuationCase.content.viewContexts.find(
+    ({ view }) => view === 'current'
+  );
+  if (!currentContext) throw new Error('Missing current valuation context.');
+  const methodologyPayload = methodology(
+    input.fixture.bundle.valuationBundleId,
+    {
+      id: input.fixture.bundle.content.valueUnitId,
+      label: 'Fixture football value',
+      description: 'A fabricated source-native AFL football contribution unit.',
+      direction: 'higher_is_better',
+    },
+    currentContext.valuationAsOf
+  );
+  return { freshness, projectionPresentationPolicy, methodologyPayload };
+}
+
+function createProjectionPublicationStage(input: {
+  fixture: ProjectionPipelineFixture;
+  inventoryIndex: ReturnType<typeof createAflTradeValuationOutputInventoryIndex>;
+  freshness: ReturnType<typeof createAflTradeFreshnessPolicy>;
+  projectionPresentationPolicy: ReturnType<typeof createAflTradeProjectionPresentationPolicy>;
+  methodologyPayload: ReturnType<typeof methodology>;
+  custodyIndexVerification?: ProjectionCustodyIndexVerification;
+  publicationAt: string;
+  publicationArtifactAt: string;
+}) {
+  const publicationContent = {
+    schemaVersion: 'afl-trade-publication/v3' as const,
+    environment: input.fixture.bundle.content.environment,
+    scopeKey: input.fixture.bundle.content.scopeKey,
+    createdAt: input.publicationAt,
+    valuationBundleId: input.fixture.bundle.valuationBundleId,
+    gate3DecisionId: input.fixture.bundle.content.components[0].gate3DecisionId,
+    sourceRegisterIds: ['fixture-source-register'],
+    supportedViews: [...AFL_TRADE_VALUATION_VIEWS],
+    supportedCohorts: ['fixture-supported-cohort'],
+    excludedCohorts: [],
+    valueUnitId: input.fixture.bundle.content.valueUnitId,
+    entryCount: 1,
+    publicationBundleArtifact: artifact('publication-bundle', input.publicationArtifactAt),
+    methodologyArtifact: createAflTradeCanonicalJsonArtifactRef(
+      input.methodologyPayload,
+      input.publicationArtifactAt
+    ),
+    validationReportArtifact: artifact('publication-validation', input.publicationArtifactAt),
+    modelCardArtifact: artifact('publication-model-card', input.publicationArtifactAt),
+    publicAssetBoundary: AFL_TRADE_PROJECTION_PUBLIC_ASSET_BOUNDARY,
+    valuationOutputInventoryIndex: {
+      schemaVersion: input.inventoryIndex.valuationOutputInventoryIndex.content.schemaVersion,
+      valuationOutputInventoryIndexId:
+        input.inventoryIndex.valuationOutputInventoryIndex.valuationOutputInventoryIndexId,
+      artifactRef: input.inventoryIndex.valuationOutputInventoryIndexArtifactRef,
+      entryCount: input.inventoryIndex.valuationOutputInventoryIndex.content.entryCount,
+      inventorySetSha256:
+        input.inventoryIndex.valuationOutputInventoryIndex.content.inventorySetSha256,
+    },
+    freshnessPolicy: {
+      schemaVersion: input.freshness.freshnessPolicy.content.schemaVersion,
+      freshnessPolicyId: input.freshness.freshnessPolicy.freshnessPolicyId,
+      artifactRef: input.freshness.freshnessPolicyArtifactRef,
+    },
+    projectionPresentationPolicy: {
+      schemaVersion:
+        input.projectionPresentationPolicy.projectionPresentationPolicy.content.schemaVersion,
+      projectionPresentationPolicyId:
+        input.projectionPresentationPolicy.projectionPresentationPolicy
+          .projectionPresentationPolicyId,
+      artifactRef: input.projectionPresentationPolicy.projectionPresentationPolicyArtifactRef,
+      valueUnitId:
+        input.projectionPresentationPolicy.projectionPresentationPolicy.content.valueUnit.id,
+      universalLayer:
+        input.projectionPresentationPolicy.projectionPresentationPolicy.content.universalLayer,
+      supportedViews:
+        input.projectionPresentationPolicy.projectionPresentationPolicy.content.supportedViews,
+    },
+  };
+  const publicationCandidate = aflTradePublicationManifestV3Schema.parse({
+    publicationId: createAflTradeContentAddress('publication', publicationContent),
+    content: publicationContent,
+  });
+  const publication = input.custodyIndexVerification
+    ? createAflTradeCustodiedPublicationManifest({
+        publicationCandidate,
+        custodyIndexVerification: input.custodyIndexVerification,
+      })
+    : {
+        publicationManifest: publicationCandidate,
+        artifactRef: createAflTradeCanonicalJsonArtifactRef(
+          publicationCandidate,
+          input.publicationAt
+        ),
+      };
+  return { publication, publicationManifest: publication.publicationManifest };
+}
+
+function createProjectionEvidenceStage(input: {
+  fixture: ProjectionPipelineFixture;
+  publicationStage: ReturnType<typeof createProjectionPublicationStage>;
+  inventoryIndex: ReturnType<typeof createAflTradeValuationOutputInventoryIndex>;
+  inventory: ReturnType<typeof createAflTradeValuationOutputInventory>;
+  completeTradeAssessmentVerification: ReturnType<
+    typeof createAflTradeCompleteAssessmentVerificationFixture
+  >;
+  sourceAt: string;
+  evidenceAt: string;
+  evidenceIndexAt: string;
+}) {
+  const sources = sourceArtifacts(input.sourceAt);
+  const evidence = createAflTradeProjectionPublicEvidence({
+    content: realEvidenceContent(
+      input.fixture,
+      input.publicationStage.publicationManifest,
+      input.inventoryIndex.valuationOutputInventoryIndex.valuationOutputInventoryIndexId,
+      input.inventory.valuationOutputInventory.valuationOutputInventoryId,
+      sources,
+      input.evidenceAt,
+      input.completeTradeAssessmentVerification
+    ),
+    materializedAt: input.evidenceAt,
+  });
+  const projectionPublicEvidenceIndex = createAflTradeProjectionPublicEvidenceIndex({
+    publicationManifest: input.publicationStage.publicationManifest,
+    publicationManifestArtifactRef: input.publicationStage.publication.artifactRef,
+    valuationOutputInventoryIndex: input.inventoryIndex.valuationOutputInventoryIndex,
+    valuationOutputInventoryIndexArtifactRef:
+      input.inventoryIndex.valuationOutputInventoryIndexArtifactRef,
+    valuationOutputInventories: [
+      {
+        valuationOutputInventory: input.inventory.valuationOutputInventory,
+        artifactRef: input.inventory.valuationOutputInventoryArtifactRef,
+      },
+    ],
+    projectionPublicEvidences: [
+      {
+        projectionPublicEvidence: evidence.projectionPublicEvidence,
+        projectionPublicEvidenceArtifactRef: evidence.projectionPublicEvidenceArtifactRef,
+      },
+    ],
+    materializedAt: input.evidenceIndexAt,
+  });
+  return { sources, evidence, projectionPublicEvidenceIndex };
+}
+
+function createProjectionTradeStage(input: {
+  fixture: ProjectionPipelineFixture;
+  publicationStage: ReturnType<typeof createProjectionPublicationStage>;
+  inventoryIndex: ReturnType<typeof createAflTradeValuationOutputInventoryIndex>;
+  inventory: ReturnType<typeof createAflTradeValuationOutputInventory>;
+  projectionPresentationPolicy: ReturnType<typeof createAflTradeProjectionPresentationPolicy>;
+  evidenceStage: ReturnType<typeof createProjectionEvidenceStage>;
+  numeric: ReturnType<typeof numericArtifacts>;
+  caseArtifactRef: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+  completeTradeAssessmentVerification: ReturnType<
+    typeof createAflTradeCompleteAssessmentVerificationFixture
+  >;
+  custodyIndexVerification?: ProjectionCustodyIndexVerification;
+  sourceAt: string;
+  verifiedAt: string;
+  documentAt: string;
+}) {
+  const evidenceVerificationInput = {
+    projectionPublicEvidenceResult: input.evidenceStage.evidence,
+    sourceArtifacts: input.evidenceStage.sources,
+    verifiedAt: input.verifiedAt,
+  };
+  const tradeInput = {
+    publication: input.publicationStage.publication,
+    valuationOutputInventoryIndex: input.inventoryIndex,
+    projectionPublicEvidenceIndex: input.evidenceStage.projectionPublicEvidenceIndex,
+    projectionPresentationPolicy: input.projectionPresentationPolicy,
+    valuationOutputInventory: input.inventory,
+    valuationCase: {
+      valuationCase: input.fixture.valuationCase,
+      artifactRef: input.caseArtifactRef,
+    },
+    selectedDistributions: input.numeric.distributions
+      .filter(
+        ({ content }) =>
+          content.measure.kind === 'universal_football_value' &&
+          content.measure.layer === 'scarcity_adjusted'
+      )
+      .map((valuationDistribution) => ({
+        valuationDistribution,
+        artifactRef: createAflTradeCanonicalJsonArtifactRef(valuationDistribution, input.sourceAt),
+      })),
+    selectedComparisons: input.numeric.comparisons
+      .filter(({ content }) => content.measure.layer === 'scarcity_adjusted')
+      .map((valuationComparison) => ({
+        valuationComparison,
+        artifactRef: createAflTradeCanonicalJsonArtifactRef(valuationComparison, input.sourceAt),
+      })),
+    projectionPublicEvidence: input.evidenceStage.evidence,
+    evidenceSourceVerification: {
+      ...evidenceVerificationInput,
+      output: createAflTradeProjectionEvidenceSourceVerification(evidenceVerificationInput),
+    },
+    ...(input.custodyIndexVerification
+      ? {
+          valuationOutputCustodyIndexVerification: input.custodyIndexVerification,
+          completeTradeAssessmentVerification: input.completeTradeAssessmentVerification,
+        }
+      : {}),
+    materializedAt: input.documentAt,
+  };
+  const tradeOutput = createAflTradeProjectionTradeMaterialization(tradeInput);
+  return { tradeOutput, tradeVerification: { ...tradeInput, output: tradeOutput } };
+}
+
+function createProjectionMaterializationStage(input: {
+  fixtureKind: AflTradeValuationFixtureKind;
+  publicationStage: ReturnType<typeof createProjectionPublicationStage>;
+  inventoryIndex: ReturnType<typeof createAflTradeValuationOutputInventoryIndex>;
+  projectionPublicEvidenceIndex: ReturnType<typeof createAflTradeProjectionPublicEvidenceIndex>;
+  projectionPresentationPolicy: ReturnType<typeof createAflTradeProjectionPresentationPolicy>;
+  tradeStage: ReturnType<typeof createProjectionTradeStage>;
+  custodyIndexVerification?: ProjectionCustodyIndexVerification;
+  stageAt?: string;
+  schemaAt: string;
+  materializationShardAt: string;
+  materializationRootAt: string;
+}) {
+  const schemaCreatedAt =
+    input.stageAt === undefined && input.fixtureKind === 'future_pick_resolution'
+      ? '2026-08-05T06:30:01.000Z'
+      : input.schemaAt;
+  const projectionSchemaBundle = input.custodyIndexVerification
+    ? createAflTradeProjectionSchemaBundleV2({ createdAt: schemaCreatedAt })
+    : createAflTradeProjectionSchemaBundle({ createdAt: schemaCreatedAt });
+  const commonParents = {
+    publication: input.publicationStage.publication,
+    valuationOutputInventoryIndex: input.inventoryIndex,
+    projectionPublicEvidenceIndex: input.projectionPublicEvidenceIndex,
+    projectionPresentationPolicy: input.projectionPresentationPolicy,
+    projectionSchemaBundle,
+  };
+  const shardInput = {
+    ...commonParents,
+    shardOrdinal: 0,
+    projectionTradeMaterializerVerifications: [input.tradeStage.tradeVerification],
+    materializedAt: input.materializationShardAt,
+  };
+  const shardOutput = createAflTradeProjectionMaterializationShard(shardInput);
+  const rootInput = {
+    ...commonParents,
+    projectionMaterializationShardVerifications: [{ ...shardInput, output: shardOutput }],
+    materializedAt: input.materializationRootAt,
+  };
+  const rootOutput = createAflTradeProjectionMaterialization(rootInput);
+  return {
+    projectionSchemaBundle,
+    rootOutput,
+    projectionMaterializationVerification: { ...rootInput, output: rootOutput },
+  };
+}
+
+function buildVerifiedProjectionPipeline(
+  fixtureKind: AflTradeValuationFixtureKind = 'two_party_player_swap',
+  custodyIndexVerification?: ProjectionCustodyIndexVerification,
+  override?: AflTradeProjectionPipelineOverride
+) {
+  const fixture = override?.fixture ?? boundValuationFixture(fixtureKind);
+  const times = resolveProjectionPipelineTimes(override);
+  const inventoryStage = createProjectionInventoryStage({
+    fixture,
+    sourceAt: times.sourceAt,
+    bundleReferenceAt: times.bundleReferenceAt,
+    inventoryAt: times.inventoryAt,
+  });
+  const { numeric, bundleArtifactRef, caseArtifactRef, inventory } = inventoryStage;
+  const { valuationOutputInventoryVerification } = inventoryStage;
   const completeTradeAssessmentVerification =
     override?.assessmentVerification ??
     createAflTradeCompleteAssessmentVerificationFixture(
@@ -744,224 +1071,75 @@ function buildVerifiedProjectionPipeline(
         artifactRef: inventory.valuationOutputInventoryArtifactRef,
       },
     ],
-    createdAt: indexAt,
+    createdAt: times.indexAt,
   });
-  const freshness = createAflTradeFreshnessPolicy({
-    scopeKey: fixture.bundle.content.scopeKey,
-    valueUnitId: fixture.bundle.content.valueUnitId,
-    currentDurationSeconds: override?.freshnessDurationSeconds?.current ?? 86_400,
-    staleServeDurationSeconds: override?.freshnessDurationSeconds?.stale ?? 86_400,
-    createdAt: policyAt,
-  });
-  const projectionPresentationPolicy = createAflTradeProjectionPresentationPolicy({
-    valueUnit: {
-      id: fixture.bundle.content.valueUnitId,
-      label: 'Fabricated football contribution',
-      description: 'A fabricated cross-club football-contribution unit for parity tests.',
-      direction: 'higher_is_better',
-    },
-    universalLayer: 'scarcity_adjusted',
-    balancedMaximumLeaderMargin: fixtureKind === 'future_pick_resolution' ? 0.06 : 0.05,
-    balancedMinimumPracticalEquivalenceProbability: 0.4,
-    strongMinimumLeaderMargin: 0.2,
-    methodologyHref: AFL_TRADE_METHODOLOGY_HREF,
-    createdAt: policyAt,
-  });
-  const currentContext = fixture.valuationCase.content.viewContexts.find(
-    ({ view }) => view === 'current'
-  );
-  if (!currentContext) throw new Error('Missing current valuation context.');
-  const methodologyPayload = methodology(
-    fixture.bundle.valuationBundleId,
-    {
-      id: fixture.bundle.content.valueUnitId,
-      label: 'Fixture football value',
-      description: 'A fabricated source-native AFL football contribution unit.',
-      direction: 'higher_is_better',
-    },
-    currentContext.valuationAsOf
-  );
-  const publicationContent = {
-    schemaVersion: 'afl-trade-publication/v3' as const,
-    environment: fixture.bundle.content.environment,
-    scopeKey: fixture.bundle.content.scopeKey,
-    createdAt: publicationAt,
-    valuationBundleId: fixture.bundle.valuationBundleId,
-    gate3DecisionId: fixture.bundle.content.components[0].gate3DecisionId,
-    sourceRegisterIds: ['fixture-source-register'],
-    supportedViews: [...AFL_TRADE_VALUATION_VIEWS],
-    supportedCohorts: ['fixture-supported-cohort'],
-    excludedCohorts: [],
-    valueUnitId: fixture.bundle.content.valueUnitId,
-    entryCount: 1,
-    publicationBundleArtifact: artifact('publication-bundle', publicationArtifactAt),
-    methodologyArtifact: createAflTradeCanonicalJsonArtifactRef(
-      methodologyPayload,
-      publicationArtifactAt
-    ),
-    validationReportArtifact: artifact('publication-validation', publicationArtifactAt),
-    modelCardArtifact: artifact('publication-model-card', publicationArtifactAt),
-    publicAssetBoundary: AFL_TRADE_PROJECTION_PUBLIC_ASSET_BOUNDARY,
-    valuationOutputInventoryIndex: {
-      schemaVersion: inventoryIndex.valuationOutputInventoryIndex.content.schemaVersion,
-      valuationOutputInventoryIndexId:
-        inventoryIndex.valuationOutputInventoryIndex.valuationOutputInventoryIndexId,
-      artifactRef: inventoryIndex.valuationOutputInventoryIndexArtifactRef,
-      entryCount: inventoryIndex.valuationOutputInventoryIndex.content.entryCount,
-      inventorySetSha256: inventoryIndex.valuationOutputInventoryIndex.content.inventorySetSha256,
-    },
-    freshnessPolicy: {
-      schemaVersion: freshness.freshnessPolicy.content.schemaVersion,
-      freshnessPolicyId: freshness.freshnessPolicy.freshnessPolicyId,
-      artifactRef: freshness.freshnessPolicyArtifactRef,
-    },
-    projectionPresentationPolicy: {
-      schemaVersion:
-        projectionPresentationPolicy.projectionPresentationPolicy.content.schemaVersion,
-      projectionPresentationPolicyId:
-        projectionPresentationPolicy.projectionPresentationPolicy.projectionPresentationPolicyId,
-      artifactRef: projectionPresentationPolicy.projectionPresentationPolicyArtifactRef,
-      valueUnitId: projectionPresentationPolicy.projectionPresentationPolicy.content.valueUnit.id,
-      universalLayer:
-        projectionPresentationPolicy.projectionPresentationPolicy.content.universalLayer,
-      supportedViews:
-        projectionPresentationPolicy.projectionPresentationPolicy.content.supportedViews,
-    },
-  };
-  const publicationCandidate = aflTradePublicationManifestV3Schema.parse({
-    publicationId: createAflTradeContentAddress('publication', publicationContent),
-    content: publicationContent,
-  });
-  const publication = custodyIndexVerification
-    ? createAflTradeCustodiedPublicationManifest({
-        publicationCandidate,
-        custodyIndexVerification,
-      })
-    : {
-        publicationManifest: publicationCandidate,
-        artifactRef: createAflTradeCanonicalJsonArtifactRef(publicationCandidate, publicationAt),
-      };
-  const publicationManifest = publication.publicationManifest;
-  const sources = sourceArtifacts(sourceAt);
-  const evidence = createAflTradeProjectionPublicEvidence({
-    content: realEvidenceContent(
-      fixture,
-      publicationManifest,
-      inventoryIndex.valuationOutputInventoryIndex.valuationOutputInventoryIndexId,
-      inventory.valuationOutputInventory.valuationOutputInventoryId,
-      sources,
-      evidenceAt,
-      completeTradeAssessmentVerification
-    ),
-    materializedAt: evidenceAt,
-  });
-  const projectionPublicEvidenceIndex = createAflTradeProjectionPublicEvidenceIndex({
-    publicationManifest,
-    publicationManifestArtifactRef: publication.artifactRef,
-    valuationOutputInventoryIndex: inventoryIndex.valuationOutputInventoryIndex,
-    valuationOutputInventoryIndexArtifactRef:
-      inventoryIndex.valuationOutputInventoryIndexArtifactRef,
-    valuationOutputInventories: [
-      {
-        valuationOutputInventory: inventory.valuationOutputInventory,
-        artifactRef: inventory.valuationOutputInventoryArtifactRef,
-      },
-    ],
-    projectionPublicEvidences: [
-      {
-        projectionPublicEvidence: evidence.projectionPublicEvidence,
-        projectionPublicEvidenceArtifactRef: evidence.projectionPublicEvidenceArtifactRef,
-      },
-    ],
-    materializedAt: evidenceIndexAt,
-  });
-  const evidenceVerificationInput = {
-    projectionPublicEvidenceResult: evidence,
-    sourceArtifacts: sources,
-    verifiedAt,
-  };
-  const tradeInput = {
-    publication,
-    valuationOutputInventoryIndex: inventoryIndex,
-    projectionPublicEvidenceIndex,
-    projectionPresentationPolicy,
-    valuationOutputInventory: inventory,
-    valuationCase: { valuationCase: fixture.valuationCase, artifactRef: caseArtifactRef },
-    selectedDistributions: numeric.distributions
-      .filter(
-        ({ content }) =>
-          content.measure.kind === 'universal_football_value' &&
-          content.measure.layer === 'scarcity_adjusted'
-      )
-      .map((valuationDistribution) => ({
-        valuationDistribution,
-        artifactRef: createAflTradeCanonicalJsonArtifactRef(valuationDistribution, sourceAt),
-      })),
-    selectedComparisons: numeric.comparisons
-      .filter(({ content }) => content.measure.layer === 'scarcity_adjusted')
-      .map((valuationComparison) => ({
-        valuationComparison,
-        artifactRef: createAflTradeCanonicalJsonArtifactRef(valuationComparison, sourceAt),
-      })),
-    projectionPublicEvidence: evidence,
-    evidenceSourceVerification: {
-      ...evidenceVerificationInput,
-      output: createAflTradeProjectionEvidenceSourceVerification(evidenceVerificationInput),
-    },
-    ...(custodyIndexVerification
-      ? {
-          valuationOutputCustodyIndexVerification: custodyIndexVerification,
-          completeTradeAssessmentVerification,
-        }
-      : {}),
-    materializedAt: documentAt,
-  };
-  const tradeOutput = createAflTradeProjectionTradeMaterialization(tradeInput);
-  const tradeVerification = { ...tradeInput, output: tradeOutput };
-  const schemaCreatedAt =
-    stageAt === undefined && fixtureKind === 'future_pick_resolution'
-      ? '2026-08-05T06:30:01.000Z'
-      : schemaAt;
-  const projectionSchemaBundle = custodyIndexVerification
-    ? createAflTradeProjectionSchemaBundleV2({ createdAt: schemaCreatedAt })
-    : createAflTradeProjectionSchemaBundle({ createdAt: schemaCreatedAt });
-  const commonParents = {
-    publication,
-    valuationOutputInventoryIndex: inventoryIndex,
-    projectionPublicEvidenceIndex,
-    projectionPresentationPolicy,
-    projectionSchemaBundle,
-  };
-  const shardInput = {
-    ...commonParents,
-    shardOrdinal: 0,
-    projectionTradeMaterializerVerifications: [tradeVerification],
-    materializedAt: materializationShardAt,
-  };
-  const shardOutput = createAflTradeProjectionMaterializationShard(shardInput);
-  const rootInput = {
-    ...commonParents,
-    projectionMaterializationShardVerifications: [{ ...shardInput, output: shardOutput }],
-    materializedAt: materializationRootAt,
-  };
-  const rootOutput = createAflTradeProjectionMaterialization(rootInput);
-  const projectionMaterializationVerification = { ...rootInput, output: rootOutput };
-  return {
+  const { freshness, projectionPresentationPolicy, methodologyPayload } =
+    createProjectionPolicyStage({ fixture, fixtureKind, override, policyAt: times.policyAt });
+  const publicationStage = createProjectionPublicationStage({
     fixture,
-    valuationOutputInventoryVerification,
-    publicationManifest,
     inventoryIndex,
     freshness,
     projectionPresentationPolicy,
-    projectionPublicEvidenceIndex,
-    projectionSchemaBundle,
     methodologyPayload,
-    tradeOutput,
-    rootOutput,
-    projectionMaterializationVerification,
-    methodologyAt: stageAt ?? METHODOLOGY_AT,
-    documentSetAt: stageAt ?? SET_AT,
-    checkedAt: stageAt ?? CHECKED_AT,
+    custodyIndexVerification,
+    publicationAt: times.publicationAt,
+    publicationArtifactAt: times.publicationArtifactAt,
+  });
+  const evidenceStage = createProjectionEvidenceStage({
+    fixture,
+    publicationStage,
+    inventoryIndex,
+    inventory,
+    completeTradeAssessmentVerification,
+    sourceAt: times.sourceAt,
+    evidenceAt: times.evidenceAt,
+    evidenceIndexAt: times.evidenceIndexAt,
+  });
+  const tradeStage = createProjectionTradeStage({
+    fixture,
+    publicationStage,
+    inventoryIndex,
+    inventory,
+    projectionPresentationPolicy,
+    evidenceStage,
+    numeric,
+    caseArtifactRef,
+    completeTradeAssessmentVerification,
+    custodyIndexVerification,
+    sourceAt: times.sourceAt,
+    verifiedAt: times.verifiedAt,
+    documentAt: times.documentAt,
+  });
+  const materializationStage = createProjectionMaterializationStage({
+    fixtureKind,
+    publicationStage,
+    inventoryIndex,
+    projectionPublicEvidenceIndex: evidenceStage.projectionPublicEvidenceIndex,
+    projectionPresentationPolicy,
+    tradeStage,
+    custodyIndexVerification,
+    stageAt: times.stageAt,
+    schemaAt: times.schemaAt,
+    materializationShardAt: times.materializationShardAt,
+    materializationRootAt: times.materializationRootAt,
+  });
+  return {
+    fixture,
+    valuationOutputInventoryVerification,
+    publicationManifest: publicationStage.publicationManifest,
+    inventoryIndex,
+    freshness,
+    projectionPresentationPolicy,
+    projectionPublicEvidenceIndex: evidenceStage.projectionPublicEvidenceIndex,
+    projectionSchemaBundle: materializationStage.projectionSchemaBundle,
+    methodologyPayload,
+    tradeOutput: tradeStage.tradeOutput,
+    rootOutput: materializationStage.rootOutput,
+    projectionMaterializationVerification:
+      materializationStage.projectionMaterializationVerification,
+    methodologyAt: times.stageAt ?? METHODOLOGY_AT,
+    documentSetAt: times.stageAt ?? SET_AT,
+    checkedAt: times.stageAt ?? CHECKED_AT,
   };
 }
 
