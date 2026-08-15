@@ -89,7 +89,13 @@ const selectionSchema = z
     status: statusSchema,
     supportingProviders: z
       .array(
-        z.enum(['draftguru', 'footywire', 'official_afl', 'fitzroy_official_afl_player_details'])
+        z.enum([
+          'statly_local_fixture',
+          'draftguru',
+          'footywire',
+          'official_afl',
+          'fitzroy_official_afl_player_details',
+        ])
       )
       .min(1),
     evidenceIds: evidenceIdsSchema,
@@ -167,6 +173,18 @@ const contentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
+    if (
+      content.environment !== 'test_fixture' &&
+      content.draftSelections.some(({ supportingProviders }) =>
+        supportingProviders.includes('statly_local_fixture')
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['draftSelections'],
+        message: 'Local fixture provider support is valid only in test_fixture candidates.',
+      });
+    }
     if (content.schemaVersion === AFL_TRADE_EXTERNAL_RECONCILIATION_CANDIDATE_SCHEMA_VERSION) {
       if (!content.sourceAuthority) {
         context.addIssue({
@@ -268,8 +286,7 @@ const contentSchema = z
         context.addIssue({
           code: 'custom',
           path: ['transactions', index],
-          message:
-            'Incomplete transactions must remain unresolved with an exact blocking issue.',
+          message: 'Incomplete transactions must remain unresolved with an exact blocking issue.',
         });
       }
     });

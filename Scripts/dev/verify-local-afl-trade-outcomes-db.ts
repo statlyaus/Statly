@@ -10,7 +10,8 @@ const expectedNonce = requireLocalAflTradeOutcomesRuntimeNonce(
   process.env.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE ?? ''
 );
 const pool = new Pool({
-  connectionString: AFL_TRADE_LOCAL_OUTCOMES_DATABASE_URL,
+  connectionString:
+    process.env.AFL_OUTCOMES_DATABASE_URL ?? AFL_TRADE_LOCAL_OUTCOMES_DATABASE_URL,
   connectionTimeoutMillis: 3_000,
   max: 1,
   statement_timeout: 3_000,

@@ -31,6 +31,10 @@ export interface AflTradeConditionalObjectIdentity {
   metadata: Readonly<Record<string, string>>;
   encryption:
     | {
+        mode: 'local_filesystem_unencrypted';
+        keyReferenceSha256: null;
+      }
+    | {
         mode: 'provider_managed';
         keyReferenceSha256: null;
       }

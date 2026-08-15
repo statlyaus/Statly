@@ -262,6 +262,28 @@ function fixtureDependencies() {
 }
 
 describe('authorized external provider ingestion', () => {
+  it('rejects the local fixture provider before live authorization or admission', async () => {
+    const fixture = fixtureDependencies();
+
+    await expect(
+      ingestAuthorizedAflTradeExternalPage(
+        {
+          request: {
+            ...request,
+            environment: 'test_fixture',
+            provider: 'statly_local_fixture',
+            capabilityId: 'statly-local-generated-fixture',
+            sourceUrl: 'fixture://statly/provider-ingestion-rejection',
+          },
+          gateRequest,
+        },
+        fixture.dependencies
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_SCOPE' });
+    expect(fixture.resolveAuthorization).not.toHaveBeenCalled();
+    expect(fixture.dependencies.admission.acquire).not.toHaveBeenCalled();
+  });
+
   it('rechecks durable authority after retrieval and completes the admitted lease', async () => {
     const fixture = fixtureDependencies();
     const result = await ingestAuthorizedAflTradeExternalPage(

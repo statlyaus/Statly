@@ -475,8 +475,16 @@ export function getAflTradeFitzRoyObservedScopeError(
   const authorizedSeason = String(invocation.authorizationSeason);
   const observedDateYears =
     diagnostics.observedDateRange?.map((value) => value.slice(0, 4)) ?? [];
+  const diagnosticFields = new Set(diagnostics.fields.map(({ name }) => name));
+  const officialScopeIsRetainedForDecode =
+    invocation.capabilityId === 'official-afl-player-stats' &&
+    diagnostics.rowCount > 0 &&
+    diagnosticFields.has('utcStartTime') &&
+    diagnosticFields.has('compSeason.shortName');
   if (
-    (diagnostics.observedSeasonValues.length === 0 && observedDateYears.length === 0) ||
+    (diagnostics.observedSeasonValues.length === 0 &&
+      observedDateYears.length === 0 &&
+      !officialScopeIsRetainedForDecode) ||
     diagnostics.observedSeasonValues.some((value) => value !== authorizedSeason) ||
     observedDateYears.some((value) => value !== authorizedSeason)
   ) {

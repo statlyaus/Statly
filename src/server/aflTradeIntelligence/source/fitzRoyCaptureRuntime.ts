@@ -80,7 +80,10 @@ export interface AflTradeFitzRoyProcessResult {
 
 export interface AflTradeFitzRoyProcessExecutor {
   readonly executionBoundary:
-    'fixture_no_network' | 'local_network_capable' | 'attested_rate_limited';
+    | 'fixture_no_network'
+    | 'local_network_capable'
+    | 'local_rate_limited_docker'
+    | 'attested_rate_limited';
   readonly egressPolicyEvidenceIds?: readonly string[];
   execute(
     invocation: AflTradeFitzRoyInvocation,
@@ -242,6 +245,28 @@ function requireProductionCaptureBoundary(
   }
 }
 
+function requireLocalNonProductionCaptureBoundary(
+  dependencies: AflTradeFitzRoyCaptureDependencies
+) {
+  if (
+    dependencies.captureAdmission !== undefined ||
+    dependencies.egressExecutionVerifier === undefined ||
+    dependencies.executor.executionBoundary !== 'local_rate_limited_docker' ||
+    dependencies.rawArtifactRepository.assurance !== 'local_non_production_filesystem' ||
+    dependencies.metadataArtifactRepository.assurance !==
+      'local_non_production_filesystem' ||
+    dependencies.rawArtifactRepository.artifactClass !== 'raw_source' ||
+    dependencies.metadataArtifactRepository.artifactClass !== 'capture_metadata' ||
+    dependencies.rawArtifactRepository.custodyProfile !== null ||
+    dependencies.metadataArtifactRepository.custodyProfile !== null
+  ) {
+    throw new AflTradeFitzRoyCaptureError(
+      'PRODUCTION_EXECUTION_DISABLED',
+      'Local non-production capture requires filesystem custody, a locally authenticated rate-limited Docker executor, and no deployed admission claim.'
+    );
+  }
+}
+
 async function requireAuthenticatedEgressExecution(input: {
   unparsedReceipt: unknown;
   verifier: AflTradeFitzRoyEgressExecutionVerifier;
@@ -256,6 +281,7 @@ async function requireAuthenticatedEgressExecution(input: {
   cacheSeconds: number | null;
   authorizationRecordedAt: string;
   egressPolicyEvidenceId: string;
+  expectedExecutionBoundary: 'local_non_production_docker' | 'attested_provider_egress';
 }): Promise<AflTradeFitzRoyEgressExecutionReceipt> {
   let receipt: AflTradeFitzRoyEgressExecutionReceipt;
   try {
@@ -274,6 +300,11 @@ async function requireAuthenticatedEgressExecution(input: {
   if (
     upstreamRate === null ||
     input.cacheSeconds === null ||
+    content.executionBoundary !== input.expectedExecutionBoundary ||
+    (input.expectedExecutionBoundary === 'local_non_production_docker' &&
+      content.enforcementScope !== 'capture_admission_only') ||
+    (input.expectedExecutionBoundary === 'attested_provider_egress' &&
+      content.enforcementScope === 'capture_admission_only') ||
     content.provider !== input.invocation.provider ||
     content.capabilityId !== input.invocation.capabilityId ||
     content.directFunction !== input.invocation.directFunction ||
@@ -295,7 +326,7 @@ async function requireAuthenticatedEgressExecution(input: {
   ) {
     throw new AflTradeFitzRoyCaptureError(
       'RUNTIME_IDENTITY_MISMATCH',
-      'The provider-egress execution evidence does not bind the exact authorized capture.'
+      'The execution evidence does not bind the exact authorized capture boundary.'
     );
   }
   return receipt;
@@ -316,7 +347,7 @@ function requireEgressPolicyEvidence(sourceRights: AflTradeSourceRightsProposal)
   ) {
     throw new AflTradeFitzRoyCaptureError(
       'AUTHORIZATION_BLOCKED',
-      'Production capture requires one exact reviewed egress policy and approved caching.'
+      'Governed provider capture requires one exact reviewed egress policy and approved caching.'
     );
   }
   return evidenceIds[0];
@@ -414,6 +445,10 @@ export async function captureAuthorizedAflTradeFitzRoyEvidence(
     );
   }
   const fixtureCapture = command.gateRequest.environment === 'test_fixture';
+  const localNonProductionCapture = command.gateRequest.environment === 'non_production';
+  const localNonProductionExecution =
+    localNonProductionCapture &&
+    dependencies.executor.executionBoundary === 'local_rate_limited_docker';
   let authorizedCommand = command;
   if (fixtureCapture) {
     if (dependencies.executor.executionBoundary !== 'fixture_no_network') {
@@ -459,7 +494,11 @@ export async function captureAuthorizedAflTradeFitzRoyEvidence(
         'The exact current source authority could not be resolved from durable state.'
       );
     }
-    requireProductionCaptureBoundary(authorizedCommand, dependencies);
+    if (localNonProductionExecution) {
+      requireLocalNonProductionCaptureBoundary(dependencies);
+    } else {
+      requireProductionCaptureBoundary(authorizedCommand, dependencies);
+    }
   }
   validateCaptureAuthorizationScope(request, authorizedCommand.gateRequest);
   const invocation = createAflTradeFitzRoyInvocation(request);
@@ -482,7 +521,7 @@ export async function captureAuthorizedAflTradeFitzRoyEvidence(
       'Gate 0A did not authorize this fitzRoy capture.'
     );
   }
-  const captureLease = fixtureCapture
+  const captureLease = fixtureCapture || localNonProductionExecution
     ? null
     : await acquireProductionLease({
         command: authorizedCommand,
@@ -569,6 +608,9 @@ export async function captureAuthorizedAflTradeFitzRoyEvidence(
           cacheSeconds: authorizedCommand.gateRequest.cacheSeconds,
           authorizationRecordedAt: authorizationReceipt.content.recordedAt,
           egressPolicyEvidenceId: egressPolicyEvidenceId!,
+          expectedExecutionBoundary: localNonProductionExecution
+            ? 'local_non_production_docker'
+            : 'attested_provider_egress',
         });
     const capturedAt = dependencies.clock.now();
     const authorizationAgeMs = Date.parse(capturedAt) - Date.parse(evaluatedAt);

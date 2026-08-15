@@ -132,7 +132,10 @@ async function authenticateStoredCustody(input: {
     !readback.success ||
     input.row.artifact_class !== 'public_projection' ||
     input.row.environment !== input.environment ||
-    input.row.custody_profile_id !== input.repository.custodyProfile?.profileId ||
+    input.row.custody_profile_id !==
+      (input.repository.custodyProfile === null
+        ? null
+        : input.repository.custodyProfile.profileId) ||
     !doAflTradeArtifactRefsExactlyMatch(reference.data, readback.data.content.artifact) ||
     readback.data.content.artifactClass !== 'public_projection' ||
     readback.data.content.custodyEnvironment !== input.environment ||
@@ -179,16 +182,23 @@ export async function persistPostgresAflTradeProjectionRelease(
   }
   const environment = authenticated.output.projectionManifest.content.environment;
   const profile = dependencies.artifactRepository.custodyProfile;
+  const exactFixtureFilesystem =
+    environment === 'test_fixture' &&
+    dependencies.artifactRepository.assurance === 'fixture_filesystem' &&
+    profile === null;
+  const exactDurableStorage =
+    dependencies.artifactRepository.assurance === 'durable_object_storage' &&
+    profile !== null &&
+    profile.content.environment === environment &&
+    profile.content.artifactClass === 'public_projection';
+  const custodyProfileId = profile === null ? null : profile.profileId;
   if (
-    dependencies.artifactRepository.assurance !== 'durable_object_storage' ||
     dependencies.artifactRepository.artifactClass !== 'public_projection' ||
-    profile === null ||
-    profile.content.environment !== environment ||
-    profile.content.artifactClass !== 'public_projection'
+    (!exactFixtureFilesystem && !exactDurableStorage)
   ) {
     throw new AflTradeProjectionReleaseCustodyError(
       'INVALID_COMPOSITION',
-      'Projection custody requires exact durable public-projection storage in the release environment.'
+      'Projection custody requires exact test-fixture filesystem or durable public-projection storage in the release environment.'
     );
   }
 
@@ -223,7 +233,7 @@ export async function persistPostgresAflTradeProjectionRelease(
     if (!doAflTradeArtifactRefsExactlyMatch(persisted.reference, releaseArtifact.artifactRef)) {
       throw new AflTradeProjectionReleaseCustodyError(
         'CUSTODY_MISMATCH',
-        'Durable storage returned a different projection release reference.'
+        'Immutable storage returned a different projection release reference.'
       );
     }
     const verifiedAt = await trustedNow(transaction);
@@ -247,7 +257,7 @@ export async function persistPostgresAflTradeProjectionRelease(
         releaseArtifact.artifactRef.byteLength,
         'public_projection',
         environment,
-        profile.profileId,
+        custodyProfileId,
         releaseArtifact.artifactRef.createdAt,
         verifiedAt,
         canonicalizeAflTradeJson(readback),

@@ -96,8 +96,8 @@ function identityResolution(input: {
 
 export function createLocalAflTradePromotionBackedEvidence() {
   const fixture = createLocalAflTradeArchiveFixture();
-  const trade = fixture.trades[0];
-  if (!trade) throw new TypeError('The local source fixture has no trade.');
+  const sourceShapedTrade = fixture.trades[0];
+  if (!sourceShapedTrade) throw new TypeError('The local source fixture has no trade.');
   const clubById = new Map(fixture.clubs.map((club) => [club.id, club]));
   const clubBySlug = new Map(fixture.clubs.map((club) => [club.slug, club]));
   const entity = (clubId: string) => {
@@ -106,13 +106,13 @@ export function createLocalAflTradePromotionBackedEvidence() {
     return { nativeId: club.slug, recordedName: club.name };
   };
 
-  const draftguruClaims: Claim[] = [
+  const archiveClaims: Claim[] = fixture.trades.flatMap((trade) => [
     {
-      kind: 'transaction',
+      kind: 'transaction' as const,
       nativeEventId: trade.id,
       seasonYear: trade.seasonYear,
       occurredOn: trade.occurredOn,
-      transactionType: 'trade',
+      transactionType: 'trade' as const,
       title: trade.title,
     },
     ...trade.parties.map((clubSlug) => {
@@ -140,14 +140,22 @@ export function createLocalAflTradePromotionBackedEvidence() {
               roundNumber: asset.nominalRound,
               originalClub: entity(asset.originalClubId),
             }
-          : {
-              kind: 'current_pick' as const,
-              draftYear: asset.draftSeasonYear,
-              draftType: 'national' as const,
-              recordedPickNumber: asset.nominalPick,
-              recordedRoundNumber: asset.nominalRound,
-              recordedLabel: asset.rawDescription,
-            },
+          : asset.kind === 'current_pick'
+            ? {
+                kind: 'current_pick' as const,
+                draftYear: asset.draftSeasonYear,
+                draftType: 'national' as const,
+                recordedPickNumber: asset.nominalPick,
+                recordedRoundNumber: asset.nominalRound,
+                recordedLabel: asset.rawDescription,
+              }
+            : {
+                kind: 'player' as const,
+                player: {
+                  nativeId: asset.selectedPlayerId,
+                  recordedName: asset.selectedPlayer,
+                },
+              },
     })),
     ...trade.assets.flatMap((asset) =>
       asset.kind === 'current_pick'
@@ -167,60 +175,66 @@ export function createLocalAflTradePromotionBackedEvidence() {
           ]
         : []
     ),
-  ];
-  const officialClaims: Claim[] = trade.assets.map((asset) => ({
-    kind: 'pick_custody' as const,
-    observedAt: '2025-11-01T00:00:00.000Z',
-    draftYear: asset.draftSeasonYear,
-    draftType: 'national' as const,
-    roundNumber: asset.nominalRound,
-    recordedPickNumber: asset.kind === 'current_pick' ? asset.selectionNumber : null,
-    originalClub: entity(asset.originalClubId),
-    currentClub: entity(asset.toClubId),
-  }));
+  ]);
+  const custodyClaims: Claim[] = sourceShapedTrade.assets.flatMap((asset) =>
+    asset.kind === 'player'
+      ? []
+      : [
+          {
+            kind: 'pick_custody' as const,
+            observedAt: '2025-11-01T00:00:00.000Z',
+            draftYear: asset.draftSeasonYear,
+            draftType: 'national' as const,
+            roundNumber: asset.nominalRound,
+            recordedPickNumber: asset.kind === 'current_pick' ? asset.selectionNumber : null,
+            originalClub: entity(asset.originalClubId),
+            currentClub: entity(asset.toClubId),
+          },
+        ]
+  );
   const sourceBatches = [
     evidenceBatch({
-      provider: 'draftguru',
-      sourceUrl: 'https://www.draftguru.com.au/trades/2025-local-source-fixture',
-      effectiveAt: `${trade.occurredOn}T00:00:00.000Z`,
-      claims: draftguruClaims,
+      provider: 'statly_local_fixture',
+      sourceUrl: 'fixture://statly/local-afl-trade-archive-v2',
+      effectiveAt: `${sourceShapedTrade.occurredOn}T00:00:00.000Z`,
+      claims: archiveClaims,
     }),
     evidenceBatch({
-      provider: 'official_afl',
-      sourceUrl: 'https://www.afl.com.au/news/2025-indicative-draft-order',
+      provider: 'statly_local_fixture',
+      sourceUrl: 'fixture://statly/local-afl-trade-custody-v2',
       effectiveAt: '2025-11-01T00:00:00.000Z',
-      claims: officialClaims,
+      claims: custodyClaims,
     }),
   ];
-  const clubResolutions = fixture.clubs.flatMap((club) =>
-    (['draftguru', 'official_afl'] as const).map((provider) =>
-      identityResolution({
-        provider,
-        entityKind: 'club',
-        nativeId: club.slug,
-        recordedName: club.name,
-        canonicalId: club.id,
-      })
-    )
+  const clubResolutions = fixture.clubs.map((club) =>
+    identityResolution({
+      provider: 'statly_local_fixture',
+      entityKind: 'club',
+      nativeId: club.slug,
+      recordedName: club.name,
+      canonicalId: club.id,
+    })
   );
-  const playerResolutions = trade.assets.flatMap((asset) =>
-    asset.kind === 'current_pick'
-      ? [
-          identityResolution({
-            provider: 'draftguru',
-            entityKind: 'player',
-            nativeId: asset.selectedPlayerId,
-            recordedName: asset.selectedPlayer,
-            canonicalId: asset.selectedPlayerId,
-          }),
-        ]
-      : []
+  const playerResolutions = fixture.trades.flatMap((trade) =>
+    trade.assets.flatMap((asset) =>
+      asset.kind === 'current_pick' || asset.kind === 'player'
+        ? [
+            identityResolution({
+              provider: 'statly_local_fixture',
+              entityKind: 'player',
+              nativeId: asset.selectedPlayerId,
+              recordedName: asset.selectedPlayer,
+              canonicalId: asset.selectedPlayerId,
+            }),
+          ]
+        : []
+    )
   );
   const identityResolutions = [...clubResolutions, ...playerResolutions];
   const candidate = reconcileAflTradeExternalEvidence({
     environment: fixture.environment,
     competition: fixture.competition,
-    anchorSeasonYear: trade.seasonYear,
+    anchorSeasonYear: sourceShapedTrade.seasonYear,
     sourceBatches,
     identityResolutions,
     reconciledAt,

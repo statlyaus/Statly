@@ -29,6 +29,7 @@ type RecordedEntity = Extract<Claim, { kind: 'transaction_party' }>['club'];
 type Evidence = AflTradeExternalEvidenceBatch['content']['evidence'][number];
 
 const providerSchema = z.enum([
+  'statly_local_fixture',
   'draftguru',
   'footywire',
   'official_afl',
@@ -263,6 +264,241 @@ function pickId(
   });
 }
 
+type DirectedTransferClaim = Extract<Claim, { kind: 'directed_transfer' }>;
+type DirectedTransferEvidence = Evidence & { content: { claim: DirectedTransferClaim } };
+type TransactionEvidence = Evidence & {
+  content: { claim: Extract<Claim, { kind: 'transaction' }> };
+};
+type IdentityResolver = (
+  provider: Provider,
+  entityKind: 'club' | 'player',
+  sourceIdentity: RecordedEntity,
+  subjectKey: string,
+  evidenceId: string
+) => string | null;
+
+function isUsableCustody(custody: CanonicalPickCustody): boolean {
+  return custody.status === 'single_source' || custody.status === 'corroborated';
+}
+
+function playerTransferAsset(input: {
+  row: DirectedTransferEvidence;
+  claim: DirectedTransferClaim;
+  resolve: IdentityResolver;
+}): CanonicalTransferAsset {
+  if (input.claim.asset.kind !== 'player') {
+    throw new TypeError('Player transfer asset resolution received the wrong asset kind.');
+  }
+  return {
+    kind: 'player',
+    playerId: input.resolve(
+      input.row.content.provider,
+      'player',
+      input.claim.asset.player,
+      `transfer:${input.claim.nativeTransferId}:player`,
+      input.row.evidenceId
+    ),
+    recordedName: input.claim.asset.player.recordedName,
+  };
+}
+
+function futurePickTransferAsset(input: {
+  row: DirectedTransferEvidence;
+  claim: DirectedTransferClaim;
+  resolve: IdentityResolver;
+  pickCustody: readonly CanonicalPickCustody[];
+  toClubId: string | null;
+}): CanonicalTransferAsset {
+  if (input.claim.asset.kind !== 'future_pick') {
+    throw new TypeError('Future-pick transfer resolution received the wrong asset kind.');
+  }
+  const futurePick = input.claim.asset;
+  const originalClubId = input.resolve(
+    input.row.content.provider,
+    'club',
+    futurePick.originalClub,
+    `transfer:${input.claim.nativeTransferId}:original-club`,
+    input.row.evidenceId
+  );
+  const custodyMatches = input.pickCustody.filter(
+    (custody) =>
+      isUsableCustody(custody) &&
+      custody.draftYear === futurePick.draftYear &&
+      custody.draftType === futurePick.draftType &&
+      custody.roundNumber === futurePick.roundNumber &&
+      custody.originalClubId === originalClubId &&
+      custody.currentClubId === input.toClubId
+  );
+  return {
+    kind: 'pick_entitlement',
+    pickId:
+      custodyMatches.length === 1
+        ? custodyMatches[0].pickId
+        : pickId(futurePick.draftYear, futurePick.draftType, null, futurePick.roundNumber),
+    draftYear: futurePick.draftYear,
+    draftType: futurePick.draftType,
+    nominalRound: futurePick.roundNumber,
+    nominalPick: null,
+    originalClubId,
+    recordedLabel: null,
+  };
+}
+
+function latestPriorCustody(
+  pickCustody: readonly CanonicalPickCustody[],
+  custody: CanonicalPickCustody
+): CanonicalPickCustody | undefined {
+  return pickCustody
+    .filter(
+      (prior) =>
+        isUsableCustody(prior) &&
+        prior.pickId === custody.pickId &&
+        prior.observedAt < custody.observedAt
+    )
+    .sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0];
+}
+
+function matchesCurrentPickCustody(input: {
+  custody: CanonicalPickCustody;
+  pickCustody: readonly CanonicalPickCustody[];
+  currentPick: Extract<DirectedTransferClaim['asset'], { kind: 'current_pick' }>;
+  eventClaim: Extract<Claim, { kind: 'transaction' }> | null;
+  occurredOn: string | null;
+  fromClubId: string | null;
+  toClubId: string | null;
+}): boolean {
+  const { custody, currentPick } = input;
+  if (
+    !input.eventClaim ||
+    !isUsableCustody(custody) ||
+    custody.draftYear !== currentPick.draftYear ||
+    custody.draftType !== currentPick.draftType ||
+    custody.currentClubId !== input.toClubId ||
+    (input.occurredOn !== null && custody.observedAt.slice(0, 10) < input.occurredOn) ||
+    (currentPick.recordedRoundNumber !== undefined &&
+      custody.roundNumber !== null &&
+      custody.roundNumber !== currentPick.recordedRoundNumber)
+  ) {
+    return false;
+  }
+  const priorCustody = latestPriorCustody(input.pickCustody, custody);
+  return priorCustody
+    ? priorCustody.currentClubId === input.fromClubId &&
+        (input.occurredOn === null || priorCustody.observedAt.slice(0, 10) <= input.occurredOn)
+    : custody.originalClubId === input.fromClubId;
+}
+
+function currentPickTransferAsset(input: {
+  claim: DirectedTransferClaim;
+  transactionClaimsByNativeEventId: ReadonlyMap<string, readonly TransactionEvidence[]>;
+  pickCustody: readonly CanonicalPickCustody[];
+  fromClubId: string | null;
+  toClubId: string | null;
+}): CanonicalTransferAsset {
+  if (input.claim.asset.kind !== 'current_pick') {
+    throw new TypeError('Current-pick transfer resolution received the wrong asset kind.');
+  }
+  const currentPick = input.claim.asset;
+  const eventClaims = input.transactionClaimsByNativeEventId.get(input.claim.nativeEventId) ?? [];
+  const eventClaim = eventClaims.length === 1 ? eventClaims[0].content.claim : null;
+  const occurredOn = eventClaim?.occurredOn ?? null;
+  const custodyMatches = input.pickCustody.filter((custody) =>
+    matchesCurrentPickCustody({
+      custody,
+      pickCustody: input.pickCustody,
+      currentPick,
+      eventClaim,
+      occurredOn,
+      fromClubId: input.fromClubId,
+      toClubId: input.toClubId,
+    })
+  );
+  const exactCustody = custodyMatches.length === 1 ? custodyMatches[0] : null;
+  return {
+    kind: 'pick_entitlement',
+    pickId: exactCustody
+      ? exactCustody.pickId
+      : pickId(
+          currentPick.draftYear,
+          currentPick.draftType,
+          currentPick.recordedPickNumber,
+          currentPick.recordedRoundNumber ?? null
+        ),
+    draftYear: currentPick.draftYear,
+    draftType: currentPick.draftType,
+    nominalRound: currentPick.recordedRoundNumber ?? null,
+    nominalPick: currentPick.recordedPickNumber,
+    originalClubId: exactCustody?.originalClubId ?? null,
+    recordedLabel: currentPick.recordedLabel ?? null,
+  };
+}
+
+function reconcileDirectedTransfer(input: {
+  row: DirectedTransferEvidence;
+  resolve: IdentityResolver;
+  pickCustody: readonly CanonicalPickCustody[];
+  transactionClaimsByNativeEventId: ReadonlyMap<string, readonly TransactionEvidence[]>;
+}): CanonicalTransfer {
+  const claim = input.row.content.claim;
+  const transactionId = createAflTradeContentAddress('external-transaction', {
+    provider: input.row.content.provider,
+    nativeEventId: claim.nativeEventId,
+  });
+  const fromClubId = input.resolve(
+    input.row.content.provider,
+    'club',
+    claim.fromClub,
+    `transfer:${claim.nativeTransferId}:from`,
+    input.row.evidenceId
+  );
+  const toClubId = input.resolve(
+    input.row.content.provider,
+    'club',
+    claim.toClub,
+    `transfer:${claim.nativeTransferId}:to`,
+    input.row.evidenceId
+  );
+  const asset =
+    claim.asset.kind === 'player'
+      ? playerTransferAsset({ row: input.row, claim, resolve: input.resolve })
+      : claim.asset.kind === 'future_pick'
+        ? futurePickTransferAsset({
+            row: input.row,
+            claim,
+            resolve: input.resolve,
+            pickCustody: input.pickCustody,
+            toClubId,
+          })
+        : currentPickTransferAsset({
+            claim,
+            transactionClaimsByNativeEventId: input.transactionClaimsByNativeEventId,
+            pickCustody: input.pickCustody,
+            fromClubId,
+            toClubId,
+          });
+  const custodyResolved =
+    asset.kind !== 'pick_entitlement' ||
+    input.pickCustody.some(
+      (custody) => custody.pickId === asset.pickId && isUsableCustody(custody)
+    );
+  const status: ReconciliationStatus =
+    !fromClubId || !toClubId || (asset.kind === 'player' && !asset.playerId) || !custodyResolved
+      ? 'unresolved'
+      : 'single_source';
+  return {
+    transferId: createAflTradeContentAddress('external-transfer', {
+      transactionId,
+      nativeTransferId: claim.nativeTransferId,
+    }),
+    transactionId,
+    fromClubId,
+    toClubId,
+    asset,
+    status,
+    evidenceIds: [input.row.evidenceId],
+  };
+}
+
 export function reconcileAflTradeExternalEvidence(input: {
   environment: 'test_fixture' | 'non_production' | 'production';
   competition: string;
@@ -279,6 +515,12 @@ export function reconcileAflTradeExternalEvidence(input: {
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
   const reconciledAt = instantSchema.parse(input.reconciledAt);
   const sourceBatches = input.sourceBatches.map(parseAflTradeExternalEvidenceBatch);
+  if (
+    environment !== 'test_fixture' &&
+    sourceBatches.some(({ content }) => content.provider === 'statly_local_fixture')
+  ) {
+    throw new TypeError('Local fixture evidence can be reconciled only in test_fixture.');
+  }
   const sourceBatchIds = sourceBatches.map((batch) => batch.batchId).sort();
   const sourceAuthority =
     input.sourceAuthority === undefined
@@ -299,6 +541,12 @@ export function reconcileAflTradeExternalEvidence(input: {
   const identityResolutions = input.identityResolutions.map((value) =>
     identityResolutionSchema.parse(value)
   );
+  if (
+    environment !== 'test_fixture' &&
+    identityResolutions.some(({ content }) => content.provider === 'statly_local_fixture')
+  ) {
+    throw new TypeError('Local fixture identities can be reconciled only in test_fixture.');
+  }
   const evidence = sourceBatches.flatMap((batch) => batch.content.evidence);
   const issues: ReconciliationIssue[] = [];
 
@@ -345,19 +593,22 @@ export function reconcileAflTradeExternalEvidence(input: {
 
   const transactionClaims = evidence.filter(
     (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'transaction' }> } } =>
-      row.content.provider === 'draftguru' && row.content.claim.kind === 'transaction'
+      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
+      row.content.claim.kind === 'transaction'
   );
   const parties = evidence.filter(
     (
       row
     ): row is Evidence & { content: { claim: Extract<Claim, { kind: 'transaction_party' }> } } =>
-      row.content.provider === 'draftguru' && row.content.claim.kind === 'transaction_party'
+      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
+      row.content.claim.kind === 'transaction_party'
   );
   const directedTransfers = evidence.filter(
     (
       row
     ): row is Evidence & { content: { claim: Extract<Claim, { kind: 'directed_transfer' }> } } =>
-      row.content.provider === 'draftguru' && row.content.claim.kind === 'directed_transfer'
+      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
+      row.content.claim.kind === 'directed_transfer'
   );
   const transactionClaimsByNativeEventId = new Map<string, typeof transactionClaims>();
   for (const transaction of transactionClaims) {
@@ -441,157 +692,29 @@ export function reconcileAflTradeExternalEvidence(input: {
       evidenceIds: group.flatMap(({ evidenceIds }) => evidenceIds),
     });
   });
-  const isUsableCustody = (custody: CanonicalPickCustody) =>
-    custody.status === 'single_source' || custody.status === 'corroborated';
-
-  const transfers: CanonicalTransfer[] = directedTransfers.map((row) => {
-    const claim = row.content.claim;
-    const transactionId = createAflTradeContentAddress('external-transaction', {
-      provider: 'draftguru',
-      nativeEventId: claim.nativeEventId,
-    });
-    const fromClubId = resolve(
-      'draftguru',
-      'club',
-      claim.fromClub,
-      `transfer:${claim.nativeTransferId}:from`,
-      row.evidenceId
-    );
-    const toClubId = resolve(
-      'draftguru',
-      'club',
-      claim.toClub,
-      `transfer:${claim.nativeTransferId}:to`,
-      row.evidenceId
-    );
-    let asset: CanonicalTransferAsset;
-    if (claim.asset.kind === 'player') {
-      asset = {
-        kind: 'player',
-        playerId: resolve(
-          'draftguru',
-          'player',
-          claim.asset.player,
-          `transfer:${claim.nativeTransferId}:player`,
-          row.evidenceId
-        ),
-        recordedName: claim.asset.player.recordedName,
-      };
-    } else if (claim.asset.kind === 'future_pick') {
-      const futurePick = claim.asset;
-      const originalClubId = resolve(
-        'draftguru',
-        'club',
-        futurePick.originalClub,
-        `transfer:${claim.nativeTransferId}:original-club`,
-        row.evidenceId
-      );
-      const custodyMatches = pickCustody.filter(
-        (custody) =>
-          isUsableCustody(custody) &&
-          custody.draftYear === futurePick.draftYear &&
-          custody.draftType === futurePick.draftType &&
-          custody.roundNumber === futurePick.roundNumber &&
-          custody.originalClubId === originalClubId &&
-          custody.currentClubId === toClubId
-      );
-      asset = {
-        kind: 'pick_entitlement',
-        pickId:
-          custodyMatches.length === 1
-            ? custodyMatches[0].pickId
-            : pickId(futurePick.draftYear, futurePick.draftType, null, futurePick.roundNumber),
-        draftYear: futurePick.draftYear,
-        draftType: futurePick.draftType,
-        nominalRound: futurePick.roundNumber,
-        nominalPick: null,
-        originalClubId,
-        recordedLabel: null,
-      };
-    } else {
-      const currentPick = claim.asset;
-      const eventClaims = transactionClaimsByNativeEventId.get(claim.nativeEventId) ?? [];
-      const eventClaim = eventClaims.length === 1 ? eventClaims[0].content.claim : null;
-      const occurredOn = eventClaim?.occurredOn ?? null;
-      const custodyMatches = pickCustody.filter((custody) => {
-        if (
-          !eventClaim ||
-          !isUsableCustody(custody) ||
-          custody.draftYear !== currentPick.draftYear ||
-          custody.draftType !== currentPick.draftType ||
-          custody.currentClubId !== toClubId ||
-          (occurredOn !== null && custody.observedAt.slice(0, 10) < occurredOn) ||
-          (currentPick.recordedRoundNumber !== undefined &&
-            custody.roundNumber !== null &&
-            custody.roundNumber !== currentPick.recordedRoundNumber)
-        ) {
-          return false;
-        }
-        const priorCustody = pickCustody
-          .filter(
-            (prior) =>
-              isUsableCustody(prior) &&
-              prior.pickId === custody.pickId &&
-              prior.observedAt < custody.observedAt
-          )
-          .sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0];
-        return priorCustody
-          ? priorCustody.currentClubId === fromClubId &&
-              (occurredOn === null || priorCustody.observedAt.slice(0, 10) <= occurredOn)
-          : custody.originalClubId === fromClubId;
-      });
-      const exactCustody = custodyMatches.length === 1 ? custodyMatches[0] : null;
-      asset = {
-        kind: 'pick_entitlement',
-        pickId: exactCustody
-          ? exactCustody.pickId
-          : pickId(
-              currentPick.draftYear,
-              currentPick.draftType,
-              currentPick.recordedPickNumber,
-              currentPick.recordedRoundNumber ?? null
-            ),
-        draftYear: currentPick.draftYear,
-        draftType: currentPick.draftType,
-        nominalRound: currentPick.recordedRoundNumber ?? null,
-        nominalPick: currentPick.recordedPickNumber,
-        originalClubId: exactCustody?.originalClubId ?? null,
-        recordedLabel: currentPick.recordedLabel ?? null,
-      };
-    }
-    const custodyResolved =
-      asset.kind !== 'pick_entitlement' ||
-      pickCustody.some((custody) => custody.pickId === asset.pickId && isUsableCustody(custody));
-    const status: ReconciliationStatus =
-      !fromClubId || !toClubId || (asset.kind === 'player' && !asset.playerId) || !custodyResolved
-        ? 'unresolved'
-        : 'single_source';
-    return {
-      transferId: createAflTradeContentAddress('external-transfer', {
-        transactionId,
-        nativeTransferId: claim.nativeTransferId,
-      }),
-      transactionId,
-      fromClubId,
-      toClubId,
-      asset,
-      status,
-      evidenceIds: [row.evidenceId],
-    };
-  });
+  const transfers: CanonicalTransfer[] = directedTransfers.map((row) =>
+    reconcileDirectedTransfer({
+      row,
+      resolve,
+      pickCustody,
+      transactionClaimsByNativeEventId,
+    })
+  );
 
   const transactions: CanonicalTransaction[] = transactionClaims.map((row) => {
     const claim = row.content.claim;
     const transactionId = createAflTradeContentAddress('external-transaction', {
-      provider: 'draftguru',
+      provider: row.content.provider,
       nativeEventId: claim.nativeEventId,
     });
     const eventParties = parties.filter(
-      (party) => party.content.claim.nativeEventId === claim.nativeEventId
+      (party) =>
+        party.content.provider === row.content.provider &&
+        party.content.claim.nativeEventId === claim.nativeEventId
     );
     const partyIds = eventParties.map((party) =>
       resolve(
-        'draftguru',
+        row.content.provider,
         'club',
         party.content.claim.club,
         `transaction:${claim.nativeEventId}:party:${party.content.claim.nativePartyId}`,

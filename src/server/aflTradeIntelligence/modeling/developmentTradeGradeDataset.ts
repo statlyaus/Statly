@@ -122,15 +122,12 @@ const acquisitionSchema = z
     }
     if (observedAt < maturedAt) {
       const outcomes = Object.values(acquisition.outcome);
-      if (
-        outcomes.some(({ state }) => state === 'observed') ||
-        !outcomes.some(({ state }) => state === 'partial')
-      ) {
+      if (outcomes.some(({ state }) => state === 'observed')) {
         context.addIssue({
           code: 'custom',
           path: ['outcome'],
           message:
-            'Pre-maturity outcomes must remain explicitly partial or unavailable and include right-censoring evidence.',
+            'Pre-maturity outcomes must remain explicitly partial or unavailable; observed outcomes require a matured horizon.',
         });
       }
     }

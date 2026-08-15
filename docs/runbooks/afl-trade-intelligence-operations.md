@@ -634,6 +634,203 @@ no network or live source, creates no hosted or billable resource, grants no rev
 authority, and does not satisfy real-source custody, hosted durability or hosted backup/restore,
 alerting, scheduling, deployment, or production-activation requirements.
 
+### Inspecting the governed five-season workbook evaluation
+
+Use this development-only path only after a separately authorized one-off capture has completed. It
+does not perform capture, grant source rights, or turn the workbook into factual authority. The
+retained disposable database must contain exactly one governed AFL Tables capture for each completed
+season from 2021 through 2025 and one separately governed official AFL current-season capture for 2026. Preserve the capture receipts and local artifact roots; do not substitute workbook values for
+missing or review-blocked observations.
+
+Before launch, verify the six captures are finalized in the caller-owned loopback PostgreSQL database
+named exactly `statly_outcomes_test`. Expected staged coverage for the current rehearsal is 57,621
+player-match rows: 9,522 each for 2021 and 2022, 9,936 each for 2023–2025, and 8,769 for official 2026. A count mismatch, duplicate season capture, changed field map, unresolved custody object, or
+non-loopback database is a stop condition. Do not repeat provider requests merely to start the UI;
+the interactive path reads retained PostgreSQL staging and fails closed when it is absent.
+
+Set the private workbook path and its independently computed SHA-256 only in the invoking shell. Do
+not write either value to Git, logs, documentation, or a shared environment file. Then run:
+
+```sh
+export AFL_OUTCOMES_DATABASE_URL='postgresql://<local-user>:<local-password>@127.0.0.1:<port>/statly_outcomes_test?sslmode=disable'
+npm run dev:outcomes:authenticate
+npm run dev:outcomes:review-afl-tables-2021-2025
+npm run dev:outcomes:review-official-2026
+
+AFL_OUTCOMES_DEV_WORKBOOK_PATH='<absolute-private-workbook-path>' \
+AFL_OUTCOMES_DEV_WORKBOOK_SHA256='<verified-sha256>' \
+npm run dev:full:workbook-evaluation
+```
+
+The authentication command accepts only loopback PostgreSQL named `statly_outcomes_test`, installs a
+private runtime nonce, and stores that nonce below the ignored `.statly-local` root. Both staging
+entrypoints authenticate it before their first mutation. The review commands perform no provider
+request. The historical command checks the pinned 48,769-row five-season evidence digest, records
+three local review receipts per row in bounded transactions, and writes the complete-set admission
+only after all 146,307 receipts are current. An interrupted run leaves partial receipts dormant. The
+official command admits exactly 12 current Sam Flanders rows in one transaction only after recording
+12 identity approvals, 12 concluded-match approvals and 12 local reconciled player-match facts; a
+changed native entity, match, date, count or goal value fails closed against the pinned digest.
+
+The wrapper pins workbook inspection, then runs the private synthetic-valuation verifier before it
+starts any web process. The verifier must report the workbook trade count as `scenarioReadyTrades`,
+report finite numerical party views, keep `publicationEligible` false and find no unavailable trade.
+It exercises local calculation only: it does not read PostgreSQL facts, perform capture, create a fact
+batch or issue release/publication authority. To rerun just this gate with the same exported workbook
+path and digest:
+
+```sh
+npx tsx Scripts/dev/verify-local-workbook-synthetic-valuations.ts
+```
+
+After the gate passes, the wrapper enables the private reader, selects the local `test_fixture`
+public-read adapter rather than hosted `non_production` custody, re-authenticates the caller-owned
+database, and starts the canonical full local stack in reuse mode. In that mode the launcher must not
+migrate, seed, reset, destroy, or stop the supplied outcomes database. It still owns the disposable
+app database, emulators, workers, and web process that it starts. Stop the stack normally; dispose of
+the outcomes container separately only after the local evidence is no longer needed.
+
+Sign in through the Firebase Auth emulator as `admin@statly.dev` using the local password printed by
+the stack. The private evaluator accepts only that revocation-checked local session; it does not accept
+the credential-free development-auth fallback, request host headers or feature flags as identity.
+Missing or rejected credentials must return not found before any workbook or outcomes read. Then open
+`/dev/afl-trade-evaluation`, select the pinned 2025 workbook, and inspect the Sam Flanders
+acquisition detail. The current official evidence must show 12 concluded St Kilda appearances, one
+goal, right-censored 2026 coverage, acquisition `2025_0016`, and effective-through 28 May 2026. The
+workbook-recorded zero may remain visible only as labelled source input. Missing historical outcomes,
+ambiguous zeros, incomplete votes, or unsupported links must remain unavailable in the factual lane;
+neither the UI nor a model may invent factual completeness.
+
+Independently, the archive card must say `Synthetic scenario ready` and display each party's net for
+all four views. The detail page must show received, given-up and net values for all four views, the
+content-addressed scenario and calculation identities, and both `Fabricated test evidence — not real
+AFL data` and `Publication prohibited`. A two-party trade must disclose that the sender was inferred
+as the other participating club; a multi-party trade must disclose the deterministic fixture transfer
+map. These values exist only to make the calculation and UI testable. They are not an answer to a
+factual evidence gap, a calibrated trade grade, a provider-derived result or a release candidate.
+
+This page is a private evidence-and-scenario review surface, not the public archive. The sealed factual-release
+lifecycle, API/projection/export parity, rollback, no-fallback withdrawal, and recovery proof remain
+owned by the immediately preceding disposable PostgreSQL rehearsal. Do not describe staged workbook
+projection or a synthetic scenario as an activated public release. Real-data release review, model
+calibration and validation, hosted deployment, and production activation remain later procedures.
+
+### Rehearsing fixture-only valuation publication
+
+Run this only as part of the same disposable outcomes command:
+
+```sh
+npm run test:outcomes:int
+```
+
+Docker must be available. For a strictly offline run, confirm `postgres:16-alpine` is already present;
+the rehearsal itself makes no provider request. Do not set an outcomes URL manually, load a checkout
+`.env`, run `test:outcomes:int:provisioned`, or substitute shared PostgreSQL. The harness creates one
+loopback-only container, passes its exact immutable container ID and generated database URL through an
+allowlisted test environment, creates a unique schema, and removes the container after success or
+failure. The provisioned command is reserved for controlled CI that already owns its disposable
+service.
+
+The local seed generates 783 deterministic factual archive trades across 1988–2025. Exactly one is
+the source-shaped `2025 Draft Pick Exchange: GWS and Western Bulldogs` rehearsal trade; the other 782
+are explicitly named synthetic local trades and exist only to exercise realistic archive volume. The
+workbook is not read, copied or authorized by this seed. Both captured batches, all reviewed
+identities and the fixture rights record use provider `statly_local_fixture` and `fixture://statly/`
+references. The live provider-ingestion command rejects this provider, so these rows cannot be
+mistaken for captured Draftguru or official-AFL facts.
+
+The valuation test must prove this sequence:
+
+1. Seed the deterministic 783-trade `test_fixture` factual archive and authenticate its exact active
+   factual release, candidate, projection, governed trade, identity, match, and acquisition-spell
+   ancestry. Verify 38 years, 21 trades in 2025, 20 trades in 1988, and 783 trades in total.
+2. Fabricate baseline and replacement value evidence for only the governed archive trade. Mark every
+   artifact `productionEligible: false`, `liveSourceAccessed: false`, and
+   `providerRightsExpanded: false`.
+3. Persist the value inventories, custody receipts and indexes; register and validate the sealed
+   publication/projection pairs; and record fixture-only Gate 4 and Gate 5 decisions that pin those
+   exact identifiers in `test_fixture`.
+4. Activate baseline, activate replacement, republish the still-eligible superseded baseline as the
+   explicit rollback, withdraw baseline to the original empty value scope, and recover replacement.
+   Never infer fallback selection. Never attempt to republish a withdrawn publication.
+5. Confirm the factual registry state is unchanged at every valuation transition. Direct list/detail
+   reads, `/api/draft-trades/valuations`, `/api/draft-trades/[tradeId]/valuation`, projection exports,
+   and `/draft/trades/[tradeId]` must all identify the recovered replacement publication and
+   projection under `public-afl-trades-current`. A mixed request containing the governed trade and an
+   archive-only synthetic trade must preserve the governed value while returning `not_calculated`
+   with `trade-not-in-active-projection` for the synthetic member. The synthetic detail API and page
+   must render the same unavailable state rather than fail or borrow a value. An unknown trade ID
+   must retain `TRADE_NOT_IN_PROJECTION`; the fallback is valid only for a member of the active
+   governed factual archive.
+6. Create a custom-format schema dump with the container's PostgreSQL tools, close the pool, destroy
+   the generated schema, prove it is absent, and restore it with `pg_restore --single-transaction`.
+   Fresh repositories must authenticate both registries and reproduce the complete archive detail,
+   value-service responses, API data, archive-page inputs, and export rows observed before destruction.
+   Ignore only the outer API wrapper's new wall-clock response timestamp.
+7. Withdraw the restored replacement. The value selector must return `selection: none`, values must
+   return the honest `not_calculated` state, and the factual release must remain exactly active and
+   unchanged.
+
+The checkpoint is valid only when the complete disposable PostgreSQL suite passes and Docker removes
+the owned container. Retain the exact commit and final test summary; do not retain the temporary dump,
+schema, database credentials, generated Prisma output, or artifact bytes as release evidence.
+
+This procedure grants no Draftguru permission. Public factual-display authority is not
+`model_training` or `derived_feature_creation` authority, and fixture Gate decisions cannot satisfy a
+non-production or production gate. Do not add real Draftguru data, source credentials, live fitzRoy
+capture, AWS, hosted storage, a shared database, billable infrastructure, a deployed runtime, or a
+production pointer to make this test pass. If the sealed factual ancestry, fixture-only gate scope,
+projection/publication identity, dump/restore equality, or no-fallback withdrawal check fails, stop
+and repair that local boundary. Real capture, a rights-approved factual valuation dataset, model
+validation, hosted deployment, and production activation remain separate later procedures.
+
+For interactive inspection after the disposable proof passes, start the complete local stack:
+
+```sh
+npm run dev:full:all
+```
+
+The launcher owns loopback PostgreSQL on port `55432`, stores projection envelopes below ignored
+`.statly-local/afl-trade-artifacts`, runs the factual seed and valuation lifecycle before Next.js, and
+prints the active factual release, 783-trade count, governed trade, recovered valuation publication,
+and replay status. The database process holds a mode-`0600`, ignored nonce handoff under
+`.statly-local/` only while it is running; the seed authenticates that nonce and the fixed loopback
+target before any write. It must not export AWS or source credentials. In another terminal:
+
+```sh
+curl -fsS 'http://localhost:3000/api/draft-trades?year=2025'
+curl -fsS 'http://localhost:3000/api/draft-trades?year=1988'
+curl -fsS 'http://localhost:3000/api/draft-trades/methodology'
+```
+
+From 2025, take the `tradeId` whose title is
+`2025 Draft Pick Exchange: GWS and Western Bulldogs`, set `TRADE_ID` to that exact value, and inspect
+the publication list:
+
+```sh
+TRADE_ID='<tradeId returned above>'
+curl -fsS -G 'http://localhost:3000/api/draft-trades/valuations' \
+  --data-urlencode "tradeId=$TRADE_ID" \
+  --data-urlencode 'view=current' \
+  --data-urlencode 'limit=1'
+```
+
+Then inspect `/draft/trades/<tradeId>`,
+`/api/draft-trades/<tradeId>/valuation`, `/api/draft-trades/<tradeId>/export`, and
+`/api/draft-trades/export?year=2025`. The value list, value detail, methodology, and page must resolve
+the recovered publication/projection pair; factual detail and both CSV exports must resolve that same
+trade and factual archive. Re-run `npm run dev:outcomes:seed` while PostgreSQL remains up. It must
+report `783 archived trades` and `Verified` for both factual and valuation state and must not append a
+new active identity. Also open a 1988 synthetic trade and verify its factual detail renders while its
+valuation API and page report `not_calculated` under the same active publication.
+
+The interactive state intentionally ends with replacement active so it can be inspected. Rollback and
+withdrawal proof comes from the immediately preceding seed lifecycle and the disposable integration
+test: replacement to baseline, baseline withdrawal to `selection: none`, and replacement recovery,
+with the factual pointer unchanged at every transition. Do not manually rewrite registry tables to
+demonstrate those states. Stop the launcher normally; local bytes are disposable and recoverable only
+as local development state, not as release evidence.
+
 ### Reviewing provider identities and matches
 
 This workflow is a governed database boundary, not a spreadsheet correction or rendering-layer alias.

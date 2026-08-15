@@ -160,6 +160,7 @@ const identityBindingsSchema = z
   .object({
     nativeId: sourceFieldBindingSchema.nullable(),
     recordedName: sourceFieldBindingSchema,
+    recordedSurname: sourceFieldBindingSchema.nullable().optional(),
     recordedClubNativeId: sourceFieldBindingSchema.nullable(),
     recordedClubName: sourceFieldBindingSchema.nullable(),
   })
@@ -201,7 +202,7 @@ const achievementBindingSchema = z
   })
   .strict();
 
-const fieldMapSchema = z
+const fieldMapContentSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_FITZROY_FIELD_MAP_SCHEMA_VERSION),
     mapId: z.string().min(1).max(240),
@@ -225,88 +226,97 @@ const fieldMapSchema = z
     metrics: z.array(metricBindingSchema),
     achievement: achievementBindingSchema.nullable(),
   })
-  .strict()
-  .superRefine((map, context) => {
-    if (new Set(map.exactOrderedFields).size !== map.exactOrderedFields.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['exactOrderedFields'],
-        message: 'Approved source fields must be unique and remain in returned order.',
-      });
-    }
-    if (new Set(map.naturalKeyFields).size !== map.naturalKeyFields.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['naturalKeyFields'],
-        message: 'Reviewed provider natural-key fields must be unique.',
-      });
-    }
-    if (map.validFromSeason > map.validThroughSeason) {
-      context.addIssue({
-        code: 'custom',
-        path: ['validThroughSeason'],
-        message: 'Field-map season applicability is invalid.',
-      });
-    }
-    if (map.observationKind === 'match_universe' && map.match === null) {
-      context.addIssue({
-        code: 'custom',
-        path: ['match'],
-        message: 'Match-universe maps need match bindings.',
-      });
-    }
-    if (map.observationKind !== 'player_identity' && map.seasonField === null) {
-      context.addIssue({
-        code: 'custom',
-        path: ['seasonField'],
-        message: 'Season, match, and achievement observations need a source season field.',
-      });
-    }
-    if (
-      map.observationKind === 'player_identity' &&
-      (map.identity === null ||
-        map.match !== null ||
-        map.metrics.length > 0 ||
-        map.achievement !== null)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['identity'],
-        message: 'Player-identity maps accept identity bindings only.',
-      });
-    }
-    if (
-      map.observationKind === 'player_stat' &&
-      (map.identity === null || map.metrics.length === 0)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['identity'],
-        message: 'Player-stat maps need provider identity and metric bindings.',
-      });
-    }
-    if (
-      map.observationKind === 'achievement' &&
-      (map.identity === null || map.achievement === null)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['achievement'],
-        message: 'Achievement maps need provider identity and achievement bindings.',
-      });
-    }
+  .strict();
 
-    const boundFields = collectBoundFields(map);
-    for (const field of boundFields) {
-      if (!map.exactOrderedFields.includes(field)) {
-        context.addIssue({
-          code: 'custom',
-          path: ['exactOrderedFields'],
-          message: `Binding references an unapproved source field: ${field}.`,
-        });
-      }
+type FieldMapContent = z.infer<typeof fieldMapContentSchema>;
+
+function addFieldMapIssue(context: z.RefinementCtx, path: string, message: string): void {
+  context.addIssue({ code: 'custom', path: [path], message });
+}
+
+function validateFieldMapKeysAndWindow(map: FieldMapContent, context: z.RefinementCtx): void {
+  if (new Set(map.exactOrderedFields).size !== map.exactOrderedFields.length) {
+    addFieldMapIssue(
+      context,
+      'exactOrderedFields',
+      'Approved source fields must be unique and remain in returned order.'
+    );
+  }
+  if (new Set(map.naturalKeyFields).size !== map.naturalKeyFields.length) {
+    addFieldMapIssue(
+      context,
+      'naturalKeyFields',
+      'Reviewed provider natural-key fields must be unique.'
+    );
+  }
+  if (map.validFromSeason > map.validThroughSeason) {
+    addFieldMapIssue(context, 'validThroughSeason', 'Field-map season applicability is invalid.');
+  }
+}
+
+function validateFieldMapObservationBindings(map: FieldMapContent, context: z.RefinementCtx): void {
+  if (map.observationKind === 'match_universe' && map.match === null) {
+    addFieldMapIssue(context, 'match', 'Match-universe maps need match bindings.');
+  }
+  if (
+    map.observationKind !== 'player_identity' &&
+    map.seasonField === null &&
+    map.capabilityId !== 'official-afl-player-stats'
+  ) {
+    addFieldMapIssue(
+      context,
+      'seasonField',
+      'Season, match, and achievement observations need a source season field unless the official AFL request authorization supplies the season.'
+    );
+  }
+  if (
+    map.observationKind === 'player_identity' &&
+    (map.identity === null ||
+      map.match !== null ||
+      map.metrics.length > 0 ||
+      map.achievement !== null)
+  ) {
+    addFieldMapIssue(context, 'identity', 'Player-identity maps accept identity bindings only.');
+  }
+  if (
+    map.observationKind === 'player_stat' &&
+    (map.identity === null || map.metrics.length === 0)
+  ) {
+    addFieldMapIssue(
+      context,
+      'identity',
+      'Player-stat maps need provider identity and metric bindings.'
+    );
+  }
+  if (
+    map.observationKind === 'achievement' &&
+    (map.identity === null || map.achievement === null)
+  ) {
+    addFieldMapIssue(
+      context,
+      'achievement',
+      'Achievement maps need provider identity and achievement bindings.'
+    );
+  }
+}
+
+function validateApprovedBoundFields(map: FieldMapContent, context: z.RefinementCtx): void {
+  for (const field of collectBoundFields(map)) {
+    if (!map.exactOrderedFields.includes(field)) {
+      addFieldMapIssue(
+        context,
+        'exactOrderedFields',
+        `Binding references an unapproved source field: ${field}.`
+      );
     }
-  });
+  }
+}
+
+const fieldMapSchema = fieldMapContentSchema.superRefine((map, context) => {
+  validateFieldMapKeysAndWindow(map, context);
+  validateFieldMapObservationBindings(map, context);
+  validateApprovedBoundFields(map, context);
+});
 
 export type AflTradeFitzRoyFieldMap = z.infer<typeof fieldMapSchema>;
 
@@ -326,7 +336,7 @@ function collectBoundFields(map: {
   if (map.observedDateField !== null) fields.push(map.observedDateField.sourceField);
   fields.push(...map.naturalKeyFields);
   for (const binding of Object.values(map.identity ?? {})) {
-    if (binding !== null) fields.push(binding.sourceField);
+    if (binding != null) fields.push(binding.sourceField);
   }
   for (const binding of Object.values(map.match ?? {})) {
     if (binding !== null) fields.push(binding.sourceField);

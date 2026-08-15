@@ -28,7 +28,7 @@ const upstreamRateSchema = z
       context.addIssue({
         code: 'custom',
         path: ['burst'],
-        message: 'The attested burst must not be smaller than the reviewed request allowance.',
+        message: 'The recorded burst must not be smaller than the reviewed request allowance.',
       });
     }
   });
@@ -43,7 +43,10 @@ const outputBindingSchema = z
 export const aflTradeFitzRoyEgressExecutionContentSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_FITZROY_EGRESS_EXECUTION_SCHEMA_VERSION),
-    executionBoundary: z.literal('attested_provider_egress'),
+    executionBoundary: z.enum(['attested_provider_egress', 'local_non_production_docker']),
+    enforcementScope: z
+      .enum(['provider_egress', 'capture_admission_only'])
+      .optional(),
     provider: z.enum([
       'official_afl',
       'afl_tables',
@@ -77,6 +80,27 @@ export const aflTradeFitzRoyEgressExecutionContentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
+    if (
+      content.executionBoundary === 'local_non_production_docker' &&
+      content.enforcementScope !== 'capture_admission_only'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['enforcementScope'],
+        message:
+          'Local Docker evidence must state that rate enforcement covers capture admission only.',
+      });
+    }
+    if (
+      content.executionBoundary === 'attested_provider_egress' &&
+      content.enforcementScope === 'capture_admission_only'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['enforcementScope'],
+        message: 'Attested provider-egress evidence cannot claim only local capture admission.',
+      });
+    }
     const capability = AFL_TRADE_FITZROY_CAPABILITIES.find(
       (candidate) => candidate.capabilityId === content.capabilityId
     );

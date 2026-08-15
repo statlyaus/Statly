@@ -8,7 +8,10 @@ import {
   verifyAflTradeArtifactReadback,
 } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
-import { createAflTradeExternalCaptureExecutionReceipt } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
+import {
+  createAflTradeExternalCaptureExecutionReceipt,
+  createAflTradeLocalFixtureExecutionReceipt,
+} from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 import { PostgresAflTradeExternalCaptureRegistry } from '@/server/aflTradeIntelligence/source/postgresExternalCaptureRegistry';
 
 const capturedAt = '2026-08-09T07:00:00.000Z';
@@ -302,6 +305,31 @@ describe('PostgreSQL external page capture registry', () => {
         executionReceipt: executionReceipt(),
       })
     ).rejects.toThrow(/execution receipt v2/i);
+  });
+
+  it('rejects local generation receipts at the external capture registry', async () => {
+    const input = {
+      ...(await captureInput()),
+      executionReceipt: createAflTradeLocalFixtureExecutionReceipt({
+        schemaVersion: 'statly-local-fixture-execution/v1',
+        environment: 'test_fixture',
+        fixtureOnly: true,
+        liveSourceAccessed: false,
+        providerRightsExpanded: false,
+        rightsArtifactId: `source-rights:${'a'.repeat(64)}`,
+        gateDecisionId: `gate-decision:${'b'.repeat(64)}`,
+        gateDecisionKey: 'fixture-local-generation',
+        ledgerRevision: 7,
+        provider: 'statly_local_fixture',
+        capabilityId: 'statly-local-generated-fixture',
+        parserVersion: 'statly-local-fixture/v1',
+        fieldManifestSha256: 'f'.repeat(64),
+        fixtureEvidenceId: `artifact:${'e'.repeat(64)}`,
+      }),
+    };
+    const registry = new PostgresAflTradeExternalCaptureRegistry(fakeClient().client);
+
+    await expect(registry.persistCapture(input)).rejects.toThrow(/local fixture receipt/i);
   });
 
   it('keeps terminal capture attempts append-only in PostgreSQL', () => {

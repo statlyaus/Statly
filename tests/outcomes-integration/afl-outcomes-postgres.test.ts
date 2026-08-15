@@ -1071,6 +1071,9 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0042_pick_pav_model_execution_registry',
       '0043_external_identity_clock_skew_tolerance',
       '0044_governed_provider_release_membership',
+      '0045_fixture_filesystem_custody_assurance',
+      '0046_local_nonproduction_capture_custody',
+      '0047_review_decision_current_set_lookup',
     ]);
 
     const tables = await query<{ table_name: string }>(
@@ -1239,6 +1242,50 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_projection_item_release_club_name_folded_idx',
     ]) {
       expect(indexNames).toContain(expected);
+    }
+  });
+
+  it('admits fixture-filesystem custody only for unprofiled test-fixture operations', async () => {
+    const connection = await outcomesPool.connect();
+    const insertOperation = (
+      suffix: string,
+      environment: 'test_fixture' | 'non_production',
+      custodyProfileId: string | null
+    ) =>
+      connection.query(
+        `INSERT INTO outcome_valuation_output_custody_operation
+          (operation_id,environment,valuation_output_inventory_id,output_set_sha256,
+           repository_assurance,custody_profile_id,artifact_count,verified_at,
+           operation_content_canonical_json,operation_canonical_json,operation_json,status)
+         VALUES ($1,$2,$3,$4,'fixture_filesystem',$5,1,clock_timestamp(),
+                 '{}'::text,'{}'::text,'{}'::jsonb,'open')`,
+        [
+          `valuation-output-custody-operation:${suffix.repeat(64)}`,
+          environment,
+          `valuation-output-inventory:${suffix.repeat(64)}`,
+          suffix.repeat(64),
+          custodyProfileId,
+        ]
+      );
+    try {
+      await connection.query('BEGIN');
+      await connection.query('SET LOCAL session_replication_role = replica');
+      await insertOperation('a', 'test_fixture', null);
+
+      await connection.query('SAVEPOINT non_fixture');
+      await expect(insertOperation('b', 'non_production', null)).rejects.toThrow(
+        /outcome_valuation_output_custody_shape_check/i
+      );
+      await connection.query('ROLLBACK TO SAVEPOINT non_fixture');
+
+      await connection.query('SAVEPOINT profiled_fixture');
+      await expect(
+        insertOperation('c', 'test_fixture', `artifact-custody-profile:${'d'.repeat(64)}`)
+      ).rejects.toThrow(/outcome_valuation_output_custody_shape_check/i);
+      await connection.query('ROLLBACK TO SAVEPOINT profiled_fixture');
+      await connection.query('ROLLBACK');
+    } finally {
+      connection.release();
     }
   });
 

@@ -47,6 +47,20 @@ const fields = [
     levels: null,
     timezone: null,
   },
+  {
+    name: 'player_surname',
+    storageType: 'character',
+    classes: ['character'],
+    levels: null,
+    timezone: null,
+  },
+  {
+    name: 'observed_at',
+    storageType: 'character',
+    classes: ['character'],
+    levels: null,
+    timezone: null,
+  },
   { name: 'home', storageType: 'character', classes: ['character'], levels: null, timezone: null },
   { name: 'away', storageType: 'character', classes: ['character'], levels: null, timezone: null },
   { name: 'round', storageType: 'character', classes: ['character'], levels: null, timezone: null },
@@ -62,6 +76,8 @@ const text = (value: string): AflTradeDecodedScalar => ({ kind: 'text', value })
 function sourceRow(input: {
   playerId: string;
   playerName: string | null;
+  playerSurname?: string | null;
+  observedAt?: string;
   home?: string;
   away?: string;
   goals?: AflTradeDecodedScalar;
@@ -71,6 +87,8 @@ function sourceRow(input: {
     text('provider-match-1'),
     text(input.playerId),
     input.playerName === null ? { kind: 'missing' } : text(input.playerName),
+    input.playerSurname == null ? { kind: 'missing' } : text(input.playerSurname),
+    text(input.observedAt ?? '2026-03-08T02:15:00Z'),
     text(input.home ?? 'Carlton'),
     text(input.away ?? 'Fremantle'),
     text('Round 1'),
@@ -370,6 +388,49 @@ describe('fitzRoy provider observation staging', () => {
       metricCandidates: [],
     });
     expect(result.rows[0]?.identityCandidate).not.toBeNull();
+  });
+
+  it('uses the authorized official season and composes split official player names', () => {
+    const map = fieldMap({
+      seasonField: null,
+      observedDateField: { sourceField: 'observed_at', required: true },
+      identity: {
+        nativeId: { sourceField: 'player_id', required: true },
+        recordedName: { sourceField: 'player_name', required: true },
+        recordedSurname: { sourceField: 'player_surname', required: true },
+        recordedClubNativeId: null,
+        recordedClubName: null,
+      },
+    });
+    const result = normalizeAflTradeFitzRoyDecodedTable({
+      table: decodedTable([
+        sourceRow({ playerId: 'CD_I1000074', playerName: 'Sam', playerSurname: 'Flanders' }),
+      ]),
+      fieldMap: map,
+    });
+
+    expect(result.rows[0]).toMatchObject({
+      seasonYear: 2026,
+      observedSeasonText: null,
+      rowStatus: 'staged',
+      identityCandidate: { recordedName: 'Sam Flanders' },
+    });
+
+    const wrongSeason = normalizeAflTradeFitzRoyDecodedTable({
+      table: decodedTable([
+        sourceRow({
+          playerId: 'CD_I1000074',
+          playerName: 'Sam',
+          playerSurname: 'Flanders',
+          observedAt: '2025-03-08T02:15:00Z',
+        }),
+      ]),
+      fieldMap: map,
+    });
+    expect(wrongSeason.rows[0]?.rowStatus).toBe('needs_review');
+    expect(wrongSeason.issues).toContainEqual(
+      expect.objectContaining({ code: 'source_season_mismatch', field: 'observed_at' })
+    );
   });
 
   it('versions interpreted row and candidate identities by the exact approved field map', () => {

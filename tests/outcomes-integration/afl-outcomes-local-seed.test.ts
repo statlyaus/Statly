@@ -51,7 +51,7 @@ afterAll(async () => {
 });
 
 describe('local source-native AFL archive seed', () => {
-  it('is idempotent and serves exercised and future picks through the governed archive reader', async () => {
+  it('is idempotent and serves 783 local trades through the governed archive reader', async () => {
     const client = createPgAflOutcomeSqlClient(outcomesPool);
     const first = await seedLocalAflTradeOutcomeArchive(client);
     const replay = await seedLocalAflTradeOutcomeArchive(client);
@@ -76,7 +76,32 @@ describe('local source-native AFL archive seed', () => {
       }),
     });
 
-    await expect(archive.listYears()).resolves.toEqual([2025]);
+    const years = await archive.listYears();
+    expect(years).toEqual(Array.from({ length: 38 }, (_, index) => 2025 - index));
+    const tradesByYear = await Promise.all(years.map((year) => archive.listTradesByYear(year)));
+    expect(tradesByYear.flat()).toHaveLength(783);
+    await expect(archive.listTradesByYear(2025)).resolves.toHaveLength(21);
+    await expect(archive.listTradesByYear(1988)).resolves.toHaveLength(20);
+    await expect(
+      archive.listTradesByYear(1988, { clubSlug: 'local-club-01', type: 'player' })
+    ).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: 'Synthetic local trade 1988-001' })])
+    );
+    const syntheticMatches = await archive.searchTrades('synthetic local trade 1988-001', 10);
+    expect(syntheticMatches).toEqual([
+      expect.objectContaining({ title: 'Synthetic local trade 1988-001' }),
+    ]);
+    const syntheticDetail = await archive.getById(syntheticMatches[0]!.tradeId);
+    expect(syntheticDetail).toMatchObject({
+      trade: { year: 1988, title: 'Synthetic local trade 1988-001' },
+      assets: [
+        {
+          assetType: 'player',
+          playerName: 'Synthetic Player 1988-001',
+          games: null,
+        },
+      ],
+    });
     const detail = await archive.getById(first.tradeId);
     expect(detail?.assets).toEqual(
       expect.arrayContaining([
@@ -119,14 +144,14 @@ describe('local source-native AFL archive seed', () => {
       `SELECT COUNT(*)::text AS count FROM outcome_valuation_active_publication`
     );
     expect(publicationCount.rows[0]?.count).toBe('0');
-    const provenance = await outcomesPool.query<{ provider: string; registry: string }>(
-      `SELECT capture.provider, head.registry_json::text AS registry
-         FROM outcome_source_capture capture CROSS JOIN outcome_registry_head head
-        WHERE capture.provider='draftguru'
-        ORDER BY capture.capture_id LIMIT 1`
+    const provenance = await outcomesPool.query<{ provider: string }>(
+      `SELECT DISTINCT provider FROM outcome_source_capture ORDER BY provider`
     );
-    expect(provenance.rows[0]?.provider).toBe('draftguru');
-    expect(provenance.rows[0]?.registry).not.toMatch(/workbook/i);
+    const registry = await outcomesPool.query<{ registry: string }>(
+      `SELECT registry_json::text AS registry FROM outcome_registry_head`
+    );
+    expect(provenance.rows).toEqual([{ provider: 'statly_local_fixture' }]);
+    expect(registry.rows[0]?.registry).not.toMatch(/draftguru|official_afl|workbook/i);
     expect(first).toEqual(
       expect.objectContaining({
         releaseId: expect.stringMatching(/^outcome-release:/),
@@ -135,7 +160,8 @@ describe('local source-native AFL archive seed', () => {
         corpusId: expect.stringMatching(/^corpus:/),
         sourceCandidateId: expect.stringMatching(/^external-reconciliation:/),
         promotionId: expect.stringMatching(/^external-canonical-promotion:/),
+        archivedTradeCount: 783,
       })
     );
-  });
+  }, 120_000);
 });

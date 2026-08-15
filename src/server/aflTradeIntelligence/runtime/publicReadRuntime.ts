@@ -11,6 +11,8 @@ import type { DraftTradeReadRepository } from '@/lib/draftTrades/read';
 import { createAflTradeArtifactCustodyProfile } from '../artifacts/artifactCustodyProfile';
 import { createAflTradeDurableObjectArtifactRepository } from '../artifacts/durableObjectArtifactRepository';
 import { createAflTradeS3ConditionalObjectStore } from '../artifacts/s3ConditionalObjectStore';
+import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutableArtifactRepository';
+import { createLocalAflTradeArtifactRepository } from '../development/localFileConditionalObjectStore';
 import { createPostgresAflTradeGateDecisionLedgerRepository } from '../governance/postgresGateDecisionLedgerRepository';
 import {
   createAflDraftHistoryReadService,
@@ -71,6 +73,62 @@ export function createAflTradePublicReadPoolOptions(config: PostgresConfig): {
     : { connectionString: config.databaseUrl };
 }
 
+export function createAflTradePublicProjectionArtifactRepository(
+  config: PostgresConfig,
+  dependencies: { s3Client?: S3Client } = {}
+): AflTradeImmutableArtifactRepository {
+  if (config.artifactStorage.kind === 'local_filesystem') {
+    return createLocalAflTradeArtifactRepository({
+      rootDirectory: config.artifactStorage.rootDirectory,
+      repositoryId: 'statly-local-afl-trade-projections',
+      artifactClass: 'public_projection',
+      maximumObjectBytes: AFL_TRADE_PROJECTION_ARTIFACT_READ_RELEASE_MAX_BYTES,
+    });
+  }
+  const storage = config.artifactStorage;
+  const custodyProfile = createAflTradeArtifactCustodyProfile({
+    schemaVersion: 'afl-trade-artifact-custody-profile/v1',
+    subject: 'afl-trade-intelligence',
+    contractRole: 'requirements_only_not_readiness_or_authorization',
+    repositoryId: storage.repositoryId,
+    environment: config.environment,
+    artifactClass: 'public_projection',
+    maximumObjectBytes: AFL_TRADE_PROJECTION_ARTIFACT_READ_RELEASE_MAX_BYTES,
+    keyDerivation: 'profile_sha256_two_level_fanout_v1',
+    conditionalCreate: 'if_none_match_star_required',
+    encryption: {
+      inTransit: 'tls_required',
+      atRest: {
+        mode: 'customer_managed',
+        keyReferenceSha256: createHash('sha256').update(storage.kmsKeyId, 'utf8').digest('hex'),
+      },
+    },
+    retention: {
+      deletion: {
+        kind: 'no_scheduled_deletion',
+        maximumDays: null,
+        enforcement: 'not_applicable',
+      },
+      deleteOnWithdrawal: true,
+      worm: null,
+    },
+    residency: {
+      allowedJurisdictions: ['Australia'],
+      crossJurisdictionTransfer: 'prohibited',
+    },
+    infrastructureEvidenceIds: [storage.policyEvidenceId],
+  });
+  return createAflTradeDurableObjectArtifactRepository({
+    objectStore: createAflTradeS3ConditionalObjectStore({
+      client: dependencies.s3Client ?? new S3Client({ region: storage.region }),
+      bucket: storage.bucket,
+      keyPrefix: storage.keyPrefix,
+      kmsKeyId: storage.kmsKeyId,
+    }),
+    custodyProfile,
+  });
+}
+
 async function createPostgresRuntime(config: PostgresConfig): Promise<AflTradePublicReadRuntime> {
   const globalWithLocalPool = globalThis as GlobalWithLocalOutcomePool;
   const ownsPool = config.environment !== 'test_fixture';
@@ -79,7 +137,10 @@ async function createPostgresRuntime(config: PostgresConfig): Promise<AflTradePu
     : (globalWithLocalPool.__statlyAflTradeLocalOutcomePool ??= new Pool(
         createAflTradePublicReadPoolOptions(config)
       ));
-  const s3 = new S3Client({ region: config.objectStorage.region });
+  const s3 =
+    config.artifactStorage.kind === 's3'
+      ? new S3Client({ region: config.artifactStorage.region })
+      : null;
   try {
     const client = createPgAflOutcomeSqlClient(pool);
     const gateRepository = createPostgresAflTradeGateDecisionLedgerRepository(client);
@@ -95,49 +156,12 @@ async function createPostgresRuntime(config: PostgresConfig): Promise<AflTradePu
     });
     const publicArchiveRepository =
       createPostgresAflTradePromotionBackedPublicArchiveReadRepository({ client });
-    const custodyProfile = createAflTradeArtifactCustodyProfile({
-      schemaVersion: 'afl-trade-artifact-custody-profile/v1',
-      subject: 'afl-trade-intelligence',
-      contractRole: 'requirements_only_not_readiness_or_authorization',
-      repositoryId: config.objectStorage.repositoryId,
-      environment: config.environment,
-      artifactClass: 'public_projection',
-      maximumObjectBytes: AFL_TRADE_PROJECTION_ARTIFACT_READ_RELEASE_MAX_BYTES,
-      keyDerivation: 'profile_sha256_two_level_fanout_v1',
-      conditionalCreate: 'if_none_match_star_required',
-      encryption: {
-        inTransit: 'tls_required',
-        atRest: {
-          mode: 'customer_managed',
-          keyReferenceSha256: createHash('sha256')
-            .update(config.objectStorage.kmsKeyId, 'utf8')
-            .digest('hex'),
-        },
-      },
-      retention: {
-        deletion: {
-          kind: 'no_scheduled_deletion',
-          maximumDays: null,
-          enforcement: 'not_applicable',
-        },
-        deleteOnWithdrawal: true,
-        worm: null,
-      },
-      residency: {
-        allowedJurisdictions: ['Australia'],
-        crossJurisdictionTransfer: 'prohibited',
-      },
-      infrastructureEvidenceIds: [config.objectStorage.policyEvidenceId],
+    const archiveReadRepository = createPostgresDraftTradeReadRepository({
+      archiveSelector: promotionArchiveSelector,
+      archiveRepository: publicArchiveRepository,
     });
-    const objectStore = createAflTradeS3ConditionalObjectStore({
-      client: s3,
-      bucket: config.objectStorage.bucket,
-      keyPrefix: config.objectStorage.keyPrefix,
-      kmsKeyId: config.objectStorage.kmsKeyId,
-    });
-    const artifactRepository = createAflTradeDurableObjectArtifactRepository({
-      objectStore,
-      custodyProfile,
+    const artifactRepository = createAflTradePublicProjectionArtifactRepository(config, {
+      ...(s3 === null ? {} : { s3Client: s3 }),
     });
     const releaseSource = createPostgresAflTradeProjectionArtifactReleaseSource({
       client,
@@ -151,6 +175,8 @@ async function createPostgresRuntime(config: PostgresConfig): Promise<AflTradePu
           releaseSource,
           freshnessHighWaterStore,
         }),
+      isFactualArchiveTrade: async (tradeId) =>
+        (await archiveReadRepository.getById(tradeId)) !== null,
     });
     const publicationSelector = createGovernedAflTradePublicationSelector({
       publicationRepository: createPostgresAflTradePublicationRepository(client),
@@ -178,10 +204,7 @@ async function createPostgresRuntime(config: PostgresConfig): Promise<AflTradePu
         projectionRepository,
         now: () => new Date(),
       }),
-      archiveReadRepository: createPostgresDraftTradeReadRepository({
-        archiveSelector: promotionArchiveSelector,
-        archiveRepository: publicArchiveRepository,
-      }),
+      archiveReadRepository,
       draftHistoryReadService: createAflDraftHistoryReadService({
         archiveSelector: promotionArchiveSelector,
         repository: createPostgresAflDraftHistoryRepository({
@@ -190,12 +213,12 @@ async function createPostgresRuntime(config: PostgresConfig): Promise<AflTradePu
         now,
       }),
       async close() {
-        s3.destroy();
+        s3?.destroy();
         if (ownsPool) await pool.end();
       },
     };
   } catch (error) {
-    s3.destroy();
+    s3?.destroy();
     await pool.end();
     if (!ownsPool && globalWithLocalPool.__statlyAflTradeLocalOutcomePool === pool) {
       delete globalWithLocalPool.__statlyAflTradeLocalOutcomePool;

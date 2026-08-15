@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
@@ -13,6 +13,7 @@ import {
 
 const root = resolve(import.meta.dirname, '../..');
 const dataDirectory = resolve(root, '.statly-local/afl-trade-outcomes-pgdata');
+const noncePath = resolve(root, '.statly-local/afl-trade-outcomes-runtime-nonce');
 const configuredRuntimeNonce = process.env.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE?.trim();
 const runtimeNonce = requireLocalAflTradeOutcomesRuntimeNonce(
   configuredRuntimeNonce === undefined || configuredRuntimeNonce === ''
@@ -21,6 +22,7 @@ const runtimeNonce = requireLocalAflTradeOutcomesRuntimeNonce(
 );
 
 await mkdir(resolve(root, '.statly-local'), { recursive: true });
+await writeFile(noncePath, runtimeNonce, { encoding: 'utf8', flag: 'w', mode: 0o600 });
 
 const database = await PGlite.create(dataDirectory);
 await installLocalAflTradeOutcomesRuntimeIdentity(database, runtimeNonce, process.pid);
@@ -36,6 +38,9 @@ async function close(): Promise<void> {
   closing = (async () => {
     await server.stop();
     await database.close();
+    await unlink(noncePath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
   })();
   return closing;
 }

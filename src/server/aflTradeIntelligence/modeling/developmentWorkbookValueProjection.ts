@@ -24,6 +24,36 @@ export interface AflTradeDevelopmentWorkbookAssetLink {
   state: 'linked' | 'unresolved' | 'ambiguous';
   acquisitionId: string | null;
   method: 'player_club_year' | 'draft_selection_year' | 'none';
+  outcomeEvidence:
+    | {
+        state: 'reconciled';
+        effectiveThrough: string;
+        games: AflTradeDevelopmentReconciledOutcomeMetric;
+      }
+    | {
+        state: 'unavailable';
+        reason: 'asset_not_linked' | 'no_reconciled_acquisition_spell';
+      };
+}
+
+export type AflTradeDevelopmentReconciledOutcomeMetric =
+  | { state: 'observed'; value: number }
+  | {
+      state: 'partial';
+      observedValue: number;
+      reason: 'active_career_right_censored';
+    }
+  | { state: 'unavailable'; reason: 'source_missing' | 'definition_unsupported' };
+
+export interface AflTradeDevelopmentReconciledAcquisitionOutcome {
+  source: 'reconciled_acquisition_spell';
+  effectiveThrough: string;
+  metrics: {
+    games: AflTradeDevelopmentReconciledOutcomeMetric;
+    goals: AflTradeDevelopmentReconciledOutcomeMetric;
+    coachesVotes: AflTradeDevelopmentReconciledOutcomeMetric;
+    brownlowVotes: AflTradeDevelopmentReconciledOutcomeMetric;
+  };
 }
 
 export interface AflTradeDevelopmentWorkbookValueProjection {
@@ -42,6 +72,10 @@ export interface AflTradeDevelopmentWorkbookValueProjectionInput {
   trades: AflOutcomesDevelopmentTradeProjection;
   acquisitions: AflOutcomesDevelopmentAcquisitionProjection;
   providerSeasons: AflTradeDevelopmentGradeDatasetContent['providerSeasons'];
+  reconciledOutcomesByAcquisitionId: ReadonlyMap<
+    string,
+    AflTradeDevelopmentReconciledAcquisitionOutcome
+  >;
   createdAt: string;
   minimumCohortSize: number;
   tradeIds?: readonly string[];
@@ -63,34 +97,23 @@ function stableWorkbookPlayerId(item: AflOutcomesDevelopmentAcquisitionItem): st
   return `development-workbook-player:${digest}`;
 }
 
-function numericMetric(
-  rawValue: string | null,
-  isMatured: boolean
-):
-  | { state: 'observed'; value: number }
-  | { state: 'partial'; observedValue: number; reason: 'active_career_right_censored' }
-  | { state: 'unavailable'; reason: 'source_missing' | 'definition_unsupported' } {
-  if (rawValue === null || rawValue.trim() === '') {
-    return { state: 'unavailable', reason: 'source_missing' };
-  }
-  if (!/^\d+(?:\.\d+)?$/.test(rawValue.trim())) {
-    return { state: 'unavailable', reason: 'definition_unsupported' };
-  }
-  const value = Number(rawValue);
-  return isMatured
-    ? { state: 'observed', value }
-    : { state: 'partial', observedValue: value, reason: 'active_career_right_censored' };
-}
+const unavailableOutcomeMetric = {
+  state: 'unavailable',
+  reason: 'source_missing',
+} as const;
 
-function toDatasetAcquisition(item: AflOutcomesDevelopmentAcquisitionItem, createdAt: string) {
+function toDatasetAcquisition(
+  item: AflOutcomesDevelopmentAcquisitionItem,
+  createdAt: string,
+  reconciledOutcome: AflTradeDevelopmentReconciledAcquisitionOutcome | undefined
+) {
   const effectiveAt = `${item.year}-10-01T00:00:00.000Z`;
   const outcomeMaturedAt = `${item.year + 3}-10-01T00:00:00.000Z`;
-  const isMatured = Date.parse(outcomeMaturedAt) <= Date.parse(createdAt);
   return {
     acquisitionId: item.eventId,
     effectiveAt,
     outcomeMaturedAt,
-    outcomeObservedAt: createdAt,
+    outcomeObservedAt: reconciledOutcome?.effectiveThrough ?? createdAt,
     seasonYear: item.year,
     mechanism: item.category,
     receivingClubId: `afl-club:${normalizeName(item.clubName).replaceAll(' ', '-')}`,
@@ -116,10 +139,10 @@ function toDatasetAcquisition(item: AflOutcomesDevelopmentAcquisitionItem, creat
     },
     atTrade: { age: item.age, heightCm: item.heightCm, weightKg: item.weightKg },
     outcome: {
-      games: numericMetric(item.games, isMatured),
-      goals: numericMetric(item.goals, isMatured),
-      coachesVotes: numericMetric(item.coachesVotes, isMatured),
-      brownlowVotes: numericMetric(item.brownlowVotes, isMatured),
+      games: reconciledOutcome?.metrics.games ?? unavailableOutcomeMetric,
+      goals: reconciledOutcome?.metrics.goals ?? unavailableOutcomeMetric,
+      coachesVotes: reconciledOutcome?.metrics.coachesVotes ?? unavailableOutcomeMetric,
+      brownlowVotes: reconciledOutcome?.metrics.brownlowVotes ?? unavailableOutcomeMetric,
     },
   };
 }
@@ -170,7 +193,11 @@ function matchBySelection(
 
 function linkAsset(
   asset: DraftTradeAssetItem,
-  acquisitions: readonly AflOutcomesDevelopmentAcquisitionItem[]
+  acquisitions: readonly AflOutcomesDevelopmentAcquisitionItem[],
+  reconciledOutcomesByAcquisitionId: ReadonlyMap<
+    string,
+    AflTradeDevelopmentReconciledAcquisitionOutcome
+  >
 ): AflTradeDevelopmentWorkbookAssetLink {
   const candidates =
     asset.assetType === 'player'
@@ -185,13 +212,31 @@ function linkAsset(
         ? ('draft_selection_year' as const)
         : ('none' as const);
   if (candidates.length === 1) {
-    return { assetId: asset.id, state: 'linked', acquisitionId: candidates[0]!.eventId, method };
+    const acquisitionId = candidates[0]!.eventId;
+    const reconciledOutcome = reconciledOutcomesByAcquisitionId.get(acquisitionId);
+    return {
+      assetId: asset.id,
+      state: 'linked',
+      acquisitionId,
+      method,
+      outcomeEvidence: reconciledOutcome
+        ? {
+            state: 'reconciled',
+            effectiveThrough: reconciledOutcome.effectiveThrough,
+            games: reconciledOutcome.metrics.games,
+          }
+        : {
+            state: 'unavailable',
+            reason: 'no_reconciled_acquisition_spell',
+          },
+    };
   }
   return {
     assetId: asset.id,
     state: candidates.length > 1 ? 'ambiguous' : 'unresolved',
     acquisitionId: null,
     method: candidates.length > 0 ? method : 'none',
+    outcomeEvidence: { state: 'unavailable', reason: 'asset_not_linked' },
   };
 }
 
@@ -205,7 +250,11 @@ export function projectAflOutcomesDevelopmentWorkbookValues(
     sourceBoundary: 'pinned_workbook_and_reconciled_fitzroy_no_fantasy_ownership',
     fixedOutcomeHorizonSeasons: 3,
     acquisitions: input.acquisitions.items.map((item) =>
-      toDatasetAcquisition(item, input.createdAt)
+      toDatasetAcquisition(
+        item,
+        input.createdAt,
+        input.reconciledOutcomesByAcquisitionId.get(item.eventId)
+      )
     ),
     providerSeasons: input.providerSeasons,
   });
@@ -228,7 +277,9 @@ export function projectAflOutcomesDevelopmentWorkbookValues(
         left.trade.year - right.trade.year || left.trade.tradeId.localeCompare(right.trade.tradeId)
     );
   for (const detail of orderedDetails) {
-    const links = detail.assets.map((asset) => linkAsset(asset, input.acquisitions.items));
+    const links = detail.assets.map((asset) =>
+      linkAsset(asset, input.acquisitions.items, input.reconciledOutcomesByAcquisitionId)
+    );
     linksByTradeId.set(detail.trade.tradeId, links);
     const linkByAssetId = new Map(links.map((link) => [link.assetId, link]));
     const tradeCase = {

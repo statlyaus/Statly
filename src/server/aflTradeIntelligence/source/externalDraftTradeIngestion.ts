@@ -58,6 +58,25 @@ const legacyExecutionReceiptContentSchema = z
   })
   .strict();
 
+const localFixtureExecutionReceiptContentSchema = z
+  .object({
+    schemaVersion: z.literal('statly-local-fixture-execution/v1'),
+    environment: z.literal('test_fixture'),
+    fixtureOnly: z.literal(true),
+    liveSourceAccessed: z.literal(false),
+    providerRightsExpanded: z.literal(false),
+    rightsArtifactId: aflTradeContentAddressedIdSchema('source-rights'),
+    gateDecisionId: aflTradeContentAddressedIdSchema('gate-decision'),
+    gateDecisionKey: z.string().trim().min(1).max(200),
+    ledgerRevision: z.number().int().nonnegative(),
+    provider: z.literal('statly_local_fixture'),
+    capabilityId: z.literal('statly-local-generated-fixture'),
+    parserVersion: z.string().trim().min(1).max(160),
+    fieldManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    fixtureEvidenceId: aflTradeContentAddressedIdSchema('artifact'),
+  })
+  .strict();
+
 const executionRequestSchema = z
   .object({
     environment: z.enum(['test_fixture', 'non_production', 'production']),
@@ -165,7 +184,11 @@ const executionReceiptContentSchema = z
 const executionReceiptSchema = z
   .object({
     receiptId: aflTradeContentAddressedIdSchema('external-capture-execution'),
-    content: z.union([legacyExecutionReceiptContentSchema, executionReceiptContentSchema]),
+    content: z.union([
+      legacyExecutionReceiptContentSchema,
+      localFixtureExecutionReceiptContentSchema,
+      executionReceiptContentSchema,
+    ]),
   })
   .strict()
   .superRefine((receipt, context) => {
@@ -194,6 +217,16 @@ export function createAflTradeExternalCaptureExecutionReceipt(
   const parsed = z
     .union([legacyExecutionReceiptContentSchema, executionReceiptContentSchema])
     .parse(content);
+  return executionReceiptSchema.parse({
+    receiptId: createAflTradeContentAddress('external-capture-execution', parsed),
+    content: parsed,
+  });
+}
+
+export function createAflTradeLocalFixtureExecutionReceipt(
+  content: z.input<typeof localFixtureExecutionReceiptContentSchema>
+): AflTradeExternalCaptureExecutionReceipt {
+  const parsed = localFixtureExecutionReceiptContentSchema.parse(content);
   return executionReceiptSchema.parse({
     receiptId: createAflTradeContentAddress('external-capture-execution', parsed),
     content: parsed,
@@ -453,6 +486,12 @@ function requireExecutionReceipt(
   unparsedReceipt: unknown
 ): AflTradeExternalCaptureExecutionReceipt {
   const receipt = executionReceiptSchema.parse(unparsedReceipt);
+  if (receipt.content.schemaVersion === 'statly-local-fixture-execution/v1') {
+    throw new AflTradeExternalPageIngestionError(
+      'CAPTURE_MISMATCH',
+      'A local fixture receipt cannot authorize live provider capture.'
+    );
+  }
   if (receipt.content.schemaVersion === 'afl-trade-external-capture-execution/v1') {
     if (request.environment !== 'test_fixture') {
       throw new AflTradeExternalPageIngestionError(

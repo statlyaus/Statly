@@ -42,7 +42,11 @@ export class AflTradeArtifactCustodyError extends Error {
 }
 
 export interface AflTradeImmutableArtifactRepository {
-  readonly assurance: 'fixture_memory' | 'durable_object_storage';
+  readonly assurance:
+    | 'fixture_memory'
+    | 'fixture_filesystem'
+    | 'local_non_production_filesystem'
+    | 'durable_object_storage';
   readonly artifactClass: AflTradeArtifactCustodyClass;
   readonly custodyProfile: AflTradeArtifactCustodyProfile | null;
   putIfAbsent(
@@ -62,7 +66,12 @@ export const aflTradeArtifactReadbackReceiptContentSchema = z
   .object({
     schemaVersion: z.literal('afl-trade-artifact-readback/v4'),
     artifact: aflTradeArtifactRefSchema,
-    repositoryAssurance: z.enum(['fixture_memory', 'durable_object_storage']),
+    repositoryAssurance: z.enum([
+      'fixture_memory',
+      'fixture_filesystem',
+      'local_non_production_filesystem',
+      'durable_object_storage',
+    ]),
     artifactClass: z.enum([
       'raw_source',
       'capture_metadata',
@@ -86,10 +95,15 @@ export const aflTradeArtifactReadbackReceiptContentSchema = z
       });
     }
     if (
-      (receipt.repositoryAssurance === 'fixture_memory' &&
+      ((receipt.repositoryAssurance === 'fixture_memory' ||
+        receipt.repositoryAssurance === 'fixture_filesystem') &&
         (receipt.custodyProfileId !== null ||
           receipt.custodyProfile !== null ||
           receipt.custodyEnvironment !== 'test_fixture')) ||
+      (receipt.repositoryAssurance === 'local_non_production_filesystem' &&
+        (receipt.custodyProfileId !== null ||
+          receipt.custodyProfile !== null ||
+          receipt.custodyEnvironment !== 'non_production')) ||
       (receipt.repositoryAssurance === 'durable_object_storage' &&
         (receipt.custodyProfileId === null ||
           receipt.custodyProfile === null ||
@@ -101,7 +115,7 @@ export const aflTradeArtifactReadbackReceiptContentSchema = z
         code: 'custom',
         path: ['custodyProfileId'],
         message:
-          'Fixture custody must remain test-only; durable custody must bind its complete content-addressed profile, class, and environment.',
+          'Fixture custody must remain test-only, local capture custody must remain non-production, and durable custody must bind its complete content-addressed profile, class, and environment.',
       });
     }
   });
@@ -176,7 +190,9 @@ export async function verifyAflTradeArtifactReadback(
     custodyProfileId: repository.custodyProfile?.profileId ?? null,
     custodyProfile: repository.custodyProfile,
     custodyEnvironment: (repository.custodyProfile?.content.environment ??
-      'test_fixture') satisfies AflTradeArtifactCustodyEnvironment,
+      (repository.assurance === 'local_non_production_filesystem'
+        ? 'non_production'
+        : 'test_fixture')) satisfies AflTradeArtifactCustodyEnvironment,
     verifiedAt,
     verification: 'exact_reference_and_sha256_bytes',
     status: 'passed',

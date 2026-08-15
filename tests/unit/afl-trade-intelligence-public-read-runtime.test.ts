@@ -11,6 +11,7 @@ import {
   createAflTradePublicReadRuntime,
   createAflTradePublicReadRuntimeLoader,
   createAflTradePublicReadPoolOptions,
+  createAflTradePublicProjectionArtifactRepository,
   type AflTradePublicReadRuntime,
 } from '@/server/aflTradeIntelligence/runtime/publicReadRuntime';
 import type { AflTradePublicReadConfig } from '@/server/aflTradeIntelligence/runtime/publicReadConfig';
@@ -20,13 +21,25 @@ const postgresConfig = {
   environment: 'production',
   databaseUrl: 'postgresql://statly.invalid/outcomes',
   cursorSecret: new Uint8Array(32),
-  objectStorage: {
+  artifactStorage: {
+    kind: 's3',
     bucket: 'statly-afl-trade-public',
     keyPrefix: 'public/v1',
     kmsKeyId: 'fixture-kms',
     policyEvidenceId: `artifact:${'a'.repeat(64)}`,
     region: 'ap-southeast-2',
     repositoryId: 'fixture-public',
+  },
+} satisfies AflTradePublicReadConfig;
+
+const localPostgresConfig = {
+  mode: 'postgres',
+  environment: 'test_fixture',
+  databaseUrl: 'postgresql://postgres:postgres@127.0.0.1:55432/postgres',
+  cursorSecret: new Uint8Array(32),
+  artifactStorage: {
+    kind: 'local_filesystem',
+    rootDirectory: '/tmp/statly-local-public-read-artifacts',
   },
 } satisfies AflTradePublicReadConfig;
 
@@ -89,6 +102,16 @@ describe('AFL trade public read runtime', () => {
     ).toEqual({ connectionString: postgresConfig.databaseUrl, max: 1 });
     expect(createAflTradePublicReadPoolOptions(postgresConfig)).toEqual({
       connectionString: postgresConfig.databaseUrl,
+    });
+  });
+
+  it('composes fixture-only filesystem custody without weakening hosted storage', () => {
+    const repository = createAflTradePublicProjectionArtifactRepository(localPostgresConfig);
+
+    expect(repository).toMatchObject({
+      assurance: 'fixture_filesystem',
+      artifactClass: 'public_projection',
+      custodyProfile: null,
     });
   });
 

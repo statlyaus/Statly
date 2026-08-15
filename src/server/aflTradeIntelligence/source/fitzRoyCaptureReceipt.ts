@@ -145,7 +145,18 @@ export const aflTradeFitzRoyCaptureReceiptContentSchema = z
     } else {
       const execution = receipt.egressExecutionReceipt.content;
       const executionArtifact = receipt.egressExecutionCustody.artifact;
+      const captureEnvironment = receipt.authorizationReceipt.content.request.environment;
+      const executionBoundaryMatchesEnvironment =
+        (captureEnvironment === 'non_production' &&
+          ((execution.executionBoundary === 'local_non_production_docker' &&
+            execution.enforcementScope === 'capture_admission_only') ||
+            (execution.executionBoundary === 'attested_provider_egress' &&
+              execution.enforcementScope !== 'capture_admission_only'))) ||
+        (captureEnvironment === 'production' &&
+          execution.executionBoundary === 'attested_provider_egress' &&
+          execution.enforcementScope !== 'capture_admission_only');
       if (
+        !executionBoundaryMatchesEnvironment ||
         executionArtifact.mediaType !== AFL_TRADE_CANONICAL_JSON_ARTIFACT_MEDIA_TYPE ||
         !doesAflTradeArtifactRefMatchCanonicalJson(
           executionArtifact,
