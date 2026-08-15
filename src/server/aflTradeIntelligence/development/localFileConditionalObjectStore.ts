@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
-import { constants, lstatSync, mkdirSync, realpathSync } from 'node:fs';
-import { lstat, open, realpath } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { constants, lstatSync, mkdirSync, realpathSync, type Stats } from 'node:fs';
+import { link, lstat, open, readdir, realpath, unlink } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 
 import {
@@ -26,6 +26,8 @@ const ENVELOPE_SCHEMA_VERSION = 'statly-local-conditional-object/v1';
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const MAXIMUM_OBJECT_KEY_BYTES = 1_024;
 const MAXIMUM_ENVELOPE_BYTES = 192 * 1024 * 1024;
+const UUID_V4_PATTERN_SOURCE =
+  '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 
 interface StoredEnvelope {
   schemaVersion: typeof ENVELOPE_SCHEMA_VERSION;
@@ -137,6 +139,9 @@ function validateEnvelope(value: unknown, objectKey: string): StoredEnvelope {
   if (
     envelope.schemaVersion !== ENVELOPE_SCHEMA_VERSION ||
     identity === undefined ||
+    identity === null ||
+    typeof identity !== 'object' ||
+    Array.isArray(identity) ||
     identity.objectKey !== objectKey ||
     typeof envelope.bytesBase64 !== 'string'
   ) {
@@ -194,20 +199,58 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
     }
   }
 
-  async function assertAnchoredEnvelope(
+  async function recoverOwnedLinksAndAssertAnchoredEnvelope(
     path: string,
-    handle: Awaited<ReturnType<typeof open>>
+    handle: Awaited<ReturnType<typeof open>>,
+    objectKey?: string
   ): Promise<void> {
     await assertAnchoredRoot();
-    const [pathDetails, handleDetails] = await Promise.all([lstat(path), handle.stat()]);
+    let [pathDetails, handleDetails] = await Promise.all([lstat(path), handle.stat()]);
     if (
       pathDetails.isSymbolicLink() ||
       !pathDetails.isFile() ||
-      pathDetails.nlink !== 1 ||
       pathDetails.dev !== handleDetails.dev ||
       pathDetails.ino !== handleDetails.ino
     ) {
       fail('INVALID_REQUEST', 'Local object custody envelope identity changed during open.');
+    }
+    if (pathDetails.nlink > 1 && objectKey !== undefined) {
+      await recoverOwnedPendingLinks(objectKey, handleDetails);
+      [pathDetails, handleDetails] = await Promise.all([lstat(path), handle.stat()]);
+    }
+    if (
+      pathDetails.nlink !== 1 ||
+      pathDetails.dev !== handleDetails.dev ||
+      pathDetails.ino !== handleDetails.ino
+    ) {
+      fail('INVALID_REQUEST', 'Local object custody envelope has unexplained filesystem links.');
+    }
+  }
+
+  async function recoverOwnedPendingLinks(
+    objectKey: string,
+    envelopeDetails: Stats
+  ): Promise<void> {
+    const encodedKey = sha256(new TextEncoder().encode(objectKey));
+    const pendingNamePattern = new RegExp(
+      `^\\.pending-${encodedKey}-${UUID_V4_PATTERN_SOURCE}\\.json$`,
+      'u'
+    );
+    for (const entry of await readdir(canonicalRoot)) {
+      if (!pendingNamePattern.test(entry)) continue;
+      const candidatePath = resolve(canonicalRoot, entry);
+      const candidate = await lstat(candidatePath).catch(() => null);
+      if (
+        candidate !== null &&
+        !candidate.isSymbolicLink() &&
+        candidate.isFile() &&
+        candidate.dev === envelopeDetails.dev &&
+        candidate.ino === envelopeDetails.ino
+      ) {
+        await unlink(candidatePath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+        });
+      }
     }
   }
 
@@ -218,12 +261,29 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
     return resolve(canonicalRoot, `${encodedKey}.json`);
   }
 
+  async function pendingEnvelopePath(objectKey: string): Promise<string> {
+    validateObjectKey(objectKey);
+    const encodedKey = sha256(new TextEncoder().encode(objectKey));
+    await assertAnchoredRoot();
+    return resolve(canonicalRoot, `.pending-${encodedKey}-${randomUUID()}.json`);
+  }
+
+  async function syncRootDirectory(): Promise<void> {
+    const rootHandle = await open(canonicalRoot, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      await assertAnchoredRoot();
+      await rootHandle.sync();
+    } finally {
+      await rootHandle.close();
+    }
+  }
+
   async function loadEnvelope(objectKey: string): Promise<StoredEnvelope | null> {
     const path = await envelopePath(objectKey);
     let handle: Awaited<ReturnType<typeof open>> | null = null;
     try {
       handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-      await assertAnchoredEnvelope(path, handle);
+      await recoverOwnedLinksAndAssertAnchoredEnvelope(path, handle, objectKey);
       const details = await handle.stat();
       if (!details.isFile() || details.size > MAXIMUM_ENVELOPE_BYTES) {
         fail('OBJECT_TOO_LARGE', 'Local object envelope exceeds its fixed read bound.');
@@ -233,6 +293,9 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
       if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
         fail('INVALID_REQUEST', 'Local object custody rejects linked envelope targets.');
+      }
+      if (error instanceof SyntaxError) {
+        fail('INTEGRITY_MISMATCH', 'Local object custody returned malformed envelope JSON.');
       }
       if (error instanceof AflTradeConditionalObjectStoreError) throw error;
       fail('TRANSPORT_FAILURE', 'Local object custody could not read its immutable envelope.');
@@ -245,6 +308,7 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
   return {
     async createIfAbsent(request) {
       const path = await envelopePath(request.objectKey);
+      const pendingPath = await pendingEnvelopePath(request.objectKey);
       const identity = identityFor(request);
       const envelope: StoredEnvelope = {
         schemaVersion: ENVELOPE_SCHEMA_VERSION,
@@ -254,23 +318,57 @@ export function createLocalAflTradeFileConditionalObjectStore(options: {
       let handle: Awaited<ReturnType<typeof open>> | null = null;
       try {
         handle = await open(
-          path,
+          pendingPath,
           constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW,
           0o600
         );
-        await assertAnchoredEnvelope(path, handle);
+        await recoverOwnedLinksAndAssertAnchoredEnvelope(pendingPath, handle);
         await handle.writeFile(JSON.stringify(envelope), 'utf8');
+        await handle.sync();
+        await recoverOwnedLinksAndAssertAnchoredEnvelope(pendingPath, handle);
+        await handle.close();
+        handle = null;
+
+        await assertAnchoredRoot();
+        await link(pendingPath, path);
+        await unlink(pendingPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+        });
+        await syncRootDirectory();
+
+        const readback = await loadEnvelope(request.objectKey);
+        if (
+          readback === null ||
+          readback.identity.versionId !== identity.versionId ||
+          readback.identity.eTag !== identity.eTag ||
+          readback.identity.byteLength !== identity.byteLength ||
+          readback.identity.mediaType !== identity.mediaType ||
+          readback.identity.checksumSha256 !== identity.checksumSha256 ||
+          !exactRecord(readback.identity.metadata, identity.metadata)
+        ) {
+          fail('INTEGRITY_MISMATCH', 'Local object custody failed exact publication read-back.');
+        }
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-          const existing = await lstat(path).catch(() => null);
-          if (existing?.isSymbolicLink()) {
-            fail('INVALID_REQUEST', 'Local object custody rejects linked envelope targets.');
+          await unlink(pendingPath).catch((cleanupError: NodeJS.ErrnoException) => {
+            if (cleanupError.code !== 'ENOENT') throw cleanupError;
+          });
+          const existing = await loadEnvelope(request.objectKey);
+          if (existing === null) {
+            fail(
+              'TRANSPORT_FAILURE',
+              'The conflicting local object disappeared before validation.'
+            );
           }
           fail('ALREADY_EXISTS', 'The immutable local object key already exists.');
         }
+        if (error instanceof AflTradeConditionalObjectStoreError) throw error;
         fail('TRANSPORT_FAILURE', 'Local object custody could not create its immutable envelope.');
       } finally {
         await handle?.close();
+        await unlink(pendingPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') return;
+        });
       }
       return identity;
     },

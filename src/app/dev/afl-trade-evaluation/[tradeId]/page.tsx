@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { AflTradeValueSummaryCard } from '@/components/draft/AflTradeValueSummaryCard';
-import { localWorkbookEvaluationService } from '@/server/aflTradeIntelligence/development/localWorkbookEvaluation';
+import { privateLocalWorkbookReads } from '@/server/aflTradeIntelligence/development/privateLocalWorkbookReads';
 import type { AflTradeDevelopmentReconciledOutcomeMetric } from '@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection';
 
 export const dynamic = 'force-dynamic';
@@ -73,7 +73,7 @@ export default async function LocalWorkbookTradeEvaluationPage({
   const tradeId = parseTradeId((await params).tradeId);
   if (tradeId === null) notFound();
 
-  const evaluation = await localWorkbookEvaluationService.loadTrade(tradeId);
+  const evaluation = await privateLocalWorkbookReads.loadTrade(tradeId);
   if (evaluation === null) notFound();
 
   const { calculation, detail } = evaluation;

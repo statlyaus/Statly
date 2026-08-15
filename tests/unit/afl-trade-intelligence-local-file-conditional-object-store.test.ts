@@ -1,5 +1,16 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, rename, rm, symlink } from 'node:fs/promises';
+import {
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rename,
+  rm,
+  stat,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -36,6 +47,16 @@ function request(): AflTradeConditionalObjectCreateRequest {
       'statly-environment': 'test_fixture',
     },
   };
+}
+
+function encodedEnvelopePath(root: string, objectKey: string): string {
+  const encodedKey = createHash('sha256').update(objectKey, 'utf8').digest('hex');
+  return join(root, `${encodedKey}.json`);
+}
+
+function pendingEnvelopePath(root: string, objectKey: string, nonce = 'fixture'): string {
+  const encodedKey = createHash('sha256').update(objectKey, 'utf8').digest('hex');
+  return join(root, `.pending-${encodedKey}-${nonce}.json`);
 }
 
 afterEach(async () => {
@@ -92,12 +113,7 @@ describe('local AFL trade conditional object store', () => {
       status: 'stored',
     });
     await expect(
-      verifyAflTradeArtifactReadback(
-        repository,
-        reference,
-        '2026-08-14T08:00:01.000Z',
-        1_024
-      )
+      verifyAflTradeArtifactReadback(repository, reference, '2026-08-14T08:00:01.000Z', 1_024)
     ).resolves.toMatchObject({
       content: {
         repositoryAssurance: 'local_non_production_filesystem',
@@ -138,14 +154,94 @@ describe('local AFL trade conditional object store', () => {
     } satisfies Partial<AflTradeConditionalObjectStoreError>);
   });
 
+  it('returns ALREADY_EXISTS only when the existing envelope passes exact validation', async () => {
+    const root = await temporaryRoot();
+    const input = request();
+    await writeFile(encodedEnvelopePath(root, input.objectKey), '{"partial":', { mode: 0o600 });
+    const store = createLocalAflTradeFileConditionalObjectStore({ rootDirectory: root });
+
+    await expect(store.createIfAbsent(input)).rejects.toMatchObject({
+      code: 'INTEGRITY_MISMATCH',
+    } satisfies Partial<AflTradeConditionalObjectStoreError>);
+  });
+
+  it('publishes exactly one complete envelope under concurrent writers', async () => {
+    const root = await temporaryRoot();
+    const input = request();
+    const stores = Array.from({ length: 12 }, () =>
+      createLocalAflTradeFileConditionalObjectStore({ rootDirectory: root })
+    );
+
+    const results = await Promise.allSettled(stores.map((store) => store.createIfAbsent(input)));
+    const fulfilled = results.filter(
+      (
+        result
+      ): result is PromiseFulfilledResult<
+        Awaited<ReturnType<(typeof stores)[number]['createIfAbsent']>>
+      > => result.status === 'fulfilled'
+    );
+    const rejected = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected'
+    );
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(11);
+    expect(rejected.every(({ reason }) => reason?.code === 'ALREADY_EXISTS')).toBe(true);
+    await expect(stores[0]!.headExact({ objectKey: input.objectKey })).resolves.toEqual(
+      fulfilled[0]!.value
+    );
+  });
+
+  it('ignores an unpublished staging orphan and permits a later complete publication', async () => {
+    const root = await temporaryRoot();
+    const input = request();
+    await writeFile(pendingEnvelopePath(root, input.objectKey), '{"partial":', { mode: 0o600 });
+    const store = createLocalAflTradeFileConditionalObjectStore({ rootDirectory: root });
+
+    await expect(store.headExact({ objectKey: input.objectKey })).resolves.toBeNull();
+    const created = await store.createIfAbsent(input);
+
+    await expect(store.headExact({ objectKey: input.objectKey })).resolves.toEqual(created);
+  });
+
+  it('repairs an owned post-publication staging link without accepting unexplained hard links', async () => {
+    const root = await temporaryRoot();
+    const input = request();
+    const store = createLocalAflTradeFileConditionalObjectStore({ rootDirectory: root });
+    const created = await store.createIfAbsent(input);
+    const finalPath = encodedEnvelopePath(root, input.objectKey);
+    const pendingPath = pendingEnvelopePath(
+      root,
+      input.objectKey,
+      '00000000-0000-4000-8000-000000000000'
+    );
+    await link(finalPath, pendingPath);
+
+    await expect(store.headExact({ objectKey: input.objectKey })).resolves.toEqual(created);
+    expect((await stat(finalPath)).nlink).toBe(1);
+    await expect(stat(pendingPath)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const invalidPendingPath = pendingEnvelopePath(root, input.objectKey, 'not-a-writer-uuid');
+    await link(finalPath, invalidPendingPath);
+    await expect(store.headExact({ objectKey: input.objectKey })).rejects.toMatchObject({
+      code: 'INVALID_REQUEST',
+    } satisfies Partial<AflTradeConditionalObjectStoreError>);
+    await unlink(invalidPendingPath);
+
+    const unexplainedPath = join(root, 'unexplained-hard-link.json');
+    await link(finalPath, unexplainedPath);
+    await expect(store.headExact({ objectKey: input.objectKey })).rejects.toMatchObject({
+      code: 'INVALID_REQUEST',
+    } satisfies Partial<AflTradeConditionalObjectStoreError>);
+  });
+
   it('rejects a symlink at the flat encoded envelope target', async () => {
     const root = await temporaryRoot();
     const outside = await temporaryRoot();
     const input = request();
-    const encodedKey = createHash('sha256').update(input.objectKey, 'utf8').digest('hex');
     const outsideFile = join(outside, 'outside.json');
     await mkdir(outside, { recursive: true });
-    await symlink(outsideFile, join(root, `${encodedKey}.json`));
+    await symlink(outsideFile, encodedEnvelopePath(root, input.objectKey));
 
     const store = createLocalAflTradeFileConditionalObjectStore({ rootDirectory: root });
     await expect(store.createIfAbsent(input)).rejects.toMatchObject({

@@ -31,6 +31,7 @@ vi.mock('@/lib/firebaseAdmin', () => ({
 import { getAuthenticatedUserIdFromApiRequest } from '@/lib/nextApiAuth';
 import { requireUser } from '@/lib/requireUser';
 import {
+  getExplicitAuthenticatedUserIdFromServerContext,
   getAuthenticatedUserId,
   getAuthenticatedUserIdFromServerContext,
   resolveAuthenticatedUserId,
@@ -172,6 +173,44 @@ describe('server authentication boundary', () => {
 
     await expect(getAuthenticatedUserIdFromServerContext()).resolves.toBe('server-component-user');
     expect(mocks.verifyIdToken).toHaveBeenCalledWith('navigation-token', true);
+  });
+
+  it('requires a presented Firebase credential for explicit server-component authentication', async () => {
+    mocks.isServerDevelopmentAuthEnabled.mockReturnValue(true);
+    mocks.headers.mockResolvedValue(new Headers({ 'x-auth-user': 'statly-dev-tester' }));
+    mocks.cookies.mockResolvedValue(store({ statly_dev_user: 'statly-dev-tester' }));
+
+    await expect(getExplicitAuthenticatedUserIdFromServerContext()).resolves.toBeNull();
+
+    expect(mocks.verifyIdToken).not.toHaveBeenCalled();
+    expect(mocks.verifySessionCookie).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a development bearer token as an explicit Firebase credential', async () => {
+    mocks.isServerDevelopmentAuthEnabled.mockReturnValue(true);
+    mocks.verifyIdToken.mockRejectedValue(new Error('not a Firebase token'));
+    mocks.headers.mockResolvedValue(new Headers({ authorization: 'Bearer dev:statly-dev-tester' }));
+
+    await expect(getExplicitAuthenticatedUserIdFromServerContext()).resolves.toBeNull();
+
+    expect(mocks.verifyIdToken).toHaveBeenCalledWith('dev:statly-dev-tester', true);
+  });
+
+  it('revocation-checks an explicitly presented server-component session', async () => {
+    mocks.isServerDevelopmentAuthEnabled.mockReturnValue(true);
+    mocks.verifySessionCookie.mockResolvedValue({ uid: 'statly-dev-tester' });
+    mocks.cookies.mockResolvedValue(
+      store({
+        statly_dev_user: 'statly-dev-tester',
+        statly_session: 'verified-session',
+      })
+    );
+
+    await expect(getExplicitAuthenticatedUserIdFromServerContext()).resolves.toBe(
+      'statly-dev-tester'
+    );
+
+    expect(mocks.verifySessionCookie).toHaveBeenCalledWith('verified-session', true);
   });
 
   it('makes requireUser consume the canonical server-component identity', async () => {

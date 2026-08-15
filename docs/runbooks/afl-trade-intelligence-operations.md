@@ -690,7 +690,11 @@ migrate, seed, reset, destroy, or stop the supplied outcomes database. It still 
 app database, emulators, workers, and web process that it starts. Stop the stack normally; dispose of
 the outcomes container separately only after the local evidence is no longer needed.
 
-Open `/dev/afl-trade-evaluation`, select the pinned 2025 workbook, and inspect the Sam Flanders
+Sign in through the Firebase Auth emulator as `admin@statly.dev` using the local password printed by
+the stack. The private evaluator accepts only that revocation-checked local session; it does not accept
+the credential-free development-auth fallback, request host headers or feature flags as identity.
+Missing or rejected credentials must return not found before any workbook or outcomes read. Then open
+`/dev/afl-trade-evaluation`, select the pinned 2025 workbook, and inspect the Sam Flanders
 acquisition detail. The current official evidence must show 12 concluded St Kilda appearances, one
 goal, right-censored 2026 coverage, acquisition `2025_0016`, and effective-through 28 May 2026. The
 workbook-recorded zero may remain visible only as labelled source input. Missing historical outcomes,

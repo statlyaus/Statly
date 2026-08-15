@@ -39,9 +39,9 @@ function getDevelopmentUserId(credentials: ServerAuthCredentials): string | null
 
   const hasSuppliedCredential = Boolean(
     credentials.authorization ||
-      credentials.sessionCookie ||
-      credentials.developmentHeaderUserId ||
-      credentials.developmentCookieUserId
+    credentials.sessionCookie ||
+    credentials.developmentHeaderUserId ||
+    credentials.developmentCookieUserId
   );
   if (hasSuppliedCredential) return null;
 
@@ -49,6 +49,24 @@ function getDevelopmentUserId(credentials: ServerAuthCredentials): string | null
   return configuredUserId === DEVELOPMENT_AUTH_USER_ID
     ? configuredUserId
     : DEVELOPMENT_AUTH_USER_ID;
+}
+
+async function validateFirebaseIdToken(token: string): Promise<string | null> {
+  try {
+    const decoded = await adminAuth.verifyIdToken(token, true);
+    return decoded.uid ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function validateFirebaseSessionCookie(sessionCookie: string): Promise<string | null> {
+  try {
+    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+    return decoded.uid ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -71,12 +89,23 @@ export async function resolveAuthenticatedUserId(
 
   if (!credentials.sessionCookie) return null;
 
-  try {
-    const decoded = await adminAuth.verifySessionCookie(credentials.sessionCookie, true);
-    return decoded.uid ?? null;
-  } catch {
-    return null;
-  }
+  return validateFirebaseSessionCookie(credentials.sessionCookie);
+}
+
+/**
+ * Resolve only a presented Firebase credential.
+ *
+ * Private development tools use this stricter boundary so enabling the credential-free local auth
+ * fallback cannot make protected evidence readable without an authenticated browser session.
+ */
+export async function resolveExplicitAuthenticatedUserId(
+  credentials: Pick<ServerAuthCredentials, 'authorization' | 'sessionCookie'>
+): Promise<string | null> {
+  const token = getBearerToken(credentials.authorization);
+  if (token) return validateFirebaseIdToken(token);
+
+  if (!credentials.sessionCookie) return null;
+  return validateFirebaseSessionCookie(credentials.sessionCookie);
 }
 
 /** Verify one Firebase ID token, including revocation, without consulting fallback credentials. */
@@ -87,12 +116,7 @@ export async function validateAuthToken(token: string): Promise<string | null> {
       : null;
   }
 
-  try {
-    const decoded = await adminAuth.verifyIdToken(token, true);
-    return decoded.uid ?? null;
-  } catch {
-    return null;
-  }
+  return validateFirebaseIdToken(token);
 }
 
 /** Resolve identity for an App Router request. */
@@ -118,6 +142,16 @@ export async function getAuthenticatedUserIdFromServerContext(): Promise<string 
     authorization: headerStore.get('authorization'),
     developmentHeaderUserId: headerStore.get('x-auth-user'),
     developmentCookieUserId: cookieStore.get(DEVELOPMENT_AUTH_COOKIE)?.value,
+    sessionCookie: cookieStore.get(SESSION_COOKIE_NAME)?.value,
+  });
+}
+
+/** Resolve a presented Firebase credential from an App Router server-component context. */
+export async function getExplicitAuthenticatedUserIdFromServerContext(): Promise<string | null> {
+  const [headerStore, cookieStore] = await Promise.all([headers(), cookies()]);
+
+  return resolveExplicitAuthenticatedUserId({
+    authorization: headerStore.get('authorization'),
     sessionCookie: cookieStore.get(SESSION_COOKIE_NAME)?.value,
   });
 }

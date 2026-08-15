@@ -144,12 +144,16 @@ projected workbook trade to produce finite received, given-up and net values acr
 it also rejects any scenario that is not publication-prohibited. A malformed trade or unsupported
 asset stops launch instead of receiving a made-up zero. The launcher then selects only the local
 `test_fixture` public-read adapter, enables the private reader for the child stack, and starts the same
-disposable local services as `dev:full:all`. Open
+disposable local services as `dev:full:all`. Sign in through the Firebase Auth emulator as
+`admin@statly.dev` using the local password printed by the stack, then open
 `http://localhost:3000/dev/afl-trade-evaluation` to filter the private archive and review each trade's
 scenario-ready state and synthetic net for at-trade, realized, remaining and current views, then open
 a detail to inspect each view's received, given-up and net values. Every page must label fabricated test
 evidence, show production authority `none` and publication authority `none`, and retain the separate
-asset-level factual evidence state. No export or activation control exists in this route.
+asset-level factual evidence state. The route requires that verified emulator session before it reads
+the workbook or disposable outcomes database; the credential-free development-auth fallback is not
+accepted. Missing or rejected credentials return not found. No export or activation control exists in
+this route.
 
 To prove withdrawal, stop the launcher and explicitly override any local environment-file value:
 

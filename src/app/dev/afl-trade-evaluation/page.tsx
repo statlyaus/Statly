@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { localWorkbookEvaluationService } from '@/server/aflTradeIntelligence/development/localWorkbookEvaluation';
+import { privateLocalWorkbookReads } from '@/server/aflTradeIntelligence/development/privateLocalWorkbookReads';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,7 +64,7 @@ export default async function LocalWorkbookEvaluationPage({
   const clubSlug = first(resolved.club).trim().toLowerCase() || undefined;
   const q = first(resolved.q).trim() || undefined;
   const type = assetTypeParam(first(resolved.type).trim());
-  const evaluation = await localWorkbookEvaluationService.loadArchive({
+  const evaluation = await privateLocalWorkbookReads.loadArchive({
     year: requestedYear,
     clubSlug,
     type,

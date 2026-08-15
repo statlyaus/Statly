@@ -9,8 +9,8 @@ const { loadTradeMock, notFoundMock } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('@/server/aflTradeIntelligence/development/localWorkbookEvaluation', () => ({
-  localWorkbookEvaluationService: { loadTrade: loadTradeMock },
+vi.mock('@/server/aflTradeIntelligence/development/privateLocalWorkbookReads', () => ({
+  privateLocalWorkbookReads: { loadTrade: loadTradeMock },
 }));
 
 vi.mock('next/navigation', () => ({ notFound: notFoundMock }));
