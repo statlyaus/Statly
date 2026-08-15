@@ -7,7 +7,9 @@ import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntell
 import { createAflTradeExternalEvidenceEnvelope } from '@/server/aflTradeIntelligence/source/externalDraftTradeEvidenceContracts';
 import {
   createAflTradeExternalCaptureExecutionReceipt,
+  createAflTradeLocalFixtureExecutionReceipt,
   ingestAflTradeExternalPage,
+  parseAflTradeExternalCaptureExecutionReceipt,
   type AflTradeExternalPageIngestionDependencies,
 } from '@/server/aflTradeIntelligence/source/externalDraftTradeIngestion';
 
@@ -75,7 +77,78 @@ function dependencies(options?: { replay?: boolean }) {
   return { captureRegistry, staging, authorizeCapture };
 }
 
+function localFixtureReceipt() {
+  return createAflTradeLocalFixtureExecutionReceipt({
+    schemaVersion: 'statly-local-fixture-execution/v1',
+    environment: 'test_fixture',
+    fixtureOnly: true,
+    liveSourceAccessed: false,
+    providerRightsExpanded: false,
+    rightsArtifactId: `source-rights:${digest('a')}`,
+    gateDecisionId: `gate-decision:${digest('b')}`,
+    gateDecisionKey: 'fixture-local-generation',
+    ledgerRevision: 7,
+    provider: 'statly_local_fixture',
+    capabilityId: 'statly-local-generated-fixture',
+    parserVersion: 'statly-local-fixture/v1',
+    fieldManifestSha256: digest('f'),
+    fixtureEvidenceId: `artifact:${digest('e')}`,
+  });
+}
+
 describe('external AFL draft/trade page ingestion', () => {
+  it('authenticates a fixture-only receipt without representing local generation as web egress', () => {
+    const receipt = localFixtureReceipt();
+
+    expect(parseAflTradeExternalCaptureExecutionReceipt(receipt)).toEqual(receipt);
+    expect(receipt.content).toMatchObject({
+      fixtureOnly: true,
+      liveSourceAccessed: false,
+      providerRightsExpanded: false,
+      provider: 'statly_local_fixture',
+    });
+  });
+
+  it('rejects a local fixture receipt at the live page-ingestion boundary', async () => {
+    const rawArtifacts = createAflTradeFixtureArtifactRepository({ artifactClass: 'raw_source' });
+    const deps = dependencies();
+    deps.authorizeCapture.mockResolvedValueOnce(localFixtureReceipt());
+    const bytes = new TextEncoder().encode('<html>captured trade</html>');
+    const parsePage = vi.fn();
+
+    await expect(
+      ingestAflTradeExternalPage(
+        {
+          ...sourceScope,
+          provider: 'draftguru',
+          sourceUrl: 'https://www.draftguru.com.au/trades/2025-fixture',
+          capturedAt,
+          effectiveAt: capturedAt,
+          parserVersion: 'draftguru-parser/v1',
+          fieldManifestSha256: digest('f'),
+          maximumBytes: 1_000_000,
+        },
+        {
+          rawArtifacts,
+          captureRegistry: deps.captureRegistry,
+          staging: deps.staging,
+          authorizeCapture: deps.authorizeCapture,
+          capturePage: async () => ({
+            status: 'captured',
+            sourceUrl: 'https://www.draftguru.com.au/trades/2025-fixture',
+            bytes,
+            contentSha256: sha256(bytes),
+            mediaType: 'text/html; charset=utf-8',
+            eTag: null,
+            lastModified: null,
+          }),
+          parsePage,
+        }
+      )
+    ).rejects.toMatchObject({ code: 'CAPTURE_MISMATCH' });
+    expect(parsePage).not.toHaveBeenCalled();
+  });
+
   it('stores and reads back raw bytes before registering and staging parsed facts', async () => {
     const rawArtifacts = createAflTradeFixtureArtifactRepository({ artifactClass: 'raw_source' });
     const deps = dependencies();

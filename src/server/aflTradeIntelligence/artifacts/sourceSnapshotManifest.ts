@@ -180,8 +180,22 @@ export const aflTradeSourceSnapshotManifestContentSchema = z
         message: 'The read-back receipt must verify the exact source artifact.',
       });
     }
+    const localExecution = snapshot.fitzRoyCaptureReceipt?.content.egressExecutionReceipt?.content;
+    const localNonProductionCustody =
+      receiptRequest.environment === 'non_production' &&
+      snapshot.capture.kind === 'fitzroy' &&
+      snapshot.readbackReceipt.content.repositoryAssurance ===
+        'local_non_production_filesystem' &&
+      snapshot.readbackReceipt.content.custodyEnvironment === 'non_production' &&
+      snapshot.readbackReceipt.content.custodyProfile === null &&
+      localExecution?.executionBoundary === 'local_non_production_docker' &&
+      localExecution.enforcementScope === 'capture_admission_only';
     const expectedAssurance =
-      receiptRequest.environment === 'test_fixture' ? 'fixture_memory' : 'durable_object_storage';
+      receiptRequest.environment === 'test_fixture'
+        ? 'fixture_memory'
+        : localNonProductionCustody
+          ? 'local_non_production_filesystem'
+          : 'durable_object_storage';
     if (
       snapshot.readbackReceipt.content.artifactClass !== 'raw_source' ||
       snapshot.readbackReceipt.content.repositoryAssurance !== expectedAssurance ||
@@ -195,7 +209,7 @@ export const aflTradeSourceSnapshotManifestContentSchema = z
       });
     }
     const custodyProfile = snapshot.readbackReceipt.content.custodyProfile;
-    if (receiptRequest.environment !== 'test_fixture') {
+    if (receiptRequest.environment !== 'test_fixture' && !localNonProductionCustody) {
       const deletion = custodyProfile?.content.retention.deletion;
       const retentionMatches =
         receiptRequest.rawRetentionDays === null

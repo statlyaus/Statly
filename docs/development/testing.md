@@ -67,17 +67,123 @@ draft worker enabled.
 boundaries plus a persistent loopback-only PGlite service for the isolated AFL outcomes schema. The
 launcher refuses an already-occupied outcomes port and authenticates its newly spawned database through
 a per-launch nonce stored inside a local-only identity schema before it deploys migrations or seed data.
-It then deploys all outcomes migrations and exact-replays a deterministic `test_fixture` factual release
-before Next starts. Local outcomes bytes live under ignored `.statly-local/`; they are never a production
-database or source authority.
+While it is running, the database process also writes that nonce to the mode-`0600`, ignored
+`.statly-local/afl-trade-outcomes-runtime-nonce` handoff and removes the file on shutdown. A separately
+invoked seed can therefore authenticate the same exact loopback process without printing the nonce.
+It then deploys all outcomes migrations, exact-replays a deterministic `test_fixture` factual release,
+and rehearses a separately governed synthetic valuation publication before Next starts. PostgreSQL and
+content-addressed artifact bytes live under ignored `.statly-local/`; they are never a production
+database, durable hosted custody, real AFL evidence, or source authority.
 
-The local AFL fixture is source-shaped rather than workbook-backed. It contains one 2025 GWS–Western
-Bulldogs pick exchange, including nominal Pick 14 resolving through a typed draft selection to Harry
-Kyle and one unresolved 2026 future pick. It intentionally creates no valuation publication, so the
-archive is visible while numerical values and grades remain honestly unavailable. Run the database or
-seed independently with `npm run dev:outcomes-db` and `npm run dev:outcomes:seed`; the standalone
-database command generates its own local identity nonce, while the full-stack launcher supplies the
-nonce it subsequently authenticates before writes.
+The `0045_fixture_filesystem_custody_assurance` migration deliberately stops describing local files as
+provider-managed storage. A disposable outcomes store created before that migration contains immutable
+legacy fixture receipts and must not be rewritten in place. Preserve or remove only the ignored
+`.statly-local/afl-trade-outcomes-pgdata` and `.statly-local/afl-trade-artifacts` directories once, then
+restart the stack to create honest fixture-filesystem evidence. Never apply this reset to a shared or
+hosted database.
+
+The local AFL fixture is generated code rather than workbook-backed. It contains 783 deterministic
+archive trades across 1988–2025: one source-shaped 2025 GWS–Western Bulldogs pick exchange and 782
+records whose titles, clubs, players and source references explicitly identify them as synthetic local
+volume data. The source-shaped member includes nominal Pick 14 resolving through a typed draft
+selection to Harry Kyle and one unresolved 2026 future pick. The valuation fixture fabricates baseline
+and replacement values only for that governed rehearsal trade, activates both in sequence, rolls back,
+withdraws to the original empty value scope, and leaves the recovered replacement active. Synthetic
+archive-only trades must remain `not_calculated` even while that valuation publication is active. Every
+fixture artifact remains `test_fixture`, `productionEligible: false`, and independent of Draftguru
+model-training rights.
+
+Both generated evidence batches are persisted under provider `statly_local_fixture` with
+`fixture://statly/` source references. They never claim Draftguru, Footywire or official-AFL
+provenance, and the live provider-ingestion boundary rejects `statly_local_fixture` entirely.
+
+### Private workbook evaluation lane
+
+Use the separate workbook evaluation launcher when product testing needs the historical transaction
+volume in a privately held workbook. This lane is development-only, production-disabled and excluded
+from every factual-release, public API, export and archive-reader boundary. It evaluates recorded
+transactions and Statly's local model outputs; it never treats workbook `Expected`, `Actual` or grade
+cells as source evidence or a publication value.
+
+The route deliberately presents two independent lanes:
+
+- the factual-evidence lane retains reconciled acquisition-spell observations and remains unavailable
+  when reviewed evidence is missing, ambiguous or incomplete; and
+- the synthetic-scenario lane sends each structurally valid workbook trade through the same lineage,
+  joint-draw, realized-ledger, four-view, snapshot and explanation machinery used by the valuation
+  kernel. Its component numbers are deterministic fabricated test evidence, not AFL observations,
+  calibrated estimates or release facts.
+
+Workbook rows identify the receiving club but not the sending club for each asset. A two-party
+scenario explicitly assumes that the other party sent the asset. A multi-party scenario uses the
+versioned deterministic fixture transfer map. Both assumptions are content-addressed and rendered in
+the detail page. They must never be silently promoted into transaction facts.
+
+Pin the exact private file for each run without adding its path or digest to repository configuration:
+
+```sh
+export AFL_OUTCOMES_DATABASE_URL="postgresql://<local-user>:<local-password>@127.0.0.1:<port>/statly_outcomes_test?sslmode=disable"
+npm run dev:outcomes:authenticate
+npm run dev:outcomes:review-afl-tables-2021-2025
+npm run dev:outcomes:review-official-2026
+export AFL_OUTCOMES_DEV_WORKBOOK_PATH="/absolute/private/path/to/workbook.xlsx"
+export AFL_OUTCOMES_DEV_WORKBOOK_SHA256="<64-character-sha256>"
+npm run dev:full:workbook-evaluation
+```
+
+The authentication command first requires the exact loopback database name and installs a private
+runtime nonce. Capture staging and the launcher must re-authenticate that nonce before mutation or
+reuse. Neither review command performs capture. The five-season command pins 48,769 reviewable
+appearances from the exact 2021–2025 candidate set, records identity, match and player-match receipts
+in bounded transactions, and exposes them only after one complete-set admission decision. It retains
+32,883 ambiguous zero-like goals rows as quarantined. The official command atomically records 12
+identity, 12 match and 12 player-match approvals for the exact pinned Sam Flanders match/date set.
+The launcher then fails closed in production mode, verifies the workbook digest and structure, and
+runs `Scripts/dev/verify-local-workbook-synthetic-valuations.ts`. That verifier requires every
+projected workbook trade to produce finite received, given-up and net values across all four views;
+it also rejects any scenario that is not publication-prohibited. A malformed trade or unsupported
+asset stops launch instead of receiving a made-up zero. The launcher then selects only the local
+`test_fixture` public-read adapter, enables the private reader for the child stack, and starts the same
+disposable local services as `dev:full:all`. Open
+`http://localhost:3000/dev/afl-trade-evaluation` to filter the private archive and review each trade's
+scenario-ready state and synthetic net for at-trade, realized, remaining and current views, then open
+a detail to inspect each view's received, given-up and net values. Every page must label fabricated test
+evidence, show production authority `none` and publication authority `none`, and retain the separate
+asset-level factual evidence state. No export or activation control exists in this route.
+
+To prove withdrawal, stop the launcher and explicitly override any local environment-file value:
+
+```sh
+AFL_OUTCOMES_DEV_WORKBOOK_READ_ENABLED=false \
+DATABASE_URL="file:$PWD/.statly-local/statly-app.db" \
+npm run dev:full:all
+```
+
+The `/dev/afl-trade-evaluation` route must return not found while the governed fixture archive, APIs,
+projections and exports retain their prior local release identity. This removes only private evaluation
+access; it does not activate, roll back or alter a factual release. Unsetting variables alone is not a
+withdrawal proof because Next development environment files may supply a configured value.
+
+After `npm run dev:full:all` reports that the web process is ready, open
+`http://localhost:3000/draft/trades`. Verify the 38 year filters, the 783-trade archive, the 21 trades
+in 2025, and the 20 trades in 1988. Then compare the governed 2025 trade detail page with:
+
+- `GET /api/draft-trades/valuations?tradeId=<tradeId>&view=current&limit=1`;
+- `GET /api/draft-trades/<tradeId>/valuation`;
+- `GET /api/draft-trades/<tradeId>/export`; and
+- `GET /api/draft-trades/export?year=2025`.
+
+The valuation APIs and detail page must name one publication/projection pair; both CSV routes must
+retain the same factual trade identity. Open an archive-only synthetic trade and confirm its factual
+detail still renders while its valuation API and UI display `not_calculated` against that same active
+publication. That fallback is permitted only after the trade is found in the active governed factual
+archive; an unknown trade ID must remain `TRADE_NOT_IN_PROJECTION`. Run the seed again with
+`npm run dev:outcomes:seed` to prove an idempotent replay. Run the
+database or seed independently with `npm run dev:outcomes-db` and `npm run dev:outcomes:seed`; the
+standalone database command generates its own local identity nonce, while the full-stack launcher
+supplies the nonce it subsequently authenticates before writes. The seed always targets the fixed
+loopback URL on port `55432`; it rejects an absent or mismatched nonce and does not accept a
+caller-supplied database URL.
 
 PGlite's PostgreSQL socket compatibility layer is for local development only and is serialized through
 a one-connection `test_fixture` read pool. Migration triggers and concurrent repository behavior remain
@@ -181,9 +287,10 @@ uniquely named `postgres:16-alpine` container with test-only credentials, binds 
 to `127.0.0.1`, stores `PGDATA` on `tmpfs`, and replaces both outcomes database URLs only for its child
 checks. It validates and generates the isolated Prisma schema, then runs the PostgreSQL suite. The
 suite creates unique temporary schemas, applies the complete ordered migration history, exercises
-native triggers, rollback, and concurrency behavior, and removes those schemas afterward. The harness
-attempts bounded force-removal by immutable container ID after success, failure, `SIGINT`, or `SIGTERM`,
-and reports cleanup failure alongside any check failure.
+native triggers, rollback, concurrency behavior, the 783-trade idempotent local seed and valuation
+isolation for archive-only trades, and removes those schemas afterward. The harness attempts bounded
+force-removal by immutable container ID after success, failure, `SIGINT`, or `SIGTERM`, and reports
+cleanup failure alongside any check failure.
 
 CI already owns a disposable PostgreSQL service and therefore runs
 `npm run test:outcomes:int:provisioned` with explicit test URLs. That command is not the supported local

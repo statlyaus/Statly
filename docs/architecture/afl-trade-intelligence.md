@@ -3,10 +3,13 @@
 - Status: the legacy public archive, exact approved AFL Tables/Footywire/Fryzigg policy factories,
   persisted Gate and release registries, factual and valuation read contracts, normalized outcomes
   PostgreSQL migrations, durable object adapters, and the server-only public runtime composition
-  exist. Public callers use that runtime and no longer hard-wire prepublication services. Hosted
-  infrastructure, provider field-manifest recording, reviewed real captures/releases, real-data model
-  development, activation, deployment, and production verification remain incomplete.
-- Last verified against source: 2026-08-09
+  exist. Public callers use that runtime and no longer hard-wire prepublication services. Disposable
+  PostgreSQL rehearsals now cover the factual-release lifecycle, a separately governed,
+  factual-release-bound synthetic valuation lifecycle, and a governed workbook-evaluation path over
+  five completed AFL Tables seasons plus current official AFL evidence. Hosted infrastructure,
+  production-grade provider custody, reviewed real-data releases, real-data model development,
+  deployment, and production verification remain incomplete.
+- Last verified against source: 2026-08-14
 
 ## Purpose
 
@@ -173,14 +176,19 @@ evaluator is a pure staging/evaluation boundary, not a request-time importer or 
 its values.
 
 An explicitly enabled non-production adapter may load one absolute-path, SHA-256-pinned workbook for
-local development. It projects archive trades and acquisition outcomes from the same cached workbook
-load into a development-only empirical contribution dataset. Conservative linkage requires an exact
-same-year receiving-club match plus player identity evidence for traded players, or supported draft
-selection and player evidence for drafted players. Future picks, missing drafted players, ambiguous
-matches, and unsupported outcome values remain unresolved rather than receiving invented value.
+local development. It projects archive transactions and acquisition-link candidates from the same
+cached workbook load. Workbook-recorded game totals remain labelled source text and cannot satisfy a
+factual outcome input. A development calculation admits games, goals and votes only through an
+explicit reconciled acquisition-spell result with an effective-through date; when no such result is
+supplied, every outcome metric remains unavailable rather than becoming zero or a workbook-derived
+partial value. Conservative linkage requires an exact same-year receiving-club match plus player
+identity evidence for traded players, or supported draft selection and player evidence for drafted
+players. Future picks, missing drafted players, ambiguous matches, and missing reconciled outcomes
+remain unresolved rather than receiving invented value.
 
-The development model uses only fixed-horizon historical outcomes known before each trade, optionally
-augmented by genuinely reconciled AFL Tables, Footywire, or Fryzigg season observations when supplied.
+The development model uses only reconciled fixed-horizon historical outcomes known before each trade,
+optionally augmented by genuinely reconciled AFL Tables, Footywire, or Fryzigg season observations
+when supplied.
 It emits bounded at-trade, realized, remaining, and current summaries with explicit coverage and
 confidence. A single versioned policy converts the at-trade and current comparison distributions to
 Statly grades from A+ through D. The policy uses an equal-party baseline, conditions out practical
@@ -246,12 +254,12 @@ immutable calculation runs and attempts, pure lease and retry transitions, conte
 decisions and dispatch claims, operational-health recommendations, and append-only model-change
 reviews. The modeling and valuation modules can fit deterministic benchmarks, run simulations,
 compose aligned component draws, calculate package distributions, produce snapshots and structured
-explanations, and evaluate locked predictions supplied through their contracts, but only fabricated
-fixtures have been used to establish local behavior. These modules do not read production evidence,
-write a database, configure a queue or scheduler, establish approved real-data performance, publish
-numerical values, or activate a public projection. The separate WP7A public boundary adds an honest
-unavailable-state experience, contract-ready numerical views, and a general methodology page; it is
-not evidence that a numerical valuation exists.
+explanations, and evaluate locked predictions supplied through their contracts. Fabricated fixtures
+now establish the complete local publication lifecycle against disposable PostgreSQL, but the modules
+still do not read production evidence, configure a live queue or scheduler, establish approved
+real-data performance, or activate a production projection. The separate WP7A public boundary adds an
+honest unavailable-state experience, contract-ready numerical views, and a general methodology page;
+the local fixture publication is not evidence that a real-data numerical valuation exists.
 
 WP1 completion therefore means that later work has a deterministic boundary to build on. It does not
 mean that a historical source is approved, object storage or managed PostgreSQL is operational, a
@@ -323,6 +331,94 @@ connections must reproduce the sealed candidates, full 15-event lifecycle, recov
 projection, service, API, archive response, and authenticated JSON, CSV and OOXML exports byte for
 byte. This is disposable local recovery evidence only; it is not evidence for hosted retention,
 point-in-time recovery, cross-host recovery, disaster recovery, or production restore authority.
+
+A separate development-only evidence rehearsal retains six one-off governed captures in a
+caller-owned disposable `statly_outcomes_test` PostgreSQL database: completed AFL Tables seasons
+2021–2025 and official AFL current-season evidence for 2026. The retained captures contain 57,621
+staged player-match rows. Capture rights, field maps, receipts, decoder provenance, raw-object
+digests, and staging outcomes remain independently attributable to their source decisions. Local raw
+custody uses the explicit `local_non_production_filesystem` profile and confers no hosted durability,
+redistribution, production, or recurring-capture authority.
+
+Those local capture-rights artifacts permit bounded capture, raw/hash retention and internal quality
+evaluation only. Model training, derived-feature creation, public derived output, public fact display
+and raw redistribution are blocked at both field-use and operation scope. Before any staging mutation,
+the caller must authenticate the exact loopback `statly_outcomes_test` runtime nonce. Retained
+historical rows become eligible only after the exact five-season evidence digest has three current
+local receipts per admitted row and one complete-set admission decision. Retained official rows
+become eligible only after one atomic exact-set review records current per-candidate identity,
+concluded-match and local reconciled player-match approvals. Finalized normalization alone is
+insufficient in either path.
+
+The private workbook evaluator may project only accepted, unambiguous staged rows into reconciled
+acquisition-spell outcomes. Zero-valued source cells that are indistinguishable from missing data,
+unresolved identities, and unsupported workbook links remain review work and cannot silently become
+facts. The official 2026 evidence currently supports 12 concluded St Kilda appearances and one goal
+for Sam Flanders through 28 May 2026; that season remains explicitly right-censored. The workbook's
+recorded zero is preserved as source input but does not override those post-trade observations.
+Missing evidence remains unavailable rather than becoming zero. This path is private development
+evidence only: it does not itself approve a public factual release or make the workbook authoritative.
+
+The same private page may also render a **private calculation scenario** beside the reviewed evidence.
+A scenario is a content-addressed, deterministic set of explicitly synthetic assumptions used only to
+exercise the source-independent valuation calculation. Its assumed transfer directions, asset
+lineage, contribution draws and package policy are not observations, reconciled facts, review
+decisions or release members. The scenario result must retain its assumption-set identity and
+`publicationEligible: false`; it cannot satisfy factual-release ancestry, valuation-publication
+preparation or a public-read repository. Reviewed evidence and scenario output are separate lanes:
+an unavailable fact remains unavailable even when the corresponding scenario produces a number.
+
+For a two-party workbook trade, the scenario may assume that an asset received by one party was sent
+by the other party. Because the workbook does not record a sending club for each asset, a multi-party
+scenario requires an explicit deterministic fixture transfer map. Both forms are labelled assumptions
+and are prohibited from becoming canonical lineage. Structurally malformed trades remain unavailable
+with an exact reason rather than receiving fabricated completeness.
+
+The interactive `test_fixture` archive uses a separate deterministic volume corpus so local archive
+behavior is not judged from a one-record page. It seals 783 transactions across 1988–2025: one
+source-shaped 2025 rehearsal transaction and 782 unmistakably synthetic generated transactions. All
+members traverse the same reviewed-identity, reconciliation, canonical-promotion, factual-release,
+public-archive and projection boundaries. The expanded source-rights artifact authorizes only this
+checked-in local fixture across its 1988–2026 evidence span; it grants no access to a provider,
+workbook, live source or production environment. The private migration workbook remains outside
+runtime composition and is not copied into this corpus. Generated evidence is labeled
+`statly_local_fixture` with `fixture://statly/` references throughout identity, capture and
+reconciliation state. The live provider-ingestion boundary does not accept that provider value.
+
+A separate valuation-publication rehearsal consumes that governed factual archive without changing
+its release authority. It fabricates deterministic `test_fixture` contribution evidence for the
+exact active archive, the one source-shaped trade, factual candidate, and release identifiers; seals
+baseline and replacement valuation bundles, custody indexes, publication manifests, projection
+manifests, and fixture-only Gate 4 and Gate 5 decisions; and activates only the valuation publication
+pointer in the same disposable PostgreSQL schema. The active value scope is the actual public-read scope,
+`public-afl-trades-current`, while the factual scope and release pointer remain unchanged. Direct
+value reads, both valuation APIs, projection exports, and the source-shaped archive detail page must
+resolve the same publication and projection identifiers. Archive-only synthetic trades remain factual
+members of the same release but return `not_calculated`; they never inherit or fabricate the governed
+trade's numerical result. The lifecycle proves baseline activation, replacement,
+explicit rollback to baseline, no-fallback withdrawal to the prior empty value scope, and recovery
+through a still-eligible non-withdrawn candidate. A withdrawn publication cannot be republished.
+
+The valuation rehearsal is intentionally not a rights or readiness transition. Its authority kind is
+`fixture`, its environment is `test_fixture`, and its evidence is fabricated and
+`productionEligible: false`. It performs no live capture and grants no Draftguru model-training,
+derived-feature, or public-display rights. Factual release approval does not authorize a valuation;
+valuation approval does not mutate, replace, or strengthen the factual release. The harness dumps,
+destroys, and restores the combined schema, then re-authenticates both registries and reproduces the
+archive detail, value service, API data, archive-page inputs, and projection export exactly. This is
+local restore evidence only and confers no hosted backup, deployment, production activation, or
+provider authority.
+
+Interactive local serving uses the same immutable-artifact repository interface as hosted serving,
+but a distinct `test_fixture` adapter persists canonical envelopes below the ignored
+`.statly-local/afl-trade-artifacts` root. The seed process and Next.js therefore resolve the same
+content-addressed projection bytes across process boundaries without S3, AWS credentials, or a
+network fallback. Runtime configuration is discriminated by environment: `test_fixture` requires an
+absolute local artifact root, while `non_production` and `production` continue to require complete S3,
+KMS, repository-policy, and region configuration. Local filesystem custody must never be selected for
+a hosted environment. It reports the distinct `fixture_filesystem` assurance with no custody profile
+and an unencrypted-local-filesystem identity; it does not claim provider durability, encryption,
+retention, residency, transport, or recovery assurance.
 
 ### Maturity-review acceptance criteria
 
@@ -1328,6 +1424,16 @@ an active publication whose exact serving authority is expired, withdrawn or oth
 Neither state has a publication reference, model vintage, temporal context, numerical payload,
 winner, or estimated release time.
 
+An active publication may intentionally cover fewer trades than the factual archive. When its
+authenticated projection reports that a requested archive trade is not a member, the resolving read
+adapter preserves the active publication metadata but returns `not_calculated` with reason
+`trade-not-in-active-projection` for that trade. Mixed list batches retain available values for
+projection members. Before creating the fallback, the adapter must also find the requested trade in
+the active governed factual archive. Unknown trade IDs and archive-selection failures preserve the
+projection error or fail closed. Only that doubly authenticated membership miss is recoverable; projection mount,
+integrity, selection, freshness and other read failures still fail closed and never fall back to
+legacy numbers.
+
 This unavailable result applies only to the additional evidence needed for Statly valuation. It does
 not disable the existing historical AFL archive. The archive remains anonymous and separate from the
 fantasy domain: public AFL trades and assets have no user, league, roster, or membership owner.
@@ -1741,12 +1847,12 @@ model-execution evidence, complete-trade assessment contracts, and independent p
 That foundation is not equivalent to a live factual dataset or an approved trade grade. Completion is
 reported by milestone, never as one blended percentage:
 
-| Milestone                 | Current state | Completion evidence                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Engineering foundation    | Complete      | Normalized migrations and contracts, disposable real-PostgreSQL rehearsal, supported checks, build, cleanup, and review are complete.                                                                                                                                                                                                                                      |
-| Non-production operations | Partial       | The source-independent fitzRoy private-candidate, full factual-release, and disposable dump/destroy/restore PostgreSQL rehearsals are complete, including local parity, rollback, no-fallback withdrawal, recovery, and restored parity; hosted services, real-source capture, historical reconciliation, hosted restore, and alert burn-in still need execution evidence. |
-| Factual production        | Not complete  | No reviewed real-data factual release has been activated and verified across every public read/export surface.                                                                                                                                                                                                                                                             |
-| Valuation production      | Not complete  | No locked real-data player/pick model and complete-trade valuation publication has passed Gates 3, 4, and 5 and been activated.                                                                                                                                                                                                                                            |
+| Milestone                 | Current state | Completion evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Engineering foundation    | Complete      | Normalized migrations and contracts, disposable real-PostgreSQL rehearsal, supported checks, build, cleanup, and review are complete.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Non-production operations | Partial       | The source-independent fitzRoy private-candidate, full factual-release, and disposable dump/destroy/restore PostgreSQL rehearsals are complete, including local parity, rollback, no-fallback withdrawal, recovery, and restored parity. A separate governed local rehearsal retains, stages, and explicitly reviews five completed AFL Tables seasons plus the exact current official evidence set for private workbook evaluation. A reviewed real-data factual release, hosted services, hosted restore, and alert burn-in still need execution evidence. |
+| Factual production        | Not complete  | No reviewed real-data factual release has been activated and verified across every public read/export surface.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Valuation production      | Not complete  | No locked real-data player/pick model and complete-trade valuation publication has passed Gates 3, 4, and 5 and been activated.                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 The remaining work proceeds through these independently verifiable gates:
 
@@ -1860,8 +1966,9 @@ Passing the factual manifest and lifecycle fixture tests proves content integrit
 stale-revision rejection, exact selection, and no-fallback withdrawal behavior. The disposable
 fitzRoy factual-release rehearsal additionally proves the implemented PostgreSQL transactions and
 local API, projection, export, and archive-page parity against its deterministic candidate. Neither
-proves live raw-source custody, current external source rights, human review, parity against a real
-corpus, hosted cache invalidation, hosted backup/restore, disaster recovery, or a production release.
+that fixture lifecycle nor the separate governed local capture proves complete human review, parity
+against a fully reconciled real corpus, hosted cache invalidation, hosted backup/restore, disaster
+recovery, or a production release.
 
 Selecting the isolated target in design does not mean it is provisioned, ready, authoritative, or
 approved. The current external blockers are exact machine-recorded source decisions and field uses,

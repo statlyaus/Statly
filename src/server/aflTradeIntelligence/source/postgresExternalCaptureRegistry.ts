@@ -87,6 +87,12 @@ function sameArtifactContent(
 }
 
 function executionScope(receipt: ReturnType<typeof parseAflTradeExternalCaptureExecutionReceipt>) {
+  if (receipt.content.schemaVersion === 'statly-local-fixture-execution/v1') {
+    throw new AflTradeExternalCaptureRegistryError(
+      'INVALID_CAPTURE',
+      'A local fixture receipt cannot enter the external capture registry.'
+    );
+  }
   return receipt.content.schemaVersion === 'afl-trade-external-capture-execution/v2'
     ? {
         provider: receipt.content.request.provider,

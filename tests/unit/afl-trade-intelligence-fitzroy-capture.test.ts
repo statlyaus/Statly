@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -11,6 +13,7 @@ import {
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeArtifactCustodyProfile } from '@/server/aflTradeIntelligence/artifacts/artifactCustodyProfile';
 import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
+import { createLocalAflTradeNonProductionArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import {
   aflTradeGateDecisionProposalSchema,
   aflTradeGateDecisionRecordSchema,
@@ -19,6 +22,7 @@ import {
   AFL_TRADE_FITZROY_CAPTURE_REQUEST_SCHEMA_VERSION,
   aflTradeFitzRoyInvocationSchema,
   createAflTradeFitzRoyInvocation,
+  getAflTradeFitzRoyObservedScopeError,
 } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
 import {
   AflTradeFitzRoyCaptureError,
@@ -408,6 +412,36 @@ function productionGovernanceFixture() {
   };
 }
 
+function nonProductionGovernanceFixture() {
+  const fixture = productionGovernanceFixture();
+  const { proposal, decision } = createApprovedAflTradeFitzRoyGateRecords({
+    sourceRights: fixture.sourceRights,
+    environment: 'non_production',
+    version: 1,
+    supersedesDecisionId: null,
+    decidedAt: '2026-08-02T00:10:00.000Z',
+    effectiveAt: '2026-08-02T00:10:00.000Z',
+    revalidateAt: '2027-08-01T00:00:00.000Z',
+    accountableOwner: 'source-governance-owner',
+    reviewer: {
+      id: 'source-reviewer',
+      role: 'source-governance-reviewer',
+      evidenceId: `artifact:${sha('1')}`,
+    },
+    authorityEvidenceId: `artifact:${sha('f')}`,
+    rateLimitEvidenceId: fixture.rateLimitEvidenceId,
+  });
+  return {
+    ...fixture,
+    ledger: { proposals: [proposal], decisions: [decision] },
+    gateRequest: {
+      ...fixture.gateRequest,
+      decisionKey: proposal.content.decisionKey,
+      environment: 'non_production' as const,
+    },
+  };
+}
+
 function durableFixtureRepository(artifactClass: 'raw_source' | 'capture_metadata') {
   const fixture = createAflTradeFixtureArtifactRepository({ artifactClass });
   const custodyProfile = createAflTradeArtifactCustodyProfile({
@@ -721,6 +755,50 @@ describe('authorized fitzRoy capture runtime', () => {
     ).rejects.toMatchObject({ code: expectedCode });
   });
 
+  it('admits request-scoped official rows only when their schema retains season evidence for decode', () => {
+    const invocation = createAflTradeFitzRoyInvocation(
+      captureRequest({ parameters: { season: 2026, roundNumber: null } })
+    );
+    const officialDiagnostics = {
+      ...diagnostics(invocation),
+      fields: [
+        ...diagnostics(invocation).fields,
+        {
+          name: 'utcStartTime',
+          classes: ['character'],
+          storageType: 'character',
+          missingCount: 0,
+          nanCount: 0,
+          positiveInfinityCount: 0,
+          negativeInfinityCount: 0,
+          levels: null,
+          timezone: null,
+        },
+        {
+          name: 'compSeason.shortName',
+          classes: ['character'],
+          storageType: 'character',
+          missingCount: 0,
+          nanCount: 0,
+          positiveInfinityCount: 0,
+          negativeInfinityCount: 0,
+          levels: null,
+          timezone: null,
+        },
+      ],
+      observedSeasonValues: [],
+      observedDateRange: null,
+    };
+
+    expect(getAflTradeFitzRoyObservedScopeError(invocation, officialDiagnostics)).toBeNull();
+    expect(
+      getAflTradeFitzRoyObservedScopeError(invocation, {
+        ...officialDiagnostics,
+        fields: officialDiagnostics.fields.filter(({ name }) => name !== 'utcStartTime'),
+      })
+    ).toMatch(/season evidence/);
+  });
+
   it('never calls the provider process when the requested season exceeds Gate scope', async () => {
     const fixture = governanceFixture();
     const execute = vi.fn();
@@ -861,6 +939,148 @@ describe('authorized fitzRoy capture runtime', () => {
       expect.objectContaining({ token: 'production-lease' }),
       expect.objectContaining({ outcome: 'succeeded' })
     );
+  });
+
+  it('captures approved local evidence only through the explicit non-production profile', async () => {
+    const fixture = nonProductionGovernanceFixture();
+    const directory = await mkdtemp(join(tmpdir(), 'statly-local-capture-profile-'));
+    const execute = vi.fn(async (invocation) => {
+      const sourceBytes = Uint8Array.from([88, 10, 0, 0, 0, 3]);
+      const executionDiagnostics = diagnostics(invocation);
+      const diagnosticsBytes = new TextEncoder().encode(
+        canonicalizeAflTradeJson(executionDiagnostics)
+      );
+      return {
+        sourceBytes,
+        diagnostics: executionDiagnostics,
+        egressExecutionReceipt: createAflTradeFitzRoyEgressExecutionReceipt({
+          content: {
+            schemaVersion: AFL_TRADE_FITZROY_EGRESS_EXECUTION_SCHEMA_VERSION,
+            executionBoundary: 'local_non_production_docker',
+            enforcementScope: 'capture_admission_only',
+            provider: 'footywire',
+            capabilityId: invocation.capabilityId,
+            directFunction: invocation.directFunction,
+            fitzRoyVersion: invocation.fitzRoyVersion,
+            invocationSha256: sha256AflTradeCanonicalJson(invocation),
+            sourceOutput: {
+              contentSha256: createHash('sha256').update(sourceBytes).digest('hex'),
+              byteLength: sourceBytes.byteLength,
+            },
+            diagnosticsOutput: {
+              contentSha256: createHash('sha256').update(diagnosticsBytes).digest('hex'),
+              byteLength: diagnosticsBytes.byteLength,
+            },
+            runtime: runtimeIdentity,
+            enforcedPolicy: {
+              upstreamRate: { requests: 1, perSeconds: 3, burst: 1 },
+              cacheSeconds: 86_400,
+              egressPolicyEvidenceId: fixture.rateLimitEvidenceId,
+            },
+            startedAt: '2026-08-03T00:00:00.000Z',
+            completedAt: '2026-08-03T00:00:00.000Z',
+            status: 'succeeded',
+          },
+          signature: {
+            algorithm: 'Ed25519',
+            keyId: 'local-rehearsal-key',
+            valueBase64Url: 'A'.repeat(86),
+          },
+        }),
+      };
+    });
+    const resolveAuthorization = vi.fn(async () => ({
+      ledger: fixture.ledger,
+      sourceRights: fixture.sourceRights,
+    }));
+
+    try {
+      const receipt = await captureAuthorizedAflTradeFitzRoyEvidence(fixture, {
+        rawArtifactRepository: createLocalAflTradeNonProductionArtifactRepository({
+          rootDirectory: directory,
+          repositoryId: 'raw-source',
+          artifactClass: 'raw_source',
+          maximumObjectBytes: 16_384,
+        }),
+        metadataArtifactRepository: createLocalAflTradeNonProductionArtifactRepository({
+          rootDirectory: directory,
+          repositoryId: 'capture-metadata',
+          artifactClass: 'capture_metadata',
+          maximumObjectBytes: 16_384,
+        }),
+        executor: {
+          executionBoundary: 'local_rate_limited_docker',
+          egressPolicyEvidenceIds: [fixture.rateLimitEvidenceId],
+          execute,
+        },
+        egressExecutionVerifier: { verify: vi.fn(async () => true) },
+        authorizationResolver: { resolveAuthorization },
+        clock: { now: () => '2026-08-03T00:00:00.000Z' },
+        runtimeIdentity,
+        timeoutMs: 30_000,
+        maximumSourceBytes: 1_024,
+        maximumDiagnosticsBytes: 16_384,
+      });
+
+      expect(receipt.content.authorizationReceipt.content.request.environment).toBe(
+        'non_production'
+      );
+      expect(receipt.content.sourceCustody.readback.content.repositoryAssurance).toBe(
+        'local_non_production_filesystem'
+      );
+      expect(receipt.content.egressExecutionReceipt?.content).toMatchObject({
+        executionBoundary: 'local_non_production_docker',
+        enforcementScope: 'capture_admission_only',
+      });
+      expect(resolveAuthorization).toHaveBeenCalledOnce();
+      expect(execute).toHaveBeenCalledOnce();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('does not let the local capture profile satisfy production execution', async () => {
+    const fixture = productionGovernanceFixture();
+    const directory = await mkdtemp(join(tmpdir(), 'statly-local-production-rejection-'));
+    const execute = vi.fn();
+    try {
+      await expect(
+        captureAuthorizedAflTradeFitzRoyEvidence(fixture, {
+          rawArtifactRepository: createLocalAflTradeNonProductionArtifactRepository({
+            rootDirectory: directory,
+            repositoryId: 'raw-source',
+            artifactClass: 'raw_source',
+            maximumObjectBytes: 16_384,
+          }),
+          metadataArtifactRepository: createLocalAflTradeNonProductionArtifactRepository({
+            rootDirectory: directory,
+            repositoryId: 'capture-metadata',
+            artifactClass: 'capture_metadata',
+            maximumObjectBytes: 16_384,
+          }),
+          executor: {
+            executionBoundary: 'local_rate_limited_docker',
+            egressPolicyEvidenceIds: [fixture.rateLimitEvidenceId],
+            execute,
+          },
+          egressExecutionVerifier: { verify: vi.fn(async () => true) },
+          authorizationResolver: {
+            resolveAuthorization: vi.fn(async () => ({
+              ledger: fixture.ledger,
+              sourceRights: fixture.sourceRights,
+            })),
+          },
+          clock: { now: () => '2026-08-03T00:00:00.000Z' },
+          runtimeIdentity,
+          timeoutMs: 30_000,
+          maximumSourceBytes: 1_024,
+          maximumDiagnosticsBytes: 16_384,
+        })
+      ).rejects.toMatchObject({ code: 'PRODUCTION_EXECUTION_DISABLED' });
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it('does not let fixture authority reach a network-capable executor', async () => {

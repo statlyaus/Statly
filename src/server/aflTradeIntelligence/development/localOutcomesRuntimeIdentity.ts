@@ -1,5 +1,5 @@
 export interface LocalAflTradeOutcomesIdentitySqlClient {
-  query(sql: string, parameters?: unknown[]): Promise<{ rows: unknown[] }>;
+  query(sql: string, parameters?: readonly unknown[]): Promise<{ rows: readonly unknown[] }>;
 }
 
 const NONCE_PATTERN = /^[a-f0-9]{64}$/u;

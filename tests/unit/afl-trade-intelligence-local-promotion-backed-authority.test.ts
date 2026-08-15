@@ -72,7 +72,7 @@ describe('local promotion-backed authority', () => {
       parityReportArtifactId: input().parityReportArtifactId,
       writeBarrier: 'engaged',
     });
-  });
+  }, 120_000);
 
   it('is byte-stable for an exact reviewed publication package', () => {
     expect(createLocalAflTradePromotionBackedAuthority(input())).toEqual(

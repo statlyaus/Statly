@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { projectAflOutcomesDevelopmentWorkbookValues } from '@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection';
+import type { AflTradeDevelopmentReconciledAcquisitionOutcome } from '@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection';
 import type { AflOutcomesDevelopmentAcquisitionProjection } from '@/server/aflTradeIntelligence/source/developmentWorkbookAcquisitionProjection';
 import type { AflOutcomesDevelopmentTradeProjection } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeProjection';
 
@@ -93,6 +94,36 @@ function acquisitions(): AflOutcomesDevelopmentAcquisitionProjection {
       training_squad_selection: 0,
     },
   };
+}
+
+function reconciledOutcomes(
+  input: AflOutcomesDevelopmentAcquisitionProjection = acquisitions()
+): ReadonlyMap<string, AflTradeDevelopmentReconciledAcquisitionOutcome> {
+  return new Map(
+    input.items.map((item) => {
+      const metric =
+        item.year <= 2023
+          ? ({ state: 'observed', value: 10 } as const)
+          : ({
+              state: 'partial',
+              observedValue: 2,
+              reason: 'active_career_right_censored',
+            } as const);
+      return [
+        item.eventId,
+        {
+          source: 'reconciled_acquisition_spell' as const,
+          effectiveThrough: '2026-08-07T00:00:00.000Z',
+          metrics: {
+            games: metric,
+            goals: metric,
+            coachesVotes: metric,
+            brownlowVotes: metric,
+          },
+        },
+      ];
+    })
+  );
 }
 
 function trades(): AflOutcomesDevelopmentTradeProjection {
@@ -213,11 +244,38 @@ function trades(): AflOutcomesDevelopmentTradeProjection {
 }
 
 describe('development workbook Statly value projection', () => {
+  it('does not treat workbook-recorded games as reconciled acquisition-spell facts', () => {
+    const projection = projectAflOutcomesDevelopmentWorkbookValues({
+      trades: trades(),
+      acquisitions: acquisitions(),
+      providerSeasons: [],
+      reconciledOutcomesByAcquisitionId: new Map(),
+      createdAt: '2026-08-08T00:00:00.000Z',
+      minimumCohortSize: 2,
+    });
+    const value = projection.valuesByTradeId.get('workbook-2025-fixture');
+    const reidy = value?.assets.find(({ assetId }) => assetId === 'asset-reidy');
+    const link = projection.linksByTradeId
+      .get('workbook-2025-fixture')
+      ?.find(({ assetId }) => assetId === 'asset-reidy');
+
+    expect(reidy?.state).not.toBe('right_censored');
+    expect(link).toMatchObject({
+      state: 'linked',
+      acquisitionId: '2025_0026',
+      outcomeEvidence: {
+        state: 'unavailable',
+        reason: 'no_reconciled_acquisition_spell',
+      },
+    });
+  });
+
   it('links unique player and used-pick outcomes while leaving unresolved picks explicit', () => {
     const projection = projectAflOutcomesDevelopmentWorkbookValues({
       trades: trades(),
       acquisitions: acquisitions(),
       providerSeasons: [],
+      reconciledOutcomesByAcquisitionId: new Map(),
       createdAt: '2026-08-08T00:00:00.000Z',
       minimumCohortSize: 2,
     });
@@ -236,6 +294,7 @@ describe('development workbook Statly value projection', () => {
       trades: trades(),
       acquisitions: acquisitions(),
       providerSeasons: [],
+      reconciledOutcomesByAcquisitionId: reconciledOutcomes(),
       createdAt: '2026-08-08T00:00:00.000Z',
       minimumCohortSize: 2,
     });
@@ -245,6 +304,15 @@ describe('development workbook Statly value projection', () => {
     expect(value?.summaries.at_trade.availability).toBe('available');
     expect(grades?.atTrade.clubs).toHaveLength(2);
     expect(grades?.current.clubs.every(({ grade }) => grade !== null)).toBe(true);
+    expect(projection.linksByTradeId.get('workbook-2025-fixture')?.[0]?.outcomeEvidence).toEqual({
+      state: 'reconciled',
+      effectiveThrough: '2026-08-07T00:00:00.000Z',
+      games: {
+        state: 'partial',
+        observedValue: 2,
+        reason: 'active_career_right_censored',
+      },
+    });
     expect(JSON.stringify({ value, grades })).not.toMatch(/999|legacy|workbookGrade/i);
   });
 
@@ -253,6 +321,7 @@ describe('development workbook Statly value projection', () => {
       trades: trades(),
       acquisitions: acquisitions(),
       providerSeasons: [],
+      reconciledOutcomesByAcquisitionId: reconciledOutcomes(),
       createdAt: '2026-08-08T00:00:00.000Z',
       minimumCohortSize: 2,
     });
@@ -280,6 +349,7 @@ describe('development workbook Statly value projection', () => {
       trades: trades(),
       acquisitions: input,
       providerSeasons: [],
+      reconciledOutcomesByAcquisitionId: new Map(),
       createdAt: '2026-08-08T00:00:00.000Z',
       minimumCohortSize: 2,
     });

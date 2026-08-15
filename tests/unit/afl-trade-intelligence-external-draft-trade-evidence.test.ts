@@ -232,6 +232,22 @@ describe('external AFL draft and trade evidence contracts', () => {
     ).toThrow(/distinct/i);
   });
 
+  it('requires the local fixture provider and source scheme to be paired', () => {
+    const transaction = transactionEnvelope().content;
+    expect(() =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...transaction,
+        provider: 'statly_local_fixture',
+      })
+    ).toThrow(/must be used together/i);
+    expect(() =>
+      createAflTradeExternalEvidenceEnvelope({
+        ...transaction,
+        capture: { ...transaction.capture, sourceUrl: 'fixture://statly/provider-substitution' },
+      })
+    ).toThrow(/must be used together/i);
+  });
+
   it('seals complete, sorted, unique source-row accounting', () => {
     const first = transactionEnvelope();
     const second = createAflTradeExternalEvidenceEnvelope({

@@ -123,6 +123,25 @@ async function requireCurrentSourceAuthority(
   receipt: ReturnType<typeof parseAflTradeExternalCaptureExecutionReceipt>,
   createdAt: string
 ): Promise<{ rightsArtifactId: string; gateDecisionId: string }> {
+  if (receipt.content.schemaVersion === 'statly-local-fixture-execution/v1') {
+    if (
+      corpus.content.environment !== 'test_fixture' ||
+      receipt.content.environment !== corpus.content.environment ||
+      receipt.content.provider !== 'statly_local_fixture' ||
+      !receipt.content.fixtureOnly ||
+      receipt.content.liveSourceAccessed ||
+      receipt.content.providerRightsExpanded
+    ) {
+      throw new AflTradePromotionBackedFactualReleasePersistenceError(
+        'SOURCE_AUTHORITY_MISMATCH',
+        'Local fixture execution authority does not match the fixture-only corpus.'
+      );
+    }
+    return {
+      rightsArtifactId: receipt.content.rightsArtifactId,
+      gateDecisionId: receipt.content.gateDecisionId,
+    };
+  }
   if (receipt.content.schemaVersion === 'afl-trade-external-capture-execution/v1') {
     if (corpus.content.environment !== 'test_fixture') {
       throw new AflTradePromotionBackedFactualReleasePersistenceError(

@@ -20,6 +20,8 @@ interface ProjectionCustodyRow extends Record<string, unknown> {
   byte_length: string | number | bigint;
   created_at: string | Date;
   artifact_class: string;
+  environment: string;
+  custody_profile_id: string | null;
 }
 
 export type AflTradeProjectionReleaseSourceErrorCode =
@@ -55,13 +57,20 @@ export function createPostgresAflTradeProjectionArtifactReleaseSource(input: {
   client: AflOutcomeSqlClient;
   artifactRepository: AflTradeImmutableArtifactRepository;
 }): AflTradeProjectionArtifactReleaseSource {
+  const profile = input.artifactRepository.custodyProfile;
+  const fixtureFilesystem =
+    input.artifactRepository.assurance === 'fixture_filesystem' && profile === null;
+  const exactDurableStorage =
+    input.artifactRepository.assurance === 'durable_object_storage' &&
+    profile !== null &&
+    profile.content.artifactClass === 'public_projection';
   if (
-    input.artifactRepository.assurance !== 'durable_object_storage' ||
-    input.artifactRepository.artifactClass !== 'public_projection'
+    input.artifactRepository.artifactClass !== 'public_projection' ||
+    (!fixtureFilesystem && !exactDurableStorage)
   ) {
     throw new AflTradeProjectionReleaseSourceError(
       'INVALID_COMPOSITION',
-      'Public valuation serving requires durable public-projection artifact custody.'
+      'Public valuation serving requires exact fixture-filesystem or durable public-projection custody.'
     );
   }
 
@@ -80,7 +89,8 @@ export function createPostgresAflTradeProjectionArtifactReleaseSource(input: {
       }
       const result = await input.client.query<ProjectionCustodyRow>(
         `SELECT p.projection_id, a.artifact_id, a.content_sha256, a.storage_uri,
-                a.media_type, a.byte_length, a.created_at, a.artifact_class
+                a.media_type, a.byte_length, a.created_at, a.artifact_class,
+                a.environment, a.custody_profile_id
            FROM outcome_valuation_projection_manifest p
            JOIN outcome_artifact_custody a ON a.artifact_id = p.artifact_id
           WHERE p.projection_id = $1`,
@@ -96,7 +106,11 @@ export function createPostgresAflTradeProjectionArtifactReleaseSource(input: {
       const row = result.rows[0];
       if (
         row.projection_id !== parsedProjectionId.data ||
-        row.artifact_class !== 'public_projection'
+        row.artifact_class !== 'public_projection' ||
+        (fixtureFilesystem
+          ? row.environment !== 'test_fixture' || row.custody_profile_id !== null
+          : row.environment !== profile?.content.environment ||
+            row.custody_profile_id !== profile?.profileId)
       ) {
         throw new AflTradeProjectionReleaseSourceError(
           'INVALID_CUSTODY',

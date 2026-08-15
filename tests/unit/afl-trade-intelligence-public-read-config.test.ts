@@ -19,6 +19,16 @@ function postgresEnvironment(): Readonly<Record<string, string | undefined>> {
   };
 }
 
+function localPostgresEnvironment(): Readonly<Record<string, string | undefined>> {
+  return {
+    AFL_TRADE_PUBLIC_READ_MODE: 'postgres',
+    AFL_TRADE_PUBLIC_READ_ENVIRONMENT: 'test_fixture',
+    AFL_OUTCOMES_DATABASE_URL: 'postgresql://postgres:postgres@127.0.0.1:55432/postgres',
+    AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64: validSecret,
+    AFL_TRADE_LOCAL_ARTIFACT_ROOT: '/tmp/statly-local-artifacts',
+  };
+}
+
 describe('AFL trade public read runtime configuration', () => {
   it('keeps disabled mode explicit and dependency free', () => {
     expect(parseAflTradePublicReadConfig({ AFL_TRADE_PUBLIC_READ_MODE: 'disabled' })).toEqual({
@@ -33,7 +43,8 @@ describe('AFL trade public read runtime configuration', () => {
     expect(config).toMatchObject({
       mode: 'postgres',
       environment: 'production',
-      objectStorage: {
+      artifactStorage: {
+        kind: 's3',
         bucket: 'statly-afl-trade-public',
         keyPrefix: 'public-read/v1',
         region: 'ap-southeast-2',
@@ -42,6 +53,17 @@ describe('AFL trade public read runtime configuration', () => {
     });
     if (config.mode !== 'postgres') throw new Error('Expected PostgreSQL mode.');
     expect(config.cursorSecret).toEqual(new Uint8Array(Buffer.from(validSecret, 'base64')));
+  });
+
+  it('parses test-fixture PostgreSQL with local artifact storage and no AWS configuration', () => {
+    expect(parseAflTradePublicReadConfig(localPostgresEnvironment())).toMatchObject({
+      mode: 'postgres',
+      environment: 'test_fixture',
+      artifactStorage: {
+        kind: 'local_filesystem',
+        rootDirectory: '/tmp/statly-local-artifacts',
+      },
+    });
   });
 
   it.each([
@@ -53,6 +75,22 @@ describe('AFL trade public read runtime configuration', () => {
     expect(() => parseAflTradePublicReadConfig({ ...postgresEnvironment(), [key]: value })).toThrow(
       /public read configuration/i
     );
+  });
+
+  it('requires the storage configuration selected by the exact environment', () => {
+    expect(() =>
+      parseAflTradePublicReadConfig({
+        ...localPostgresEnvironment(),
+        AFL_TRADE_LOCAL_ARTIFACT_ROOT: undefined,
+      })
+    ).toThrow(/AFL_TRADE_LOCAL_ARTIFACT_ROOT/);
+    expect(() =>
+      parseAflTradePublicReadConfig({
+        ...postgresEnvironment(),
+        AFL_TRADE_OBJECT_BUCKET: undefined,
+        AFL_TRADE_LOCAL_ARTIFACT_ROOT: '/tmp/not-a-production-fallback',
+      })
+    ).toThrow(/AFL_TRADE_OBJECT_BUCKET/);
   });
 
   it('never treats an unknown mode as disabled', () => {

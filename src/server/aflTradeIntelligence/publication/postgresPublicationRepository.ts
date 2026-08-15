@@ -100,7 +100,7 @@ interface PointerRow extends Record<string, unknown> {
   scope_key: string;
   publication_id: string;
   registry_revision: number;
-  activated_at: string;
+  activated_at: string | Date;
 }
 
 interface CustodyIndexRow extends Record<string, unknown> {
@@ -301,7 +301,8 @@ async function loadPersistence(
     scopeKey: row.scope_key,
     publicationId: row.publication_id,
     revision: row.registry_revision,
-    activatedAt: row.activated_at,
+    activatedAt:
+      row.activated_at instanceof Date ? row.activated_at.toISOString() : row.activated_at,
   }));
   let registry: AflTradePublicationRegistry;
   try {

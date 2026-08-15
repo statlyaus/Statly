@@ -30,21 +30,46 @@ export SOCKET_IO_PORT="3002"
 export NEXT_PUBLIC_SOCKET_URL="http://localhost:3002"
 export STATLY_ENABLE_DEV_TOOLS="true"
 export AFL_TRADE_PUBLIC_READ_MODE="postgres"
-export AFL_TRADE_PUBLIC_READ_ENVIRONMENT="test_fixture"
-export AFL_OUTCOMES_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/postgres?sslmode=disable"
-STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+export AFL_TRADE_PUBLIC_READ_ENVIRONMENT="${AFL_TRADE_PUBLIC_READ_ENVIRONMENT:-test_fixture}"
+STATLY_LOCAL_REUSE_OUTCOMES_DATABASE="${STATLY_LOCAL_REUSE_OUTCOMES_DATABASE:-false}"
+if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" != "true" && "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" != "false" ]]; then
+  echo "local stack: STATLY_LOCAL_REUSE_OUTCOMES_DATABASE must be true or false" >&2
+  exit 1
+fi
+if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" == "true" ]]; then
+  if [[ -z "${AFL_OUTCOMES_DATABASE_URL:-}" ]]; then
+    echo "local stack: AFL_OUTCOMES_DATABASE_URL is required when reusing an outcomes database" >&2
+    exit 1
+  fi
+  node -e '
+    const value = process.env.AFL_OUTCOMES_DATABASE_URL;
+    const url = new URL(value);
+    const loopback = new Set(["127.0.0.1", "localhost", "::1"]);
+    if (!["postgres:", "postgresql:"].includes(url.protocol) || !loopback.has(url.hostname)) {
+      throw new Error("the reused outcomes database must be loopback PostgreSQL");
+    }
+    if (url.pathname !== "/statly_outcomes_test") {
+      throw new Error("the reused outcomes database must be statly_outcomes_test");
+    }
+  '
+else
+  export AFL_OUTCOMES_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/postgres?sslmode=disable"
+fi
+export AFL_TRADE_LOCAL_ARTIFACT_ROOT="${AFL_TRADE_LOCAL_ARTIFACT_ROOT:-$ROOT_DIR/.statly-local/afl-trade-artifacts}"
+OUTCOMES_NONCE_PATH="$ROOT_DIR/.statly-local/afl-trade-outcomes-runtime-nonce"
+if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" == "true" ]]; then
+  if [[ ! "${STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE:-}" =~ ^[a-f0-9]{64}$ ]]; then
+    echo "local stack: the reused outcomes database requires its 64-character runtime nonce" >&2
+    exit 1
+  fi
+else
+  STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")"
+fi
 export STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE
 if [[ -z "${AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64:-}" ]]; then
   AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64'))")"
 fi
 export AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64
-export AFL_TRADE_OBJECT_BUCKET="statly-local-afl-trade-projections"
-export AFL_TRADE_OBJECT_PREFIX="test-fixture"
-export AFL_TRADE_OBJECT_KMS_KEY_ID="statly-local-only-no-production-authority"
-export AFL_TRADE_OBJECT_REPOSITORY_ID="statly-local-afl-trade-projections"
-export AFL_TRADE_OBJECT_POLICY_EVIDENCE_ID="artifact:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-export AWS_REGION="ap-southeast-2"
-export AWS_EC2_METADATA_DISABLED="true"
 
 FIREBASE_PID=""
 OUTCOMES_PID=""
@@ -55,6 +80,9 @@ cleanup() {
   fi
   if [[ -n "$OUTCOMES_PID" ]] && kill -0 "$OUTCOMES_PID" >/dev/null 2>&1; then
     kill "$OUTCOMES_PID" >/dev/null 2>&1 || true
+  fi
+  if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" == "false" ]]; then
+    rm -f -- "$OUTCOMES_NONCE_PATH"
   fi
 }
 
@@ -93,20 +121,25 @@ port_is_open() {
 
 npm run dev:down >/dev/null 2>&1 || true
 
-if port_is_open "127.0.0.1" "55432"; then
-  echo "local stack: refusing to reuse the unidentified service on 127.0.0.1:55432; stop it before starting the local stack" >&2
-  exit 1
-fi
+if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" == "true" ]]; then
+  echo "local stack: reusing the caller-owned disposable AFL outcomes database"
+  ./node_modules/.bin/tsx Scripts/dev/verify-local-afl-trade-outcomes-db.ts
+else
+  if port_is_open "127.0.0.1" "55432"; then
+    echo "local stack: refusing to reuse the unidentified service on 127.0.0.1:55432; stop it before starting the local stack" >&2
+    exit 1
+  fi
 
-npm run dev:outcomes-db &
-OUTCOMES_PID="$!"
+  npm run dev:outcomes-db &
+  OUTCOMES_PID="$!"
 
-wait_for_port "AFL outcomes database" "127.0.0.1" "55432"
-if [[ -z "$OUTCOMES_PID" ]] || ! kill -0 "$OUTCOMES_PID" >/dev/null 2>&1; then
-  echo "local stack: the Statly AFL outcomes process exited before ownership could be confirmed" >&2
-  exit 1
+  wait_for_port "AFL outcomes database" "127.0.0.1" "55432"
+  if [[ -z "$OUTCOMES_PID" ]] || ! kill -0 "$OUTCOMES_PID" >/dev/null 2>&1; then
+    echo "local stack: the Statly AFL outcomes process exited before ownership could be confirmed" >&2
+    exit 1
+  fi
+  ./node_modules/.bin/tsx Scripts/dev/verify-local-afl-trade-outcomes-db.ts
 fi
-./node_modules/.bin/tsx Scripts/dev/verify-local-afl-trade-outcomes-db.ts
 
 if port_is_open "127.0.0.1" "8080" && port_is_open "127.0.0.1" "9099"; then
   echo "local stack: reusing existing Firebase emulators on 127.0.0.1:8080 and 127.0.0.1:9099"
@@ -124,9 +157,13 @@ wait_for_port "Firebase Auth emulator" "127.0.0.1" "9099"
 npm run prisma:generate
 npx prisma migrate deploy
 npm run dev:seed:local
-npm run outcomes:prisma:generate
-npm run outcomes:prisma:migrate:deploy
-npm run dev:outcomes:seed
+if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" == "true" ]]; then
+  echo "local stack: preserving the caller-owned outcomes migrations and data"
+else
+  npm run outcomes:prisma:generate
+  npm run outcomes:prisma:migrate:deploy
+  npm run dev:outcomes:seed
+fi
 
 npx concurrently -k -n web,socket,draft-worker -c blue,magenta,green \
   "npm:dev" \

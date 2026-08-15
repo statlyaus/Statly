@@ -19,6 +19,7 @@ export const AFL_TRADE_EXTERNAL_IDENTITY_REVIEW_DECISION_SCHEMA_VERSION =
 
 const environmentSchema = z.enum(['test_fixture', 'non_production', 'production']);
 const providerSchema = z.enum([
+  'statly_local_fixture',
   'draftguru',
   'footywire',
   'official_afl',
@@ -63,7 +64,16 @@ const subjectContentSchema = z
     entityKind: entityKindSchema,
     identityScope: identityScopeSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((subject, context) => {
+    if (subject.provider === 'statly_local_fixture' && subject.environment !== 'test_fixture') {
+      context.addIssue({
+        code: 'custom',
+        path: ['provider'],
+        message: 'Statly local fixture identities are valid only in test_fixture.',
+      });
+    }
+  });
 
 export const aflTradeExternalIdentitySubjectSchema = z
   .object({

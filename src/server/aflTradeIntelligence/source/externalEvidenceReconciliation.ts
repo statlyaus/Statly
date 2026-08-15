@@ -29,6 +29,7 @@ type RecordedEntity = Extract<Claim, { kind: 'transaction_party' }>['club'];
 type Evidence = AflTradeExternalEvidenceBatch['content']['evidence'][number];
 
 const providerSchema = z.enum([
+  'statly_local_fixture',
   'draftguru',
   'footywire',
   'official_afl',
@@ -279,6 +280,12 @@ export function reconcileAflTradeExternalEvidence(input: {
   const anchorSeasonYear = z.number().int().min(1897).max(2200).parse(input.anchorSeasonYear);
   const reconciledAt = instantSchema.parse(input.reconciledAt);
   const sourceBatches = input.sourceBatches.map(parseAflTradeExternalEvidenceBatch);
+  if (
+    environment !== 'test_fixture' &&
+    sourceBatches.some(({ content }) => content.provider === 'statly_local_fixture')
+  ) {
+    throw new TypeError('Local fixture evidence can be reconciled only in test_fixture.');
+  }
   const sourceBatchIds = sourceBatches.map((batch) => batch.batchId).sort();
   const sourceAuthority =
     input.sourceAuthority === undefined
@@ -299,6 +306,12 @@ export function reconcileAflTradeExternalEvidence(input: {
   const identityResolutions = input.identityResolutions.map((value) =>
     identityResolutionSchema.parse(value)
   );
+  if (
+    environment !== 'test_fixture' &&
+    identityResolutions.some(({ content }) => content.provider === 'statly_local_fixture')
+  ) {
+    throw new TypeError('Local fixture identities can be reconciled only in test_fixture.');
+  }
   const evidence = sourceBatches.flatMap((batch) => batch.content.evidence);
   const issues: ReconciliationIssue[] = [];
 
@@ -345,19 +358,22 @@ export function reconcileAflTradeExternalEvidence(input: {
 
   const transactionClaims = evidence.filter(
     (row): row is Evidence & { content: { claim: Extract<Claim, { kind: 'transaction' }> } } =>
-      row.content.provider === 'draftguru' && row.content.claim.kind === 'transaction'
+      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
+      row.content.claim.kind === 'transaction'
   );
   const parties = evidence.filter(
     (
       row
     ): row is Evidence & { content: { claim: Extract<Claim, { kind: 'transaction_party' }> } } =>
-      row.content.provider === 'draftguru' && row.content.claim.kind === 'transaction_party'
+      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
+      row.content.claim.kind === 'transaction_party'
   );
   const directedTransfers = evidence.filter(
     (
       row
     ): row is Evidence & { content: { claim: Extract<Claim, { kind: 'directed_transfer' }> } } =>
-      row.content.provider === 'draftguru' && row.content.claim.kind === 'directed_transfer'
+      (row.content.provider === 'draftguru' || row.content.provider === 'statly_local_fixture') &&
+      row.content.claim.kind === 'directed_transfer'
   );
   const transactionClaimsByNativeEventId = new Map<string, typeof transactionClaims>();
   for (const transaction of transactionClaims) {
@@ -447,18 +463,18 @@ export function reconcileAflTradeExternalEvidence(input: {
   const transfers: CanonicalTransfer[] = directedTransfers.map((row) => {
     const claim = row.content.claim;
     const transactionId = createAflTradeContentAddress('external-transaction', {
-      provider: 'draftguru',
+      provider: row.content.provider,
       nativeEventId: claim.nativeEventId,
     });
     const fromClubId = resolve(
-      'draftguru',
+      row.content.provider,
       'club',
       claim.fromClub,
       `transfer:${claim.nativeTransferId}:from`,
       row.evidenceId
     );
     const toClubId = resolve(
-      'draftguru',
+      row.content.provider,
       'club',
       claim.toClub,
       `transfer:${claim.nativeTransferId}:to`,
@@ -469,7 +485,7 @@ export function reconcileAflTradeExternalEvidence(input: {
       asset = {
         kind: 'player',
         playerId: resolve(
-          'draftguru',
+          row.content.provider,
           'player',
           claim.asset.player,
           `transfer:${claim.nativeTransferId}:player`,
@@ -480,7 +496,7 @@ export function reconcileAflTradeExternalEvidence(input: {
     } else if (claim.asset.kind === 'future_pick') {
       const futurePick = claim.asset;
       const originalClubId = resolve(
-        'draftguru',
+        row.content.provider,
         'club',
         futurePick.originalClub,
         `transfer:${claim.nativeTransferId}:original-club`,
@@ -583,15 +599,17 @@ export function reconcileAflTradeExternalEvidence(input: {
   const transactions: CanonicalTransaction[] = transactionClaims.map((row) => {
     const claim = row.content.claim;
     const transactionId = createAflTradeContentAddress('external-transaction', {
-      provider: 'draftguru',
+      provider: row.content.provider,
       nativeEventId: claim.nativeEventId,
     });
     const eventParties = parties.filter(
-      (party) => party.content.claim.nativeEventId === claim.nativeEventId
+      (party) =>
+        party.content.provider === row.content.provider &&
+        party.content.claim.nativeEventId === claim.nativeEventId
     );
     const partyIds = eventParties.map((party) =>
       resolve(
-        'draftguru',
+        row.content.provider,
         'club',
         party.content.claim.club,
         `transaction:${claim.nativeEventId}:party:${party.content.claim.nativePartyId}`,

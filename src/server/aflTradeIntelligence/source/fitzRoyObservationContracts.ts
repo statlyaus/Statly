@@ -160,6 +160,7 @@ const identityBindingsSchema = z
   .object({
     nativeId: sourceFieldBindingSchema.nullable(),
     recordedName: sourceFieldBindingSchema,
+    recordedSurname: sourceFieldBindingSchema.nullable().optional(),
     recordedClubNativeId: sourceFieldBindingSchema.nullable(),
     recordedClubName: sourceFieldBindingSchema.nullable(),
   })
@@ -255,11 +256,16 @@ const fieldMapSchema = z
         message: 'Match-universe maps need match bindings.',
       });
     }
-    if (map.observationKind !== 'player_identity' && map.seasonField === null) {
+    if (
+      map.observationKind !== 'player_identity' &&
+      map.seasonField === null &&
+      map.capabilityId !== 'official-afl-player-stats'
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['seasonField'],
-        message: 'Season, match, and achievement observations need a source season field.',
+        message:
+          'Season, match, and achievement observations need a source season field unless the official AFL request authorization supplies the season.',
       });
     }
     if (
@@ -326,7 +332,7 @@ function collectBoundFields(map: {
   if (map.observedDateField !== null) fields.push(map.observedDateField.sourceField);
   fields.push(...map.naturalKeyFields);
   for (const binding of Object.values(map.identity ?? {})) {
-    if (binding !== null) fields.push(binding.sourceField);
+    if (binding != null) fields.push(binding.sourceField);
   }
   for (const binding of Object.values(map.match ?? {})) {
     if (binding !== null) fields.push(binding.sourceField);

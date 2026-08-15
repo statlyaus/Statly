@@ -34,7 +34,11 @@ export const AFL_TRADE_VALUATION_OUTPUT_CUSTODY_SCHEMA_VERSION =
   'afl-trade-valuation-output-custody/v1' as const;
 
 const environmentSchema = z.enum(['test_fixture', 'non_production', 'production']);
-const repositoryAssuranceSchema = z.enum(['fixture_memory', 'durable_object_storage']);
+const repositoryAssuranceSchema = z.enum([
+  'fixture_memory',
+  'fixture_filesystem',
+  'durable_object_storage',
+]);
 
 export const aflTradeValuationOutputCustodyOperationScopeSchema = z
   .object({
@@ -328,7 +332,7 @@ function requireCustodyPolicy(
       'Valuation outputs require derived-private immutable custody.'
     );
   }
-  if (repository.assurance === 'fixture_memory') {
+  if (repository.assurance !== 'durable_object_storage') {
     if (environment !== 'test_fixture' || repository.custodyProfile !== null) {
       throw new AflTradeValuationOutputCustodyError(
         'CUSTODY_POLICY_MISMATCH',

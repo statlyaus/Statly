@@ -1,6 +1,25 @@
 import { aflTradeContentAddressedIdSchema } from '../artifacts/contentAddress';
+import { createAflTradePrePublicationAvailability } from './prePublicationAvailability';
 import type { AflTradePublicationReadSelection } from './publicationReadContracts';
-import type { AflTradeProjectionArtifactReadRepository } from './projectionArtifactReadRepository';
+import {
+  isAflTradeProjectionArtifactReadError,
+  type AflTradeProjectionArtifactReadRepository,
+} from './projectionArtifactReadRepository';
+
+function isTradeOutsideProjection(error: unknown): boolean {
+  return isAflTradeProjectionArtifactReadError(error) && error.code === 'TRADE_NOT_IN_PROJECTION';
+}
+
+function createArchiveOnlyAvailability(
+  view: Parameters<typeof createAflTradePrePublicationAvailability>[0]
+) {
+  return {
+    ...createAflTradePrePublicationAvailability(view),
+    reasonCode: 'trade-not-in-active-projection',
+    message:
+      'This factual archive trade is not included in the active numerical publication. Its facts remain available without a calculated value.',
+  };
+}
 
 export interface AflTradeProjectionReadRepositoryFactory {
   (projectionId: string): Promise<AflTradeProjectionArtifactReadRepository>;
@@ -8,6 +27,7 @@ export interface AflTradeProjectionReadRepositoryFactory {
 
 export function createResolvingAflTradeProjectionReadRepository(input: {
   factory: AflTradeProjectionReadRepositoryFactory;
+  isFactualArchiveTrade(tradeId: string): Promise<boolean>;
   maxEntries?: number;
 }): AflTradeProjectionArtifactReadRepository {
   const maxEntries = input.maxEntries ?? 4;
@@ -46,10 +66,57 @@ export function createResolvingAflTradeProjectionReadRepository(input: {
 
   return {
     async list(selection, request) {
-      return (await resolve(selection)).list(selection, request);
+      const mounted = await resolve(selection);
+      try {
+        return await mounted.list(selection, request);
+      } catch (error) {
+        if (!isTradeOutsideProjection(error)) throw error;
+      }
+      const items = [];
+      let metadata = null;
+      for (const tradeId of request.tradeIds) {
+        try {
+          const single = await mounted.list(selection, {
+            ...request,
+            tradeIds: [tradeId],
+            limit: 1,
+          });
+          metadata ??= single.metadata;
+          items.push(...single.items);
+        } catch (error) {
+          if (!isTradeOutsideProjection(error)) throw error;
+          if (!(await input.isFactualArchiveTrade(tradeId))) throw error;
+          items.push({
+            tradeId,
+            valuation: createArchiveOnlyAvailability(request.requestedView),
+          });
+        }
+      }
+      metadata ??= (await mounted.read(selection)).metadata;
+      return { metadata, items, nextCursor: null, total: items.length };
     },
     async detail(selection, request) {
-      return (await resolve(selection)).detail(selection, request);
+      const mounted = await resolve(selection);
+      try {
+        return await mounted.detail(selection, request);
+      } catch (error) {
+        if (!isTradeOutsideProjection(error)) throw error;
+        if (!(await input.isFactualArchiveTrade(request.tradeId))) throw error;
+      }
+      return {
+        metadata: (await mounted.read(selection)).metadata,
+        tradeId: request.tradeId,
+        valuations: request.requestedViews.map(createArchiveOnlyAvailability),
+        assets: [],
+        lineageSummary: {
+          status: 'unavailable' as const,
+          totalAssetCount: null,
+          resolvedAssetCount: null,
+          unresolvedAssetCount: null,
+          lineageEdgeCount: null,
+          maximumDepth: null,
+        },
+      };
     },
     async read(selection) {
       return (await resolve(selection)).read(selection);

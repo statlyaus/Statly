@@ -37,7 +37,9 @@ function capture(
     sourceUrl:
       provider === 'fitzroy_official_afl_player_details'
         ? 'fitzroy://official-afl-player-details/2025'
-        : `https://example.test/${provider}/2025`,
+        : provider === 'statly_local_fixture'
+          ? `fixture://statly/${suffix}`
+          : `https://example.test/${provider}/2025`,
     capturedAt,
     effectiveAt: '2025-11-20T00:00:00.000Z',
     parserVersion: `${provider}/v1`,
@@ -251,6 +253,65 @@ const resolutions = [
 ];
 
 describe('external draft and trade evidence reconciliation', () => {
+  it('keeps local fixture evidence and provider support inside test_fixture', () => {
+    const local = batch('statly_local_fixture', 'e', [
+      {
+        kind: 'draft_selection',
+        draftYear: 2025,
+        draftType: 'national',
+        selectionNumber: 1,
+        roundNumber: 1,
+        player: { nativeId: null, recordedName: 'Synthetic Local Player' },
+        selectedByClub: { nativeId: null, recordedName: 'Synthetic Local Club' },
+      },
+    ]);
+    const identityResolutions = [
+      resolution('statly_local_fixture', 'player', 'Synthetic Local Player', 'player-local'),
+      resolution('statly_local_fixture', 'club', 'Synthetic Local Club', 'club-local'),
+    ];
+
+    expect(() =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'non_production',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [local],
+        identityResolutions,
+        reconciledAt: capturedAt,
+      })
+    ).toThrow(/only in test_fixture/i);
+
+    const candidate = reconcileAflTradeExternalEvidence({
+      environment: 'test_fixture',
+      competition: 'AFLM',
+      anchorSeasonYear: 2025,
+      sourceBatches: [local],
+      identityResolutions,
+      reconciledAt: capturedAt,
+    });
+    expect(() =>
+      parseAflTradeExternalReconciliationCandidate({
+        ...candidate,
+        content: { ...candidate.content, environment: 'production' },
+      })
+    ).toThrow(/fixture provider support is valid only in test_fixture/i);
+  });
+
+  it('rejects local fixture identities outside test_fixture with external source batches', () => {
+    expect(() =>
+      reconcileAflTradeExternalEvidence({
+        environment: 'production',
+        competition: 'AFLM',
+        anchorSeasonYear: 2025,
+        sourceBatches: [draftguru],
+        identityResolutions: [
+          resolution('statly_local_fixture', 'club', 'Synthetic Local Club', 'club-local'),
+        ],
+        reconciledAt: capturedAt,
+      })
+    ).toThrow(/fixture identities can be reconciled only in test_fixture/i);
+  });
+
   it('builds a version 2 candidate from an exact historical completion authority', () => {
     const sourceBatches = [draftguru, footywire, fitzroy, officialOrder];
     const sourceBatchIds = sourceBatches.map(({ batchId }) => batchId).sort();

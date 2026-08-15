@@ -228,10 +228,13 @@ async function authorize(
   dependencies: AflTradeExternalProviderIngestionDependencies,
   evaluatedAt: string
 ) {
-  if (command.request.provider === 'fitzroy_official_afl_player_details') {
+  if (
+    command.request.provider === 'statly_local_fixture' ||
+    command.request.provider === 'fitzroy_official_afl_player_details'
+  ) {
     throw new AflTradeExternalProviderIngestionError(
       'INVALID_SCOPE',
-      'fitzRoy player details cannot use the external web-capture boundary.'
+      'Fixture and fitzRoy player-detail evidence cannot use the external web-capture boundary.'
     );
   }
   const authorization = await dependencies.resolveAuthorization(
@@ -251,10 +254,10 @@ export async function ingestAuthorizedAflTradeExternalPage(
   dependencies: AflTradeExternalProviderIngestionDependencies
 ): Promise<AflTradeExternalProviderIngestionResult> {
   const provider = command.request.provider;
-  if (provider === 'fitzroy_official_afl_player_details') {
+  if (provider === 'statly_local_fixture' || provider === 'fitzroy_official_afl_player_details') {
     throw new AflTradeExternalProviderIngestionError(
       'INVALID_SCOPE',
-      'fitzRoy player details must use the separately attested fitzRoy ingestion boundary.'
+      'Fixture and fitzRoy player-detail evidence must use their non-web ingestion boundaries.'
     );
   }
   validateAflTradeExternalCaptureScope(command.request);

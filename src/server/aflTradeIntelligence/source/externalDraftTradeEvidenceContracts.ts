@@ -33,6 +33,7 @@ const draftTypeSchema = z.enum([
   'other',
 ]);
 const providerSchema = z.enum([
+  'statly_local_fixture',
   'draftguru',
   'footywire',
   'official_afl',
@@ -44,6 +45,7 @@ const sourceUrlSchema = z
   .min(1)
   .max(2_048)
   .superRefine((value, context) => {
+    if (value.startsWith('fixture://statly/')) return;
     if (value.startsWith('fitzroy://')) return;
     try {
       const url = new URL(value);
@@ -273,6 +275,13 @@ const claimSchema = z.discriminatedUnion('kind', [
 ]);
 
 const allowedKindsByProvider = {
+  statly_local_fixture: new Set([
+    'transaction',
+    'transaction_party',
+    'directed_transfer',
+    'draft_selection',
+    'pick_custody',
+  ]),
   draftguru: new Set([
     'trade_detail_link',
     'transaction',
@@ -296,6 +305,15 @@ const evidenceContentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
+    const usesLocalFixtureScheme = content.capture.sourceUrl.startsWith('fixture://statly/');
+    if ((content.provider === 'statly_local_fixture') !== usesLocalFixtureScheme) {
+      context.addIssue({
+        code: 'custom',
+        path: ['capture', 'sourceUrl'],
+        message:
+          'The statly_local_fixture provider and fixture://statly/ source scheme must be used together.',
+      });
+    }
     if (!allowedKindsByProvider[content.provider].has(content.claim.kind)) {
       context.addIssue({
         code: 'custom',

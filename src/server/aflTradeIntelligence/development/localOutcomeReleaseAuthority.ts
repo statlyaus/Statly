@@ -108,15 +108,16 @@ export function createLocalAflTradeOutcomeReleaseAuthority() {
   ];
   const rightsContent = {
     schemaVersion: 'afl-trade-source-rights/v2' as const,
-    registerId: 'local-draftguru-source-shaped-fixture-v1',
-    provider: 'draftguru',
-    dataset: 'Local source-shaped AFL trade and draft fixture',
-    datasetVersion: '2025-v1',
-    intendedPurpose: 'Exercise the isolated local factual archive and public read boundary.',
+    registerId: 'statly-local-synthetic-volume-fixture-v2',
+    provider: 'statly_local_fixture',
+    dataset: 'Local synthetic-volume AFL trade fixture with one source-shaped rehearsal',
+    datasetVersion: '1988-2026-v2',
+    intendedPurpose:
+      'Exercise realistic local archive volume while preserving one source-shaped factual rehearsal.',
     scope: {
       competitions: ['AFLM'],
-      seasonRanges: [{ from: 2025, to: 2026 }],
-      accessMechanism: 'provider_export' as const,
+      seasonRanges: [{ from: 1988, to: 2026 }],
+      accessMechanism: 'manual_review' as const,
     },
     acquisition: {
       kind: 'provided_artifact' as const,
@@ -163,7 +164,7 @@ export function createLocalAflTradeOutcomeReleaseAuthority() {
     redistribution: { rawFieldsPermitted: false, publicDerivedOutputPermitted: true },
     attribution: {
       required: true,
-      text: 'Development fixture shaped from Draftguru trade and draft facts.',
+      text: 'Statly-generated synthetic development fixture; not provider facts.',
       placement: 'Local development methodology only.',
     },
     restrictions: { geographic: [], commercial: ['test-only'], audience: ['local-developer'] },
@@ -200,14 +201,17 @@ export function createLocalAflTradeOutcomeReleaseAuthority() {
   });
   const rights = gateDecision({
     gate: 'gate_0a_permission_to_evaluate',
-    decisionKey: 'local-draftguru-source-shaped-fixture',
+    decisionKey: 'statly-local-synthetic-volume-fixture-v2',
     decidedAt: '2026-08-09T08:10:00.000Z',
     affectedArtifacts: [{ kind: 'source_rights', artifactId: sourceRights.rightsArtifactId }],
     scopeDimensions: [
       { name: 'source_rights_artifact', values: [sourceRights.rightsArtifactId] },
       { name: 'competition', values: ['AFLM'] },
-      { name: 'season', values: ['2025'] },
-      { name: 'access_mechanism', values: ['provider_export'] },
+      {
+        name: 'season',
+        values: Array.from({ length: 2026 - 1988 + 1 }, (_, index) => String(1988 + index)),
+      },
+      { name: 'access_mechanism', values: ['manual_review'] },
       { name: 'geography', values: ['global'] },
       { name: 'commercial_context', values: ['test-only'] },
       { name: 'audience', values: ['local-developer'] },
@@ -226,7 +230,7 @@ export function createLocalAflTradeOutcomeReleaseAuthority() {
       evaluatedAt: '2026-08-09T08:20:00.000Z',
       competition: 'AFLM',
       season: 2025,
-      accessMechanism: 'provider_export',
+      accessMechanism: 'manual_review',
       capabilityId: null,
       geography: 'global',
       commercialContext: 'test-only',
@@ -284,8 +288,8 @@ export function createLocalAflTradeOutcomeReleaseAuthority() {
     ],
     reconciliationReportArtifact: artifact('local-reconciliation', '2026-08-09T08:40:00.000Z'),
     exceptionReportArtifact: artifact('local-exceptions', '2026-08-09T08:40:00.000Z'),
-    supportedScope: ['One deterministic source-native AFL trade fixture'],
-    excludedScope: ['Numerical valuation and production publication'],
+    supportedScope: ['783 deterministic local test-fixture trades across 1988-2025'],
+    excludedScope: ['Synthetic facts, numerical valuation, and production publication'],
     outcomeRecordCount: 0,
     exceptionCount: 0,
     unresolvedIdentityCount: 0,

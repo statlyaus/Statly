@@ -86,6 +86,21 @@ describe('local full stack development architecture', () => {
     expect(firebaseAnalytics).toContain('useFirebaseEmulators');
   });
 
+  it('reuses only an explicitly supplied disposable outcomes database for workbook evaluation', () => {
+    const localStack = read('Scripts/dev/full-local-stack.sh');
+    const workbookStack = read('Scripts/dev/full-local-workbook-evaluation.sh');
+
+    expect(workbookStack).toContain('STATLY_LOCAL_REUSE_OUTCOMES_DATABASE="true"');
+    expect(workbookStack).toContain('AFL_OUTCOMES_DATABASE_URL is required');
+    expect(workbookStack).toContain('statly_outcomes_test');
+    expect(workbookStack).toContain('STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE');
+    expect(workbookStack).toContain('AFL_TRADE_PUBLIC_READ_ENVIRONMENT="test_fixture"');
+    expect(localStack).toContain('STATLY_LOCAL_REUSE_OUTCOMES_DATABASE');
+    expect(localStack).toContain('reusing the caller-owned disposable AFL outcomes database');
+    expect(localStack).toContain('Scripts/dev/verify-local-afl-trade-outcomes-db.ts');
+    expect(localStack).toContain('AFL_TRADE_PUBLIC_READ_ENVIRONMENT="${AFL_TRADE_PUBLIC_READ_ENVIRONMENT:-test_fixture}"');
+  });
+
   it('does not require clipboard permission to recover from invite copy failures', () => {
     const source = read('src/components/league/InviteModal.tsx');
 

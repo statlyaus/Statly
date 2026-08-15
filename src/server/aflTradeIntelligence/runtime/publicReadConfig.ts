@@ -1,8 +1,7 @@
 import { Buffer } from 'node:buffer';
+import { isAbsolute } from 'node:path';
 
 import { z } from 'zod';
-
-import { AFL_TRADE_DECISION_ENVIRONMENTS } from '../governance/gateDecisionTypes';
 
 const immutableReferenceSchema = z.string().regex(/^[a-z][a-z0-9-]*:[a-f0-9]{64}$/);
 const publicIdSchema = z
@@ -40,12 +39,42 @@ const cursorSecretSchema = z
   })
   .transform((value) => new Uint8Array(Buffer.from(value, 'base64')));
 
-const postgresConfigSchema = z
-  .object({
-    AFL_TRADE_PUBLIC_READ_MODE: z.literal('postgres'),
-    AFL_TRADE_PUBLIC_READ_ENVIRONMENT: z.enum(AFL_TRADE_DECISION_ENVIRONMENTS),
-    AFL_OUTCOMES_DATABASE_URL: postgresUrlSchema,
-    AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64: cursorSecretSchema,
+const sharedPostgresConfigSchema = z.object({
+  AFL_TRADE_PUBLIC_READ_MODE: z.literal('postgres'),
+  AFL_OUTCOMES_DATABASE_URL: postgresUrlSchema,
+  AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64: cursorSecretSchema,
+});
+
+const localArtifactRootSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(4_096)
+  .superRefine((value, context) => {
+    if (!isAbsolute(value)) {
+      context.addIssue({ code: 'custom', message: 'An absolute local artifact root is required.' });
+    }
+  });
+
+const localPostgresConfigSchema = sharedPostgresConfigSchema
+  .extend({
+    AFL_TRADE_PUBLIC_READ_ENVIRONMENT: z.literal('test_fixture'),
+    AFL_TRADE_LOCAL_ARTIFACT_ROOT: localArtifactRootSchema,
+  })
+  .transform((value) => ({
+    mode: value.AFL_TRADE_PUBLIC_READ_MODE,
+    environment: value.AFL_TRADE_PUBLIC_READ_ENVIRONMENT,
+    databaseUrl: value.AFL_OUTCOMES_DATABASE_URL,
+    cursorSecret: value.AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64,
+    artifactStorage: {
+      kind: 'local_filesystem' as const,
+      rootDirectory: value.AFL_TRADE_LOCAL_ARTIFACT_ROOT,
+    },
+  }));
+
+const hostedPostgresConfigSchema = sharedPostgresConfigSchema
+  .extend({
+    AFL_TRADE_PUBLIC_READ_ENVIRONMENT: z.enum(['non_production', 'production']),
     AFL_TRADE_OBJECT_BUCKET: z
       .string()
       .trim()
@@ -73,7 +102,8 @@ const postgresConfigSchema = z
     environment: value.AFL_TRADE_PUBLIC_READ_ENVIRONMENT,
     databaseUrl: value.AFL_OUTCOMES_DATABASE_URL,
     cursorSecret: value.AFL_OUTCOMES_CURSOR_HMAC_SECRET_B64,
-    objectStorage: {
+    artifactStorage: {
+      kind: 's3' as const,
       bucket: value.AFL_TRADE_OBJECT_BUCKET,
       keyPrefix: value.AFL_TRADE_OBJECT_PREFIX,
       kmsKeyId: value.AFL_TRADE_OBJECT_KMS_KEY_ID,
@@ -84,7 +114,9 @@ const postgresConfigSchema = z
   }));
 
 export type AflTradePublicReadConfig =
-  { readonly mode: 'disabled' } | z.output<typeof postgresConfigSchema>;
+  | { readonly mode: 'disabled' }
+  | z.output<typeof localPostgresConfigSchema>
+  | z.output<typeof hostedPostgresConfigSchema>;
 
 export function parseAflTradePublicReadConfig(
   environment: Readonly<Record<string, string | undefined>>
@@ -96,7 +128,11 @@ export function parseAflTradePublicReadConfig(
     return { mode: 'disabled' };
   }
 
-  const parsed = postgresConfigSchema.safeParse(environment);
+  const schema =
+    environment.AFL_TRADE_PUBLIC_READ_ENVIRONMENT === 'test_fixture'
+      ? localPostgresConfigSchema
+      : hostedPostgresConfigSchema;
+  const parsed = schema.safeParse(environment);
   if (!parsed.success) {
     const fields = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0])))]
       .filter(Boolean)

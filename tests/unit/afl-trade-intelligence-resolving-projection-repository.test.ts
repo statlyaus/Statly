@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AflTradePublicationReadSelection } from '@/server/aflTradeIntelligence/publication/publicationReadContracts';
-import type { AflTradeProjectionArtifactReadRepository } from '@/server/aflTradeIntelligence/publication/projectionArtifactReadRepository';
+import {
+  AflTradeProjectionArtifactReadError,
+  type AflTradeProjectionArtifactReadRepository,
+} from '@/server/aflTradeIntelligence/publication/projectionArtifactReadRepository';
 import { createResolvingAflTradeProjectionReadRepository } from '@/server/aflTradeIntelligence/publication/resolvingProjectionReadRepository';
 
 const id = (prefix: string, digit: string) => `${prefix}:${digit.repeat(64)}`;
@@ -36,7 +39,11 @@ function projectionRepository(projectionId: string): AflTradeProjectionArtifactR
 describe('resolving AFL trade projection repository', () => {
   it('mounts and delegates by each captured immutable projection ID', async () => {
     const factory = vi.fn(async (projectionId: string) => projectionRepository(projectionId));
-    const repository = createResolvingAflTradeProjectionReadRepository({ factory, maxEntries: 2 });
+    const repository = createResolvingAflTradeProjectionReadRepository({
+      factory,
+      isFactualArchiveTrade: async () => true,
+      maxEntries: 2,
+    });
     const first = selection('1');
     const second = selection('2');
 
@@ -54,7 +61,11 @@ describe('resolving AFL trade projection repository', () => {
 
   it('deduplicates concurrent mounts and evicts the least recently used projection', async () => {
     const factory = vi.fn(async (projectionId: string) => projectionRepository(projectionId));
-    const repository = createResolvingAflTradeProjectionReadRepository({ factory, maxEntries: 2 });
+    const repository = createResolvingAflTradeProjectionReadRepository({
+      factory,
+      isFactualArchiveTrade: async () => true,
+      maxEntries: 2,
+    });
     const first = selection('1');
     const second = selection('2');
     const third = selection('3');
@@ -72,5 +83,88 @@ describe('resolving AFL trade projection repository', () => {
       third.projectionBuildId,
       first.projectionBuildId,
     ]);
+  });
+
+  it('preserves projected values while returning not-calculated results for archive-only trades', async () => {
+    const active = selection('1');
+    const metadata = {
+      publicationId: active.publication.publicationId,
+      projectionBuildId: active.projectionBuildId,
+      scopeKey: active.scopeKey,
+      calculationAsOf: '2026-08-08T00:00:00.000Z',
+      knowledgeCutoffAt: '2026-08-08T00:00:00.000Z',
+      freshness: 'current' as const,
+      warnings: [],
+    };
+    const valuedTradeId = 'trade-valued';
+    const archiveOnlyTradeId = 'trade-archive-only';
+    const mounted = projectionRepository(active.projectionBuildId);
+    mounted.list = vi.fn(async (_selection, request) => {
+      if (request.tradeIds.includes(archiveOnlyTradeId)) {
+        throw new AflTradeProjectionArtifactReadError('TRADE_NOT_IN_PROJECTION');
+      }
+      return {
+        metadata,
+        items: [
+          {
+            tradeId: valuedTradeId,
+            valuation: {
+              availability: 'available',
+              view: request.requestedView,
+              unit: 'fixture-unit',
+              received: 100,
+              surrendered: 90,
+              net: 10,
+              grade: null,
+              confidence: null,
+              explanation: null,
+            },
+          },
+        ],
+        nextCursor: null,
+        total: 1,
+      } as never;
+    }) as never;
+    mounted.detail = vi.fn(async () => {
+      throw new AflTradeProjectionArtifactReadError('TRADE_NOT_IN_PROJECTION');
+    }) as never;
+    mounted.read = vi.fn(async () => ({ metadata })) as never;
+    const repository = createResolvingAflTradeProjectionReadRepository({
+      factory: vi.fn(async () => mounted),
+      isFactualArchiveTrade: async (tradeId) =>
+        tradeId === valuedTradeId || tradeId === archiveOnlyTradeId,
+    });
+
+    const list = await repository.list(active, {
+      scopeKey: active.scopeKey,
+      requestedView: 'current',
+      tradeIds: [valuedTradeId, archiveOnlyTradeId],
+      limit: 2,
+      cursor: null,
+    });
+    const detail = await repository.detail(active, {
+      scopeKey: active.scopeKey,
+      tradeId: archiveOnlyTradeId,
+      requestedViews: ['current'],
+    });
+
+    expect(list.items.map(({ tradeId, valuation }) => [tradeId, valuation.availability])).toEqual([
+      [valuedTradeId, 'available'],
+      [archiveOnlyTradeId, 'not_calculated'],
+    ]);
+    expect(detail).toMatchObject({
+      metadata,
+      tradeId: archiveOnlyTradeId,
+      valuations: [{ view: 'current', availability: 'not_calculated' }],
+      assets: [],
+      lineageSummary: { status: 'unavailable' },
+    });
+    await expect(
+      repository.detail(active, {
+        scopeKey: active.scopeKey,
+        tradeId: 'trade-unknown',
+        requestedViews: ['current'],
+      })
+    ).rejects.toMatchObject({ code: 'TRADE_NOT_IN_PROJECTION' });
   });
 });

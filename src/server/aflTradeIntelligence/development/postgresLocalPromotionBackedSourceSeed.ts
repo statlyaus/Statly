@@ -3,7 +3,7 @@ import {
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
-import { createAflTradeExternalCaptureExecutionReceipt } from '../source/externalDraftTradeIngestion';
+import { createAflTradeLocalFixtureExecutionReceipt } from '../source/externalDraftTradeIngestion';
 import { PostgresAflTradeExternalEvidenceRepository } from '../source/postgresExternalEvidenceRepository';
 import { PostgresAflTradeExternalReconciliationRepository } from '../source/postgresExternalReconciliationRepository';
 import { createLocalAflTradePromotionBackedEvidence } from './localPromotionBackedEvidenceFixture';
@@ -20,8 +20,20 @@ async function seedCaptureRoots(
   authority: LocalAflTradeSourceAuthorityReference
 ): Promise<void> {
   const source = createLocalAflTradePromotionBackedEvidence();
+  const seasonYears = [
+    ...new Set([
+      ...source.fixture.trades.map(({ seasonYear }) => seasonYear),
+      ...source.fixture.trades.flatMap(({ assets }) =>
+        assets.flatMap((asset) =>
+          asset.kind === 'current_pick' || asset.kind === 'future_pick'
+            ? [asset.draftSeasonYear]
+            : []
+        )
+      ),
+    ]),
+  ].sort((left, right) => left - right);
   await client.transaction(async (transaction) => {
-    for (const seasonYear of [2025, 2026]) {
+    for (const seasonYear of seasonYears) {
       await transaction.query(
         `INSERT INTO outcome_competition_season (competition,season_year)
          VALUES ('AFLM',$1) ON CONFLICT DO NOTHING`,
@@ -32,16 +44,30 @@ async function seedCaptureRoots(
       await transaction.query(
         `INSERT INTO outcome_club (club_id,current_name,abbreviation,status)
          VALUES ($1,$2,$3,'approved') ON CONFLICT (club_id) DO NOTHING`,
-        [club.id, club.name, club.slug === 'gws' ? 'GWS' : 'WB']
+        [
+          club.id,
+          club.name,
+          club.slug === 'gws'
+            ? 'GWS'
+            : club.slug === 'western-bulldogs'
+              ? 'WB'
+              : `LC${club.slug.slice(-2)}`,
+        ]
       );
     }
-    const players = source.fixture.trades.flatMap(({ assets }) =>
-      assets.flatMap((asset) =>
-        asset.kind === 'current_pick'
-          ? [{ playerId: asset.selectedPlayerId, displayName: asset.selectedPlayer }]
-          : []
-      )
-    );
+    const players = [
+      ...new Map(
+        source.fixture.trades
+          .flatMap(({ assets }) =>
+            assets.flatMap((asset) =>
+              asset.kind === 'current_pick' || asset.kind === 'player'
+                ? [{ playerId: asset.selectedPlayerId, displayName: asset.selectedPlayer }]
+                : []
+            )
+          )
+          .map((player) => [player.playerId, player])
+      ).values(),
+    ];
     for (const player of players) {
       await transaction.query(
         `INSERT INTO outcome_player (player_id,display_name,status)
@@ -58,27 +84,29 @@ async function seedCaptureRoots(
           'Local transaction evidence cannot use the fitzRoy player-details lane.'
         );
       }
-      const capabilityId =
-        provider === 'draftguru' ? 'draftguru-trade-detail' : 'official-afl-indicative-order';
-      const attemptId = `local-${provider}-capture-attempt-v1`;
-      const executionReceipt = createAflTradeExternalCaptureExecutionReceipt({
-        schemaVersion: 'afl-trade-external-capture-execution/v1',
+      if (provider !== 'statly_local_fixture') {
+        throw new TypeError('The generated local archive cannot claim an external provider.');
+      }
+      const capabilityId = 'statly-local-generated-fixture';
+      const attemptId = `local-fixture-attempt-${capture.contentSha256.slice(0, 16)}`;
+      const executionReceipt = createAflTradeLocalFixtureExecutionReceipt({
+        schemaVersion: 'statly-local-fixture-execution/v1',
+        environment: 'test_fixture',
+        fixtureOnly: true,
+        liveSourceAccessed: false,
+        providerRightsExpanded: false,
         rightsArtifactId: authority.sourceRightsArtifactId,
         gateDecisionId: authority.gateDecisionId,
         gateDecisionKey: authority.gateDecisionKey,
         ledgerRevision: authority.ledgerRevision,
-        evaluatedAt: '2026-08-09T08:00:00.000Z',
         provider,
         capabilityId,
         parserVersion: capture.parserVersion,
         fieldManifestSha256: capture.fieldManifestSha256,
-        upstreamRate: { requests: 1, perSeconds: 3, burst: 1 },
-        cacheSeconds: 86_400,
-        rawRetentionDays: 30,
-        egressPolicyEvidenceId: createAflTradeContentAddress('artifact', {
+        fixtureEvidenceId: createAflTradeContentAddress('artifact', {
           fixture: true,
           provider,
-          kind: 'egress-policy',
+          kind: 'generated-fixture-contract',
         }),
       });
       await transaction.query(
@@ -120,7 +148,7 @@ async function seedCaptureRoots(
           (capture_id,attempt_id,source_snapshot_id,source_artifact_id,environment,provider,
            dataset,dataset_version,access_mechanism,capability_id,competition,anchor_season_year,
            effective_at,captured_at,status,manifest_json)
-         VALUES ($1,$2,$3,$4,'test_fixture',$5,$6,'local-v1','automated_web',$6,'AFLM',2025,
+         VALUES ($1,$2,$3,$4,'test_fixture',$5,$6,'local-v2','manual_review',$6,'AFLM',2025,
                  $7,$8,'approved',$9::jsonb)
          ON CONFLICT (capture_id) DO NOTHING`,
         [
@@ -135,7 +163,7 @@ async function seedCaptureRoots(
           canonicalizeAflTradeJson({ sourceUrl: capture.sourceUrl, executionReceipt }),
         ]
       );
-      for (const seasonYear of [2025, 2026]) {
+      for (const seasonYear of seasonYears) {
         await transaction.query(
           `INSERT INTO outcome_source_capture_season (capture_id,competition,season_year)
            SELECT $1,'AFLM',$2

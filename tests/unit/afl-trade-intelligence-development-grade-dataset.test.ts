@@ -192,6 +192,36 @@ describe('development AFL trade grading dataset', () => {
     expect(eligibleAflTradeHistoricalOutcomes(dataset, '2027-01-01T00:00:00.000Z')).toEqual([]);
   });
 
+  it('admits a recent acquisition with every outcome unavailable without inventing a partial zero', () => {
+    const unavailable = { state: 'unavailable', reason: 'source_missing' } as const;
+    const dataset = createAflTradeDevelopmentGradeDataset(
+      datasetInput({
+        acquisitions: [
+          acquisition({
+            acquisitionId: 'acquisition:alpha:2025',
+            effectiveAt: '2025-10-15T00:00:00.000Z',
+            outcomeMaturedAt: '2028-10-01T00:00:00.000Z',
+            outcomeObservedAt: '2026-08-07T00:00:00.000Z',
+            seasonYear: 2025,
+            outcome: {
+              games: unavailable,
+              goals: unavailable,
+              coachesVotes: unavailable,
+              brownlowVotes: unavailable,
+            },
+          }),
+        ],
+      })
+    );
+
+    expect(dataset.content.rows[0]?.outcome).toEqual({
+      games: unavailable,
+      goals: unavailable,
+      coachesVotes: unavailable,
+      brownlowVotes: unavailable,
+    });
+  });
+
   it('does not promote conflicted provider observations into at-trade features', () => {
     const dataset = createAflTradeDevelopmentGradeDataset(
       datasetInput({

@@ -73,7 +73,7 @@ export async function seedLocalAflTradeOutcomeArchive(client: AflOutcomeSqlClien
   const promotionAuthority = createLocalAflTradeCanonicalPromotionAuthority({
     proposal,
     competition: 'AFLM',
-    validFromSeason: 2025,
+    validFromSeason: 1988,
     validThroughSeason: 2025,
   });
   const promotionReview = await persistLocalAflTradeCanonicalPromotionAuthority({
@@ -193,14 +193,30 @@ export async function seedLocalAflTradeOutcomeArchive(client: AflOutcomeSqlClien
   if (state !== 'published') {
     throw new TypeError(`Local factual release could not be activated from ${String(state)}.`);
   }
+  const sourceShapedTrade = source.candidate.content.transactions.find(
+    ({ providerEventId }) => providerEventId === 'local-trade-2025-gws-western-bulldogs'
+  );
+  if (!sourceShapedTrade) {
+    throw new TypeError('The source-shaped local factual rehearsal trade is unavailable.');
+  }
   return {
     releaseId: preparation.releaseId,
+    factualCandidateId: preparation.factualCandidateId,
+    lineageId: preparation.lineageId,
     projectionId: preparation.projectionId,
     publicArchiveId: preparation.publicArchiveId,
     corpusId: corpus.corpusId,
     sourceCandidateId: source.candidate.candidateId,
     promotionId: promotion.promotionId,
-    tradeId: source.candidate.content.transactions[0]!.transactionId,
+    gate2DecisionKey: preparation.gate2DecisionKey,
+    gate2AffectedArtifacts: preparation.gate2AffectedArtifacts,
+    gate2AdmissionId: admission.admissionId,
+    gate2DecisionId: admission.gate2DecisionId,
+    tradeId: sourceShapedTrade.transactionId,
+    archivedTradeCount: source.candidate.content.transactions.length,
+    factualReleaseManifest: manifest,
+    publicArchive: archive.archive,
+    outcomeProjection: archive.projection,
     idempotentReplay:
       alreadyPublished &&
       sourceGate.idempotentReplay &&

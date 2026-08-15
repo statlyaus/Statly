@@ -135,9 +135,10 @@ export type AflTradeValueReadErrorCode =
 export class AflTradeValueReadError extends Error {
   constructor(
     public readonly code: AflTradeValueReadErrorCode,
-    message: string
+    message: string,
+    options?: ErrorOptions
   ) {
-    super(message);
+    super(message, options);
     this.name = 'AflTradeValueReadError';
   }
 }
@@ -332,10 +333,11 @@ export function createAflTradeValueReadService(dependencies: {
       let projection: AflTradeProjectionListPage;
       try {
         projection = await dependencies.projectionRepository.list(selection, request);
-      } catch {
+      } catch (cause) {
         throw new AflTradeValueReadError(
           'PROJECTION_READ_FAILED',
-          'The active AFL trade-value projection could not be read.'
+          'The active AFL trade-value projection could not be read.',
+          { cause }
         );
       }
       requireProjectionMetadata(selection, projection.metadata);
@@ -384,10 +386,11 @@ export function createAflTradeValueReadService(dependencies: {
       let projection: AflTradeProjectionDetail;
       try {
         projection = await dependencies.projectionRepository.detail(selection, request);
-      } catch {
+      } catch (cause) {
         throw new AflTradeValueReadError(
           'PROJECTION_READ_FAILED',
-          'The active AFL trade-value projection could not be read.'
+          'The active AFL trade-value projection could not be read.',
+          { cause }
         );
       }
       requireProjectionMetadata(selection, projection.metadata);

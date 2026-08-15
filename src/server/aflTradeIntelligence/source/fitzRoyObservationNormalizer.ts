@@ -196,7 +196,7 @@ function requiredSourceFields(fieldMap: AflTradeFitzRoyFieldMap): readonly strin
   return [
     ...new Set(
       bindings.flatMap((binding) =>
-        binding !== null && binding.required ? [binding.sourceField] : []
+        binding != null && binding.required ? [binding.sourceField] : []
       )
     ),
   ];
@@ -313,18 +313,26 @@ function makeIdentityCandidate(input: {
   bindings: NonNullable<AflTradeFitzRoyFieldMap['identity']>;
   issues: AflTradeProviderObservationIssue[];
 }): AflTradeProviderIdentityCandidate | null {
-  const recordedName = requiredText({
+  const recordedGivenName = requiredText({
     row: input.row,
     field: input.bindings.recordedName.sourceField,
     rowNumber: input.rowNumber,
     issues: input.issues,
   });
-  if (recordedName === null) return null;
+  if (recordedGivenName === null) return null;
   const bindingInput = {
     row: input.row,
     rowNumber: input.rowNumber,
     issues: input.issues,
   };
+  const recordedSurnameBinding = input.bindings.recordedSurname ?? null;
+  const recordedSurname = boundText({
+    ...bindingInput,
+    binding: recordedSurnameBinding,
+  });
+  if (recordedSurnameBinding?.required === true && recordedSurname === null) return null;
+  const recordedName =
+    recordedSurname === null ? recordedGivenName : `${recordedGivenName} ${recordedSurname}`;
   const nativeEntityId = boundText({ ...bindingInput, binding: input.bindings.nativeId });
   const recordedClubId = boundText({
     ...bindingInput,
@@ -462,12 +470,30 @@ export function normalizeAflTradeFitzRoyDecodedTable(input: {
       fieldMap.seasonField === null
         ? null
         : boundText({ row: typedPayload, binding: fieldMap.seasonField, rowNumber, issues });
+    const observedDateText = optionalText(
+      typedPayload,
+      fieldMap.observedDateField?.sourceField ?? null
+    );
     if (fieldMap.seasonField !== null && observedSeasonText !== String(table.authorizationSeason)) {
       issues.push({
         rowNumber,
         code: 'source_season_mismatch',
         field: fieldMap.seasonField.sourceField,
         message: 'Observed source season does not equal the authorized capture season.',
+      });
+    }
+    if (
+      table.capabilityId === 'official-afl-player-stats' &&
+      fieldMap.seasonField === null &&
+      (observedDateText === null ||
+        !Number.isFinite(Date.parse(observedDateText)) ||
+        new Date(observedDateText).getUTCFullYear() !== table.authorizationSeason)
+    ) {
+      issues.push({
+        rowNumber,
+        code: 'source_season_mismatch',
+        field: fieldMap.observedDateField?.sourceField ?? null,
+        message: 'Official AFL match time does not prove the authorized capture season.',
       });
     }
     const matchCandidate =
@@ -546,7 +572,7 @@ export function normalizeAflTradeFitzRoyDecodedTable(input: {
       seasonYear: table.authorizationSeason,
       observedSeasonText,
       roundLabel: optionalText(typedPayload, fieldMap.roundLabelField?.sourceField ?? null),
-      observedDateText: optionalText(typedPayload, fieldMap.observedDateField?.sourceField ?? null),
+      observedDateText,
       sourceRowNumber: rowNumber,
       sourceRowSha256,
       rowStatus: issues.length === rowIssueStart ? 'staged' : 'needs_review',
