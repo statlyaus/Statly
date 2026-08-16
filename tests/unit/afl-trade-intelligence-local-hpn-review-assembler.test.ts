@@ -103,8 +103,8 @@ function snapshot(input: { withMethod?: boolean } = {}) {
     providerDecodeMap: fieldMap,
     rights,
     rightsArtifact,
-    hpnFieldMap: null,
-    hpnFieldMapCreatedAt: null,
+    hpnResultProjection: null,
+    hpnPlayerProjection: null,
     factualRunId: null,
     hpnResolutionsCurrent: false,
   });
