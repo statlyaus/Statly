@@ -316,7 +316,11 @@ const resultContentSchema = z
       });
     }
     const incomplete = content.assets.some(({ state }) => state === 'unavailable');
-    if (incomplete && content.overallGrade.reason !== 'asset_values_incomplete') {
+    if (
+      incomplete &&
+      (content.overallGrade.state !== 'unavailable' ||
+        content.overallGrade.reason !== 'asset_values_incomplete')
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['overallGrade'],

@@ -270,6 +270,39 @@ describe('private local workbook evaluation', () => {
     ).resolves.toBeNull();
   });
 
+  it('adds an admitted private reviewed calculation to trade detail without changing archive reads', async () => {
+    const service = createLocalWorkbookEvaluationService(dependencies());
+    const calculation = {
+      projectionId: `local-private-trade-calculation:${'f'.repeat(64)}`,
+      tradeId: 'workbook-2025-0001',
+      workbookSha256: digest,
+      publicationEligible: false,
+      publicationProhibited: true,
+    } as never;
+    const loadPrivateCalculation = vi.fn().mockResolvedValue(calculation);
+
+    await expect(
+      service.loadTrade(
+        'workbook-2025-0001',
+        enabledEnvironment,
+        vi.fn().mockResolvedValue(sourceBlockedReadiness),
+        loadPrivateCalculation
+      )
+    ).resolves.toMatchObject({
+      numericalEvaluation: {
+        state: 'partial',
+        readiness: sourceBlockedReadiness,
+        calculation,
+      },
+    });
+    expect(loadPrivateCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trade: expect.objectContaining({ tradeId: 'workbook-2025-0001' }),
+      }),
+      digest
+    );
+  });
+
   it('reuses a content-pinned scenario within one local service instance', async () => {
     const prepareScenario = vi.fn(prepareLocalWorkbookSyntheticValuation);
     const service = createLocalWorkbookEvaluationService({

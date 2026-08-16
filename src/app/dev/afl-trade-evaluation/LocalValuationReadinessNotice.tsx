@@ -18,8 +18,10 @@ function requiredAuthorityLabel(
 
 export function LocalValuationReadinessNotice({
   readiness,
+  historicalCalculationAvailable = false,
 }: {
   readonly readiness: LocalAflTradeValuationReadiness;
+  readonly historicalCalculationAvailable?: boolean;
 }) {
   return (
     <section
@@ -35,9 +37,15 @@ export function LocalValuationReadinessNotice({
             id="local-valuation-readiness-heading"
             className="mt-2 text-xl font-semibold text-foreground"
           >
-            Numerical valuation preparation is blocked
+            {historicalCalculationAvailable
+              ? 'Complete trade grading remains blocked'
+              : 'Numerical valuation preparation is blocked'}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{readiness.explanation}</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {historicalCalculationAvailable
+              ? 'Reviewed historical player PAV is available below. Pick values, predictive remaining value, complete package comparison, and letter-grade distributions still require the listed authority.'
+              : readiness.explanation}
+          </p>
         </div>
         <span className="rounded-full border border-warning/35 bg-background px-3 py-1.5 text-xs font-semibold text-foreground">
           Blocked · {readiness.blockerCodes.join(', ')}

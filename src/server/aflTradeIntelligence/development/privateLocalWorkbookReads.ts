@@ -5,8 +5,11 @@ import { isAbsolute } from 'node:path';
 import { Pool } from 'pg';
 
 import { DEVELOPMENT_AUTH_USER_ID } from '@/lib/devAuth';
+import type { DraftTradeDetail } from '@/lib/draftTrades/read';
 import { getExplicitAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 
+import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
+import type { LocalPrivateReviewedTradeCalculation } from './localPrivateReviewedTradeCalculation';
 import { assertLocalAflTradeOutcomesRuntimeIdentity } from './localOutcomesRuntimeIdentity';
 import {
   localWorkbookEvaluationService,
@@ -15,6 +18,7 @@ import {
   type LocalWorkbookEvaluationService,
   type LocalWorkbookTradeEvaluation,
 } from './localWorkbookEvaluation';
+import { loadPostgresLocalPrivateReviewedTradeCalculation } from './postgresLocalPrivateReviewedTradeCalculation';
 import {
   inspectLocalAflTradeValuationReadiness,
   type LocalAflTradeValuationReadiness,
@@ -48,6 +52,11 @@ export interface PrivateLocalWorkbookReadDependencies {
     environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
     scopeKey: string
   ): Promise<LocalAflTradeValuationReadiness>;
+  loadPrivateCalculation?(
+    environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
+    detail: DraftTradeDetail,
+    workbookSha256: string
+  ): Promise<LocalPrivateReviewedTradeCalculation | null>;
   environment(): PrivateLocalWorkbookReadEnvironment;
   evaluation: LocalWorkbookEvaluationService;
 }
@@ -113,6 +122,13 @@ export function createPrivateLocalWorkbookReads(
       readiness: Promise<LocalAflTradeValuationReadiness>;
     }>
   >();
+  const calculationByRuntimeAndTrade = new Map<
+    string,
+    Readonly<{
+      generation: string;
+      calculation: Promise<LocalPrivateReviewedTradeCalculation | null>;
+    }>
+  >();
 
   async function admit(): Promise<Readonly<PrivateLocalWorkbookReadEnvironment> | null> {
     const environment = snapshotEnvironment(dependencies.environment());
@@ -152,6 +168,33 @@ export function createPrivateLocalWorkbookReads(
     }
   }
 
+  async function loadCurrentPrivateCalculation(
+    environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
+    detail: DraftTradeDetail,
+    workbookSha256: string
+  ): Promise<LocalPrivateReviewedTradeCalculation | null> {
+    if (!dependencies.loadPrivateCalculation) return null;
+    const generation = await dependencies.readValuationReadinessGeneration(environment);
+    const cacheKey = `${environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE}\0${workbookSha256}\0${detail.trade.tradeId}`;
+    const current = calculationByRuntimeAndTrade.get(cacheKey);
+    if (current?.generation === generation) return current.calculation;
+    const calculation = dependencies.loadPrivateCalculation(
+      environment,
+      detail,
+      workbookSha256
+    );
+    const entry = Object.freeze({ generation, calculation });
+    calculationByRuntimeAndTrade.set(cacheKey, entry);
+    try {
+      return await calculation;
+    } catch (error) {
+      if (calculationByRuntimeAndTrade.get(cacheKey) === entry) {
+        calculationByRuntimeAndTrade.delete(cacheKey);
+      }
+      throw error;
+    }
+  }
+
   return {
     async loadArchive(query) {
       const environment = await admit();
@@ -169,7 +212,11 @@ export function createPrivateLocalWorkbookReads(
       return dependencies.evaluation.loadTrade(
         tradeId,
         environment,
-        (scopeKey) => inspectCurrentValuationReadiness(environment, scopeKey)
+        (scopeKey) => inspectCurrentValuationReadiness(environment, scopeKey),
+        dependencies.loadPrivateCalculation
+          ? (detail, workbookSha256) =>
+              loadCurrentPrivateCalculation(environment, detail, workbookSha256)
+          : undefined
       );
     },
   };
@@ -211,6 +258,27 @@ async function inspectAdmittedLocalValuationReadiness(
   }
 }
 
+async function loadAdmittedPrivateCalculation(
+  environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
+  detail: DraftTradeDetail,
+  workbookSha256: string
+): Promise<LocalPrivateReviewedTradeCalculation> {
+  const pool = new Pool({
+    connectionString: environment.AFL_OUTCOMES_DATABASE_URL,
+    application_name: 'statly-private-workbook-reviewed-calculation',
+    connectionTimeoutMillis: 5_000,
+    max: 1,
+  });
+  try {
+    return await loadPostgresLocalPrivateReviewedTradeCalculation(
+      createPgAflOutcomeSqlClient(pool),
+      { detail, workbookSha256 }
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
 async function readLocalValuationReadinessGeneration(
   environment: Readonly<PrivateLocalWorkbookReadEnvironment>
 ): Promise<string> {
@@ -239,6 +307,7 @@ export const privateLocalWorkbookReads = createPrivateLocalWorkbookReads({
   authenticateRuntime: authenticateLocalOutcomesRuntime,
   readValuationReadinessGeneration: readLocalValuationReadinessGeneration,
   inspectValuationReadiness: inspectAdmittedLocalValuationReadiness,
+  loadPrivateCalculation: loadAdmittedPrivateCalculation,
   environment: () => process.env,
   evaluation: localWorkbookEvaluationService,
 });

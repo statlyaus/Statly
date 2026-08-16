@@ -12,6 +12,7 @@ import type { DraftTradeDetail, DraftTradeListItem } from '@/lib/draftTrades/rea
 
 import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 import type { LocalAflTradeValuationReadiness } from './localAflTradeValuationReadiness';
+import type { LocalPrivateReviewedTradeCalculation } from './localPrivateReviewedTradeCalculation';
 import {
   prepareLocalWorkbookSyntheticValuation,
   type LocalWorkbookSyntheticValuationPreparation,
@@ -23,6 +24,10 @@ export type LocalWorkbookEvaluationEnvironment = DevelopmentWorkbookDraftTradeEn
 export type LocalWorkbookValuationReadinessInspector = (
   scopeKey: string
 ) => Promise<LocalAflTradeValuationReadiness>;
+export type LocalWorkbookPrivateCalculationLoader = (
+  detail: DraftTradeDetail,
+  workbookSha256: string
+) => Promise<LocalPrivateReviewedTradeCalculation | null>;
 
 export interface LocalWorkbookEvaluationDependencies {
   loadRepository(
@@ -55,6 +60,12 @@ export interface LocalWorkbookBlockedNumericalEvaluation {
   readiness: LocalAflTradeValuationReadiness;
 }
 
+export interface LocalWorkbookPartialNumericalEvaluation {
+  state: 'partial';
+  readiness: LocalAflTradeValuationReadiness;
+  calculation: LocalPrivateReviewedTradeCalculation;
+}
+
 export interface LocalWorkbookEvaluationArchive {
   input: LocalWorkbookEvaluationInputIdentity;
   years: readonly number[];
@@ -69,7 +80,9 @@ export interface LocalWorkbookTradeEvaluation {
   input: LocalWorkbookEvaluationInputIdentity;
   detail: DraftTradeDetail;
   scenario: LocalWorkbookSyntheticValuationPreparation;
-  numericalEvaluation: LocalWorkbookBlockedNumericalEvaluation;
+  numericalEvaluation:
+    | LocalWorkbookBlockedNumericalEvaluation
+    | LocalWorkbookPartialNumericalEvaluation;
   publicationEligible: false;
 }
 
@@ -87,7 +100,8 @@ export interface LocalWorkbookEvaluationService {
   loadTrade(
     tradeId: string,
     environment: LocalWorkbookEvaluationEnvironment,
-    inspectValuationReadiness: LocalWorkbookValuationReadinessInspector
+    inspectValuationReadiness: LocalWorkbookValuationReadinessInspector,
+    loadPrivateCalculation?: LocalWorkbookPrivateCalculationLoader
   ): Promise<LocalWorkbookTradeEvaluation | null>;
 }
 
@@ -229,7 +243,7 @@ export function createLocalWorkbookEvaluationService(
       };
     },
 
-    async loadTrade(tradeId, environment, inspectValuationReadiness) {
+    async loadTrade(tradeId, environment, inspectValuationReadiness, loadPrivateCalculation) {
       const repository = await requireRepository(dependencies, environment);
       if (repository === null) return null;
       const detail = await repository.getById(tradeId);
@@ -240,11 +254,16 @@ export function createLocalWorkbookEvaluationService(
       const scenario = (
         await prepareScenarios(dependencies, repository, [detail.trade], environment, scenarioCache)
       ).get(tradeId)!;
+      const workbookSha256 = inputIdentity(environment).sha256;
+      const privateCalculation = await loadPrivateCalculation?.(detail, workbookSha256);
       return {
         input: inputIdentity(environment),
         detail,
         scenario,
-        numericalEvaluation: { state: 'blocked', readiness },
+        numericalEvaluation:
+          privateCalculation === undefined || privateCalculation === null
+            ? { state: 'blocked', readiness }
+            : { state: 'partial', readiness, calculation: privateCalculation },
         publicationEligible: false,
       };
     },
