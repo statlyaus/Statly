@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   deriveAflTradeStatlyGrades,
+  deriveAflTradeStatlyGradesFromProbabilities,
   type AflTradeStatlyGradeResult,
 } from '@/server/aflTradeIntelligence/valuation/statlyGradePolicy';
 import type { AflTradeValueSummary } from '@/types/aflTradeIntelligence';
@@ -41,10 +42,12 @@ function valueSummary({
     interval: { lower: 40 + index, upper: 60 + index, level: 0.8 },
     finishesAheadProbability: probability,
   }));
-  const coverage =
-    coverageRatio === 1
-      ? ({ status: 'complete', coverageRatio: 1, excludedAssetCount: 0 } as const)
-      : ({ status: 'partial', coverageRatio, excludedAssetCount: 1 } as const);
+  const completeCoverage = { status: 'complete', coverageRatio: 1, excludedAssetCount: 0 } as const;
+  const partialCoverage = {
+    status: 'partial',
+    coverageRatio,
+    excludedAssetCount: 1,
+  } as const;
   const favouredClub = clubs.reduce((leader, club) =>
     club.finishesAheadProbability > leader.finishesAheadProbability ? club : leader
   );
@@ -84,7 +87,6 @@ function valueSummary({
       })),
     },
     methodologyHref: '/draft/trades/methodology',
-    coverage,
     warnings: developmentPreview
       ? [
           {
@@ -97,12 +99,13 @@ function valueSummary({
   };
 
   if (availability === 'available') {
-    return { ...common, availability };
+    return { ...common, availability, coverage: completeCoverage };
   }
   if (availability === 'stale') {
     return {
       ...common,
       availability,
+      coverage: coverageRatio === 1 ? completeCoverage : partialCoverage,
       reasonCode: 'test:stale',
       message: 'The calculation is stale.',
       nextAction: null,
@@ -119,6 +122,7 @@ function valueSummary({
   return {
     ...common,
     availability,
+    coverage: partialCoverage,
     reasonCode: 'test:partial',
     message: 'Some assets are excluded.',
     nextAction: null,
@@ -225,6 +229,127 @@ describe('Statly AFL trade grade policy', () => {
     expect(
       result.clubs.every(({ state, grade }) => state === 'provisional' && grade !== null)
     ).toBe(true);
+  });
+
+  it('grades an authenticated package-probability projection without requiring a public response shape', () => {
+    const result = deriveAflTradeStatlyGradesFromProbabilities({
+      view: 'current',
+      availability: 'available',
+      clubs: [
+        {
+          aflClubId: 'afl-club:adelaide',
+          clubName: 'Adelaide',
+          finishesAheadProbability: 0.9,
+        },
+        {
+          aflClubId: 'afl-club:st-kilda',
+          clubName: 'St Kilda',
+          finishesAheadProbability: 0.1,
+        },
+      ],
+      confidenceLevel: 'high',
+      coverageRatio: 1,
+      coverageStatus: 'complete',
+      developmentPreview: true,
+      practicalEquivalenceProbability: 0,
+    });
+
+    expect(result).toMatchObject({
+      view: 'current',
+      state: 'provisional',
+      reasonCode: 'development_preview',
+      clubs: [
+        { aflClubId: 'afl-club:adelaide', grade: 'A+', state: 'provisional' },
+        { aflClubId: 'afl-club:st-kilda', grade: 'D', state: 'provisional' },
+      ],
+    });
+  });
+
+  it('rejects malformed or non-exhaustive package probabilities at the shared policy seam', () => {
+    expect(() =>
+      deriveAflTradeStatlyGradesFromProbabilities({
+        view: 'current',
+        availability: 'available',
+        clubs: [
+          {
+            aflClubId: 'afl-club:adelaide',
+            clubName: 'Adelaide',
+            finishesAheadProbability: Number.NaN,
+          },
+          {
+            aflClubId: 'afl-club:adelaide',
+            clubName: 'Adelaide duplicate',
+            finishesAheadProbability: 0.1,
+          },
+        ],
+        confidenceLevel: 'high',
+        coverageRatio: 1,
+        coverageStatus: 'complete',
+        developmentPreview: true,
+        practicalEquivalenceProbability: 0,
+      })
+    ).toThrow();
+
+    expect(() =>
+      deriveAflTradeStatlyGradesFromProbabilities({
+        view: 'current',
+        availability: 'available',
+        clubs: [
+          {
+            aflClubId: 'afl-club:adelaide',
+            clubName: 'Adelaide',
+            finishesAheadProbability: 0.6,
+          },
+          {
+            aflClubId: 'afl-club:st-kilda',
+            clubName: 'St Kilda',
+            finishesAheadProbability: 0.3,
+          },
+        ],
+        confidenceLevel: 'high',
+        coverageRatio: 1,
+        coverageStatus: 'complete',
+        developmentPreview: true,
+        practicalEquivalenceProbability: 0,
+      })
+    ).toThrow('probabilities must exhaust unit mass');
+  });
+
+  it('rejects contradictory coverage status and ratios at the shared policy seam', () => {
+    const common = {
+      view: 'current' as const,
+      availability: 'available' as const,
+      clubs: [
+        {
+          aflClubId: 'afl-club:adelaide',
+          clubName: 'Adelaide',
+          finishesAheadProbability: 0.5,
+        },
+        {
+          aflClubId: 'afl-club:st-kilda',
+          clubName: 'St Kilda',
+          finishesAheadProbability: 0.5,
+        },
+      ],
+      confidenceLevel: 'high' as const,
+      developmentPreview: false,
+      practicalEquivalenceProbability: 0,
+    };
+
+    expect(() =>
+      deriveAflTradeStatlyGradesFromProbabilities({
+        ...common,
+        coverageRatio: 0.8,
+        coverageStatus: 'complete',
+      })
+    ).toThrow('Complete coverage requires ratio 1');
+    expect(() =>
+      deriveAflTradeStatlyGradesFromProbabilities({
+        ...common,
+        coverageRatio: 1,
+        coverageStatus: 'partial',
+      })
+    ).toThrow('partial coverage requires a ratio below 1');
   });
 
   it('returns no club grades when no numerical valuation exists', () => {

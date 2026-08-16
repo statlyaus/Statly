@@ -12,7 +12,6 @@ import {
   clearDevelopmentWorkbookDraftTradeReadCacheForTests,
   getDevelopmentWorkbookAcquisitionPreview,
   getDevelopmentWorkbookDraftTradeReadRepository,
-  getDevelopmentWorkbookStatlyTradeValues,
   getDevelopmentWorkbookTradeGradeEvidence,
   isDevelopmentWorkbookDraftTradeReadEnabled,
 } from '@/lib/draftTrades/developmentWorkbook';
@@ -113,12 +112,6 @@ describe('development workbook draft-trade repository', () => {
         NODE_ENV: 'production',
       })
     ).resolves.toBeNull();
-    await expect(
-      getDevelopmentWorkbookStatlyTradeValues(['workbook-trade'], {
-        ...enabledEnvironment,
-        NODE_ENV: 'production',
-      })
-    ).resolves.toBeNull();
     expect(loadWorkbookMock).not.toHaveBeenCalled();
   });
 
@@ -140,10 +133,6 @@ describe('development workbook draft-trade repository', () => {
     const trade = (await first?.listTradesByYear(2024))?.[0];
     const gradeEvidence = await getDevelopmentWorkbookTradeGradeEvidence(
       trade?.tradeId ?? '',
-      enabledEnvironment
-    );
-    const statlyValues = await getDevelopmentWorkbookStatlyTradeValues(
-      [trade?.tradeId ?? ''],
       enabledEnvironment
     );
     await expect(first?.getById(trade?.tradeId ?? '')).resolves.toMatchObject({
@@ -180,18 +169,6 @@ describe('development workbook draft-trade repository', () => {
           reasonCode: 'no_acquisition_match',
         }),
       ]),
-    });
-    expect(statlyValues?.valuesByTradeId.get(trade?.tradeId ?? '')).toMatchObject({
-      tradeId: trade?.tradeId,
-      summaries: {
-        at_trade: { view: 'at_trade' },
-        current: { view: 'current' },
-      },
-      publicationEligible: false,
-    });
-    expect(statlyValues?.gradesByTradeId.get(trade?.tradeId ?? '')).toMatchObject({
-      atTrade: { view: 'at_trade' },
-      current: { view: 'current' },
     });
   });
 

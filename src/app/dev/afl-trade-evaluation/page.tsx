@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 
 import { privateLocalWorkbookReads } from '@/server/aflTradeIntelligence/development/privateLocalWorkbookReads';
 
+import { LocalValuationReadinessNotice } from './LocalValuationReadinessNotice';
+
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
@@ -26,21 +28,6 @@ function yearParam(value: string): number | null {
 
 function assetTypeParam(value: string): AssetType | undefined {
   return value === 'player' || value === 'pick' || value === 'future_pick' ? value : undefined;
-}
-
-function availabilityLabel(availability: string): string {
-  if (availability === 'available') return 'Complete calculation';
-  if (availability === 'available_partial') return 'Partial calculation';
-  if (availability === 'lineage_unresolved') return 'Lineage unresolved';
-  return 'Insufficient data';
-}
-
-function availabilityClass(availability: string): string {
-  if (availability === 'available') return 'border-success/30 bg-success/10 text-success';
-  if (availability === 'available_partial') {
-    return 'border-warning/35 bg-warning/10 text-foreground';
-  }
-  return 'border-border bg-muted text-muted-foreground';
 }
 
 function signedScenarioValue(value: number): string {
@@ -71,31 +58,20 @@ export default async function LocalWorkbookEvaluationPage({
     q,
   });
   if (evaluation === null) notFound();
+  const valuationReadiness = evaluation.numericalEvaluation.readiness;
 
   const metrics = [
     {
-      key: 'processed',
-      label: 'Processed',
-      value: evaluation.batch.processedTrades,
-      detail: `${evaluation.year} selected · ${evaluation.batch.totalTrades} total trades`,
+      key: 'selected-year-trades',
+      label: `${evaluation.year} trades`,
+      value: evaluation.batch.selectedYearTrades,
+      detail: 'factual workbook transactions in the selected year',
     },
     {
-      key: 'available',
-      label: 'Complete',
-      value: evaluation.batch.availableTrades,
-      detail: 'all included assets calculated this year',
-    },
-    {
-      key: 'partial',
-      label: 'Partial',
-      value: evaluation.batch.partialTrades,
-      detail: 'calculated with excluded assets this year',
-    },
-    {
-      key: 'unresolved',
-      label: 'Unresolved',
-      value: evaluation.batch.unresolvedTrades,
-      detail: 'no defensible comparison yet this year',
+      key: 'all-trades',
+      label: 'All trades',
+      value: evaluation.batch.totalTrades,
+      detail: 'factual workbook transactions across every loaded year',
     },
     {
       key: 'scenario-ready',
@@ -134,7 +110,7 @@ export default async function LocalWorkbookEvaluationPage({
             </span>
           </div>
         </div>
-        <dl className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <dl className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
           {metrics.map((metric) => (
             <div key={metric.key} className="bg-background p-5">
               <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -151,6 +127,8 @@ export default async function LocalWorkbookEvaluationPage({
           ))}
         </dl>
       </header>
+
+      <LocalValuationReadinessNotice readiness={valuationReadiness} />
 
       <section
         aria-labelledby="evaluation-input-heading"
@@ -186,8 +164,8 @@ export default async function LocalWorkbookEvaluationPage({
                 Real workbook trades · {evaluation.year}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {evaluation.trades.length} matching transactions. Open a trade to inspect calculated
-                views, coverage, and unresolved asset evidence.
+                {evaluation.trades.length} matching transactions. Open a trade to review its factual
+                workbook record and the separately labelled synthetic calculation fixture.
               </p>
             </div>
           </div>
@@ -266,7 +244,7 @@ export default async function LocalWorkbookEvaluationPage({
           </div>
         ) : (
           <ul className="grid gap-4 lg:grid-cols-2">
-            {evaluation.trades.map(({ trade, calculation, scenario }) => {
+            {evaluation.trades.map(({ trade, scenario }) => {
               return (
                 <li
                   key={trade.tradeId}
@@ -285,10 +263,8 @@ export default async function LocalWorkbookEvaluationPage({
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <span
-                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${availabilityClass(calculation.availability)}`}
-                      >
-                        {availabilityLabel(calculation.availability)}
+                      <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        Factual transaction loaded
                       </span>
                       <span
                         className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${scenario.state === 'ready' ? 'border-success/30 bg-success/10 text-success' : 'border-border bg-muted text-muted-foreground'}`}
@@ -340,7 +316,7 @@ export default async function LocalWorkbookEvaluationPage({
                       href={`/dev/afl-trade-evaluation/${encodeURIComponent(trade.tradeId)}`}
                       className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      Review calculation
+                      Review trade
                     </Link>
                   </div>
                 </li>

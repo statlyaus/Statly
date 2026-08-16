@@ -103,6 +103,8 @@ function requireCommonModelBinding(input: {
   if (
     ledger.valuationBundleId !== drawSet.valuationBundleId ||
     policy.valuationBundleId !== drawSet.valuationBundleId ||
+    ledger.valuationInputBundleId !== drawSet.valuationInputBundleId ||
+    policy.valuationInputBundleId !== drawSet.valuationInputBundleId ||
     ledger.valueUnitId !== drawSet.valueUnitId ||
     policy.valueUnitId !== drawSet.valueUnitId
   ) {
@@ -275,6 +277,9 @@ export function materializeAflTradeValuationCase(
       tradeId: transaction.eventId,
       tradeEffectiveAt: `${transaction.occurredOn}T00:00:00.000Z`,
       valuationBundleId: componentDrawSet.content.valuationBundleId,
+      ...(componentDrawSet.content.valuationInputBundleId
+        ? { valuationInputBundleId: componentDrawSet.content.valuationInputBundleId }
+        : {}),
       lineageGraphId: createAflTradeLineageGraphId(unparsedInput.lineageGraph),
       componentDrawSetId: componentDrawSet.componentDrawSetId,
       realizedContributionLedgerId: realizedContributionLedger.realizedContributionLedgerId,

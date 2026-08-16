@@ -94,17 +94,23 @@ describe('ensureAuthServiceWorkerReady', () => {
 
   function installServiceWorkerContainer(options?: {
     controlled?: boolean;
+    updatePending?: boolean;
     registrationDelayMs?: number;
     registrationError?: Error;
     registrationPending?: boolean;
   }) {
     const eventTarget = new EventTarget();
-    const activeWorker = { postMessage: vi.fn() };
-    const registration = { active: activeWorker } as unknown as ServiceWorkerRegistration;
+    const activeWorker = {
+      postMessage: vi.fn(),
+      scriptURL: new URL('/auth-service-worker.js', window.location.href).href,
+    };
+    const registration = {
+      active: activeWorker,
+      installing: options?.updatePending ? { postMessage: vi.fn() } : null,
+      waiting: null,
+    } as unknown as ServiceWorkerRegistration;
     const container = {
-      controller: options?.controlled
-        ? { scriptURL: new URL('/auth-service-worker.js', window.location.href).href }
-        : null,
+      controller: options?.controlled ? activeWorker : null,
       register: options?.registrationError
         ? vi.fn().mockRejectedValue(options.registrationError)
         : options?.registrationPending
@@ -130,12 +136,25 @@ describe('ensureAuthServiceWorkerReady', () => {
     return { activeWorker, container };
   }
 
-  it('resolves immediately when the expected worker already controls the page', async () => {
-    const { container } = installServiceWorkerContainer({ controlled: true });
+  it('refreshes a stale expected worker before resolving readiness', async () => {
+    const { container } = installServiceWorkerContainer({ controlled: true, updatePending: true });
     const { ensureAuthServiceWorkerReady } = await import('@/lib/authServiceWorker');
+    let settled = false;
+    const ready = ensureAuthServiceWorkerReady().then(() => {
+      settled = true;
+    });
 
-    await expect(ensureAuthServiceWorkerReady()).resolves.toBeUndefined();
-    expect(container.register).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(container.register).toHaveBeenCalledWith('/auth-service-worker.js', { scope: '/' });
+    });
+    expect(settled).toBe(false);
+
+    Object.assign(container, {
+      controller: { scriptURL: new URL('/auth-service-worker.js', window.location.href).href },
+    });
+    container.dispatchEvent(new Event('controllerchange'));
+
+    await expect(ready).resolves.toBeUndefined();
   });
 
   it('registers at root scope and waits until the worker controls the page', async () => {

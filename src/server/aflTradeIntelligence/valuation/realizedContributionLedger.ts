@@ -96,6 +96,7 @@ export const aflTradeRealizedContributionLedgerContentSchema = z
     schemaVersion: z.literal('afl-trade-realized-contribution-ledger/v1'),
     publicAssetBoundary: z.literal('source_native_afl_players_no_user_or_fantasy_ownership'),
     valuationBundleId: aflTradeContentAddressedIdSchema('valuation-bundle'),
+    valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle').optional(),
     lineageGraphId: aflTradeContentAddressedIdSchema('lineage-graph'),
     valueUnitId: aflTradePublicIdSchema,
     records: z.array(aflTradeRealizedContributionRecordSchema).max(100_000),
