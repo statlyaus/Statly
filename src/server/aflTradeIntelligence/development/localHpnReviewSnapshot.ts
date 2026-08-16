@@ -18,8 +18,8 @@ const sourceSchema = z
     providerDecodeMap: z.unknown(),
     rights: z.unknown(),
     rightsArtifact: aflTradeArtifactRefSchema,
-    hpnFieldMap: z.unknown().nullable(),
-    hpnFieldMapCreatedAt: timestampSchema.nullable(),
+    hpnResultProjection: z.unknown().nullable(),
+    hpnPlayerProjection: z.unknown().nullable(),
     factualRunId: publicIdSchema.nullable(),
     hpnResolutionsCurrent: z.boolean(),
   })
@@ -54,8 +54,8 @@ export type LocalAflTradeHpnReviewSnapshot = Readonly<{
     providerDecodeMap: unknown;
     rights: unknown;
     rightsArtifact: z.infer<typeof aflTradeArtifactRefSchema>;
-    hpnFieldMap: unknown | null;
-    hpnFieldMapCreatedAt: string | null;
+    hpnResultProjection: unknown | null;
+    hpnPlayerProjection: unknown | null;
     factualRunId: string | null;
     hpnResolutionsCurrent: boolean;
   }>[];
@@ -82,8 +82,10 @@ const LOAD_REVIEW_SNAPSHOT_SQL = `WITH authority AS MATERIALIZED (
   SELECT capture.anchor_season_year AS season_year,capture.capture_id,
          capture.provider,capture.capability_id,run.normalization_run_id,
          decode_map.map_json AS provider_decode_map,rights.content_json AS rights_json,
-         rights_ref.item AS rights_artifact,hpn.map_json AS hpn_field_map_json,
-         hpn.created_at AS hpn_field_map_created_at,factual.factual_run_id
+         rights_ref.item AS rights_artifact,
+         result_projection.projection_json AS hpn_result_projection_json,
+         player_projection.projection_json AS hpn_player_projection_json,
+         factual.factual_run_id
     FROM authority
     CROSS JOIN LATERAL jsonb_array_elements(
       authority.bundle_json->'content'->'sourceCaptures'
@@ -108,23 +110,60 @@ const LOAD_REVIEW_SNAPSHOT_SQL = `WITH authority AS MATERIALIZED (
        LIMIT 1
     ) rights_ref ON true
     LEFT JOIN LATERAL (
-      SELECT map.map_json,map.created_at
-        FROM outcome_hpn_pav_field_map map
-        JOIN outcome_review_decision review
+      SELECT jsonb_build_object(
+               'map',map.map_json,
+               'candidate',candidate.candidate_json,
+               'candidateArtifact',candidate.candidate_artifact_json,
+               'decision',review.decision_json,
+               'decisionArtifact',review.decision_artifact_json
+             ) AS projection_json
+        FROM outcome_hpn_projected_field_map map
+        JOIN outcome_hpn_field_map_candidate candidate
+          ON candidate.candidate_id=map.candidate_id
+        JOIN outcome_hpn_field_map_review_decision review
           ON review.decision_id=map.approval_decision_id
        WHERE map.environment='non_production'
          AND map.competition='AFLM'
+         AND map.provider=capture.provider
+         AND map.capability_id=capture.capability_id
+         AND map.input_kind='completed_match_result'
+         AND capture.anchor_season_year BETWEEN map.valid_from_season AND map.valid_through_season
+         AND review.decision='approved'
+         AND NOT EXISTS (
+           SELECT 1 FROM outcome_hpn_field_map_review_decision successor
+            WHERE successor.candidate_id=review.candidate_id
+              AND (successor.registered_at,successor.decision_id)>
+                  (review.registered_at,review.decision_id)
+         )
+       ORDER BY map.registered_at DESC,map.field_map_id DESC LIMIT 1
+    ) result_projection ON true
+    LEFT JOIN LATERAL (
+      SELECT jsonb_build_object(
+               'map',map.map_json,
+               'candidate',candidate.candidate_json,
+               'candidateArtifact',candidate.candidate_artifact_json,
+               'decision',review.decision_json,
+               'decisionArtifact',review.decision_artifact_json
+             ) AS projection_json
+        FROM outcome_hpn_projected_field_map map
+        JOIN outcome_hpn_field_map_candidate candidate
+          ON candidate.candidate_id=map.candidate_id
+        JOIN outcome_hpn_field_map_review_decision review
+          ON review.decision_id=map.approval_decision_id
+       WHERE map.environment='non_production'
          AND map.provider=capture.provider
          AND map.capability_id=capture.capability_id
          AND map.input_kind='player_match_stats'
          AND capture.anchor_season_year BETWEEN map.valid_from_season AND map.valid_through_season
          AND review.decision='approved'
          AND NOT EXISTS (
-           SELECT 1 FROM outcome_review_decision successor
-            WHERE successor.supersedes_decision_id=review.decision_id
+           SELECT 1 FROM outcome_hpn_field_map_review_decision successor
+            WHERE successor.candidate_id=review.candidate_id
+              AND (successor.registered_at,successor.decision_id)>
+                  (review.registered_at,review.decision_id)
          )
-       ORDER BY map.created_at DESC,map.field_map_id DESC LIMIT 1
-    ) hpn ON true
+       ORDER BY map.registered_at DESC,map.field_map_id DESC LIMIT 1
+    ) player_projection ON true
     LEFT JOIN LATERAL (
       SELECT factual_run.factual_run_id
         FROM outcome_factual_reconciliation_run factual_run
@@ -158,8 +197,9 @@ SELECT transaction_timestamp() AS trusted_at,authority.bundle_json AS reviewed_e
          'provider',sources.provider,'capabilityId',sources.capability_id,
          'normalizationRunId',sources.normalization_run_id,
          'providerDecodeMap',sources.provider_decode_map,'rights',sources.rights_json,
-         'rightsArtifact',sources.rights_artifact,'hpnFieldMap',sources.hpn_field_map_json,
-         'hpnFieldMapCreatedAt',sources.hpn_field_map_created_at,
+         'rightsArtifact',sources.rights_artifact,
+         'hpnResultProjection',sources.hpn_result_projection_json,
+         'hpnPlayerProjection',sources.hpn_player_projection_json,
          'factualRunId',sources.factual_run_id,'hpnResolutionsCurrent',false
        ) ORDER BY sources.season_year,sources.provider) FILTER (
          WHERE sources.normalization_run_id IS NOT NULL
@@ -203,11 +243,8 @@ export async function loadLocalAflTradeHpnReviewSnapshot(
         providerDecodeMap: source.providerDecodeMap,
         rights: source.rights,
         rightsArtifact: source.rightsArtifact,
-        hpnFieldMap: source.hpnFieldMap,
-        hpnFieldMapCreatedAt:
-          source.hpnFieldMapCreatedAt === null
-            ? null
-            : new Date(source.hpnFieldMapCreatedAt).toISOString(),
+        hpnResultProjection: source.hpnResultProjection,
+        hpnPlayerProjection: source.hpnPlayerProjection,
         factualRunId: source.factualRunId,
         hpnResolutionsCurrent: source.hpnResolutionsCurrent,
       })),

@@ -1222,6 +1222,71 @@ model OutcomeProviderDecodedRow {
   @@map("outcome_provider_decoded_row")
 }
 
+model OutcomeHpnFieldMapCandidate {
+  candidateId            String                             @id @map("candidate_id")
+  environment            OutcomeEnvironment
+  provider               String
+  capabilityId           String                             @map("capability_id")
+  inputKind              String                             @map("input_kind")
+  sourceSchemaSha256     String                             @map("source_schema_sha256") @outcomes.Char(64)
+  validFromSeason        Int                                @map("valid_from_season")
+  validThroughSeason     Int                                @map("valid_through_season")
+  candidateSha256        String                             @unique @map("candidate_sha256") @outcomes.Char(64)
+  candidateArtifactJson  Json                               @map("candidate_artifact_json")
+  candidateCanonicalJson String                             @map("candidate_canonical_json") @outcomes.Text
+  candidateJson          Json                               @map("candidate_json")
+  createdAt              DateTime                           @map("created_at") @outcomes.Timestamptz(3)
+  registeredAt           DateTime                           @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  reviewDecisions        OutcomeHpnFieldMapReviewDecision[]
+  projectedMaps          OutcomeHpnProjectedFieldMap[]
+
+  @@index([environment, provider, capabilityId, inputKind, validFromSeason, validThroughSeason], map: "outcome_hpn_field_map_candidate_lookup_idx")
+  @@map("outcome_hpn_field_map_candidate")
+}
+
+model OutcomeHpnFieldMapReviewDecision {
+  decisionId            String                        @id @map("decision_id")
+  candidateId           String                        @map("candidate_id")
+  decision              String
+  reviewerId            String                        @map("reviewer_id")
+  rationale             String
+  decisionSha256        String                        @unique @map("decision_sha256") @outcomes.Char(64)
+  decisionArtifactJson  Json                          @map("decision_artifact_json")
+  decisionCanonicalJson String                        @map("decision_canonical_json") @outcomes.Text
+  decisionJson          Json                          @map("decision_json")
+  decidedAt             DateTime                      @map("decided_at") @outcomes.Timestamptz(3)
+  registeredAt          DateTime                      @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  candidate             OutcomeHpnFieldMapCandidate   @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
+  projectedMaps         OutcomeHpnProjectedFieldMap[]
+
+  @@index([candidateId, registeredAt, decisionId], map: "outcome_hpn_field_map_review_current_idx")
+  @@map("outcome_hpn_field_map_review_decision")
+}
+
+model OutcomeHpnProjectedFieldMap {
+  fieldMapId            String                           @id @map("field_map_id")
+  candidateId           String                           @map("candidate_id")
+  approvalDecisionId    String                           @map("approval_decision_id")
+  environment           OutcomeEnvironment
+  competition           String
+  provider              String
+  capabilityId          String                           @map("capability_id")
+  inputKind             String                           @map("input_kind")
+  sourceSchemaSha256    String                           @map("source_schema_sha256") @outcomes.Char(64)
+  validFromSeason       Int                              @map("valid_from_season")
+  validThroughSeason    Int                              @map("valid_through_season")
+  fieldMapSha256        String                           @unique @map("field_map_sha256") @outcomes.Char(64)
+  fieldMapCanonicalJson String                           @map("field_map_canonical_json") @outcomes.Text
+  mapJson               Json                             @map("map_json")
+  createdAt             DateTime                         @map("created_at") @outcomes.Timestamptz(3)
+  registeredAt          DateTime                         @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  candidate             OutcomeHpnFieldMapCandidate      @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
+  approvalDecision      OutcomeHpnFieldMapReviewDecision @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict)
+
+  @@index([environment, competition, provider, capabilityId, inputKind, validFromSeason, validThroughSeason], map: "outcome_hpn_projected_field_map_lookup_idx")
+  @@map("outcome_hpn_projected_field_map")
+}
+
 model OutcomeHpnPavFieldMap {
   fieldMapId             String                  @id @map("field_map_id")
   environment            OutcomeEnvironment
