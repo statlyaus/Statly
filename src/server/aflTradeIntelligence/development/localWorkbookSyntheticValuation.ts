@@ -1,13 +1,21 @@
 import type { DraftTradeDetail } from '@/lib/draftTrades/firestore';
 
 import {
+  createAflTradeValuationExplanation,
+  type AflTradeValuationExplanationResult,
+} from '../valuation/tradeValuationExplanation';
+
+import {
   createLocalSyntheticValuationScenario,
   type LocalSyntheticTradeDefinition,
   type LocalSyntheticValuationScenario,
 } from './localSyntheticValuationScenario';
 
 export type LocalWorkbookSyntheticValuationUnavailableReason =
-  'invalid_trade_shape' | 'unsupported_asset_kind' | 'invalid_evaluation_window';
+  | 'invalid_trade_shape'
+  | 'unsupported_asset_kind'
+  | 'invalid_evaluation_window'
+  | 'incomplete_numeric_evidence';
 
 export interface LocalWorkbookSyntheticValuationInput {
   environment: 'test_fixture';
@@ -23,6 +31,7 @@ export type LocalWorkbookSyntheticValuationPreparation =
       state: 'ready';
       tradeId: string;
       scenario: ReturnType<typeof createLocalSyntheticValuationScenario>;
+      explanation: Extract<AflTradeValuationExplanationResult, { state: 'available' }>;
       summary: LocalWorkbookSyntheticValuationSummary;
       publicationEligible: false;
     }
@@ -99,7 +108,10 @@ function definitionFor(
   ) {
     return unavailable(trade.trade.tradeId, 'invalid_evaluation_window');
   }
-  const indexBySlug = new Map(partySlugs.map((slug, index) => [slug, index]));
+  const canonicalPartySlugs = [...partySlugs].sort((left, right) =>
+    clubId(left).localeCompare(clubId(right))
+  );
+  const indexBySlug = new Map(canonicalPartySlugs.map((slug, index) => [slug, index]));
   const directionBasis =
     parties.length === 2
       ? ('two_party_other_club_assumption' as const)
@@ -119,10 +131,13 @@ function definitionFor(
       .sort((left, right) => left.assetIndex - right.assetIndex || left.id.localeCompare(right.id))
       .map((asset) => {
         const receiverIndex = indexBySlug.get(asset.clubSlug)!;
-        const sender = parties[(receiverIndex + parties.length - 1) % parties.length]!;
+        const senderSlug =
+          canonicalPartySlugs[
+            (receiverIndex + canonicalPartySlugs.length - 1) % canonicalPartySlugs.length
+          ]!;
         return {
           transferId: asset.id,
-          fromClubId: clubId(sender.clubSlug),
+          fromClubId: clubId(senderSlug),
           toClubId: clubId(asset.clubSlug),
           assetId: asset.id,
           assetKind: assetKind(asset.assetType)!,
@@ -133,57 +148,24 @@ function definitionFor(
   };
 }
 
-function scarcityAdjusted(
-  value: ReturnType<
-    typeof createLocalSyntheticValuationScenario
-  >['calculation']['content']['draws'][number]['parties'][number]['views'][number]['roots'][number]['universal']
-): number {
-  return value.status === 'available'
-    ? value.layers.scarcityAdjusted
-    : value.partialLayers.scarcityAdjusted;
-}
-
-function summarizeScenario(
-  scenario: ReturnType<typeof createLocalSyntheticValuationScenario>
+function summarizeExplanation(
+  scenario: ReturnType<typeof createLocalSyntheticValuationScenario>,
+  explanation: Extract<AflTradeValuationExplanationResult, { state: 'available' }>
 ): LocalWorkbookSyntheticValuationSummary {
-  const transfers = scenario.definition.transfers;
-  const views = scenario.valuationCase.content.viewContexts.map(({ view }) => ({
-    view,
-    parties: scenario.definition.parties.map((party) => {
-      let received = 0;
-      let givenUp = 0;
-      for (const draw of scenario.calculation.content.draws) {
-        const roots = draw.parties.flatMap(
-          (drawParty) => drawParty.views.find((candidate) => candidate.view === view)?.roots ?? []
-        );
-        const valueByAssetId = new Map(
-          roots.map((root) => [root.assetId, scarcityAdjusted(root.universal)] as const)
-        );
-        received +=
-          draw.probabilityWeight *
-          transfers
-            .filter(({ toClubId }) => toClubId === party.aflClubId)
-            .reduce((sum, transfer) => sum + valueByAssetId.get(transfer.assetId)!, 0);
-        givenUp +=
-          draw.probabilityWeight *
-          transfers
-            .filter(({ fromClubId }) => fromClubId === party.aflClubId)
-            .reduce((sum, transfer) => sum + valueByAssetId.get(transfer.assetId)!, 0);
-      }
-      return {
-        aflClubId: party.aflClubId,
-        clubName: party.clubName,
-        received,
-        givenUp,
-        netAdvantage: received - givenUp,
-      };
-    }),
-  }));
   return {
     scenarioId: scenario.scenarioId,
     calculationId: scenario.calculation.valuationCalculationId,
     valueUnitId: scenario.valuationCase.content.valueUnitId,
-    views,
+    views: explanation.document.views.map(({ view, clubs }) => ({
+      view,
+      parties: clubs.map(({ aflClubId, clubName, received, givenUp, net }) => ({
+        aflClubId,
+        clubName,
+        received: received.additiveMean,
+        givenUp: givenUp.additiveMean,
+        netAdvantage: net.additiveMean,
+      })),
+    })),
   };
 }
 
@@ -205,11 +187,26 @@ export function prepareLocalWorkbookSyntheticValuation(
     scenario: input.scenario,
     assessedAt: input.assessedAt,
   });
+  const explanation = createAflTradeValuationExplanation({
+    admittedAssumptionSetId: scenario.assumptionSet.assumptionSetId,
+    directionEvidence: scenario.assumptionSet,
+    valuationCase: scenario.valuationCase,
+    valuationCalculation: scenario.calculation,
+    selectedLayer: 'scarcityAdjusted',
+    gradeContext: {
+      confidenceLevel: 'high',
+      developmentPreview: true,
+    },
+  });
+  if (explanation.state !== 'available') {
+    return unavailable(input.trade.trade.tradeId, 'incomplete_numeric_evidence');
+  }
   return {
     state: 'ready',
     tradeId: input.trade.trade.tradeId,
     scenario,
-    summary: summarizeScenario(scenario),
+    explanation,
+    summary: summarizeExplanation(scenario, explanation),
     publicationEligible: false,
   };
 }

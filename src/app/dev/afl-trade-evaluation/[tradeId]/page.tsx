@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { AflTradeValueSummaryCard } from '@/components/draft/AflTradeValueSummaryCard';
 import { privateLocalWorkbookReads } from '@/server/aflTradeIntelligence/development/privateLocalWorkbookReads';
-import type { AflTradeDevelopmentReconciledOutcomeMetric } from '@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection';
+
+import { LocalValuationReadinessNotice } from '../LocalValuationReadinessNotice';
+import { LocalSyntheticTradeExplanationPanel } from './LocalSyntheticTradeExplanationPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,56 +14,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const assetStateLabels = {
-  valued: 'Valued',
-  right_censored: 'Right-censored',
-  outcome_unresolved: 'Outcome unresolved',
-  lineage_unresolved: 'Lineage unresolved',
-  insufficient_cohort: 'Insufficient cohort',
-} as const;
-
-const linkStateLabels = {
-  linked: 'Linked',
-  unresolved: 'Unresolved',
-  ambiguous: 'Ambiguous',
-} as const;
-
-const linkMethodLabels = {
-  player_club_year: 'Player, receiving club and year',
-  draft_selection_year: 'Draft selection and year',
-  none: 'No defensible match',
-} as const;
-
 function parseTradeId(value: string): string | null {
   const tradeId = value.trim();
   if (tradeId.length === 0 || tradeId.length > 200) return null;
   return /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/u.test(tradeId) ? tradeId : null;
-}
-
-function providerLabel(value: string): string {
-  if (value === 'afl_tables') return 'AFL Tables';
-  if (value === 'footywire') return 'Footywire';
-  if (value === 'fryzigg') return 'Fryzigg';
-  return value;
-}
-
-function verifiedGamesLabel(metric: AflTradeDevelopmentReconciledOutcomeMetric): string {
-  if (metric.state === 'observed') return `${metric.value} games`;
-  if (metric.state === 'partial') {
-    return `${metric.observedValue} games (right-censored)`;
-  }
-  return 'Unavailable — reconciled fact has no supported games value';
-}
-
-const scenarioViewLabels = {
-  at_trade: 'At trade',
-  realized: 'Realized',
-  remaining: 'Remaining',
-  current: 'Current',
-} as const;
-
-function scenarioValue(value: number): string {
-  return value.toFixed(2);
 }
 
 export default async function LocalWorkbookTradeEvaluationPage({
@@ -75,16 +30,9 @@ export default async function LocalWorkbookTradeEvaluationPage({
 
   const evaluation = await privateLocalWorkbookReads.loadTrade(tradeId);
   if (evaluation === null) notFound();
+  const valuationReadiness = evaluation.numericalEvaluation.readiness;
 
-  const { calculation, detail } = evaluation;
-  const assetById = new Map(detail.assets.map((asset) => [asset.id, asset]));
-  const linkByAssetId = new Map(evaluation.links.map((link) => [link.assetId, link]));
-  const summaries = [
-    calculation.summaries.at_trade,
-    calculation.summaries.realized,
-    calculation.summaries.remaining,
-    calculation.summaries.current,
-  ];
+  const { detail } = evaluation;
   const scenario = evaluation.scenario;
   const scenarioDirectionBasis =
     scenario.state === 'ready'
@@ -154,6 +102,8 @@ export default async function LocalWorkbookTradeEvaluationPage({
         </dl>
       </header>
 
+      <LocalValuationReadinessNotice readiness={valuationReadiness} />
+
       <section
         aria-labelledby="synthetic-scenario-heading"
         className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
@@ -186,67 +136,7 @@ export default async function LocalWorkbookTradeEvaluationPage({
                 ? 'Workbook rows record the receiving club only; for this two-party test scenario, each sender is inferred as the other participating club.'
                 : 'Workbook rows record the receiving club only; this multi-party test scenario uses the declared deterministic fixture transfer map.'}
             </p>
-            <div className="mt-5 grid gap-4 xl:grid-cols-2">
-              {scenario.summary.views.map((view) => (
-                <section
-                  key={view.view}
-                  aria-label={`${scenarioViewLabels[view.view]} synthetic values`}
-                  className="overflow-hidden rounded-xl border border-border bg-background"
-                >
-                  <h3 className="border-b border-border bg-muted/40 px-4 py-3 text-sm font-semibold text-foreground">
-                    {scenarioViewLabels[view.view]}
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                        <tr>
-                          <th scope="col" className="px-4 py-3 font-semibold">
-                            Club
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-right font-semibold">
-                            Received
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-right font-semibold">
-                            Given up
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-right font-semibold">
-                            Net
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {view.parties.map((party) => (
-                          <tr key={party.aflClubId}>
-                            <th scope="row" className="px-4 py-3 font-semibold text-foreground">
-                              {party.clubName}
-                            </th>
-                            <td className="px-4 py-3 text-right tabular-nums text-foreground">
-                              {scenarioValue(party.received)}
-                            </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-foreground">
-                              {scenarioValue(party.givenUp)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
-                              {scenarioValue(party.netAdvantage)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              ))}
-            </div>
-            <dl className="mt-5 grid gap-3 text-xs text-muted-foreground sm:grid-cols-2">
-              <div>
-                <dt className="font-semibold text-foreground">Scenario</dt>
-                <dd className="break-all font-mono">{scenario.summary.scenarioId}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-foreground">Calculation</dt>
-                <dd className="break-all font-mono">{scenario.summary.calculationId}</dd>
-              </div>
-            </dl>
+            <LocalSyntheticTradeExplanationPanel document={scenario.explanation.document} />
           </>
         ) : (
           <p className="mt-4 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
@@ -254,27 +144,6 @@ export default async function LocalWorkbookTradeEvaluationPage({
             result was created for this trade.
           </p>
         )}
-      </section>
-
-      <section aria-labelledby="calculation-views-heading" className="space-y-4">
-        <div>
-          <h2 id="calculation-views-heading" className="text-xl font-semibold text-foreground">
-            Factual-evidence calculation views
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Source-recorded grades are prohibited. Values are model outputs with explicit coverage
-            and uncertainty.
-          </p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {summaries.map((summary) => (
-            <AflTradeValueSummaryCard
-              key={summary.view}
-              valuation={summary}
-              calculationAsOf={evaluation.model.content.createdAt}
-            />
-          ))}
-        </div>
       </section>
 
       <section
@@ -285,100 +154,49 @@ export default async function LocalWorkbookTradeEvaluationPage({
           Asset evidence review
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Every workbook asset is shown with its calculation and acquisition-link state.
+          These are the factual transaction records from the pinned workbook. No inferred identity,
+          acquisition link, post-trade outcome, or numerical value is added at this boundary.
         </p>
 
         <ul className="mt-5 divide-y divide-border border-y border-border">
-          {calculation.assets.map((result) => {
-            const asset = assetById.get(result.assetId);
-            const link = linkByAssetId.get(result.assetId);
-            return (
-              <li
-                key={result.assetId}
-                className="grid gap-4 py-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
-              >
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Workbook trade record
-                  </p>
-                  <p className="font-semibold text-foreground">
-                    {asset?.assetText ?? result.assetId}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {asset?.clubName ?? 'Unknown club'} · {asset?.assetType ?? 'unknown'}
-                  </p>
-                </div>
-                <div className="text-sm">
-                  <p className="font-semibold text-foreground">{assetStateLabels[result.state]}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {result.atTradeSampleCount} historical samples
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Providers:{' '}
-                    {result.featureProviders.length > 0
-                      ? result.featureProviders.map(providerLabel).join(', ')
-                      : 'none'}
-                  </p>
-                </div>
-                <div className="text-sm">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Verified post-trade games
-                  </p>
-                  {link?.outcomeEvidence.state === 'reconciled' ? (
-                    <>
-                      <p className="mt-1 font-semibold text-foreground">
-                        {verifiedGamesLabel(link.outcomeEvidence.games)}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Effective through {link.outcomeEvidence.effectiveThrough.slice(0, 10)}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-1 font-semibold text-foreground">
-                      Unavailable — no reconciled acquisition-spell fact
-                    </p>
-                  )}
-                </div>
-                <div className="text-sm">
-                  <p className="font-semibold text-foreground">
-                    {link ? linkStateLabels[link.state] : 'No link result'}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {link ? linkMethodLabels[link.method] : 'No matching method recorded'}
-                  </p>
-                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                    {link?.acquisitionId ?? 'No acquisition id'}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
+          {detail.assets.map((asset) => (
+            <li key={asset.id} className="grid gap-4 py-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Workbook trade record
+                </p>
+                <p className="font-semibold text-foreground">{asset.assetText}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {asset.clubName} · {asset.assetType.replaceAll('_', ' ')}
+                </p>
+              </div>
+              <div className="text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Governed numerical evidence
+                </p>
+                <p className="mt-1 font-semibold text-foreground">Unavailable at this gate</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Exact source qualification and authenticated model-run ancestry are required.
+                </p>
+              </div>
+            </li>
+          ))}
         </ul>
       </section>
 
       <section
-        aria-labelledby="calculation-identity-heading"
+        aria-labelledby="input-identity-heading"
         className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
       >
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
-            <h2 id="calculation-identity-heading" className="text-lg font-semibold text-foreground">
-              Reproducible calculation identity
+            <h2 id="input-identity-heading" className="text-lg font-semibold text-foreground">
+              Pinned factual input identity
             </h2>
-            <dl className="mt-3 space-y-2 text-xs text-muted-foreground">
-              <div>
-                <dt className="font-semibold text-foreground">Calculation</dt>
-                <dd className="break-all font-mono">{calculation.calculationId}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-foreground">Dataset</dt>
-                <dd className="break-all font-mono">{calculation.datasetId}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-foreground">Model</dt>
-                <dd className="break-all font-mono">{calculation.modelId}</dd>
-              </div>
-            </dl>
+            <p className="mt-3 text-sm text-muted-foreground">
+              No factual calculation, dataset, or model identity is claimed while numerical
+              evaluation remains blocked.
+            </p>
           </div>
           <div className="text-right text-xs leading-5 text-muted-foreground">
             <p>{evaluation.input.originalFilename}</p>

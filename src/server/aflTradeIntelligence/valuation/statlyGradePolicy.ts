@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import {
   aflTradeValueResultSchema,
   aflTradeValueSummarySchema,
@@ -34,6 +36,61 @@ export interface AflTradeStatlyGradeResult {
   practicalEquivalenceProbability: number | null;
   clubs: readonly AflTradeStatlyClubGrade[];
 }
+
+const probabilityGradeInputSchema = z
+  .object({
+    availability: z.enum(['available', 'available_partial', 'stale', 'failed_previous_available']),
+    clubs: z
+      .array(
+        z
+          .object({
+            aflClubId: z.string().trim().min(1).max(200),
+            clubName: z.string().trim().min(1).max(120),
+            finishesAheadProbability: z.number().finite().min(0).max(1),
+          })
+          .strict()
+      )
+      .min(2)
+      .max(18),
+    confidenceLevel: z.enum(['low', 'moderate', 'high']),
+    coverageRatio: z.number().finite().min(0).max(1),
+    coverageStatus: z.enum(['complete', 'partial']),
+    developmentPreview: z.boolean(),
+    practicalEquivalenceProbability: z.number().finite().min(0).max(1),
+    view: z.enum(['at_trade', 'realized', 'remaining', 'current']),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    const clubIds = input.clubs.map(({ aflClubId }) => aflClubId);
+    const competitiveProbability = input.clubs.reduce(
+      (sum, club) => sum + club.finishesAheadProbability,
+      0
+    );
+    if (new Set(clubIds).size !== clubIds.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['clubs'],
+        message: 'Grade inputs require unique AFL clubs.',
+      });
+    }
+    if (Math.abs(competitiveProbability + input.practicalEquivalenceProbability - 1) > 1e-8) {
+      context.addIssue({
+        code: 'custom',
+        path: ['clubs'],
+        message: 'Finish-ahead and practical-equivalence probabilities must exhaust unit mass.',
+      });
+    }
+    if (
+      (input.coverageStatus === 'complete' && input.coverageRatio !== 1) ||
+      (input.coverageStatus === 'partial' && input.coverageRatio >= 1)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['coverageRatio'],
+        message: 'Complete coverage requires ratio 1; partial coverage requires a ratio below 1.',
+      });
+    }
+  });
 
 export const AFL_TRADE_STATLY_GRADE_POLICY = Object.freeze({
   schemaVersion: 'afl-trade-statly-grade-policy/v1' as const,
@@ -135,7 +192,7 @@ function unavailableGradeResult(view: AflTradeValueSummary['view']): AflTradeSta
   });
 }
 
-function deriveNumericalGrades({
+export function deriveAflTradeStatlyGradesFromProbabilities({
   availability,
   clubs,
   confidenceLevel,
@@ -158,6 +215,28 @@ function deriveNumericalGrades({
   practicalEquivalenceProbability: number;
   view: AflTradeValueSummary['view'];
 }): AflTradeStatlyGradeResult {
+  const validated = probabilityGradeInputSchema.parse({
+    availability,
+    clubs: clubs.map(({ aflClubId, clubName, finishesAheadProbability }) => ({
+      aflClubId,
+      clubName,
+      finishesAheadProbability,
+    })),
+    confidenceLevel,
+    coverageRatio,
+    coverageStatus,
+    developmentPreview,
+    practicalEquivalenceProbability,
+    view,
+  });
+  availability = validated.availability;
+  clubs = validated.clubs;
+  confidenceLevel = validated.confidenceLevel;
+  coverageRatio = validated.coverageRatio;
+  coverageStatus = validated.coverageStatus;
+  developmentPreview = validated.developmentPreview;
+  practicalEquivalenceProbability = validated.practicalEquivalenceProbability;
+  view = validated.view;
   const { state, reasonCode } = numericalState({
     availability,
     confidenceLevel,
@@ -207,7 +286,7 @@ export function deriveAflTradeStatlyGrades(input: unknown): AflTradeStatlyGradeR
     return unavailableGradeResult(summary.view);
   }
 
-  return deriveNumericalGrades({
+  return deriveAflTradeStatlyGradesFromProbabilities({
     availability: summary.availability,
     clubs: summary.clubValues,
     confidenceLevel: summary.confidence.level,
@@ -230,7 +309,7 @@ export function deriveAflTradeStatlyGradesFromDetail(input: unknown): AflTradeSt
   const probabilities = new Map(
     value.comparison.probabilities.map((entry) => [entry.aflClubId, entry.finishesAhead] as const)
   );
-  return deriveNumericalGrades({
+  return deriveAflTradeStatlyGradesFromProbabilities({
     availability: value.availability,
     clubs: value.clubValues.map((club) => ({
       aflClubId: club.aflClubId,

@@ -177,6 +177,7 @@ export const aflTradeComponentDrawSetContentSchema = z
     schemaVersion: z.literal('afl-trade-component-draw-set/v1'),
     publicAssetBoundary: z.literal('source_native_afl_assets_no_user_or_fantasy_ownership'),
     valuationBundleId: aflTradeContentAddressedIdSchema('valuation-bundle'),
+    valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle').optional(),
     valueUnitId: aflTradePublicIdSchema,
     components: z.array(aflTradeValuationComponentSchema).length(componentRoles.length),
     execution: z.discriminatedUnion('mode', [exactExecutionSchema, sampledExecutionSchema]),

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { loadTradeMock, notFoundMock } = vi.hoisted(() => ({
@@ -19,56 +19,111 @@ import LocalWorkbookTradeEvaluationPage from '../../src/app/dev/afl-trade-evalua
 
 const FLANDERS_TRADE_ID = 'workbook-2025-c64962fd1891b951';
 
-function summary(view: 'at_trade' | 'realized' | 'remaining' | 'current') {
-  return {
-    availability: 'available' as const,
-    view,
-    modelVintage: view === 'at_trade' ? ('historical_restatement' as const) : ('current' as const),
-    unit: {
-      id: 'fixture-unit',
-      label: 'Fixture value',
-      description: 'Fixture-only value for component tests.',
-      direction: 'higher_is_better' as const,
+function distribution(mean: number) {
+  return { mean, median: mean, p10: mean - 1, p90: mean + 1 };
+}
+
+function explanationView(
+  view: 'at_trade' | 'realized' | 'remaining' | 'current',
+  flandersValue: number,
+  pickValue: number
+) {
+  const asset = (
+    assetId: string,
+    label: string,
+    assetKind: 'player' | 'future_pick',
+    fromClubId: string,
+    toClubId: string,
+    additiveMean: number
+  ) => ({
+    assetId,
+    assetKind,
+    label,
+    fromClubId,
+    toClubId,
+    additiveMean,
+    distribution: distribution(additiveMean),
+    currentComponents:
+      view === 'current'
+        ? {
+            realizedMean: assetKind === 'player' ? 2 : 1,
+            remainingMean: additiveMean - (assetKind === 'player' ? 2 : 1),
+          }
+        : null,
+    layers: {
+      grossMean: additiveMean,
+      listSpotAdjustedMean: additiveMean,
+      scarcityAdjustedMean: additiveMean,
+      listSpotDelta: 0,
+      scarcityDelta: 0,
     },
-    clubValues: [
-      {
-        aflClubId: 'afl-club:gold-coast',
-        clubName: 'Gold Coast',
-        expectedValue: 100,
-        medianValue: 98,
-        interval: { lower: 80, upper: 120, level: 0.8 },
-        finishesAheadProbability: 0.7,
-      },
+    evidenceState: 'complete' as const,
+  });
+  const flanders = asset(
+    'asset:flanders',
+    'Sam Flanders',
+    'player',
+    'afl-club:gold-coast',
+    'afl-club:st-kilda',
+    flandersValue
+  );
+  const futurePick = asset(
+    'asset:future-pick',
+    '2026 second-round pick',
+    'future_pick',
+    'afl-club:st-kilda',
+    'afl-club:gold-coast',
+    pickValue
+  );
+  const net = flandersValue - pickValue;
+  return {
+    view,
+    practicalEquivalenceProbability: 0,
+    verdict: { kind: 'favours_club' as const, aflClubIds: ['afl-club:st-kilda'] },
+    clubs: [
       {
         aflClubId: 'afl-club:st-kilda',
         clubName: 'St Kilda',
-        expectedValue: 80,
-        medianValue: 78,
-        interval: { lower: 60, upper: 100, level: 0.8 },
-        finishesAheadProbability: 0.2,
+        received: {
+          assets: [flanders],
+          additiveMean: flandersValue,
+          distribution: distribution(flandersValue),
+        },
+        givenUp: {
+          assets: [futurePick],
+          additiveMean: pickValue,
+          distribution: distribution(pickValue),
+        },
+        net: { additiveMean: net, distribution: distribution(net) },
+        finishAheadProbability: 1,
+        grade: {
+          grade: 'A+' as const,
+          state: 'provisional' as const,
+          reasonCode: 'development_preview',
+        },
+      },
+      {
+        aflClubId: 'afl-club:gold-coast',
+        clubName: 'Gold Coast',
+        received: {
+          assets: [futurePick],
+          additiveMean: pickValue,
+          distribution: distribution(pickValue),
+        },
+        givenUp: {
+          assets: [flanders],
+          additiveMean: flandersValue,
+          distribution: distribution(flandersValue),
+        },
+        net: { additiveMean: -net, distribution: distribution(-net) },
+        finishAheadProbability: 0,
+        grade: {
+          grade: 'D' as const,
+          state: 'provisional' as const,
+          reasonCode: 'development_preview',
+        },
       },
     ],
-    practicalEquivalenceProbability: 0.1,
-    comparisonBasis: 'complete_trade' as const,
-    assessment: {
-      interpretation: 'leans_to_club' as const,
-      favouredAflClubId: 'afl-club:gold-coast',
-      scope: 'complete_trade' as const,
-    },
-    confidence: {
-      level: 'moderate' as const,
-      dimensions: [
-        {
-          kind: 'model_calibration' as const,
-          level: 'moderate' as const,
-          reasonCode: 'fixture-model-moderate',
-          explanation: 'Fixture-only model evidence for the development page test.',
-        },
-      ],
-    },
-    coverage: { status: 'complete' as const, coverageRatio: 1, excludedAssetCount: 0 },
-    methodologyHref: '/draft/trades/methodology',
-    warnings: [],
   };
 }
 
@@ -135,59 +190,49 @@ function evaluationFixture() {
         },
       ],
     },
-    calculation: {
-      calculationId: 'development-trade-value:123',
-      tradeId: FLANDERS_TRADE_ID,
-      datasetId: 'development-grade-dataset:123',
-      modelId: 'development-grade-model:456',
-      summaries: {
-        at_trade: summary('at_trade'),
-        realized: summary('realized'),
-        remaining: summary('remaining'),
-        current: summary('current'),
-      },
-      assets: [
-        {
-          assetId: 'asset:1',
-          state: 'valued',
-          featureProviders: ['afl_tables'],
-          atTradeSampleCount: 40,
-        },
-      ],
-      publicationEligible: false,
-    },
-    links: [
-      {
-        assetId: 'asset:1',
-        state: 'linked',
-        acquisitionId: '2025_0016',
-        method: 'player_club_year',
-        outcomeEvidence: {
-          state: 'unavailable',
-          reason: 'no_reconciled_acquisition_spell',
-        },
-      },
-    ],
-    model: {
-      modelId: 'development-grade-model:456',
-      content: {
-        schemaVersion: 'afl-trade-development-grade-model/v1',
-        datasetId: 'development-grade-dataset:123',
-        createdAt: '2026-08-06T08:37:32.121Z',
-        minimumCohortSize: 20,
-        practicalEquivalenceTolerance: 10,
-        outcomeWeights: { games: 1, goals: 0.5, coachesVotes: 1.5, brownlowVotes: 2 },
-        providerFeatureTreatment:
-          'reconciled_point_in_time_when_available_else_selection_demographic',
-        historicalEligibility: 'fixed_horizon_matured_strictly_before_prediction',
-        sourceRecordedGradeTreatment: 'prohibited',
-        publicationEligible: false,
-      },
-    },
     scenario: {
       state: 'ready',
       tradeId: FLANDERS_TRADE_ID,
       publicationEligible: false,
+      explanation: {
+        state: 'available',
+        document: {
+          explanationId: 'valuation-explanation:fixture',
+          schemaVersion: 'afl-trade-valuation-explanation/v1',
+          tradeId: FLANDERS_TRADE_ID,
+          defaultView: 'current',
+          authority: {
+            kind: 'private_synthetic',
+            assumptionSetId: `artifact:${'d'.repeat(64)}`,
+            publicationProhibited: true,
+            warning: 'Fabricated rank-based test values — not real AFL data.',
+          },
+          valueUnitId: 'fabricated-football-contribution-above-replacement-v1',
+          valuationBundleId: `valuation-bundle:${'a'.repeat(64)}`,
+          valuationCaseId: `valuation-case:${'b'.repeat(64)}`,
+          valuationCalculationId: `valuation-calculation:${'c'.repeat(64)}`,
+          effectiveAt: '2025-10-01T00:00:00.000Z',
+          effectiveThrough: '2026-08-01T00:00:00.000Z',
+          coverage: { status: 'complete', ratio: 1 },
+          confidenceLevel: 'high',
+          selectedLayer: 'scarcityAdjusted',
+          views: [
+            explanationView('at_trade', 10.4, 5.2),
+            explanationView('realized', 2, 1),
+            explanationView('remaining', 5.2, 2.6),
+            explanationView('current', 7.2, 3.6),
+          ],
+          methodology: {
+            additiveStatistic: 'probability_weighted_mean',
+            uncertaintyStatistic: 'joint_draw_weighted_quantiles',
+            packageMedianIsAdditive: false,
+            assetGradeTreatment: 'prohibited',
+            currentIdentity: 'realized_plus_remaining',
+            practicalEquivalenceBasis:
+              'Synthetic fixture assumes no practical-equivalence band; grades are provisional.',
+          },
+        },
+      },
       summary: {
         scenarioId: 'artifact:scenario-fixture',
         calculationId: 'valuation-calculation:scenario-fixture',
@@ -230,6 +275,28 @@ function evaluationFixture() {
       },
     },
     publicationEligible: false,
+    numericalEvaluation: {
+      state: 'blocked',
+      readiness: {
+        state: 'blocked',
+        numericalCalculationsAvailable: false,
+        qualificationReportCreated: true,
+        qualificationReportId: `valuation-source-qualification:${'b'.repeat(64)}`,
+        factualReleaseId: `outcome-release:${'c'.repeat(64)}`,
+        qualificationEvaluatedAt: '2026-08-15T02:00:00.000Z',
+        privateEvaluationAuthorityState: 'not_authorized',
+        privateEvaluationDecisionId: null,
+        privateEvaluationDecidedAt: null,
+        preparedInputSetCreated: true,
+        preparedInputSetCount: 1,
+        preparedInputSetIds: [`prepared-valuation-input-set:${'a'.repeat(64)}`],
+        scopeKey: 'afl-men:2025-trades',
+        blockerCodes: ['source_blocked', 'private_evaluation_not_authorized'],
+        sources: ['afl-tables-five-season', 'official-afl-2026'],
+        requiredNextAuthority: 'private_nonproduction_derived_calculation_authority',
+        explanation: 'Private non-production derived calculation authority has not been recorded.',
+      },
+    },
   };
 }
 
@@ -239,7 +306,7 @@ describe('private local workbook trade evaluation page', () => {
     loadTradeMock.mockResolvedValue(evaluationFixture());
   });
 
-  it('shows four calculation views and asset-level evidence without publication controls', async () => {
+  it('shows reconciled asset scores and an overall provisional grade in the isolated synthetic scenario', async () => {
     render(
       await LocalWorkbookTradeEvaluationPage({
         params: Promise.resolve({ tradeId: FLANDERS_TRADE_ID }),
@@ -249,27 +316,60 @@ describe('private local workbook trade evaluation page', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: '2025 Trade for Sam Flanders' })
     ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Numerical valuation preparation is blocked' })
+    ).toBeVisible();
+    expect(
+      screen.getByText(`afl-men:2025-trades · retained for outcome-release:${'c'.repeat(64)}`)
+    ).toBeVisible();
+    expect(screen.getByText('Private non-production calculation authority')).toBeVisible();
+    expect(screen.getByText('Not authorized')).toBeVisible();
     expect(screen.getByText('Private local calculation')).toBeVisible();
-    expect(screen.getAllByRole('region', { name: /trade value summary$/ })).toHaveLength(4);
     const scenario = screen.getByRole('region', { name: 'Synthetic calculation scenario' });
     expect(
       within(scenario).getByText('Fabricated test evidence — not real AFL data')
     ).toBeVisible();
     expect(within(scenario).getByText('Publication prohibited')).toBeVisible();
-    expect(within(scenario).getAllByText('10.00').length).toBeGreaterThan(0);
+    expect(
+      within(scenario).getByLabelText('St Kilda provisional synthetic grade A+')
+    ).toBeVisible();
+    expect(within(scenario).getAllByText('Sam Flanders')).toHaveLength(2);
+    expect(within(scenario).getAllByLabelText('Sam Flanders contribution +7.20')).toHaveLength(2);
+    expect(within(scenario).getByText('Received subtotal +7.20')).toBeVisible();
+    expect(within(scenario).getByText('Expected net +3.60')).toBeVisible();
+    expect(within(scenario).getByText('100% chance to finish ahead')).toBeVisible();
+    expect(within(scenario).getByText('Package median +3.60')).toBeVisible();
+    expect(
+      within(scenario).getByText(
+        /Asset contributions and package subtotals use the probability-weighted mean/i
+      )
+    ).toBeInTheDocument();
+    const viewSelector = within(scenario).getByRole('combobox', { name: 'Valuation view' });
+    expect(viewSelector).toHaveValue('current');
+    expect(within(scenario).getByRole('button', { name: 'Current' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    fireEvent.change(viewSelector, { target: { value: 'at_trade' } });
+    expect(within(scenario).getByRole('button', { name: 'At trade' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(within(scenario).getAllByLabelText('Sam Flanders contribution +10.40')).toHaveLength(2);
+    expect(within(scenario).getByText('Expected net +5.20')).toBeVisible();
     expect(
       within(scenario).getByText(/sender is inferred as the other participating club/i)
     ).toBeVisible();
     const workbookRecord = screen.getByText('Workbook trade record').parentElement;
-    const verifiedGames = screen.getByText('Verified post-trade games').parentElement;
     expect(workbookRecord).not.toBeNull();
-    expect(verifiedGames).not.toBeNull();
     expect(within(workbookRecord!).getByText('Flanders (0 games)')).toBeVisible();
+    expect(screen.getByText('Governed numerical evidence')).toBeVisible();
+    expect(screen.getByText('Unavailable at this gate')).toBeVisible();
     expect(
-      within(verifiedGames!).getByText('Unavailable — no reconciled acquisition-spell fact')
+      screen.getByText(
+        'No factual calculation, dataset, or model identity is claimed while numerical evaluation remains blocked.'
+      )
     ).toBeVisible();
-    expect(screen.getByText('Valued')).toBeVisible();
-    expect(screen.getByText('40 historical samples')).toBeVisible();
     expect(screen.getByText('Production authority: none')).toBeVisible();
     expect(screen.getByText('Publication authority: none')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Back to private archive' })).toHaveAttribute(
@@ -278,32 +378,6 @@ describe('private local workbook trade evaluation page', () => {
     );
     expect(screen.queryByRole('link', { name: /export/i })).not.toBeInTheDocument();
     expect(loadTradeMock).toHaveBeenCalledWith(FLANDERS_TRADE_ID);
-  });
-
-  it('renders reconciled games with their effective-through date', async () => {
-    const fixture = evaluationFixture();
-    fixture.links[0]!.outcomeEvidence = {
-      state: 'reconciled',
-      effectiveThrough: '2026-08-09T09:20:00.000Z',
-      games: {
-        state: 'partial',
-        observedValue: 12,
-        reason: 'active_career_right_censored',
-      },
-    };
-    loadTradeMock.mockResolvedValueOnce(fixture);
-
-    render(
-      await LocalWorkbookTradeEvaluationPage({
-        params: Promise.resolve({ tradeId: FLANDERS_TRADE_ID }),
-      })
-    );
-
-    const verifiedGames = screen.getByText('Verified post-trade games').parentElement;
-    expect(verifiedGames).not.toBeNull();
-    expect(within(verifiedGames!).getByText('12 games (right-censored)')).toBeVisible();
-    expect(within(verifiedGames!).getByText('Effective through 2026-08-09')).toBeVisible();
-    expect(screen.getByText('2025_0016')).toBeVisible();
   });
 
   it('returns not found when the trade is unavailable or evaluation is disabled', async () => {

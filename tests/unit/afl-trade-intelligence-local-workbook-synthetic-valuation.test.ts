@@ -94,15 +94,48 @@ describe('local workbook synthetic valuation adapter', () => {
         directionBasis: 'two_party_other_club_assumption',
       }),
     ]);
-    expect(prepared.summary.views).toHaveLength(4);
+    expect(prepared.explanation.state).toBe('available');
+    if (prepared.explanation.state !== 'available') {
+      throw new Error('Expected the synthetic explanation to be available.');
+    }
+    expect(prepared.explanation.document).toMatchObject({
+      schemaVersion: 'afl-trade-valuation-explanation/v1',
+      defaultView: 'current',
+      authority: {
+        kind: 'private_synthetic',
+        assumptionSetId: prepared.scenario.assumptionSet.assumptionSetId,
+        publicationProhibited: true,
+      },
+      coverage: { status: 'complete', ratio: 1 },
+      methodology: {
+        additiveStatistic: 'probability_weighted_mean',
+        packageMedianIsAdditive: false,
+        assetGradeTreatment: 'prohibited',
+      },
+    });
+    expect(prepared.explanation.document.views).toHaveLength(4);
     expect(
-      prepared.summary.views.every((view) =>
-        view.parties.every(
-          ({ received, givenUp, netAdvantage }) =>
-            Number.isFinite(received) && Number.isFinite(givenUp) && Number.isFinite(netAdvantage)
+      prepared.explanation.document.views.every((view) =>
+        view.clubs.every(
+          ({ received, givenUp, net }) =>
+            Number.isFinite(received.additiveMean) &&
+            Number.isFinite(givenUp.additiveMean) &&
+            Number.isFinite(net.additiveMean)
         )
       )
     ).toBe(true);
+    expect(prepared.summary.views).toEqual(
+      prepared.explanation.document.views.map(({ view, clubs }) => ({
+        view,
+        parties: clubs.map(({ aflClubId, clubName, received, givenUp, net }) => ({
+          aflClubId,
+          clubName,
+          received: received.additiveMean,
+          givenUp: givenUp.additiveMean,
+          netAdvantage: net.additiveMean,
+        })),
+      }))
+    );
   });
 
   it('uses a declared deterministic transfer map for multi-party workbook fixtures', () => {

@@ -108,13 +108,21 @@ function expectedControllerUrl(): string {
   return new URL(AUTH_SERVICE_WORKER_PATH, window.location.href).href;
 }
 
-function hasExpectedController(container: ServiceWorkerContainer): boolean {
-  return container.controller?.scriptURL === expectedControllerUrl();
+function hasExpectedController(
+  container: ServiceWorkerContainer,
+  previousController?: ServiceWorker | null
+): boolean {
+  const controller = container.controller;
+  return (
+    controller?.scriptURL === expectedControllerUrl() &&
+    (previousController === undefined || controller !== previousController)
+  );
 }
 
 function waitForExpectedController(
   container: ServiceWorkerContainer,
-  timeoutMs: number
+  timeoutMs: number,
+  previousController?: ServiceWorker | null
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -127,7 +135,7 @@ function waitForExpectedController(
     };
 
     const onControllerChange = () => {
-      if (!hasExpectedController(container)) {
+      if (!hasExpectedController(container, previousController)) {
         return;
       }
 
@@ -206,9 +214,8 @@ async function registerAndWaitForController(): Promise<void> {
   }
 
   const container = navigator.serviceWorker;
-  if (hasExpectedController(container)) {
-    return;
-  }
+  const previousController = container.controller;
+  const previousControllerWasExpected = hasExpectedController(container);
 
   const deadline = Date.now() + AUTH_SERVICE_WORKER_READY_TIMEOUT_MS;
   const registration = await registerServiceWorker(
@@ -216,14 +223,30 @@ async function registerAndWaitForController(): Promise<void> {
     Math.max(0, deadline - Date.now())
   );
 
-  if (hasExpectedController(container)) {
+  if (!previousControllerWasExpected && hasExpectedController(container)) {
     return;
   }
 
+  const refreshPending = Boolean(
+    registration.installing ||
+      registration.waiting ||
+      (previousControllerWasExpected &&
+        registration.active &&
+        registration.active !== previousController)
+  );
+  if (previousControllerWasExpected && !refreshPending) return;
+  if (hasExpectedController(container, previousController)) return;
+
   // An already-active worker normally claimed clients during activation. Ask
   // it to claim again to recover deterministically from an uncontrolled tab.
-  registration.active?.postMessage({ type: 'statly:claim-auth-clients' });
-  await waitForExpectedController(container, Math.max(0, deadline - Date.now()));
+  if (!previousControllerWasExpected) {
+    registration.active?.postMessage({ type: 'statly:claim-auth-clients' });
+  }
+  await waitForExpectedController(
+    container,
+    Math.max(0, deadline - Date.now()),
+    previousControllerWasExpected ? previousController : undefined
+  );
 }
 
 /**

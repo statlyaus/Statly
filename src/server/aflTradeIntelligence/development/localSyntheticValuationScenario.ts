@@ -601,17 +601,35 @@ function buildLocalSyntheticValuationArtifacts(
     basis: definition.basis,
     tradeId: definition.tradeId,
     scenario,
+    valuationCaseId: valuationCase.valuationCaseId,
+    valuationCalculationId: calculation.valuationCalculationId,
     transferDirections: definition.transfers.map(
-      ({ transferId, fromClubId, toClubId, assetId, directionBasis }) => ({
+      ({ transferId, fromClubId, toClubId, assetId, assetKind, displayLabel, directionBasis }) => ({
         transferId,
         fromClubId,
         toClubId,
         assetId,
+        assetKind,
+        displayLabel,
         directionBasis,
       })
     ),
     contributionPolicy: 'deterministic_fixture_rank_v1' as const,
+    explanationPolicy: {
+      schemaVersion: 'local-synthetic-explanation-policy/v1' as const,
+      valueUnitId: valuationCase.content.valueUnitId,
+      practicalEquivalenceBandByView: {
+        at_trade: 0,
+        realized: 0,
+        remaining: 0,
+        current: 0,
+      },
+      practicalEquivalenceBasis:
+        'Synthetic fixture assumes no practical-equivalence band; grades are provisional.',
+    },
     createdAt: assessedAt,
+    effectiveAt: definition.effectiveAt,
+    effectiveThrough: definition.effectiveThrough,
     publicationEligible: false as const,
   };
   const assumptionSet = {
