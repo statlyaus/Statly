@@ -49,10 +49,19 @@ node -e '
   }
 '
 
+mkdir -p "$ROOT_DIR/.statly-local"
 export AFL_OUTCOMES_DEV_WORKBOOK_READ_ENABLED="true"
 export DATABASE_URL="file:$ROOT_DIR/.statly-local/statly-app.db"
 export STATLY_LOCAL_REUSE_OUTCOMES_DATABASE="true"
 export AFL_TRADE_PUBLIC_READ_ENVIRONMENT="test_fixture"
+export STATLY_NEXT_DEV_BUNDLER="webpack"
+
+echo "workbook evaluation: authenticating and migrating the disposable outcomes database"
+npx tsx Scripts/dev/verify-local-afl-trade-outcomes-db.ts
+npm run outcomes:prisma:migrate:deploy
+
+echo "workbook evaluation: retaining exact local player identity reviews"
+npx tsx Scripts/dev/review-local-workbook-player-identities.ts
 
 echo "workbook evaluation: verifying the pinned private input"
 npm run outcomes:workbook:inspect

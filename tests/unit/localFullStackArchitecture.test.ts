@@ -44,6 +44,7 @@ describe('local full stack development architecture', () => {
 
   it('starts the app stack with Firebase emulator environment variables', () => {
     const source = read('Scripts/dev/full-local-stack.sh');
+    const nextConfig = read('next.config.mjs');
     const firebaseConfig = read('src/lib/firebase/clientConfig.ts');
     const firebaseAuth = read('src/lib/firebase/clientAuth.ts');
     const firebaseFirestore = read('src/lib/firebase/clientFirestore.ts');
@@ -79,6 +80,7 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('export SOCKETIO_PORT="3002"');
     expect(source).toContain('export SOCKET_IO_PORT="3002"');
     expect(source).toContain('export NEXT_PUBLIC_SOCKET_URL="http://localhost:3002"');
+    expect(nextConfig).toContain('root: process.cwd()');
     expect(firebaseConfig).toContain('const useFirebaseEmulators');
     expect(firebaseAuth).toContain('if (!useFirebaseEmulators || !authInstance)');
     expect(firebaseFirestore).toContain('if (useFirebaseEmulators)');
@@ -95,9 +97,26 @@ describe('local full stack development architecture', () => {
     expect(workbookStack).toContain('statly_outcomes_test');
     expect(workbookStack).toContain('STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE');
     expect(workbookStack).toContain('AFL_TRADE_PUBLIC_READ_ENVIRONMENT="test_fixture"');
+    expect(workbookStack).toContain('STATLY_NEXT_DEV_BUNDLER="webpack"');
+    expect(workbookStack).toContain('Scripts/dev/verify-local-afl-trade-outcomes-db.ts');
+    expect(workbookStack).toContain('npm run outcomes:prisma:migrate:deploy');
+    expect(workbookStack).toContain('Scripts/dev/review-local-workbook-player-identities.ts');
+    expect(workbookStack.indexOf('verify-local-afl-trade-outcomes-db.ts')).toBeLessThan(
+      workbookStack.indexOf('outcomes:prisma:migrate:deploy')
+    );
+    expect(workbookStack.indexOf('outcomes:prisma:migrate:deploy')).toBeLessThan(
+      workbookStack.indexOf('review-local-workbook-player-identities.ts')
+    );
+    expect(workbookStack).toContain('mkdir -p "$ROOT_DIR/.statly-local"');
+    expect(workbookStack.indexOf('mkdir -p "$ROOT_DIR/.statly-local"')).toBeLessThan(
+      workbookStack.indexOf('DATABASE_URL="file:$ROOT_DIR/.statly-local/statly-app.db"')
+    );
     expect(localStack).toContain('STATLY_LOCAL_REUSE_OUTCOMES_DATABASE');
     expect(localStack).toContain('reusing the caller-owned disposable AFL outcomes database');
     expect(localStack).toContain('Scripts/dev/verify-local-afl-trade-outcomes-db.ts');
+    expect(localStack).toContain('STATLY_NEXT_DEV_BUNDLER');
+    expect(localStack).toContain('./node_modules/.bin/next dev --webpack');
+    expect(localStack).toContain('npm run auth-worker:build');
     expect(localStack).toContain('AFL_TRADE_PUBLIC_READ_ENVIRONMENT="${AFL_TRADE_PUBLIC_READ_ENVIRONMENT:-test_fixture}"');
   });
 

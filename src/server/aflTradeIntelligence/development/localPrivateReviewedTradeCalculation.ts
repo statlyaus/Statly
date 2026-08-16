@@ -8,6 +8,7 @@ import {
 import type { AflTradeDevelopmentReconciledAcquisitionOutcome } from '../modeling/developmentWorkbookValueProjection';
 
 export interface LocalPrivateReviewedPlayerIdentityEvidence {
+  readonly sourcePlayerName?: string;
   readonly recordedName: string;
   readonly canonicalPlayerId: string;
   readonly identityDecisionIds: readonly string[];
@@ -176,7 +177,8 @@ function projectPlayer(input: {
     return { asset: input.asset, state: 'unavailable', reason: 'player_identity_unavailable' };
   }
   const matching = input.identities.filter(
-    ({ recordedName: candidate }) => normalizeName(candidate) === normalizeName(recordedName)
+    ({ sourcePlayerName, recordedName: candidate }) =>
+      normalizeName(sourcePlayerName ?? candidate) === normalizeName(recordedName)
   );
   const canonicalIds = [...new Set(matching.map(({ canonicalPlayerId }) => canonicalPlayerId))];
   if (canonicalIds.length === 0) {
