@@ -114,7 +114,10 @@ describe('HPN private calculation source-use policy', () => {
       evaluatedAt,
     });
 
-    expect(assessment).toMatchObject({
+    expect(assessment.assessmentId).toMatch(
+      /^hpn-private-source-use-assessment:[a-f0-9]{64}$/
+    );
+    expect(assessment.content).toMatchObject({
       state: 'not_permitted',
       reasons: ['derived_feature_operation_blocked', 'derived_source_field_blocked'],
       fields: [
@@ -134,7 +137,7 @@ describe('HPN private calculation source-use policy', () => {
       evaluatedAt,
     });
 
-    expect(assessment).toMatchObject({
+    expect(assessment.content).toMatchObject({
       state: 'not_permitted',
       reasons: ['authority_is_overbroad'],
     });
@@ -150,7 +153,7 @@ describe('HPN private calculation source-use policy', () => {
       evaluatedAt,
     });
 
-    expect(assessment).toMatchObject({
+    expect(assessment.content).toMatchObject({
       state: 'permitted_private_calculation',
       reasons: [],
       fields: [
@@ -173,7 +176,7 @@ describe('HPN private calculation source-use policy', () => {
       evaluatedAt,
     });
 
-    expect(assessment).toMatchObject({
+    expect(assessment.content).toMatchObject({
       state: 'not_permitted',
       reasons: ['private_evaluation_not_authorized'],
     });
@@ -193,7 +196,7 @@ describe('HPN private calculation source-use policy', () => {
       evaluatedAt,
     });
 
-    expect(assessment).toMatchObject({
+    expect(assessment.content).toMatchObject({
       state: 'not_permitted',
       reasons: ['reviewed_evidence_not_exact'],
     });
@@ -216,8 +219,8 @@ describe('HPN private calculation source-use policy', () => {
       evaluatedAt: '2028-08-16T05:00:00.000Z',
     });
 
-    expect(outOfScope.reasons).toEqual(['rights_scope_mismatch']);
-    expect(expired.reasons).toEqual(['rights_not_current']);
+    expect(outOfScope.content.reasons).toEqual(['rights_scope_mismatch']);
+    expect(expired.content.reasons).toEqual(['rights_not_current']);
   });
 
   it('reports an unregistered HPN source field instead of silently admitting it', () => {
@@ -230,7 +233,7 @@ describe('HPN private calculation source-use policy', () => {
       evaluatedAt,
     });
 
-    expect(assessment).toMatchObject({
+    expect(assessment.content).toMatchObject({
       state: 'not_permitted',
       reasons: ['source_field_not_registered'],
       fields: [

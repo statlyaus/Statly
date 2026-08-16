@@ -3,6 +3,7 @@ import {
   doesAflTradeArtifactRefMatchCanonicalJson,
   type AflTradeArtifactRef,
 } from '../artifacts/artifactReference';
+import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 import {
   aflTradeSourceRightsProposalSchema,
   type AflTradeSourceRightsProposal,
@@ -29,6 +30,18 @@ export type AflTradeHpnPrivateSourceUseReason =
   (typeof AFL_TRADE_HPN_PRIVATE_SOURCE_USE_REASONS)[number];
 
 export type AflTradeHpnPrivateCalculationSourceUseAssessment = Readonly<{
+  assessmentId: string;
+  content: AflTradeHpnPrivateCalculationSourceUseAssessmentContent;
+}>;
+
+export type AflTradeHpnPrivateCalculationSourceUseAssessmentContent = Readonly<{
+  schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v1';
+  environment: 'non_production';
+  purpose: 'private_confirmed_realized_hpn_pav';
+  competition: string;
+  seasonYear: number;
+  valuationScopeKey: string | null;
+  evaluationDecisionId: string | null;
   state: 'permitted_private_calculation' | 'not_permitted';
   rightsArtifactId: string;
   evidenceBundleId: string;
@@ -108,6 +121,10 @@ function isOverbroad(rights: AflTradeSourceRightsProposal): boolean {
 }
 
 function unavailableAssessment(input: {
+  competition: string;
+  seasonYear: number;
+  valuationScopeKey: string | null;
+  evaluationDecisionId: string | null;
   rightsArtifactId: string;
   evidenceBundleId: string;
   sourceFields: readonly string[];
@@ -115,9 +132,16 @@ function unavailableAssessment(input: {
   reasons: readonly AflTradeHpnPrivateSourceUseReason[];
   evidenceRefs: readonly AflTradeArtifactRef[];
   evaluatedAt: string;
-}): AflTradeHpnPrivateCalculationSourceUseAssessment {
+}): AflTradeHpnPrivateCalculationSourceUseAssessmentContent {
   const reasons = uniqueReasons(input.reasons);
   return {
+    schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v1',
+    environment: 'non_production',
+    purpose: 'private_confirmed_realized_hpn_pav',
+    competition: input.competition,
+    seasonYear: input.seasonYear,
+    valuationScopeKey: input.valuationScopeKey,
+    evaluationDecisionId: input.evaluationDecisionId,
     state: 'not_permitted',
     rightsArtifactId: input.rightsArtifactId,
     evidenceBundleId: input.evidenceBundleId,
@@ -131,6 +155,18 @@ function unavailableAssessment(input: {
     evaluatedAt: input.evaluatedAt,
     publicationEligible: false,
     publicationProhibited: true,
+  };
+}
+
+function sealAssessment(
+  content: AflTradeHpnPrivateCalculationSourceUseAssessmentContent
+): AflTradeHpnPrivateCalculationSourceUseAssessment {
+  return {
+    assessmentId: createAflTradeContentAddress(
+      'hpn-private-source-use-assessment',
+      content
+    ),
+    content,
   };
 }
 
@@ -155,7 +191,17 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
     reasons: readonly AflTradeHpnPrivateSourceUseReason[],
     fieldReasons?: ReadonlyMap<string, readonly AflTradeHpnPrivateSourceUseReason[]>
   ) =>
-    unavailableAssessment({
+    sealAssessment(unavailableAssessment({
+      competition: input.competition,
+      seasonYear: input.seasonYear,
+      valuationScopeKey:
+        input.admission.state === 'authorized'
+          ? input.admission.authority.valuationScopeKey
+          : null,
+      evaluationDecisionId:
+        input.admission.state === 'authorized'
+          ? input.admission.authority.decisionId
+          : input.admission.decisionId,
       rightsArtifactId: rights.rightsArtifactId,
       evidenceBundleId: evidenceBundle.evidenceBundleId,
       sourceFields,
@@ -163,7 +209,7 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
       reasons,
       evidenceRefs,
       evaluatedAt: input.evaluatedAt,
-    });
+    }));
 
   if (input.admission.state !== 'authorized') {
     return unavailable(['private_evaluation_not_authorized']);
@@ -227,7 +273,14 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
 
   const canonicalReasons = uniqueReasons(reasons);
   if (canonicalReasons.length > 0) return unavailable(canonicalReasons, fieldReasons);
-  return {
+  return sealAssessment({
+    schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v1',
+    environment: 'non_production',
+    purpose: 'private_confirmed_realized_hpn_pav',
+    competition: input.competition,
+    seasonYear: input.seasonYear,
+    valuationScopeKey: input.admission.authority.valuationScopeKey,
+    evaluationDecisionId: input.admission.authority.decisionId,
     state: 'permitted_private_calculation',
     rightsArtifactId: rights.rightsArtifactId,
     evidenceBundleId: evidenceBundle.evidenceBundleId,
@@ -241,5 +294,5 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
     evaluatedAt: input.evaluatedAt,
     publicationEligible: false,
     publicationProhibited: true,
-  };
+  });
 }
