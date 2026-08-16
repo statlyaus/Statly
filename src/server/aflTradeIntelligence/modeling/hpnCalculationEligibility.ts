@@ -13,7 +13,7 @@ import {
 import { aflTradeHpnPavMethodSchema } from './hpnPlayerApproximateValue';
 
 export const AFL_TRADE_HPN_CALCULATION_ELIGIBILITY_SCHEMA_VERSION =
-  'afl-trade-hpn-calculation-eligibility/v2' as const;
+  'afl-trade-hpn-calculation-eligibility/v3' as const;
 
 const publicIdSchema = z
   .string()
@@ -151,7 +151,18 @@ const blockerSchema = z.enum([
   'raw_field_missing',
   'source_use_not_permitted',
 ]);
-const reportBlockerSchema = z.enum(['method_not_authenticated']);
+const reportBlockerSchema = z.enum([
+  'method_not_authenticated',
+  'required_source_missing',
+]);
+const evidenceProfileSchema = z
+  .object({
+    state: z.enum(['single_source', 'corroborated']),
+    limitations: z
+      .array(z.literal('no_independent_player_stats_corroboration'))
+      .max(1),
+  })
+  .strict();
 
 const assessmentInputSchema = z
   .object({
@@ -178,7 +189,6 @@ const sourceBase = {
   inputKind: z.enum(['completed_match_result', 'player_match_stats']),
   role: z.enum(['primary', 'corroborating']).nullable(),
   selectionEvidenceRefs: evidenceRefsSchema,
-  fields: z.array(assessmentSchema).min(1).max(30),
 };
 
 const sourceSchema = z
@@ -189,6 +199,7 @@ const sourceSchema = z
         selectionState: z.literal('selected'),
         normalizationRunId: aflTradeContentAddressedIdSchema('provider-normalization-run'),
         provider: publicIdSchema,
+        fields: z.array(assessmentSchema).min(1).max(30),
       })
       .strict(),
     z
@@ -211,34 +222,30 @@ const sourceSchema = z
         message: 'Only player-stat sources have primary or corroborating roles.',
       });
     }
-    const expected = listAflTradeHpnRequiredSemanticFields(source.inputKind);
-    const actual = source.fields.map(({ semanticField }) => semanticField);
-    if (
-      actual.length !== expected.length ||
-      actual.some((fieldName, index) => fieldName !== expected[index])
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['fields'],
-        message: 'Each selected source must assess every required HPN semantic field exactly once.',
-      });
-    }
-    const approvedMapIds = source.fields.flatMap(({ fieldMapReview }) =>
-      fieldMapReview.state === 'current_approved' ? [fieldMapReview.fieldMapId] : []
-    );
-    if (new Set(approvedMapIds).size > 1) {
-      context.addIssue({
-        code: 'custom',
-        path: ['fields'],
-        message: 'One source run cannot be assessed through multiple current field maps.',
-      });
-    }
-    if (source.selectionState === 'missing' && source.fields.some(({ state }) => state === 'eligible')) {
-      context.addIssue({
-        code: 'custom',
-        path: ['fields'],
-        message: 'A missing source selection cannot contain an eligible field.',
-      });
+    if (source.selectionState === 'selected') {
+      const expected = listAflTradeHpnRequiredSemanticFields(source.inputKind);
+      const actual = source.fields.map(({ semanticField }) => semanticField);
+      if (
+        actual.length !== expected.length ||
+        actual.some((fieldName, index) => fieldName !== expected[index])
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fields'],
+          message:
+            'Each selected source must assess every required HPN semantic field exactly once.',
+        });
+      }
+      const approvedMapIds = source.fields.flatMap(({ fieldMapReview }) =>
+        fieldMapReview.state === 'current_approved' ? [fieldMapReview.fieldMapId] : []
+      );
+      if (new Set(approvedMapIds).size > 1) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fields'],
+          message: 'One source run cannot be assessed through multiple current field maps.',
+        });
+      }
     }
   });
 
@@ -252,14 +259,19 @@ const contentSchema = z
     seasonYear: z.number().int().min(1998).max(2200),
     methodSelection: aflTradeHpnCalculationMethodSelectionSchema,
     authoritySnapshotArtifact: aflTradeArtifactRefSchema,
-    sources: z.array(sourceSchema).min(3).max(100),
+    sources: z.array(sourceSchema).length(3),
     state: z.enum(['eligible', 'blocked']),
-    blockers: z.array(reportBlockerSchema).max(1),
+    blockers: z.array(reportBlockerSchema).max(2),
+    evidenceProfile: evidenceProfileSchema,
     counts: z
       .object({
-        totalFields: z.number().int().positive(),
+        totalFields: z.number().int().nonnegative(),
         eligibleFields: z.number().int().nonnegative(),
         blockedFields: z.number().int().nonnegative(),
+        requiredFields: z.number().int().nonnegative(),
+        blockedRequiredFields: z.number().int().nonnegative(),
+        optionalFields: z.number().int().nonnegative(),
+        blockedOptionalFields: z.number().int().nonnegative(),
       })
       .strict(),
     evaluatedAt: z.iso.datetime({ offset: true }),
@@ -271,43 +283,81 @@ const contentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
-    const runIds = content.sources.flatMap(({ normalizationRunId }) =>
-      normalizationRunId === null ? [] : [normalizationRunId]
+    const resultSources = content.sources.filter(
+      ({ inputKind }) => inputKind === 'completed_match_result'
     );
-    if (new Set(runIds).size !== runIds.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['sources'],
-        message: 'Eligibility source runs must be unique.',
-      });
-    }
+    const primarySources = content.sources.filter(({ role }) => role === 'primary');
+    const corroboratingSources = content.sources.filter(
+      ({ role }) => role === 'corroborating'
+    );
     if (
-      content.sources.filter(({ inputKind }) => inputKind === 'completed_match_result').length !==
-        1 ||
-      !content.sources.some(({ role }) => role === 'primary') ||
-      !content.sources.some(({ role }) => role === 'corroborating')
+      resultSources.length !== 1 ||
+      primarySources.length !== 1 ||
+      corroboratingSources.length !== 1
     ) {
       context.addIssue({
         code: 'custom',
         path: ['sources'],
         message:
-          'Eligibility requires one result run plus primary and corroborating player-stat runs.',
+          'Eligibility requires exactly one result, primary-player, and corroborating-player source slot.',
       });
     }
-    const assessments = content.sources.flatMap(({ fields }) => fields);
+    const assessments = content.sources.flatMap((source) =>
+      source.selectionState === 'selected' ? source.fields : []
+    );
+    const requiredAssessments = content.sources.flatMap((source) =>
+      source.selectionState === 'selected' && source.role !== 'corroborating'
+        ? source.fields
+        : []
+    );
+    const optionalAssessments = content.sources.flatMap((source) =>
+      source.selectionState === 'selected' && source.role === 'corroborating'
+        ? source.fields
+        : []
+    );
     const eligibleFields = assessments.filter(({ state }) => state === 'eligible').length;
     const blockedFields = assessments.length - eligibleFields;
-    const expectedBlockers =
-      content.methodSelection.state === 'missing'
-        ? (['method_not_authenticated'] as const)
-        : ([] as const);
+    const blockedRequiredFields = requiredAssessments.filter(
+      ({ state }) => state === 'blocked'
+    ).length;
+    const blockedOptionalFields = optionalAssessments.filter(
+      ({ state }) => state === 'blocked'
+    ).length;
+    const requiredSourceMissing = [...resultSources, ...primarySources].some(
+      ({ selectionState }) => selectionState === 'missing'
+    );
+    const expectedBlockers: z.infer<typeof reportBlockerSchema>[] = [];
+    if (content.methodSelection.state === 'missing') {
+      expectedBlockers.push('method_not_authenticated');
+    }
+    if (requiredSourceMissing) expectedBlockers.push('required_source_missing');
+    const primary = primarySources[0];
+    const corroborating = corroboratingSources[0];
+    const independentlyCorroborated =
+      primary?.selectionState === 'selected' &&
+      corroborating?.selectionState === 'selected' &&
+      primary.provider !== corroborating.provider &&
+      blockedOptionalFields === 0;
+    const expectedEvidenceProfile = independentlyCorroborated
+      ? { state: 'corroborated' as const, limitations: [] }
+      : {
+          state: 'single_source' as const,
+          limitations: ['no_independent_player_stats_corroboration' as const],
+        };
     if (
       content.counts.totalFields !== assessments.length ||
       content.counts.eligibleFields !== eligibleFields ||
       content.counts.blockedFields !== blockedFields ||
+      content.counts.requiredFields !== requiredAssessments.length ||
+      content.counts.blockedRequiredFields !== blockedRequiredFields ||
+      content.counts.optionalFields !== optionalAssessments.length ||
+      content.counts.blockedOptionalFields !== blockedOptionalFields ||
       JSON.stringify(content.blockers) !== JSON.stringify(expectedBlockers) ||
+      JSON.stringify(content.evidenceProfile) !== JSON.stringify(expectedEvidenceProfile) ||
       content.state !==
-        (blockedFields === 0 && expectedBlockers.length === 0 ? 'eligible' : 'blocked')
+        (blockedRequiredFields === 0 && expectedBlockers.length === 0
+          ? 'eligible'
+          : 'blocked')
     ) {
       context.addIssue({
         code: 'custom',
@@ -417,7 +467,6 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
         readonly inputKind: 'completed_match_result' | 'player_match_stats';
         readonly role: 'primary' | 'corroborating' | null;
         readonly selectionEvidenceRefs: readonly AflTradeArtifactRef[];
-        readonly fields: readonly AflTradeHpnCalculationFieldAssessmentInput[];
       }
   )[];
   readonly evaluatedAt: string;
@@ -441,12 +490,16 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
     });
   }
   const sources = input.sources
-    .map((source) => ({
-      ...source,
-      fields: source.fields
-        .map(assess)
-        .sort((left, right) => left.semanticField.localeCompare(right.semanticField)),
-    }))
+    .map((source) =>
+      source.selectionState === 'selected'
+        ? {
+            ...source,
+            fields: source.fields
+              .map(assess)
+              .sort((left, right) => left.semanticField.localeCompare(right.semanticField)),
+          }
+        : source
+    )
     .sort((left, right) => {
       const slot = (source: (typeof sources)[number]) =>
         source.inputKind === 'completed_match_result'
@@ -456,13 +509,45 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
             : '2';
       return slot(left).localeCompare(slot(right));
     });
-  const assessments = sources.flatMap(({ fields }) => fields);
+  const assessments = sources.flatMap((source) =>
+    source.selectionState === 'selected' ? source.fields : []
+  );
+  const requiredAssessments = sources.flatMap((source) =>
+    source.selectionState === 'selected' && source.role !== 'corroborating'
+      ? source.fields
+      : []
+  );
+  const optionalAssessments = sources.flatMap((source) =>
+    source.selectionState === 'selected' && source.role === 'corroborating'
+      ? source.fields
+      : []
+  );
   const eligibleFields = assessments.filter(({ state }) => state === 'eligible').length;
   const blockedFields = assessments.length - eligibleFields;
-  const blockers =
-    methodSelection.state === 'missing'
-      ? (['method_not_authenticated'] as const)
-      : ([] as const);
+  const blockedRequiredFields = requiredAssessments.filter(
+    ({ state }) => state === 'blocked'
+  ).length;
+  const blockedOptionalFields = optionalAssessments.filter(
+    ({ state }) => state === 'blocked'
+  ).length;
+  const result = sources.find(({ inputKind }) => inputKind === 'completed_match_result');
+  const primary = sources.find(({ role }) => role === 'primary');
+  const corroborating = sources.find(({ role }) => role === 'corroborating');
+  const blockers: z.infer<typeof reportBlockerSchema>[] = [];
+  if (methodSelection.state === 'missing') blockers.push('method_not_authenticated');
+  if (result?.selectionState === 'missing' || primary?.selectionState === 'missing') {
+    blockers.push('required_source_missing');
+  }
+  const evidenceProfile =
+    primary?.selectionState === 'selected' &&
+    corroborating?.selectionState === 'selected' &&
+    primary.provider !== corroborating.provider &&
+    blockedOptionalFields === 0
+      ? { state: 'corroborated' as const, limitations: [] }
+      : {
+          state: 'single_source' as const,
+          limitations: ['no_independent_player_stats_corroboration' as const],
+        };
   const content = contentSchema.parse({
     schemaVersion: AFL_TRADE_HPN_CALCULATION_ELIGIBILITY_SCHEMA_VERSION,
     environment: 'non_production',
@@ -473,12 +558,18 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
     methodSelection,
     authoritySnapshotArtifact: input.authoritySnapshotArtifact,
     sources,
-    state: blockedFields === 0 && blockers.length === 0 ? 'eligible' : 'blocked',
+    state:
+      blockedRequiredFields === 0 && blockers.length === 0 ? 'eligible' : 'blocked',
     blockers,
+    evidenceProfile,
     counts: {
       totalFields: assessments.length,
       eligibleFields,
       blockedFields,
+      requiredFields: requiredAssessments.length,
+      blockedRequiredFields,
+      optionalFields: optionalAssessments.length,
+      blockedOptionalFields,
     },
     evaluatedAt: input.evaluatedAt,
     publicationEligible: false,

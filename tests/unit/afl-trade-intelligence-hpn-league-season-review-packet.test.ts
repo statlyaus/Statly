@@ -93,18 +93,6 @@ function report(
       inputKind: 'player_match_stats',
       role: 'corroborating',
       selectionEvidenceRefs: [ref(`missing-selection:${seasonYear}`)],
-      fields: listAflTradeHpnRequiredSemanticFields('player_match_stats').map((name) =>
-        field(name, {
-          rawAvailability: { state: 'missing', evidenceRefs: [ref(`missing-raw:${name}`)] },
-          fieldMapReview: { state: 'missing', evidenceRefs: [ref(`missing-map:${name}`)] },
-          sourceUse: { state: 'unreviewed', evidenceRefs: [ref(`missing-use:${name}`)] },
-          factualReview: { state: 'missing', evidenceRefs: [ref(`missing-fact:${name}`)] },
-          canonicalIdentity: {
-            state: 'incomplete',
-            evidenceRefs: [ref(`missing-identity:${name}`)],
-          },
-        })
-      ),
     } as const
     : selectedSource(seasonYear, 'player_match_stats', 'corroborating', '3');
   const sources = [
@@ -153,7 +141,7 @@ describe('HPN league-season review packet', () => {
     expect(first).toEqual(second);
     expect(first.packetId).toMatch(/^hpn-league-season-review-packet:[a-f0-9]{64}$/);
     expect(first.content).toMatchObject({
-      state: 'blocked',
+      state: 'ready_for_human_review',
       methodSelection: {
         state: 'authenticated',
         methodId: method.methodId,
@@ -161,13 +149,15 @@ describe('HPN league-season review packet', () => {
       },
       counts: {
         seasonCount: 2,
-        eligibleSeasons: 1,
-        blockedSeasons: 1,
+        eligibleSeasons: 2,
+        blockedSeasons: 0,
+        corroboratedSeasons: 1,
+        singleSourceSeasons: 1,
         sourceSlots: 6,
         missingSourceSlots: 1,
-        totalFields: 72,
+        totalFields: 57,
         eligibleFields: 57,
-        blockedFields: 15,
+        blockedFields: 0,
       },
       missingSources: [
         { seasonYear: 2025, slot: 'corroborating_player_stats' },

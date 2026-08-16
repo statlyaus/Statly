@@ -18,7 +18,7 @@ import {
 } from './hpnCalculationEligibility';
 
 export const AFL_TRADE_HPN_LEAGUE_SEASON_REVIEW_PACKET_SCHEMA_VERSION =
-  'afl-trade-hpn-league-season-review-packet/v2' as const;
+  'afl-trade-hpn-league-season-review-packet/v3' as const;
 
 const publicIdSchema = z
   .string()
@@ -38,12 +38,17 @@ const blockerSchema = z.enum([
   'raw_field_missing',
   'source_use_not_permitted',
   'method_not_authenticated',
+  'required_source_missing',
 ]);
 const fieldCountsSchema = z
   .object({
-    totalFields: z.number().int().positive(),
+    totalFields: z.number().int().nonnegative(),
     eligibleFields: z.number().int().nonnegative(),
     blockedFields: z.number().int().nonnegative(),
+    requiredFields: z.number().int().nonnegative(),
+    blockedRequiredFields: z.number().int().nonnegative(),
+    optionalFields: z.number().int().nonnegative(),
+    blockedOptionalFields: z.number().int().nonnegative(),
   })
   .strict();
 const sourceSummarySchema = z
@@ -63,9 +68,10 @@ const seasonSummarySchema = z
     ),
     eligibilityReportArtifact: aflTradeArtifactRefSchema,
     state: z.enum(['eligible', 'blocked']),
+    evidenceProfile: z.enum(['single_source', 'corroborated']),
     sources: z.array(sourceSummarySchema).length(3),
     counts: fieldCountsSchema,
-    blockerCounts: z.array(blockerCountSchema).max(6),
+    blockerCounts: z.array(blockerCountSchema).max(7),
   })
   .strict();
 const missingSourceSchema = z
@@ -105,7 +111,7 @@ const contentSchema = z
     methodSelection: aflTradeHpnCalculationMethodSelectionSchema,
     seasons: z.array(seasonSummarySchema).min(1).max(50),
     missingSources: z.array(missingSourceSchema).max(150),
-    blockerCounts: z.array(blockerCountSchema).max(6),
+    blockerCounts: z.array(blockerCountSchema).max(7),
     state: z.enum(['ready_for_human_review', 'blocked']),
     reviewDisposition: z.literal('requires_human_decision'),
     counts: z
@@ -113,9 +119,11 @@ const contentSchema = z
         seasonCount: z.number().int().positive(),
         eligibleSeasons: z.number().int().nonnegative(),
         blockedSeasons: z.number().int().nonnegative(),
+        corroboratedSeasons: z.number().int().nonnegative(),
+        singleSourceSeasons: z.number().int().nonnegative(),
         sourceSlots: z.number().int().positive(),
         missingSourceSlots: z.number().int().nonnegative(),
-        totalFields: z.number().int().positive(),
+        totalFields: z.number().int().nonnegative(),
         eligibleFields: z.number().int().nonnegative(),
         blockedFields: z.number().int().nonnegative(),
       })
@@ -152,6 +160,12 @@ const contentSchema = z
       seasonCount: content.seasons.length,
       eligibleSeasons,
       blockedSeasons: content.seasons.length - eligibleSeasons,
+      corroboratedSeasons: content.seasons.filter(
+        ({ evidenceProfile }) => evidenceProfile === 'corroborated'
+      ).length,
+      singleSourceSeasons: content.seasons.filter(
+        ({ evidenceProfile }) => evidenceProfile === 'single_source'
+      ).length,
       sourceSlots: content.seasons.length * 3,
       missingSourceSlots: missingSources.length,
       totalFields: content.seasons.reduce((sum, season) => sum + season.counts.totalFields, 0),
@@ -199,7 +213,9 @@ function summarizeReport(
   for (const blocker of report.content.blockers) {
     blockerCounts.set(blocker, (blockerCounts.get(blocker) ?? 0) + 1);
   }
-  for (const assessment of report.content.sources.flatMap(({ fields }) => fields)) {
+  for (const assessment of report.content.sources.flatMap((source) =>
+    source.selectionState === 'selected' ? source.fields : []
+  )) {
     for (const blocker of assessment.blockers) {
       blockerCounts.set(blocker, (blockerCounts.get(blocker) ?? 0) + 1);
     }
@@ -209,6 +225,7 @@ function summarizeReport(
     eligibilityReportId: report.reportId,
     eligibilityReportArtifact: artifact,
     state: report.content.state,
+    evidenceProfile: report.content.evidenceProfile.state,
     sources: report.content.sources.map((source) => ({
       slot: slotFor(source),
       selectionState: source.selectionState,
@@ -282,6 +299,12 @@ export function createAflTradeHpnLeagueSeasonReviewPacket(input: {
       seasonCount: reports.length,
       eligibleSeasons,
       blockedSeasons: reports.length - eligibleSeasons,
+      corroboratedSeasons: reports.filter(
+        ({ evidenceProfile }) => evidenceProfile === 'corroborated'
+      ).length,
+      singleSourceSeasons: reports.filter(
+        ({ evidenceProfile }) => evidenceProfile === 'single_source'
+      ).length,
       sourceSlots: reports.length * 3,
       missingSourceSlots: missingSources.length,
       totalFields: reports.reduce((sum, report) => sum + report.counts.totalFields, 0),

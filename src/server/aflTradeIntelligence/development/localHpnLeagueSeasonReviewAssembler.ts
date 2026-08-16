@@ -24,7 +24,6 @@ import {
 } from '../valuation/privateReviewedEvidenceEvaluation';
 import { createLocalAflTradeHpnPlayerFieldMapCandidate } from './localHpnFieldMapCandidates';
 import {
-  createMissingLocalAflTradeHpnFields,
   createSelectedLocalAflTradeHpnFields,
 } from './localHpnReviewFieldAssessments';
 import {
@@ -183,17 +182,12 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
           inputKind: 'player_match_stats';
           role: 'primary';
           selectionEvidenceRefs: readonly AflTradeArtifactRef[];
-          fields: readonly AflTradeHpnCalculationFieldAssessmentInput[];
         };
     if (!primary) {
       primarySource = {
         selectionState: 'missing', normalizationRunId: null, provider: null,
         inputKind: 'player_match_stats', role: 'primary',
         selectionEvidenceRefs: [authoritySnapshotArtifact],
-        fields: createMissingLocalAflTradeHpnFields(
-          'player_match_stats',
-          authoritySnapshotArtifact
-        ),
       };
     } else {
       const decodeMapArtifact = createAflTradeCanonicalJsonArtifactRef(
@@ -278,20 +272,12 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
           selectionState: 'missing', normalizationRunId: null, provider: null,
           inputKind: 'completed_match_result', role: null,
           selectionEvidenceRefs: [authoritySnapshotArtifact],
-          fields: createMissingLocalAflTradeHpnFields(
-            'completed_match_result',
-            authoritySnapshotArtifact
-          ),
         },
         primarySource,
         {
           selectionState: 'missing', normalizationRunId: null, provider: null,
           inputKind: 'player_match_stats', role: 'corroborating',
           selectionEvidenceRefs: [authoritySnapshotArtifact],
-          fields: createMissingLocalAflTradeHpnFields(
-            'player_match_stats',
-            authoritySnapshotArtifact
-          ),
         },
       ],
       evaluatedAt: snapshot.trustedAt,
