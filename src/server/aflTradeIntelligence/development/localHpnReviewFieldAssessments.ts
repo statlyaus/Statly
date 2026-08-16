@@ -9,7 +9,7 @@ import {
   type AflTradeHpnFieldMapCandidate,
   type AflTradeHpnSemanticBindingCandidate,
 } from '../modeling/hpnFieldMapCandidate';
-import type { AflTradeHpnPavFieldMap } from '../modeling/hpnPavInputContracts';
+import type { AflTradeHpnProjectedFieldMap } from '../modeling/hpnProjectedFieldMap';
 import type { AflTradeHpnPrivateCalculationSourceUseAssessment } from '../modeling/hpnPrivateCalculationSourceUse';
 
 const identityFields = new Set(['player', 'match', 'club', 'homeClub', 'awayClub']);
@@ -41,41 +41,13 @@ function candidateBinding(
 }
 
 function approvedSourceFields(
-  map: AflTradeHpnPavFieldMap,
+  map: AflTradeHpnProjectedFieldMap,
   semanticField: AflTradeHpnRequiredSemanticField
 ): readonly string[] {
-  if (map.content.inputKind === 'completed_match_result') {
-    const bindings = map.content.bindings;
-    if (
-      semanticField === 'match' ||
-      semanticField === 'homeClub' ||
-      semanticField === 'awayClub' ||
-      semanticField === 'homePoints' ||
-      semanticField === 'awayPoints' ||
-      semanticField === 'completionStatus'
-    ) {
-      return [bindings[semanticField]];
-    }
-    return [];
-  }
-  const bindings = map.content.bindings;
-  if (semanticField === 'totalPoints') {
-    return bindings.totalPoints.kind === 'total_points'
-      ? [bindings.totalPoints.totalPoints]
-      : [bindings.totalPoints.goals, bindings.totalPoints.behinds];
-  }
-  if (
-    semanticField === 'player' || semanticField === 'match' || semanticField === 'club' ||
-    semanticField === 'hitOuts' || semanticField === 'goalAssists' ||
-    semanticField === 'inside50s' || semanticField === 'marks' ||
-    semanticField === 'marksInside50' || semanticField === 'freeKicksFor' ||
-    semanticField === 'freeKicksAgainst' || semanticField === 'rebound50s' ||
-    semanticField === 'onePercenters' || semanticField === 'clearances' ||
-    semanticField === 'tackles'
-  ) {
-    return [bindings[semanticField]];
-  }
-  return [];
+  const binding = map.content.semanticBindings.find(
+    (candidate) => candidate.semanticField === semanticField
+  );
+  return binding ? listAflTradeHpnCandidateSourceFields(binding) : [];
 }
 
 function exactStringSet(left: readonly string[], right: readonly string[]): boolean {
@@ -91,7 +63,7 @@ export function createSelectedLocalAflTradeHpnFields(input: Readonly<{
   decodeMapArtifact: AflTradeArtifactRef;
   sourceUseAssessment: AflTradeHpnPrivateCalculationSourceUseAssessment;
   sourceUseAssessmentArtifact: AflTradeArtifactRef;
-  currentMap: AflTradeHpnPavFieldMap | null;
+  currentMap: AflTradeHpnProjectedFieldMap | null;
   currentMapArtifact: AflTradeArtifactRef | null;
   factualRunId: string | null;
   hpnResolutionsCurrent: boolean;
@@ -104,7 +76,8 @@ export function createSelectedLocalAflTradeHpnFields(input: Readonly<{
       );
       if (
         input.currentMap !== null &&
-        !exactStringSet(sourceFields, approvedSourceFields(input.currentMap, semanticField))
+        (input.currentMap.content.candidateId !== input.candidate.candidateId ||
+          !exactStringSet(sourceFields, approvedSourceFields(input.currentMap, semanticField)))
       ) {
         throw new TypeError('The current HPN map conflicts with its exact review candidate.');
       }
