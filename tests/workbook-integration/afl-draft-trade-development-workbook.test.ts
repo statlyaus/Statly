@@ -1,14 +1,15 @@
-import { readFile } from 'node:fs/promises';
-
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { evaluateAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookEvaluation';
 import { projectAflOutcomesDevelopmentWorkbookAcquisitions } from '@/server/aflTradeIntelligence/source/developmentWorkbookAcquisitionProjection';
-import { loadAflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookLoader';
+import {
+  loadAflOutcomesDevelopmentWorkbook,
+  loadAflOutcomesDevelopmentWorkbookEvidence,
+} from '@/server/aflTradeIntelligence/source/developmentWorkbookLoader';
 import type { AflOutcomesDevelopmentWorkbook } from '@/server/aflTradeIntelligence/source/developmentWorkbookStructure';
 import { projectAflOutcomesDevelopmentWorkbookTradeGrades } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeOutcomeProjection';
 import { projectAflOutcomesDevelopmentWorkbookTrades } from '@/server/aflTradeIntelligence/source/developmentWorkbookTradeProjection';
-import { parseAflTradeWorkbookForStaging } from '@/server/aflTradeIntelligence/source/workbookStagingParser';
+import { createAflTradeWorkbookTransactionReviewSet } from '@/server/aflTradeIntelligence/source/workbookTransactionReviewSet';
 import type { AflTradeWorkbookStagingPackage } from '@/server/aflTradeIntelligence/source/workbookImportContracts';
 
 const workbookPath = process.env.AFL_OUTCOMES_DEV_WORKBOOK_PATH;
@@ -23,16 +24,13 @@ let workbook: AflOutcomesDevelopmentWorkbook;
 let staging: AflTradeWorkbookStagingPackage;
 
 beforeAll(async () => {
-  workbook = await loadAflOutcomesDevelopmentWorkbook({
+  const evidence = await loadAflOutcomesDevelopmentWorkbookEvidence({
     workbookPath,
     expectedSha256,
     runtimeEnvironment: 'development',
   });
-  staging = await parseAflTradeWorkbookForStaging({
-    bytes: await readFile(workbookPath),
-    sourceArtifact: workbook.sourceArtifact,
-    originalFilename: workbook.report.source.originalFilename,
-  });
+  workbook = evidence.workbook;
+  staging = evidence.staging;
 });
 
 describe('AFL Draft and Trade development workbook', () => {
@@ -206,5 +204,28 @@ describe('AFL Draft and Trade development workbook', () => {
     expect([...partyCountsByTransaction.values()].filter((count) => count === 2)).toHaveLength(944);
     expect([...partyCountsByTransaction.values()].filter((count) => count === 3)).toHaveLength(25);
     expect([...partyCountsByTransaction.values()].filter((count) => count === 4)).toHaveLength(6);
+  });
+
+  it('seals the complete trade ledger into a private publication-prohibited review set', () => {
+    const reviewSet = createAflTradeWorkbookTransactionReviewSet(staging);
+
+    expect(reviewSet.content).toMatchObject({
+      stagingPackageId: staging.stagingPackageId,
+      sourceArtifactId: workbook.sourceArtifact.artifactId,
+      sourceArtifactSha256: expectedSha256.toLowerCase(),
+      rawEvidenceSha256: staging.rawEvidence.evidenceSha256,
+      authority: 'private_workbook_migration_oracle_review',
+      publicationEligible: false,
+      publicationProhibited: true,
+      transactionCount: 975,
+      pendingReviewCount: 975,
+    });
+    expect(reviewSet.content.transactions.flatMap(({ parties }) => parties)).toHaveLength(1987);
+    expect(
+      new Set(reviewSet.content.transactions.map(({ reviewSubjectId }) => reviewSubjectId)).size
+    ).toBe(975);
+    expect(
+      reviewSet.content.transactions.every(({ reviewState }) => reviewState === 'pending')
+    ).toBe(true);
   });
 });
