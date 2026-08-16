@@ -46,10 +46,12 @@ function source(
   character: string
 ) {
   return {
+    selectionState: 'selected' as const,
     normalizationRunId: run(character),
     provider: `provider:${character}`,
     inputKind,
     role,
+    selectionEvidenceRefs: [ref(`selection:${character}`)],
     fields: listAflTradeHpnRequiredSemanticFields(inputKind).map((name) => field(name)),
   };
 }
@@ -146,5 +148,52 @@ describe('HPN calculation eligibility report', () => {
         ({ semanticField }) => semanticField === 'inside50s'
       )
     ).toMatchObject({ state: 'blocked', blockers: ['source_use_not_permitted'] });
+  });
+
+  it('can seal an honest blocker report when a required source run does not exist', () => {
+    const input = reportInput();
+    input.sources[2] = {
+      selectionState: 'missing',
+      normalizationRunId: null,
+      provider: null,
+      inputKind: 'player_match_stats',
+      role: 'corroborating',
+      selectionEvidenceRefs: [ref('missing-corroborating-source')],
+      fields: listAflTradeHpnRequiredSemanticFields('player_match_stats').map((name) =>
+        field(name, {
+          rawAvailability: {
+            state: 'missing',
+            evidenceRefs: [ref(`missing-raw:${name}`)],
+          },
+          fieldMapReview: {
+            state: 'missing',
+            evidenceRefs: [ref(`missing-map:${name}`)],
+          },
+          sourceUse: {
+            state: 'unreviewed',
+            evidenceRefs: [ref(`missing-rights:${name}`)],
+          },
+          factualReview: {
+            state: 'missing',
+            evidenceRefs: [ref(`missing-fact:${name}`)],
+          },
+          canonicalIdentity: {
+            state: 'incomplete',
+            evidenceRefs: [ref(`missing-identity:${name}`)],
+          },
+        })
+      ),
+    };
+
+    const report = createAflTradeHpnCalculationEligibilityReport(input);
+    expect(report.content).toMatchObject({
+      state: 'blocked',
+      counts: { totalFields: 36, eligibleFields: 21, blockedFields: 15 },
+    });
+    expect(report.content.sources[2]).toMatchObject({
+      selectionState: 'missing',
+      normalizationRunId: null,
+      provider: null,
+    });
   });
 });
