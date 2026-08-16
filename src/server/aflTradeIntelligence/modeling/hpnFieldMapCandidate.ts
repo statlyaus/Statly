@@ -131,6 +131,15 @@ const contentSchema = z
       });
     }
     if (
+      Date.parse(content.providerDecodeMapArtifact.createdAt) > Date.parse(content.createdAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['providerDecodeMapArtifact'],
+        message: 'Candidate evidence must exist before candidate creation.',
+      });
+    }
+    if (
       (content.inputKind === 'completed_match_result') !==
       (content.completedValues !== null && content.completedValues.length > 0)
     ) {
