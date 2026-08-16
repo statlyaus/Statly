@@ -165,6 +165,7 @@ export const aflTradePackagePolicyContentSchema = z
     schemaVersion: z.literal('afl-trade-package-policy/v1'),
     publicAssetBoundary: z.literal('source_native_afl_assets_no_user_or_fantasy_ownership'),
     valuationBundleId: aflTradeContentAddressedIdSchema('valuation-bundle'),
+    valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle').optional(),
     valueUnitId: aflTradePublicIdSchema,
     universalValueLayers: z
       .object({
