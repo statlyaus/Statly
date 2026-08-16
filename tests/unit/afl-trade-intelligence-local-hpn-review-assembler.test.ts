@@ -1,6 +1,10 @@
-import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  createAflTradeByteArtifactRef,
+  createAflTradeCanonicalJsonArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createLocalAflTradeFiveSeasonAflTablesAuthority } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { assembleLocalAflTradeHpnLeagueSeasonReviewPacket } from '@/server/aflTradeIntelligence/development/localHpnLeagueSeasonReviewAssembler';
+import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlQueryResult,
@@ -12,9 +16,19 @@ import {
 } from '@/server/aflTradeIntelligence/valuation/privateReviewedEvidenceEvaluation';
 
 const trustedAt = '2026-08-16T05:00:00.000Z';
-const methodId = `hpn-pav-method:${'d'.repeat(64)}`;
+const methodRegisteredAt = '2026-08-16T04:30:00.000Z';
+const methodBytes = new TextEncoder().encode('<html>retained HPN method</html>');
+const method = createAflTradeHpnPavMethod({
+  sourceArtifact: createAflTradeByteArtifactRef(
+    methodBytes,
+    'text/html',
+    '2026-08-16T02:00:00.000Z'
+  ),
+  sourceBytes: methodBytes,
+  capturedAt: '2026-08-16T02:00:00.000Z',
+});
 
-function snapshot() {
+function snapshot(input: { withMethod?: boolean } = {}) {
   const authority2024 = createLocalAflTradeFiveSeasonAflTablesAuthority(2024);
   const authority2025 = createLocalAflTradeFiveSeasonAflTablesAuthority(2025);
   const rights = authority2025.capture.sourceRights;
@@ -99,6 +113,9 @@ function snapshot() {
     reviewed_evidence_bundle_json: evidenceBundle,
     reviewed_evaluation_decision_json: decision,
     evidence_current: true,
+    method_count: input.withMethod ? 1 : 0,
+    method_json: input.withMethod ? method : null,
+    method_registered_at: input.withMethod ? methodRegisteredAt : null,
     sources_json: [
       source(2024, authority2024.fieldMap, '4'),
       source(2025, authority2025.fieldMap, '5'),
@@ -129,14 +146,18 @@ describe('local HPN league-season review assembler', () => {
       valuationScopeKey: 'workbook:2025',
       fromSeason: 2024,
       throughSeason: 2025,
-      methodId,
     });
 
     expect(client.statements).toHaveLength(1);
     expect(client.statements[0]).toContain('transaction_timestamp()');
     expect(client.statements[0]).toContain('outcome_private_reviewed_evidence_is_current()');
+    expect(client.statements[0]).toContain('outcome_hpn_pav_method');
     expect(assembled.packet.content).toMatchObject({
       state: 'blocked',
+      methodSelection: { state: 'missing', methodId: null },
+      blockerCounts: expect.arrayContaining([
+        { blocker: 'method_not_authenticated', count: 2 },
+      ]),
       counts: {
         seasonCount: 2,
         eligibleSeasons: 0,
@@ -178,8 +199,29 @@ describe('local HPN league-season review assembler', () => {
         valuationScopeKey: 'workbook:2025',
         fromSeason: 2024,
         throughSeason: 2025,
-        methodId,
       })
     ).rejects.toThrow(/reviewed evidence is not current/i);
+  });
+
+  it('authenticates one exact registered method from the same database snapshot', async () => {
+    const assembled = await assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
+      new FixtureClient(snapshot({ withMethod: true })),
+      {
+        valuationScopeKey: 'workbook:2025',
+        fromSeason: 2024,
+        throughSeason: 2025,
+      }
+    );
+
+    expect(assembled.packet.content.methodSelection).toMatchObject({
+      state: 'authenticated',
+      methodId: method.methodId,
+      methodArtifact: createAflTradeCanonicalJsonArtifactRef(method, methodRegisteredAt),
+    });
+    expect(assembled.documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ document: method }),
+      ])
+    );
   });
 });

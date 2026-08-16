@@ -14,6 +14,7 @@ import {
 } from '../modeling/hpnFieldMapCandidate';
 import { createAflTradeHpnLeagueSeasonReviewPacket } from '../modeling/hpnLeagueSeasonReviewPacket';
 import { aflTradeHpnPavFieldMapSchema } from '../modeling/hpnPavInputContracts';
+import { aflTradeHpnPavMethodSchema } from '../modeling/hpnPlayerApproximateValue';
 import { assessAflTradeHpnPrivateCalculationSourceUse } from '../modeling/hpnPrivateCalculationSourceUse';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
@@ -38,7 +39,6 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
     valuationScopeKey: string;
     fromSeason: number;
     throughSeason: number;
-    methodId: string;
   }>
 ) {
   const snapshot = await loadLocalAflTradeHpnReviewSnapshot(client, input);
@@ -64,6 +64,32 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
     throw new TypeError('The private reviewed-evidence admission failed exact authentication.');
   }
 
+  if (
+    (snapshot.methodCount === 1 &&
+      (snapshot.method === null || snapshot.methodRegisteredAt === null)) ||
+    (snapshot.methodCount !== 1 &&
+      (snapshot.method !== null || snapshot.methodRegisteredAt !== null))
+  ) {
+    throw new TypeError('The local HPN method snapshot is internally inconsistent.');
+  }
+  const registeredMethod =
+    snapshot.methodCount === 1
+      ? aflTradeHpnPavMethodSchema.parse(snapshot.method)
+      : null;
+  if (
+    snapshot.methodRegisteredAt !== null &&
+    Date.parse(snapshot.methodRegisteredAt) > Date.parse(snapshot.trustedAt)
+  ) {
+    throw new TypeError('The local HPN method was registered after the trusted snapshot time.');
+  }
+  const registeredMethodArtifact =
+    registeredMethod === null || snapshot.methodRegisteredAt === null
+      ? null
+      : createAflTradeCanonicalJsonArtifactRef(
+          registeredMethod,
+          snapshot.methodRegisteredAt
+        );
+
   const authoritySnapshot = {
     schemaVersion: 'afl-trade-local-hpn-review-snapshot/v1',
     valuationScopeKey: input.valuationScopeKey,
@@ -71,6 +97,8 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
     evidenceBundleId: evidenceBundle.evidenceBundleId,
     evaluationDecisionId: decision.decisionId,
     evidenceCurrent: snapshot.evidenceCurrent,
+    hpnMethodCount: snapshot.methodCount,
+    hpnMethodId: registeredMethod?.methodId ?? null,
     sources: snapshot.sources.map((source) => ({
       seasonYear: source.seasonYear,
       captureId: source.captureId,
@@ -101,6 +129,21 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
   };
   addDocument(authoritySnapshot, authoritySnapshotArtifact);
   addDocument(evidenceBundle, admission.authority.evidenceBundleArtifact);
+  if (registeredMethod !== null && registeredMethodArtifact !== null) {
+    addDocument(registeredMethod, registeredMethodArtifact);
+  }
+
+  const calculationMethod =
+    registeredMethod !== null && registeredMethodArtifact !== null
+      ? {
+          state: 'authenticated' as const,
+          method: registeredMethod,
+          methodArtifact: registeredMethodArtifact,
+        }
+      : {
+          state: 'missing' as const,
+          evidenceRefs: [authoritySnapshotArtifact],
+        };
 
   const fieldMapCandidates: Array<{
     seasonYear: number;
@@ -228,7 +271,7 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
     const report = createAflTradeHpnCalculationEligibilityReport({
       valuationScopeKey: input.valuationScopeKey,
       seasonYear,
-      methodId: input.methodId,
+      method: calculationMethod,
       authoritySnapshotArtifact,
       sources: [
         {
@@ -262,7 +305,6 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
     valuationScopeKey: input.valuationScopeKey,
     fromSeason: input.fromSeason,
     throughSeason: input.throughSeason,
-    methodId: input.methodId,
     reports: eligibilityReports.map(({ report, artifact }) => ({
       eligibilityReport: report,
       eligibilityReportArtifact: artifact,

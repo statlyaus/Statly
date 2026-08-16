@@ -1,14 +1,19 @@
 import { z } from 'zod';
 
-import { aflTradeArtifactRefSchema, type AflTradeArtifactRef } from '../artifacts/artifactReference';
+import {
+  aflTradeArtifactRefSchema,
+  doesAflTradeArtifactRefMatchCanonicalJson,
+  type AflTradeArtifactRef,
+} from '../artifacts/artifactReference';
 import {
   addAflTradeContentAddressIssue,
   aflTradeContentAddressedIdSchema,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { aflTradeHpnPavMethodSchema } from './hpnPlayerApproximateValue';
 
 export const AFL_TRADE_HPN_CALCULATION_ELIGIBILITY_SCHEMA_VERSION =
-  'afl-trade-hpn-calculation-eligibility/v1' as const;
+  'afl-trade-hpn-calculation-eligibility/v2' as const;
 
 const publicIdSchema = z
   .string()
@@ -17,6 +22,27 @@ const publicIdSchema = z
   .max(240)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/u);
 const evidenceRefsSchema = z.array(aflTradeArtifactRefSchema).min(1).max(100);
+
+export const aflTradeHpnCalculationMethodSelectionSchema = z.discriminatedUnion('state', [
+  z
+    .object({
+      state: z.literal('authenticated'),
+      methodId: aflTradeContentAddressedIdSchema('hpn-pav-method'),
+      methodArtifact: aflTradeArtifactRefSchema,
+    })
+    .strict(),
+  z
+    .object({
+      state: z.literal('missing'),
+      methodId: z.null(),
+      evidenceRefs: evidenceRefsSchema,
+    })
+    .strict(),
+]);
+
+export type AflTradeHpnCalculationMethodSelection = z.infer<
+  typeof aflTradeHpnCalculationMethodSelectionSchema
+>;
 
 const semanticFieldSchema = z.enum([
   'awayClub',
@@ -125,6 +151,7 @@ const blockerSchema = z.enum([
   'raw_field_missing',
   'source_use_not_permitted',
 ]);
+const reportBlockerSchema = z.enum(['method_not_authenticated']);
 
 const assessmentInputSchema = z
   .object({
@@ -223,10 +250,11 @@ const contentSchema = z
     valuationScopeKey: publicIdSchema,
     competition: z.literal('AFLM'),
     seasonYear: z.number().int().min(1998).max(2200),
-    methodId: aflTradeContentAddressedIdSchema('hpn-pav-method'),
+    methodSelection: aflTradeHpnCalculationMethodSelectionSchema,
     authoritySnapshotArtifact: aflTradeArtifactRefSchema,
     sources: z.array(sourceSchema).min(3).max(100),
     state: z.enum(['eligible', 'blocked']),
+    blockers: z.array(reportBlockerSchema).max(1),
     counts: z
       .object({
         totalFields: z.number().int().positive(),
@@ -269,20 +297,30 @@ const contentSchema = z
     const assessments = content.sources.flatMap(({ fields }) => fields);
     const eligibleFields = assessments.filter(({ state }) => state === 'eligible').length;
     const blockedFields = assessments.length - eligibleFields;
+    const expectedBlockers =
+      content.methodSelection.state === 'missing'
+        ? (['method_not_authenticated'] as const)
+        : ([] as const);
     if (
       content.counts.totalFields !== assessments.length ||
       content.counts.eligibleFields !== eligibleFields ||
       content.counts.blockedFields !== blockedFields ||
-      content.state !== (blockedFields === 0 ? 'eligible' : 'blocked')
+      JSON.stringify(content.blockers) !== JSON.stringify(expectedBlockers) ||
+      content.state !==
+        (blockedFields === 0 && expectedBlockers.length === 0 ? 'eligible' : 'blocked')
     ) {
       context.addIssue({
         code: 'custom',
         path: ['counts'],
-        message: 'Eligibility state and counts must equal the exact field assessments.',
+        message:
+          'Eligibility state, blockers, and counts must equal the exact method and field assessments.',
       });
     }
     const evidence = [
       content.authoritySnapshotArtifact,
+      ...(content.methodSelection.state === 'authenticated'
+        ? [content.methodSelection.methodArtifact]
+        : content.methodSelection.evidenceRefs),
       ...content.sources.flatMap(({ selectionEvidenceRefs }) => selectionEvidenceRefs),
       ...assessments.flatMap((assessment) => [
         ...assessment.rawAvailability.evidenceRefs,
@@ -351,7 +389,16 @@ function assess(input: AflTradeHpnCalculationFieldAssessmentInput) {
 export function createAflTradeHpnCalculationEligibilityReport(input: {
   readonly valuationScopeKey: string;
   readonly seasonYear: number;
-  readonly methodId: string;
+  readonly method:
+    | {
+        readonly state: 'authenticated';
+        readonly method: unknown;
+        readonly methodArtifact: AflTradeArtifactRef;
+      }
+    | {
+        readonly state: 'missing';
+        readonly evidenceRefs: readonly AflTradeArtifactRef[];
+      };
   readonly authoritySnapshotArtifact: AflTradeArtifactRef;
   readonly sources: readonly (
     | {
@@ -375,6 +422,24 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
   )[];
   readonly evaluatedAt: string;
 }): AflTradeHpnCalculationEligibilityReport {
+  let methodSelection: AflTradeHpnCalculationMethodSelection;
+  if (input.method.state === 'authenticated') {
+    const method = aflTradeHpnPavMethodSchema.parse(input.method.method);
+    if (!doesAflTradeArtifactRefMatchCanonicalJson(input.method.methodArtifact, method)) {
+      throw new TypeError('The eligibility report requires the exact retained HPN method document.');
+    }
+    methodSelection = {
+      state: 'authenticated',
+      methodId: method.methodId,
+      methodArtifact: input.method.methodArtifact,
+    };
+  } else {
+    methodSelection = aflTradeHpnCalculationMethodSelectionSchema.parse({
+      state: 'missing',
+      methodId: null,
+      evidenceRefs: input.method.evidenceRefs,
+    });
+  }
   const sources = input.sources
     .map((source) => ({
       ...source,
@@ -394,6 +459,10 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
   const assessments = sources.flatMap(({ fields }) => fields);
   const eligibleFields = assessments.filter(({ state }) => state === 'eligible').length;
   const blockedFields = assessments.length - eligibleFields;
+  const blockers =
+    methodSelection.state === 'missing'
+      ? (['method_not_authenticated'] as const)
+      : ([] as const);
   const content = contentSchema.parse({
     schemaVersion: AFL_TRADE_HPN_CALCULATION_ELIGIBILITY_SCHEMA_VERSION,
     environment: 'non_production',
@@ -401,10 +470,11 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
     valuationScopeKey: input.valuationScopeKey,
     competition: 'AFLM',
     seasonYear: input.seasonYear,
-    methodId: input.methodId,
+    methodSelection,
     authoritySnapshotArtifact: input.authoritySnapshotArtifact,
     sources,
-    state: blockedFields === 0 ? 'eligible' : 'blocked',
+    state: blockedFields === 0 && blockers.length === 0 ? 'eligible' : 'blocked',
+    blockers,
     counts: {
       totalFields: assessments.length,
       eligibleFields,

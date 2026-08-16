@@ -30,6 +30,9 @@ const rowSchema = z
     reviewed_evidence_bundle_json: z.unknown(),
     reviewed_evaluation_decision_json: z.unknown(),
     evidence_current: z.boolean(),
+    method_count: z.number().int().nonnegative(),
+    method_json: z.unknown().nullable(),
+    method_registered_at: timestampSchema.nullable(),
     sources_json: z.array(sourceSchema),
   })
   .strict();
@@ -39,6 +42,9 @@ export type LocalAflTradeHpnReviewSnapshot = Readonly<{
   reviewedEvidenceBundle: unknown;
   reviewedEvaluationDecision: unknown;
   evidenceCurrent: boolean;
+  methodCount: number;
+  method: unknown | null;
+  methodRegisteredAt: string | null;
   sources: readonly Readonly<{
     seasonYear: number;
     captureId: string;
@@ -65,6 +71,13 @@ const LOAD_REVIEW_SNAPSHOT_SQL = `WITH authority AS MATERIALIZED (
    WHERE head.valuation_scope_key=$1
      AND head.evidence_scope_key='afl-player-match-reviewed-2021-2026'
      AND head.status='authorized'
+), methods AS MATERIALIZED (
+  SELECT count(*)::INTEGER AS method_count,
+         CASE WHEN count(*)=1 THEN jsonb_agg(method_json ORDER BY method_id)->0
+              ELSE NULL END AS method_json,
+         CASE WHEN count(*)=1 THEN max(registered_at) ELSE NULL END AS method_registered_at
+    FROM outcome_hpn_pav_method
+   WHERE environment='non_production'
 ), sources AS MATERIALIZED (
   SELECT capture.anchor_season_year AS season_year,capture.capture_id,
          capture.provider,capture.capability_id,run.normalization_run_id,
@@ -139,6 +152,7 @@ const LOAD_REVIEW_SNAPSHOT_SQL = `WITH authority AS MATERIALIZED (
 SELECT transaction_timestamp() AS trusted_at,authority.bundle_json AS reviewed_evidence_bundle_json,
        authority.decision_json AS reviewed_evaluation_decision_json,
        outcome_private_reviewed_evidence_is_current() AS evidence_current,
+       methods.method_count,methods.method_json,methods.method_registered_at,
        COALESCE(jsonb_agg(jsonb_build_object(
          'seasonYear',sources.season_year,'captureId',sources.capture_id,
          'provider',sources.provider,'capabilityId',sources.capability_id,
@@ -150,8 +164,9 @@ SELECT transaction_timestamp() AS trusted_at,authority.bundle_json AS reviewed_e
        ) ORDER BY sources.season_year,sources.provider) FILTER (
          WHERE sources.normalization_run_id IS NOT NULL
        ),'[]'::jsonb) AS sources_json
-  FROM authority LEFT JOIN sources ON true
- GROUP BY authority.bundle_json,authority.decision_json`;
+  FROM authority CROSS JOIN methods LEFT JOIN sources ON true
+ GROUP BY authority.bundle_json,authority.decision_json,methods.method_count,
+          methods.method_json,methods.method_registered_at`;
 
 export async function loadLocalAflTradeHpnReviewSnapshot(
   client: AflOutcomeSqlClient,
@@ -173,6 +188,12 @@ export async function loadLocalAflTradeHpnReviewSnapshot(
       reviewedEvidenceBundle: row.reviewed_evidence_bundle_json,
       reviewedEvaluationDecision: row.reviewed_evaluation_decision_json,
       evidenceCurrent: row.evidence_current,
+      methodCount: row.method_count,
+      method: row.method_json,
+      methodRegisteredAt:
+        row.method_registered_at === null
+          ? null
+          : new Date(row.method_registered_at).toISOString(),
       sources: row.sources_json.map((source) => ({
         seasonYear: source.seasonYear,
         captureId: source.captureId,

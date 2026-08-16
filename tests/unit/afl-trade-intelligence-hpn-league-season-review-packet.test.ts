@@ -1,19 +1,34 @@
-import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  createAflTradeByteArtifactRef,
+  createAflTradeCanonicalJsonArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import {
   createAflTradeHpnCalculationEligibilityReport,
   listAflTradeHpnRequiredSemanticFields,
   type AflTradeHpnCalculationFieldAssessmentInput,
 } from '@/server/aflTradeIntelligence/modeling/hpnCalculationEligibility';
 import { createAflTradeHpnLeagueSeasonReviewPacket } from '@/server/aflTradeIntelligence/modeling/hpnLeagueSeasonReviewPacket';
+import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 
 const evaluatedAt = '2026-08-16T03:00:00.000Z';
 const createdAt = '2026-08-16T04:00:00.000Z';
-const methodId = `hpn-pav-method:${'d'.repeat(64)}`;
 const ref = (name: string, at = evaluatedAt) =>
   createAflTradeCanonicalJsonArtifactRef({ name }, at);
 const run = (season: number, character: string) =>
   `provider-normalization-run:${season.toString(16).padStart(4, character).slice(-4)}${character.repeat(60)}`;
 const map = (character: string) => `hpn-pav-field-map:${character.repeat(64)}`;
+const methodBytes = new TextEncoder().encode('<html>retained HPN method</html>');
+const method = createAflTradeHpnPavMethod({
+  sourceArtifact: createAflTradeByteArtifactRef(
+    methodBytes,
+    'text/html',
+    '2026-08-16T02:00:00.000Z'
+  ),
+  sourceBytes: methodBytes,
+  capturedAt: '2026-08-16T02:00:00.000Z',
+});
+const methodArtifact = createAflTradeCanonicalJsonArtifactRef(method, evaluatedAt);
+const authenticatedMethod = { state: 'authenticated' as const, method, methodArtifact };
 
 function field(
   semanticField: string,
@@ -62,7 +77,14 @@ function selectedSource(
   };
 }
 
-function report(seasonYear: number, missingCorroborating = false) {
+function report(
+  seasonYear: number,
+  missingCorroborating = false,
+  selectedMethod:
+    | typeof authenticatedMethod
+    | { readonly state: 'missing'; readonly evidenceRefs: readonly ReturnType<typeof ref>[] } =
+    authenticatedMethod
+) {
   const corroborating = missingCorroborating
     ? {
       selectionState: 'missing',
@@ -93,7 +115,7 @@ function report(seasonYear: number, missingCorroborating = false) {
   return createAflTradeHpnCalculationEligibilityReport({
     valuationScopeKey: 'workbook:2025',
     seasonYear,
-    methodId,
+    method: selectedMethod,
     authoritySnapshotArtifact: ref(`authority:${seasonYear}`),
     sources,
     evaluatedAt,
@@ -117,7 +139,6 @@ describe('HPN league-season review packet', () => {
       valuationScopeKey: 'workbook:2025',
       fromSeason: 2024,
       throughSeason: 2025,
-      methodId,
       reports: [binding(2025, true), binding(2024)],
       createdAt,
     });
@@ -125,7 +146,6 @@ describe('HPN league-season review packet', () => {
       valuationScopeKey: 'workbook:2025',
       fromSeason: 2024,
       throughSeason: 2025,
-      methodId,
       reports: [binding(2024), binding(2025, true)],
       createdAt,
     });
@@ -134,6 +154,11 @@ describe('HPN league-season review packet', () => {
     expect(first.packetId).toMatch(/^hpn-league-season-review-packet:[a-f0-9]{64}$/);
     expect(first.content).toMatchObject({
       state: 'blocked',
+      methodSelection: {
+        state: 'authenticated',
+        methodId: method.methodId,
+        methodArtifact,
+      },
       counts: {
         seasonCount: 2,
         eligibleSeasons: 1,
@@ -159,7 +184,6 @@ describe('HPN league-season review packet', () => {
         valuationScopeKey: 'workbook:2025',
         fromSeason: 2024,
         throughSeason: 2025,
-        methodId,
         reports: [binding(2024)],
         createdAt,
       })
@@ -169,7 +193,6 @@ describe('HPN league-season review packet', () => {
         valuationScopeKey: 'workbook:2025',
         fromSeason: 2024,
         throughSeason: 2025,
-        methodId,
         reports: [binding(2024), binding(2024)],
         createdAt,
       })
@@ -183,7 +206,6 @@ describe('HPN league-season review packet', () => {
         valuationScopeKey: 'workbook:2025',
         fromSeason: 2024,
         throughSeason: 2024,
-        methodId,
         reports: [
           {
             ...reportBinding,
@@ -198,8 +220,47 @@ describe('HPN league-season review packet', () => {
         valuationScopeKey: 'another-scope',
         fromSeason: 2024,
         throughSeason: 2024,
-        methodId,
         reports: [reportBinding],
+        createdAt,
+      })
+    ).toThrow(/scope and method ancestry/i);
+  });
+
+  it('seals one shared missing-method blocker and rejects mixed method ancestry', () => {
+    const missingMethod = {
+      state: 'missing' as const,
+      evidenceRefs: [ref('missing-method')],
+    };
+    const missingBindings = [2024, 2025].map((seasonYear) => {
+      const eligibilityReport = report(seasonYear, false, missingMethod);
+      return {
+        eligibilityReport,
+        eligibilityReportArtifact: createAflTradeCanonicalJsonArtifactRef(
+          eligibilityReport,
+          evaluatedAt
+        ),
+      };
+    });
+    const packet = createAflTradeHpnLeagueSeasonReviewPacket({
+      valuationScopeKey: 'workbook:2025',
+      fromSeason: 2024,
+      throughSeason: 2025,
+      reports: missingBindings,
+      createdAt,
+    });
+
+    expect(packet.content).toMatchObject({
+      state: 'blocked',
+      methodSelection: { state: 'missing', methodId: null },
+      blockerCounts: [{ blocker: 'method_not_authenticated', count: 2 }],
+      counts: { eligibleSeasons: 0, blockedSeasons: 2 },
+    });
+    expect(() =>
+      createAflTradeHpnLeagueSeasonReviewPacket({
+        valuationScopeKey: 'workbook:2025',
+        fromSeason: 2024,
+        throughSeason: 2025,
+        reports: [binding(2024), missingBindings[1]!],
         createdAt,
       })
     ).toThrow(/scope and method ancestry/i);
