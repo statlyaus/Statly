@@ -81,6 +81,7 @@
     "outcomes:modeling:materialize-pick-pav": "tsx Scripts/materialize-pick-pav-observations.ts",
     "outcomes:modeling:inspect-local-valuation-readiness": "tsx Scripts/dev/inspect-local-afl-trade-valuation-readiness.ts",
     "outcomes:modeling:review-local-hpn-field-maps": "tsx Scripts/dev/review-local-afl-trade-hpn-field-maps.ts",
+    "outcomes:modeling:review-local-hpn-season-universes": "tsx Scripts/dev/review-local-afl-trade-hpn-season-universes.ts",
     "outcomes:modeling:prepare-local-source-qualification": "tsx Scripts/dev/prepare-local-afl-trade-valuation-source-qualification.ts",
     "outcomes:modeling:record-private-evaluation-authority": "tsx Scripts/dev/record-local-afl-trade-private-valuation-evaluation.ts",
     "outcomes:modeling:record-private-reviewed-evaluation-authority": "tsx Scripts/dev/record-local-afl-trade-private-reviewed-evaluation.ts",

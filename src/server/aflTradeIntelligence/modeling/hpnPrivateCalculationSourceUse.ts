@@ -52,6 +52,18 @@ export type AflTradeHpnPrivateCalculationSourceUseAssessmentContent = Readonly<{
   }>[];
   reasons: readonly AflTradeHpnPrivateSourceUseReason[];
   evidenceRefs: readonly AflTradeArtifactRef[];
+  effectiveRestriction: Readonly<{
+    mode: 'narrowed_private_evaluation';
+    baseRightsArtifactId: string;
+    evaluationDecisionId: string;
+    operation: 'derived_feature_creation';
+    commercialContext: 'internal-evaluation';
+    audience: 'internal';
+    modelTraining: 'blocked';
+    publicDerivedOutput: 'blocked';
+    publicFactDisplay: 'blocked';
+    rawFieldRedistribution: 'blocked';
+  }> | null;
   evaluatedAt: string;
   publicationEligible: false;
   publicationProhibited: true;
@@ -131,6 +143,7 @@ function unavailableAssessment(input: {
   fieldReasons?: ReadonlyMap<string, readonly AflTradeHpnPrivateSourceUseReason[]>;
   reasons: readonly AflTradeHpnPrivateSourceUseReason[];
   evidenceRefs: readonly AflTradeArtifactRef[];
+  effectiveRestriction?: AflTradeHpnPrivateCalculationSourceUseAssessmentContent['effectiveRestriction'];
   evaluatedAt: string;
 }): AflTradeHpnPrivateCalculationSourceUseAssessmentContent {
   const reasons = uniqueReasons(input.reasons);
@@ -152,6 +165,7 @@ function unavailableAssessment(input: {
     })),
     reasons,
     evidenceRefs: input.evidenceRefs,
+    effectiveRestriction: input.effectiveRestriction ?? null,
     evaluatedAt: input.evaluatedAt,
     publicationEligible: false,
     publicationProhibited: true,
@@ -230,18 +244,33 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
     return unavailable(['reviewed_evidence_not_exact']);
   }
 
+  const restrictionIncludes = (values: readonly string[], value: string) =>
+    values.length === 0 || values.includes(value);
   const inScope =
     rights.content.scope.competitions.includes(input.competition) &&
     rights.content.scope.seasonRanges.some(
       (range) => input.seasonYear >= range.from && input.seasonYear <= range.to
     ) &&
-    rights.content.restrictions.commercial.includes('internal-evaluation') &&
-    rights.content.restrictions.audience.includes('internal');
+    restrictionIncludes(rights.content.restrictions.commercial, 'internal-evaluation') &&
+    restrictionIncludes(rights.content.restrictions.audience, 'internal');
   if (!inScope) return unavailable(['rights_scope_mismatch']);
   if (!isCurrentForEvaluation(rights, input.evaluatedAt)) {
     return unavailable(['rights_not_current']);
   }
-  if (isOverbroad(rights)) return unavailable(['authority_is_overbroad']);
+  const effectiveRestriction = isOverbroad(rights)
+    ? {
+        mode: 'narrowed_private_evaluation' as const,
+        baseRightsArtifactId: rights.rightsArtifactId,
+        evaluationDecisionId: input.admission.authority.decisionId,
+        operation: 'derived_feature_creation' as const,
+        commercialContext: 'internal-evaluation' as const,
+        audience: 'internal' as const,
+        modelTraining: 'blocked' as const,
+        publicDerivedOutput: 'blocked' as const,
+        publicFactDisplay: 'blocked' as const,
+        rawFieldRedistribution: 'blocked' as const,
+      }
+    : null;
 
   const reasons: AflTradeHpnPrivateSourceUseReason[] = [];
   if (rights.content.operations.derived_feature_creation !== 'allowed') {
@@ -291,6 +320,7 @@ export function assessAflTradeHpnPrivateCalculationSourceUse(
     })),
     reasons: [],
     evidenceRefs,
+    effectiveRestriction,
     evaluatedAt: input.evaluatedAt,
     publicationEligible: false,
     publicationProhibited: true,

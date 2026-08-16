@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import { Pool } from 'pg';
 
-import { reviewLocalAflTradeHpnFieldMaps } from '../../src/server/aflTradeIntelligence/development/localHpnFieldMapReview';
+import { reviewLocalAflTradeHpnSeasonUniverses } from '../../src/server/aflTradeIntelligence/development/localHpnReviewedSeasonReview';
 import { assertLocalAflTradeOutcomesRuntimeIdentity } from '../../src/server/aflTradeIntelligence/development/localOutcomesRuntimeIdentity';
 import { createPgAflOutcomeSqlClient } from '../../src/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 
@@ -16,7 +16,7 @@ if (
   !new Set(['127.0.0.1', 'localhost', '::1']).has(parsed.hostname) ||
   parsed.pathname !== '/statly_outcomes_test'
 ) {
-  throw new Error('HPN field-map review requires loopback statly_outcomes_test.');
+  throw new Error('HPN season review requires loopback statly_outcomes_test.');
 }
 const runtimeNonce = (
   process.env.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE ??
@@ -26,21 +26,35 @@ const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
   statement_timeout: 120_000,
-  application_name: 'statly-local-hpn-field-map-review',
+  application_name: 'statly-local-hpn-season-review',
 });
 
 try {
   await assertLocalAflTradeOutcomesRuntimeIdentity(pool, runtimeNonce);
-  const result = await reviewLocalAflTradeHpnFieldMaps(createPgAflOutcomeSqlClient(pool), {
-    valuationScopeKey: 'afl-men:2025-trades',
-    fromSeason: 2021,
-    throughSeason: 2025,
-    reviewerId: 'local-hpn-field-map-reviewer',
-  });
+  const reviewed = await reviewLocalAflTradeHpnSeasonUniverses(
+    createPgAflOutcomeSqlClient(pool),
+    {
+      fromSeason: 2021,
+      throughSeason: 2025,
+      reviewerId: 'local-hpn-season-reviewer',
+    }
+  );
+  const rowCount = reviewed.reduce(
+    (total, season) => total + season.content.counts.sourceRows,
+    0
+  );
+  const matchCount = reviewed.reduce(
+    (total, season) => total + season.content.counts.completedMatches,
+    0
+  );
+  const quarantineCount = reviewed.reduce(
+    (total, season) => total + season.content.counts.quarantinedIdentityRows,
+    0
+  );
   process.stdout.write(
-    `Approved ${result.approvals.length} exact HPN projection maps from ` +
-      `${result.packet.content.fromSeason}-${result.packet.content.throughSeason} for ` +
-      'private local non-production calculation only.\n'
+    `Approved ${reviewed.length} reviewed HPN seasons containing ${rowCount} exact ` +
+      `appearances across ${matchCount} completed matches; ${quarantineCount} ` +
+      'unresolved appearances remain explicitly quarantined.\n'
   );
 } finally {
   await pool.end();

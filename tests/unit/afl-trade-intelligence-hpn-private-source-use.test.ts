@@ -127,7 +127,7 @@ describe('HPN private calculation source-use policy', () => {
     });
   });
 
-  it('rejects obsolete overbroad rights even when they say derived features are allowed', () => {
+  it('narrows obsolete overbroad base rights to the authorized private operation', () => {
     const input = governedInput(rightsWith({ derived: 'allowed', broad: true }));
     const assessment = assessAflTradeHpnPrivateCalculationSourceUse({
       ...input,
@@ -138,8 +138,20 @@ describe('HPN private calculation source-use policy', () => {
     });
 
     expect(assessment.content).toMatchObject({
-      state: 'not_permitted',
-      reasons: ['authority_is_overbroad'],
+      state: 'permitted_private_calculation',
+      reasons: [],
+      effectiveRestriction: {
+        mode: 'narrowed_private_evaluation',
+        baseRightsArtifactId: input.rights.rightsArtifactId,
+        evaluationDecisionId: input.admission.state === 'authorized'
+          ? input.admission.authority.decisionId
+          : '',
+        operation: 'derived_feature_creation',
+        modelTraining: 'blocked',
+        publicDerivedOutput: 'blocked',
+        publicFactDisplay: 'blocked',
+        rawFieldRedistribution: 'blocked',
+      },
     });
   });
 
@@ -162,6 +174,7 @@ describe('HPN private calculation source-use policy', () => {
       ],
       publicationEligible: false,
       publicationProhibited: true,
+      effectiveRestriction: null,
     });
   });
 
