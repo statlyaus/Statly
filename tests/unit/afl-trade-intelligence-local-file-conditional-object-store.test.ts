@@ -25,6 +25,7 @@ import { verifyAflTradeArtifactReadback } from '@/server/aflTradeIntelligence/ar
 import {
   createLocalAflTradeFileConditionalObjectStore,
   createLocalAflTradeNonProductionArtifactRepository,
+  createLocalAflTradePrivateDerivedArtifactRepository,
 } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 
 const roots: string[] = [];
@@ -122,6 +123,32 @@ describe('local AFL trade conditional object store', () => {
         custodyProfile: null,
         custodyEnvironment: 'non_production',
         verification: 'exact_reference_and_sha256_bytes',
+      },
+    });
+  });
+
+  it('keeps private calculation-review documents in local non-production derived custody', async () => {
+    const root = await temporaryRoot();
+    const repository = createLocalAflTradePrivateDerivedArtifactRepository({
+      rootDirectory: root,
+      repositoryId: 'local-private-hpn-review',
+      maximumObjectBytes: 1_024,
+    });
+    const bytes = new TextEncoder().encode('{"kind":"private-hpn-review"}');
+    const reference = createAflTradeByteArtifactRef(
+      bytes,
+      'application/json',
+      '2026-08-16T05:00:00.000Z'
+    );
+
+    await repository.putIfAbsent(reference, bytes);
+    await expect(
+      verifyAflTradeArtifactReadback(repository, reference, '2026-08-16T05:00:01.000Z', 1_024)
+    ).resolves.toMatchObject({
+      content: {
+        repositoryAssurance: 'local_non_production_filesystem',
+        artifactClass: 'derived_private',
+        custodyEnvironment: 'non_production',
       },
     });
   });
