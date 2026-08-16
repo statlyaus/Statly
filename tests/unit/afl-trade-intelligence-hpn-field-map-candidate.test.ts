@@ -4,6 +4,9 @@ import {
   type AflTradeHpnSemanticBindingCandidate,
 } from '@/server/aflTradeIntelligence/modeling/hpnFieldMapCandidate';
 import { listAflTradeHpnRequiredSemanticFields } from '@/server/aflTradeIntelligence/modeling/hpnCalculationEligibility';
+import { createLocalAflTradeHpnPlayerFieldMapCandidate } from '@/server/aflTradeIntelligence/development/localHpnFieldMapCandidates';
+import { createLocalAflTradeFiveSeasonAflTablesAuthority } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
+import { createLocalAflTradeOfficialAfl2026Authority } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Authority';
 
 const createdAt = '2026-08-16T04:00:00.000Z';
 const sourceSchemaSha256 = 'a'.repeat(64);
@@ -131,5 +134,45 @@ describe('HPN field-map review candidate', () => {
         createdAt,
       })
     ).toThrow(/exact provider decode-map artifact/i);
+  });
+
+  it('builds exact unapproved candidates for both retained player-stat providers', () => {
+    const aflTables = createLocalAflTradeFiveSeasonAflTablesAuthority(2025).fieldMap;
+    const official = createLocalAflTradeOfficialAfl2026Authority().fieldMap;
+    const aflTablesCandidate = createLocalAflTradeHpnPlayerFieldMapCandidate({
+      provider: 'afl_tables',
+      seasonYear: 2025,
+      providerDecodeMap: aflTables,
+      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
+        aflTables,
+        createdAt
+      ),
+      createdAt,
+    });
+    const officialCandidate = createLocalAflTradeHpnPlayerFieldMapCandidate({
+      provider: 'official_afl',
+      seasonYear: 2026,
+      providerDecodeMap: official,
+      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
+        official,
+        createdAt
+      ),
+      createdAt,
+    });
+
+    expect(
+      aflTablesCandidate.content.semanticBindings.find(
+        ({ semanticField }) => semanticField === 'hitOuts'
+      )
+    ).toMatchObject({ mapping: { kind: 'direct', sourceField: 'Hit.Outs' } });
+    expect(
+      officialCandidate.content.semanticBindings.find(
+        ({ semanticField }) => semanticField === 'clearances'
+      )
+    ).toMatchObject({
+      mapping: { kind: 'direct', sourceField: 'clearances.totalClearances' },
+    });
+    expect(aflTablesCandidate.content.reviewState).toBe('requires_review');
+    expect(officialCandidate.content.reviewState).toBe('requires_review');
   });
 });
