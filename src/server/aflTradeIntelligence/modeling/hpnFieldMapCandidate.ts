@@ -17,7 +17,7 @@ import {
 } from './hpnCalculationEligibility';
 
 export const AFL_TRADE_HPN_FIELD_MAP_CANDIDATE_SCHEMA_VERSION =
-  'afl-trade-hpn-field-map-candidate/v1' as const;
+  'afl-trade-hpn-field-map-candidate/v2' as const;
 
 const publicIdSchema = z
   .string()
@@ -57,6 +57,29 @@ const mappingSchema = z.discriminatedUnion('kind', [
       behinds: fieldNameSchema,
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal('composite_key'),
+      sourceFields: z.array(fieldNameSchema).min(2).max(10),
+    })
+    .strict()
+    .superRefine((mapping, context) => {
+      if (new Set(mapping.sourceFields).size !== mapping.sourceFields.length) {
+        context.addIssue({
+          code: 'custom',
+          path: ['sourceFields'],
+          message: 'Composite-key source fields must be unique.',
+        });
+      }
+    }),
+  z
+    .object({
+      kind: z.literal('reviewed_final_scores'),
+      matchDateField: fieldNameSchema,
+      homePointsField: fieldNameSchema,
+      awayPointsField: fieldNameSchema,
+    })
+    .strict(),
 ]);
 const bindingSchema = z
   .object({ semanticField: semanticFieldSchema, mapping: mappingSchema })
@@ -74,16 +97,49 @@ export type AflTradeHpnSemanticBindingCandidate = Readonly<{
   semanticField: AflTradeHpnRequiredSemanticField;
   mapping:
     | Readonly<{ kind: 'direct'; sourceField: string }>
-    | Readonly<{ kind: 'goals_plus_behinds'; goals: string; behinds: string }>;
+    | Readonly<{ kind: 'goals_plus_behinds'; goals: string; behinds: string }>
+    | Readonly<{ kind: 'composite_key'; sourceFields: readonly string[] }>
+    | Readonly<{
+        kind: 'reviewed_final_scores';
+        matchDateField: string;
+        homePointsField: string;
+        awayPointsField: string;
+      }>;
 }>;
 
 export function listAflTradeHpnCandidateSourceFields(
   binding: AflTradeHpnSemanticBindingCandidate
 ): readonly string[] {
-  return binding.mapping.kind === 'direct'
-    ? [binding.mapping.sourceField]
-    : [binding.mapping.goals, binding.mapping.behinds];
+  switch (binding.mapping.kind) {
+    case 'direct':
+      return [binding.mapping.sourceField];
+    case 'goals_plus_behinds':
+      return [binding.mapping.goals, binding.mapping.behinds];
+    case 'composite_key':
+      return binding.mapping.sourceFields;
+    case 'reviewed_final_scores':
+      return [
+        binding.mapping.matchDateField,
+        binding.mapping.homePointsField,
+        binding.mapping.awayPointsField,
+      ];
+  }
 }
+
+const completionRuleSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('source_status'),
+      completedValues: z.array(z.string().trim().min(1).max(120)).min(1).max(20),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('reviewed_final_score_presence'),
+      decisionRequired: z.literal(true),
+    })
+    .strict(),
+]);
 
 const contentSchema = z
   .object({
@@ -100,7 +156,7 @@ const contentSchema = z
     providerDecodeMapId: publicIdSchema,
     providerDecodeMapArtifact: aflTradeArtifactRefSchema,
     semanticBindings: z.array(bindingSchema).min(1).max(30),
-    completedValues: z.array(z.string().trim().min(1).max(120)).max(20).nullable(),
+    completionRule: completionRuleSchema.nullable(),
     reviewState: z.literal('requires_review'),
     createdAt: z.iso.datetime({ offset: true }),
     publicationEligible: z.literal(false),
@@ -139,31 +195,74 @@ const contentSchema = z
         message: 'Candidate evidence must exist before candidate creation.',
       });
     }
+    if ((content.inputKind === 'completed_match_result') !== (content.completionRule !== null)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['completionRule'],
+        message: 'Only result candidates require an explicit completion rule.',
+      });
+    }
+    const completionBinding = content.semanticBindings.find(
+      ({ semanticField }) => semanticField === 'completionStatus'
+    );
     if (
-      (content.inputKind === 'completed_match_result') !==
-      (content.completedValues !== null && content.completedValues.length > 0)
+      content.completionRule?.kind === 'source_status' &&
+      completionBinding?.mapping.kind !== 'direct'
     ) {
       context.addIssue({
         code: 'custom',
-        path: ['completedValues'],
-        message: 'Only result candidates require explicit completed-status values.',
+        path: ['completionRule'],
+        message: 'Source-status completion requires one direct status-field mapping.',
       });
     }
-    const invalidMapping = content.semanticBindings.some(({ semanticField, mapping }) =>
-      semanticField === 'totalPoints'
-        ? !['direct', 'goals_plus_behinds'].includes(mapping.kind)
-        : mapping.kind !== 'direct'
-    );
+    if (
+      content.completionRule?.kind === 'reviewed_final_score_presence' &&
+      completionBinding?.mapping.kind !== 'reviewed_final_scores'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['completionRule'],
+        message: 'Reviewed final-score completion requires exact score-evidence fields.',
+      });
+    }
+    const invalidMapping = content.semanticBindings.some(({ semanticField, mapping }) => {
+      if (semanticField === 'totalPoints') {
+        return !['direct', 'goals_plus_behinds'].includes(mapping.kind);
+      }
+      if (semanticField === 'match') {
+        return !['direct', 'composite_key'].includes(mapping.kind);
+      }
+      if (semanticField === 'completionStatus') {
+        return !['direct', 'reviewed_final_scores'].includes(mapping.kind);
+      }
+      return mapping.kind !== 'direct';
+    });
     const sourceFields = content.semanticBindings.flatMap((binding) =>
-      binding.mapping.kind === 'direct'
-        ? [binding.mapping.sourceField]
-        : [binding.mapping.goals, binding.mapping.behinds]
+      listAflTradeHpnCandidateSourceFields(binding)
     );
-    if (invalidMapping || new Set(sourceFields).size !== sourceFields.length) {
+    const directlyConsumedFields = content.semanticBindings.flatMap(({ mapping }) =>
+      mapping.kind === 'direct'
+        ? [mapping.sourceField]
+        : mapping.kind === 'goals_plus_behinds'
+          ? [mapping.goals, mapping.behinds]
+          : []
+    );
+    if (
+      invalidMapping ||
+      new Set(directlyConsumedFields).size !== directlyConsumedFields.length
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['semanticBindings'],
-        message: 'Candidate semantic mappings must be explicit and source-field distinct.',
+        message:
+          'Candidate semantic mappings must be explicit and directly consumed source fields distinct.',
+      });
+    }
+    if (sourceFields.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['semanticBindings'],
+        message: 'A candidate requires exact source-field evidence.',
       });
     }
   });
@@ -200,7 +299,7 @@ export function createAflTradeHpnFieldMapCandidate(input: {
   readonly providerDecodeMap: unknown;
   readonly providerDecodeMapArtifact: AflTradeArtifactRef;
   readonly semanticBindings: readonly AflTradeHpnSemanticBindingCandidate[];
-  readonly completedValues?: readonly string[];
+  readonly completionRule?: z.input<typeof completionRuleSchema>;
   readonly createdAt: string;
 }): AflTradeHpnFieldMapCandidate {
   const decodeMap = decodeMapSchema.parse(input.providerDecodeMap);
@@ -217,9 +316,7 @@ export function createAflTradeHpnFieldMapCandidate(input: {
     .map((binding) => bindingSchema.parse(binding))
     .sort((left, right) => left.semanticField.localeCompare(right.semanticField));
   const candidateFields = semanticBindings.flatMap((binding) =>
-    binding.mapping.kind === 'direct'
-      ? [binding.mapping.sourceField]
-      : [binding.mapping.goals, binding.mapping.behinds]
+    listAflTradeHpnCandidateSourceFields(binding)
   );
   const availableFields = new Set(decodeMap.exactOrderedFields);
   if (candidateFields.some((sourceField) => !availableFields.has(sourceField))) {
@@ -239,7 +336,7 @@ export function createAflTradeHpnFieldMapCandidate(input: {
     providerDecodeMapId: decodeMap.mapId,
     providerDecodeMapArtifact: input.providerDecodeMapArtifact,
     semanticBindings,
-    completedValues: input.completedValues ?? null,
+    completionRule: input.completionRule ?? null,
     reviewState: 'requires_review',
     createdAt: input.createdAt,
     publicationEligible: false,

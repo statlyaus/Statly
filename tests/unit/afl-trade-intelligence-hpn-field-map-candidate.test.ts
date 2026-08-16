@@ -4,7 +4,10 @@ import {
   type AflTradeHpnSemanticBindingCandidate,
 } from '@/server/aflTradeIntelligence/modeling/hpnFieldMapCandidate';
 import { listAflTradeHpnRequiredSemanticFields } from '@/server/aflTradeIntelligence/modeling/hpnCalculationEligibility';
-import { createLocalAflTradeHpnPlayerFieldMapCandidate } from '@/server/aflTradeIntelligence/development/localHpnFieldMapCandidates';
+import {
+  createLocalAflTradeHpnCompletedResultFieldMapCandidate,
+  createLocalAflTradeHpnPlayerFieldMapCandidate,
+} from '@/server/aflTradeIntelligence/development/localHpnFieldMapCandidates';
 import { createLocalAflTradeFiveSeasonAflTablesAuthority } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { createLocalAflTradeOfficialAfl2026Authority } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Authority';
 
@@ -162,9 +165,19 @@ describe('HPN field-map review candidate', () => {
 
     expect(
       aflTablesCandidate.content.semanticBindings.find(
-        ({ semanticField }) => semanticField === 'hitOuts'
+        ({ semanticField }) => semanticField === 'match'
       )
-    ).toMatchObject({ mapping: { kind: 'direct', sourceField: 'Hit.Outs' } });
+    ).toMatchObject({
+      mapping: {
+        kind: 'composite_key',
+        sourceFields: ['Date', 'Home.team', 'Away.team'],
+      },
+    });
+    expect(
+      aflTablesCandidate.content.semanticBindings.find(
+        ({ semanticField }) => semanticField === 'club'
+      )
+    ).toMatchObject({ mapping: { kind: 'direct', sourceField: 'Playing.for' } });
     expect(
       officialCandidate.content.semanticBindings.find(
         ({ semanticField }) => semanticField === 'clearances'
@@ -174,5 +187,52 @@ describe('HPN field-map review candidate', () => {
     });
     expect(aflTablesCandidate.content.reviewState).toBe('requires_review');
     expect(officialCandidate.content.reviewState).toBe('requires_review');
+  });
+
+  it('proposes an explicit reviewed final-score projection instead of inventing a status field', () => {
+    const providerDecodeMap = createLocalAflTradeFiveSeasonAflTablesAuthority(2025).fieldMap;
+    const resultCandidate = createLocalAflTradeHpnCompletedResultFieldMapCandidate({
+      seasonYear: 2025,
+      providerDecodeMap,
+      providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
+        providerDecodeMap,
+        createdAt
+      ),
+      createdAt,
+    });
+
+    expect(resultCandidate.content).toMatchObject({
+      inputKind: 'completed_match_result',
+      completionRule: {
+        kind: 'reviewed_final_score_presence',
+        decisionRequired: true,
+      },
+      reviewState: 'requires_review',
+      publicationEligible: false,
+      publicationProhibited: true,
+    });
+    expect(
+      resultCandidate.content.semanticBindings.find(
+        ({ semanticField }) => semanticField === 'match'
+      )
+    ).toMatchObject({
+      mapping: {
+        kind: 'composite_key',
+        sourceFields: ['Date', 'Home.team', 'Away.team'],
+      },
+    });
+    expect(
+      resultCandidate.content.semanticBindings.find(
+        ({ semanticField }) => semanticField === 'completionStatus'
+      )
+    ).toMatchObject({
+      mapping: {
+        kind: 'reviewed_final_scores',
+        matchDateField: 'Date',
+        homePointsField: 'Home.score',
+        awayPointsField: 'Away.score',
+      },
+    });
+    expect(resultCandidate.content).not.toHaveProperty('completedValues');
   });
 });

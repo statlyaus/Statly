@@ -44,7 +44,20 @@ function approvedSourceFields(
   map: AflTradeHpnPavFieldMap,
   semanticField: AflTradeHpnRequiredSemanticField
 ): readonly string[] {
-  if (map.content.inputKind !== 'player_match_stats') return [];
+  if (map.content.inputKind === 'completed_match_result') {
+    const bindings = map.content.bindings;
+    if (
+      semanticField === 'match' ||
+      semanticField === 'homeClub' ||
+      semanticField === 'awayClub' ||
+      semanticField === 'homePoints' ||
+      semanticField === 'awayPoints' ||
+      semanticField === 'completionStatus'
+    ) {
+      return [bindings[semanticField]];
+    }
+    return [];
+  }
   const bindings = map.content.bindings;
   if (semanticField === 'totalPoints') {
     return bindings.totalPoints.kind === 'total_points'
@@ -84,7 +97,7 @@ export function createSelectedLocalAflTradeHpnFields(input: Readonly<{
   hpnResolutionsCurrent: boolean;
   authoritySnapshotArtifact: AflTradeArtifactRef;
 }>): readonly AflTradeHpnCalculationFieldAssessmentInput[] {
-  return listAflTradeHpnRequiredSemanticFields('player_match_stats').map(
+  return listAflTradeHpnRequiredSemanticFields(input.candidate.content.inputKind).map(
     (semanticField): AflTradeHpnCalculationFieldAssessmentInput => {
       const sourceFields = listAflTradeHpnCandidateSourceFields(
         candidateBinding(input.candidate, semanticField)

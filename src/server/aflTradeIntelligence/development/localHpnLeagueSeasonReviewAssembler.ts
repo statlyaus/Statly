@@ -22,7 +22,10 @@ import {
   createAflTradePrivateReviewedEvidenceEvaluationAdmission,
   parseAflTradePrivateReviewedEvidenceEvaluationDecision,
 } from '../valuation/privateReviewedEvidenceEvaluation';
-import { createLocalAflTradeHpnPlayerFieldMapCandidate } from './localHpnFieldMapCandidates';
+import {
+  createLocalAflTradeHpnCompletedResultFieldMapCandidate,
+  createLocalAflTradeHpnPlayerFieldMapCandidate,
+} from './localHpnFieldMapCandidates';
 import {
   createSelectedLocalAflTradeHpnFields,
 } from './localHpnReviewFieldAssessments';
@@ -165,6 +168,24 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
       throw new TypeError('The local HPN primary source selection is ambiguous.');
     }
     const primary = selected[0];
+    let resultSource:
+      | {
+          selectionState: 'selected';
+          normalizationRunId: string;
+          provider: string;
+          inputKind: 'completed_match_result';
+          role: null;
+          selectionEvidenceRefs: readonly AflTradeArtifactRef[];
+          fields: readonly AflTradeHpnCalculationFieldAssessmentInput[];
+        }
+      | {
+          selectionState: 'missing';
+          normalizationRunId: null;
+          provider: null;
+          inputKind: 'completed_match_result';
+          role: null;
+          selectionEvidenceRefs: readonly AflTradeArtifactRef[];
+        };
     let primarySource:
       | {
           selectionState: 'selected';
@@ -184,6 +205,11 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
           selectionEvidenceRefs: readonly AflTradeArtifactRef[];
         };
     if (!primary) {
+      resultSource = {
+        selectionState: 'missing', normalizationRunId: null, provider: null,
+        inputKind: 'completed_match_result', role: null,
+        selectionEvidenceRefs: [authoritySnapshotArtifact],
+      };
       primarySource = {
         selectionState: 'missing', normalizationRunId: null, provider: null,
         inputKind: 'player_match_stats', role: 'primary',
@@ -196,6 +222,69 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
       );
       addDocument(primary.providerDecodeMap, decodeMapArtifact);
       addDocument(primary.rights, primary.rightsArtifact);
+
+      const resultCandidate = createLocalAflTradeHpnCompletedResultFieldMapCandidate({
+        seasonYear,
+        providerDecodeMap: primary.providerDecodeMap,
+        providerDecodeMapArtifact: decodeMapArtifact,
+        createdAt: snapshot.trustedAt,
+      });
+      const resultCandidateArtifact = createAflTradeCanonicalJsonArtifactRef(
+        resultCandidate,
+        snapshot.trustedAt
+      );
+      addDocument(resultCandidate, resultCandidateArtifact);
+      fieldMapCandidates.push({
+        seasonYear,
+        candidate: resultCandidate,
+        artifact: resultCandidateArtifact,
+      });
+      const resultSourceFields = [...new Set(
+        resultCandidate.content.semanticBindings.flatMap(
+          listAflTradeHpnCandidateSourceFields
+        )
+      )].sort();
+      const resultAssessment = assessAflTradeHpnPrivateCalculationSourceUse({
+        rights: primary.rights,
+        rightsArtifact: primary.rightsArtifact,
+        evidenceBundle,
+        admission,
+        competition: 'AFLM',
+        seasonYear,
+        sourceFields: resultSourceFields,
+        evaluatedAt: snapshot.trustedAt,
+      });
+      const resultAssessmentArtifact = createAflTradeCanonicalJsonArtifactRef(
+        resultAssessment,
+        snapshot.trustedAt
+      );
+      addDocument(resultAssessment, resultAssessmentArtifact);
+      sourceUseAssessments.push({
+        seasonYear,
+        assessment: resultAssessment,
+        artifact: resultAssessmentArtifact,
+      });
+      resultSource = {
+        selectionState: 'selected',
+        normalizationRunId: primary.normalizationRunId,
+        provider: primary.provider,
+        inputKind: 'completed_match_result',
+        role: null,
+        selectionEvidenceRefs: [authoritySnapshotArtifact],
+        fields: createSelectedLocalAflTradeHpnFields({
+          candidate: resultCandidate,
+          candidateArtifact: resultCandidateArtifact,
+          decodeMapArtifact,
+          sourceUseAssessment: resultAssessment,
+          sourceUseAssessmentArtifact: resultAssessmentArtifact,
+          currentMap: null,
+          currentMapArtifact: null,
+          factualRunId: null,
+          hpnResolutionsCurrent: false,
+          authoritySnapshotArtifact,
+        }),
+      };
+
       const candidate = createLocalAflTradeHpnPlayerFieldMapCandidate({
         provider: primary.provider,
         seasonYear,
@@ -268,11 +357,7 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
       method: calculationMethod,
       authoritySnapshotArtifact,
       sources: [
-        {
-          selectionState: 'missing', normalizationRunId: null, provider: null,
-          inputKind: 'completed_match_result', role: null,
-          selectionEvidenceRefs: [authoritySnapshotArtifact],
-        },
+        resultSource,
         primarySource,
         {
           selectionState: 'missing', normalizationRunId: null, provider: null,

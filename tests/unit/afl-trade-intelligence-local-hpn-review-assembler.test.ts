@@ -163,20 +163,44 @@ describe('local HPN league-season review assembler', () => {
         eligibleSeasons: 0,
         blockedSeasons: 2,
         sourceSlots: 6,
-        missingSourceSlots: 4,
-        totalFields: 30,
+        missingSourceSlots: 2,
+        totalFields: 42,
         eligibleFields: 0,
-        blockedFields: 30,
+        blockedFields: 42,
       },
     });
-    expect(assembled.fieldMapCandidates).toHaveLength(2);
-    expect(assembled.sourceUseAssessments).toHaveLength(2);
+    expect(assembled.fieldMapCandidates).toHaveLength(4);
+    expect(assembled.sourceUseAssessments).toHaveLength(4);
     expect(
       assembled.sourceUseAssessments.map(({ assessment }) => assessment.content.reasons)
-    ).toEqual([
-      ['derived_feature_operation_blocked', 'derived_source_field_blocked'],
-      ['derived_feature_operation_blocked', 'derived_source_field_blocked'],
-    ]);
+    ).toEqual(
+      Array.from({ length: 4 }, () => [
+        'derived_feature_operation_blocked',
+        'derived_source_field_blocked',
+      ])
+    );
+    for (const { report } of assembled.eligibilityReports) {
+      expect(report.content.sources).toMatchObject([
+        {
+          selectionState: 'selected',
+          inputKind: 'completed_match_result',
+          role: null,
+        },
+        {
+          selectionState: 'selected',
+          inputKind: 'player_match_stats',
+          role: 'primary',
+        },
+        {
+          selectionState: 'missing',
+          inputKind: 'player_match_stats',
+          role: 'corroborating',
+        },
+      ]);
+      expect(report.content.sources[0]!.normalizationRunId).toBe(
+        report.content.sources[1]!.normalizationRunId
+      );
+    }
     const primary = assembled.eligibilityReports[0]!.report.content.sources.find(
       ({ role }) => role === 'primary'
     )!;
