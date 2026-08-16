@@ -102,12 +102,24 @@ describe('HPN calculation eligibility report', () => {
     expect(first.content).toMatchObject({
       state: 'eligible',
       blockers: [],
+      evidenceProfile: {
+        state: 'corroborated',
+        limitations: [],
+      },
       methodSelection: {
         state: 'authenticated',
         methodId: method.methodId,
         methodArtifact,
       },
-      counts: { eligibleFields: 36, blockedFields: 0, totalFields: 36 },
+      counts: {
+        requiredFields: 21,
+        blockedRequiredFields: 0,
+        optionalFields: 15,
+        blockedOptionalFields: 0,
+        eligibleFields: 36,
+        blockedFields: 0,
+        totalFields: 36,
+      },
       publicationEligible: false,
       publicationProhibited: true,
     });
@@ -153,7 +165,7 @@ describe('HPN calculation eligibility report', () => {
     );
 
     const prohibited = reportInput();
-    prohibited.sources[2]!.fields = prohibited.sources[2]!.fields.map((assessment) =>
+    prohibited.sources[1]!.fields = prohibited.sources[1]!.fields.map((assessment) =>
       assessment.semanticField === 'inside50s'
         ? field('inside50s', {
             sourceUse: {
@@ -165,13 +177,13 @@ describe('HPN calculation eligibility report', () => {
     );
     const report = createAflTradeHpnCalculationEligibilityReport(prohibited);
     expect(
-      report.content.sources[2]!.fields.find(
+      report.content.sources[1]!.fields.find(
         ({ semanticField }) => semanticField === 'inside50s'
       )
     ).toMatchObject({ state: 'blocked', blockers: ['source_use_not_permitted'] });
   });
 
-  it('can seal an honest blocker report when a required source run does not exist', () => {
+  it('keeps an explicitly limited single-source private calculation reviewable when corroboration is absent', () => {
     const input = reportInput();
     input.sources[2] = {
       selectionState: 'missing',
@@ -180,42 +192,120 @@ describe('HPN calculation eligibility report', () => {
       inputKind: 'player_match_stats',
       role: 'corroborating',
       selectionEvidenceRefs: [ref('missing-corroborating-source')],
-      fields: listAflTradeHpnRequiredSemanticFields('player_match_stats').map((name) =>
-        field(name, {
-          rawAvailability: {
-            state: 'missing',
-            evidenceRefs: [ref(`missing-raw:${name}`)],
-          },
-          fieldMapReview: {
-            state: 'missing',
-            evidenceRefs: [ref(`missing-map:${name}`)],
-          },
-          sourceUse: {
-            state: 'unreviewed',
-            evidenceRefs: [ref(`missing-rights:${name}`)],
-          },
-          factualReview: {
-            state: 'missing',
-            evidenceRefs: [ref(`missing-fact:${name}`)],
-          },
-          canonicalIdentity: {
-            state: 'incomplete',
-            evidenceRefs: [ref(`missing-identity:${name}`)],
-          },
-        })
-      ),
     };
 
     const report = createAflTradeHpnCalculationEligibilityReport(input);
     expect(report.content).toMatchObject({
-      state: 'blocked',
-      counts: { totalFields: 36, eligibleFields: 21, blockedFields: 15 },
+      state: 'eligible',
+      blockers: [],
+      evidenceProfile: {
+        state: 'single_source',
+        limitations: ['no_independent_player_stats_corroboration'],
+      },
+      counts: {
+        requiredFields: 21,
+        blockedRequiredFields: 0,
+        optionalFields: 0,
+        blockedOptionalFields: 0,
+        totalFields: 21,
+        eligibleFields: 21,
+        blockedFields: 0,
+      },
     });
     expect(report.content.sources[2]).toMatchObject({
       selectionState: 'missing',
       normalizationRunId: null,
       provider: null,
     });
+    expect(report.content.sources[2]).not.toHaveProperty('fields');
+  });
+
+  it('blocks when a required primary source is absent', () => {
+    const input = reportInput();
+    input.sources[1] = {
+      selectionState: 'missing',
+      normalizationRunId: null,
+      provider: null,
+      inputKind: 'player_match_stats',
+      role: 'primary',
+      selectionEvidenceRefs: [ref('missing-primary-source')],
+    };
+
+    const report = createAflTradeHpnCalculationEligibilityReport(input);
+    expect(report.content).toMatchObject({
+      state: 'blocked',
+      blockers: ['required_source_missing'],
+      evidenceProfile: {
+        state: 'single_source',
+        limitations: ['no_independent_player_stats_corroboration'],
+      },
+      counts: {
+        requiredFields: 6,
+        blockedRequiredFields: 0,
+        optionalFields: 15,
+        blockedOptionalFields: 0,
+      },
+    });
+  });
+
+  it('does not overstate same-provider or partially unusable corroboration', () => {
+    const sameProvider = reportInput();
+    sameProvider.sources[2]!.provider = sameProvider.sources[1]!.provider;
+    const sameProviderReport = createAflTradeHpnCalculationEligibilityReport(sameProvider);
+
+    expect(sameProviderReport.content).toMatchObject({
+      state: 'eligible',
+      evidenceProfile: {
+        state: 'single_source',
+        limitations: ['no_independent_player_stats_corroboration'],
+      },
+    });
+
+    const blockedOptional = reportInput();
+    blockedOptional.sources[2]!.fields = blockedOptional.sources[2]!.fields.map(
+      (assessment) =>
+        assessment.semanticField === 'tackles'
+          ? field('tackles', {
+              factualReview: {
+                state: 'disputed',
+                evidenceRefs: [ref('disputed-corroborating-tackles')],
+              },
+            })
+          : assessment
+    );
+    const blockedOptionalReport = createAflTradeHpnCalculationEligibilityReport(
+      blockedOptional
+    );
+
+    expect(blockedOptionalReport.content).toMatchObject({
+      state: 'eligible',
+      evidenceProfile: {
+        state: 'single_source',
+        limitations: ['no_independent_player_stats_corroboration'],
+      },
+      counts: {
+        blockedRequiredFields: 0,
+        blockedOptionalFields: 1,
+        blockedFields: 1,
+      },
+    });
+  });
+
+  it('allows one retained normalization run to back distinct result and player projections', () => {
+    const input = reportInput();
+    input.sources[1]!.normalizationRunId = input.sources[0]!.normalizationRunId;
+    input.sources[1]!.provider = input.sources[0]!.provider;
+
+    const report = createAflTradeHpnCalculationEligibilityReport(input);
+
+    expect(report.content).toMatchObject({
+      state: 'eligible',
+      evidenceProfile: { state: 'corroborated' },
+    });
+    expect(report.content.sources.slice(0, 2).map((source) => source.normalizationRunId)).toEqual([
+      input.sources[0]!.normalizationRunId,
+      input.sources[0]!.normalizationRunId,
+    ]);
   });
 
   it('seals a blocked report when the HPN method is not authenticated', () => {

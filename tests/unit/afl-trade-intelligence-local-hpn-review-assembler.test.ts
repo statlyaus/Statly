@@ -164,9 +164,9 @@ describe('local HPN league-season review assembler', () => {
         blockedSeasons: 2,
         sourceSlots: 6,
         missingSourceSlots: 4,
-        totalFields: 72,
+        totalFields: 30,
         eligibleFields: 0,
-        blockedFields: 72,
+        blockedFields: 30,
       },
     });
     expect(assembled.fieldMapCandidates).toHaveLength(2);
