@@ -1074,6 +1074,10 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0045_fixture_filesystem_custody_assurance',
       '0046_local_nonproduction_capture_custody',
       '0047_review_decision_current_set_lookup',
+      '0048_prepared_valuation_input_sets',
+      '0049_workbook_transaction_reviews',
+      '0050_private_valuation_evaluation_authority',
+      '0051_private_reviewed_evidence_evaluation',
     ]);
 
     const tables = await query<{ table_name: string }>(
@@ -1140,6 +1144,15 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_public_factual_archive_record',
       'outcome_valuation_output_custody_index',
       'outcome_valuation_output_custody_index_entry',
+      'outcome_prepared_valuation_input_set',
+      'outcome_prepared_valuation_input_entry',
+      'outcome_workbook_transaction_review_set',
+      'outcome_workbook_transaction_review_subject',
+      'outcome_workbook_transaction_review_decision',
+      'outcome_workbook_transaction_review_head',
+      'outcome_private_reviewed_evidence_bundle',
+      'outcome_private_reviewed_evaluation_decision',
+      'outcome_private_reviewed_evaluation_head',
     ]) {
       expect(tableNames).toContain(expected);
     }
@@ -1201,6 +1214,16 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_public_factual_archive_delete_reject',
       'outcome_projection_manifest_promotion_archive_validate',
       'aa_validate_outcome_factual_release_registry_event',
+      'outcome_prepared_valuation_input_set_validate_insert',
+      'outcome_prepared_valuation_input_entry_validate_insert',
+      'outcome_prepared_valuation_input_set_finalize',
+      'outcome_prepared_valuation_input_entry_append_only',
+      'outcome_private_reviewed_evidence_bundle_insert_guard',
+      'outcome_private_reviewed_evaluation_decision_insert_guard',
+      'outcome_private_reviewed_evaluation_head_write_guard',
+      'outcome_private_reviewed_evidence_bundle_mutation_guard',
+      'outcome_private_reviewed_evaluation_decision_mutation_guard',
+      'outcome_private_reviewed_evaluation_head_delete_guard',
     ]) {
       expect(triggerNames).toContain(expected);
     }
@@ -1222,6 +1245,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_source_capture_anchor_season_fkey',
       'outcome_acquisition_spell_metric_coverage_check',
       'outcome_provider_normalization_finalized_check',
+      'outcome_prepared_valuation_input_set_identity_check',
+      'outcome_prepared_valuation_input_entry_trade_key',
     ]) {
       expect(constraintNames).toContain(expected);
     }
