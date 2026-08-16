@@ -1296,36 +1296,37 @@ model OutcomeHpnProjectedFieldMap {
 }
 
 model OutcomeHpnReviewedSeasonUniverse {
-  reviewedSeasonId            String                           @id @map("reviewed_season_id")
-  seasonYear                  Int                              @map("season_year")
-  candidateId                 String                           @map("candidate_id")
-  decisionId                  String                           @map("decision_id")
-  membershipId                String                           @map("membership_id")
-  normalizationRunId          String                           @map("normalization_run_id")
-  resultFieldMapId            String                           @map("result_field_map_id")
-  playerFieldMapId            String                           @map("player_field_map_id")
-  sourceRowCount              Int                              @map("source_row_count")
-  completedMatchCount         Int                              @map("completed_match_count")
-  resolvedIdentityRowCount    Int                              @map("resolved_identity_row_count")
-  quarantinedIdentityRowCount Int                              @map("quarantined_identity_row_count")
-  identityCoverage            String                           @map("identity_coverage")
-  candidateArtifactJson       Json                             @map("candidate_artifact_json")
-  membershipArtifactJson      Json                             @map("membership_artifact_json")
-  decisionArtifactJson        Json                             @map("decision_artifact_json")
-  candidateCanonicalJson      String                           @map("candidate_canonical_json") @outcomes.Text
-  candidateJson               Json                             @map("candidate_json")
-  membershipCanonicalJson     String                           @map("membership_canonical_json") @outcomes.Text
-  membershipJson              Json                             @map("membership_json")
-  decisionCanonicalJson       String                           @map("decision_canonical_json") @outcomes.Text
-  decisionJson                Json                             @map("decision_json")
-  reviewedCanonicalJson       String                           @map("reviewed_canonical_json") @outcomes.Text
-  reviewedJson                Json                             @map("reviewed_json")
-  reviewedAt                  DateTime                         @map("reviewed_at") @outcomes.Timestamptz(3)
-  registeredAt                DateTime                         @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
-  normalizationRun            OutcomeProviderNormalizationRun  @relation(fields: [normalizationRunId], references: [normalizationRunId], onDelete: Restrict)
-  resultFieldMap              OutcomeHpnProjectedFieldMap      @relation("OutcomeHpnReviewedResultFieldMap", fields: [resultFieldMapId], references: [fieldMapId], onDelete: Restrict)
-  playerFieldMap              OutcomeHpnProjectedFieldMap      @relation("OutcomeHpnReviewedPlayerFieldMap", fields: [playerFieldMapId], references: [fieldMapId], onDelete: Restrict)
+  reviewedSeasonId            String                                 @id @map("reviewed_season_id")
+  seasonYear                  Int                                    @map("season_year")
+  candidateId                 String                                 @map("candidate_id")
+  decisionId                  String                                 @map("decision_id")
+  membershipId                String                                 @map("membership_id")
+  normalizationRunId          String                                 @map("normalization_run_id")
+  resultFieldMapId            String                                 @map("result_field_map_id")
+  playerFieldMapId            String                                 @map("player_field_map_id")
+  sourceRowCount              Int                                    @map("source_row_count")
+  completedMatchCount         Int                                    @map("completed_match_count")
+  resolvedIdentityRowCount    Int                                    @map("resolved_identity_row_count")
+  quarantinedIdentityRowCount Int                                    @map("quarantined_identity_row_count")
+  identityCoverage            String                                 @map("identity_coverage")
+  candidateArtifactJson       Json                                   @map("candidate_artifact_json")
+  membershipArtifactJson      Json                                   @map("membership_artifact_json")
+  decisionArtifactJson        Json                                   @map("decision_artifact_json")
+  candidateCanonicalJson      String                                 @map("candidate_canonical_json") @outcomes.Text
+  candidateJson               Json                                   @map("candidate_json")
+  membershipCanonicalJson     String                                 @map("membership_canonical_json") @outcomes.Text
+  membershipJson              Json                                   @map("membership_json")
+  decisionCanonicalJson       String                                 @map("decision_canonical_json") @outcomes.Text
+  decisionJson                Json                                   @map("decision_json")
+  reviewedCanonicalJson       String                                 @map("reviewed_canonical_json") @outcomes.Text
+  reviewedJson                Json                                   @map("reviewed_json")
+  reviewedAt                  DateTime                               @map("reviewed_at") @outcomes.Timestamptz(3)
+  registeredAt                DateTime                               @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  normalizationRun            OutcomeProviderNormalizationRun        @relation(fields: [normalizationRunId], references: [normalizationRunId], onDelete: Restrict)
+  resultFieldMap              OutcomeHpnProjectedFieldMap            @relation("OutcomeHpnReviewedResultFieldMap", fields: [resultFieldMapId], references: [fieldMapId], onDelete: Restrict)
+  playerFieldMap              OutcomeHpnProjectedFieldMap            @relation("OutcomeHpnReviewedPlayerFieldMap", fields: [playerFieldMapId], references: [fieldMapId], onDelete: Restrict)
   members                     OutcomeHpnReviewedSeasonMember[]
+  privateCalculations         OutcomePrivateReviewedHpnCalculation[]
 
   @@index([seasonYear, registeredAt, reviewedSeasonId], map: "outcome_hpn_reviewed_season_current_idx")
   @@map("outcome_hpn_reviewed_season_universe")
@@ -1348,6 +1349,75 @@ model OutcomeHpnReviewedSeasonMember {
   @@index([canonicalPlayerId, reviewedSeasonId], map: "outcome_hpn_reviewed_season_member_player_idx")
   @@index([reviewedSeasonId, matchId], map: "outcome_hpn_reviewed_season_member_match_idx")
   @@map("outcome_hpn_reviewed_season_member")
+}
+
+model OutcomePrivateReviewedHpnMethod {
+  methodId                   String                                 @id @map("method_id")
+  methodSha256               String                                 @unique @map("method_sha256") @outcomes.Char(64)
+  methodContentCanonicalJson String                                 @map("method_content_canonical_json") @outcomes.Text
+  methodCanonicalJson        String                                 @map("method_canonical_json") @outcomes.Text
+  methodJson                 Json                                   @map("method_json")
+  registeredAt               DateTime                               @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  calculations               OutcomePrivateReviewedHpnCalculation[]
+
+  @@map("outcome_private_reviewed_hpn_method")
+}
+
+model OutcomePrivateReviewedHpnCalculation {
+  calculationId                   String                                @id @map("calculation_id")
+  calculationSha256               String                                @unique @map("calculation_sha256") @outcomes.Char(64)
+  reviewedSeasonId                String                                @map("reviewed_season_id")
+  membershipId                    String                                @map("membership_id")
+  methodId                        String                                @map("method_id")
+  seasonYear                      Int                                   @map("season_year")
+  teamCount                       Int                                   @map("team_count")
+  allocationCount                 Int                                   @map("allocation_count")
+  resolvedAllocationCount         Int                                   @map("resolved_allocation_count")
+  quarantinedAllocationCount      Int                                   @map("quarantined_allocation_count")
+  calculatedAt                    DateTime                              @map("calculated_at") @outcomes.Timestamptz(3)
+  calculationContentCanonicalJson String                                @map("calculation_content_canonical_json") @outcomes.Text
+  calculationCanonicalJson        String                                @map("calculation_canonical_json") @outcomes.Text
+  calculationJson                 Json                                  @map("calculation_json")
+  registeredAt                    DateTime                              @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  reviewedSeason                  OutcomeHpnReviewedSeasonUniverse      @relation(fields: [reviewedSeasonId], references: [reviewedSeasonId], onDelete: Restrict)
+  method                          OutcomePrivateReviewedHpnMethod       @relation(fields: [methodId], references: [methodId], onDelete: Restrict)
+  teams                           OutcomePrivateReviewedHpnTeam[]
+  allocations                     OutcomePrivateReviewedHpnAllocation[]
+
+  @@unique([reviewedSeasonId, methodId], map: "outcome_private_reviewed_hpn_calculation_replay_key")
+  @@index([seasonYear, registeredAt, calculationId], map: "outcome_private_reviewed_hpn_calculation_season_idx")
+  @@map("outcome_private_reviewed_hpn_calculation")
+}
+
+model OutcomePrivateReviewedHpnTeam {
+  calculationId String                               @map("calculation_id")
+  ordinal       Int
+  teamId        String                               @map("team_id")
+  totalPav      Float                                @map("total_pav")
+  teamJson      Json                                 @map("team_json")
+  calculation   OutcomePrivateReviewedHpnCalculation @relation(fields: [calculationId], references: [calculationId], onDelete: Restrict)
+
+  @@id([calculationId, teamId])
+  @@unique([calculationId, ordinal], map: "outcome_private_reviewed_hpn_team_ordinal_key")
+  @@map("outcome_private_reviewed_hpn_team")
+}
+
+model OutcomePrivateReviewedHpnAllocation {
+  calculationId     String                               @map("calculation_id")
+  ordinal           Int
+  allocationId      String                               @map("allocation_id")
+  clubId            String                               @map("club_id")
+  identityState     String                               @map("identity_state")
+  canonicalPlayerId String?                              @map("canonical_player_id")
+  gamesPlayed       Int                                  @map("games_played")
+  totalPav          Float                                @map("total_pav")
+  allocationJson    Json                                 @map("allocation_json")
+  calculation       OutcomePrivateReviewedHpnCalculation @relation(fields: [calculationId], references: [calculationId], onDelete: Restrict)
+
+  @@id([calculationId, allocationId])
+  @@unique([calculationId, ordinal], map: "outcome_private_reviewed_hpn_allocation_ordinal_key")
+  @@index([canonicalPlayerId, calculationId], map: "outcome_private_reviewed_hpn_allocation_player_idx")
+  @@map("outcome_private_reviewed_hpn_allocation")
 }
 
 model OutcomeHpnPavFieldMap {
