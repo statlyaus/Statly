@@ -118,34 +118,38 @@ model OutcomeRegistryHead {
 }
 
 model OutcomeReleaseManifest {
-  releaseId                   String                                      @id @map("release_id")
-  scopeKey                    String                                      @map("scope_key")
-  environment                 String
-  createdAt                   DateTime                                    @map("created_at") @outcomes.Timestamptz(3)
-  effectiveThrough            DateTime                                    @map("effective_through") @outcomes.Timestamptz(3)
-  manifestJson                Json                                        @map("manifest_json")
-  manifestCanonicalJson       String?                                     @map("manifest_canonical_json") @outcomes.Text
-  projections                 OutcomeProjectionManifest[]
-  registryEvents              OutcomeRegistryEvent[]
-  stateCommitments            OutcomeRecordStateCommitment[]
-  sourceCaptureMembers        OutcomeReleaseSourceCapture[]
-  eventVersionMembers         OutcomeReleaseEventVersion[]
-  eventAssetMembers           OutcomeReleaseEventAsset[]
-  draftSelectionMembers       OutcomeReleaseDraftSelection[]
-  pickCustodyMembers          OutcomeReleasePickCustody[]
-  pickRealizationMembers      OutcomeReleasePickRealization[]
-  observationMembers          OutcomeReleaseStatObservation[]
-  identityMembers             OutcomeReleaseIdentityAssignment[]
-  lineageMembers              OutcomeReleasePickLineage[]
-  spellMembers                OutcomeReleaseAcquisitionSpell[]
-  reconciliationMembers       OutcomeReleaseReconciliation[]
-  reviewMembers               OutcomeReleaseReviewDecision[]
-  activePointer               OutcomeActiveRelease?
-  promotionFactualLineage     OutcomeCorpusFactualLineage?
-  publicFactualArchive        OutcomePublicFactualArchive?
-  valuationDatasets           OutcomeValuationDatasetCandidate[]
-  valuationDatasetAuthorities OutcomeValuationDatasetOperationAuthority[]
-  pickPavObservationSets      OutcomePickPavObservationSet[]
+  releaseId                           String                                      @id @map("release_id")
+  scopeKey                            String                                      @map("scope_key")
+  environment                         String
+  createdAt                           DateTime                                    @map("created_at") @outcomes.Timestamptz(3)
+  effectiveThrough                    DateTime                                    @map("effective_through") @outcomes.Timestamptz(3)
+  manifestJson                        Json                                        @map("manifest_json")
+  manifestCanonicalJson               String?                                     @map("manifest_canonical_json") @outcomes.Text
+  projections                         OutcomeProjectionManifest[]
+  registryEvents                      OutcomeRegistryEvent[]
+  stateCommitments                    OutcomeRecordStateCommitment[]
+  sourceCaptureMembers                OutcomeReleaseSourceCapture[]
+  eventVersionMembers                 OutcomeReleaseEventVersion[]
+  eventAssetMembers                   OutcomeReleaseEventAsset[]
+  draftSelectionMembers               OutcomeReleaseDraftSelection[]
+  pickCustodyMembers                  OutcomeReleasePickCustody[]
+  pickRealizationMembers              OutcomeReleasePickRealization[]
+  observationMembers                  OutcomeReleaseStatObservation[]
+  identityMembers                     OutcomeReleaseIdentityAssignment[]
+  lineageMembers                      OutcomeReleasePickLineage[]
+  spellMembers                        OutcomeReleaseAcquisitionSpell[]
+  reconciliationMembers               OutcomeReleaseReconciliation[]
+  reviewMembers                       OutcomeReleaseReviewDecision[]
+  activePointer                       OutcomeActiveRelease?
+  promotionFactualLineage             OutcomeCorpusFactualLineage?
+  publicFactualArchive                OutcomePublicFactualArchive?
+  valuationDatasets                   OutcomeValuationDatasetCandidate[]
+  valuationDatasetAuthorities         OutcomeValuationDatasetOperationAuthority[]
+  pickPavObservationSets              OutcomePickPavObservationSet[]
+  sourceQualificationReports          OutcomeValuationSourceQualificationReport[]
+  preparedValuationInputSets          OutcomePreparedValuationInputSet[]
+  privateValuationEvaluationDecisions OutcomePrivateValuationEvaluationDecision[]
+  privateValuationEvaluationHeads     OutcomePrivateValuationEvaluationHead[]
 
   @@index([scopeKey, createdAt])
   @@map("outcome_release_manifest")
@@ -251,23 +255,24 @@ model OutcomeFactualProjectionItemSet {
 }
 
 model OutcomeArtifactCustody {
-  artifactId                String                                  @id @map("artifact_id")
-  contentSha256             String                                  @map("content_sha256") @outcomes.Char(64)
-  storageUri                String                                  @unique @map("storage_uri")
-  mediaType                 String                                  @map("media_type")
-  byteLength                BigInt                                  @map("byte_length")
-  artifactClass             OutcomeArtifactClass                    @map("artifact_class")
-  environment               OutcomeEnvironment
-  custodyProfileId          String?                                 @map("custody_profile_id")
-  createdAt                 DateTime                                @map("created_at") @outcomes.Timestamptz(3)
-  verifiedAt                DateTime                                @map("verified_at") @outcomes.Timestamptz(3)
-  custodyJson               Json                                    @map("custody_json")
-  sourceCaptures            OutcomeSourceCapture[]
-  captureAttemptEvidence    OutcomeSourceCaptureAttempt[]
-  governedEvidence          OutcomeGovernedEvidenceReference[]
-  valuationProjections      OutcomeValuationProjectionManifest[]
-  valuationDatasetArtifacts OutcomeValuationDatasetArtifactMember[]
-  hpnPavMethods             OutcomeHpnPavMethod[]
+  artifactId                    String                                  @id @map("artifact_id")
+  contentSha256                 String                                  @map("content_sha256") @outcomes.Char(64)
+  storageUri                    String                                  @unique @map("storage_uri")
+  mediaType                     String                                  @map("media_type")
+  byteLength                    BigInt                                  @map("byte_length")
+  artifactClass                 OutcomeArtifactClass                    @map("artifact_class")
+  environment                   OutcomeEnvironment
+  custodyProfileId              String?                                 @map("custody_profile_id")
+  createdAt                     DateTime                                @map("created_at") @outcomes.Timestamptz(3)
+  verifiedAt                    DateTime                                @map("verified_at") @outcomes.Timestamptz(3)
+  custodyJson                   Json                                    @map("custody_json")
+  sourceCaptures                OutcomeSourceCapture[]
+  captureAttemptEvidence        OutcomeSourceCaptureAttempt[]
+  governedEvidence              OutcomeGovernedEvidenceReference[]
+  valuationProjections          OutcomeValuationProjectionManifest[]
+  valuationDatasetArtifacts     OutcomeValuationDatasetArtifactMember[]
+  hpnPavMethods                 OutcomeHpnPavMethod[]
+  workbookTransactionReviewSets OutcomeWorkbookTransactionReviewSet[]
 
   @@unique([artifactClass, contentSha256], map: "outcome_artifact_class_sha256_key")
   @@index([environment, artifactClass, createdAt], map: "outcome_artifact_environment_class_created_idx")
@@ -845,18 +850,19 @@ model OutcomeSourceCaptureSeason {
 }
 
 model OutcomeImportRun {
-  importRunId                  String                                      @id @map("import_run_id")
-  captureId                    String                                      @map("capture_id")
-  importKind                   String                                      @map("import_kind")
-  parserVersion                String                                      @map("parser_version")
-  startedAt                    DateTime                                    @map("started_at") @outcomes.Timestamptz(3)
-  completedAt                  DateTime?                                   @map("completed_at") @outcomes.Timestamptz(3)
-  status                       OutcomeRecordStatus
-  manifestJson                 Json                                        @map("manifest_json")
-  capture                      OutcomeSourceCapture                        @relation(fields: [captureId], references: [captureId], onDelete: Restrict)
-  rows                         OutcomeImportRow[]
-  partitions                   OutcomeImportPartition[]
-  canonicalPromotionMembership OutcomeExternalCanonicalPromotionImportRun?
+  importRunId                   String                                      @id @map("import_run_id")
+  captureId                     String                                      @map("capture_id")
+  importKind                    String                                      @map("import_kind")
+  parserVersion                 String                                      @map("parser_version")
+  startedAt                     DateTime                                    @map("started_at") @outcomes.Timestamptz(3)
+  completedAt                   DateTime?                                   @map("completed_at") @outcomes.Timestamptz(3)
+  status                        OutcomeRecordStatus
+  manifestJson                  Json                                        @map("manifest_json")
+  capture                       OutcomeSourceCapture                        @relation(fields: [captureId], references: [captureId], onDelete: Restrict)
+  rows                          OutcomeImportRow[]
+  partitions                    OutcomeImportPartition[]
+  canonicalPromotionMembership  OutcomeExternalCanonicalPromotionImportRun?
+  workbookTransactionReviewSets OutcomeWorkbookTransactionReviewSet[]
 
   @@unique([captureId, importKind, parserVersion], map: "outcome_import_run_idempotency_key")
   @@index([captureId, startedAt], map: "outcome_import_run_capture_started_idx")
@@ -4094,6 +4100,169 @@ model OutcomeValuationActivePublication {
   @@map("outcome_valuation_active_publication")
 }
 
+model OutcomeValuationSourceQualificationReport {
+  qualificationReportId  String                             @id @map("qualification_report_id")
+  contentSha256          String                             @map("content_sha256") @outcomes.Char(64)
+  schemaVersion          String                             @map("schema_version")
+  environment            OutcomeEnvironment
+  operation              String
+  valuationScopeKey      String                             @map("valuation_scope_key")
+  factualReleaseScopeKey String                             @map("factual_release_scope_key")
+  factualReleaseId       String                             @map("factual_release_id")
+  decisionState          String                             @map("decision_state")
+  evaluatedAt            DateTime                           @map("evaluated_at") @outcomes.Timestamptz(3)
+  contentCanonicalJson   String                             @map("content_canonical_json") @outcomes.Text
+  reportCanonicalJson    String                             @map("report_canonical_json") @outcomes.Text
+  reportJson             Json                               @map("report_json")
+  finalizedAt            DateTime                           @map("finalized_at") @outcomes.Timestamptz(3)
+  registeredAt           DateTime                           @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredBy           String                             @default(dbgenerated("CURRENT_USER")) @map("registered_by")
+  factualRelease         OutcomeReleaseManifest             @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
+  preparedInputSets      OutcomePreparedValuationInputSet[]
+
+  @@index([environment, valuationScopeKey, evaluatedAt], map: "outcome_valuation_source_qualification_scope_idx")
+  @@index([factualReleaseId, evaluatedAt], map: "outcome_valuation_source_qualification_release_idx")
+  @@map("outcome_valuation_source_qualification_report")
+}
+
+model OutcomePreparedValuationInputSet {
+  preparedInputSetId       String                                    @id @map("prepared_input_set_id")
+  contentSha256            String                                    @map("content_sha256") @outcomes.Char(64)
+  schemaVersion            String                                    @map("schema_version")
+  environment              OutcomeEnvironment
+  scopeKey                 String                                    @map("scope_key")
+  factualReleaseScopeKey   String                                    @map("factual_release_scope_key")
+  factualReleaseId         String                                    @map("factual_release_id")
+  qualificationReportId    String                                    @map("qualification_report_id")
+  tradeCount               Int                                       @map("trade_count")
+  readyCount               Int                                       @map("ready_count")
+  blockedCount             Int                                       @map("blocked_count")
+  preparedAt               DateTime                                  @map("prepared_at") @outcomes.Timestamptz(3)
+  contentCanonicalJson     String                                    @map("content_canonical_json") @outcomes.Text
+  preparedSetCanonicalJson String                                    @map("prepared_set_canonical_json") @outcomes.Text
+  preparedSetJson          Json                                      @map("prepared_set_json")
+  finalizedAt              DateTime?                                 @map("finalized_at") @outcomes.Timestamptz(3)
+  registeredAt             DateTime                                  @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredBy             String                                    @default(dbgenerated("CURRENT_USER")) @map("registered_by")
+  factualRelease           OutcomeReleaseManifest                    @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
+  qualificationReport      OutcomeValuationSourceQualificationReport @relation(fields: [qualificationReportId], references: [qualificationReportId], onDelete: Restrict)
+  entries                  OutcomePreparedValuationInputEntry[]
+
+  @@index([environment, scopeKey, preparedAt], map: "outcome_prepared_valuation_input_set_scope_idx")
+  @@index([factualReleaseId, preparedAt], map: "outcome_prepared_valuation_input_set_release_idx")
+  @@index([qualificationReportId], map: "outcome_prepared_valuation_input_set_qualification_idx")
+  @@map("outcome_prepared_valuation_input_set")
+}
+
+model OutcomePreparedValuationInputEntry {
+  preparedInputSetId String                           @map("prepared_input_set_id")
+  ordinal            Int
+  tradeId            String                           @map("trade_id")
+  state              String
+  entryCanonicalJson String                           @map("entry_canonical_json") @outcomes.Text
+  entryJson          Json                             @map("entry_json")
+  preparedInputSet   OutcomePreparedValuationInputSet @relation(fields: [preparedInputSetId], references: [preparedInputSetId], onDelete: Restrict)
+
+  @@id([preparedInputSetId, ordinal])
+  @@unique([preparedInputSetId, tradeId], map: "outcome_prepared_valuation_input_entry_trade_key")
+  @@map("outcome_prepared_valuation_input_entry")
+}
+
+model OutcomePrivateValuationEvaluationDecision {
+  decisionId                   String                                     @id @map("decision_id") @outcomes.Text
+  valuationScopeKey            String                                     @map("valuation_scope_key") @outcomes.Text
+  factualReleaseScopeKey       String                                     @map("factual_release_scope_key") @outcomes.Text
+  factualReleaseId             String                                     @map("factual_release_id") @outcomes.Text
+  status                       String                                     @outcomes.Text
+  revision                     Int
+  supersedesDecisionId         String?                                    @unique @map("supersedes_decision_id") @outcomes.Text
+  reviewerId                   String                                     @map("reviewer_id") @outcomes.Text
+  decidedAt                    DateTime                                   @map("decided_at") @outcomes.Timestamptz(3)
+  decisionSha256               String                                     @map("decision_sha256") @outcomes.Char(64)
+  decisionContentCanonicalJson String                                     @map("decision_content_canonical_json") @outcomes.Text
+  decisionJson                 Json                                       @map("decision_json")
+  registeredAt                 DateTime                                   @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  factualRelease               OutcomeReleaseManifest                     @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
+  supersedesDecision           OutcomePrivateValuationEvaluationDecision? @relation("OutcomePrivateValuationEvaluationDecisionChain", fields: [supersedesDecisionId], references: [decisionId], onDelete: Restrict, map: "outcome_private_valuation_evaluation_decision_supersedes_fkey")
+  successorDecision            OutcomePrivateValuationEvaluationDecision? @relation("OutcomePrivateValuationEvaluationDecisionChain")
+  currentHead                  OutcomePrivateValuationEvaluationHead?
+
+  @@unique([valuationScopeKey, factualReleaseId, revision], map: "outcome_private_valuation_evaluation_decision_revision_key")
+  @@index([valuationScopeKey, factualReleaseScopeKey, factualReleaseId, decidedAt], map: "outcome_private_valuation_evaluation_decision_scope_idx")
+  @@map("outcome_private_valuation_evaluation_decision")
+}
+
+model OutcomePrivateValuationEvaluationHead {
+  valuationScopeKey String                                    @map("valuation_scope_key") @outcomes.Text
+  factualReleaseId  String                                    @map("factual_release_id") @outcomes.Text
+  revision          Int
+  decisionId        String                                    @unique @map("decision_id") @outcomes.Text
+  status            String                                    @outcomes.Text
+  updatedAt         DateTime                                  @map("updated_at") @outcomes.Timestamptz(3)
+  factualRelease    OutcomeReleaseManifest                    @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict, map: "outcome_private_valuation_evaluation_head_release_fkey")
+  decision          OutcomePrivateValuationEvaluationDecision @relation(fields: [decisionId], references: [decisionId], onDelete: Restrict, map: "outcome_private_valuation_evaluation_head_decision_fkey")
+
+  @@id([valuationScopeKey, factualReleaseId])
+  @@index([status, updatedAt], map: "outcome_private_valuation_evaluation_head_status_idx")
+  @@map("outcome_private_valuation_evaluation_head")
+}
+
+model OutcomePrivateReviewedEvidenceBundle {
+  evidenceBundleId           String                                     @id @map("evidence_bundle_id") @outcomes.Text
+  evidenceScopeKey           String                                     @map("evidence_scope_key") @outcomes.Text
+  candidateCount             Int                                        @map("candidate_count")
+  decisionCount              Int                                        @map("decision_count")
+  sourceCaptureCount         Int                                        @map("source_capture_count")
+  sourceRightsCount          Int                                        @map("source_rights_count")
+  createdAt                  DateTime                                   @map("created_at") @outcomes.Timestamptz(3)
+  bundleSha256               String                                     @map("bundle_sha256") @outcomes.Char(64)
+  bundleContentCanonicalJson String                                     @map("bundle_content_canonical_json") @outcomes.Text
+  bundleJson                 Json                                       @map("bundle_json")
+  registeredAt               DateTime                                   @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  decisions                  OutcomePrivateReviewedEvaluationDecision[]
+  currentHeads               OutcomePrivateReviewedEvaluationHead[]
+
+  @@index([evidenceScopeKey, createdAt], map: "outcome_private_reviewed_evidence_bundle_scope_idx")
+  @@map("outcome_private_reviewed_evidence_bundle")
+}
+
+model OutcomePrivateReviewedEvaluationDecision {
+  decisionId                   String                                    @id @map("decision_id") @outcomes.Text
+  valuationScopeKey            String                                    @map("valuation_scope_key") @outcomes.Text
+  evidenceBundleId             String                                    @map("evidence_bundle_id") @outcomes.Text
+  status                       String                                    @outcomes.Text
+  revision                     Int
+  supersedesDecisionId         String?                                   @unique @map("supersedes_decision_id") @outcomes.Text
+  reviewerId                   String                                    @map("reviewer_id") @outcomes.Text
+  decidedAt                    DateTime                                  @map("decided_at") @outcomes.Timestamptz(3)
+  decisionSha256               String                                    @map("decision_sha256") @outcomes.Char(64)
+  decisionContentCanonicalJson String                                    @map("decision_content_canonical_json") @outcomes.Text
+  decisionJson                 Json                                      @map("decision_json")
+  registeredAt                 DateTime                                  @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  evidenceBundle               OutcomePrivateReviewedEvidenceBundle      @relation(fields: [evidenceBundleId], references: [evidenceBundleId], onDelete: Restrict)
+  supersedesDecision           OutcomePrivateReviewedEvaluationDecision? @relation("OutcomePrivateReviewedEvaluationDecisionChain", fields: [supersedesDecisionId], references: [decisionId], onDelete: Restrict, map: "outcome_private_reviewed_evaluation_decision_supersedes_fkey")
+  successorDecision            OutcomePrivateReviewedEvaluationDecision? @relation("OutcomePrivateReviewedEvaluationDecisionChain")
+  currentHead                  OutcomePrivateReviewedEvaluationHead?
+
+  @@unique([valuationScopeKey, evidenceBundleId, revision], map: "outcome_private_reviewed_evaluation_decision_revision_key")
+  @@map("outcome_private_reviewed_evaluation_decision")
+}
+
+model OutcomePrivateReviewedEvaluationHead {
+  valuationScopeKey String                                   @map("valuation_scope_key") @outcomes.Text
+  evidenceScopeKey  String                                   @map("evidence_scope_key") @outcomes.Text
+  revision          Int
+  decisionId        String                                   @unique @map("decision_id") @outcomes.Text
+  evidenceBundleId  String                                   @map("evidence_bundle_id") @outcomes.Text
+  status            String                                   @outcomes.Text
+  updatedAt         DateTime                                 @map("updated_at") @outcomes.Timestamptz(3)
+  evidenceBundle    OutcomePrivateReviewedEvidenceBundle     @relation(fields: [evidenceBundleId], references: [evidenceBundleId], onDelete: Restrict)
+  decision          OutcomePrivateReviewedEvaluationDecision @relation(fields: [decisionId], references: [decisionId], onDelete: Restrict)
+
+  @@id([valuationScopeKey, evidenceScopeKey])
+  @@map("outcome_private_reviewed_evaluation_head")
+}
+
 model OutcomeExternalCaptureSchedule {
   scheduleId                  String                                             @id @map("schedule_id")
   environment                 OutcomeEnvironment
@@ -4368,4 +4537,82 @@ model OutcomeExternalCaptureProviderCircuit {
 
   @@id([environment, provider])
   @@map("outcome_external_capture_provider_circuit")
+}
+
+model OutcomeWorkbookTransactionReviewSet {
+  reviewSetId                   String                                    @id @map("review_set_id") @outcomes.Text
+  importRunId                   String                                    @map("import_run_id") @outcomes.Text
+  stagingPackageId              String                                    @map("staging_package_id") @outcomes.Text
+  sourceArtifactId              String                                    @map("source_artifact_id") @outcomes.Text
+  sourceArtifactSha256          String                                    @map("source_artifact_sha256") @outcomes.Char(64)
+  rawEvidenceSha256             String                                    @map("raw_evidence_sha256") @outcomes.Char(64)
+  transactionCount              Int                                       @map("transaction_count")
+  transactionSetSha256          String                                    @map("transaction_set_sha256") @outcomes.Char(64)
+  transactionSetCanonicalJson   String                                    @map("transaction_set_canonical_json") @outcomes.Text
+  reviewSetContentSha256        String                                    @map("review_set_content_sha256") @outcomes.Char(64)
+  reviewSetContentCanonicalJson String                                    @map("review_set_content_canonical_json") @outcomes.Text
+  reviewSetJson                 Json                                      @map("review_set_json")
+  registeredAt                  DateTime                                  @default(dbgenerated("clock_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  importRun                     OutcomeImportRun                          @relation(fields: [importRunId], references: [importRunId], onDelete: Restrict, map: "outcome_workbook_transaction_review_set_import_fkey")
+  sourceArtifact                OutcomeArtifactCustody                    @relation(fields: [sourceArtifactId], references: [artifactId], onDelete: Restrict, map: "outcome_workbook_transaction_review_set_artifact_fkey")
+  subjects                      OutcomeWorkbookTransactionReviewSubject[]
+
+  @@unique([importRunId, stagingPackageId], map: "outcome_workbook_transaction_review_set_import_key")
+  @@map("outcome_workbook_transaction_review_set")
+}
+
+model OutcomeWorkbookTransactionReviewSubject {
+  reviewSetId                 String                                     @map("review_set_id") @outcomes.Text
+  reviewSubjectId             String                                     @map("review_subject_id") @outcomes.Text
+  sourceOrdinal               Int                                        @map("source_ordinal")
+  seasonYear                  Int                                        @map("season_year")
+  subjectAddressSha256        String                                     @map("subject_address_sha256") @outcomes.Char(64)
+  subjectAddressCanonicalJson String                                     @map("subject_address_canonical_json") @outcomes.Text
+  subjectSha256               String                                     @map("subject_sha256") @outcomes.Char(64)
+  partySetCanonicalJson       String                                     @map("party_set_canonical_json") @outcomes.Text
+  subjectCanonicalJson        String                                     @map("subject_canonical_json") @outcomes.Text
+  subjectJson                 Json                                       @map("subject_json")
+  reviewSet                   OutcomeWorkbookTransactionReviewSet        @relation(fields: [reviewSetId], references: [reviewSetId], onDelete: Restrict, map: "outcome_workbook_transaction_review_subject_set_fkey")
+  decisions                   OutcomeWorkbookTransactionReviewDecision[]
+  currentHead                 OutcomeWorkbookTransactionReviewHead?
+
+  @@id([reviewSetId, reviewSubjectId])
+  @@unique([reviewSetId, sourceOrdinal], map: "outcome_workbook_transaction_review_subject_ordinal_key")
+  @@map("outcome_workbook_transaction_review_subject")
+}
+
+model OutcomeWorkbookTransactionReviewDecision {
+  decisionId                   String                                    @id @map("decision_id") @outcomes.Text
+  reviewSetId                  String                                    @map("review_set_id") @outcomes.Text
+  reviewSubjectId              String                                    @map("review_subject_id") @outcomes.Text
+  revision                     Int
+  supersedesDecisionId         String?                                   @unique @map("supersedes_decision_id") @outcomes.Text
+  outcome                      String                                    @outcomes.Text
+  reviewerId                   String                                    @map("reviewer_id") @outcomes.Text
+  decidedAt                    DateTime                                  @map("decided_at") @outcomes.Timestamptz(3)
+  decisionSha256               String                                    @map("decision_sha256") @outcomes.Char(64)
+  decisionContentCanonicalJson String                                    @map("decision_content_canonical_json") @outcomes.Text
+  decisionJson                 Json                                      @map("decision_json")
+  subject                      OutcomeWorkbookTransactionReviewSubject   @relation(fields: [reviewSetId, reviewSubjectId], references: [reviewSetId, reviewSubjectId], onDelete: Restrict, map: "outcome_workbook_transaction_review_decision_subject_fkey")
+  supersedesDecision           OutcomeWorkbookTransactionReviewDecision? @relation("OutcomeWorkbookTransactionReviewDecisionChain", fields: [supersedesDecisionId], references: [decisionId], onDelete: Restrict, map: "outcome_workbook_transaction_review_decision_supersedes_fkey")
+  successorDecision            OutcomeWorkbookTransactionReviewDecision? @relation("OutcomeWorkbookTransactionReviewDecisionChain")
+  currentHead                  OutcomeWorkbookTransactionReviewHead?
+
+  @@unique([reviewSetId, reviewSubjectId, revision], map: "outcome_workbook_transaction_review_decision_revision_key")
+  @@map("outcome_workbook_transaction_review_decision")
+}
+
+model OutcomeWorkbookTransactionReviewHead {
+  reviewSetId     String                                   @map("review_set_id") @outcomes.Text
+  reviewSubjectId String                                   @map("review_subject_id") @outcomes.Text
+  revision        Int
+  decisionId      String                                   @unique @map("decision_id") @outcomes.Text
+  outcome         String                                   @outcomes.Text
+  updatedAt       DateTime                                 @map("updated_at") @outcomes.Timestamptz(3)
+  subject         OutcomeWorkbookTransactionReviewSubject  @relation(fields: [reviewSetId, reviewSubjectId], references: [reviewSetId, reviewSubjectId], onDelete: Restrict, map: "outcome_workbook_transaction_review_head_subject_fkey")
+  decision        OutcomeWorkbookTransactionReviewDecision @relation(fields: [decisionId], references: [decisionId], onDelete: Restrict, map: "outcome_workbook_transaction_review_head_decision_fkey")
+
+  @@id([reviewSetId, reviewSubjectId])
+  @@index([reviewSetId, outcome, updatedAt], map: "outcome_workbook_transaction_review_head_status_idx")
+  @@map("outcome_workbook_transaction_review_head")
 }
