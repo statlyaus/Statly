@@ -1,14 +1,29 @@
-import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  createAflTradeByteArtifactRef,
+  createAflTradeCanonicalJsonArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import {
   createAflTradeHpnCalculationEligibilityReport,
   listAflTradeHpnRequiredSemanticFields,
   type AflTradeHpnCalculationFieldAssessmentInput,
 } from '@/server/aflTradeIntelligence/modeling/hpnCalculationEligibility';
+import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 
 const evaluatedAt = '2026-08-16T03:00:00.000Z';
 const ref = (name: string) => createAflTradeCanonicalJsonArtifactRef({ name }, evaluatedAt);
 const run = (character: string) => `provider-normalization-run:${character.repeat(64)}`;
 const map = (character: string) => `hpn-pav-field-map:${character.repeat(64)}`;
+const methodBytes = new TextEncoder().encode('<html>retained HPN method</html>');
+const method = createAflTradeHpnPavMethod({
+  sourceArtifact: createAflTradeByteArtifactRef(
+    methodBytes,
+    'text/html',
+    '2026-08-16T02:00:00.000Z'
+  ),
+  sourceBytes: methodBytes,
+  capturedAt: '2026-08-16T02:00:00.000Z',
+});
+const methodArtifact = createAflTradeCanonicalJsonArtifactRef(method, evaluatedAt);
 
 function field(
   semanticField: string,
@@ -60,7 +75,7 @@ function reportInput() {
   return {
     valuationScopeKey: 'workbook:2025',
     seasonYear: 2025,
-    methodId: `hpn-pav-method:${'d'.repeat(64)}`,
+    method: { state: 'authenticated' as const, method, methodArtifact },
     authoritySnapshotArtifact: ref('authority-snapshot'),
     sources: [
       source('completed_match_result', null, '1'),
@@ -86,6 +101,12 @@ describe('HPN calculation eligibility report', () => {
     expect(first.reportId).toMatch(/^hpn-calculation-eligibility:[a-f0-9]{64}$/);
     expect(first.content).toMatchObject({
       state: 'eligible',
+      blockers: [],
+      methodSelection: {
+        state: 'authenticated',
+        methodId: method.methodId,
+        methodArtifact,
+      },
       counts: { eligibleFields: 36, blockedFields: 0, totalFields: 36 },
       publicationEligible: false,
       publicationProhibited: true,
@@ -194,6 +215,24 @@ describe('HPN calculation eligibility report', () => {
       selectionState: 'missing',
       normalizationRunId: null,
       provider: null,
+    });
+  });
+
+  it('seals a blocked report when the HPN method is not authenticated', () => {
+    const input = {
+      ...reportInput(),
+      method: {
+        state: 'missing' as const,
+        evidenceRefs: [ref('missing-method')],
+      },
+    };
+    const report = createAflTradeHpnCalculationEligibilityReport(input);
+
+    expect(report.content).toMatchObject({
+      state: 'blocked',
+      blockers: ['method_not_authenticated'],
+      methodSelection: { state: 'missing', methodId: null },
+      counts: { totalFields: 36, eligibleFields: 36, blockedFields: 0 },
     });
   });
 });

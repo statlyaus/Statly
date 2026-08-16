@@ -12,11 +12,13 @@ import {
 } from '../artifacts/contentAddress';
 import {
   aflTradeHpnCalculationEligibilityReportSchema,
+  aflTradeHpnCalculationMethodSelectionSchema,
   type AflTradeHpnCalculationEligibilityReport,
+  type AflTradeHpnCalculationMethodSelection,
 } from './hpnCalculationEligibility';
 
 export const AFL_TRADE_HPN_LEAGUE_SEASON_REVIEW_PACKET_SCHEMA_VERSION =
-  'afl-trade-hpn-league-season-review-packet/v1' as const;
+  'afl-trade-hpn-league-season-review-packet/v2' as const;
 
 const publicIdSchema = z
   .string()
@@ -35,6 +37,7 @@ const blockerSchema = z.enum([
   'field_map_not_current',
   'raw_field_missing',
   'source_use_not_permitted',
+  'method_not_authenticated',
 ]);
 const fieldCountsSchema = z
   .object({
@@ -62,7 +65,7 @@ const seasonSummarySchema = z
     state: z.enum(['eligible', 'blocked']),
     sources: z.array(sourceSummarySchema).length(3),
     counts: fieldCountsSchema,
-    blockerCounts: z.array(blockerCountSchema).max(5),
+    blockerCounts: z.array(blockerCountSchema).max(6),
   })
   .strict();
 const missingSourceSchema = z
@@ -99,10 +102,10 @@ const contentSchema = z
     competition: z.literal('AFLM'),
     fromSeason: z.number().int().min(1998).max(2200),
     throughSeason: z.number().int().min(1998).max(2200),
-    methodId: aflTradeContentAddressedIdSchema('hpn-pav-method'),
+    methodSelection: aflTradeHpnCalculationMethodSelectionSchema,
     seasons: z.array(seasonSummarySchema).min(1).max(50),
     missingSources: z.array(missingSourceSchema).max(150),
-    blockerCounts: z.array(blockerCountSchema).max(5),
+    blockerCounts: z.array(blockerCountSchema).max(6),
     state: z.enum(['ready_for_human_review', 'blocked']),
     reviewDisposition: z.literal('requires_human_decision'),
     counts: z
@@ -193,6 +196,9 @@ function summarizeReport(
   artifact: AflTradeArtifactRef
 ) {
   const blockerCounts = new Map<z.infer<typeof blockerSchema>, number>();
+  for (const blocker of report.content.blockers) {
+    blockerCounts.set(blocker, (blockerCounts.get(blocker) ?? 0) + 1);
+  }
   for (const assessment of report.content.sources.flatMap(({ fields }) => fields)) {
     for (const blocker of assessment.blockers) {
       blockerCounts.set(blocker, (blockerCounts.get(blocker) ?? 0) + 1);
@@ -218,22 +224,26 @@ export function createAflTradeHpnLeagueSeasonReviewPacket(input: {
   readonly valuationScopeKey: string;
   readonly fromSeason: number;
   readonly throughSeason: number;
-  readonly methodId: string;
   readonly reports: readonly Readonly<{
     eligibilityReport: unknown;
     eligibilityReportArtifact: AflTradeArtifactRef;
   }>[];
   readonly createdAt: string;
 }): AflTradeHpnLeagueSeasonReviewPacket {
+  let methodSelection: AflTradeHpnCalculationMethodSelection | null = null;
   const reports = input.reports.map(({ eligibilityReport, eligibilityReportArtifact }) => {
     const parsed = aflTradeHpnCalculationEligibilityReportSchema.parse(eligibilityReport);
     if (!doesAflTradeArtifactRefMatchCanonicalJson(eligibilityReportArtifact, parsed)) {
       throw new TypeError('An exact eligibility-report artifact is required.');
     }
-    if (
-      parsed.content.valuationScopeKey !== input.valuationScopeKey ||
-      parsed.content.methodId !== input.methodId
-    ) {
+    if (parsed.content.valuationScopeKey !== input.valuationScopeKey) {
+      throw new TypeError('Eligibility reports must share exact scope and method ancestry.');
+    }
+    if (methodSelection === null) {
+      methodSelection = aflTradeHpnCalculationMethodSelectionSchema.parse(
+        parsed.content.methodSelection
+      );
+    } else if (!sameJson(methodSelection, parsed.content.methodSelection)) {
       throw new TypeError('Eligibility reports must share exact scope and method ancestry.');
     }
     return summarizeReport(parsed, eligibilityReportArtifact);
@@ -241,6 +251,9 @@ export function createAflTradeHpnLeagueSeasonReviewPacket(input: {
   reports.sort((left, right) => left.seasonYear - right.seasonYear);
   if (!sameJson(reports.map(({ seasonYear }) => seasonYear), expectedSeasons(input.fromSeason, input.throughSeason))) {
     throw new TypeError('The review packet must contain every requested season exactly once.');
+  }
+  if (methodSelection === null) {
+    throw new TypeError('The review packet requires at least one exact method selection.');
   }
   const partial = {
     schemaVersion: AFL_TRADE_HPN_LEAGUE_SEASON_REVIEW_PACKET_SCHEMA_VERSION,
@@ -250,7 +263,7 @@ export function createAflTradeHpnLeagueSeasonReviewPacket(input: {
     competition: 'AFLM' as const,
     fromSeason: input.fromSeason,
     throughSeason: input.throughSeason,
-    methodId: input.methodId,
+    methodSelection,
     seasons: reports,
   };
   const missingSources = reports.flatMap((season) =>
