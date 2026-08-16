@@ -1245,19 +1245,23 @@ model OutcomeHpnFieldMapCandidate {
 }
 
 model OutcomeHpnFieldMapReviewDecision {
-  decisionId            String                        @id @map("decision_id")
-  candidateId           String                        @map("candidate_id")
-  decision              String
-  reviewerId            String                        @map("reviewer_id")
-  rationale             String
-  decisionSha256        String                        @unique @map("decision_sha256") @outcomes.Char(64)
-  decisionArtifactJson  Json                          @map("decision_artifact_json")
-  decisionCanonicalJson String                        @map("decision_canonical_json") @outcomes.Text
-  decisionJson          Json                          @map("decision_json")
-  decidedAt             DateTime                      @map("decided_at") @outcomes.Timestamptz(3)
-  registeredAt          DateTime                      @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
-  candidate             OutcomeHpnFieldMapCandidate   @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
-  projectedMaps         OutcomeHpnProjectedFieldMap[]
+  decisionId                       String                        @id @map("decision_id")
+  candidateId                      String                        @map("candidate_id")
+  decision                         String
+  reviewerId                       String                        @map("reviewer_id")
+  rationale                        String
+  sourceUseAssessmentId            String                        @map("source_use_assessment_id")
+  sourceUseAssessmentArtifactJson  Json                          @map("source_use_assessment_artifact_json")
+  sourceUseAssessmentCanonicalJson String                        @map("source_use_assessment_canonical_json") @outcomes.Text
+  sourceUseAssessmentJson          Json                          @map("source_use_assessment_json")
+  decisionSha256                   String                        @unique @map("decision_sha256") @outcomes.Char(64)
+  decisionArtifactJson             Json                          @map("decision_artifact_json")
+  decisionCanonicalJson            String                        @map("decision_canonical_json") @outcomes.Text
+  decisionJson                     Json                          @map("decision_json")
+  decidedAt                        DateTime                      @map("decided_at") @outcomes.Timestamptz(3)
+  registeredAt                     DateTime                      @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  candidate                        OutcomeHpnFieldMapCandidate   @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
+  projectedMaps                    OutcomeHpnProjectedFieldMap[]
 
   @@index([candidateId, registeredAt, decisionId], map: "outcome_hpn_field_map_review_current_idx")
   @@map("outcome_hpn_field_map_review_decision")

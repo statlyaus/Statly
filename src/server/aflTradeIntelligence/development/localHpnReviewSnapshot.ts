@@ -114,6 +114,8 @@ const LOAD_REVIEW_SNAPSHOT_SQL = `WITH authority AS MATERIALIZED (
                'map',map.map_json,
                'candidate',candidate.candidate_json,
                'candidateArtifact',candidate.candidate_artifact_json,
+               'sourceUseAssessment',review.source_use_assessment_json,
+               'sourceUseAssessmentArtifact',review.source_use_assessment_artifact_json,
                'decision',review.decision_json,
                'decisionArtifact',review.decision_artifact_json
              ) AS projection_json
@@ -142,6 +144,8 @@ const LOAD_REVIEW_SNAPSHOT_SQL = `WITH authority AS MATERIALIZED (
                'map',map.map_json,
                'candidate',candidate.candidate_json,
                'candidateArtifact',candidate.candidate_artifact_json,
+               'sourceUseAssessment',review.source_use_assessment_json,
+               'sourceUseAssessmentArtifact',review.source_use_assessment_artifact_json,
                'decision',review.decision_json,
                'decisionArtifact',review.decision_artifact_json
              ) AS projection_json

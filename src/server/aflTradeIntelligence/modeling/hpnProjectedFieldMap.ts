@@ -13,11 +13,13 @@ import {
 } from '../artifacts/contentAddress';
 import {
   aflTradeHpnFieldMapCandidateSchema,
+  listAflTradeHpnCandidateSourceFields,
   type AflTradeHpnFieldMapCandidate,
 } from './hpnFieldMapCandidate';
+import type { AflTradeHpnPrivateCalculationSourceUseAssessment } from './hpnPrivateCalculationSourceUse';
 
 export const AFL_TRADE_HPN_FIELD_MAP_REVIEW_DECISION_SCHEMA_VERSION =
-  'afl-trade-hpn-field-map-review-decision/v1' as const;
+  'afl-trade-hpn-field-map-review-decision/v2' as const;
 export const AFL_TRADE_HPN_PROJECTED_FIELD_MAP_SCHEMA_VERSION =
   'afl-trade-hpn-projected-field-map/v1' as const;
 
@@ -35,6 +37,10 @@ const decisionContentSchema = z
     purpose: z.literal('private_confirmed_realized_hpn_pav_review'),
     candidateId: aflTradeContentAddressedIdSchema('hpn-field-map-candidate'),
     candidateArtifact: aflTradeArtifactRefSchema,
+    sourceUseAssessmentId: aflTradeContentAddressedIdSchema(
+      'hpn-private-source-use-assessment'
+    ),
+    sourceUseAssessmentArtifact: aflTradeArtifactRefSchema,
     decision: z.enum(['approved', 'rejected']),
     reviewerId: publicIdSchema,
     rationale: z.string().trim().min(1).max(2_000),
@@ -127,13 +133,45 @@ export type AflTradeHpnProjectedFieldMap = z.infer<
 export function createAflTradeHpnFieldMapReviewDecision(input: {
   readonly candidate: unknown;
   readonly candidateArtifact: AflTradeArtifactRef;
+  readonly sourceUseAssessment: AflTradeHpnPrivateCalculationSourceUseAssessment;
+  readonly sourceUseAssessmentArtifact: AflTradeArtifactRef;
   readonly decision: 'approved' | 'rejected';
   readonly reviewerId: string;
   readonly rationale: string;
   readonly decidedAt: string;
 }): AflTradeHpnFieldMapReviewDecision {
   const candidate = aflTradeHpnFieldMapCandidateSchema.parse(input.candidate);
-  if (!doesAflTradeArtifactRefMatchCanonicalJson(input.candidateArtifact, candidate)) {
+  const sourceUseAssessment = input.sourceUseAssessment;
+  const expectedSourceFields = [...new Set(
+    candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
+  )].sort();
+  const assessedSourceFields = sourceUseAssessment.content.fields
+    .map(({ sourceField }) => sourceField)
+    .sort();
+  if (
+    !doesAflTradeArtifactRefMatchCanonicalJson(input.candidateArtifact, candidate) ||
+    !doesAflTradeArtifactRefMatchCanonicalJson(
+      input.sourceUseAssessmentArtifact,
+      sourceUseAssessment
+    ) ||
+    sourceUseAssessment.assessmentId !==
+      createAflTradeContentAddress(
+        'hpn-private-source-use-assessment',
+        sourceUseAssessment.content
+      ) ||
+    sourceUseAssessment.content.environment !== 'non_production' ||
+    sourceUseAssessment.content.competition !== candidate.content.competition ||
+    sourceUseAssessment.content.seasonYear < candidate.content.validFromSeason ||
+    sourceUseAssessment.content.seasonYear > candidate.content.validThroughSeason ||
+    sourceUseAssessment.content.state !== 'permitted_private_calculation' ||
+    sourceUseAssessment.content.publicationEligible !== false ||
+    sourceUseAssessment.content.publicationProhibited !== true ||
+    sourceUseAssessment.content.fields.some(
+      ({ state }) => state !== 'permitted_private_calculation'
+    ) ||
+    expectedSourceFields.length !== assessedSourceFields.length ||
+    expectedSourceFields.some((field, index) => field !== assessedSourceFields[index])
+  ) {
     throw new TypeError('An exact candidate artifact is required for HPN field-map review.');
   }
   const content = decisionContentSchema.parse({
@@ -142,6 +180,8 @@ export function createAflTradeHpnFieldMapReviewDecision(input: {
     purpose: 'private_confirmed_realized_hpn_pav_review',
     candidateId: candidate.candidateId,
     candidateArtifact: input.candidateArtifact,
+    sourceUseAssessmentId: sourceUseAssessment.assessmentId,
+    sourceUseAssessmentArtifact: input.sourceUseAssessmentArtifact,
     decision: input.decision,
     reviewerId: input.reviewerId,
     rationale: input.rationale,

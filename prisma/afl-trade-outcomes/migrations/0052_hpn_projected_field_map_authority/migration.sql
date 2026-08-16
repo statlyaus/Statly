@@ -57,6 +57,10 @@ CREATE TABLE "outcome_hpn_field_map_review_decision" (
   "decision" TEXT NOT NULL,
   "reviewer_id" TEXT NOT NULL,
   "rationale" TEXT NOT NULL,
+  "source_use_assessment_id" TEXT NOT NULL,
+  "source_use_assessment_artifact_json" JSONB NOT NULL,
+  "source_use_assessment_canonical_json" TEXT NOT NULL,
+  "source_use_assessment_json" JSONB NOT NULL,
   "decision_sha256" CHAR(64) NOT NULL UNIQUE,
   "decision_artifact_json" JSONB NOT NULL,
   "decision_canonical_json" TEXT NOT NULL,
@@ -72,12 +76,31 @@ CREATE TABLE "outcome_hpn_field_map_review_decision" (
     AND "decision" IN ('approved','rejected')
     AND length("reviewer_id") BETWEEN 1 AND 240
     AND length("rationale") BETWEEN 1 AND 2000
+    AND "source_use_assessment_id" ~ '^hpn-private-source-use-assessment:[a-f0-9]{64}$'
+    AND "source_use_assessment_json"="source_use_assessment_canonical_json"::jsonb
+    AND "source_use_assessment_json"->>'assessmentId'="source_use_assessment_id"
+    AND "source_use_assessment_json"->'content'->>'environment'='non_production'
+    AND "source_use_assessment_json"->'content'->>'state'='permitted_private_calculation'
+    AND "source_use_assessment_json"->'content'->>'publicationEligible'='false'
+    AND "source_use_assessment_json"->'content'->>'publicationProhibited'='true'
+    AND "source_use_assessment_artifact_json"->>'contentSha256'=
+      encode(sha256(convert_to("source_use_assessment_canonical_json",'UTF8')),'hex')
+    AND "source_use_assessment_artifact_json"->>'artifactId'=
+      'artifact:' || encode(sha256(convert_to("source_use_assessment_canonical_json",'UTF8')),'hex')
+    AND "source_use_assessment_artifact_json"->>'storageUri'=
+      'artifact://sha256/' || encode(sha256(convert_to("source_use_assessment_canonical_json",'UTF8')),'hex')
+    AND "source_use_assessment_artifact_json"->>'mediaType'='application/json'
+    AND ("source_use_assessment_artifact_json"->>'byteLength')::integer=
+      octet_length(convert_to("source_use_assessment_canonical_json",'UTF8'))
     AND "decision_json"="decision_canonical_json"::jsonb
     AND "decision_json"->>'decisionId'="decision_id"
     AND "decision_json"->'content'->>'candidateId'="candidate_id"
     AND "decision_json"->'content'->>'decision'="decision"
     AND "decision_json"->'content'->>'reviewerId'="reviewer_id"
     AND "decision_json"->'content'->>'rationale'="rationale"
+    AND "decision_json"->'content'->>'sourceUseAssessmentId'="source_use_assessment_id"
+    AND "decision_json"->'content'->'sourceUseAssessmentArtifact'=
+      "source_use_assessment_artifact_json"
     AND ("decision_json"->'content'->>'decidedAt')::timestamptz="decided_at"
     AND "decision_json"->'content'->>'environment'='non_production'
     AND "decision_json"->'content'->>'publicationEligible'='false'

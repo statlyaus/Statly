@@ -7,8 +7,10 @@ import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createLocalAflTradeFiveSeasonAflTablesAuthority } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { createLocalAflTradeHpnPlayerFieldMapCandidate } from '@/server/aflTradeIntelligence/development/localHpnFieldMapCandidates';
+import { listAflTradeHpnCandidateSourceFields } from '@/server/aflTradeIntelligence/modeling/hpnFieldMapCandidate';
 import {
   createAflTradeHpnFieldMapReviewDecision,
   createAflTradeHpnProjectedFieldMap,
@@ -78,9 +80,46 @@ function approvedProjection(input: { readonly decision: 'approved' | 'rejected';
     createdAt: candidateAt,
   });
   const candidateArtifact = createAflTradeCanonicalJsonArtifactRef(candidate, candidateAt);
+  const sourceUseContent = {
+    schemaVersion: 'afl-trade-hpn-private-source-use-assessment/v1' as const,
+    environment: 'non_production' as const,
+    purpose: 'private_confirmed_realized_hpn_pav' as const,
+    competition: 'AFLM',
+    seasonYear: 2025,
+    valuationScopeKey: 'workbook:2025',
+    evaluationDecisionId: 'private-reviewed-evaluation-decision:fixture',
+    state: 'permitted_private_calculation' as const,
+    rightsArtifactId: `artifact:${'1'.repeat(64)}`,
+    evidenceBundleId: 'private-reviewed-evidence:fixture',
+    fields: [...new Set(
+      candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
+    )].sort().map((sourceField) => ({
+      sourceField,
+      state: 'permitted_private_calculation' as const,
+      reasons: [],
+    })),
+    reasons: [],
+    evidenceRefs: [],
+    evaluatedAt: candidateAt,
+    publicationEligible: false as const,
+    publicationProhibited: true as const,
+  };
+  const sourceUseAssessment = {
+    assessmentId: createAflTradeContentAddress(
+      'hpn-private-source-use-assessment',
+      sourceUseContent
+    ),
+    content: sourceUseContent,
+  };
+  const sourceUseAssessmentArtifact = createAflTradeCanonicalJsonArtifactRef(
+    sourceUseAssessment,
+    candidateAt
+  );
   const reviewDecision = createAflTradeHpnFieldMapReviewDecision({
     candidate,
     candidateArtifact,
+    sourceUseAssessment,
+    sourceUseAssessmentArtifact,
     decision: input.decision,
     reviewerId: 'local-hpn-field-map-reviewer',
     rationale: input.rationale,
@@ -90,6 +129,8 @@ function approvedProjection(input: { readonly decision: 'approved' | 'rejected';
   return {
     candidate,
     candidateArtifact,
+    sourceUseAssessment,
+    sourceUseAssessmentArtifact,
     reviewDecision,
     decisionArtifact,
     projectedFieldMap:

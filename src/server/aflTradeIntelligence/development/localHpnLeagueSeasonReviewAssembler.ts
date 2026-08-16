@@ -5,7 +5,10 @@ import {
   doesAflTradeArtifactRefMatchCanonicalJson,
   type AflTradeArtifactRef,
 } from '../artifacts/artifactReference';
-import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+} from '../artifacts/contentAddress';
 import {
   createAflTradeHpnCalculationEligibilityReport,
   type AflTradeHpnCalculationFieldAssessmentInput,
@@ -23,6 +26,7 @@ import {
 } from '../modeling/hpnProjectedFieldMap';
 import { aflTradeHpnPavMethodSchema } from '../modeling/hpnPlayerApproximateValue';
 import { assessAflTradeHpnPrivateCalculationSourceUse } from '../modeling/hpnPrivateCalculationSourceUse';
+import type { AflTradeHpnPrivateCalculationSourceUseAssessment } from '../modeling/hpnPrivateCalculationSourceUse';
 import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
 import {
   aflTradePrivateReviewedEvidenceBundleSchema,
@@ -49,6 +53,11 @@ function authenticateProjectedFieldMap(value: unknown) {
   const candidateArtifact = aflTradeArtifactRefSchema.parse(projection.candidateArtifact);
   const decision = aflTradeHpnFieldMapReviewDecisionSchema.parse(projection.decision);
   const decisionArtifact = aflTradeArtifactRefSchema.parse(projection.decisionArtifact);
+  const sourceUseAssessment =
+    projection.sourceUseAssessment as AflTradeHpnPrivateCalculationSourceUseAssessment;
+  const sourceUseAssessmentArtifact = aflTradeArtifactRefSchema.parse(
+    projection.sourceUseAssessmentArtifact
+  );
   const map = aflTradeHpnProjectedFieldMapSchema.parse(projection.map);
   const reconstructed = createAflTradeHpnProjectedFieldMap({
     candidate,
@@ -56,7 +65,22 @@ function authenticateProjectedFieldMap(value: unknown) {
     decision,
     decisionArtifact,
   });
-  if (canonicalizeAflTradeJson(reconstructed) !== canonicalizeAflTradeJson(map)) {
+  if (
+    canonicalizeAflTradeJson(reconstructed) !== canonicalizeAflTradeJson(map) ||
+    sourceUseAssessment.assessmentId !== createAflTradeContentAddress(
+      'hpn-private-source-use-assessment',
+      sourceUseAssessment.content
+    ) ||
+    !doesAflTradeArtifactRefMatchCanonicalJson(
+      sourceUseAssessmentArtifact,
+      sourceUseAssessment
+    ) ||
+    decision.content.sourceUseAssessmentId !== sourceUseAssessment.assessmentId ||
+    !doAflTradeArtifactRefsExactlyMatch(
+      decision.content.sourceUseAssessmentArtifact,
+      sourceUseAssessmentArtifact
+    )
+  ) {
     throw new TypeError('The current projected HPN field map has inexact review ancestry.');
   }
   return {
@@ -64,6 +88,8 @@ function authenticateProjectedFieldMap(value: unknown) {
     candidateArtifact,
     decision,
     decisionArtifact,
+    sourceUseAssessment,
+    sourceUseAssessmentArtifact,
     map,
     mapArtifact: createAflTradeCanonicalJsonArtifactRef(map, map.content.createdAt),
   };
@@ -276,6 +302,10 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
       addDocument(primary.providerDecodeMap, resultDecodeMapArtifact);
       addDocument(resultCandidate, resultCandidateArtifact);
       if (retainedResult) {
+        addDocument(
+          retainedResult.sourceUseAssessment,
+          retainedResult.sourceUseAssessmentArtifact
+        );
         addDocument(retainedResult.decision, retainedResult.decisionArtifact);
         addDocument(retainedResult.map, retainedResult.mapArtifact);
       }
@@ -355,6 +385,10 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
       addDocument(primary.providerDecodeMap, playerDecodeMapArtifact);
       addDocument(candidate, candidateArtifact);
       if (retainedPlayer) {
+        addDocument(
+          retainedPlayer.sourceUseAssessment,
+          retainedPlayer.sourceUseAssessmentArtifact
+        );
         addDocument(retainedPlayer.decision, retainedPlayer.decisionArtifact);
         addDocument(retainedPlayer.map, retainedPlayer.mapArtifact);
       }
