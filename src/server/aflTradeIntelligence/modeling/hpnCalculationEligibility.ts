@@ -147,15 +147,32 @@ const assessmentSchema = assessmentInputSchema.extend({
   blockers: z.array(blockerSchema).max(5),
 });
 
+const sourceBase = {
+  inputKind: z.enum(['completed_match_result', 'player_match_stats']),
+  role: z.enum(['primary', 'corroborating']).nullable(),
+  selectionEvidenceRefs: evidenceRefsSchema,
+  fields: z.array(assessmentSchema).min(1).max(30),
+};
+
 const sourceSchema = z
-  .object({
-    normalizationRunId: aflTradeContentAddressedIdSchema('provider-normalization-run'),
-    provider: publicIdSchema,
-    inputKind: z.enum(['completed_match_result', 'player_match_stats']),
-    role: z.enum(['primary', 'corroborating']).nullable(),
-    fields: z.array(assessmentSchema).min(1).max(30),
-  })
-  .strict()
+  .discriminatedUnion('selectionState', [
+    z
+      .object({
+        ...sourceBase,
+        selectionState: z.literal('selected'),
+        normalizationRunId: aflTradeContentAddressedIdSchema('provider-normalization-run'),
+        provider: publicIdSchema,
+      })
+      .strict(),
+    z
+      .object({
+        ...sourceBase,
+        selectionState: z.literal('missing'),
+        normalizationRunId: z.null(),
+        provider: z.null(),
+      })
+      .strict(),
+  ])
   .superRefine((source, context) => {
     if (
       (source.inputKind === 'completed_match_result' && source.role !== null) ||
@@ -189,6 +206,13 @@ const sourceSchema = z
         message: 'One source run cannot be assessed through multiple current field maps.',
       });
     }
+    if (source.selectionState === 'missing' && source.fields.some(({ state }) => state === 'eligible')) {
+      context.addIssue({
+        code: 'custom',
+        path: ['fields'],
+        message: 'A missing source selection cannot contain an eligible field.',
+      });
+    }
   });
 
 const contentSchema = z
@@ -219,7 +243,9 @@ const contentSchema = z
   })
   .strict()
   .superRefine((content, context) => {
-    const runIds = content.sources.map(({ normalizationRunId }) => normalizationRunId);
+    const runIds = content.sources.flatMap(({ normalizationRunId }) =>
+      normalizationRunId === null ? [] : [normalizationRunId]
+    );
     if (new Set(runIds).size !== runIds.length) {
       context.addIssue({
         code: 'custom',
@@ -257,6 +283,7 @@ const contentSchema = z
     }
     const evidence = [
       content.authoritySnapshotArtifact,
+      ...content.sources.flatMap(({ selectionEvidenceRefs }) => selectionEvidenceRefs),
       ...assessments.flatMap((assessment) => [
         ...assessment.rawAvailability.evidenceRefs,
         ...assessment.fieldMapReview.evidenceRefs,
@@ -326,13 +353,26 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
   readonly seasonYear: number;
   readonly methodId: string;
   readonly authoritySnapshotArtifact: AflTradeArtifactRef;
-  readonly sources: readonly {
-    readonly normalizationRunId: string;
-    readonly provider: string;
-    readonly inputKind: 'completed_match_result' | 'player_match_stats';
-    readonly role: 'primary' | 'corroborating' | null;
-    readonly fields: readonly AflTradeHpnCalculationFieldAssessmentInput[];
-  }[];
+  readonly sources: readonly (
+    | {
+        readonly selectionState: 'selected';
+        readonly normalizationRunId: string;
+        readonly provider: string;
+        readonly inputKind: 'completed_match_result' | 'player_match_stats';
+        readonly role: 'primary' | 'corroborating' | null;
+        readonly selectionEvidenceRefs: readonly AflTradeArtifactRef[];
+        readonly fields: readonly AflTradeHpnCalculationFieldAssessmentInput[];
+      }
+    | {
+        readonly selectionState: 'missing';
+        readonly normalizationRunId: null;
+        readonly provider: null;
+        readonly inputKind: 'completed_match_result' | 'player_match_stats';
+        readonly role: 'primary' | 'corroborating' | null;
+        readonly selectionEvidenceRefs: readonly AflTradeArtifactRef[];
+        readonly fields: readonly AflTradeHpnCalculationFieldAssessmentInput[];
+      }
+  )[];
   readonly evaluatedAt: string;
 }): AflTradeHpnCalculationEligibilityReport {
   const sources = input.sources
@@ -342,7 +382,15 @@ export function createAflTradeHpnCalculationEligibilityReport(input: {
         .map(assess)
         .sort((left, right) => left.semanticField.localeCompare(right.semanticField)),
     }))
-    .sort((left, right) => left.normalizationRunId.localeCompare(right.normalizationRunId));
+    .sort((left, right) => {
+      const slot = (source: (typeof sources)[number]) =>
+        source.inputKind === 'completed_match_result'
+          ? '0'
+          : source.role === 'primary'
+            ? '1'
+            : '2';
+      return slot(left).localeCompare(slot(right));
+    });
   const assessments = sources.flatMap(({ fields }) => fields);
   const eligibleFields = assessments.filter(({ state }) => state === 'eligible').length;
   const blockedFields = assessments.length - eligibleFields;
