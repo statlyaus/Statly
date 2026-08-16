@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { privateLocalWorkbookReads } from '@/server/aflTradeIntelligence/development/privateLocalWorkbookReads';
 
 import { LocalValuationReadinessNotice } from '../LocalValuationReadinessNotice';
+import { LocalPrivateReviewedTradeCalculationPanel } from './LocalPrivateReviewedTradeCalculationPanel';
 import { LocalSyntheticTradeExplanationPanel } from './LocalSyntheticTradeExplanationPanel';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,13 @@ export default async function LocalWorkbookTradeEvaluationPage({
   const evaluation = await privateLocalWorkbookReads.loadTrade(tradeId);
   if (evaluation === null) notFound();
   const valuationReadiness = evaluation.numericalEvaluation.readiness;
+  const privateCalculation =
+    evaluation.numericalEvaluation.state === 'partial'
+      ? evaluation.numericalEvaluation.calculation
+      : null;
+  const calculationAssets = new Map(
+    privateCalculation?.assets.map((asset) => [asset.asset.id, asset]) ?? []
+  );
 
   const { detail } = evaluation;
   const scenario = evaluation.scenario;
@@ -59,10 +67,10 @@ export default async function LocalWorkbookTradeEvaluationPage({
                 {detail.trade.title}
               </h1>
               <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
-                Transaction identity comes from the pinned private workbook. Factual outcomes stay
-                unavailable unless reconciled acquisition-spell evidence exists; the separate
-                numerical scenario below uses fabricated test inputs only. Neither lane has
-                factual-release or publication authority.
+                Transaction identity comes from the pinned private workbook. Reviewed historical
+                player PAV is shown where an exact player identity and season calculation exist;
+                unsupported assets remain unavailable. The separate synthetic scenario stays
+                clearly isolated. Neither lane has publication or production authority.
               </p>
             </div>
             <span className="rounded-full border border-warning/35 bg-warning/10 px-3 py-1.5 text-xs font-semibold text-foreground">
@@ -102,7 +110,14 @@ export default async function LocalWorkbookTradeEvaluationPage({
         </dl>
       </header>
 
-      <LocalValuationReadinessNotice readiness={valuationReadiness} />
+      <LocalValuationReadinessNotice
+        readiness={valuationReadiness}
+        historicalCalculationAvailable={privateCalculation !== null}
+      />
+
+      {privateCalculation ? (
+        <LocalPrivateReviewedTradeCalculationPanel calculation={privateCalculation} />
+      ) : null}
 
       <section
         aria-labelledby="synthetic-scenario-heading"
@@ -154,12 +169,15 @@ export default async function LocalWorkbookTradeEvaluationPage({
           Asset evidence review
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          These are the factual transaction records from the pinned workbook. No inferred identity,
-          acquisition link, post-trade outcome, or numerical value is added at this boundary.
+          These are the exact transaction records from the pinned workbook. A separate reviewed
+          calculation may link a player record to exact historical season PAV; this list itself does
+          not infer pick lineage, future output, or a trade grade.
         </p>
 
         <ul className="mt-5 divide-y divide-border border-y border-border">
-          {detail.assets.map((asset) => (
+          {detail.assets.map((asset) => {
+            const calculatedAsset = calculationAssets.get(asset.id);
+            return (
             <li key={asset.id} className="grid gap-4 py-4 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -174,13 +192,20 @@ export default async function LocalWorkbookTradeEvaluationPage({
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Governed numerical evidence
                 </p>
-                <p className="mt-1 font-semibold text-foreground">Unavailable at this gate</p>
+                <p className="mt-1 font-semibold text-foreground">
+                  {calculatedAsset?.state === 'calculated'
+                    ? 'Reviewed historical PAV linked'
+                    : 'Unavailable at this gate'}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Exact source qualification and authenticated model-run ancestry are required.
+                  {calculatedAsset?.state === 'calculated'
+                    ? 'See the component calculation above; predictive and grade authority remain unavailable.'
+                    : 'Exact identity or selection lineage and supported calculation evidence are required.'}
                 </p>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </section>
 
@@ -194,8 +219,9 @@ export default async function LocalWorkbookTradeEvaluationPage({
               Pinned factual input identity
             </h2>
             <p className="mt-3 text-sm text-muted-foreground">
-              No factual calculation, dataset, or model identity is claimed while numerical
-              evaluation remains blocked.
+              {privateCalculation
+                ? 'Reviewed historical player calculations are private and publication-prohibited; unsupported assets and predictive grades remain blocked.'
+                : 'No factual calculation, dataset, or model identity is claimed while numerical evaluation remains blocked.'}
             </p>
           </div>
           <div className="text-right text-xs leading-5 text-muted-foreground">
