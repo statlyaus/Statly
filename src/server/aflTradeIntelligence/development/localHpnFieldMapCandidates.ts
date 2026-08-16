@@ -18,7 +18,7 @@ const directFields = {
   afl_tables: {
     player: 'ID',
     match: 'url',
-    club: 'Team',
+    club: 'Playing.for',
     hitOuts: 'Hit.Outs',
     goalAssists: 'Goal.Assists',
     inside50s: 'Inside.50s',
@@ -81,6 +81,11 @@ export function createLocalAflTradeHpnPlayerFieldMapCandidate(input: {
             goals: scoringFields[input.provider].goals,
             behinds: scoringFields[input.provider].behinds,
           }
+        : semanticField === 'match' && input.provider === 'afl_tables'
+          ? {
+              kind: 'composite_key',
+              sourceFields: ['Date', 'Home.team', 'Away.team'],
+            }
         : {
             kind: 'direct',
             sourceField:
@@ -99,6 +104,72 @@ export function createLocalAflTradeHpnPlayerFieldMapCandidate(input: {
     providerDecodeMap: input.providerDecodeMap,
     providerDecodeMapArtifact: input.providerDecodeMapArtifact,
     semanticBindings,
+    createdAt: input.createdAt,
+  });
+}
+
+export function createLocalAflTradeHpnCompletedResultFieldMapCandidate(input: {
+  readonly seasonYear: number;
+  readonly providerDecodeMap: unknown;
+  readonly providerDecodeMapArtifact: AflTradeArtifactRef;
+  readonly createdAt: string;
+}) {
+  const decodeMap = decodeMapIdentitySchema.parse(input.providerDecodeMap);
+  if (decodeMap.capabilityId !== 'afl-tables-player-stats') {
+    throw new TypeError(
+      'The retained provider decode map has the wrong HPN result capability.'
+    );
+  }
+  const semanticBindings = listAflTradeHpnRequiredSemanticFields(
+    'completed_match_result'
+  ).map<AflTradeHpnSemanticBindingCandidate>((semanticField) => {
+    switch (semanticField) {
+      case 'awayClub':
+        return { semanticField, mapping: { kind: 'direct', sourceField: 'Away.team' } };
+      case 'awayPoints':
+        return { semanticField, mapping: { kind: 'direct', sourceField: 'Away.score' } };
+      case 'completionStatus':
+        return {
+          semanticField,
+          mapping: {
+            kind: 'reviewed_final_scores',
+            matchDateField: 'Date',
+            homePointsField: 'Home.score',
+            awayPointsField: 'Away.score',
+          },
+        };
+      case 'homeClub':
+        return { semanticField, mapping: { kind: 'direct', sourceField: 'Home.team' } };
+      case 'homePoints':
+        return { semanticField, mapping: { kind: 'direct', sourceField: 'Home.score' } };
+      case 'match':
+        return {
+          semanticField,
+          mapping: {
+            kind: 'composite_key',
+            sourceFields: ['Date', 'Home.team', 'Away.team'],
+          },
+        };
+      default:
+        throw new TypeError(`Unexpected completed-result semantic field: ${semanticField}`);
+    }
+  });
+  return createAflTradeHpnFieldMapCandidate({
+    environment: 'non_production',
+    competition: 'AFLM',
+    provider: 'afl_tables',
+    capabilityId: 'afl-tables-player-stats',
+    sourceSchemaSha256: decodeMap.sourceSchemaSha256,
+    inputKind: 'completed_match_result',
+    validFromSeason: input.seasonYear,
+    validThroughSeason: input.seasonYear,
+    providerDecodeMap: input.providerDecodeMap,
+    providerDecodeMapArtifact: input.providerDecodeMapArtifact,
+    semanticBindings,
+    completionRule: {
+      kind: 'reviewed_final_score_presence',
+      decisionRequired: true,
+    },
     createdAt: input.createdAt,
   });
 }
