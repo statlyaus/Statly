@@ -31,6 +31,11 @@ export NEXT_PUBLIC_SOCKET_URL="http://localhost:3002"
 export STATLY_ENABLE_DEV_TOOLS="true"
 export AFL_TRADE_PUBLIC_READ_MODE="postgres"
 export AFL_TRADE_PUBLIC_READ_ENVIRONMENT="${AFL_TRADE_PUBLIC_READ_ENVIRONMENT:-test_fixture}"
+STATLY_NEXT_DEV_BUNDLER="${STATLY_NEXT_DEV_BUNDLER:-turbopack}"
+if [[ "$STATLY_NEXT_DEV_BUNDLER" != "turbopack" && "$STATLY_NEXT_DEV_BUNDLER" != "webpack" ]]; then
+  echo "local stack: STATLY_NEXT_DEV_BUNDLER must be turbopack or webpack" >&2
+  exit 1
+fi
 STATLY_LOCAL_REUSE_OUTCOMES_DATABASE="${STATLY_LOCAL_REUSE_OUTCOMES_DATABASE:-false}"
 if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" != "true" && "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" != "false" ]]; then
   echo "local stack: STATLY_LOCAL_REUSE_OUTCOMES_DATABASE must be true or false" >&2
@@ -165,7 +170,13 @@ else
   npm run dev:outcomes:seed
 fi
 
+WEB_COMMAND="npm:dev"
+if [[ "$STATLY_NEXT_DEV_BUNDLER" == "webpack" ]]; then
+  npm run auth-worker:build
+  WEB_COMMAND="./node_modules/.bin/next dev --webpack"
+fi
+
 npx concurrently -k -n web,socket,draft-worker -c blue,magenta,green \
-  "npm:dev" \
+  "$WEB_COMMAND" \
   "npm:socket" \
   "npm:draft-worker:dev"

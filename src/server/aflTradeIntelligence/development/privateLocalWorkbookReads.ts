@@ -2,14 +2,13 @@ import 'server-only';
 
 import { isAbsolute } from 'node:path';
 
-import { Pool } from 'pg';
-
 import { DEVELOPMENT_AUTH_USER_ID } from '@/lib/devAuth';
 import type { DraftTradeDetail } from '@/lib/draftTrades/read';
 import { getExplicitAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
 import type { LocalPrivateReviewedTradeCalculation } from './localPrivateReviewedTradeCalculation';
+import { getLocalOutcomesRuntimePool } from './localOutcomesRuntimePool';
 import { assertLocalAflTradeOutcomesRuntimeIdentity } from './localOutcomesRuntimeIdentity';
 import {
   localWorkbookEvaluationService,
@@ -225,37 +224,19 @@ export function createPrivateLocalWorkbookReads(
 async function authenticateLocalOutcomesRuntime(
   environment: Readonly<PrivateLocalWorkbookReadEnvironment>
 ): Promise<void> {
-  const pool = new Pool({
-    connectionString: environment.AFL_OUTCOMES_DATABASE_URL,
-    application_name: 'statly-private-workbook-admission',
-    connectionTimeoutMillis: 5_000,
-    max: 1,
-  });
-  try {
-    await assertLocalAflTradeOutcomesRuntimeIdentity(
-      pool,
-      environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE!
-    );
-  } finally {
-    await pool.end();
-  }
+  const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
+  await assertLocalAflTradeOutcomesRuntimeIdentity(
+    pool,
+    environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE!
+  );
 }
 
 async function inspectAdmittedLocalValuationReadiness(
   environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
   scopeKey: string
 ): Promise<LocalAflTradeValuationReadiness> {
-  const pool = new Pool({
-    connectionString: environment.AFL_OUTCOMES_DATABASE_URL,
-    application_name: 'statly-private-workbook-valuation-readiness',
-    connectionTimeoutMillis: 5_000,
-    max: 1,
-  });
-  try {
-    return await inspectLocalAflTradeValuationReadiness(pool, { scopeKey });
-  } finally {
-    await pool.end();
-  }
+  const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
+  return inspectLocalAflTradeValuationReadiness(pool, { scopeKey });
 }
 
 async function loadAdmittedPrivateCalculation(
@@ -263,43 +244,25 @@ async function loadAdmittedPrivateCalculation(
   detail: DraftTradeDetail,
   workbookSha256: string
 ): Promise<LocalPrivateReviewedTradeCalculation> {
-  const pool = new Pool({
-    connectionString: environment.AFL_OUTCOMES_DATABASE_URL,
-    application_name: 'statly-private-workbook-reviewed-calculation',
-    connectionTimeoutMillis: 5_000,
-    max: 1,
-  });
-  try {
-    return await loadPostgresLocalPrivateReviewedTradeCalculation(
-      createPgAflOutcomeSqlClient(pool),
-      { detail, workbookSha256 }
-    );
-  } finally {
-    await pool.end();
-  }
+  const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
+  return loadPostgresLocalPrivateReviewedTradeCalculation(
+    createPgAflOutcomeSqlClient(pool),
+    { detail, workbookSha256 }
+  );
 }
 
 async function readLocalValuationReadinessGeneration(
   environment: Readonly<PrivateLocalWorkbookReadEnvironment>
 ): Promise<string> {
-  const pool = new Pool({
-    connectionString: environment.AFL_OUTCOMES_DATABASE_URL,
-    application_name: 'statly-private-workbook-readiness-generation',
-    connectionTimeoutMillis: 5_000,
-    max: 1,
-  });
-  try {
-    const result = await pool.query<{ generation: string }>(
-      'SELECT pg_current_wal_lsn()::text AS generation'
-    );
-    const generation = result.rows[0]?.generation?.trim();
-    if (!generation || !POSTGRES_WAL_LSN_PATTERN.test(generation)) {
-      throw new Error('The outcomes readiness generation is invalid.');
-    }
-    return generation;
-  } finally {
-    await pool.end();
+  const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
+  const result = await pool.query<{ generation: string }>(
+    'SELECT pg_current_wal_lsn()::text AS generation'
+  );
+  const generation = result.rows[0]?.generation?.trim();
+  if (!generation || !POSTGRES_WAL_LSN_PATTERN.test(generation)) {
+    throw new Error('The outcomes readiness generation is invalid.');
   }
+  return generation;
 }
 
 export const privateLocalWorkbookReads = createPrivateLocalWorkbookReads({

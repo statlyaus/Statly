@@ -188,7 +188,9 @@ export async function inspectLocalAflTradeValuationReadiness(
          SELECT head.decision_id,head.status,head.updated_at,head.evidence_bundle_id,
                 decision.decision_json,bundle.bundle_json,bundle.candidate_count,
                 bundle.decision_count,bundle.source_capture_count,bundle.source_rights_count,
-                outcome_private_reviewed_evidence_is_current() AS evidence_current
+                outcome_private_reviewed_evidence_bundle_is_current(
+                  head.evidence_bundle_id
+                ) AS evidence_current
            FROM outcome_private_reviewed_evaluation_head head
            JOIN outcome_private_reviewed_evaluation_decision decision
              ON decision.decision_id=head.decision_id
