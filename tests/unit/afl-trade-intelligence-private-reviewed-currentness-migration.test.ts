@@ -16,6 +16,10 @@ describe('private reviewed evidence currentness migration', () => {
 
     expect(migration).toContain('"outcome_private_reviewed_evidence_is_current"()');
     expect(migration).toContain('Private reviewed evidence is not current before optimization');
+    expect(migration).toContain('IF has_target_private_evidence');
+    expect(migration).toContain('outcome_private_reviewed_evidence_bundle');
+    expect(migration).toContain('decision."decided_by" IN (');
+    expect(migration).toContain("capture.\"provider\"='afl_tables'");
     expect(migration).toContain('BEFORE UPDATE OR DELETE ON "outcome_review_decision"');
     expect(migration).toContain('evidenceSetSha256');
     expect(migration).toContain('aef663452e66a433048605a71fb4178ed1a5e1d9610c6d3ed75bfb796308b5cb');
