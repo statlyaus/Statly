@@ -11,6 +11,7 @@ const nextConfig = {
   reactStrictMode: true,
 
   turbopack: {
+    root: process.cwd(),
     resolveAlias: {
       [sentryClientAdapterModule]: sentryClientAdapterPath,
     },

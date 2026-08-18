@@ -5,8 +5,8 @@ import {
   type LocalWorkbookEvaluationDependencies,
 } from '@/server/aflTradeIntelligence/development/localWorkbookEvaluation';
 import type { DraftTradeReadRepository } from '@/lib/draftTrades/read';
-import type { AflTradeDevelopmentWorkbookValueProjection } from '@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection';
 import { prepareLocalWorkbookSyntheticValuation } from '@/server/aflTradeIntelligence/development/localWorkbookSyntheticValuation';
+import type { LocalAflTradeValuationReadiness } from '@/server/aflTradeIntelligence/development/localAflTradeValuationReadiness';
 
 const digest = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const enabledEnvironment = {
@@ -14,6 +14,32 @@ const enabledEnvironment = {
   AFL_OUTCOMES_DEV_WORKBOOK_READ_ENABLED: 'true',
   AFL_OUTCOMES_DEV_WORKBOOK_PATH: '/outside/workspace/AFL Drafts Trades.xlsx',
   AFL_OUTCOMES_DEV_WORKBOOK_SHA256: digest,
+};
+
+const sourceBlockedReadiness: LocalAflTradeValuationReadiness = {
+  state: 'blocked',
+  numericalCalculationsAvailable: false,
+  qualificationReportCreated: true,
+  qualificationReportId: `valuation-source-qualification:${'b'.repeat(64)}`,
+  factualReleaseId: `outcome-release:${'c'.repeat(64)}`,
+  qualificationEvaluatedAt: '2026-08-15T02:00:00.000Z',
+  privateEvaluationAuthorityState: 'not_authorized',
+  privateEvaluationEvidenceKind: null,
+  privateEvaluationDecisionId: null,
+  privateEvaluationDecidedAt: null,
+  privateEvaluationEvidenceBundleId: null,
+  retainedEvidenceCandidateCount: null,
+  retainedEvidenceDecisionCount: null,
+  retainedEvidenceSourceCaptureCount: null,
+  retainedEvidenceSourceRightsCount: null,
+  preparedInputSetCreated: false,
+  preparedInputSetCount: 0,
+  preparedInputSetIds: [],
+  scopeKey: 'afl-men:2025-trades',
+  blockerCodes: ['source_blocked', 'private_evaluation_not_authorized'],
+  sources: ['official-afl-2026'],
+  requiredNextAuthority: 'private_nonproduction_derived_calculation_authority',
+  explanation: 'Private non-production derived calculation authority has not been recorded.',
 };
 
 function trade(index: number, year: number) {
@@ -112,83 +138,9 @@ function repository(): DraftTradeReadRepository {
   };
 }
 
-function projection(tradeIds: readonly string[]): AflTradeDevelopmentWorkbookValueProjection {
-  const valuesByTradeId = new Map(
-    tradeIds.map((tradeId, index) => {
-      const availability =
-        tradeId === 'workbook-2025-0001'
-          ? 'available'
-          : tradeId === 'workbook-2025-0002'
-            ? 'available_partial'
-            : 'lineage_unresolved';
-      return [
-        tradeId,
-        {
-          calculationId: `calculation:${index}`,
-          tradeId,
-          datasetId: 'dataset:private-local',
-          modelId: 'model:private-local',
-          summaries: {
-            at_trade: { view: 'at_trade', availability },
-            realized: { view: 'realized', availability },
-            remaining: { view: 'remaining', availability },
-            current: { view: 'current', availability },
-          },
-          assets: [
-            {
-              assetId: `${tradeId}:asset`,
-              state: availability === 'lineage_unresolved' ? 'lineage_unresolved' : 'valued',
-              featureProviders: [],
-              atTradeSampleCount: availability === 'lineage_unresolved' ? 0 : 40,
-            },
-          ],
-          publicationEligible: false,
-        },
-      ];
-    })
-  );
-  return {
-    datasetId: 'dataset:private-local',
-    model: {
-      modelId: 'model:private-local',
-      content: {
-        schemaVersion: 'afl-trade-development-grade-model/v1',
-        datasetId: 'dataset:private-local',
-        createdAt: '2026-08-06T08:37:32.121Z',
-        minimumCohortSize: 20,
-        practicalEquivalenceTolerance: 5,
-        outcomeWeights: { games: 1, goals: 0.5, coachesVotes: 1.5, brownlowVotes: 2 },
-        providerFeatureTreatment:
-          'reconciled_point_in_time_when_available_else_selection_demographic',
-        historicalEligibility: 'fixed_horizon_matured_strictly_before_prediction',
-        sourceRecordedGradeTreatment: 'prohibited',
-        publicationEligible: false,
-      },
-    },
-    valuesByTradeId:
-      valuesByTradeId as AflTradeDevelopmentWorkbookValueProjection['valuesByTradeId'],
-    gradesByTradeId: new Map(),
-    linksByTradeId: new Map(
-      tradeIds.map((tradeId) => [
-        tradeId,
-        [
-          {
-            assetId: `${tradeId}:asset`,
-            state: tradeId.endsWith('0001') ? 'linked' : 'unresolved',
-            acquisitionId: tradeId.endsWith('0001') ? 'acquisition:1' : null,
-            method: tradeId.endsWith('0001') ? 'player_club_year' : 'none',
-          },
-        ],
-      ])
-    ),
-    publicationEligible: false,
-  };
-}
-
 function dependencies(): LocalWorkbookEvaluationDependencies {
   return {
     loadRepository: vi.fn(async () => repository()),
-    loadValues: vi.fn(async (tradeIds) => projection(tradeIds)),
   };
 }
 
@@ -198,19 +150,30 @@ describe('private local workbook evaluation', () => {
     const service = createLocalWorkbookEvaluationService(deps);
 
     await expect(
-      service.loadArchive({ year: 2025 }, { NODE_ENV: 'development' })
+      service.loadArchive(
+        { year: 2025 },
+        { NODE_ENV: 'development' },
+        vi.fn().mockResolvedValue(sourceBlockedReadiness)
+      )
     ).resolves.toBeNull();
     await expect(
-      service.loadArchive({ year: 2025 }, { ...enabledEnvironment, NODE_ENV: 'production' })
+      service.loadArchive(
+        { year: 2025 },
+        { ...enabledEnvironment, NODE_ENV: 'production' },
+        vi.fn().mockResolvedValue(sourceBlockedReadiness)
+      )
     ).resolves.toBeNull();
     expect(deps.loadRepository).not.toHaveBeenCalled();
-    expect(deps.loadValues).not.toHaveBeenCalled();
   });
 
-  it('processes every real trade and reports calculated, partial, and unresolved results', async () => {
+  it('loads factual trades and isolated synthetic scenarios while real numerical evaluation remains blocked', async () => {
     const service = createLocalWorkbookEvaluationService(dependencies());
 
-    const result = await service.loadArchive({ year: 2025 }, enabledEnvironment);
+    const result = await service.loadArchive(
+      { year: 2025 },
+      enabledEnvironment,
+      vi.fn().mockResolvedValue(sourceBlockedReadiness)
+    );
 
     expect(result).toMatchObject({
       input: {
@@ -224,7 +187,6 @@ describe('private local workbook evaluation', () => {
       trades: [
         expect.objectContaining({
           trade: expect.objectContaining({ tradeId: 'workbook-2025-0001' }),
-          calculation: expect.objectContaining({ availability: 'available' }),
           scenario: expect.objectContaining({
             state: 'ready',
             publicationEligible: false,
@@ -232,67 +194,59 @@ describe('private local workbook evaluation', () => {
         }),
         expect.objectContaining({
           trade: expect.objectContaining({ tradeId: 'workbook-2025-0002' }),
-          calculation: expect.objectContaining({ availability: 'available_partial' }),
           scenario: expect.objectContaining({ state: 'ready' }),
         }),
       ],
       batch: {
         totalTrades: 3,
-        processedTrades: 2,
-        availableTrades: 1,
-        partialTrades: 1,
-        unresolvedTrades: 0,
-        assetStates: {
-          valued: 2,
-          right_censored: 0,
-          outcome_unresolved: 0,
-          lineage_unresolved: 0,
-          insufficient_cohort: 0,
-        },
-        datasetId: 'dataset:private-local',
-        modelId: 'model:private-local',
+        selectedYearTrades: 2,
         scenarioReadyTrades: 2,
         scenarioUnavailableTrades: 0,
       },
+      numericalEvaluation: { state: 'blocked', readiness: sourceBlockedReadiness },
       publicationEligible: false,
     });
   });
 
-  it('uses one bounded archive projection instead of rebuilding the model for every read chunk', async () => {
+  it('keeps factual workbook review available without invoking a numerical loader when source policy blocks it', async () => {
     const deps = dependencies();
-    const loadArchiveValues = vi.fn(async (tradeIds: readonly string[]) => projection(tradeIds));
-    const service = createLocalWorkbookEvaluationService({ ...deps, loadArchiveValues });
+    const service = createLocalWorkbookEvaluationService(deps);
 
-    await expect(service.loadArchive({ year: 2025 }, enabledEnvironment)).resolves.toMatchObject({
-      batch: { totalTrades: 3, processedTrades: 2 },
-    });
-
-    expect(loadArchiveValues).toHaveBeenCalledOnce();
-    expect(loadArchiveValues).toHaveBeenCalledWith(
-      ['workbook-2025-0001', 'workbook-2025-0002'],
-      enabledEnvironment
+    const result = await service.loadArchive(
+      { year: 2025 },
+      enabledEnvironment,
+      vi.fn().mockResolvedValue(sourceBlockedReadiness)
     );
-    expect(deps.loadValues).not.toHaveBeenCalled();
+
+    expect(result).toMatchObject({
+      year: 2025,
+      trades: [
+        expect.objectContaining({
+          trade: expect.objectContaining({ tradeId: 'workbook-2025-0001' }),
+        }),
+        expect.objectContaining({
+          trade: expect.objectContaining({ tradeId: 'workbook-2025-0002' }),
+        }),
+      ],
+      numericalEvaluation: {
+        state: 'blocked',
+        readiness: sourceBlockedReadiness,
+      },
+    });
+    expect(deps.loadRepository).toHaveBeenCalledOnce();
   });
 
-  it('returns one calculated trade with its asset links and rejects unknown trade ids', async () => {
+  it('returns one factual trade with its synthetic scenario and rejects unknown trade ids', async () => {
     const service = createLocalWorkbookEvaluationService(dependencies());
 
     await expect(
-      service.loadTrade('workbook-2025-0001', enabledEnvironment)
+      service.loadTrade(
+        'workbook-2025-0001',
+        enabledEnvironment,
+        vi.fn().mockResolvedValue(sourceBlockedReadiness)
+      )
     ).resolves.toMatchObject({
       detail: { trade: { title: '2025 real trade 1' } },
-      calculation: {
-        tradeId: 'workbook-2025-0001',
-        publicationEligible: false,
-      },
-      links: [
-        {
-          state: 'linked',
-          acquisitionId: 'acquisition:1',
-          method: 'player_club_year',
-        },
-      ],
       scenario: {
         state: 'ready',
         publicationEligible: false,
@@ -304,9 +258,93 @@ describe('private local workbook evaluation', () => {
           },
         }),
       },
+      numericalEvaluation: { state: 'blocked', readiness: sourceBlockedReadiness },
       publicationEligible: false,
     });
-    await expect(service.loadTrade('workbook-missing', enabledEnvironment)).resolves.toBeNull();
+    await expect(
+      service.loadTrade(
+        'workbook-missing',
+        enabledEnvironment,
+        vi.fn().mockResolvedValue(sourceBlockedReadiness)
+      )
+    ).resolves.toBeNull();
+  });
+
+  it('adds an admitted private reviewed calculation to trade detail without changing archive reads', async () => {
+    const service = createLocalWorkbookEvaluationService(dependencies());
+    const calculation = {
+      projectionId: `local-private-trade-calculation:${'f'.repeat(64)}`,
+      tradeId: 'workbook-2025-0001',
+      workbookSha256: digest,
+      assets: [
+        {
+          state: 'calculated',
+          atTrade: { state: 'available' },
+          realized: { state: 'unavailable' },
+          remaining: { state: 'unavailable' },
+          current: { state: 'unavailable' },
+        },
+      ],
+      publicationEligible: false,
+      publicationProhibited: true,
+    } as never;
+    const loadPrivateCalculation = vi.fn().mockResolvedValue(calculation);
+
+    await expect(
+      service.loadTrade(
+        'workbook-2025-0001',
+        enabledEnvironment,
+        vi.fn().mockResolvedValue(sourceBlockedReadiness),
+        loadPrivateCalculation
+      )
+    ).resolves.toMatchObject({
+      numericalEvaluation: {
+        state: 'partial',
+        readiness: sourceBlockedReadiness,
+        calculation,
+      },
+    });
+    expect(loadPrivateCalculation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trade: expect.objectContaining({ tradeId: 'workbook-2025-0001' }),
+      }),
+      digest
+    );
+  });
+
+  it('keeps numerical evaluation blocked when every private asset view is unavailable', async () => {
+    const service = createLocalWorkbookEvaluationService(dependencies());
+    const calculation = {
+      projectionId: `local-private-trade-calculation:${'e'.repeat(64)}`,
+      tradeId: 'workbook-2025-0001',
+      workbookSha256: digest,
+      assets: [
+        { state: 'unavailable', reason: 'player_identity_unavailable' },
+        {
+          state: 'calculated',
+          atTrade: { state: 'unavailable' },
+          realized: { state: 'unavailable' },
+          remaining: { state: 'unavailable' },
+          current: { state: 'unavailable' },
+        },
+      ],
+      publicationEligible: false,
+      publicationProhibited: true,
+    } as never;
+
+    await expect(
+      service.loadTrade(
+        'workbook-2025-0001',
+        enabledEnvironment,
+        vi.fn().mockResolvedValue(sourceBlockedReadiness),
+        vi.fn().mockResolvedValue(calculation)
+      )
+    ).resolves.toMatchObject({
+      numericalEvaluation: {
+        state: 'blocked',
+        readiness: sourceBlockedReadiness,
+      },
+    });
   });
 
   it('reuses a content-pinned scenario within one local service instance', async () => {
@@ -316,8 +354,16 @@ describe('private local workbook evaluation', () => {
       prepareScenario,
     });
 
-    await service.loadTrade('workbook-2025-0001', enabledEnvironment);
-    await service.loadTrade('workbook-2025-0001', enabledEnvironment);
+    await service.loadTrade(
+      'workbook-2025-0001',
+      enabledEnvironment,
+      vi.fn().mockResolvedValue(sourceBlockedReadiness)
+    );
+    await service.loadTrade(
+      'workbook-2025-0001',
+      enabledEnvironment,
+      vi.fn().mockResolvedValue(sourceBlockedReadiness)
+    );
 
     expect(prepareScenario).toHaveBeenCalledOnce();
   });

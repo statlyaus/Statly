@@ -10,6 +10,8 @@ import {
   normalizeAflOutcomesDevelopmentWorkbook,
   type AflOutcomesDevelopmentWorkbook,
 } from './developmentWorkbookStructure';
+import type { AflTradeWorkbookStagingPackage } from './workbookImportContracts';
+import { parseAflTradeWorkbookForStaging } from './workbookStagingParser';
 
 export const AFL_OUTCOMES_DEVELOPMENT_WORKBOOK_MEDIA_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' as const;
@@ -27,6 +29,11 @@ export interface AflOutcomesDevelopmentWorkbookFingerprint {
   byteLength: number;
   sha256: string;
   observedAt: string;
+}
+
+export interface AflOutcomesDevelopmentWorkbookEvidence {
+  workbook: AflOutcomesDevelopmentWorkbook;
+  staging: AflTradeWorkbookStagingPackage;
 }
 
 export function assertAflOutcomesDevelopmentWorkbookRuntime(runtimeEnvironment?: string) {
@@ -118,9 +125,7 @@ export async function fingerprintAflOutcomesDevelopmentWorkbook(input: {
   workbookPath: string;
   runtimeEnvironment?: string;
 }): Promise<AflOutcomesDevelopmentWorkbookFingerprint> {
-  assertAflOutcomesDevelopmentWorkbookRuntime(
-    input.runtimeEnvironment ?? process.env.NODE_ENV
-  );
+  assertAflOutcomesDevelopmentWorkbookRuntime(input.runtimeEnvironment ?? process.env.NODE_ENV);
   const { bytes, fileStat, resolvedPath } = await readDevelopmentWorkbookFile(input.workbookPath);
   return {
     originalFilename: basename(resolvedPath),
@@ -133,9 +138,17 @@ export async function fingerprintAflOutcomesDevelopmentWorkbook(input: {
 export async function loadAflOutcomesDevelopmentWorkbook(
   input: LoadAflOutcomesDevelopmentWorkbookInput
 ): Promise<AflOutcomesDevelopmentWorkbook> {
-  assertAflOutcomesDevelopmentWorkbookRuntime(
-    input.runtimeEnvironment ?? process.env.NODE_ENV
-  );
+  return (await loadAflOutcomesDevelopmentWorkbookEvidence(input)).workbook;
+}
+
+/**
+ * Loads the private normalized workbook and immutable staging package from one authenticated byte
+ * snapshot. Callers must not re-read the path to construct review evidence.
+ */
+export async function loadAflOutcomesDevelopmentWorkbookEvidence(
+  input: LoadAflOutcomesDevelopmentWorkbookInput
+): Promise<AflOutcomesDevelopmentWorkbookEvidence> {
+  assertAflOutcomesDevelopmentWorkbookRuntime(input.runtimeEnvironment ?? process.env.NODE_ENV);
   const expectedSha256 = validateExpectedDigest(input.expectedSha256);
   const { bytes, fileStat, resolvedPath } = await readDevelopmentWorkbookFile(input.workbookPath);
   const actualSha256 = createHash('sha256').update(bytes).digest('hex');
@@ -159,11 +172,17 @@ export async function loadAflOutcomesDevelopmentWorkbook(
       // JavaScript number first could round identifiers or large statistics.
       parseNumber: (value) => value,
     });
-    return normalizeAflOutcomesDevelopmentWorkbook({
+    const workbook = normalizeAflOutcomesDevelopmentWorkbook({
       sheets,
       sourceArtifact,
       originalFilename: basename(resolvedPath),
     });
+    const staging = await parseAflTradeWorkbookForStaging({
+      bytes,
+      sourceArtifact,
+      originalFilename: basename(resolvedPath),
+    });
+    return { workbook, staging };
   } catch (error) {
     if (error instanceof AflOutcomesDevelopmentWorkbookError) throw error;
     throw new AflOutcomesDevelopmentWorkbookError(

@@ -2,14 +2,6 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 
-import { Pool } from 'pg';
-
-import {
-  projectAflOutcomesDevelopmentWorkbookValues,
-  type AflTradeDevelopmentWorkbookValueProjection,
-} from '@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection';
-import { loadLocalAflTradeStagedWorkbookOutcomes } from '@/server/aflTradeIntelligence/development/localStagedWorkbookOutcomeProjection';
-import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
   projectAflOutcomesDevelopmentWorkbookAcquisitions,
   type AflOutcomesDevelopmentAcquisitionCategory,
@@ -81,14 +73,6 @@ interface DevelopmentWorkbookProjectionBundle {
   trades: AflOutcomesDevelopmentTradeProjection;
   acquisitions: AflOutcomesDevelopmentAcquisitionProjection;
   tradeGrades: ReadonlyMap<string, AflOutcomesDevelopmentTradeGradeEvidence>;
-  observedAt: string;
-  stagedOutcomeCache: Promise<
-    ReadonlyMap<
-      string,
-      import('@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection').AflTradeDevelopmentReconciledAcquisitionOutcome
-    >
-  > | null;
-  statlyValueCache: Map<string, Promise<AflTradeDevelopmentWorkbookValueProjection>>;
 }
 
 const projectionCache = new Map<string, Promise<DevelopmentWorkbookProjectionBundle>>();
@@ -140,9 +124,6 @@ async function loadProjectionBundle(
       trades,
       acquisitions,
       tradeGrades: projectAflOutcomesDevelopmentWorkbookTradeGrades(workbook, trades, acquisitions),
-      observedAt: workbook.report.source.observedAt,
-      stagedOutcomeCache: null,
-      statlyValueCache: new Map(),
     };
   });
   projectionCache.set(cacheKey, pending);
@@ -152,78 +133,6 @@ async function loadProjectionBundle(
     projectionCache.delete(cacheKey);
     throw error;
   }
-}
-
-function localOutcomeDatabaseUrl(
-  environment: DevelopmentWorkbookDraftTradeEnvironment
-): string | null {
-  const value = environment.AFL_OUTCOMES_DATABASE_URL?.trim();
-  if (!value) return null;
-  if (environment.NODE_ENV === 'production') {
-    throw new Error('Private workbook outcomes cannot read PostgreSQL in production mode.');
-  }
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error('AFL_OUTCOMES_DATABASE_URL must be a valid local PostgreSQL URL.');
-  }
-  if (
-    !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    !['127.0.0.1', 'localhost', '::1'].includes(url.hostname)
-  ) {
-    throw new Error(
-      'Private workbook outcomes accept only a loopback PostgreSQL rehearsal database.'
-    );
-  }
-  return value;
-}
-
-async function loadStagedOutcomes(
-  bundle: DevelopmentWorkbookProjectionBundle,
-  environment: DevelopmentWorkbookDraftTradeEnvironment
-) {
-  const databaseUrl = localOutcomeDatabaseUrl(environment);
-  if (databaseUrl === null) return new Map();
-  if (bundle.stagedOutcomeCache) return bundle.stagedOutcomeCache;
-  const pending = (async () => {
-    const pool = new Pool({
-      connectionString: databaseUrl,
-      max: 1,
-      application_name: 'statly-local-workbook-outcome-projection',
-    });
-    try {
-      return await loadLocalAflTradeStagedWorkbookOutcomes(
-        createPgAflOutcomeSqlClient(pool),
-        bundle.acquisitions.items
-      );
-    } finally {
-      await pool.end();
-    }
-  })();
-  bundle.stagedOutcomeCache = pending;
-  try {
-    return await pending;
-  } catch (error) {
-    bundle.stagedOutcomeCache = null;
-    throw error;
-  }
-}
-
-function projectionCreatedAt(
-  observedAt: string,
-  outcomes: ReadonlyMap<
-    string,
-    import('@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection').AflTradeDevelopmentReconciledAcquisitionOutcome
-  >
-): string {
-  return [...outcomes.values()].reduce(
-    (latest, outcome) =>
-      Date.parse(outcome.effectiveThrough) > Date.parse(latest)
-        ? new Date(outcome.effectiveThrough).toISOString()
-        : latest,
-    new Date(observedAt).toISOString()
-  );
 }
 
 function createRepository(
@@ -308,67 +217,6 @@ export async function getDevelopmentWorkbookTradeGradeEvidence(
 ): Promise<AflOutcomesDevelopmentTradeGradeEvidence | null> {
   if (!isDevelopmentWorkbookDraftTradeReadEnabled(environment)) return null;
   return (await loadProjectionBundle(environment)).tradeGrades.get(tradeId) ?? null;
-}
-
-async function loadDevelopmentWorkbookStatlyTradeValues(
-  tradeIds: readonly string[],
-  maximumTrades: number,
-  limitMessage: string,
-  environment: DevelopmentWorkbookDraftTradeEnvironment = process.env
-): Promise<AflTradeDevelopmentWorkbookValueProjection | null> {
-  if (!isDevelopmentWorkbookDraftTradeReadEnabled(environment)) return null;
-  const bundle = await loadProjectionBundle(environment);
-  const requestedTradeIds = [...new Set(tradeIds)].filter((tradeId) =>
-    bundle.trades.detailsById.has(tradeId)
-  );
-  if (requestedTradeIds.length > maximumTrades) {
-    throw new Error(limitMessage);
-  }
-  const cacheKey = [...requestedTradeIds].sort().join('\0');
-  const cached = bundle.statlyValueCache.get(cacheKey);
-  if (cached) return cached;
-  const pending = loadStagedOutcomes(bundle, environment).then((reconciledOutcomesByAcquisitionId) =>
-    projectAflOutcomesDevelopmentWorkbookValues({
-      trades: bundle.trades,
-      acquisitions: bundle.acquisitions,
-      providerSeasons: [],
-      reconciledOutcomesByAcquisitionId,
-      createdAt: projectionCreatedAt(bundle.observedAt, reconciledOutcomesByAcquisitionId),
-      minimumCohortSize: 20,
-      tradeIds: requestedTradeIds,
-    })
-  );
-  bundle.statlyValueCache.set(cacheKey, pending);
-  try {
-    return await pending;
-  } catch (error) {
-    bundle.statlyValueCache.delete(cacheKey);
-    throw error;
-  }
-}
-
-export async function getDevelopmentWorkbookStatlyTradeValues(
-  tradeIds: readonly string[],
-  environment: DevelopmentWorkbookDraftTradeEnvironment = process.env
-): Promise<AflTradeDevelopmentWorkbookValueProjection | null> {
-  return loadDevelopmentWorkbookStatlyTradeValues(
-    tradeIds,
-    100,
-    'Development Statly value reads are bounded to 100 trades per request.',
-    environment
-  );
-}
-
-export async function getDevelopmentWorkbookStatlyTradeEvaluationValues(
-  tradeIds: readonly string[],
-  environment: DevelopmentWorkbookDraftTradeEnvironment = process.env
-): Promise<AflTradeDevelopmentWorkbookValueProjection | null> {
-  return loadDevelopmentWorkbookStatlyTradeValues(
-    tradeIds,
-    2_000,
-    'Private local workbook evaluation is bounded to 2,000 trades.',
-    environment
-  );
 }
 
 export function clearDevelopmentWorkbookDraftTradeReadCacheForTests(): void {

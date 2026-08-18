@@ -601,3 +601,19 @@ export function createLocalAflTradeNonProductionArtifactRepository(options: {
     assurance: 'local_non_production_filesystem',
   });
 }
+
+/**
+ * Immutable local custody for private non-production calculation and review artifacts. This
+ * repository cannot accept public-projection classification or satisfy production assurance.
+ */
+export function createLocalAflTradePrivateDerivedArtifactRepository(options: {
+  rootDirectory: string;
+  repositoryId: string;
+  maximumObjectBytes: number;
+}): AflTradeImmutableArtifactRepository {
+  return createLocalAflTradeFilesystemArtifactRepository({
+    ...options,
+    artifactClass: 'derived_private',
+    assurance: 'local_non_production_filesystem',
+  });
+}

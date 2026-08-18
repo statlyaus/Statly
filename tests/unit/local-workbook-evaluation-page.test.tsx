@@ -45,10 +45,6 @@ describe('private local workbook evaluation archive page', () => {
             hasFuturePicks: false,
             receivesByClub: [],
           },
-          calculation: {
-            calculationId: 'development-trade-value:123',
-            availability: 'available_partial',
-          },
           scenario: {
             state: 'ready',
             publicationEligible: false,
@@ -140,27 +136,38 @@ describe('private local workbook evaluation archive page', () => {
       ],
       batch: {
         totalTrades: 975,
-        processedTrades: 975,
-        availableTrades: 412,
-        partialTrades: 301,
-        unresolvedTrades: 262,
-        assetStates: {
-          valued: 1200,
-          right_censored: 31,
-          outcome_unresolved: 19,
-          lineage_unresolved: 280,
-          insufficient_cohort: 11,
-        },
-        datasetId: 'development-grade-dataset:123',
-        modelId: 'development-grade-model:456',
+        selectedYearTrades: 783,
         scenarioReadyTrades: 975,
         scenarioUnavailableTrades: 0,
       },
       publicationEligible: false,
+      numericalEvaluation: {
+        state: 'blocked',
+        readiness: {
+          state: 'blocked',
+          numericalCalculationsAvailable: false,
+          qualificationReportCreated: true,
+          qualificationReportId: `valuation-source-qualification:${'b'.repeat(64)}`,
+          factualReleaseId: `outcome-release:${'c'.repeat(64)}`,
+          qualificationEvaluatedAt: '2026-08-15T02:00:00.000Z',
+          privateEvaluationAuthorityState: 'not_authorized',
+          privateEvaluationDecisionId: null,
+          privateEvaluationDecidedAt: null,
+          preparedInputSetCreated: false,
+          preparedInputSetCount: 0,
+          preparedInputSetIds: [],
+          scopeKey: 'afl-men:2025-trades',
+          blockerCodes: ['source_blocked', 'private_evaluation_not_authorized'],
+          sources: ['afl-tables-five-season', 'official-afl-2026'],
+          requiredNextAuthority: 'private_nonproduction_derived_calculation_authority',
+          explanation:
+            'Private non-production derived calculation authority has not been recorded.',
+        },
+      },
     });
   });
 
-  it('shows real archive records and an explicit batch calculation summary', async () => {
+  it('shows factual archive records, the numerical blocker, and isolated synthetic scenarios', async () => {
     render(
       await LocalWorkbookEvaluationPage({
         searchParams: Promise.resolve({}),
@@ -170,14 +177,28 @@ describe('private local workbook evaluation archive page', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Private local trade evaluation' })
     ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Numerical valuation preparation is blocked' })
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        'Private non-production derived calculation authority has not been recorded.'
+      )
+    ).toBeVisible();
+    expect(
+      screen.getByText(`afl-men:2025-trades · retained for outcome-release:${'c'.repeat(64)}`)
+    ).toBeVisible();
+    expect(screen.getByText('Required next authority')).toBeVisible();
+    expect(screen.getByText('Private non-production calculation authority')).toBeVisible();
+    expect(screen.getByText('Not authorized')).toBeVisible();
     expect(screen.getByText('Not a factual release')).toBeVisible();
-    expect(screen.getByText('975', { selector: '[data-metric="processed"]' })).toBeVisible();
-    expect(screen.getByText('412', { selector: '[data-metric="available"]' })).toBeVisible();
-    expect(screen.getByText('301', { selector: '[data-metric="partial"]' })).toBeVisible();
-    expect(screen.getByText('262', { selector: '[data-metric="unresolved"]' })).toBeVisible();
+    expect(
+      screen.getByText('783', { selector: '[data-metric="selected-year-trades"]' })
+    ).toBeVisible();
+    expect(screen.getByText('975', { selector: '[data-metric="all-trades"]' })).toBeVisible();
     expect(screen.getByText('975', { selector: '[data-metric="scenario-ready"]' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Real Carlton and Essendon trade' })).toBeVisible();
-    expect(screen.getByText('Partial calculation')).toBeVisible();
+    expect(screen.getByText('Factual transaction loaded')).toBeVisible();
     expect(screen.getByText('Synthetic scenario ready')).toBeVisible();
     expect(screen.getByText('At trade')).toBeVisible();
     expect(screen.getByText('Carlton −10.00')).toBeVisible();
@@ -191,7 +212,7 @@ describe('private local workbook evaluation archive page', () => {
     expect(screen.getByText('Current')).toBeVisible();
     expect(screen.getByText('Carlton −2.00')).toBeVisible();
     expect(screen.getByText('Essendon +2.00')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Review calculation' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Review trade' })).toHaveAttribute(
       'href',
       '/dev/afl-trade-evaluation/workbook-2025-real-trade'
     );

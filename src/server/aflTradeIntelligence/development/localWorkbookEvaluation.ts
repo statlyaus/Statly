@@ -4,53 +4,35 @@ import { basename } from 'node:path';
 
 import {
   getDevelopmentWorkbookDraftTradeReadRepository,
-  getDevelopmentWorkbookStatlyTradeEvaluationValues,
-  getDevelopmentWorkbookStatlyTradeValues,
   isDevelopmentWorkbookDraftTradeReadEnabled,
   type DevelopmentWorkbookDraftTradeEnvironment,
   type DraftTradeReadRepository,
 } from '@/lib/draftTrades/developmentWorkbook';
 import type { DraftTradeDetail, DraftTradeListItem } from '@/lib/draftTrades/read';
-import type {
-  AflTradeDevelopmentWorkbookAssetLink,
-  AflTradeDevelopmentWorkbookValueProjection,
-} from '@/server/aflTradeIntelligence/modeling/developmentWorkbookValueProjection';
-import type { AflTradeDevelopmentTradeValueResult } from '@/server/aflTradeIntelligence/modeling/developmentTradeGradeModel';
 
 import { createAflTradeContentAddress } from '../artifacts/contentAddress';
+import type { LocalAflTradeValuationReadiness } from './localAflTradeValuationReadiness';
+import type { LocalPrivateReviewedTradeCalculation } from './localPrivateReviewedTradeCalculation';
 import {
   prepareLocalWorkbookSyntheticValuation,
   type LocalWorkbookSyntheticValuationPreparation,
 } from './localWorkbookSyntheticValuation';
 
-const CALCULATION_BATCH_SIZE = 100;
 const LOCAL_SCENARIO_ASSESSED_AT = '2026-08-15T00:00:00.000Z';
-const assetStates = [
-  'valued',
-  'right_censored',
-  'outcome_unresolved',
-  'lineage_unresolved',
-  'insufficient_cohort',
-] as const;
-
-type AssetState = (typeof assetStates)[number];
-type CalculationAvailability =
-  AflTradeDevelopmentTradeValueResult['summaries']['at_trade']['availability'];
 
 export type LocalWorkbookEvaluationEnvironment = DevelopmentWorkbookDraftTradeEnvironment;
+export type LocalWorkbookValuationReadinessInspector = (
+  scopeKey: string
+) => Promise<LocalAflTradeValuationReadiness>;
+export type LocalWorkbookPrivateCalculationLoader = (
+  detail: DraftTradeDetail,
+  workbookSha256: string
+) => Promise<LocalPrivateReviewedTradeCalculation | null>;
 
 export interface LocalWorkbookEvaluationDependencies {
   loadRepository(
     environment: LocalWorkbookEvaluationEnvironment
   ): Promise<DraftTradeReadRepository | null>;
-  loadValues(
-    tradeIds: readonly string[],
-    environment: LocalWorkbookEvaluationEnvironment
-  ): Promise<AflTradeDevelopmentWorkbookValueProjection | null>;
-  loadArchiveValues?(
-    tradeIds: readonly string[],
-    environment: LocalWorkbookEvaluationEnvironment
-  ): Promise<AflTradeDevelopmentWorkbookValueProjection | null>;
   prepareScenario?: typeof prepareLocalWorkbookSyntheticValuation;
 }
 
@@ -63,24 +45,25 @@ export interface LocalWorkbookEvaluationInputIdentity {
 
 export interface LocalWorkbookEvaluationBatchSummary {
   totalTrades: number;
-  processedTrades: number;
-  availableTrades: number;
-  partialTrades: number;
-  unresolvedTrades: number;
-  assetStates: Readonly<Record<AssetState, number>>;
-  datasetId: string;
-  modelId: string;
+  selectedYearTrades: number;
   scenarioReadyTrades: number;
   scenarioUnavailableTrades: number;
 }
 
 export interface LocalWorkbookEvaluationArchiveItem {
   trade: DraftTradeListItem;
-  calculation: {
-    calculationId: string;
-    availability: CalculationAvailability;
-  };
   scenario: LocalWorkbookSyntheticValuationPreparation;
+}
+
+export interface LocalWorkbookBlockedNumericalEvaluation {
+  state: 'blocked';
+  readiness: LocalAflTradeValuationReadiness;
+}
+
+export interface LocalWorkbookPartialNumericalEvaluation {
+  state: 'partial';
+  readiness: LocalAflTradeValuationReadiness;
+  calculation: LocalPrivateReviewedTradeCalculation;
 }
 
 export interface LocalWorkbookEvaluationArchive {
@@ -89,16 +72,17 @@ export interface LocalWorkbookEvaluationArchive {
   year: number;
   trades: readonly LocalWorkbookEvaluationArchiveItem[];
   batch: LocalWorkbookEvaluationBatchSummary;
+  numericalEvaluation: LocalWorkbookBlockedNumericalEvaluation;
   publicationEligible: false;
 }
 
 export interface LocalWorkbookTradeEvaluation {
   input: LocalWorkbookEvaluationInputIdentity;
   detail: DraftTradeDetail;
-  calculation: AflTradeDevelopmentTradeValueResult;
-  links: readonly AflTradeDevelopmentWorkbookAssetLink[];
-  model: AflTradeDevelopmentWorkbookValueProjection['model'];
   scenario: LocalWorkbookSyntheticValuationPreparation;
+  numericalEvaluation:
+    | LocalWorkbookBlockedNumericalEvaluation
+    | LocalWorkbookPartialNumericalEvaluation;
   publicationEligible: false;
 }
 
@@ -110,11 +94,14 @@ export interface LocalWorkbookEvaluationService {
       type?: 'player' | 'pick' | 'future_pick';
       q?: string;
     },
-    environment?: LocalWorkbookEvaluationEnvironment
+    environment: LocalWorkbookEvaluationEnvironment,
+    inspectValuationReadiness: LocalWorkbookValuationReadinessInspector
   ): Promise<LocalWorkbookEvaluationArchive | null>;
   loadTrade(
     tradeId: string,
-    environment?: LocalWorkbookEvaluationEnvironment
+    environment: LocalWorkbookEvaluationEnvironment,
+    inspectValuationReadiness: LocalWorkbookValuationReadinessInspector,
+    loadPrivateCalculation?: LocalWorkbookPrivateCalculationLoader
   ): Promise<LocalWorkbookTradeEvaluation | null>;
 }
 
@@ -139,101 +126,31 @@ function inputIdentity(
   };
 }
 
-function emptyAssetStateCounts(): Record<AssetState, number> {
-  return Object.fromEntries(assetStates.map((state) => [state, 0])) as Record<AssetState, number>;
-}
-
-function chunks<T>(items: readonly T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let offset = 0; offset < items.length; offset += size) {
-    result.push(items.slice(offset, offset + size));
-  }
-  return result;
-}
-
-function assertProjectionIdentity(
-  current: { datasetId: string; modelId: string } | null,
-  projection: AflTradeDevelopmentWorkbookValueProjection
-): { datasetId: string; modelId: string } {
-  const next = { datasetId: projection.datasetId, modelId: projection.model.modelId };
-  if (
-    current !== null &&
-    (current.datasetId !== next.datasetId || current.modelId !== next.modelId)
-  ) {
-    throw new Error('Local workbook calculation batches resolved different dataset or model ids.');
-  }
-  return next;
-}
-
-async function calculateAll(
-  dependencies: LocalWorkbookEvaluationDependencies,
-  trades: readonly DraftTradeListItem[],
-  environment: LocalWorkbookEvaluationEnvironment
-) {
-  const valuesByTradeId = new Map<string, AflTradeDevelopmentTradeValueResult>();
-  const linksByTradeId = new Map<string, readonly AflTradeDevelopmentWorkbookAssetLink[]>();
-  let identity: { datasetId: string; modelId: string } | null = null;
-  const calculationBatches = dependencies.loadArchiveValues
-    ? [trades]
-    : chunks(trades, CALCULATION_BATCH_SIZE);
-  const loadValues = dependencies.loadArchiveValues ?? dependencies.loadValues;
-
-  for (const batch of calculationBatches) {
-    const projection = await loadValues(
-      batch.map(({ tradeId }) => tradeId),
-      environment
-    );
-    if (projection === null) {
-      throw new Error('Local workbook values became unavailable during an evaluation run.');
-    }
-    identity = assertProjectionIdentity(identity, projection);
-    for (const [tradeId, calculation] of projection.valuesByTradeId) {
-      if (valuesByTradeId.has(tradeId)) {
-        throw new Error(`Local workbook trade ${tradeId} was calculated more than once.`);
-      }
-      valuesByTradeId.set(tradeId, calculation);
-      linksByTradeId.set(tradeId, projection.linksByTradeId.get(tradeId) ?? []);
-    }
-  }
-
-  if (valuesByTradeId.size !== trades.length || identity === null) {
-    throw new Error(
-      `Local workbook evaluation processed ${valuesByTradeId.size} of ${trades.length} trades.`
-    );
-  }
-  return { valuesByTradeId, linksByTradeId, identity };
-}
-
 function summarizeBatch(
   totalTrades: number,
-  calculations: ReadonlyMap<string, AflTradeDevelopmentTradeValueResult>,
-  identity: { datasetId: string; modelId: string },
+  selectedYearTrades: number,
   scenarios: ReadonlyMap<string, LocalWorkbookSyntheticValuationPreparation>
 ): LocalWorkbookEvaluationBatchSummary {
-  const counts = {
-    availableTrades: 0,
-    partialTrades: 0,
-    unresolvedTrades: 0,
-  };
-  const stateCounts = emptyAssetStateCounts();
-  for (const calculation of calculations.values()) {
-    const availability = calculation.summaries.at_trade.availability;
-    if (availability === 'available') counts.availableTrades += 1;
-    else if (availability === 'available_partial') counts.partialTrades += 1;
-    else counts.unresolvedTrades += 1;
-    for (const asset of calculation.assets) stateCounts[asset.state] += 1;
-  }
   return {
     totalTrades,
-    processedTrades: calculations.size,
-    ...counts,
-    assetStates: stateCounts,
-    ...identity,
+    selectedYearTrades,
     scenarioReadyTrades: [...scenarios.values()].filter(({ state }) => state === 'ready').length,
     scenarioUnavailableTrades: [...scenarios.values()].filter(
       ({ state }) => state === 'unavailable'
     ).length,
   };
+}
+
+function hasAvailableCalculatedView(
+  calculation: LocalPrivateReviewedTradeCalculation
+): boolean {
+  return calculation.assets.some(
+    (asset) =>
+      asset.state === 'calculated' &&
+      [asset.atTrade, asset.realized, asset.remaining, asset.current].some(
+        (view) => view.state === 'available'
+      )
+  );
 }
 
 function localScenarioBundleId(workbookSha256: string): string {
@@ -293,13 +210,11 @@ async function requireRepository(
 export function createLocalWorkbookEvaluationService(
   dependencies: LocalWorkbookEvaluationDependencies = {
     loadRepository: getDevelopmentWorkbookDraftTradeReadRepository,
-    loadValues: getDevelopmentWorkbookStatlyTradeValues,
-    loadArchiveValues: getDevelopmentWorkbookStatlyTradeEvaluationValues,
   }
 ): LocalWorkbookEvaluationService {
   const scenarioCache = new Map<string, LocalWorkbookSyntheticValuationPreparation>();
   return {
-    async loadArchive(input, environment = process.env) {
+    async loadArchive(input, environment, inspectValuationReadiness) {
       const repository = await requireRepository(dependencies, environment);
       if (repository === null) return null;
       const years = await repository.listYears();
@@ -313,7 +228,7 @@ export function createLocalWorkbookEvaluationService(
       );
       const allTrades = allTradesByYear.flat();
       const selectedYearTrades = allTradesByYear[years.indexOf(selectedYear)] ?? [];
-      const calculations = await calculateAll(dependencies, selectedYearTrades, environment);
+      const readiness = await inspectValuationReadiness(`afl-men:${selectedYear}-trades`);
       const scenarios = await prepareScenarios(
         dependencies,
         repository,
@@ -330,53 +245,39 @@ export function createLocalWorkbookEvaluationService(
         input: inputIdentity(environment),
         years,
         year: selectedYear,
-        trades: selectedTrades.map((trade) => {
-          const calculation = calculations.valuesByTradeId.get(trade.tradeId);
-          if (!calculation) {
-            throw new Error(`Local workbook trade ${trade.tradeId} has no calculation result.`);
-          }
-          return {
-            trade,
-            calculation: {
-              calculationId: calculation.calculationId,
-              availability: calculation.summaries.at_trade.availability,
-            },
-            scenario: scenarios.get(trade.tradeId)!,
-          };
-        }),
-        batch: summarizeBatch(
-          allTrades.length,
-          calculations.valuesByTradeId,
-          calculations.identity,
-          scenarios
-        ),
+        trades: selectedTrades.map((trade) => ({
+          trade,
+          scenario: scenarios.get(trade.tradeId)!,
+        })),
+        batch: summarizeBatch(allTrades.length, selectedYearTrades.length, scenarios),
+        numericalEvaluation: { state: 'blocked', readiness },
         publicationEligible: false,
       };
     },
 
-    async loadTrade(tradeId, environment = process.env) {
+    async loadTrade(tradeId, environment, inspectValuationReadiness, loadPrivateCalculation) {
       const repository = await requireRepository(dependencies, environment);
       if (repository === null) return null;
       const detail = await repository.getById(tradeId);
       if (detail === null) return null;
-      const projection = await dependencies.loadValues([tradeId], environment);
-      if (projection === null) {
-        throw new Error('Local workbook values became unavailable during a trade calculation.');
-      }
-      const calculation = projection.valuesByTradeId.get(tradeId);
-      if (!calculation) {
-        throw new Error(`Local workbook trade ${tradeId} has no calculation result.`);
-      }
+      const readiness = await inspectValuationReadiness(
+        `afl-men:${detail.trade.year}-trades`
+      );
       const scenario = (
         await prepareScenarios(dependencies, repository, [detail.trade], environment, scenarioCache)
       ).get(tradeId)!;
+      const workbookSha256 = inputIdentity(environment).sha256;
+      const privateCalculation = await loadPrivateCalculation?.(detail, workbookSha256);
       return {
         input: inputIdentity(environment),
         detail,
-        calculation,
-        links: projection.linksByTradeId.get(tradeId) ?? [],
-        model: projection.model,
         scenario,
+        numericalEvaluation:
+          privateCalculation === undefined ||
+          privateCalculation === null ||
+          !hasAvailableCalculatedView(privateCalculation)
+            ? { state: 'blocked', readiness }
+            : { state: 'partial', readiness, calculation: privateCalculation },
         publicationEligible: false,
       };
     },

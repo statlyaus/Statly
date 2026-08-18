@@ -35,6 +35,7 @@ export const aflTradeValuationCaseContentSchema = z
     tradeId: aflTradePublicIdSchema,
     tradeEffectiveAt: aflTradeIsoDateTimeSchema,
     valuationBundleId: aflTradeContentAddressedIdSchema('valuation-bundle'),
+    valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle').optional(),
     lineageGraphId: aflTradeContentAddressedIdSchema('lineage-graph'),
     componentDrawSetId: aflTradeContentAddressedIdSchema('component-draw-set'),
     realizedContributionLedgerId: aflTradeContentAddressedIdSchema('realized-contribution-ledger'),

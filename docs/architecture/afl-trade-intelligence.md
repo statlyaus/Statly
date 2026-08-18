@@ -217,6 +217,31 @@ never grants release eligibility: reviewed normalization creates later evidence-
 records and release membership. No workbook is generated from a release, offered to a user, or
 accepted as a recurring production update after sourced cutover.
 
+The trade-ledger subset has a separate content-addressed review boundary. It authenticates the exact
+workbook import, every transaction row, every party row, and complete transaction grouping while
+excluding the annual metric rows and their independent review issues. Each transaction begins
+`pending`; an approval must bind that exact subject, resolve every party to a distinct canonical club,
+and explicitly confirm that the assets beside a listed club were received by that club. Decisions
+remain private migration-oracle evidence with publication prohibited. A workbook shadow-oracle fact
+set can be constructed only when every exact subject has one current approved decision. Pending,
+rejected, duplicate, superseded, or subject-mismatched decisions fail closed and cannot become factual
+release members. Even a complete workbook review does not replace provider capture and reviewed
+canonical promotion: it makes the frozen oracle comparable to provider-backed facts, not authoritative
+on its own.
+
+Migration `0049_workbook_transaction_reviews` retains that set, its exact subjects, immutable
+decision history, and one guarded current-head pointer per subject in disposable PostgreSQL. Set
+registration re-authenticates the approved private workbook capture, exact staging manifest, raw
+artifact digest, and complete staged trade-row membership. Decisions use trusted database time and
+must advance the exact current head; stale writes and mutation of retained evidence fail closed. The
+three local commands are deliberately separate: `outcomes:workbook:prepare-transaction-review`
+registers a set against an explicit retained import run,
+`outcomes:workbook:inspect-transaction-review` exports pending/current review work, and
+`outcomes:workbook:record-transaction-review` records one explicit operator decision with party-order
+canonical club identities and direction confirmation. Each command authenticates the disposable
+loopback runtime before reading private evidence or decisions. None auto-approves subjects, creates
+provider facts, grants model rights, prepares a release, publishes, or activates anything.
+
 The source-independent factual release boundary now defines content-addressed candidate, projection,
 and activation-authorization manifests. A candidate pins the archive dataset, source snapshot and
 evaluation sets, acquisition-spell rule, metric definitions, reconciliation and exception evidence,
@@ -260,6 +285,78 @@ still do not read production evidence, configure a live queue or scheduler, esta
 real-data performance, or activate a production projection. The separate WP7A public boundary adds an
 honest unavailable-state experience, contract-ready numerical views, and a general methodology page;
 the local fixture publication is not evidence that a real-data numerical valuation exists.
+
+The governed calculation-input boundary now separates a stable, non-production pre-execution
+`valuation-input-bundle` from its later execution/output manifest. Prepared-input-set v1 is a
+source-policy preflight only: it classifies every transaction in the exact factual-release membership
+as blocked and cannot assert a model-ready calculation input. Migration
+`0048_prepared_valuation_input_sets` re-authenticates that complete transaction membership and the
+exact release and membership artifact references. It names the exact
+`valuation_model_training_and_derived_feature_creation` operation, distinguishes the year-specific
+valuation scope from the factual release's own scope, retains the complete durable source-rights
+ancestry declared by that release, and records only the subset of sources that actually block the
+operation as per-trade blockers. The PostgreSQL qualification writer obtains trusted database time,
+the exact release membership, and exact rights rows before constructing an immutable qualification
+report for both blocked and eligible outcomes. Registration re-authenticates those parents,
+recomputes the exact policy result, finalizes atomically, and enforces exact replay and append-only
+custody. A blocked prepared-input set must reference that exact report and repeat its complete blocker
+decision; a raw rights proposal or transient positive result cannot grant dataset or model authority.
+The current local AFL Tables 2021-2025 and official-AFL 2026 policies block model training and
+derived-feature creation, so the local readiness command and admitted private workbook UI read the
+latest retained report for its still-active factual release and its bound blocker set from disposable
+PostgreSQL. If no current report exists,
+readiness says qualification has not run; it does not reconstruct policy from code, invoke a scorer,
+infer new rights, or substitute a zero value. The workbook
+review service no longer imports or exports the legacy name/year/pick value projection: it exposes
+factual transaction records plus a separately labelled, publication-prohibited synthetic scenario.
+A later ready-input contract must use the existing authenticated dataset admission and
+admitted-model-run authorities, require both exact current Gate 3 component runs, and retain and
+exactly read back every bounded input and trace artifact before finalization.
+There is intentionally no caller-injected "governed" writer or real scorer in this phase: the next
+stage must obtain trusted database time and authenticate the exact release, input-bundle custody,
+dataset admissions, and both current Gate 3 model runs in one PostgreSQL snapshot before it may create
+the first ready-capable construction plan.
+
+Migration `0050_private_valuation_evaluation_authority` adds the narrower authority needed before
+that next stage can use retained real evidence for internal calculations. This append-only decision
+is supplemental to source rights: it binds one non-production factual release, its exact membership
+artifact, and the complete exact source-rights ancestry declared by the release, without changing any
+provider proposal. An authorization permits only private local non-production derived calculations
+for internal evaluation. Its schema and PostgreSQL trigger fix model training, public display,
+redistribution, production activation, live capture, and publication to false; direct insertion of a
+content-addressed decision that grants any of them fails authentication. Decisions use trusted
+database time, advance one exact current head, and can be withdrawn so calculation admission fails
+closed immediately while the immutable history remains.
+
+The five-season provider rehearsal has reviewed player-match evidence that is not a member of the
+transaction-shaped factual release contract. Migration
+`0051_private_reviewed_evidence_evaluation` therefore adds a separate
+`retained_private_review` lane instead of inventing factual-release ancestry. Its content-addressed
+bundle authenticates the two exact current review sets, every deterministic current review receipt,
+the six retained 2021–2026 source captures and their immutable source artifacts, and the two exact
+source-rights artifacts. The current rehearsal bundle contains 48,781 reviewed candidates and
+146,343 current decisions. PostgreSQL rechecks the complete review-set health and exact artifact
+custody when the bundle is registered, whenever the append-only authorization head changes, and
+whenever calculation admission is assessed. One missing, superseded, or altered receipt invalidates
+the whole lane; partial counts and zero-valued fallback are not admitted.
+
+This lane is permanently private and non-production. It is not a factual release, dataset admission,
+model-training input, public fact set, publication candidate, production activation, or live-capture
+authority. Its decision schema and database trigger permit only derived calculations for internal
+evaluation and fix every broader permission to false. The workbook readiness read model prefers this
+lane when present, reports its exact counts and bundle identity, and fails closed if its review sets
+stop being current. The operator command is
+`outcomes:modeling:record-private-reviewed-evaluation-authority`; it requires the authenticated
+disposable loopback `statly_outcomes_test` runtime and an exact expected current decision ID for every
+withdrawal or restoration.
+
+Operators record or withdraw this authority only through
+`outcomes:modeling:record-private-evaluation-authority`, against a runtime-authenticated loopback
+`statly_outcomes_test` database and either an exact release ID or the currently active release in an
+explicit factual-release scope. The private archive and detail views read the same current decision.
+Authorization is not a numerical result: until exact reviewed player/pick inputs and their governed
+model execution boundary exist, readiness continues to say calculations are unavailable and never
+substitutes workbook values, synthetic values, or zero.
 
 WP1 completion therefore means that later work has a deterministic boundary to build on. It does not
 mean that a historical source is approved, object storage or managed PostgreSQL is operational, a
@@ -1655,6 +1752,28 @@ comparison is available. The public interface uses the explanatory labels above 
 median, uncertainty interval, effective date, evidence cutoff, coverage status, and major asset
 drivers. An optional letter grade is a secondary summary of the same distribution and cannot replace
 the calculation.
+
+The server compiles a separate content-addressed trade-valuation explanation only after it has
+authenticated the calculation, valuation case, content-addressed private assumption set, transfer
+directions, and exact party/root coverage in every aligned draw. Its
+per-asset contributions use probability-weighted means because means remain additive: received and
+given-up asset rows must reconcile exactly to the displayed package subtotals and expected net. The
+package median and central interval remain statistics of the aligned joint distribution and are not
+presented as sums of asset medians. The explanation derives practical-equivalence mass from the
+aligned draws and the value-unit band retained inside the admitted, content-addressed assumption set
+before assigning the remaining probability mass to finish-ahead outcomes. The explanation retains
+that policy identity, exact four-view bands, and basis beside its methodology. A caller cannot
+substitute a different band or transfer map after admission. The central grade policy derives one
+provisional package grade from those
+reconciled probabilities; asset letter grades are prohibited because
+they would discard lineage, interaction, and uncertainty context. Missing roots or mismatched ancestry
+make the explanation unavailable rather than contributing zero. This first Adapter is deliberately
+complete-only: the explanation derives full coverage from the authenticated draw membership and
+retains the assumption set's effective window rather than accepting caller-supplied coverage. Private
+synthetic explanations retain fabricated-evidence and publication-prohibited authority and cannot
+satisfy a governed release lane; no governed-release authority variant exists until a real governed
+Adapter can authenticate that ancestry. The local archive summary is projected from this same
+complete explanation, so partial root values cannot produce totals that disagree with trade detail.
 
 At-trade package values use only the contemporaneous information set. Current package values retain
 realized receiving-club contribution separately from projected remaining contribution and enforce
