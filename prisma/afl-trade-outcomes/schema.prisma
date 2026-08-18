@@ -4419,9 +4419,32 @@ model OutcomePrivateReviewedEvidenceBundle {
   registeredAt               DateTime                                   @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   decisions                  OutcomePrivateReviewedEvaluationDecision[]
   currentHeads               OutcomePrivateReviewedEvaluationHead[]
+  localPlayerIdentityReviews OutcomeLocalWorkbookPlayerIdentityReview[]
 
   @@index([evidenceScopeKey, createdAt], map: "outcome_private_reviewed_evidence_bundle_scope_idx")
   @@map("outcome_private_reviewed_evidence_bundle")
+}
+
+model OutcomeLocalWorkbookPlayerIdentityReview {
+  decisionId            String                               @id @map("decision_id") @outcomes.Text
+  workbookSha256        String                               @map("workbook_sha256") @outcomes.Char(64)
+  tradeId               String                               @map("trade_id") @outcomes.Text
+  assetId               String                               @map("asset_id") @outcomes.Text
+  sourcePlayerName      String                               @map("source_player_name") @outcomes.Text
+  sourceAssetText       String                               @map("source_asset_text") @outcomes.Text
+  receivingClubName     String                               @map("receiving_club_name") @outcomes.Text
+  canonicalPlayerId     String                               @map("canonical_player_id") @outcomes.Text
+  recordedName          String                               @map("recorded_name") @outcomes.Text
+  evidenceBundleId      String                               @map("evidence_bundle_id") @outcomes.Text
+  reviewerId            String                               @map("reviewer_id") @outcomes.Text
+  reviewedAt            DateTime                             @map("reviewed_at") @outcomes.Timestamptz(3)
+  decisionContentSha256 String                               @map("decision_content_sha256") @outcomes.Char(64)
+  decisionJson          Json                                 @map("decision_json")
+  evidenceBundle        OutcomePrivateReviewedEvidenceBundle @relation(fields: [evidenceBundleId], references: [evidenceBundleId], onDelete: Restrict, map: "outcome_local_workbook_player_identity_review_bundle_fkey")
+
+  @@unique([workbookSha256, assetId], map: "outcome_local_workbook_player_iden_workbook_sha256_asset_id_key")
+  @@index([canonicalPlayerId, workbookSha256], map: "outcome_local_workbook_player_identity_review_player_idx")
+  @@map("outcome_local_workbook_player_identity_review")
 }
 
 model OutcomePrivateReviewedEvaluationDecision {

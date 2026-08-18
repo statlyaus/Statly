@@ -1078,6 +1078,12 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0049_workbook_transaction_reviews',
       '0050_private_valuation_evaluation_authority',
       '0051_private_reviewed_evidence_evaluation',
+      '0052_hpn_projected_field_map_authority',
+      '0053_hpn_reviewed_season_universe',
+      '0054_private_reviewed_hpn_calculation',
+      '0055_private_reviewed_evidence_currentness',
+      '0056_local_workbook_player_identity_review',
+      '0057_local_workbook_player_identity_authority',
     ]);
 
     const tables = await query<{ table_name: string }>(
@@ -1153,6 +1159,16 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_private_reviewed_evidence_bundle',
       'outcome_private_reviewed_evaluation_decision',
       'outcome_private_reviewed_evaluation_head',
+      'outcome_hpn_field_map_candidate',
+      'outcome_hpn_field_map_review_decision',
+      'outcome_hpn_projected_field_map',
+      'outcome_hpn_reviewed_season_universe',
+      'outcome_hpn_reviewed_season_member',
+      'outcome_private_reviewed_hpn_method',
+      'outcome_private_reviewed_hpn_calculation',
+      'outcome_private_reviewed_hpn_team',
+      'outcome_private_reviewed_hpn_allocation',
+      'outcome_local_workbook_player_identity_review',
     ]) {
       expect(tableNames).toContain(expected);
     }
