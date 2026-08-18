@@ -99,6 +99,7 @@ async function loadIdentityEvidence(
             JOIN outcome_private_reviewed_evaluation_decision decision
               ON decision.decision_id=head.decision_id
            WHERE head.evidence_bundle_id=review.evidence_bundle_id
+             AND head.valuation_scope_key=$4
              AND head.evidence_scope_key='afl-player-match-reviewed-2021-2026'
              AND head.status='authorized'
              AND decision.decision_json->'content'->>'status'='authorized'
@@ -112,7 +113,12 @@ async function loadIdentityEvidence(
         )
       GROUP BY review.asset_id,review.canonical_player_id,review.decision_json
       ORDER BY review.asset_id`,
-    [workbookSha256, detail.trade.tradeId, requestedAssets.map(({ id }) => id)]
+    [
+      workbookSha256,
+      detail.trade.tradeId,
+      requestedAssets.map(({ id }) => id),
+      `afl-men:${detail.trade.year}-trades`,
+    ]
   );
   return result.rows.map((row) => {
     const review = parseLocalWorkbookPlayerIdentityReview(row.decision_json);

@@ -141,6 +141,18 @@ function summarizeBatch(
   };
 }
 
+function hasAvailableCalculatedView(
+  calculation: LocalPrivateReviewedTradeCalculation
+): boolean {
+  return calculation.assets.some(
+    (asset) =>
+      asset.state === 'calculated' &&
+      [asset.atTrade, asset.realized, asset.remaining, asset.current].some(
+        (view) => view.state === 'available'
+      )
+  );
+}
+
 function localScenarioBundleId(workbookSha256: string): string {
   return createAflTradeContentAddress('valuation-bundle', {
     schemaVersion: 'local-workbook-synthetic-valuation-bundle/v1',
@@ -261,7 +273,9 @@ export function createLocalWorkbookEvaluationService(
         detail,
         scenario,
         numericalEvaluation:
-          privateCalculation === undefined || privateCalculation === null
+          privateCalculation === undefined ||
+          privateCalculation === null ||
+          !hasAvailableCalculatedView(privateCalculation)
             ? { state: 'blocked', readiness }
             : { state: 'partial', readiness, calculation: privateCalculation },
         publicationEligible: false,

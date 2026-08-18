@@ -90,6 +90,8 @@ describe('private reviewed evidence currentness migration', () => {
     expect(calculationLoader).toContain(
       "head.evidence_bundle_id=review.evidence_bundle_id"
     );
+    expect(calculationLoader).toContain('head.valuation_scope_key=$4');
+    expect(calculationLoader).toContain('`afl-men:${detail.trade.year}-trades`');
     expect(calculationLoader).toContain("head.status='authorized'");
     expect(calculationLoader).toContain(
       "decision.decision_json->'content'->'publicationProhibited'='true'::jsonb"

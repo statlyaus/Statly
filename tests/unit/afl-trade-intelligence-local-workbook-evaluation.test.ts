@@ -276,6 +276,15 @@ describe('private local workbook evaluation', () => {
       projectionId: `local-private-trade-calculation:${'f'.repeat(64)}`,
       tradeId: 'workbook-2025-0001',
       workbookSha256: digest,
+      assets: [
+        {
+          state: 'calculated',
+          atTrade: { state: 'available' },
+          realized: { state: 'unavailable' },
+          remaining: { state: 'unavailable' },
+          current: { state: 'unavailable' },
+        },
+      ],
       publicationEligible: false,
       publicationProhibited: true,
     } as never;
@@ -301,6 +310,41 @@ describe('private local workbook evaluation', () => {
       }),
       digest
     );
+  });
+
+  it('keeps numerical evaluation blocked when every private asset view is unavailable', async () => {
+    const service = createLocalWorkbookEvaluationService(dependencies());
+    const calculation = {
+      projectionId: `local-private-trade-calculation:${'e'.repeat(64)}`,
+      tradeId: 'workbook-2025-0001',
+      workbookSha256: digest,
+      assets: [
+        { state: 'unavailable', reason: 'player_identity_unavailable' },
+        {
+          state: 'calculated',
+          atTrade: { state: 'unavailable' },
+          realized: { state: 'unavailable' },
+          remaining: { state: 'unavailable' },
+          current: { state: 'unavailable' },
+        },
+      ],
+      publicationEligible: false,
+      publicationProhibited: true,
+    } as never;
+
+    await expect(
+      service.loadTrade(
+        'workbook-2025-0001',
+        enabledEnvironment,
+        vi.fn().mockResolvedValue(sourceBlockedReadiness),
+        vi.fn().mockResolvedValue(calculation)
+      )
+    ).resolves.toMatchObject({
+      numericalEvaluation: {
+        state: 'blocked',
+        readiness: sourceBlockedReadiness,
+      },
+    });
   });
 
   it('reuses a content-pinned scenario within one local service instance', async () => {
