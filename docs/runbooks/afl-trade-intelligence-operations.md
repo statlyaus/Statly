@@ -657,10 +657,66 @@ npm run dev:outcomes:authenticate
 npm run dev:outcomes:review-afl-tables-2021-2025
 npm run dev:outcomes:review-official-2026
 
+IFS= read -r STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE < .statly-local/afl-trade-outcomes-runtime-nonce
+export STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE
+
+npm run outcomes:modeling:review-local-hpn-field-maps
+npm run outcomes:modeling:review-local-hpn-season-universes
+npm run outcomes:modeling:calculate-local-private-reviewed-hpn
+npm run outcomes:modeling:prepare-local-source-qualification -- \
+  --scope afl-men:2025-trades \
+  --release-scope public-afl-trades-current
+```
+
+Review the exact source-qualification report and the retained reviewed-evidence bundle before making
+either private authority decision. If the reviewed result does not justify authorization, stop and
+leave the readiness report blocked. An authorized first decision uses `none` as the expected current
+decision; a successor must name the exact current decision ID returned by the preceding command.
+Never copy these examples into a production environment or treat running them as model-run, Gate 3,
+publication, or production approval.
+
+```sh
+npm run outcomes:modeling:record-private-evaluation-authority -- \
+  --scope afl-men:2025-trades \
+  --release-scope public-afl-trades-current \
+  --expected-current none \
+  --decision authorized \
+  --reviewer '<reviewed-local-principal>' \
+  --rationale '<reviewed private non-production source-use rationale>'
+
+npm run outcomes:modeling:record-private-reviewed-evaluation-authority -- \
+  --scope afl-men:2025-trades \
+  --expected-current none \
+  --decision authorized \
+  --reviewer '<reviewed-local-principal>' \
+  --rationale '<reviewed retained-evidence calculation rationale>'
+
+AFL_OUTCOMES_DEV_WORKBOOK_PATH='<absolute-private-workbook-path>' \
+AFL_OUTCOMES_DEV_WORKBOOK_SHA256='<verified-sha256>' \
+npx tsx Scripts/dev/review-local-workbook-player-identities.ts
+
+npm run outcomes:modeling:inspect-local-valuation-readiness -- \
+  --scope afl-men:2025-trades
+
 AFL_OUTCOMES_DEV_WORKBOOK_PATH='<absolute-private-workbook-path>' \
 AFL_OUTCOMES_DEV_WORKBOOK_SHA256='<verified-sha256>' \
 npm run dev:full:workbook-evaluation
 ```
+
+The readiness report must retain each missing prerequisite as a blocker. This phase can produce
+reviewed completed-season HPN allocations and the right-censored current appearance result; it cannot
+produce governed player PAV, pick value, remaining value, club totals, or an overall trade grade
+without exact authorized model runs and their required Gate decisions. Missing values remain
+unavailable and workbook or synthetic values remain non-factual.
+
+The HPN map review must run before the season-universe review, and both must precede calculation. The
+field-map command seals the exact capability, invocation digest, schema and season range. The season
+command admits the exhaustive reviewed row universe and preserves unresolved identities as
+quarantined rather than silently dropping them. The calculation command then persists one
+content-addressed player/team allocation set per completed season and verifies exact retries as
+idempotent replays. The workbook identity command is scoped to the pinned private workbook bytes and
+authenticates its retained evidence parent; the full-stack wrapper repeats that review safely before
+starting the UI.
 
 The authentication command accepts only loopback PostgreSQL named `statly_outcomes_test`, installs a
 private runtime nonce, and stores that nonce below the ignored `.statly-local` root. Both staging

@@ -1,8 +1,17 @@
 import 'server-only';
 
-import { Pool, type PoolConfig } from 'pg';
+import { Pool } from 'pg';
 
-type PoolFactory = (configuration: PoolConfig) => Pool;
+type LocalOutcomesRuntimePoolConfiguration = Readonly<{
+  connectionString: string;
+  application_name: string;
+  connectionTimeoutMillis: number;
+  idleTimeoutMillis: number;
+  max: number;
+  allowExitOnIdle: boolean;
+}>;
+
+type PoolFactory = (configuration: LocalOutcomesRuntimePoolConfiguration) => Pool;
 
 export interface LocalOutcomesRuntimePoolProvider {
   get(connectionString: string): Pool;
