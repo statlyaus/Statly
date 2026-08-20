@@ -410,6 +410,214 @@ export type GovernedValuationModelQualificationRegistrationResult =
       idempotentReplay: boolean;
     }>;
 
+interface QualificationRegistrationInput {
+  readonly qualification: GovernedValuationModelQualification;
+  readonly qualificationArtifact: AflTradeArtifactRef;
+  readonly expectedGateLedgerRevision: number;
+  readonly expectedCurrentRevision: number;
+  readonly gateRecords?: readonly [
+    GovernedValuationModelQualificationGateRecord,
+    GovernedValuationModelQualificationGateRecord,
+  ];
+}
+
+function validateQualificationGateRecords(
+  qualification: GovernedValuationModelQualification,
+  qualificationArtifact: AflTradeArtifactRef,
+  gateRecords: readonly [
+    GovernedValuationModelQualificationGateRecord,
+    GovernedValuationModelQualificationGateRecord,
+  ]
+): string {
+  const expectedRunIds = [qualification.content.player.runId, qualification.content.pick.runId];
+  const qualificationRetainedAt = Date.parse(qualificationArtifact.createdAt);
+  const qualificationEvaluatedAt = Date.parse(qualification.content.evaluatedAt);
+  for (const [index, record] of gateRecords.entries()) {
+    const decision = record.decision.content;
+    const proposedAt = Date.parse(record.proposal.content.proposedAt);
+    const decidedAt = decision.decidedAt === null ? Number.NaN : Date.parse(decision.decidedAt);
+    const effectiveAt =
+      decision.effectiveAt === null ? Number.NaN : Date.parse(decision.effectiveAt);
+    if (
+      decision.authorityKind !== 'automated_validation_record' ||
+      decision.scope.scopeKey !== qualification.content.scopeKey ||
+      [proposedAt, decidedAt, effectiveAt].some(
+        (instant) =>
+          !Number.isFinite(instant) ||
+          instant < qualificationEvaluatedAt ||
+          instant < qualificationRetainedAt
+      ) ||
+      !decision.authorityEvidenceIds.includes(qualificationArtifact.artifactId) ||
+      !decision.affectedArtifacts.some(
+        ({ kind, artifactId }) => kind === 'model_run' && artifactId === expectedRunIds[index]
+      ) ||
+      !decision.affectedArtifacts.some(
+        ({ kind, artifactId }) =>
+          kind === 'model_qualification' && artifactId === qualification.qualificationId
+      )
+    ) {
+      throw new GovernedValuationModelQualificationRepositoryError(
+        'INTEGRITY_MISMATCH',
+        'Gate 3 records do not cite the exact role-specific run and shared qualification.'
+      );
+    }
+  }
+  return new Date(
+    Math.max(...gateRecords.map(({ decision }) => Date.parse(decision.content.effectiveAt!)))
+  ).toISOString();
+}
+
+async function appendQualificationGateRecords(
+  transaction: AflOutcomeSqlTransaction,
+  input: QualificationRegistrationInput & {
+    readonly gateRecords: readonly [
+      GovernedValuationModelQualificationGateRecord,
+      GovernedValuationModelQualificationGateRecord,
+    ];
+  },
+  authorityEffectiveAt: string
+): Promise<void> {
+  try {
+    await appendNewAflTradeGateDecisionsWithinTransaction(transaction, {
+      expectedRevision: input.expectedGateLedgerRevision,
+      scopeKey: input.qualification.content.scopeKey,
+      qualificationId: input.qualification.qualificationId,
+      qualificationArtifactId: input.qualificationArtifact.artifactId,
+      playerRunId: input.qualification.content.player.runId,
+      pickRunId: input.qualification.content.pick.runId,
+      records: input.gateRecords,
+      updatedAt: authorityEffectiveAt,
+    });
+  } catch (cause) {
+    if (cause instanceof AflTradeGateLedgerRepositoryError && cause.code === 'STALE_REVISION') {
+      throw new GovernedValuationModelQualificationRepositoryError(
+        'STALE_GATE_LEDGER',
+        'Gate ledger changed before the qualified pair could commit.',
+        { cause }
+      );
+    }
+    throw cause;
+  }
+}
+
+async function advanceQualifiedPair(
+  transaction: AflOutcomeSqlTransaction,
+  input: QualificationRegistrationInput & {
+    readonly gateRecords: readonly [
+      GovernedValuationModelQualificationGateRecord,
+      GovernedValuationModelQualificationGateRecord,
+    ];
+  },
+  work: GovernedValuationModelQualificationWork,
+  authorityEffectiveAt: string
+): Promise<GovernedCurrentValuationModelPair> {
+  let revisionResult;
+  try {
+    revisionResult = await transaction.query<{ revision: number }>(
+      `SELECT advance_outcome_current_governed_valuation_model_pair(
+         $1,$2,$3,$4,$5,$6,$7) AS revision`,
+      [
+        input.qualification.content.scopeKey,
+        input.qualification.qualificationId,
+        input.gateRecords[0].decision.decisionId,
+        input.gateRecords[1].decision.decisionId,
+        work.workId,
+        input.expectedCurrentRevision,
+        authorityEffectiveAt,
+      ]
+    );
+  } catch (cause) {
+    if (!(cause instanceof Error) || !cause.message.includes('Stale current model-pair revision')) {
+      throw cause;
+    }
+    throw new GovernedValuationModelQualificationRepositoryError(
+      'STALE_CURRENT_PAIR',
+      'Current model pair changed before the qualification could advance.',
+      { cause }
+    );
+  }
+  const current = await loadCurrentFrom(transaction, input.qualification.content.scopeKey);
+  if (
+    !current ||
+    current.revision !== Number(revisionResult.rows[0]?.revision) ||
+    current.qualificationId !== input.qualification.qualificationId
+  ) {
+    throw new GovernedValuationModelQualificationRepositoryError(
+      'INTEGRITY_MISMATCH',
+      'Advanced current model pair failed exact readback.'
+    );
+  }
+  return current;
+}
+
+async function registerQualificationWithinTransaction(
+  transaction: AflOutcomeSqlTransaction,
+  input: QualificationRegistrationInput,
+  nativeEvidence: AuthenticatedQualificationArtifacts
+): Promise<GovernedValuationModelQualificationRegistrationResult> {
+  const { qualification } = input;
+  await retainNativeValidationEvidence(transaction, qualification, nativeEvidence);
+  const replay =
+    (await retainQualification(transaction, qualification, input.qualificationArtifact)) ===
+    'replayed';
+  const existingCurrent = await loadCurrentFrom(transaction, qualification.content.scopeKey);
+  if (qualification.content.outcome === 'failed') {
+    return {
+      status: 'failed_retained',
+      qualification,
+      current: existingCurrent,
+      idempotentReplay: replay,
+    };
+  }
+  if (!input.gateRecords) {
+    throw new GovernedValuationModelQualificationRepositoryError(
+      'INTEGRITY_MISMATCH',
+      'A passing qualification requires both linked Gate 3 records.'
+    );
+  }
+  if (replay) {
+    if (existingCurrent?.qualificationId !== qualification.qualificationId) {
+      throw new GovernedValuationModelQualificationRepositoryError(
+        'STALE_CURRENT_PAIR',
+        'A retained qualification replay cannot replace a newer current pair.'
+      );
+    }
+    const workResult = await transaction.query<JsonRow>(
+      `SELECT work_json AS value FROM outcome_governed_model_qualification_work WHERE work_id=$1`,
+      [existingCurrent.workId]
+    );
+    const work = governedValuationModelQualificationWorkSchema.parse(workResult.rows[0]?.value);
+    return {
+      status: 'advanced',
+      qualification,
+      current: existingCurrent,
+      work,
+      idempotentReplay: true,
+    };
+  }
+  const qualifiedInput = { ...input, gateRecords: input.gateRecords };
+  const authorityEffectiveAt = validateQualificationGateRecords(
+    qualification,
+    input.qualificationArtifact,
+    qualifiedInput.gateRecords
+  );
+  await appendQualificationGateRecords(transaction, qualifiedInput, authorityEffectiveAt);
+  const work = createGovernedValuationModelQualificationWork({
+    qualification,
+    playerGate3DecisionId: qualifiedInput.gateRecords[0].decision.decisionId,
+    pickGate3DecisionId: qualifiedInput.gateRecords[1].decision.decisionId,
+    availableAt: authorityEffectiveAt,
+  });
+  await retainWork(transaction, work);
+  const current = await advanceQualifiedPair(
+    transaction,
+    qualifiedInput,
+    work,
+    authorityEffectiveAt
+  );
+  return { status: 'advanced', qualification, current, work, idempotentReplay: false };
+}
+
 export class PostgresGovernedValuationModelQualificationRepository {
   constructor(
     private readonly dependencies: {
@@ -427,16 +635,9 @@ export class PostgresGovernedValuationModelQualificationRepository {
     }
   }
 
-  async register(input: {
-    readonly qualification: GovernedValuationModelQualification;
-    readonly qualificationArtifact: AflTradeArtifactRef;
-    readonly expectedGateLedgerRevision: number;
-    readonly expectedCurrentRevision: number;
-    readonly gateRecords?: readonly [
-      GovernedValuationModelQualificationGateRecord,
-      GovernedValuationModelQualificationGateRecord,
-    ];
-  }): Promise<GovernedValuationModelQualificationRegistrationResult> {
+  async register(
+    input: QualificationRegistrationInput
+  ): Promise<GovernedValuationModelQualificationRegistrationResult> {
     const qualification = governedValuationModelQualificationSchema.parse(input.qualification);
     if (
       !doesAflTradeArtifactRefMatchCanonicalJson(input.qualificationArtifact, qualification) ||
@@ -453,168 +654,13 @@ export class PostgresGovernedValuationModelQualificationRepository {
       qualification,
       qualificationArtifact: input.qualificationArtifact,
     });
-    return this.dependencies.client.transaction(async (transaction) => {
-      await retainNativeValidationEvidence(transaction, qualification, nativeEvidence);
-      const replay =
-        (await retainQualification(transaction, qualification, input.qualificationArtifact)) ===
-        'replayed';
-      const existingCurrent = await loadCurrentFrom(transaction, qualification.content.scopeKey);
-      if (qualification.content.outcome === 'failed') {
-        return {
-          status: 'failed_retained',
-          qualification,
-          current: existingCurrent,
-          idempotentReplay: replay,
-        };
-      }
-      if (!input.gateRecords) {
-        throw new GovernedValuationModelQualificationRepositoryError(
-          'INTEGRITY_MISMATCH',
-          'A passing qualification requires both linked Gate 3 records.'
-        );
-      }
-      if (replay) {
-        if (existingCurrent?.qualificationId !== qualification.qualificationId) {
-          throw new GovernedValuationModelQualificationRepositoryError(
-            'STALE_CURRENT_PAIR',
-            'A retained qualification replay cannot replace a newer current pair.'
-          );
-        }
-        const workResult = await transaction.query<JsonRow>(
-          `SELECT work_json AS value FROM outcome_governed_model_qualification_work
-           WHERE work_id=$1`,
-          [existingCurrent.workId]
-        );
-        const work = governedValuationModelQualificationWorkSchema.parse(workResult.rows[0]?.value);
-        return {
-          status: 'advanced',
-          qualification,
-          current: existingCurrent,
-          work,
-          idempotentReplay: true,
-        };
-      }
-      const expectedRunIds = [
-        qualification.content.player.runId,
-        qualification.content.pick.runId,
-      ] as const;
-      for (const [index, record] of input.gateRecords.entries()) {
-        const decision = record.decision.content;
-        const qualificationRetainedAt = Date.parse(input.qualificationArtifact.createdAt);
-        const qualificationEvaluatedAt = Date.parse(qualification.content.evaluatedAt);
-        const proposedAt = Date.parse(record.proposal.content.proposedAt);
-        const decidedAt = decision.decidedAt === null ? Number.NaN : Date.parse(decision.decidedAt);
-        const effectiveAt =
-          decision.effectiveAt === null ? Number.NaN : Date.parse(decision.effectiveAt);
-        if (
-          decision.authorityKind !== 'automated_validation_record' ||
-          decision.scope.scopeKey !== qualification.content.scopeKey ||
-          !Number.isFinite(proposedAt) ||
-          !Number.isFinite(decidedAt) ||
-          !Number.isFinite(effectiveAt) ||
-          proposedAt < qualificationEvaluatedAt ||
-          proposedAt < qualificationRetainedAt ||
-          decidedAt < qualificationEvaluatedAt ||
-          decidedAt < qualificationRetainedAt ||
-          effectiveAt < qualificationEvaluatedAt ||
-          effectiveAt < qualificationRetainedAt ||
-          !decision.authorityEvidenceIds.includes(input.qualificationArtifact.artifactId) ||
-          !decision.affectedArtifacts.some(
-            ({ kind, artifactId }) => kind === 'model_run' && artifactId === expectedRunIds[index]
-          ) ||
-          !decision.affectedArtifacts.some(
-            ({ kind, artifactId }) =>
-              kind === 'model_qualification' && artifactId === qualification.qualificationId
-          )
-        ) {
-          throw new GovernedValuationModelQualificationRepositoryError(
-            'INTEGRITY_MISMATCH',
-            'Gate 3 records do not cite the exact role-specific run and shared qualification.'
-          );
-        }
-      }
-      const authorityEffectiveAt = new Date(
-        Math.max(
-          ...input.gateRecords.map(({ decision }) => {
-            if (decision.content.effectiveAt === null) {
-              throw new GovernedValuationModelQualificationRepositoryError(
-                'INTEGRITY_MISMATCH',
-                'Automated Gate 3 authority must have an effective time.'
-              );
-            }
-            return Date.parse(decision.content.effectiveAt);
-          })
-        )
-      ).toISOString();
-      try {
-        await appendNewAflTradeGateDecisionsWithinTransaction(transaction, {
-          expectedRevision: input.expectedGateLedgerRevision,
-          scopeKey: qualification.content.scopeKey,
-          qualificationId: qualification.qualificationId,
-          qualificationArtifactId: input.qualificationArtifact.artifactId,
-          playerRunId: qualification.content.player.runId,
-          pickRunId: qualification.content.pick.runId,
-          records: input.gateRecords,
-          updatedAt: authorityEffectiveAt,
-        });
-      } catch (cause) {
-        if (cause instanceof AflTradeGateLedgerRepositoryError && cause.code === 'STALE_REVISION') {
-          throw new GovernedValuationModelQualificationRepositoryError(
-            'STALE_GATE_LEDGER',
-            'Gate ledger changed before the qualified pair could commit.',
-            { cause }
-          );
-        }
-        throw cause;
-      }
-      const work = createGovernedValuationModelQualificationWork({
-        qualification,
-        playerGate3DecisionId: input.gateRecords[0].decision.decisionId,
-        pickGate3DecisionId: input.gateRecords[1].decision.decisionId,
-        availableAt: authorityEffectiveAt,
-      });
-      await retainWork(transaction, work);
-      let revisionResult;
-      try {
-        revisionResult = await transaction.query<{ revision: number }>(
-          `SELECT advance_outcome_current_governed_valuation_model_pair(
-             $1,$2,$3,$4,$5,$6,$7) AS revision`,
-          [
-            qualification.content.scopeKey,
-            qualification.qualificationId,
-            input.gateRecords[0].decision.decisionId,
-            input.gateRecords[1].decision.decisionId,
-            work.workId,
-            input.expectedCurrentRevision,
-            authorityEffectiveAt,
-          ]
-        );
-      } catch (cause) {
-        if (
-          !(cause instanceof Error) ||
-          !cause.message.includes('Stale current model-pair revision')
-        ) {
-          throw cause;
-        }
-        throw new GovernedValuationModelQualificationRepositoryError(
-          'STALE_CURRENT_PAIR',
-          'Current model pair changed before the qualification could advance.',
-          { cause }
-        );
-      }
-      const current = await loadCurrentFrom(transaction, qualification.content.scopeKey);
-      if (
-        !current ||
-        current.revision !== Number(revisionResult.rows[0]?.revision) ||
-        current.qualificationId !== qualification.qualificationId
-      ) {
-        throw new GovernedValuationModelQualificationRepositoryError(
-          'INTEGRITY_MISMATCH',
-          'Advanced current model pair failed exact readback.'
-        );
-      }
-      return { status: 'advanced', qualification, current, work, idempotentReplay: false };
-    });
+    return this.dependencies.client.transaction((transaction) =>
+      registerQualificationWithinTransaction(
+        transaction,
+        { ...input, qualification },
+        nativeEvidence
+      )
+    );
   }
 
   loadCurrent(scopeKey: string): Promise<GovernedCurrentValuationModelPair | null> {
