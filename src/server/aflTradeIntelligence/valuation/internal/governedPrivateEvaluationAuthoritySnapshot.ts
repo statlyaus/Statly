@@ -151,6 +151,25 @@ const readyComponentSchema = z
     }
   });
 
+const qualifiedReadyComponentSchema = readyComponentSchema.superRefine(
+  (component, context) => {
+    if (
+      component.qualificationId === undefined ||
+      component.qualificationPolicyVersion === undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['qualificationId'],
+        message: 'New ready authority requires exact model-pair qualification custody.',
+      });
+    }
+  }
+);
+
+const qualifiedReadyComponentsSchema = z
+  .array(qualifiedReadyComponentSchema)
+  .length(componentRoles.length);
+
 function refineSharedReadyQualification(
   components: readonly z.output<typeof readyComponentSchema>[],
   context: z.RefinementCtx
@@ -621,7 +640,7 @@ type ReadyCreationInput = Readonly<{
   inputTraceId: string;
   inputTraceArtifact: z.input<typeof aflTradeArtifactRefSchema>;
   gateLedgerRevision: number;
-  components: readonly z.input<typeof readyComponentSchema>[];
+  components: readonly z.input<typeof qualifiedReadyComponentSchema>[];
 }>;
 
 type ReadyV3CreationInput = Readonly<{
@@ -642,7 +661,7 @@ type ReadyV3CreationInput = Readonly<{
   valuationInputBundleId: string;
   valuationInputBundleArtifact: z.input<typeof aflTradeArtifactRefSchema>;
   gateLedgerRevision: number;
-  components: readonly z.input<typeof readyComponentSchema>[];
+  components: readonly z.input<typeof qualifiedReadyComponentSchema>[];
 }>;
 
 function resultOf(retained: z.output<typeof retainedSchema>) {
@@ -812,6 +831,7 @@ export function createReadyFixtureGovernedPrivateEvaluationAuthorityInspection(
 export function createReadyGovernedPrivateEvaluationAuthorityInspection(
   input: ReadyCreationInput
 ) {
+  const components = qualifiedReadyComponentsSchema.parse(input.components);
   const common = {
     environment: 'non_production' as const,
     publicationProhibited: true as const,
@@ -832,7 +852,7 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspection(
       inputTraceId: input.inputTraceId,
       inputTraceArtifact: input.inputTraceArtifact,
       gateLedgerRevision: input.gateLedgerRevision,
-      components: input.components,
+      components,
     },
     blockers: [] as const,
     limitation: READY_NON_PRODUCTION_LIMITATION,
@@ -867,6 +887,7 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspection(
 export function createReadyGovernedPrivateEvaluationAuthorityInspectionV3(
   input: ReadyV3CreationInput
 ) {
+  const components = qualifiedReadyComponentsSchema.parse(input.components);
   const common = {
     environment: 'non_production' as const,
     publicationProhibited: true as const,
@@ -889,7 +910,7 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspectionV3(
       valuationInputBundleId: input.valuationInputBundleId,
       valuationInputBundleArtifact: input.valuationInputBundleArtifact,
       gateLedgerRevision: input.gateLedgerRevision,
-      components: input.components,
+      components,
     },
     blockers: [] as const,
     limitation: READY_NON_PRODUCTION_LIMITATION,

@@ -481,9 +481,10 @@ class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisi
           'A Gate batch proposal or decision identity already names different content.'
         );
       }
-      const rightsExist = await Promise.all(
-        input.records.map((record) => requireExactSourceRights(transaction, record.sourceRights))
-      );
+      const rightsExist: boolean[] = [];
+      for (const record of input.records) {
+        rightsExist.push(await requireExactSourceRights(transaction, record.sourceRights));
+      }
       if (replayStates.every((state) => state === 'exact')) {
         if (rightsExist.some((exists) => !exists)) {
           throw invalidStored('An exact Gate batch replay is missing source-rights records.');
@@ -609,6 +610,12 @@ class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisi
     unparsedInput: AflTradeGateLedgerDecisionAppendInput
   ): Promise<AflTradeGateLedgerAppendResult> {
     const input = parseDecisionAppendInput(unparsedInput);
+    if (input.decision.content.authorityKind === 'automated_validation_record') {
+      throw new AflTradeGateLedgerRepositoryError(
+        'INVALID_APPEND',
+        'Automated model-validity records must use the governed qualification boundary.'
+      );
+    }
     return this.client.transaction(async (transaction) => {
       const stored = await loadLedger(transaction, true);
       const replay = findReplay(stored, input);

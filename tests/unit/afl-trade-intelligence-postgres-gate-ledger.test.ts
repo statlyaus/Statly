@@ -466,6 +466,57 @@ describe('PostgreSQL AFL trade Gate decision ledger', () => {
     ).rejects.toMatchObject({ code: 'INVALID_APPEND' });
   });
 
+  it('reserves automated model-validity records for the governed qualification boundary', async () => {
+    const repository = createPostgresAflTradeGateDecisionLedgerRepository(
+      new MemoryGateSqlClient()
+    );
+    const base = gate2Approval();
+    const qualificationId = `model-qualification:${'6'.repeat(64)}`;
+    const qualificationArtifactId = evidence('7');
+    const affectedArtifacts = [
+      { kind: 'model_run' as const, artifactId: `model-run:${'8'.repeat(64)}` },
+      { kind: 'model_qualification' as const, artifactId: qualificationId },
+    ];
+    const scope = {
+      ...base.proposal.content.scope,
+      scopeKey: 'afl-men:2026-trades',
+      dimensions: [{ name: 'qualification', values: [qualificationId] }],
+    };
+    const proposalContent = {
+      ...base.proposal.content,
+      gate: 'gate_3_model_validity' as const,
+      decisionKey: 'afl-men:2026-trades:player-model-validity',
+      environment: 'non_production' as const,
+      scope,
+      evidenceIds: [qualificationArtifactId],
+      affectedArtifacts,
+    };
+    const proposal = aflTradeGateDecisionProposalSchema.parse({
+      proposalId: createAflTradeContentAddress('gate-proposal', proposalContent),
+      content: proposalContent,
+    });
+    const decisionContent = {
+      ...base.decision.content,
+      proposalId: proposal.proposalId,
+      gate: proposal.content.gate,
+      decisionKey: proposal.content.decisionKey,
+      environment: proposal.content.environment,
+      scope,
+      authorityKind: 'automated_validation_record' as const,
+      authorityEvidenceIds: [qualificationArtifactId],
+      revalidateAt: null,
+      affectedArtifacts,
+    };
+    const decision = aflTradeGateDecisionRecordSchema.parse({
+      decisionId: createAflTradeContentAddress('gate-decision', decisionContent),
+      content: decisionContent,
+    });
+
+    await expect(
+      repository.appendDecision({ expectedRevision: 0, proposal, decision })
+    ).rejects.toMatchObject({ code: 'INVALID_APPEND' });
+  });
+
   it('applies expected-revision CAS to a new generic gate append', async () => {
     const client = new MemoryGateSqlClient();
     const repository = createPostgresAflTradeGateDecisionLedgerRepository(client);

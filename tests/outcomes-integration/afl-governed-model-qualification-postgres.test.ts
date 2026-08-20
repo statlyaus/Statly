@@ -281,6 +281,51 @@ describe('governed model qualification PostgreSQL registry', () => {
     await expect(
       insertQualificationDirectly(forgedQualification, forgedArtifact.artifactId)
     ).rejects.toThrow(/ancestry|mismatch/i);
+    const {
+      multiclassBrierScore: _omittedBrierScore,
+      ...incompletePickMetrics
+    } = passing.qualification.content.pick.validationEvidence.metrics!;
+    const incompletePickEvidence = {
+      ...passing.qualification.content.pick.validationEvidence,
+      metrics: incompletePickMetrics,
+    };
+    const incompletePickContent = {
+      ...passing.qualification.content,
+      pick: {
+        ...passing.qualification.content.pick,
+        validationEvidence: incompletePickEvidence,
+        validationEvidenceArtifact: await retain(incompletePickEvidence, evaluatedAt),
+      },
+    };
+    const incompletePickQualification = {
+      qualificationId: createAflTradeContentAddress(
+        'model-qualification',
+        incompletePickContent
+      ),
+      content: incompletePickContent,
+    } as unknown as typeof passing.qualification;
+    const incompletePickArtifact = await retain(incompletePickQualification, evaluatedAt);
+    await expect(
+      insertQualificationDirectly(
+        incompletePickQualification,
+        incompletePickArtifact.artifactId
+      )
+    ).rejects.toThrow(/ancestry|mismatch/i);
+    const wrongRoleContent = {
+      ...passing.qualification.content,
+      pick: {
+        ...passing.qualification.content.pick,
+        role: 'player_contribution_and_availability',
+      },
+    };
+    const wrongRoleQualification = {
+      qualificationId: createAflTradeContentAddress('model-qualification', wrongRoleContent),
+      content: wrongRoleContent,
+    } as unknown as typeof passing.qualification;
+    const wrongRoleArtifact = await retain(wrongRoleQualification, evaluatedAt);
+    await expect(
+      insertQualificationDirectly(wrongRoleQualification, wrongRoleArtifact.artifactId)
+    ).rejects.toThrow(/contract|mismatch/i);
     const conflictingPolicy = {
       ...passing.qualification.content.policy,
       player: {
@@ -322,6 +367,50 @@ describe('governed model qualification PostgreSQL registry', () => {
       versions: { player: 1, pick: 1 },
       supersedes: { player: null, pick: null },
     });
+    const bypassClient = await pool.connect();
+    try {
+      await bypassClient.query('BEGIN');
+      await bypassClient.query(
+        `INSERT INTO outcome_gate_proposal
+          (proposal_id,gate,decision_key,version,environment,scope_key,proposed_at,proposal_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+        [
+          gates[0].proposal.proposalId,
+          gates[0].proposal.content.gate,
+          gates[0].proposal.content.decisionKey,
+          gates[0].proposal.content.version,
+          gates[0].proposal.content.environment,
+          gates[0].proposal.content.scope.scopeKey,
+          gates[0].proposal.content.proposedAt,
+          canonicalizeAflTradeJson(gates[0].proposal),
+        ]
+      );
+      await expect(
+        bypassClient.query(
+          `INSERT INTO outcome_gate_decision
+            (decision_id,proposal_id,gate,decision_key,version,environment,state,decided_at,
+             effective_at,revalidate_at,supersedes_decision_id,decision_json)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+          [
+            gates[0].decision.decisionId,
+            gates[0].decision.content.proposalId,
+            gates[0].decision.content.gate,
+            gates[0].decision.content.decisionKey,
+            gates[0].decision.content.version,
+            gates[0].decision.content.environment,
+            gates[0].decision.content.state,
+            gates[0].decision.content.decidedAt,
+            gates[0].decision.content.effectiveAt,
+            gates[0].decision.content.revalidateAt,
+            gates[0].decision.content.supersedesDecisionId,
+            canonicalizeAflTradeJson(gates[0].decision),
+          ]
+        )
+      ).rejects.toThrow(/qualification|no rows/i);
+    } finally {
+      await bypassClient.query('ROLLBACK');
+      bypassClient.release();
+    }
 
     const advanced = await repository.register({
       ...passing,

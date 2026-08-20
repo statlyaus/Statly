@@ -140,6 +140,9 @@ LANGUAGE plpgsql AS $$
 DECLARE
     proposal_row "outcome_gate_proposal"%ROWTYPE;
     predecessor "outcome_gate_decision"%ROWTYPE;
+    qualification_row RECORD;
+    automated_qualification_id TEXT;
+    automated_model_run_id TEXT;
     content JSONB := NEW."decision_json"->'content';
 BEGIN
     PERFORM pg_advisory_xact_lock(hashtextextended(
@@ -166,17 +169,39 @@ BEGIN
                      WHERE "supersedes_decision_id"=predecessor."decision_id")
       THEN RAISE EXCEPTION 'Gate decisions must form one chronological linear chain'; END IF;
     END IF;
-    IF content->>'authorityKind'='automated_validation_record' AND (
-      NEW."gate"<>'gate_3_model_validity'
-      OR NEW."environment"<>'non_production'::"OutcomeEnvironment"
-      OR content->>'state'<>'approved'
-      OR jsonb_array_length(content->'reviewers')<>0
-      OR (SELECT count(*) FROM jsonb_array_elements(content->'affectedArtifacts') artifact
-           WHERE artifact->>'kind'='model_run')<>1
-      OR (SELECT count(*) FROM jsonb_array_elements(content->'affectedArtifacts') artifact
-           WHERE artifact->>'kind'='model_qualification')<>1
-    ) THEN
-      RAISE EXCEPTION 'Automated validation authority is limited to non-production Gate 3';
+    IF content->>'authorityKind'='automated_validation_record' THEN
+      IF NEW."gate"<>'gate_3_model_validity'
+        OR NEW."environment"<>'non_production'::"OutcomeEnvironment"
+        OR content->>'state'<>'approved'
+        OR content->'revalidateAt'<>'null'::JSONB
+        OR jsonb_array_length(content->'reviewers')<>0
+        OR (SELECT count(*) FROM jsonb_array_elements(content->'affectedArtifacts') artifact
+             WHERE artifact->>'kind'='model_run')<>1
+        OR (SELECT count(*) FROM jsonb_array_elements(content->'affectedArtifacts') artifact
+             WHERE artifact->>'kind'='model_qualification')<>1
+      THEN RAISE EXCEPTION 'Automated validation authority is limited to non-production Gate 3';
+      END IF;
+      SELECT artifact->>'artifactId' INTO STRICT automated_qualification_id
+        FROM jsonb_array_elements(content->'affectedArtifacts') artifact
+        WHERE artifact->>'kind'='model_qualification';
+      SELECT artifact->>'artifactId' INTO STRICT automated_model_run_id
+        FROM jsonb_array_elements(content->'affectedArtifacts') artifact
+        WHERE artifact->>'kind'='model_run';
+      SELECT * INTO STRICT qualification_row
+        FROM "outcome_governed_valuation_model_qualification"
+        WHERE "qualification_id"=automated_qualification_id FOR KEY SHARE;
+      IF qualification_row."outcome"<>'qualified'
+        OR qualification_row."scope_key" IS DISTINCT FROM content->'scope'->>'scopeKey'
+        OR content->'scope' IS DISTINCT FROM proposal_row."proposal_json"->'content'->'scope'
+        OR automated_model_run_id NOT IN (
+          qualification_row."player_run_id", qualification_row."pick_run_id"
+        )
+        OR NOT (content->'authorityEvidenceIds' ? qualification_row."artifact_id")
+        OR NOT (
+          proposal_row."proposal_json"->'content'->'evidenceIds' ? qualification_row."artifact_id"
+        )
+      THEN RAISE EXCEPTION 'Automated Gate 3 requires its exact retained passing qualification';
+      END IF;
     END IF;
     IF NEW."state"='approved' AND NEW."environment"='production'::"OutcomeEnvironment"
        AND content->>'authorityKind'<>'external_human_record'
@@ -223,6 +248,32 @@ CREATE TABLE "outcome_governed_valuation_model_qualification" (
     FOREIGN KEY ("pick_evidence_artifact_id") REFERENCES "outcome_artifact_custody"("artifact_id") ON DELETE RESTRICT
 );
 
+CREATE OR REPLACE FUNCTION "outcome_afl_trade_jsonb_has_exact_keys"(
+  document JSONB,
+  expected_keys TEXT[]
+) RETURNS BOOLEAN LANGUAGE SQL IMMUTABLE AS $$
+  SELECT jsonb_typeof(document)='object'
+    AND ARRAY(SELECT key FROM jsonb_object_keys(document) key ORDER BY key)
+      = ARRAY(SELECT key FROM unnest(expected_keys) key ORDER BY key)
+$$;
+
+CREATE OR REPLACE FUNCTION "outcome_afl_trade_jsonb_is_artifact_ref"(document JSONB)
+RETURNS BOOLEAN LANGUAGE SQL IMMUTABLE AS $$
+  SELECT outcome_afl_trade_jsonb_has_exact_keys(
+      document,
+      ARRAY['artifactId','byteLength','contentSha256','createdAt','mediaType','storageUri']
+    )
+    AND document->>'artifactId' ~ '^artifact:[a-f0-9]{64}$'
+    AND document->>'contentSha256' ~ '^[a-f0-9]{64}$'
+    AND document->>'artifactId' = ('artifact:' || (document->>'contentSha256'))
+    AND document->>'storageUri' = ('artifact://sha256/' || (document->>'contentSha256'))
+    AND length(document->>'mediaType') BETWEEN 1 AND 160
+    AND jsonb_typeof(document->'byteLength')='number'
+    AND (document->>'byteLength')::NUMERIC >= 0
+    AND (document->>'byteLength')::NUMERIC = trunc((document->>'byteLength')::NUMERIC)
+    AND document->>'createdAt' IS NOT NULL
+$$;
+
 CREATE OR REPLACE FUNCTION "validate_outcome_governed_model_qualification_insert"()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
@@ -245,6 +296,191 @@ BEGIN
   player_evidence:=content->'player'->'validationEvidence';
   pick_evidence:=content->'pick'->'validationEvidence';
   pick_metrics:=pick_evidence->'metrics';
+  IF outcome_afl_trade_jsonb_has_exact_keys(
+       NEW."qualification_json", ARRAY['content','qualificationId'])
+       IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(
+       content, ARRAY['environment','evaluatedAt','failureCodes','outcome','pick',
+         'player','policy','policyArtifact','publicationEligible','schemaVersion','scopeKey'])
+       IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(
+       policy, ARRAY['pick','player','policyVersion','schemaVersion']) IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(
+       policy->'player', ARRAY['minimumComparableObservations','minimumRelativeMaeImprovement',
+         'minimumRelativeRmseImprovement','requiredAcceptanceOutcome','schemaVersion'])
+       IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(
+       policy->'pick', ARRAY['evaluatedScope','maximumContributionCrps',
+         'maximumEmpiricalP10P90Coverage','maximumMeanAbsoluteContributionError',
+         'maximumMeanAbsoluteGamesError','maximumMeanEmpiricalIntervalWidth',
+         'maximumMulticlassBrierScore','maximumMulticlassLogLoss',
+         'maximumRankedProbabilityScore','maximumRootMeanSquaredContributionError',
+         'maximumRootMeanSquaredGamesError','maximumZeroProbabilityObservationCount',
+         'minimumEmpiricalP10P90Coverage','minimumObservations','schemaVersion'])
+       IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(
+       content->'player', ARRAY['criteriaArtifact','passed','protocolArtifact','protocolId','role',
+         'runArtifact','runId','validationEvidence','validationEvidenceArtifact'])
+       IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(
+       content->'pick', ARRAY['criteriaArtifact','passed','protocolArtifact','protocolId','role',
+         'runArtifact','runId','validationEvidence','validationEvidenceArtifact'])
+       IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(
+       player_evidence, ARRAY['acceptanceOutcome','comparableObservationCount',
+         'relativeMaeImprovement','relativeRmseImprovement','schemaVersion','validationReportId'])
+       IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(
+       pick_evidence, ARRAY['evaluationStatus','metrics','observationCount','schemaVersion','scope',
+         'validationReportId']) IS DISTINCT FROM TRUE
+    OR content->>'schemaVersion' IS DISTINCT FROM 'governed-valuation-model-qualification/v1'
+    OR policy->>'schemaVersion' IS DISTINCT FROM
+       'governed-valuation-model-qualification-policy/v1'
+    OR policy->'player'->>'schemaVersion' IS DISTINCT FROM
+       'governed-player-model-qualification-criteria/v1'
+    OR policy->'pick'->>'schemaVersion' IS DISTINCT FROM
+       'governed-pick-model-qualification-criteria/v1'
+    OR policy->'pick'->>'evaluatedScope' IS DISTINCT FROM 'final_test'
+    OR player_evidence->>'schemaVersion' IS DISTINCT FROM
+       'governed-player-model-qualification-evidence/v1'
+    OR pick_evidence->>'schemaVersion' IS DISTINCT FROM
+       'governed-pick-model-qualification-evidence/v1'
+    OR pick_evidence->>'scope' IS DISTINCT FROM 'final_test'
+    OR content->'player'->>'role' IS DISTINCT FROM 'player_contribution_and_availability'
+    OR content->'pick'->>'role' IS DISTINCT FROM
+       'draft_pick_and_future_pick_distribution'
+    OR policy->'player'->>'requiredAcceptanceOutcome' IS DISTINCT FROM
+       'meets_declared_predictive_thresholds'
+    OR player_evidence->>'acceptanceOutcome' IS NULL
+    OR player_evidence->>'acceptanceOutcome' NOT IN (
+       'meets_declared_predictive_thresholds','does_not_meet_declared_predictive_thresholds')
+    OR pick_evidence->>'evaluationStatus' IS NULL
+    OR pick_evidence->>'evaluationStatus' NOT IN (
+       'scored_not_approved','insufficient_eligible_observations_not_approved',
+       'invalid_zero_probability_not_approved')
+  THEN RAISE EXCEPTION 'Governed model qualification nested contract mismatch';
+  END IF;
+  IF EXISTS (
+       SELECT 1 FROM jsonb_array_elements(jsonb_build_array(
+         policy->'player'->'minimumComparableObservations',
+         policy->'player'->'minimumRelativeMaeImprovement',
+         policy->'player'->'minimumRelativeRmseImprovement',
+         policy->'pick'->'minimumObservations',
+         policy->'pick'->'maximumMulticlassBrierScore',
+         policy->'pick'->'maximumMulticlassLogLoss',
+         policy->'pick'->'maximumRankedProbabilityScore',
+         policy->'pick'->'maximumContributionCrps',
+         policy->'pick'->'maximumMeanAbsoluteContributionError',
+         policy->'pick'->'maximumRootMeanSquaredContributionError',
+         policy->'pick'->'maximumMeanAbsoluteGamesError',
+         policy->'pick'->'maximumRootMeanSquaredGamesError',
+         policy->'pick'->'minimumEmpiricalP10P90Coverage',
+         policy->'pick'->'maximumEmpiricalP10P90Coverage',
+         policy->'pick'->'maximumMeanEmpiricalIntervalWidth',
+         policy->'pick'->'maximumZeroProbabilityObservationCount',
+         player_evidence->'comparableObservationCount',
+         pick_evidence->'observationCount'
+       )) value WHERE jsonb_typeof(value)<>'number'
+     )
+    OR jsonb_typeof(player_evidence->'relativeMaeImprovement') NOT IN ('number','null')
+    OR jsonb_typeof(player_evidence->'relativeRmseImprovement') NOT IN ('number','null')
+    OR (policy->'player'->>'minimumComparableObservations')::NUMERIC NOT BETWEEN 1 AND 100000
+    OR (policy->'player'->>'minimumComparableObservations')::NUMERIC <>
+       trunc((policy->'player'->>'minimumComparableObservations')::NUMERIC)
+    OR (policy->'player'->>'minimumRelativeMaeImprovement')::NUMERIC NOT BETWEEN 0 AND 1
+    OR (policy->'player'->>'minimumRelativeMaeImprovement')::NUMERIC = 0
+    OR (policy->'player'->>'minimumRelativeRmseImprovement')::NUMERIC NOT BETWEEN 0 AND 1
+    OR (policy->'player'->>'minimumRelativeRmseImprovement')::NUMERIC = 0
+    OR (policy->'pick'->>'minimumObservations')::NUMERIC NOT BETWEEN 1 AND 100000
+    OR (policy->'pick'->>'minimumObservations')::NUMERIC <>
+       trunc((policy->'pick'->>'minimumObservations')::NUMERIC)
+    OR (player_evidence->>'comparableObservationCount')::NUMERIC NOT BETWEEN 0 AND 100000
+    OR (player_evidence->>'comparableObservationCount')::NUMERIC <>
+       trunc((player_evidence->>'comparableObservationCount')::NUMERIC)
+    OR (pick_evidence->>'observationCount')::NUMERIC NOT BETWEEN 0 AND 100000
+    OR (pick_evidence->>'observationCount')::NUMERIC <>
+       trunc((pick_evidence->>'observationCount')::NUMERIC)
+    OR (policy->'pick'->>'minimumEmpiricalP10P90Coverage')::NUMERIC NOT BETWEEN 0 AND 1
+    OR (policy->'pick'->>'maximumEmpiricalP10P90Coverage')::NUMERIC NOT BETWEEN 0 AND 1
+    OR (policy->'pick'->>'maximumEmpiricalP10P90Coverage')::NUMERIC <
+       (policy->'pick'->>'minimumEmpiricalP10P90Coverage')::NUMERIC
+    OR EXISTS (
+       SELECT 1 FROM jsonb_array_elements(jsonb_build_array(
+         policy->'pick'->'maximumMulticlassBrierScore',
+         policy->'pick'->'maximumMulticlassLogLoss',
+         policy->'pick'->'maximumRankedProbabilityScore',
+         policy->'pick'->'maximumContributionCrps',
+         policy->'pick'->'maximumMeanAbsoluteContributionError',
+         policy->'pick'->'maximumRootMeanSquaredContributionError',
+         policy->'pick'->'maximumMeanAbsoluteGamesError',
+         policy->'pick'->'maximumRootMeanSquaredGamesError',
+         policy->'pick'->'maximumMeanEmpiricalIntervalWidth'
+       )) value WHERE (value#>>'{}')::NUMERIC < 0
+     )
+    OR (policy->'pick'->>'maximumZeroProbabilityObservationCount')::NUMERIC < 0
+    OR (policy->'pick'->>'maximumZeroProbabilityObservationCount')::NUMERIC <>
+       trunc((policy->'pick'->>'maximumZeroProbabilityObservationCount')::NUMERIC)
+  THEN RAISE EXCEPTION 'Governed model qualification numeric contract mismatch';
+  END IF;
+  IF pick_metrics IS NOT NULL AND pick_metrics<>'null'::JSONB THEN
+    IF outcome_afl_trade_jsonb_has_exact_keys(
+         pick_metrics, ARRAY['contributionCrps','empiricalP10P90Coverage',
+           'meanAbsoluteContributionError','meanAbsoluteGamesError','meanEmpiricalIntervalWidth',
+           'multiclassBrierScore','multiclassLogLoss','rankedProbabilityScore',
+           'rootMeanSquaredContributionError','rootMeanSquaredGamesError',
+           'zeroProbabilityObservationCount']) IS DISTINCT FROM TRUE
+      OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements(jsonb_build_array(
+          pick_metrics->'multiclassBrierScore', pick_metrics->'rankedProbabilityScore',
+          pick_metrics->'contributionCrps', pick_metrics->'meanAbsoluteContributionError',
+          pick_metrics->'rootMeanSquaredContributionError', pick_metrics->'meanAbsoluteGamesError',
+          pick_metrics->'rootMeanSquaredGamesError', pick_metrics->'empiricalP10P90Coverage',
+          pick_metrics->'meanEmpiricalIntervalWidth',
+          pick_metrics->'zeroProbabilityObservationCount'
+        )) value WHERE jsonb_typeof(value)<>'number'
+      )
+      OR NOT (pick_metrics ? 'multiclassLogLoss')
+      OR jsonb_typeof(pick_metrics->'multiclassLogLoss') NOT IN ('number','null')
+      OR (pick_metrics->>'multiclassBrierScore')::NUMERIC < 0
+      OR (pick_metrics->>'rankedProbabilityScore')::NUMERIC < 0
+      OR (pick_metrics->>'contributionCrps')::NUMERIC < 0
+      OR (pick_metrics->>'meanAbsoluteContributionError')::NUMERIC < 0
+      OR (pick_metrics->>'rootMeanSquaredContributionError')::NUMERIC < 0
+      OR (pick_metrics->>'meanAbsoluteGamesError')::NUMERIC < 0
+      OR (pick_metrics->>'rootMeanSquaredGamesError')::NUMERIC < 0
+      OR (pick_metrics->>'empiricalP10P90Coverage')::NUMERIC NOT BETWEEN 0 AND 1
+      OR (pick_metrics->>'meanEmpiricalIntervalWidth')::NUMERIC < 0
+      OR (pick_metrics->>'zeroProbabilityObservationCount')::NUMERIC < 0
+      OR (pick_metrics->>'zeroProbabilityObservationCount')::NUMERIC <>
+         trunc((pick_metrics->>'zeroProbabilityObservationCount')::NUMERIC)
+      OR (pick_metrics->>'multiclassLogLoss')::NUMERIC < 0
+    THEN RAISE EXCEPTION 'Governed model qualification metric contract mismatch';
+    END IF;
+  END IF;
+  IF EXISTS (
+       SELECT 1 FROM jsonb_array_elements(jsonb_build_array(
+         content->'policyArtifact', content->'player'->'runArtifact',
+         content->'player'->'protocolArtifact', content->'player'->'criteriaArtifact',
+         content->'player'->'validationEvidenceArtifact', content->'pick'->'runArtifact',
+         content->'pick'->'protocolArtifact', content->'pick'->'criteriaArtifact',
+         content->'pick'->'validationEvidenceArtifact'
+       )) reference
+       WHERE outcome_afl_trade_jsonb_is_artifact_ref(reference) IS DISTINCT FROM TRUE
+     )
+    OR EXISTS (
+       SELECT 1 FROM jsonb_array_elements(jsonb_build_array(
+         content->'policyArtifact', content->'player'->'runArtifact',
+         content->'player'->'protocolArtifact', content->'player'->'criteriaArtifact',
+         content->'player'->'validationEvidenceArtifact', content->'pick'->'runArtifact',
+         content->'pick'->'protocolArtifact', content->'pick'->'criteriaArtifact',
+         content->'pick'->'validationEvidenceArtifact'
+       )) reference
+       WHERE (reference->>'createdAt')::TIMESTAMPTZ > (content->>'evaluatedAt')::TIMESTAMPTZ
+     )
+    OR content->'player'->>'runId'=content->'pick'->>'runId'
+    OR content->'player'->>'protocolId'=content->'pick'->>'protocolId'
+  THEN RAISE EXCEPTION 'Governed model qualification lineage contract mismatch';
+  END IF;
   IF (player_evidence->>'comparableObservationCount')::INTEGER <
        (policy->'player'->>'minimumComparableObservations')::INTEGER THEN
     expected_failure_codes:=expected_failure_codes || jsonb_build_array('player_observation_count_below_minimum');
