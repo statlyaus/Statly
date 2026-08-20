@@ -31,7 +31,7 @@ const nextCommand = [
   `NEXT_PUBLIC_SOCKET_DISABLED=${useSocketWebServer ? 'false' : 'true'}`,
   `NEXT_PUBLIC_SOCKET_URL=${socketURL}`,
   `NEXT_PUBLIC_SOCKET_IO_URL=${socketURL}`,
-  './node_modules/.bin/next dev --turbopack',
+  './node_modules/.bin/next dev --webpack',
   `-p ${port}`,
 ].join(' ');
 
