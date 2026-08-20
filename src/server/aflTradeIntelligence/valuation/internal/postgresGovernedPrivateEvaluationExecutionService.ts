@@ -8,6 +8,7 @@ import { authenticateGovernedPrivateEvaluationAuthorityInspection } from './gove
 import {
   createGovernedPrivateEvaluationTransitionIntent,
   createGovernedPrivateEvaluationTransitionReceipt,
+  governedPrivateEvaluationTransitionIntentSchema,
   governedPrivateEvaluationTransitionReceiptSchema,
   type GovernedPrivateEvaluationTransitionIntent,
   type GovernedPrivateEvaluationTransitionReceipt,
@@ -25,6 +26,10 @@ interface InspectionRow {
 
 interface ExistingRow {
   readonly receipt_json: unknown;
+}
+
+interface ExistingIntentRow {
+  readonly intent_json: unknown;
 }
 
 interface TrustedTimeRow {
@@ -79,6 +84,20 @@ interface ReconstructionDependency {
 
 function same(left: unknown, right: unknown): boolean {
   return canonicalizeAflTradeJson(left) === canonicalizeAflTradeJson(right);
+}
+
+function doesIntentMatchRequest(
+  intent: GovernedPrivateEvaluationTransitionIntent['content'],
+  request: GovernedPrivateEvaluationExecuteRequest,
+  principalId: string
+): boolean {
+  return (
+    intent.inspectionId === request.inspectionId &&
+    intent.operationId === request.operationId &&
+    intent.review.principalId === principalId &&
+    intent.review.rationale === request.review.rationale &&
+    same(intent.action, request.action)
+  );
 }
 
 function parseTime(value: Date | string): string {
@@ -208,16 +227,31 @@ export function createPostgresGovernedPrivateEvaluationExecutionService(dependen
           existing.rows[0].receipt_json
         );
         const intent = receipt.content.intent.content;
-        if (
-          intent.inspectionId !== request.inspectionId ||
-          intent.operationId !== request.operationId ||
-          intent.review.principalId !== dependencies.principalId ||
-          intent.review.rationale !== request.review.rationale ||
-          !same(intent.action, request.action)
-        ) {
+        if (!doesIntentMatchRequest(intent, request, dependencies.principalId)) {
           throw new TypeError('Private evaluation operation replay conflicts with its request.');
         }
         return transitionResult(receipt, request.operationId);
+      }
+      const stagedResult = await dependencies.client.query<ExistingIntentRow>(
+        `SELECT intent_json
+           FROM outcome_private_evaluation_transition_intent
+          WHERE operation_id=$1`,
+        [request.operationId]
+      );
+      if (stagedResult.rows.length > 1) {
+        throw new TypeError('Private evaluation staged operation identity is not unique.');
+      }
+      const stagedIntent =
+        stagedResult.rows[0] === undefined
+          ? null
+          : governedPrivateEvaluationTransitionIntentSchema.parse(
+              stagedResult.rows[0].intent_json
+            );
+      if (
+        stagedIntent !== null &&
+        !doesIntentMatchRequest(stagedIntent.content, request, dependencies.principalId)
+      ) {
+        throw new TypeError('Private evaluation staged operation conflicts with its request.');
       }
       const inspectionResult = await dependencies.client.query<InspectionRow>(
         `SELECT ir.receipt_json,snapshot.snapshot_json
@@ -243,8 +277,8 @@ export function createPostgresGovernedPrivateEvaluationExecutionService(dependen
       if (trusted.rows.length !== 1 || trusted.rows[0] === undefined) {
         throw new TypeError('Private evaluation execution could not establish trusted time.');
       }
-      const requestedAt = parseTime(trusted.rows[0].trusted_at);
-      if (Date.parse(requestedAt) > Date.parse(retained.result.validThrough)) {
+      const trustedAt = parseTime(trusted.rows[0].trusted_at);
+      if (Date.parse(trustedAt) > Date.parse(retained.result.validThrough)) {
         return governedPrivateEvaluationExecuteResultSchema.parse({
           state: 'invalid_transition',
           selector: retained.result.selector,
@@ -257,7 +291,7 @@ export function createPostgresGovernedPrivateEvaluationExecutionService(dependen
         client: dependencies.client,
         principalId: dependencies.principalId,
         selector: retained.result.selector,
-        authorizedAt: requestedAt,
+        authorizedAt: trustedAt,
       });
       const base = {
         selector: retained.result.selector,
@@ -352,30 +386,49 @@ export function createPostgresGovernedPrivateEvaluationExecutionService(dependen
           generationId: targetGenerationId,
         });
       }
-      const intent = createGovernedPrivateEvaluationTransitionIntent({
-        selector: retained.result.selector,
-        inspectionId: request.inspectionId,
-        authoritySnapshotId:
-          request.action.kind === 'withdraw' ? null : retained.snapshot.snapshotId,
-        operationId: request.operationId,
-        action: request.action,
-        expectedHead: retained.result.head,
-        review: {
-          principalId: dependencies.principalId,
-          rationale: request.review.rationale,
-        },
-        requestedAt,
-        expiresAt: retained.result.validThrough,
-      });
-      const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, requestedAt);
-      await dependencies.staging.stage({ intent, intentArtifact });
+      const authoritySnapshotId =
+        request.action.kind === 'withdraw' ? null : retained.snapshot.snapshotId;
+      if (
+        stagedIntent !== null &&
+        (!same(stagedIntent.content.selector, retained.result.selector) ||
+          stagedIntent.content.authoritySnapshotId !== authoritySnapshotId ||
+          !same(stagedIntent.content.expectedHead, retained.result.head) ||
+          stagedIntent.content.expiresAt !== retained.result.validThrough)
+      ) {
+        throw new TypeError(
+          'Private evaluation staged operation conflicts with its authenticated inspection.'
+        );
+      }
+      const intent =
+        stagedIntent ??
+        createGovernedPrivateEvaluationTransitionIntent({
+          selector: retained.result.selector,
+          inspectionId: request.inspectionId,
+          authoritySnapshotId,
+          operationId: request.operationId,
+          action: request.action,
+          expectedHead: retained.result.head,
+          review: {
+            principalId: dependencies.principalId,
+            rationale: request.review.rationale,
+          },
+          requestedAt: trustedAt,
+          expiresAt: retained.result.validThrough,
+        });
+      if (stagedIntent === null) {
+        const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, trustedAt);
+        await dependencies.staging.stage({ intent, intentArtifact });
+      }
       const receipt = createGovernedPrivateEvaluationTransitionReceipt({
         intent,
         previousTransitionId: retained.inspection.content.lastTransitionId,
         toGenerationId: targetGenerationId,
-        transitionedAt: requestedAt,
+        transitionedAt: intent.content.requestedAt,
       });
-      const receiptArtifact = createAflTradeCanonicalJsonArtifactRef(receipt, requestedAt);
+      const receiptArtifact = createAflTradeCanonicalJsonArtifactRef(
+        receipt,
+        intent.content.requestedAt
+      );
       await dependencies.staging.retainArtifact({
         reference: receiptArtifact,
         bytes: new TextEncoder().encode(canonicalizeAflTradeJson(receipt)),

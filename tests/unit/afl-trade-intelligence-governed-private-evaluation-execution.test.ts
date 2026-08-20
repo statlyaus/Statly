@@ -5,6 +5,7 @@ import type {
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createUnavailableGovernedPrivateEvaluationAuthorityInspection } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationAuthoritySnapshot';
 import { createPostgresGovernedPrivateEvaluationExecutionService } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationExecutionService';
+import { createGovernedPrivateEvaluationTransitionIntent } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
 
 const selector = {
   valuationScopeKey: 'afl-trade-history:test-fixture',
@@ -38,15 +39,18 @@ function retainedInspection(
 class ExecutionSqlClient implements AflOutcomeSqlClient {
   readonly retained;
   private readonly operatorAuthorized;
+  private readonly stagedIntent;
 
   constructor(
     options: Readonly<{
       operatorAuthorized?: boolean;
       head?: InspectionHead;
+      stagedIntent?: ReturnType<typeof createGovernedPrivateEvaluationTransitionIntent>;
     }> = {}
   ) {
     this.operatorAuthorized = options.operatorAuthorized ?? true;
     this.retained = retainedInspection(options.head);
+    this.stagedIntent = options.stagedIntent;
   }
 
   async query<Row>(sql: string): Promise<AflOutcomeSqlQueryResult<Row>> {
@@ -58,6 +62,12 @@ class ExecutionSqlClient implements AflOutcomeSqlClient {
     }
     if (sql.includes('FROM outcome_private_evaluation_transition_receipt')) {
       return { rows: [], rowCount: 0 } as AflOutcomeSqlQueryResult<Row>;
+    }
+    if (sql.includes('FROM outcome_private_evaluation_transition_intent')) {
+      return {
+        rows: this.stagedIntent === undefined ? [] : [{ intent_json: this.stagedIntent }],
+        rowCount: this.stagedIntent === undefined ? 0 : 1,
+      } as AflOutcomeSqlQueryResult<Row>;
     }
     if (sql.includes('FROM outcome_private_evaluation_inspection_receipt ir')) {
       return {
@@ -145,6 +155,60 @@ describe('governed private evaluation execution service', () => {
     );
     expect(retainArtifact).toHaveBeenCalledOnce();
     expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it('resumes the exact staged intent when retrying an operation before receipt commit', async () => {
+    const retained = retainedInspection();
+    const stagedIntent = createGovernedPrivateEvaluationTransitionIntent({
+      selector,
+      inspectionId: retained.inspection.inspectionId,
+      authoritySnapshotId: null,
+      operationId,
+      action: { kind: 'withdraw', reason: 'Remove the unavailable active grade.' },
+      expectedHead: retained.inspection.content.head,
+      review: {
+        principalId: 'firebase:authenticated-operator',
+        rationale: 'Fail closed while model authority is unavailable.',
+      },
+      requestedAt: '2026-08-19T10:00:30.000Z',
+      expiresAt: retained.inspection.content.validThrough,
+    });
+    const client = new ExecutionSqlClient({ stagedIntent });
+    const stage = vi.fn();
+    const retainArtifact = vi.fn(async (artifact) => artifact.reference);
+    const commit = vi.fn(async (input) => ({
+      state: 'committed' as const,
+      head: input.receipt.content.toHead,
+      transitionId: input.receipt.transitionId,
+    }));
+    const service = createPostgresGovernedPrivateEvaluationExecutionService({
+      client,
+      principalId: 'firebase:authenticated-operator',
+      staging: { stage, retainArtifact },
+      lifecycle: { commit },
+      reconstruction: { verify: vi.fn() },
+    });
+
+    await expect(
+      service.execute({
+        inspectionId: client.retained.inspection.inspectionId,
+        operationId,
+        action: { kind: 'withdraw', reason: 'Remove the unavailable active grade.' },
+        review: { rationale: 'Fail closed while model authority is unavailable.' },
+      })
+    ).resolves.toMatchObject({ state: 'withdrawn', operationId });
+
+    expect(stage).not.toHaveBeenCalled();
+    expect(commit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        receipt: expect.objectContaining({
+          content: expect.objectContaining({
+            intent: stagedIntent,
+            transitionedAt: stagedIntent.content.requestedAt,
+          }),
+        }),
+      })
+    );
   });
 
   it('keeps construction unavailable without approved component model runs', async () => {
