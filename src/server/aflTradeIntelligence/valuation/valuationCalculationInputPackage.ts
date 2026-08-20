@@ -22,7 +22,7 @@ const publicIdSchema = z
   .max(200)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
 
-const authoritySchema = z
+const fixtureAuthoritySchema = z
   .object({
     kind: z.literal('fabricated_test_fixture'),
     evidenceClassification: z.literal('fabricated_test_evidence_not_real_afl_data'),
@@ -30,13 +30,21 @@ const authoritySchema = z
   })
   .strict();
 
+const authenticatedAuthoritySchema = z
+  .object({
+    kind: z.literal('authenticated_non_production'),
+    inputTraceId: aflTradeContentAddressedIdSchema('private-evaluation-input-trace'),
+    publicationProhibited: z.literal(true),
+  })
+  .strict();
+
 export const AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_SCHEMA_VERSION =
   'afl-trade-valuation-calculation-input-package/v1' as const;
+export const AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_V2_SCHEMA_VERSION =
+  'afl-trade-valuation-calculation-input-package/v2' as const;
 
-export const aflTradeValuationCalculationInputPackageContentSchema = z
+const calculationInputKernelSchema = z
   .object({
-    schemaVersion: z.literal(AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_SCHEMA_VERSION),
-    authority: authoritySchema,
     tradeId: publicIdSchema,
     valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle'),
     valuationCase: aflTradeValuationCaseSchema,
@@ -49,8 +57,12 @@ export const aflTradeValuationCalculationInputPackageContentSchema = z
       'Calculation input only; not a result, model approval, publication approval, or activation authority.'
     ),
   })
-  .strict()
-  .superRefine((input, context) => {
+  .strict();
+
+function reconcileCalculationInput(
+  input: z.infer<typeof calculationInputKernelSchema>,
+  context: z.RefinementCtx
+) {
     const valuationCase = input.valuationCase.content;
     const drawSet = input.componentDrawSet.content;
     const ledger = input.realizedContributionLedger.content;
@@ -93,7 +105,30 @@ export const aflTradeValuationCalculationInputPackageContentSchema = z
         message: 'Calculation input lineage or value-unit identity mismatch.',
       });
     }
-  });
+}
+
+const calculationInputV1Schema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_SCHEMA_VERSION),
+    authority: fixtureAuthoritySchema,
+    ...calculationInputKernelSchema.shape,
+  })
+  .strict()
+  .superRefine(reconcileCalculationInput);
+
+const calculationInputV2Schema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_V2_SCHEMA_VERSION),
+    authority: authenticatedAuthoritySchema,
+    ...calculationInputKernelSchema.shape,
+  })
+  .strict()
+  .superRefine(reconcileCalculationInput);
+
+export const aflTradeValuationCalculationInputPackageContentSchema = z.discriminatedUnion(
+  'schemaVersion',
+  [calculationInputV1Schema, calculationInputV2Schema]
+);
 
 export const aflTradeValuationCalculationInputPackageSchema = z
   .object({

@@ -771,6 +771,94 @@ owned by the immediately preceding disposable PostgreSQL rehearsal. Do not descr
 projection or a synthetic scenario as an activated public release. Real-data release review, model
 calibration and validation, hosted deployment, and production activation remain later procedures.
 
+### Rehearsing the governed private package-evaluation workspace
+
+The governed private workspace is a second, narrower local boundary behind the workbook screen. Its
+only application-facing operations are `inspect`, `execute`, and exact `read`. It does not accept
+caller-supplied player values, pick values, transfer directions, evidence, timestamps, grades,
+generation documents, or operator identities. The concrete local adapter derives the authenticated
+operator from the server session and binds one loopback outcomes database to one absolute private
+artifact root. The retained generation and every reader document remain `test_fixture`,
+non-production, and publication-prohibited.
+
+Before exercising this boundary, verify all of the following:
+
+- `NODE_ENV` is not `production`, development tools and private workbook reads are explicitly
+  enabled, and the workbook path and SHA-256 digest identify the reviewed private input;
+- `AFL_OUTCOMES_DATABASE_URL` is loopback PostgreSQL named exactly `statly_outcomes_test`;
+- `STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE` is the 64-character nonce installed in that same database by
+  the current local stack launch;
+- `AFL_TRADE_LOCAL_ARTIFACT_ROOT` is one absolute, private, ignored filesystem directory; and
+- the signed-in identity is the authenticated local operator. A feature flag, Host header, route
+  parameter, JSON body, or development-auth literal is not operator authority.
+
+An inspection uses trusted PostgreSQL time and captures the composite `(valuationScopeKey, tradeId)`
+lifecycle head inside one repeatable-read transaction. It retains and authenticates the exact snapshot
+and inspection bytes before returning. Current real inspections fail closed with the earliest exact
+blocker, which may be `insufficient_data`, `model_not_approved`, or another declared unavailable
+reason. Externally approved player and pick model runs and the non-synthetic component draw-set
+materialization required to build a complete narrative do not yet exist. Therefore the real workspace
+must not construct, activate, rollback, or recover a grade. An unavailable inspection still retains
+its exact lifecycle head and short validity window so an authenticated operator can withdraw an
+already-active fixture generation or verify its retained reconstruction without positive model
+authority. Expired or stale inspections must be repeated; never extend their timestamps or edit
+retained JSON.
+
+When a fixture generation is active, open its private detail page through the signed-in archive. The
+automatic governed section must show one card and one package grade for every participating club,
+one global four-view selector, complete Received and Gave up ledgers, exact package subtraction,
+player games/seasons/rate evidence, pick cohort/sample evidence, and expandable labelled lineage.
+The page must also display the generation and projection-manifest identities. When current selection
+is absent, withdrawn, unauthenticated, or fails artifact authentication, the same section must show an
+explicit unavailable reason and no grade or export control. The separately labelled synthetic panel
+is never a substitute for this state.
+
+The signed-in exact export is internal transport only:
+
+```text
+GET /api/dev/afl-trade-evaluation/{tradeId}/export
+```
+
+It is not a documented third-party API. A successful response has `Content-Type: application/json`,
+`Cache-Control: private, no-store`, an attachment filename, and the exact generation and projection
+manifest IDs in response headers. Hash the downloaded bytes directly and compare that digest and byte
+length with the retained export artifact. Do not parse and reserialize the response before comparing
+it. A concealed reader, withdrawn generation, missing artifact, changed byte, manifest mismatch, or
+reconstruction failure returns no export bytes.
+
+Run the focused deterministic proof with the repository unit configuration, then the real PostgreSQL
+proof only against a disposable target:
+
+```sh
+npx vitest run --config vitest.config.unit.ts \
+  tests/unit/afl-trade-intelligence-governed-private-evaluation-workspace.test.ts \
+  tests/unit/afl-trade-intelligence-governed-evaluation-panel.test.tsx \
+  tests/unit/afl-trade-intelligence-private-local-workbook-reads.test.ts \
+  tests/unit/local-workbook-trade-evaluation-page.test.tsx \
+  tests/unit/afl-trade-intelligence-private-governed-exact-export-route.test.ts \
+  --coverage.enabled=false
+
+AFL_OUTCOMES_TEST_DATABASE_URL='<owned-disposable-loopback-postgresql>' \
+  npx vitest run --config vitest.config.outcomes-int.ts \
+  tests/outcomes-integration/afl-governed-private-evaluation-lifecycle-postgres.test.ts
+```
+
+The provisioned integration command is permitted only when the caller owns the disposable database.
+The proof applies the complete forward migration history, retains dormant artifacts before compare and
+swap, activates and exactly replays a seeded ready fixture, inspects and withdraws it through the real
+workspace, verifies the exact withdrawn generation without reactivation, rejects unavailable recovery
+and rollback, rejects mutation of append-only receipts, and proves the composite scope key prevents
+cross-scope reads. Remove only the container/schema and artifact directory created for that run.
+
+This is not yet the complete launch proof. Before any beta or public grade, implement and review the
+real ready inspector and automatic component draw-set materialization, expose construct, rollback,
+recover, and verify through an authenticated local operator adapter, recheck every retained release,
+Gate, admission, model, calculation-head, and private-authority token at serializable activation, and
+run a signed-in browser rehearsal covering archive, detail, all four views, asset drill-down, exact
+download bytes, withdrawal, and unavailable real inputs. Real HPN/PAV and pick-model runs still require
+their external approvals. Until those conditions pass, archive transactions remain factual records
+with grades explicitly unavailable.
+
 ### Rehearsing fixture-only valuation publication
 
 Run this only as part of the same disposable outcomes command:

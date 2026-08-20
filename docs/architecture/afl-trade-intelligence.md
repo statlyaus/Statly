@@ -1731,11 +1731,28 @@ attribution. Realized contribution is credited once to the receiving real AFL cl
 departure. It is not reconstructed from a forecast, defaulted to zero when missing, or adjusted by
 later list-spot or scarcity policy.
 
-The calculation unit is the complete multi-party trade. Joint draws preserve shared factors and
+The canonical product aggregate is one complete **trade transaction**, containing every directed
+transfer between two, three, or four participating AFL clubs. It is never decomposed into independent
+bilateral trades for calculation, grading, explanation, or projection. Each participating club has
+exactly one **club package assessment** within that transaction. The assessment contains the club's
+complete **received package**, complete **given-up package**, aligned estimated-advantage distribution,
+and one package-level grade when the transaction is complete enough to grade. A trade therefore
+produces two, three, or four club package assessments together; it does not produce one overall winner
+card or a detached list of graded assets.
+
+An **asset contribution** is one original transaction root viewed from a club package: positive in the
+receiving club's received package and negative in the sending club's given-up package. Those two
+placements reference the same authenticated root and lineage rather than creating duplicate asset
+identities. Every asset remains subordinate to its club package assessment and may explain that
+assessment, but it never receives an independent letter grade.
+
+The calculation unit is the complete trade transaction. Joint draws preserve shared factors and
 correlated outcomes rather than summing independent point estimates. Lineage-frontier attribution
 credits each root exactly once, follows pick and player successors, and rejects missing or duplicated
 frontier coverage. Unavailable inputs propagate an unavailable value with reasons; the kernel does not
-coerce missing evidence to zero.
+coerce missing evidence to zero. Every club package assessment is derived from this same aligned draw
+set, so a missing root or unbalanced endpoint makes every affected package comparison and grade
+unavailable rather than allowing one club to appear complete in isolation.
 
 Every transfer root has one sending club and one receiving club. In each aligned draw and valuation
 view, the calculator derives three balancing party quantities in one named value unit:
@@ -1772,8 +1789,42 @@ complete-only: the explanation derives full coverage from the authenticated draw
 retains the assumption set's effective window rather than accepting caller-supplied coverage. Private
 synthetic explanations retain fabricated-evidence and publication-prohibited authority and cannot
 satisfy a governed release lane; no governed-release authority variant exists until a real governed
-Adapter can authenticate that ancestry. The local archive summary is projected from this same
-complete explanation, so partial root values cannot produce totals that disagree with trade detail.
+Adapter can authenticate that ancestry. The retained archive-summary artifact is projected from this
+same complete explanation, so partial root values cannot produce totals that disagree with trade
+detail. Wiring that artifact into archive cards remains part of the later atomic-batch reader cutover.
+
+The retained explanation contract is a deterministic **calculation narrative**, not a restatement of
+the final score. It tells the calculation's evidence-backed story at two connected levels:
+
+- the club package narrative shows the selected view, named value unit, received-package mean,
+  given-up-package mean, exact subtraction producing estimated advantage, joint uncertainty interval,
+  finish-ahead probabilities, grade-policy result, and the assets that materially drive the result;
+- each asset narrative shows the authenticated facts and model components that produced its additive
+  contribution, followed by its ordered lineage and its place in the club subtotal.
+
+A player asset narrative identifies the player and receiving acquisition spell, the evidence cutoff,
+games and complete seasons included, each season's measured contribution, the total realized
+contribution, the admitted remaining-value model run, and the arithmetic producing the selected-view
+asset contribution. A pick asset narrative identifies the stable pick entitlement separately from its
+displayed number, the trade-date selection estimate, the admitted comparison cohort's selection range,
+observation count, draft-class count, empirical outcome distribution and method, then follows every
+authenticated custody, renumbering, on-trade, transformation, final selection, resulting player, and
+realized or remaining contribution. Nominal pick numbers are labels inside that story, not pick
+identity.
+
+The current development panel renders authenticated package arithmetic and aggregate player and pick
+evidence from this narrative. Rendering every retained season, empirical distribution, method, and
+lineage step is target reader work; retaining those details does not by itself prove that every detail
+is already visible in the UI.
+
+Every numerical or factual sentence in a calculation narrative is regenerated from retained,
+content-addressed source facts, model artifacts, lineage events, calculation draws, or policy
+artifacts. Fixed templates may turn those structured facts into plain language; operators and callers
+cannot supply prose, substitute values, or add unbound claims, and unconstrained generated numerical
+or causal explanations are prohibited. The retained narrative binds every displayed claim to its
+source artifact and calculation identity so exact replay can reproduce the same claim set. When a
+required fact is unavailable, the narrative names the missing evidence or authority and makes the
+dependent contribution and grade unavailable instead of inventing a smooth story around the gap.
 
 At-trade package values use only the contemporaneous information set. Current package values retain
 realized receiving-club contribution separately from projected remaining contribution and enforce
@@ -1787,14 +1838,30 @@ an immutable package-policy artifact and are not production defaults. Optional c
 club timing and role-congestion assumptions in a separate layer and never relabels universal value.
 Market, contract, and commercial value remain separate and unavailable in this kernel.
 
-The four immutable snapshots represent at-trade, realized, remaining, and current views. At-trade
-knowledge cannot follow the real trade, while realized, remaining, and current share one present
-temporal context. The calculation enforces `current = realized + remaining` for every root, draw,
-club, and value layer rather than checking only aggregate means. Weighted snapshots report mean,
-median, an 80% central interval, downside and upside quantiles, low-return and elite probabilities,
-all pairwise club comparison probabilities, confidence evidence, and exact-versus-sampled uncertainty.
-Partially available distributions may expose a clearly labelled conditional summary, but never a
-whole-trade statistic or comparison over missing probability mass.
+The four immutable snapshots implement four synchronized **view lenses** over the same transaction:
+at-trade, realized, remaining, and current. They are not separate trades, asset collections, model
+runs, or independently selectable club results. A reader selects one lens for the transaction, and
+every club package, asset contribution, comparison, narrative, and lineage annotation resolves under
+that same lens. At-trade knowledge cannot follow the real trade, while realized, remaining, and
+current share one present temporal context.
+
+The retained ordered weighted draw set is the single numerical source for all four lenses. Replay
+must verify for every draw and selected value layer that:
+
+- draw keys and weights are identical across roots and parties;
+- every transaction root appears exactly once with one authenticated sender and receiver;
+- total received value equals total given-up value and the global estimated advantage is zero;
+- `current = realized + remaining` for every root, club, draw, and layer;
+- means, intervals, event probabilities, pairwise comparisons, asset contributions, package grades,
+  and calculation narratives derive from that same draw set; and
+- the numeric representation, rounding, quantile, tolerance, and grade-policy versions are pinned.
+
+Weighted snapshots report mean, median, an 80% central interval, downside and upside quantiles,
+low-return and elite probabilities, all pairwise club comparison probabilities for every participating
+club pair, confidence evidence, and exact-versus-sampled uncertainty. A failed root, direction,
+weight, identity, balance, temporal, or policy check makes every dependent club comparison and grade
+unavailable together. Partially available distributions may expose a clearly labelled conditional
+asset summary, but never a whole-trade statistic or comparison over missing probability mass.
 
 Explanations are rendered only from fixed templates and structured reason codes. Their statements
 separate measured facts, model estimates, assumptions, unavailable information, and low-confidence
@@ -1807,6 +1874,33 @@ chains end to end. The validator checks schemas and content addresses, graph and
 realized attribution, exactly-once terminal frontiers, deterministic calculation/snapshot/explanation
 replay, explanation parity, and the public ownership boundary. Tamper tests cover changed hashes,
 parents, lineage, realized evidence, snapshots, explanations, and forbidden fields.
+
+The target MVP historical-coverage contract indexes every retained canonical trade transaction rather than
+publishing only trades that happen to calculate successfully. Each indexed transaction resolves to
+exactly one reader state:
+
+- **calculated** means an admitted model automatically derived every club package assessment,
+  contribution, view, narrative, and grade from complete authenticated inputs; or
+- **unavailable** means the transaction remains visible but one or more named factual-evidence,
+  lineage, cohort-support, model-authority, temporal, or reconciliation requirements failed closed.
+
+There is no operator-entered score, manually completed asset value, partial package grade, or silent
+archive omission. A transaction with an ambiguous later split, merge, or multi-asset exchange retains
+and displays its authenticated known lineage, but its dependent contributions and club grades remain
+unavailable until an admitted economic-allocation rule resolves the ambiguity. Supporting every
+historical transformation shape therefore means representing, authenticating, and explaining its
+state; it does not mean inventing a numeric allocation for every shape at launch.
+
+Reader coverage reports count calculated and unavailable transactions separately by reason. A beta or
+public launch cannot rely on fabricated fixtures or manually assembled values: at least one real,
+admitted end-to-end model release must automatically calculate its supported historical cohort, while
+every transaction outside that cohort remains explicitly unavailable rather than inheriting a score
+from a different model version or evidence set.
+
+The current foundation does not yet perform this automatic cohort calculation. It retains the
+prepared-input, materialisation, lifecycle, projection, and exact-read seams needed by that target;
+later automation stages own complete construction, batch activation, archive coverage, and coverage
+reporting.
 
 A structurally valid fixture report always retains `publicationReady: false` and the remaining
 external blockers: a real historical-data run, component-model calibration exit criteria, downstream
@@ -1834,6 +1928,63 @@ authority.
 
 Failure leaves the public archive available without numerical valuation. Product design must not turn
 a failed or missing model into hidden fallback numbers.
+
+### Target MVP registered-reader valuation surface
+
+This section defines the target reader contract. The current local foundation admits only the
+explicit signed-in development reader and wires governed detail and exact JSON export. Archive cards
+still expose factual transactions and readiness without consuming retained `archive_summary` bytes.
+Broader registered-reader admission and atomic archive/detail/API/export parity arrive with the later
+private batch reader cutover.
+
+Any user may register, but valuation reads require an authenticated registered reader. Readers may
+open the archive and trade detail and download a permitted JSON calculation-evidence export. They
+cannot inspect construction authority or invoke activation, withdrawal, rollback, recovery, or
+reconstruction operations. Internal authenticated routes may serve the website and export, but the MVP
+does not document or promise a third-party valuation API.
+
+Every activated valuation generation retains one content-addressed projection manifest that binds:
+
+- the canonical archive-card data document for the transaction;
+- the canonical trade-detail document containing every club package and expandable asset narrative;
+- the generation artifact and exact calculation identities; and
+- the exact retained JSON export byte artifact, including its media type, digest, and byte length.
+
+Runtime HTML, React output, authentication state, filters, pagination, and build identifiers are not
+retained as calculation evidence. In the target surface, archive, detail, internal transport, and export authenticate and
+replay the same retained derivation before serving it. They expose the same generation and projection
+manifest identities, and export serves the retained bytes directly rather than serializing a fresh
+runtime object. The registered-reader export contains the public facts, model summaries, arithmetic,
+reason codes, and lineage needed to verify the published calculation; it excludes private source
+custody, review material, credentials, operator authority, and publication controls.
+
+The sole governed module interface is `inspect`, `execute`, and exact `read`. Its external selector is
+the composite `(valuationScopeKey, tradeId)` identity. `read` accepts only current selection or one
+explicit generation identifier; it has no latest-generation alias or silent fallback. Withdrawal makes
+the current valuation explicitly unavailable, while an authenticated exact historical generation read
+remains available with its inactive, superseded, or withdrawn lifecycle label. Retained legacy
+generation versions use exhaustive version dispatch and either an authenticated compatible projection
+or an explicit `projection_unavailable` state; the reader never invents missing projection bytes.
+
+Target lifecycle mutations are authenticated operator actions. Construction first retains a transition
+intent, dormant generation, projection documents, projection manifest, and exact export bytes. A
+serializable compare-and-swap activation then advances the composite lifecycle head and appends its
+receipt. A stable operation identifier makes retry resume or return that same attempt rather than
+creating another generation. Withdrawal removes current selection without fallback. Rollback may
+select a previously active generation only inside its retained authority window at trusted database
+time. Reconstruction verification is read-only: it replays retained parents and compares exact
+generation, manifest, document, narrative, and export bytes without changing the lifecycle head.
+
+MVP proof has two explicitly different lanes. The current fabricated `test_fixture`, non-production,
+publication-prohibited foundation proves deterministic generation construction, immutable staging,
+low-level serializable activation, authenticated detail and exact export, withdrawal, restart-safe
+historical reads, and reconstruction using disposable PostgreSQL. Its governed workspace deliberately
+returns construction unavailable, and unavailable real authority cannot rollback or recover a fixture
+grade. Later batch work must reintroduce rollback and recovery only with exact eligible reactivation
+authority. The real-private-input lane proves missing factual or model authority remains unavailable,
+activates no grade or export, and never borrows authority from the fixture lane. Unauthorized detail
+and export requests fail before database or artifact access. Archive parity and complete browser
+narrative assertions remain target reader proof rather than claims made by this foundation.
 
 ## Immutable publication
 

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_SCHEMA_VERSION,
+  AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_V2_SCHEMA_VERSION,
+  aflTradeValuationCalculationInputPackageSchema,
   createAflTradeValuationCalculationInputPackage,
   createAflTradeValuationCalculationInputPackageArtifact,
 } from '@/server/aflTradeIntelligence/valuation/valuationCalculationInputPackage';
@@ -116,5 +118,42 @@ describe('AFL trade valuation calculation input package', () => {
           'Calculation input only; not a result, model approval, publication approval, or activation authority.',
       })
     ).toThrow();
+  });
+
+  it('binds authenticated non-production kernel inputs to one exact input trace', () => {
+    const fixture = createFabricatedAflTradeValuationFixture('three_club_trade');
+    const valuationInputBundleId = `valuation-input-bundle:${'8'.repeat(64)}`;
+    const inputTraceId = `private-evaluation-input-trace:${'7'.repeat(64)}`;
+    const { valuationCase, componentDrawSet, realizedContributionLedger, packagePolicy } =
+      bindInputBundle(fixture, valuationInputBundleId);
+    const input = createAflTradeValuationCalculationInputPackage({
+      schemaVersion: AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_V2_SCHEMA_VERSION,
+      authority: {
+        kind: 'authenticated_non_production',
+        inputTraceId,
+        publicationProhibited: true,
+      },
+      tradeId: fixture.valuationCase.content.tradeId,
+      valuationInputBundleId,
+      valuationCase,
+      componentDrawSet,
+      realizedContributionLedger,
+      packagePolicy,
+      createdAt: '2026-08-15T03:00:00.000Z',
+      publicationEligible: false,
+      limitation:
+        'Calculation input only; not a result, model approval, publication approval, or activation authority.',
+    });
+
+    expect(input.content).toMatchObject({
+      schemaVersion: AFL_TRADE_VALUATION_CALCULATION_INPUT_PACKAGE_V2_SCHEMA_VERSION,
+      authority: { kind: 'authenticated_non_production', inputTraceId },
+    });
+    expect(aflTradeValuationCalculationInputPackageSchema.parse(input)).toEqual(input);
+
+    const tampered = structuredClone(input);
+    tampered.content.authority.inputTraceId =
+      `private-evaluation-input-trace:${'6'.repeat(64)}`;
+    expect(() => aflTradeValuationCalculationInputPackageSchema.parse(tampered)).toThrow();
   });
 });

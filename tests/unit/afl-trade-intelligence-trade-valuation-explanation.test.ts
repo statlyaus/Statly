@@ -5,7 +5,11 @@ import { describe, expect, it } from 'vitest';
 import type { DraftTradeDetail } from '@/lib/draftTrades/firestore';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { prepareLocalWorkbookSyntheticValuation } from '@/server/aflTradeIntelligence/development/localWorkbookSyntheticValuation';
-import { createAflTradeValuationExplanation } from '@/server/aflTradeIntelligence/valuation/tradeValuationExplanation';
+import {
+  createAflTradeValuationExplanation,
+  createGovernedAflTradeValuationExplanation,
+} from '@/server/aflTradeIntelligence/valuation/tradeValuationExplanation';
+import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
 
 const TRADE_ID = 'workbook-2025-explanation-test';
 const VALUATION_BUNDLE_ID = `valuation-bundle:${'c'.repeat(64)}`;
@@ -169,6 +173,48 @@ function explanationInput(scenario: ReturnType<typeof preparedScenario>) {
 }
 
 describe('AFL trade valuation explanation document', () => {
+  it('automatically calculates exact asymmetric multi-club package banks from authenticated inputs', () => {
+    const fixture = createGovernedPrivateEvaluationAuthenticatedCalculationFixture();
+    const result = createGovernedAflTradeValuationExplanation(fixture);
+
+    expect(result.state).toBe('available');
+    if (result.state !== 'available') throw new Error('Expected an available explanation.');
+    expect(result.document).toMatchObject({
+      tradeId: 'trade:authenticated-three-club',
+      authority: {
+        kind: 'authenticated_non_production',
+        inputTraceId: fixture.trace.inputTraceId,
+        explanationPolicyId: fixture.explanationPolicy.policyId,
+        publicationProhibited: true,
+      },
+      confidenceLevel: 'unavailable',
+    });
+    expect(result.document.valuationCalculationId).toMatch(
+      /^valuation-calculation:[a-f0-9]{64}$/
+    );
+    const current = result.document.views.find(({ view }) => view === 'current')!;
+    expect(current.clubs.map(({ aflClubId }) => aflClubId)).toEqual([
+      'club:alpha',
+      'club:bravo',
+      'club:charlie',
+    ]);
+    expect(current.clubs.find(({ aflClubId }) => aflClubId === 'club:alpha')).toMatchObject({
+      received: { assets: [{ assetId: 'asset:03' }, { assetId: 'asset:04' }] },
+      givenUp: { assets: [{ assetId: 'asset:01' }, { assetId: 'asset:02' }] },
+      grade: {
+        grade: null,
+        state: 'unavailable',
+        reasonCode: 'grade_confidence_authority_unavailable',
+      },
+    });
+    expect(
+      current.clubs.every(
+        ({ received, givenUp, grade }) =>
+          received.assets.length > 0 && givenUp.assets.length > 0 && grade.grade === null
+      )
+    ).toBe(true);
+  });
+
   it('reconciles additive asset contributions while retaining package uncertainty separately', () => {
     const result = createAflTradeValuationExplanation(explanationInput(preparedScenario()));
 

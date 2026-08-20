@@ -8,7 +8,9 @@ import type { LocalAflTradeValuationReadiness } from '@/server/aflTradeIntellige
 import type {
   LocalWorkbookEvaluationArchive,
   LocalWorkbookEvaluationService,
+  LocalWorkbookTradeEvaluation,
 } from '@/server/aflTradeIntelligence/development/localWorkbookEvaluation';
+import type { GovernedPrivateEvaluationReadResult } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationWorkspace';
 
 const admittedEnvironment: PrivateLocalWorkbookReadEnvironment = {
   NODE_ENV: 'development',
@@ -18,10 +20,43 @@ const admittedEnvironment: PrivateLocalWorkbookReadEnvironment = {
   AFL_OUTCOMES_DEV_WORKBOOK_SHA256: 'a'.repeat(64),
   AFL_OUTCOMES_DATABASE_URL:
     'postgresql://postgres:postgres@127.0.0.1:55432/statly_outcomes_test?sslmode=disable',
+  AFL_TRADE_LOCAL_ARTIFACT_ROOT: '/private/statly-artifacts',
   STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE: 'b'.repeat(64),
 };
 
 const archive = { year: 2025, publicationEligible: false } as LocalWorkbookEvaluationArchive;
+const tradeEvaluation = {
+  detail: { trade: { tradeId: 'trade:carlton-fremantle-gold-coast', year: 2025 } },
+  publicationEligible: false,
+} as LocalWorkbookTradeEvaluation;
+
+function governedRead(
+  kind: 'detail' | 'json_export',
+  bytes: Uint8Array
+): GovernedPrivateEvaluationReadResult {
+  return {
+    state: 'available',
+    selector: {
+      valuationScopeKey: 'afl-men:2025-trades',
+      tradeId: 'trade:carlton-fremantle-gold-coast',
+    },
+    selection: { kind: 'current' },
+    generationId: `local-private-trade-evaluation-generation:${'c'.repeat(64)}`,
+    projectionManifestId: `private-evaluation-projection-manifest:${'d'.repeat(64)}`,
+    lifecycle: { status: 'active', current: true },
+    document: {
+      kind,
+      artifact: {
+        artifactId: `artifact:${'e'.repeat(64)}`,
+        mediaType: 'application/json',
+        byteLength: bytes.byteLength,
+        sha256: 'f'.repeat(64),
+        createdAt: '2026-08-19T00:00:00.000Z',
+      },
+    },
+    bytes,
+  };
+}
 
 const readinessFixture: LocalAflTradeValuationReadiness = {
   state: 'blocked',
@@ -60,6 +95,10 @@ function dependencies(input?: {
     environment: PrivateLocalWorkbookReadEnvironment
   ) => Promise<string>;
   environment?: () => PrivateLocalWorkbookReadEnvironment;
+  readGovernedEvaluation?: Parameters<
+    typeof createPrivateLocalWorkbookReads
+  >[0]['readGovernedEvaluation'];
+  trade?: LocalWorkbookTradeEvaluation | null;
 }) {
   const inspectValuationReadiness =
     input?.inspectValuationReadiness ?? vi.fn().mockResolvedValue(readinessFixture);
@@ -73,7 +112,7 @@ function dependencies(input?: {
         readiness: await inspect('afl-men:2025-trades'),
       },
     })),
-    loadTrade: vi.fn().mockResolvedValue(null),
+    loadTrade: vi.fn().mockResolvedValue(input?.trade ?? null),
   };
   return {
     evaluation,
@@ -84,6 +123,7 @@ function dependencies(input?: {
       authenticateRuntime: input?.authenticateRuntime ?? vi.fn().mockResolvedValue(undefined),
       inspectValuationReadiness,
       readValuationReadinessGeneration,
+      readGovernedEvaluation: input?.readGovernedEvaluation,
       environment: input?.environment ?? (() => admittedEnvironment),
       evaluation,
     }),
@@ -134,6 +174,19 @@ describe('private local workbook reads', () => {
       vi.mocked(evaluation.loadArchive).mock.calls[0]?.[1],
       'afl-men:2025-trades'
     );
+  });
+
+  it('keeps legacy archive and detail reads available without governed artifact custody', async () => {
+    const environment = { ...admittedEnvironment, AFL_TRADE_LOCAL_ARTIFACT_ROOT: undefined };
+    const { reads } = dependencies({
+      environment: () => environment,
+      trade: tradeEvaluation,
+    });
+
+    await expect(reads.loadArchive({ year: 2025 })).resolves.toMatchObject(archive);
+    await expect(
+      reads.loadTrade('trade:carlton-fremantle-gold-coast')
+    ).resolves.toMatchObject({ detail: tradeEvaluation.detail });
   });
 
   it('does not read workbook data when PostgreSQL rejects the runtime nonce', async () => {
@@ -217,6 +270,86 @@ describe('private local workbook reads', () => {
 
     expect(inspectValuationReadiness).toHaveBeenCalledTimes(2);
   });
+
+  it('derives the governed selector from the real transaction and returns authenticated detail bytes', async () => {
+    const detailBytes = new TextEncoder().encode('{"detail":"retained"}');
+    const readGovernedEvaluation = vi
+      .fn()
+      .mockResolvedValue(governedRead('detail', detailBytes));
+    const { reads } = dependencies({ trade: tradeEvaluation, readGovernedEvaluation });
+
+    await expect(
+      reads.loadTrade('trade:carlton-fremantle-gold-coast')
+    ).resolves.toMatchObject({
+      detail: tradeEvaluation.detail,
+      governedEvaluation: {
+        state: 'available',
+        document: { kind: 'detail' },
+        bytes: detailBytes,
+      },
+    });
+    expect(readGovernedEvaluation).toHaveBeenCalledWith(
+      expect.objectContaining({ AFL_TRADE_LOCAL_ARTIFACT_ROOT: '/private/statly-artifacts' }),
+      'statly-dev-tester',
+      {
+        selector: {
+          valuationScopeKey: 'afl-men:2025-trades',
+          tradeId: 'trade:carlton-fremantle-gold-coast',
+        },
+        selection: { kind: 'current' },
+        document: { kind: 'detail' },
+      }
+    );
+  });
+
+  it('returns the retained JSON export bytes exactly and conceals them from a non-operator', async () => {
+    const exportBytes = new TextEncoder().encode('{"exact":true}\n');
+    const readGovernedEvaluation = vi
+      .fn()
+      .mockResolvedValue(governedRead('json_export', exportBytes));
+    const { reads } = dependencies({ trade: tradeEvaluation, readGovernedEvaluation });
+
+    const exported = await reads.loadExactJsonExport(
+      'trade:carlton-fremantle-gold-coast'
+    );
+    expect(exported).toMatchObject({
+      state: 'available',
+      document: { kind: 'json_export' },
+    });
+    expect(exported?.state === 'available' ? exported.bytes : null).toBe(exportBytes);
+
+    const concealed = dependencies({
+      trade: tradeEvaluation,
+      readGovernedEvaluation,
+      authenticate: vi.fn().mockResolvedValue('another-authenticated-user'),
+    });
+    await expect(
+      concealed.reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast')
+    ).resolves.toBeNull();
+  });
+
+  it.each([undefined, 'relative/artifacts'])(
+    'fails closed for governed reads with invalid artifact custody (%s)',
+    async (artifactRoot) => {
+      const readGovernedEvaluation = vi.fn();
+      const { reads } = dependencies({
+        environment: () => ({
+          ...admittedEnvironment,
+          AFL_TRADE_LOCAL_ARTIFACT_ROOT: artifactRoot,
+        }),
+        trade: tradeEvaluation,
+        readGovernedEvaluation,
+      });
+
+      await expect(
+        reads.loadTrade('trade:carlton-fremantle-gold-coast')
+      ).rejects.toThrow('Governed private evaluation artifact configuration is invalid.');
+      await expect(
+        reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast')
+      ).rejects.toThrow('Governed private evaluation artifact configuration is invalid.');
+      expect(readGovernedEvaluation).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([
     ['production mode', { NODE_ENV: 'production' }],

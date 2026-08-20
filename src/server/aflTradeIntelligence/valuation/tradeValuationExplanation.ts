@@ -4,14 +4,24 @@ import { AFL_TRADE_VALUATION_VIEWS } from '@/types/aflTradeIntelligence';
 
 import { createAflTradeContentAddress } from '../artifacts/contentAddress';
 import {
+  authenticateGovernedPrivateEvaluationExplanationSource,
+  type GovernedPrivateEvaluationExplanationSource,
+} from './internal/governedPrivateEvaluationExplanationSource';
+import { governedPrivateEvaluationExplanationPolicySchema } from './internal/governedPrivateEvaluationExplanationPolicy';
+import { governedPrivateEvaluationInputTraceSchema } from './internal/governedPrivateEvaluationInputTrace';
+import {
   deriveAflTradeStatlyGradesFromProbabilities,
   type AflTradeStatlyGrade,
   type AflTradeStatlyGradeState,
 } from './statlyGradePolicy';
 import {
   aflTradeValuationCalculationSchema,
+  calculateAflTradeValuation,
   type AflTradeValuationCalculation,
 } from './tradeValuationCalculation';
+import {
+  aflTradeValuationCalculationInputPackageSchema,
+} from './valuationCalculationInputPackage';
 import { aflTradeValuationCaseSchema, type AflTradeValuationCase } from './valuationCaseContracts';
 
 export const AFL_TRADE_VALUATION_EXPLANATION_SCHEMA_VERSION =
@@ -21,12 +31,14 @@ type ValuationView = (typeof AFL_TRADE_VALUATION_VIEWS)[number];
 type SelectedLayer = 'gross' | 'listSpotAdjusted' | 'scarcityAdjusted';
 type AssetKind = 'player' | 'current_pick' | 'future_pick';
 
-export type AflTradeValuationExplanationAuthority = {
-  kind: 'private_synthetic';
-  assumptionSetId: string;
-  publicationProhibited: true;
-  warning: 'Fabricated rank-based test values — not real AFL data.';
-};
+export type AflTradeValuationExplanationAuthority =
+  | {
+      kind: 'private_synthetic';
+      assumptionSetId: string;
+      publicationProhibited: true;
+      warning: 'Fabricated rank-based test values — not real AFL data.';
+    }
+  | GovernedPrivateEvaluationExplanationSource['authority'];
 
 export interface AflTradeValuationExplanationTransfer {
   transferId: string;
@@ -209,7 +221,7 @@ export interface AflTradeValuationExplanationDocument {
     status: 'complete';
     ratio: 1;
   };
-  confidenceLevel: 'low' | 'moderate' | 'high';
+  confidenceLevel: 'unavailable' | 'low' | 'moderate' | 'high';
   selectedLayer: SelectedLayer;
   views: readonly AflTradeValuationExplanationView[];
   methodology: {
@@ -220,7 +232,8 @@ export interface AflTradeValuationExplanationDocument {
     currentIdentity: 'realized_plus_remaining';
     practicalEquivalenceBasis: string;
     practicalEquivalencePolicy: {
-      assumptionSetId: string;
+      assumptionSetId?: string;
+      explanationPolicyId?: string;
       valueUnitId: string;
       bandByView: Record<ValuationView, number>;
     };
@@ -237,6 +250,12 @@ export interface CreateAflTradeValuationExplanationInput {
     confidenceLevel: 'low' | 'moderate' | 'high';
     developmentPreview: boolean;
   };
+}
+
+export interface CreateGovernedAflTradeValuationExplanationInput {
+  trace: unknown;
+  explanationPolicy: unknown;
+  calculationInputPackage: unknown;
 }
 
 export type AflTradeValuationExplanationResult =
@@ -261,6 +280,22 @@ interface WeightedValue {
 interface PreparedAsset {
   contribution: AflTradeValuationAssetContribution;
   selectedSamples: readonly WeightedValue[];
+}
+
+interface ValidatedExplanationSource {
+  valuationCase: AflTradeValuationCase;
+  calculation: AflTradeValuationCalculation;
+  authority: AflTradeValuationExplanationAuthority;
+  transfers: readonly AflTradeValuationExplanationTransfer[];
+  selectedLayer: SelectedLayer;
+  gradeContext: CreateAflTradeValuationExplanationInput['gradeContext'] | null;
+  effectiveAt: string;
+  effectiveThrough: string;
+  practicalEquivalenceBasis: string;
+  practicalEquivalenceBandByView: Record<ValuationView, number>;
+  practicalEquivalencePolicyReference:
+    | { assumptionSetId: string }
+    | { explanationPolicyId: string };
 }
 
 function contractViolation(message: string, cause?: unknown): never {
@@ -356,12 +391,9 @@ function subtractSamples(
   }));
 }
 
-function validateInput(input: CreateAflTradeValuationExplanationInput): {
-  valuationCase: AflTradeValuationCase;
-  calculation: AflTradeValuationCalculation;
-  authority: AflTradeValuationExplanationAuthority;
-  transfers: readonly AflTradeValuationExplanationTransfer[];
-} {
+function validateSyntheticInput(
+  input: CreateAflTradeValuationExplanationInput
+): ValidatedExplanationSource {
   let valuationCase: AflTradeValuationCase;
   let calculation: AflTradeValuationCalculation;
   let directionEvidence: AflTradeValuationExplanationDirectionEvidence;
@@ -481,6 +513,105 @@ function validateInput(input: CreateAflTradeValuationExplanationInput): {
       warning: 'Fabricated rank-based test values — not real AFL data.',
     },
     transfers,
+    selectedLayer: input.selectedLayer,
+    gradeContext: input.gradeContext,
+    effectiveAt: directionEvidence.content.effectiveAt,
+    effectiveThrough: directionEvidence.content.effectiveThrough,
+    practicalEquivalenceBasis:
+      directionEvidence.content.explanationPolicy.practicalEquivalenceBasis,
+    practicalEquivalenceBandByView:
+      directionEvidence.content.explanationPolicy.practicalEquivalenceBandByView,
+    practicalEquivalencePolicyReference: {
+      assumptionSetId: directionEvidence.assumptionSetId,
+    },
+  };
+}
+
+function validateGovernedInput(
+  input: CreateGovernedAflTradeValuationExplanationInput
+): ValidatedExplanationSource {
+  const trace = governedPrivateEvaluationInputTraceSchema.parse(input.trace);
+  const explanationPolicy = governedPrivateEvaluationExplanationPolicySchema.parse(
+    input.explanationPolicy
+  );
+  const calculationInputPackage = aflTradeValuationCalculationInputPackageSchema.parse(
+    input.calculationInputPackage
+  );
+  if (calculationInputPackage.content.schemaVersion !== 'afl-trade-valuation-calculation-input-package/v2') {
+    contractViolation('Governed explanation requires an authenticated v2 calculation input package.');
+  }
+  const source = authenticateGovernedPrivateEvaluationExplanationSource({
+    trace,
+    policy: explanationPolicy,
+  });
+  const packageContent = calculationInputPackage.content;
+  const valuationCase = packageContent.valuationCase;
+  const caseContent = valuationCase.content;
+  const currentContext = caseContent.viewContexts.find(({ view }) => view === 'current')!;
+  if (
+    packageContent.authority.inputTraceId !== trace.inputTraceId ||
+    packageContent.valuationInputBundleId !== trace.content.valuationInputBundleId ||
+    packageContent.tradeId !== trace.content.selector.tradeId ||
+    caseContent.tradeId !== source.selector.tradeId ||
+    caseContent.tradeEffectiveAt !== source.effectiveAt ||
+    caseContent.valueUnitId !== source.valueUnitId ||
+    Date.parse(packageContent.createdAt) < Date.parse(trace.content.derivedAt) ||
+    Date.parse(packageContent.createdAt) < Date.parse(explanationPolicy.content.createdAt)
+  ) {
+    contractViolation('Governed calculation package does not match its exact trace, policy, unit, or time ancestry.');
+  }
+  const tracedComponents = new Map(trace.content.components.map((component) => [component.role, component]));
+  if (
+    packageContent.componentDrawSet.content.components.some((component) => {
+      const traced = tracedComponents.get(component.role);
+      return (
+        traced === undefined ||
+        traced.runId !== component.runId ||
+        traced.protocolId !== component.protocolId ||
+        traced.datasetId !== component.datasetId ||
+        traced.gate3DecisionId !== component.gate3DecisionId
+      );
+    })
+  ) {
+    contractViolation('Governed calculation components do not match the authenticated model ancestry.');
+  }
+  if (
+    caseContent.parties.length !== source.clubs.length ||
+    caseContent.parties.some((party) => {
+      const club = source.clubs.find(({ aflClubId }) => aflClubId === party.aflClubId);
+      return (
+        club === undefined ||
+        club.clubName !== party.clubName ||
+        !exactSet(club.receivedAssetIds, party.receivedRootAssetIds)
+      );
+    }) ||
+    !exactSet(
+      source.transfers.map(({ assetId }) => assetId),
+      caseContent.parties.flatMap(({ receivedRootAssetIds }) => receivedRootAssetIds)
+    )
+  ) {
+    contractViolation('Governed transaction clubs and directed roots do not match the valuation case.');
+  }
+  const calculation = calculateAflTradeValuation(
+    valuationCase,
+    packageContent.componentDrawSet,
+    packageContent.realizedContributionLedger,
+    packageContent.packagePolicy
+  );
+  return {
+    valuationCase,
+    calculation,
+    authority: source.authority,
+    transfers: source.transfers,
+    selectedLayer: source.selectedLayer,
+    gradeContext: null,
+    effectiveAt: source.effectiveAt,
+    effectiveThrough: currentContext.effectiveAt,
+    practicalEquivalenceBasis: source.practicalEquivalence.basis,
+    practicalEquivalenceBandByView: source.practicalEquivalence.bandByView,
+    practicalEquivalencePolicyReference: {
+      explanationPolicyId: source.authority.explanationPolicyId,
+    },
   };
 }
 
@@ -583,7 +714,7 @@ function prepareLedger(
 }
 
 function buildViews(input: {
-  source: CreateAflTradeValuationExplanationInput;
+  source: ValidatedExplanationSource;
   valuationCase: AflTradeValuationCase;
   calculation: AflTradeValuationCalculation;
   transfers: readonly AflTradeValuationExplanationTransfer[];
@@ -617,7 +748,7 @@ function buildViews(input: {
     const finishAheadProbabilities = completePackages.map(() => 0);
     let practicalEquivalenceProbability = 0;
     const practicalEquivalenceBand =
-      input.source.directionEvidence.content.explanationPolicy.practicalEquivalenceBandByView[view];
+      input.source.practicalEquivalenceBandByView[view];
     input.calculation.content.draws.forEach((draw, drawIndex) => {
       const values = completePackages.map((item) => item.netSamples[drawIndex]!.value);
       const maximum = Math.max(...values);
@@ -638,20 +769,22 @@ function buildViews(input: {
     finishAheadProbabilities.forEach((probability, index) => {
       finishAheadProbabilities[index] = normalizeNumber(probability);
     });
-    const gradeResult = deriveAflTradeStatlyGradesFromProbabilities({
-      view,
-      availability: 'available',
-      clubs: completePackages.map((item, index) => ({
-        aflClubId: item.party.aflClubId,
-        clubName: item.party.clubName,
-        finishesAheadProbability: finishAheadProbabilities[index]!,
-      })),
-      confidenceLevel: input.source.gradeContext.confidenceLevel,
-      coverageRatio: 1,
-      coverageStatus: 'complete',
-      developmentPreview: input.source.gradeContext.developmentPreview,
-      practicalEquivalenceProbability,
-    });
+    const gradeResult = input.source.gradeContext
+      ? deriveAflTradeStatlyGradesFromProbabilities({
+          view,
+          availability: 'available',
+          clubs: completePackages.map((item, index) => ({
+            aflClubId: item.party.aflClubId,
+            clubName: item.party.clubName,
+            finishesAheadProbability: finishAheadProbabilities[index]!,
+          })),
+          confidenceLevel: input.source.gradeContext.confidenceLevel,
+          coverageRatio: 1,
+          coverageStatus: 'complete',
+          developmentPreview: input.source.gradeContext.developmentPreview,
+          practicalEquivalenceProbability,
+        })
+      : null;
     const highestProbability = Math.max(...finishAheadProbabilities);
     const leaders = completePackages
       .filter(
@@ -666,7 +799,9 @@ function buildViews(input: {
         aflClubIds: leaders,
       },
       clubs: completePackages.map((item, index) => {
-        const grade = gradeResult.clubs.find(({ aflClubId }) => aflClubId === item.party.aflClubId);
+        const grade = gradeResult?.clubs.find(
+          ({ aflClubId }) => aflClubId === item.party.aflClubId
+        );
         return {
           aflClubId: item.party.aflClubId,
           clubName: item.party.clubName,
@@ -682,7 +817,7 @@ function buildViews(input: {
           grade: {
             grade: grade?.grade ?? null,
             state: grade?.state ?? 'unavailable',
-            reasonCode: gradeResult.reasonCode,
+            reasonCode: gradeResult?.reasonCode ?? 'grade_confidence_authority_unavailable',
           },
         };
       }),
@@ -690,11 +825,11 @@ function buildViews(input: {
   }).filter((view): view is NonNullable<typeof view> => view !== null);
 }
 
-export function createAflTradeValuationExplanation(
-  input: CreateAflTradeValuationExplanationInput
+function createExplanationDocument(
+  source: ValidatedExplanationSource
 ): AflTradeValuationExplanationResult {
-  const { valuationCase, calculation, authority, transfers } = validateInput(input);
-  const views = buildViews({ source: input, valuationCase, calculation, transfers });
+  const { valuationCase, calculation, authority, transfers } = source;
+  const views = buildViews({ source, valuationCase, calculation, transfers });
   if (!views || views.length !== AFL_TRADE_VALUATION_VIEWS.length) {
     return {
       state: 'unavailable',
@@ -714,14 +849,14 @@ export function createAflTradeValuationExplanation(
     valuationBundleId: valuationCase.content.valuationBundleId,
     valuationCaseId: valuationCase.valuationCaseId,
     valuationCalculationId: calculation.valuationCalculationId,
-    effectiveAt: input.directionEvidence.content.effectiveAt,
-    effectiveThrough: input.directionEvidence.content.effectiveThrough,
+    effectiveAt: source.effectiveAt,
+    effectiveThrough: source.effectiveThrough,
     coverage: {
       status: 'complete' as const,
       ratio: 1 as const,
     },
-    confidenceLevel: input.gradeContext.confidenceLevel,
-    selectedLayer: input.selectedLayer,
+    confidenceLevel: source.gradeContext?.confidenceLevel ?? ('unavailable' as const),
+    selectedLayer: source.selectedLayer,
     views,
     methodology: {
       additiveStatistic: 'probability_weighted_mean' as const,
@@ -729,13 +864,11 @@ export function createAflTradeValuationExplanation(
       packageMedianIsAdditive: false as const,
       assetGradeTreatment: 'prohibited' as const,
       currentIdentity: 'realized_plus_remaining' as const,
-      practicalEquivalenceBasis:
-        input.directionEvidence.content.explanationPolicy.practicalEquivalenceBasis,
+      practicalEquivalenceBasis: source.practicalEquivalenceBasis,
       practicalEquivalencePolicy: {
-        assumptionSetId: input.directionEvidence.assumptionSetId,
-        valueUnitId: input.directionEvidence.content.explanationPolicy.valueUnitId,
-        bandByView:
-          input.directionEvidence.content.explanationPolicy.practicalEquivalenceBandByView,
+        ...source.practicalEquivalencePolicyReference,
+        valueUnitId: valuationCase.content.valueUnitId,
+        bandByView: source.practicalEquivalenceBandByView,
       },
     },
   };
@@ -746,4 +879,16 @@ export function createAflTradeValuationExplanation(
       ...content,
     },
   };
+}
+
+export function createAflTradeValuationExplanation(
+  input: CreateAflTradeValuationExplanationInput
+): AflTradeValuationExplanationResult {
+  return createExplanationDocument(validateSyntheticInput(input));
+}
+
+export function createGovernedAflTradeValuationExplanation(
+  input: CreateGovernedAflTradeValuationExplanationInput
+): AflTradeValuationExplanationResult {
+  return createExplanationDocument(validateGovernedInput(input));
 }
