@@ -7,6 +7,12 @@ import type { DraftTradeDetail } from '@/lib/draftTrades/read';
 import { getExplicitAuthenticatedUserIdFromServerContext } from '@/lib/serverAuth';
 
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
+import type {
+  GovernedPrivateEvaluationReadRequest,
+  GovernedPrivateEvaluationReadResult,
+} from '../valuation/governedPrivateEvaluationWorkspace';
+import { createPostgresGovernedPrivateEvaluationWorkspace } from '../valuation/internal/createPostgresGovernedPrivateEvaluationWorkspace';
+import { createLocalAflTradePrivateDerivedArtifactRepository } from './localFileConditionalObjectStore';
 import type { LocalPrivateReviewedTradeCalculation } from './localPrivateReviewedTradeCalculation';
 import { getLocalOutcomesRuntimePool } from './localOutcomesRuntimePool';
 import { assertLocalAflTradeOutcomesRuntimeIdentity } from './localOutcomesRuntimeIdentity';
@@ -26,19 +32,26 @@ import {
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const POSTGRES_WAL_LSN_PATTERN = /^[a-f0-9]+\/[a-f0-9]+$/iu;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+const GOVERNED_ARTIFACT_REPOSITORY_ID = 'governed-private-evaluation';
+const MAXIMUM_GOVERNED_ARTIFACT_BYTES = 4 * 1024 * 1024;
 
 export interface PrivateLocalWorkbookReadEnvironment extends LocalWorkbookEvaluationEnvironment {
   STATLY_ENABLE_DEV_TOOLS?: string;
   STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE?: string;
+  AFL_TRADE_LOCAL_ARTIFACT_ROOT?: string;
 }
 
 type ArchiveQuery = Parameters<LocalWorkbookEvaluationService['loadArchive']>[0];
 type ArchiveResult = Promise<LocalWorkbookEvaluationArchive | null>;
-type TradeResult = Promise<LocalWorkbookTradeEvaluation | null>;
+export interface PrivateLocalWorkbookTradeEvaluation extends LocalWorkbookTradeEvaluation {
+  governedEvaluation?: GovernedPrivateEvaluationReadResult;
+}
+type TradeResult = Promise<PrivateLocalWorkbookTradeEvaluation | null>;
 
 export interface PrivateLocalWorkbookReads {
   loadArchive(query: ArchiveQuery): ArchiveResult;
   loadTrade(tradeId: string): TradeResult;
+  loadExactJsonExport(tradeId: string): Promise<GovernedPrivateEvaluationReadResult | null>;
 }
 
 export interface PrivateLocalWorkbookReadDependencies {
@@ -56,6 +69,11 @@ export interface PrivateLocalWorkbookReadDependencies {
     detail: DraftTradeDetail,
     workbookSha256: string
   ): Promise<LocalPrivateReviewedTradeCalculation | null>;
+  readGovernedEvaluation?(
+    environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
+    principalId: string,
+    request: GovernedPrivateEvaluationReadRequest
+  ): Promise<GovernedPrivateEvaluationReadResult>;
   environment(): PrivateLocalWorkbookReadEnvironment;
   evaluation: LocalWorkbookEvaluationService;
 }
@@ -70,6 +88,7 @@ function snapshotEnvironment(
     AFL_OUTCOMES_DEV_WORKBOOK_PATH: environment.AFL_OUTCOMES_DEV_WORKBOOK_PATH,
     AFL_OUTCOMES_DEV_WORKBOOK_SHA256: environment.AFL_OUTCOMES_DEV_WORKBOOK_SHA256,
     AFL_OUTCOMES_DATABASE_URL: environment.AFL_OUTCOMES_DATABASE_URL,
+    AFL_TRADE_LOCAL_ARTIFACT_ROOT: environment.AFL_TRADE_LOCAL_ARTIFACT_ROOT,
     STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE: environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE,
   });
 }
@@ -111,6 +130,13 @@ function hasValidRuntimeConfiguration(
   }
 }
 
+function hasValidGovernedArtifactConfiguration(
+  environment: Readonly<PrivateLocalWorkbookReadEnvironment>
+): boolean {
+  const artifactRoot = environment.AFL_TRADE_LOCAL_ARTIFACT_ROOT?.trim();
+  return artifactRoot !== undefined && artifactRoot !== '' && isAbsolute(artifactRoot);
+}
+
 export function createPrivateLocalWorkbookReads(
   dependencies: PrivateLocalWorkbookReadDependencies
 ): PrivateLocalWorkbookReads {
@@ -129,7 +155,10 @@ export function createPrivateLocalWorkbookReads(
     }>
   >();
 
-  async function admit(): Promise<Readonly<PrivateLocalWorkbookReadEnvironment> | null> {
+  async function admit(): Promise<Readonly<{
+    environment: Readonly<PrivateLocalWorkbookReadEnvironment>;
+    principalId: string;
+  }> | null> {
     const environment = snapshotEnvironment(dependencies.environment());
     if (!isEnabled(environment)) return null;
 
@@ -140,7 +169,21 @@ export function createPrivateLocalWorkbookReads(
       throw new Error('Private workbook evaluation runtime configuration is invalid.');
     }
     await dependencies.authenticateRuntime(environment);
-    return environment;
+    return Object.freeze({ environment, principalId: userId });
+  }
+
+  function governedRequest(
+    evaluation: LocalWorkbookTradeEvaluation,
+    document: GovernedPrivateEvaluationReadRequest['document']
+  ): GovernedPrivateEvaluationReadRequest {
+    return {
+      selector: {
+        valuationScopeKey: `afl-men:${evaluation.detail.trade.year}-trades`,
+        tradeId: evaluation.detail.trade.tradeId,
+      },
+      selection: { kind: 'current' },
+      document,
+    };
   }
 
   async function inspectCurrentValuationReadiness(
@@ -196,8 +239,9 @@ export function createPrivateLocalWorkbookReads(
 
   return {
     async loadArchive(query) {
-      const environment = await admit();
-      if (environment === null) return null;
+      const admitted = await admit();
+      if (admitted === null) return null;
+      const { environment } = admitted;
       return dependencies.evaluation.loadArchive(
         query,
         environment,
@@ -206,9 +250,10 @@ export function createPrivateLocalWorkbookReads(
     },
 
     async loadTrade(tradeId) {
-      const environment = await admit();
-      if (environment === null) return null;
-      return dependencies.evaluation.loadTrade(
+      const admitted = await admit();
+      if (admitted === null) return null;
+      const { environment, principalId } = admitted;
+      const evaluation = await dependencies.evaluation.loadTrade(
         tradeId,
         environment,
         (scopeKey) => inspectCurrentValuationReadiness(environment, scopeKey),
@@ -216,6 +261,42 @@ export function createPrivateLocalWorkbookReads(
           ? (detail, workbookSha256) =>
               loadCurrentPrivateCalculation(environment, detail, workbookSha256)
           : undefined
+      );
+      if (evaluation === null || dependencies.readGovernedEvaluation === undefined) {
+        return evaluation;
+      }
+      if (!hasValidGovernedArtifactConfiguration(environment)) {
+        throw new Error('Governed private evaluation artifact configuration is invalid.');
+      }
+      const governedEvaluation = await dependencies.readGovernedEvaluation(
+        environment,
+        principalId,
+        governedRequest(evaluation, { kind: 'detail' })
+      );
+      return { ...evaluation, governedEvaluation };
+    },
+
+    async loadExactJsonExport(tradeId) {
+      const admitted = await admit();
+      if (admitted === null || dependencies.readGovernedEvaluation === undefined) return null;
+      const { environment, principalId } = admitted;
+      if (!hasValidGovernedArtifactConfiguration(environment)) {
+        throw new Error('Governed private evaluation artifact configuration is invalid.');
+      }
+      const evaluation = await dependencies.evaluation.loadTrade(
+        tradeId,
+        environment,
+        (scopeKey) => inspectCurrentValuationReadiness(environment, scopeKey),
+        dependencies.loadPrivateCalculation
+          ? (detail, workbookSha256) =>
+              loadCurrentPrivateCalculation(environment, detail, workbookSha256)
+          : undefined
+      );
+      if (evaluation === null) return null;
+      return dependencies.readGovernedEvaluation(
+        environment,
+        principalId,
+        governedRequest(evaluation, { kind: 'json_export' })
       );
     },
   };
@@ -265,12 +346,37 @@ async function readLocalValuationReadinessGeneration(
   return generation;
 }
 
+async function readAdmittedGovernedEvaluation(
+  environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
+  principalId: string,
+  request: GovernedPrivateEvaluationReadRequest
+): Promise<GovernedPrivateEvaluationReadResult> {
+  const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
+  if (!hasValidGovernedArtifactConfiguration(environment)) {
+    throw new Error('Governed private evaluation artifact configuration is invalid.');
+  }
+  const artifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
+    rootDirectory: environment.AFL_TRADE_LOCAL_ARTIFACT_ROOT!.trim(),
+    repositoryId: GOVERNED_ARTIFACT_REPOSITORY_ID,
+    maximumObjectBytes: MAXIMUM_GOVERNED_ARTIFACT_BYTES,
+  });
+  return createPostgresGovernedPrivateEvaluationWorkspace({
+    client: createPgAflOutcomeSqlClient(pool),
+    artifactRepository,
+    maximumArtifactBytes: MAXIMUM_GOVERNED_ARTIFACT_BYTES,
+    principalId,
+    authorizeReader: async ({ principalId: candidatePrincipalId }) =>
+      candidatePrincipalId === principalId && candidatePrincipalId === DEVELOPMENT_AUTH_USER_ID,
+  }).read(request);
+}
+
 export const privateLocalWorkbookReads = createPrivateLocalWorkbookReads({
   authenticate: getExplicitAuthenticatedUserIdFromServerContext,
   authenticateRuntime: authenticateLocalOutcomesRuntime,
   readValuationReadinessGeneration: readLocalValuationReadinessGeneration,
   inspectValuationReadiness: inspectAdmittedLocalValuationReadiness,
   loadPrivateCalculation: loadAdmittedPrivateCalculation,
+  readGovernedEvaluation: readAdmittedGovernedEvaluation,
   environment: () => process.env,
   evaluation: localWorkbookEvaluationService,
 });

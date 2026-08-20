@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { AflTradePackageEvaluationPanel } from '@/components/draft/AflTradePackageEvaluationPanel';
 import { privateLocalWorkbookReads } from '@/server/aflTradeIntelligence/development/privateLocalWorkbookReads';
+import { decodeGovernedPrivateEvaluationDetailDocument } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationGeneration';
 
 import { LocalValuationReadinessNotice } from '../LocalValuationReadinessNotice';
 import { LocalPrivateReviewedTradeCalculationPanel } from './LocalPrivateReviewedTradeCalculationPanel';
@@ -41,6 +43,19 @@ export default async function LocalWorkbookTradeEvaluationPage({
   );
 
   const { detail } = evaluation;
+  const governedRead = evaluation.governedEvaluation;
+  const governedDocument =
+    governedRead?.state === 'available'
+      ? decodeGovernedPrivateEvaluationDetailDocument(governedRead.bytes)
+      : null;
+  if (
+    governedDocument !== null &&
+    (governedDocument.selector.tradeId !== detail.trade.tradeId ||
+      governedRead?.selector.tradeId !== detail.trade.tradeId ||
+      governedRead.selector.valuationScopeKey !== `afl-men:${detail.trade.year}-trades`)
+  ) {
+    throw new TypeError('The governed evaluation does not belong to this transaction.');
+  }
   const scenario = evaluation.scenario;
   const scenarioDirectionBasis =
     scenario.state === 'ready'
@@ -118,6 +133,66 @@ export default async function LocalWorkbookTradeEvaluationPage({
       {privateCalculation ? (
         <LocalPrivateReviewedTradeCalculationPanel calculation={privateCalculation} />
       ) : null}
+
+      <section
+        aria-labelledby="governed-package-calculation-heading"
+        className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Authenticated retained generation
+            </p>
+            <h2
+              id="governed-package-calculation-heading"
+              className="mt-2 text-xl font-semibold text-foreground"
+            >
+              Automatic governed package calculation
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              The transaction stays intact: every participating club receives one package grade,
+              while each received and surrendered asset explains its exact contribution and later
+              transformation under the same four time views.
+            </p>
+          </div>
+          {governedRead?.state === 'available' ? (
+            <Link
+              href={`/api/dev/afl-trade-evaluation/${encodeURIComponent(
+                detail.trade.tradeId
+              )}/export`}
+              className="inline-flex min-h-11 items-center rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Download exact JSON evidence
+            </Link>
+          ) : null}
+        </div>
+
+        {governedDocument !== null && governedRead?.state === 'available' ? (
+          <>
+            <dl className="mt-4 grid gap-3 text-xs text-muted-foreground sm:grid-cols-2">
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <dt className="font-semibold text-foreground">Generation</dt>
+                <dd className="mt-1 break-all font-mono">{governedRead.generationId}</dd>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <dt className="font-semibold text-foreground">Projection manifest</dt>
+                <dd className="mt-1 break-all font-mono">
+                  {governedRead.projectionManifestId}
+                </dd>
+              </div>
+            </dl>
+            <AflTradePackageEvaluationPanel narrative={governedDocument.narrative} />
+          </>
+        ) : (
+          <p className="mt-4 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-foreground">
+            Automatic package scores and grades are unavailable: {governedRead?.state ===
+            'unavailable'
+              ? governedRead.reason.replaceAll('_', ' ')
+              : 'no active authenticated generation'}
+            . No fallback score is shown.
+          </p>
+        )}
+      </section>
 
       <section
         aria-labelledby="synthetic-scenario-heading"

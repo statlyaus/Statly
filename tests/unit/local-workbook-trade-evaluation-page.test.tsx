@@ -2,6 +2,9 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createGovernedPrivateEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationGeneration';
+import { createGovernedPrivateEvaluationNarrativeFixture } from '../testUtils/governedPrivateEvaluationFixture';
+
 const { loadTradeMock, notFoundMock } = vi.hoisted(() => ({
   loadTradeMock: vi.fn(),
   notFoundMock: vi.fn(() => {
@@ -300,6 +303,44 @@ function evaluationFixture() {
   };
 }
 
+function governedEvaluationFixture() {
+  const narrative = createGovernedPrivateEvaluationNarrativeFixture();
+  const selector = {
+    valuationScopeKey: 'afl-men:2025-trades',
+    tradeId: narrative.content.tradeId,
+  };
+  const materialization = createGovernedPrivateEvaluationGeneration({
+    selector,
+    transitionIntentId: `private-evaluation-transition-intent:${'e'.repeat(64)}`,
+    generatedAt: '2026-08-19T00:00:00.000Z',
+    narrative,
+  });
+  const detailArtifact = materialization.artifacts.find(({ kind }) => kind === 'detail')!;
+  const evaluation = evaluationFixture();
+  return {
+    ...evaluation,
+    detail: {
+      ...evaluation.detail,
+      trade: {
+        ...evaluation.detail.trade,
+        tradeId: selector.tradeId,
+        title: 'Adelaide and St Kilda package evaluation',
+        clubNames: ['Adelaide', 'St Kilda'],
+      },
+    },
+    governedEvaluation: {
+      state: 'available' as const,
+      selector,
+      selection: { kind: 'current' as const },
+      generationId: materialization.generation.generationId,
+      projectionManifestId: materialization.projectionManifest.projectionManifestId,
+      lifecycle: { status: 'active' as const, current: true as const },
+      document: { kind: 'detail' as const, artifact: detailArtifact.reference },
+      bytes: detailArtifact.bytes,
+    },
+  };
+}
+
 describe('private local workbook trade evaluation page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -389,5 +430,33 @@ describe('private local workbook trade evaluation page', () => {
       })
     ).rejects.toThrow('NEXT_NOT_FOUND');
     expect(notFoundMock).toHaveBeenCalledOnce();
+  });
+
+  it('renders the authenticated package calculation and exact evidence export as one transaction', async () => {
+    const evaluation = governedEvaluationFixture();
+    loadTradeMock.mockResolvedValueOnce(evaluation);
+
+    render(
+      await LocalWorkbookTradeEvaluationPage({
+        params: Promise.resolve({ tradeId: evaluation.detail.trade.tradeId }),
+      })
+    );
+
+    const governed = screen.getByRole('region', {
+      name: 'Automatic governed package calculation',
+    });
+    expect(within(governed).getAllByRole('article')).toHaveLength(2);
+    expect(within(governed).getByRole('article', { name: 'Adelaide package' })).toBeVisible();
+    expect(within(governed).getByRole('article', { name: 'St Kilda package' })).toBeVisible();
+    expect(within(governed).getByText(/92 - 70 = \+22 fixed_horizon_pav/u)).toBeVisible();
+    fireEvent.click(within(governed).getAllByText('Pick 14 calculation and lineage')[0]!);
+    expect(within(governed).getAllByText(/48 observations across 12 draft classes/u)).not.toHaveLength(0);
+    expect(within(governed).getByRole('link', { name: 'Download exact JSON evidence' })).toHaveAttribute(
+      'href',
+      `/api/dev/afl-trade-evaluation/${encodeURIComponent(
+        evaluation.detail.trade.tradeId
+      )}/export`
+    );
+    expect(within(governed).queryByText(/asset grade/iu)).not.toBeInTheDocument();
   });
 });
