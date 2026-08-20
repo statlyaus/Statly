@@ -1,12 +1,16 @@
 import { createHash } from 'node:crypto';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradePickPavPolicy } from '@/server/aflTradeIntelligence/modeling/pickOutcomeContracts';
 import {
   computeAflTradePickPavModelExecutionOutputs,
 } from '@/server/aflTradeIntelligence/modeling/pickPavModelExecution';
 import { materializeAflTradePickPavObservationSet } from '@/server/aflTradeIntelligence/modeling/pickPavObservationService';
-import { createGovernedAflTradePickPavModelExecution } from '@/server/aflTradeIntelligence/modeling/governedPickPavModelExecution';
+import {
+  createGovernedAflTradePickPavModelExecution,
+  governedAflTradePickPavModelExecutionSchema,
+} from '@/server/aflTradeIntelligence/modeling/governedPickPavModelExecution';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const addressed = (prefix: string, value: string) => `${prefix}:${sha(value)}`;
@@ -171,9 +175,9 @@ describe('governed pick-PAV model execution', () => {
     });
 
     expect(execution.content).toMatchObject({
-      schemaVersion: 'afl-trade-pick-pav-model-execution/v2',
+      schemaVersion: 'afl-trade-pick-pav-model-execution/v3',
       environment: 'non_production',
-      approvalStatus: 'gate_3_review_required',
+      qualificationStatus: 'automated_qualification_pending',
       publicationEligible: false,
       datasetId,
       datasetAdmissionId,
@@ -181,5 +185,28 @@ describe('governed pick-PAV model execution', () => {
       protocolId,
     });
     expect(execution.content).not.toHaveProperty('grade');
+
+    const {
+      qualificationStatus: _qualificationStatus,
+      ...successorWithoutQualificationStatus
+    } = execution.content;
+    const legacyContent = {
+      ...successorWithoutQualificationStatus,
+      schemaVersion: 'afl-trade-pick-pav-model-execution/v2' as const,
+      authorityBoundary:
+        'authenticated_non_production_pick_model_candidate_no_gate_3_approval_grade_publication_or_fantasy_ownership' as const,
+      approvalStatus: 'gate_3_review_required' as const,
+      limitation:
+        'This retained non-production execution is eligible for independent Gate 3 review only; it is not an approval, trade grade, or public numerical authority.' as const,
+    };
+    const legacy = governedAflTradePickPavModelExecutionSchema.parse({
+      executionId: createAflTradeContentAddress('pick-pav-model-execution', legacyContent),
+      content: legacyContent,
+    });
+    expect(legacy.content).toMatchObject({
+      schemaVersion: 'afl-trade-pick-pav-model-execution/v2',
+      approvalStatus: 'gate_3_review_required',
+    });
+    expect(legacy.content).not.toHaveProperty('qualificationStatus');
   });
 });

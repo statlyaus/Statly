@@ -129,7 +129,7 @@ describe('PostgreSQL governed current calculation authority', () => {
         {
           code: 'model_not_approved',
           message:
-            'Current external Gate 3 approval is unavailable for both governed model components.',
+            'The exact current automated qualification is unavailable for both governed model components.',
         },
       ],
     });

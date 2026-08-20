@@ -47,6 +47,8 @@ function readyAuthorityInput() {
         datasetAdmissionGateLedgerRevision: 11,
         gate3DecisionId: `gate-decision:${'a'.repeat(64)}`,
         gate3DecisionVersion: 3,
+        qualificationId: `model-qualification:${'a'.repeat(64)}`,
+        qualificationPolicyVersion: `model-qualification-policy:${'b'.repeat(64)}`,
       },
       {
         role: 'draft_pick_and_future_pick_distribution' as const,
@@ -57,6 +59,8 @@ function readyAuthorityInput() {
         datasetAdmissionGateLedgerRevision: 12,
         gate3DecisionId: `gate-decision:${'f'.repeat(64)}`,
         gate3DecisionVersion: 2,
+        qualificationId: `model-qualification:${'a'.repeat(64)}`,
+        qualificationPolicyVersion: `model-qualification-policy:${'b'.repeat(64)}`,
       },
     ],
   };
@@ -208,6 +212,11 @@ describe('governed private evaluation authority snapshot', () => {
 
   it('pins ready v3 authority to one current prepared head and its exact replay manifest', () => {
     const legacy = readyAuthorityInput();
+    const qualifiedComponents = legacy.components.map((component) => ({
+      ...component,
+      qualificationId: `model-qualification:${'a'.repeat(64)}`,
+      qualificationPolicyVersion: `model-qualification-policy:${'b'.repeat(64)}`,
+    }));
     const retained = createReadyGovernedPrivateEvaluationAuthorityInspectionV3({
       selector: legacy.selector,
       capturedAt: legacy.capturedAt,
@@ -226,7 +235,7 @@ describe('governed private evaluation authority snapshot', () => {
       valuationInputBundleId: legacy.valuationInputBundleId,
       valuationInputBundleArtifact: legacy.valuationInputBundleArtifact,
       gateLedgerRevision: legacy.gateLedgerRevision,
-      components: legacy.components,
+      components: qualifiedComponents,
     });
 
     expect(retained.snapshot.content).toMatchObject({
@@ -247,7 +256,7 @@ describe('governed private evaluation authority snapshot', () => {
         ),
         privateValuationDecisionRevision: 3,
         valuationInputBundleId: legacy.valuationInputBundleId,
-        components: legacy.components,
+        components: qualifiedComponents,
       },
     });
     expect(authenticateGovernedPrivateEvaluationAuthorityInspection(retained)).toEqual(retained);
@@ -273,5 +282,16 @@ describe('governed private evaluation authority snapshot', () => {
     expect(() => createReadyGovernedPrivateEvaluationAuthorityInspection(reordered)).toThrow(
       /component|role|canonical/i
     );
+
+    const unqualified = readyAuthorityInput();
+    delete (unqualified.components[0] as { qualificationId?: string }).qualificationId;
+    delete (unqualified.components[0] as { qualificationPolicyVersion?: string })
+      .qualificationPolicyVersion;
+    delete (unqualified.components[1] as { qualificationId?: string }).qualificationId;
+    delete (unqualified.components[1] as { qualificationPolicyVersion?: string })
+      .qualificationPolicyVersion;
+    expect(() =>
+      createReadyGovernedPrivateEvaluationAuthorityInspection(unqualified)
+    ).toThrow(/qualification custody/i);
   });
 });

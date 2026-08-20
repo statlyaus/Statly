@@ -132,8 +132,60 @@ const readyComponentSchema = z
     datasetAdmissionGateLedgerRevision: z.number().int().positive(),
     gate3DecisionId: aflTradeContentAddressedIdSchema('gate-decision'),
     gate3DecisionVersion: z.number().int().positive(),
+    qualificationId: aflTradeContentAddressedIdSchema('model-qualification').optional(),
+    qualificationPolicyVersion: aflTradeContentAddressedIdSchema(
+      'model-qualification-policy'
+    ).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((component, context) => {
+    if (
+      (component.qualificationId === undefined) !==
+      (component.qualificationPolicyVersion === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['qualificationId'],
+        message: 'Ready component qualification identity and policy version must travel together.',
+      });
+    }
+  });
+
+const qualifiedReadyComponentSchema = readyComponentSchema.superRefine(
+  (component, context) => {
+    if (
+      component.qualificationId === undefined ||
+      component.qualificationPolicyVersion === undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['qualificationId'],
+        message: 'New ready authority requires exact model-pair qualification custody.',
+      });
+    }
+  }
+);
+
+const qualifiedReadyComponentsSchema = z
+  .array(qualifiedReadyComponentSchema)
+  .length(componentRoles.length);
+
+function refineSharedReadyQualification(
+  components: readonly z.output<typeof readyComponentSchema>[],
+  context: z.RefinementCtx
+): void {
+  const qualificationIds = new Set(components.map(({ qualificationId }) => qualificationId));
+  const policyVersions = new Set(
+    components.map(({ qualificationPolicyVersion }) => qualificationPolicyVersion)
+  );
+  if (qualificationIds.size !== 1 || policyVersions.size !== 1) {
+    context.addIssue({
+      code: 'custom',
+      path: ['components'],
+      message: 'Ready components must share one exact model-pair qualification and policy version.',
+    });
+  }
+}
 
 const readyCalculationAuthoritySchema = z
   .object({
@@ -154,6 +206,7 @@ const readyCalculationAuthoritySchema = z
   })
   .strict()
   .superRefine((authority, context) => {
+    refineSharedReadyQualification(authority.components, context);
     if (
       canonicalizeAflTradeJson(authority.components.map(({ role }) => role)) !==
       canonicalizeAflTradeJson(componentRoles)
@@ -229,6 +282,7 @@ const readyCalculationAuthorityV3Schema = z
   })
   .strict()
   .superRefine((authority, context) => {
+    refineSharedReadyQualification(authority.components, context);
     if (
       canonicalizeAflTradeJson(authority.components.map(({ role }) => role)) !==
       canonicalizeAflTradeJson(componentRoles)
@@ -586,7 +640,7 @@ type ReadyCreationInput = Readonly<{
   inputTraceId: string;
   inputTraceArtifact: z.input<typeof aflTradeArtifactRefSchema>;
   gateLedgerRevision: number;
-  components: readonly z.input<typeof readyComponentSchema>[];
+  components: readonly z.input<typeof qualifiedReadyComponentSchema>[];
 }>;
 
 type ReadyV3CreationInput = Readonly<{
@@ -607,7 +661,7 @@ type ReadyV3CreationInput = Readonly<{
   valuationInputBundleId: string;
   valuationInputBundleArtifact: z.input<typeof aflTradeArtifactRefSchema>;
   gateLedgerRevision: number;
-  components: readonly z.input<typeof readyComponentSchema>[];
+  components: readonly z.input<typeof qualifiedReadyComponentSchema>[];
 }>;
 
 function resultOf(retained: z.output<typeof retainedSchema>) {
@@ -777,6 +831,7 @@ export function createReadyFixtureGovernedPrivateEvaluationAuthorityInspection(
 export function createReadyGovernedPrivateEvaluationAuthorityInspection(
   input: ReadyCreationInput
 ) {
+  const components = qualifiedReadyComponentsSchema.parse(input.components);
   const common = {
     environment: 'non_production' as const,
     publicationProhibited: true as const,
@@ -797,7 +852,7 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspection(
       inputTraceId: input.inputTraceId,
       inputTraceArtifact: input.inputTraceArtifact,
       gateLedgerRevision: input.gateLedgerRevision,
-      components: input.components,
+      components,
     },
     blockers: [] as const,
     limitation: READY_NON_PRODUCTION_LIMITATION,
@@ -832,6 +887,7 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspection(
 export function createReadyGovernedPrivateEvaluationAuthorityInspectionV3(
   input: ReadyV3CreationInput
 ) {
+  const components = qualifiedReadyComponentsSchema.parse(input.components);
   const common = {
     environment: 'non_production' as const,
     publicationProhibited: true as const,
@@ -854,7 +910,7 @@ export function createReadyGovernedPrivateEvaluationAuthorityInspectionV3(
       valuationInputBundleId: input.valuationInputBundleId,
       valuationInputBundleArtifact: input.valuationInputBundleArtifact,
       gateLedgerRevision: input.gateLedgerRevision,
-      components: input.components,
+      components,
     },
     blockers: [] as const,
     limitation: READY_NON_PRODUCTION_LIMITATION,

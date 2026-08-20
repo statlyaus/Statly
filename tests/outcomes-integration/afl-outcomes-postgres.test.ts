@@ -1090,6 +1090,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0061_governed_valuation_component_runs',
       '0062_authenticated_prepared_v3_ancestry',
       '0063_governed_pick_pav_model_execution',
+      '0064_automated_model_pair_qualification',
     ]);
 
     const tables = await query<{ table_name: string }>(

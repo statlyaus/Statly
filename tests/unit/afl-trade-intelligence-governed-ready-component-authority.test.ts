@@ -4,6 +4,10 @@ import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelli
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { authenticateGovernedReadyComponentAuthority } from '@/server/aflTradeIntelligence/valuation/internal/governedReadyComponentAuthority';
+import {
+  createGovernedValuationModelQualification,
+  createGovernedValuationModelQualificationPolicy,
+} from '@/server/aflTradeIntelligence/valuation/internal/governedValuationModelQualification';
 import { createGovernedValuationComponentRunManifest } from '@/server/aflTradeIntelligence/valuation/internal/governedValuationComponentRunManifest';
 
 const capturedAt = '2026-08-20T10:00:00.000Z';
@@ -18,6 +22,108 @@ function artifact(label: string) {
     mediaType: 'application/json',
     byteLength: 128,
     createdAt,
+  };
+}
+
+function qualificationFor(
+  run: ReturnType<typeof createGovernedValuationComponentRunManifest>,
+  options: Readonly<{ playerMinimumComparableObservations?: number }> = {}
+) {
+  const policy = createGovernedValuationModelQualificationPolicy({
+    player: {
+      schemaVersion: 'governed-player-model-qualification-criteria/v1' as const,
+      minimumComparableObservations: options.playerMinimumComparableObservations ?? 1,
+      minimumRelativeMaeImprovement: 0.05,
+      minimumRelativeRmseImprovement: 0.05,
+      requiredAcceptanceOutcome: 'meets_declared_predictive_thresholds' as const,
+    },
+    pick: {
+      schemaVersion: 'governed-pick-model-qualification-criteria/v1' as const,
+      evaluatedScope: 'final_test' as const,
+      minimumObservations: 1,
+      maximumMulticlassBrierScore: 1,
+      maximumMulticlassLogLoss: 2,
+      maximumRankedProbabilityScore: 1,
+      maximumContributionCrps: 100,
+      maximumMeanAbsoluteContributionError: 100,
+      maximumRootMeanSquaredContributionError: 100,
+      maximumMeanAbsoluteGamesError: 100,
+      maximumRootMeanSquaredGamesError: 100,
+      minimumEmpiricalP10P90Coverage: 0.5,
+      maximumEmpiricalP10P90Coverage: 1,
+      maximumMeanEmpiricalIntervalWidth: 100,
+      maximumZeroProbabilityObservationCount: 0,
+    },
+  });
+  const playerEvidence = {
+    schemaVersion: 'governed-player-model-qualification-evidence/v1' as const,
+    validationReportId: createAflTradeContentAddress('player-validation-report', 'ready-player'),
+    comparableObservationCount: 10,
+    acceptanceOutcome: 'meets_declared_predictive_thresholds' as const,
+    relativeMaeImprovement: 0.1,
+    relativeRmseImprovement: 0.1,
+  };
+  const pickEvidence = {
+    schemaVersion: 'governed-pick-model-qualification-evidence/v1' as const,
+    validationReportId: createAflTradeContentAddress(
+      'pick-pav-validation-report',
+      'ready-pick'
+    ),
+    evaluationStatus: 'scored_not_approved' as const,
+    scope: 'final_test' as const,
+    observationCount: 10,
+    metrics: {
+      multiclassBrierScore: 0.5,
+      multiclassLogLoss: 1,
+      rankedProbabilityScore: 0.5,
+      contributionCrps: 50,
+      meanAbsoluteContributionError: 50,
+      rootMeanSquaredContributionError: 50,
+      meanAbsoluteGamesError: 50,
+      rootMeanSquaredGamesError: 50,
+      empiricalP10P90Coverage: 0.8,
+      meanEmpiricalIntervalWidth: 50,
+      zeroProbabilityObservationCount: 0,
+    },
+  };
+  const qualification = createGovernedValuationModelQualification({
+    environment: 'non_production',
+    scopeKey: 'afl-men:2025-trades',
+    evaluatedAt: capturedAt,
+    policy,
+    policyArtifact: createAflTradeCanonicalJsonArtifactRef(policy, capturedAt),
+    components: {
+      player: {
+        role: run.content.role as 'player_contribution_and_availability',
+        runId: run.runId,
+        runArtifact: createAflTradeCanonicalJsonArtifactRef(run, createdAt),
+        protocolId: run.content.protocolId,
+        protocolArtifact: run.content.protocolArtifact,
+        criteriaArtifact: createAflTradeCanonicalJsonArtifactRef(policy.player, capturedAt),
+        validationEvidence: playerEvidence,
+        validationEvidenceArtifact: createAflTradeCanonicalJsonArtifactRef(
+          playerEvidence,
+          capturedAt
+        ),
+      },
+      pick: {
+        role: 'draft_pick_and_future_pick_distribution',
+        runId: createAflTradeContentAddress('model-run', 'ready-pick-run'),
+        runArtifact: artifact('ready-pick-run'),
+        protocolId: createAflTradeContentAddress('model-protocol', 'ready-pick-protocol'),
+        protocolArtifact: artifact('ready-pick-protocol'),
+        criteriaArtifact: createAflTradeCanonicalJsonArtifactRef(policy.pick, capturedAt),
+        validationEvidence: pickEvidence,
+        validationEvidenceArtifact: createAflTradeCanonicalJsonArtifactRef(
+          pickEvidence,
+          capturedAt
+        ),
+      },
+    },
+  });
+  return {
+    qualification,
+    qualificationArtifact: createAflTradeCanonicalJsonArtifactRef(qualification, capturedAt),
   };
 }
 
@@ -45,6 +151,7 @@ function fixture() {
     registeredAt: createdAt,
   });
   const runArtifact = createAflTradeCanonicalJsonArtifactRef(run, createdAt);
+  const qualification = qualificationFor(run);
   const decisionContent = {
     schemaVersion: 'afl-trade-gate-decision/v1' as const,
     proposalId: createAflTradeContentAddress('gate-proposal', { fixture: 'player-gate3' }),
@@ -59,9 +166,9 @@ function fixture() {
       exclusions: [],
     },
     state: 'approved' as const,
-    authorityKind: 'external_human_record' as const,
+    authorityKind: 'automated_validation_record' as const,
     accountableOwner: 'statly-model-owner',
-    decidedBy: 'statly-independent-reviewer',
+    decidedBy: 'statly-model-qualification-agent',
     reviewers: [],
     authorityEvidenceIds: [artifact('review-evidence').artifactId],
     conditionResults: [],
@@ -69,9 +176,15 @@ function fixture() {
     limitations: ['Private non-production calculation only.'],
     decidedAt: '2026-08-20T09:10:00.000Z',
     effectiveAt: '2026-08-20T09:15:00.000Z',
-    revalidateAt: '2026-09-20T09:15:00.000Z',
+    revalidateAt: null,
     supersedesDecisionId: null,
-    affectedArtifacts: [{ kind: 'model_run' as const, artifactId: run.runId }],
+    affectedArtifacts: [
+      { kind: 'model_run' as const, artifactId: run.runId },
+      {
+        kind: 'model_qualification' as const,
+        artifactId: qualification.qualification.qualificationId,
+      },
+    ],
     withdrawalActions: [],
   };
   const gate3Decision = aflTradeGateDecisionRecordSchema.parse({
@@ -98,6 +211,7 @@ function fixture() {
       },
     },
     gate3Decision,
+    ...qualification,
   };
 }
 
@@ -126,7 +240,7 @@ function replaceDecision(
 }
 
 describe('governed ready component authority', () => {
-  it('returns only exact current externally reviewed Gate 3 authority', () => {
+  it('returns only exact current automated model-pair qualification authority', () => {
     const value = fixture();
     expect(
       authenticateGovernedReadyComponentAuthority({
@@ -135,6 +249,9 @@ describe('governed ready component authority', () => {
         gate3IsCurrent: true,
         gateLedgerRevision: 19,
         capturedAt,
+        qualification: value.qualification,
+        qualificationArtifact: value.qualificationArtifact,
+        currentQualificationId: value.qualification.qualificationId,
       })
     ).toEqual({
       role: value.traceComponent.role,
@@ -145,36 +262,42 @@ describe('governed ready component authority', () => {
       datasetAdmissionGateLedgerRevision: 11,
       gate3DecisionId: value.gate3Decision.decisionId,
       gate3DecisionVersion: 2,
+      qualificationId: value.qualification.qualificationId,
+      qualificationPolicyVersion: value.qualification.content.policy.policyVersion,
     });
   });
 
-  it('rejects superseded, expired, and fixture-only review authority', () => {
+  it('rejects superseded, not-yet-effective, and non-automated Gate authority', () => {
     const value = fixture();
     const common = {
       ...value,
       gate3DecisionArtifact: value.traceComponent.evidence.gate3Decision,
       gateLedgerRevision: 19,
       capturedAt,
+      qualification: value.qualification,
+      qualificationArtifact: value.qualificationArtifact,
+      currentQualificationId: value.qualification.qualificationId,
     };
     expect(() =>
       authenticateGovernedReadyComponentAuthority({ ...common, gate3IsCurrent: false })
     ).toThrow(/current/i);
 
-    const expired = replaceDecision(value, {
+    const notYetEffective = replaceDecision(value, {
       ...value.gate3Decision.content,
-      revalidateAt: capturedAt,
+      effectiveAt: '2026-08-20T10:00:01.000Z',
     });
     expect(() =>
       authenticateGovernedReadyComponentAuthority({
         ...common,
-        ...expired,
+        ...notYetEffective,
         gate3IsCurrent: true,
       })
-    ).toThrow(/current|revalidation/i);
+    ).toThrow(/effective/i);
 
     const fixtureOnly = replaceDecision(value, {
       ...value.gate3Decision.content,
       authorityKind: 'fixture',
+      revalidateAt: '2026-08-21T10:00:00.000Z',
     });
     expect(() =>
       authenticateGovernedReadyComponentAuthority({
@@ -182,7 +305,73 @@ describe('governed ready component authority', () => {
         ...fixtureOnly,
         gate3IsCurrent: true,
       })
-    ).toThrow(/external human/i);
+    ).toThrow(/automated/i);
+  });
+
+  it('rejects failed, stale, or mismatched model-pair qualification evidence', () => {
+    const value = fixture();
+    const common = {
+      ...value,
+      gate3DecisionArtifact: value.traceComponent.evidence.gate3Decision,
+      gate3IsCurrent: true,
+      gateLedgerRevision: 19,
+      capturedAt,
+    };
+    const failed = qualificationFor(value.run.manifest, {
+      playerMinimumComparableObservations: 100,
+    });
+
+    expect(() =>
+      authenticateGovernedReadyComponentAuthority({
+        ...common,
+        qualification: failed.qualification,
+        qualificationArtifact: failed.qualificationArtifact,
+        currentQualificationId: failed.qualification.qualificationId,
+      })
+    ).toThrow(/passing/i);
+
+    expect(() =>
+      authenticateGovernedReadyComponentAuthority({
+        ...common,
+        currentQualificationId: createAflTradeContentAddress(
+          'model-qualification',
+          'superseding-current-qualification'
+        ),
+      })
+    ).toThrow(/current/i);
+
+    const otherRun = createGovernedValuationComponentRunManifest({
+      ...value.run.manifest.content,
+      nativeExecution: {
+        kind: 'admitted_player_model_run',
+        executionId: createAflTradeContentAddress('model-run', 'other-player-run'),
+        artifact: artifact('other-player-run'),
+      },
+    });
+    const otherQualification = qualificationFor(otherRun);
+    expect(() =>
+      authenticateGovernedReadyComponentAuthority({
+        ...common,
+        qualification: otherQualification.qualification,
+        qualificationArtifact: otherQualification.qualificationArtifact,
+        currentQualificationId: otherQualification.qualification.qualificationId,
+      })
+    ).toThrow(/exact component run/i);
+
+    const crossScope = replaceDecision(value, {
+      ...value.gate3Decision.content,
+      scope: { ...value.gate3Decision.content.scope, scopeKey: 'afl-men:2024-trades' },
+    });
+    expect(() =>
+      authenticateGovernedReadyComponentAuthority({
+        ...common,
+        ...crossScope,
+        gate3IsCurrent: true,
+        qualification: value.qualification,
+        qualificationArtifact: value.qualificationArtifact,
+        currentQualificationId: value.qualification.qualificationId,
+      })
+    ).toThrow(/exact run and qualification/i);
   });
 
   it('rejects a legacy pick fixture wrapper even when a Gate 3 record names it', () => {
@@ -201,7 +390,13 @@ describe('governed ready component authority', () => {
     const runArtifact = createAflTradeCanonicalJsonArtifactRef(legacyPickRun, createdAt);
     const replaced = replaceDecision(value, {
       ...value.gate3Decision.content,
-      affectedArtifacts: [{ kind: 'model_run', artifactId: legacyPickRun.runId }],
+      affectedArtifacts: [
+        { kind: 'model_run', artifactId: legacyPickRun.runId },
+        {
+          kind: 'model_qualification',
+          artifactId: value.qualification.qualificationId,
+        },
+      ],
     });
 
     expect(() =>
@@ -226,6 +421,9 @@ describe('governed ready component authority', () => {
         gate3IsCurrent: true,
         gateLedgerRevision: 19,
         capturedAt,
+        qualification: value.qualification,
+        qualificationArtifact: value.qualificationArtifact,
+        currentQualificationId: value.qualification.qualificationId,
       })
     ).toThrow(/governed|fixture|eligible/i);
   });

@@ -149,6 +149,15 @@ function parseAppendInput(input: AflTradeGateLedgerAppendInput): AflTradeGateLed
     );
   }
   if (
+    proposal.data.content.gate !== 'gate_0a_permission_to_evaluate' ||
+    decision.data.content.gate !== 'gate_0a_permission_to_evaluate'
+  ) {
+    throw new AflTradeGateLedgerRepositoryError(
+      'INVALID_APPEND',
+      'The source-rights append boundary accepts only Gate 0A decisions.'
+    );
+  }
+  if (
     !proposal.data.content.affectedArtifacts.some(
       (artifact) =>
         artifact.kind === 'source_rights' &&
@@ -241,18 +250,16 @@ async function loadLedger(
   );
   if (head.rows.length !== 1) throw invalidStored('The Gate ledger head is unavailable.');
 
-  const [proposalRows, decisionRows] = await Promise.all([
-    transaction.query<ProposalRow>(
-      `SELECT proposal_json
-       FROM outcome_gate_proposal
-       ORDER BY proposed_at, gate, decision_key, version, proposal_id`
-    ),
-    transaction.query<DecisionRow>(
-      `SELECT decision_json
-       FROM outcome_gate_decision
-       ORDER BY version, gate, decision_key, decision_id`
-    ),
-  ]);
+  const proposalRows = await transaction.query<ProposalRow>(
+    `SELECT proposal_json
+     FROM outcome_gate_proposal
+     ORDER BY proposed_at, gate, decision_key, version, proposal_id`
+  );
+  const decisionRows = await transaction.query<DecisionRow>(
+    `SELECT decision_json
+     FROM outcome_gate_decision
+     ORDER BY version, gate, decision_key, decision_id`
+  );
   const ledger = {
     proposals: proposalRows.rows.map((row) => parseProposal(row.proposal_json)),
     decisions: decisionRows.rows.map((row) => parseDecision(row.decision_json)),
@@ -380,6 +387,113 @@ async function insertDecision(
   );
 }
 
+export async function appendNewAflTradeGateDecisionsWithinTransaction(
+  transaction: AflOutcomeSqlTransaction,
+  input: Readonly<{
+    expectedRevision: number;
+    scopeKey: string;
+    qualificationId: string;
+    qualificationArtifactId: string;
+    playerRunId: string;
+    pickRunId: string;
+    records: readonly Readonly<{
+      proposal: AflTradeGateDecisionProposal;
+      decision: AflTradeGateDecisionRecord;
+    }>[];
+    updatedAt: string;
+  }>
+): Promise<AflTradeStoredGateLedger> {
+  if (input.records.length !== 2) {
+    throw new AflTradeGateLedgerRepositoryError(
+      'INVALID_APPEND',
+      'Governed model qualification requires exactly two linked Gate decisions.'
+    );
+  }
+  const records = input.records.map((record) =>
+    parseDecisionAppendInput({ ...record, expectedRevision: input.expectedRevision })
+  );
+  const expectedRunIds = [input.playerRunId, input.pickRunId] as const;
+  for (const [index, record] of records.entries()) {
+    const proposal = record.proposal.content;
+    const decision = record.decision.content;
+    const proposalModelRuns = proposal.affectedArtifacts.filter(
+      ({ kind }) => kind === 'model_run'
+    );
+    const decisionModelRuns = decision.affectedArtifacts.filter(
+      ({ kind }) => kind === 'model_run'
+    );
+    const proposalQualifications = proposal.affectedArtifacts.filter(
+      ({ kind }) => kind === 'model_qualification'
+    );
+    const decisionQualifications = decision.affectedArtifacts.filter(
+      ({ kind }) => kind === 'model_qualification'
+    );
+    if (
+      proposal.gate !== 'gate_3_model_validity' ||
+      decision.gate !== 'gate_3_model_validity' ||
+      decision.authorityKind !== 'automated_validation_record' ||
+      proposal.scope.scopeKey !== input.scopeKey ||
+      decision.scope.scopeKey !== input.scopeKey ||
+      !proposal.evidenceIds.includes(input.qualificationArtifactId) ||
+      !decision.authorityEvidenceIds.includes(input.qualificationArtifactId) ||
+      proposalModelRuns.length !== 1 ||
+      proposalModelRuns[0]?.artifactId !== expectedRunIds[index] ||
+      decisionModelRuns.length !== 1 ||
+      decisionModelRuns[0]?.artifactId !== expectedRunIds[index] ||
+      proposalQualifications.length !== 1 ||
+      proposalQualifications[0]?.artifactId !== input.qualificationId ||
+      decisionQualifications.length !== 1 ||
+      decisionQualifications[0]?.artifactId !== input.qualificationId
+    ) {
+      throw new AflTradeGateLedgerRepositoryError(
+        'INVALID_APPEND',
+        'Transaction-scoped automated Gate decisions must bind the exact role-specific qualified pair.'
+      );
+    }
+  }
+  const stored = await loadLedger(transaction, true);
+  if (stored.revision !== input.expectedRevision) {
+    throw new AflTradeGateLedgerRepositoryError(
+      'STALE_REVISION',
+      'The Gate ledger revision changed before the transaction-scoped append.'
+    );
+  }
+  let ledger = stored.ledger;
+  for (const record of records) {
+    if (findReplay(stored, record) !== 'none') {
+      throw new AflTradeGateLedgerRepositoryError(
+        'CONFLICTING_REPLAY',
+        'A transaction-scoped Gate append requires new proposal and decision identities.'
+      );
+    }
+    try {
+      ledger = appendAflTradeGateDecision(ledger, record.proposal, record.decision);
+    } catch (cause) {
+      throw new AflTradeGateLedgerRepositoryError(
+        'INVALID_APPEND',
+        'A Gate decision does not validly extend the transaction-scoped batch.',
+        { cause }
+      );
+    }
+    await insertProposal(transaction, record.proposal);
+    await insertDecision(transaction, record.decision);
+  }
+  const revision = stored.revision + records.length;
+  const updated = await transaction.query(
+    `UPDATE outcome_gate_ledger_head
+     SET revision=$1,updated_at=$2
+     WHERE singleton_id=1 AND revision=$3`,
+    [revision, input.updatedAt, stored.revision]
+  );
+  if (updated.rowCount !== 1) {
+    throw new AflTradeGateLedgerRepositoryError(
+      'STALE_REVISION',
+      'The locked Gate ledger head could not be advanced for the transaction-scoped batch.'
+    );
+  }
+  return { revision, ledger };
+}
+
 class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisionLedgerRepository {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
@@ -420,9 +534,10 @@ class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisi
           'A Gate batch proposal or decision identity already names different content.'
         );
       }
-      const rightsExist = await Promise.all(
-        input.records.map((record) => requireExactSourceRights(transaction, record.sourceRights))
-      );
+      const rightsExist: boolean[] = [];
+      for (const record of input.records) {
+        rightsExist.push(await requireExactSourceRights(transaction, record.sourceRights));
+      }
       if (replayStates.every((state) => state === 'exact')) {
         if (rightsExist.some((exists) => !exists)) {
           throw invalidStored('An exact Gate batch replay is missing source-rights records.');
@@ -548,6 +663,12 @@ class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisi
     unparsedInput: AflTradeGateLedgerDecisionAppendInput
   ): Promise<AflTradeGateLedgerAppendResult> {
     const input = parseDecisionAppendInput(unparsedInput);
+    if (input.decision.content.authorityKind === 'automated_validation_record') {
+      throw new AflTradeGateLedgerRepositoryError(
+        'INVALID_APPEND',
+        'Automated model-validity records must use the governed qualification boundary.'
+      );
+    }
     return this.client.transaction(async (transaction) => {
       const stored = await loadLedger(transaction, true);
       const replay = findReplay(stored, input);

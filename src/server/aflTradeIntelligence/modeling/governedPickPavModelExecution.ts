@@ -20,19 +20,19 @@ import {
   validateAflTradePickPavDistributionBenchmark,
 } from './pickPavDistributionValidation';
 
-const SCHEMA_VERSION = 'afl-trade-pick-pav-model-execution/v2' as const;
-const AUTHORITY_BOUNDARY =
+const LEGACY_AUTHORITY_BOUNDARY =
   'authenticated_non_production_pick_model_candidate_no_gate_3_approval_grade_publication_or_fantasy_ownership' as const;
-const LIMITATION =
+const LEGACY_LIMITATION =
   'This retained non-production execution is eligible for independent Gate 3 review only; it is not an approval, trade grade, or public numerical authority.' as const;
+const AUTHORITY_BOUNDARY =
+  'authenticated_non_production_pick_model_candidate_pending_automated_qualification_no_grade_publication_or_fantasy_ownership' as const;
+const LIMITATION =
+  'This retained non-production execution is pending automated model-pair qualification; it is not a trade grade or public numerical authority.' as const;
 const instantSchema = z.iso.datetime({ offset: true });
 
-const governedExecutionContentSchema = z
+const sharedGovernedExecutionContentSchema = z
   .object({
-    schemaVersion: z.literal(SCHEMA_VERSION),
-    authorityBoundary: z.literal(AUTHORITY_BOUNDARY),
     publicationEligible: z.literal(false),
-    approvalStatus: z.literal('gate_3_review_required'),
     environment: z.literal('non_production'),
     competition: z.literal('AFLM'),
     datasetId: aflTradeContentAddressedIdSchema('dataset'),
@@ -55,10 +55,13 @@ const governedExecutionContentSchema = z
     validationConfig: aflTradePickPavValidationConfigSchema,
     benchmark: aflTradePickPavDistributionBenchmarkSchema,
     validationReport: aflTradePickPavValidationReportSchema,
-    limitation: z.literal(LIMITATION),
   })
-  .strict()
-  .superRefine((execution, context) => {
+  .strict();
+
+function refineGovernedExecution(
+  execution: z.infer<typeof sharedGovernedExecutionContentSchema>,
+  context: z.RefinementCtx
+) {
     const observationSet = execution.observationSet;
     if (
       execution.observationSetId !== observationSet.observationSetId ||
@@ -146,12 +149,32 @@ const governedExecutionContentSchema = z
             : 'Governed pick execution outputs could not be re-derived.',
       });
     }
-  });
+}
+
+const legacyGovernedExecutionContentSchema = sharedGovernedExecutionContentSchema
+  .extend({
+    schemaVersion: z.literal('afl-trade-pick-pav-model-execution/v2'),
+    authorityBoundary: z.literal(LEGACY_AUTHORITY_BOUNDARY),
+    approvalStatus: z.literal('gate_3_review_required'),
+    limitation: z.literal(LEGACY_LIMITATION),
+  })
+  .strict()
+  .superRefine(refineGovernedExecution);
+
+const governedExecutionContentSchema = sharedGovernedExecutionContentSchema
+  .extend({
+    schemaVersion: z.literal('afl-trade-pick-pav-model-execution/v3'),
+    authorityBoundary: z.literal(AUTHORITY_BOUNDARY),
+    qualificationStatus: z.literal('automated_qualification_pending'),
+    limitation: z.literal(LIMITATION),
+  })
+  .strict()
+  .superRefine(refineGovernedExecution);
 
 export const governedAflTradePickPavModelExecutionSchema = z
   .object({
     executionId: aflTradeContentAddressedIdSchema('pick-pav-model-execution'),
-    content: governedExecutionContentSchema,
+    content: z.union([legacyGovernedExecutionContentSchema, governedExecutionContentSchema]),
   })
   .strict()
   .superRefine((execution, context) => {
@@ -183,10 +206,10 @@ export function createGovernedAflTradePickPavModelExecution(input: {
 }): GovernedAflTradePickPavModelExecution {
   const observationSet = aflTradePickPavObservationSetSchema.parse(input.outputs.observationSet);
   const content = governedExecutionContentSchema.parse({
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion: 'afl-trade-pick-pav-model-execution/v3',
     authorityBoundary: AUTHORITY_BOUNDARY,
     publicationEligible: false,
-    approvalStatus: 'gate_3_review_required',
+    qualificationStatus: 'automated_qualification_pending',
     environment: 'non_production',
     competition: observationSet.content.competition,
     ...input.authority,

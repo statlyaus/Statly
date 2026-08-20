@@ -199,6 +199,7 @@ describe('AFL trade-intelligence gate decisions', () => {
 
   it.each([
     ['valuation_bundle', 'valuation-bundle'],
+    ['model_qualification', 'model-qualification'],
     ['architecture_current_state', 'architecture-current-state'],
     ['architecture_decision_package', 'architecture-decision-package'],
     ['authority_transition', 'authority-transition'],
@@ -323,6 +324,98 @@ describe('AFL trade-intelligence gate decisions', () => {
         content,
       }).success
     ).toBe(false);
+  });
+
+  it('permits non-expiring automated authority only for non-production Gate 3 validity', () => {
+    const qualificationId = createAflTradeContentAddress('model-qualification', 'qualification');
+    const runId = createAflTradeContentAddress('model-run', 'qualified-run');
+    const proposalContent = {
+      ...proposal().content,
+      gate: 'gate_3_model_validity' as const,
+      decisionKey: 'automated-player-model-validity',
+      environment: 'non_production' as const,
+      scope: {
+        scopeKey: 'afl-men:2026-trades',
+        description: 'Exact automated model validity for one qualified component run.',
+        dimensions: [],
+        exclusions: [],
+      },
+      reviewRequirement: 'accountable_owner_only' as const,
+      requiredReviewerRoles: [],
+      conditions: [],
+      affectedArtifacts: [
+        { kind: 'model_run' as const, artifactId: runId },
+        { kind: 'model_qualification' as const, artifactId: qualificationId },
+      ],
+    };
+    const automatedProposal = aflTradeGateDecisionProposalSchema.parse({
+      proposalId: createAflTradeContentAddress('gate-proposal', proposalContent),
+      content: proposalContent,
+    });
+    const decisionContent = {
+      schemaVersion: 'afl-trade-gate-decision/v1' as const,
+      proposalId: automatedProposal.proposalId,
+      gate: automatedProposal.content.gate,
+      decisionKey: automatedProposal.content.decisionKey,
+      version: 1,
+      environment: automatedProposal.content.environment,
+      scope: automatedProposal.content.scope,
+      state: 'approved' as const,
+      authorityKind: 'automated_validation_record' as const,
+      accountableOwner: automatedProposal.content.accountableOwner,
+      decidedBy: 'statly-model-qualification-agent',
+      reviewers: [],
+      authorityEvidenceIds: [refs.authority],
+      conditionResults: [],
+      rationale: 'The exact retained model-pair qualification recomputed successfully.',
+      limitations: ['Private non-production model validity only.'],
+      decidedAt: '2026-08-21T09:00:00.000Z',
+      effectiveAt: '2026-08-21T09:00:00.000Z',
+      revalidateAt: null,
+      supersedesDecisionId: null,
+      affectedArtifacts: automatedProposal.content.affectedArtifacts,
+      withdrawalActions: [],
+    };
+    const automatedDecision = aflTradeGateDecisionRecordSchema.parse({
+      decisionId: createAflTradeContentAddress('gate-decision', decisionContent),
+      content: decisionContent,
+    });
+    const automatedLedger = ledger([automatedProposal], [automatedDecision]);
+
+    expect(validateAflTradeGateDecisionLedger(automatedLedger)).toEqual({
+      valid: true,
+      issues: [],
+    });
+    expect(
+      resolveAflTradeGateEligibility(automatedLedger, {
+        gate: 'gate_3_model_validity',
+        decisionKey: automatedProposal.content.decisionKey,
+        environment: 'non_production',
+        evaluatedAt: '2036-08-21T09:00:00.000Z',
+      }).status
+    ).toBe('mechanically_eligible');
+
+    for (const invalidContent of [
+      { ...decisionContent, environment: 'production' as const },
+      { ...decisionContent, gate: 'gate_4_publication_api_readiness' as const },
+      { ...decisionContent, revalidateAt: '2027-08-21T09:00:00.000Z' },
+      { ...decisionContent, state: 'rejected' as const },
+      {
+        ...decisionContent,
+        state: 'pending' as const,
+        decidedBy: null,
+        rationale: null,
+        decidedAt: null,
+        effectiveAt: null,
+      },
+    ]) {
+      expect(
+        aflTradeGateDecisionRecordSchema.safeParse({
+          decisionId: createAflTradeContentAddress('gate-decision', invalidContent),
+          content: invalidContent,
+        }).success
+      ).toBe(false);
+    }
   });
 
   it('preserves ordered decision-record issues when lifecycle rules fail together', () => {

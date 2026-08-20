@@ -100,7 +100,7 @@ export default defineConfig({
   },
   webServer: {
     command: webServerCommand,
-    url: baseURL,
+    url: useDraftWorkerWebServer ? `${baseURL}/api/ping` : baseURL,
     reuseExistingServer: false,
     timeout: 120_000,
   },

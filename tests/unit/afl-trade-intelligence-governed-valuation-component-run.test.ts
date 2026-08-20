@@ -1,4 +1,5 @@
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   authenticateGovernedValuationComponentRunManifest,
   createGovernedValuationComponentRunManifest,
@@ -48,15 +49,36 @@ describe('governed valuation component run manifest', () => {
     for (const manifest of [player, pick]) {
       expect(manifest.runId).toMatch(/^model-run:[a-f0-9]{64}$/);
       expect(manifest.content).toMatchObject({
-        schemaVersion: 'governed-valuation-component-run/v1',
+        schemaVersion: 'governed-valuation-component-run/v2',
         environment: 'non_production',
-        approvalState: 'gate_3_review_required',
+        qualificationState: 'automated_qualification_pending',
         publicationEligible: false,
       });
       expect(authenticateGovernedValuationComponentRunManifest(manifest)).toEqual(manifest);
     }
     expect(player.content.nativeExecution.kind).toBe('admitted_player_model_run');
     expect(pick.content.nativeExecution.kind).toBe('governed_pick_pav_model_execution');
+
+    const {
+      qualificationState: _qualificationState,
+      ...successorWithoutQualificationState
+    } = player.content;
+    const legacyContent = {
+      ...successorWithoutQualificationState,
+      schemaVersion: 'governed-valuation-component-run/v1' as const,
+      approvalState: 'gate_3_review_required' as const,
+      limitation:
+        'Authenticated non-production component-run candidate only; Gate 3 approval, grades, production use, and publication remain prohibited.' as const,
+    };
+    const legacy = authenticateGovernedValuationComponentRunManifest({
+      runId: createAflTradeContentAddress('model-run', legacyContent),
+      content: legacyContent,
+    });
+    expect(legacy.content).toMatchObject({
+      schemaVersion: 'governed-valuation-component-run/v1',
+      approvalState: 'gate_3_review_required',
+    });
+    expect(legacy.content).not.toHaveProperty('qualificationState');
   });
 
   it('rejects role substitution and duplicate retained evidence', () => {
