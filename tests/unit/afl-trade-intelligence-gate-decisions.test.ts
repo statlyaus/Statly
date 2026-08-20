@@ -400,6 +400,14 @@ describe('AFL trade-intelligence gate decisions', () => {
       { ...decisionContent, gate: 'gate_4_publication_api_readiness' as const },
       { ...decisionContent, revalidateAt: '2027-08-21T09:00:00.000Z' },
       { ...decisionContent, state: 'rejected' as const },
+      {
+        ...decisionContent,
+        state: 'pending' as const,
+        decidedBy: null,
+        rationale: null,
+        decidedAt: null,
+        effectiveAt: null,
+      },
     ]) {
       expect(
         aflTradeGateDecisionRecordSchema.safeParse({

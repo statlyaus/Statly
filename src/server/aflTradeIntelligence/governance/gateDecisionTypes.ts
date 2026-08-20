@@ -422,6 +422,7 @@ export const aflTradeGateDecisionRecordContentSchema =
     refineDecisionRecordUniqueness(decision, context);
     if (decision.state === 'pending') {
       refinePendingDecisionRecord(decision, context);
+      refineAutomatedValidationRecord(decision, context);
       return;
     }
     refineFinalizedDecisionRecord(decision, context);

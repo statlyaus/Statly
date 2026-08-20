@@ -15,6 +15,8 @@ import {
   type AflTradeGateDecisionProposal,
   type AflTradeGateDecisionRecord,
 } from '../../governance/gateDecisionTypes';
+import type { AflTradePickPavValidationReport } from '../../modeling/pickPavDistributionValidation';
+import type { AflTradePlayerValidationReport } from '../../modeling/playerContributionValidation';
 
 const SCHEMA_VERSION = 'governed-valuation-model-qualification/v1' as const;
 const POLICY_SCHEMA_VERSION = 'governed-valuation-model-qualification-policy/v1' as const;
@@ -58,9 +60,7 @@ export const governedPickModelQualificationCriteriaSchema = z
   })
   .strict()
   .superRefine((criteria, context) => {
-    if (
-      criteria.maximumEmpiricalP10P90Coverage < criteria.minimumEmpiricalP10P90Coverage
-    ) {
+    if (criteria.maximumEmpiricalP10P90Coverage < criteria.minimumEmpiricalP10P90Coverage) {
       context.addIssue({
         code: 'custom',
         path: ['maximumEmpiricalP10P90Coverage'],
@@ -104,7 +104,7 @@ export function createGovernedValuationModelQualificationPolicy(
   });
 }
 
-const playerEvidenceSchema = z
+export const governedPlayerModelQualificationEvidenceSchema = z
   .object({
     schemaVersion: z.literal('governed-player-model-qualification-evidence/v1'),
     validationReportId: aflTradeContentAddressedIdSchema('player-validation-report'),
@@ -134,7 +134,7 @@ const pickMetricsSchema = z
   })
   .strict();
 
-const pickEvidenceSchema = z
+export const governedPickModelQualificationEvidenceSchema = z
   .object({
     schemaVersion: z.literal('governed-pick-model-qualification-evidence/v1'),
     validationReportId: aflTradeContentAddressedIdSchema('pick-pav-validation-report'),
@@ -149,6 +149,36 @@ const pickEvidenceSchema = z
   })
   .strict();
 
+export function deriveGovernedPlayerModelQualificationEvidence(
+  report: AflTradePlayerValidationReport
+): z.infer<typeof governedPlayerModelQualificationEvidenceSchema> {
+  return governedPlayerModelQualificationEvidenceSchema.parse({
+    schemaVersion: 'governed-player-model-qualification-evidence/v1',
+    validationReportId: report.validationReportId,
+    comparableObservationCount: report.content.comparableObservationIds.length,
+    acceptanceOutcome: report.content.acceptanceOutcome,
+    relativeMaeImprovement: report.content.metrics.relativeImprovement.meanAbsoluteError,
+    relativeRmseImprovement: report.content.metrics.relativeImprovement.rootMeanSquaredError,
+  });
+}
+
+export function deriveGovernedPickModelQualificationEvidence(
+  report: AflTradePickPavValidationReport
+): z.infer<typeof governedPickModelQualificationEvidenceSchema> {
+  const finalTest = report.content.scoreScopes.find(({ scope }) => scope === 'final_test');
+  if (finalTest === undefined) {
+    throw new RangeError('Pick validation report must contain final-test evidence.');
+  }
+  return governedPickModelQualificationEvidenceSchema.parse({
+    schemaVersion: 'governed-pick-model-qualification-evidence/v1',
+    validationReportId: report.validationReportId,
+    evaluationStatus: report.content.evaluationStatus,
+    scope: finalTest.scope,
+    observationCount: finalTest.observationCount,
+    metrics: finalTest.metrics,
+  });
+}
+
 const commonComponentSchema = z.object({
   runId: aflTradeContentAddressedIdSchema('model-run'),
   runArtifact: aflTradeArtifactRefSchema,
@@ -161,14 +191,14 @@ const commonComponentSchema = z.object({
 const playerComponentInputSchema = commonComponentSchema
   .extend({
     role: z.literal('player_contribution_and_availability'),
-    validationEvidence: playerEvidenceSchema,
+    validationEvidence: governedPlayerModelQualificationEvidenceSchema,
   })
   .strict();
 
 const pickComponentInputSchema = commonComponentSchema
   .extend({
     role: z.literal('draft_pick_and_future_pick_distribution'),
-    validationEvidence: pickEvidenceSchema,
+    validationEvidence: governedPickModelQualificationEvidenceSchema,
   })
   .strict();
 
@@ -216,7 +246,7 @@ type FailureCode = z.infer<typeof failureCodeSchema>;
 
 function playerFailures(
   criteria: z.infer<typeof governedPlayerModelQualificationCriteriaSchema>,
-  evidence: z.infer<typeof playerEvidenceSchema>
+  evidence: z.infer<typeof governedPlayerModelQualificationEvidenceSchema>
 ): FailureCode[] {
   const failures: FailureCode[] = [];
   if (evidence.comparableObservationCount < criteria.minimumComparableObservations) {
@@ -242,7 +272,7 @@ function playerFailures(
 
 function pickFailures(
   criteria: z.infer<typeof governedPickModelQualificationCriteriaSchema>,
-  evidence: z.infer<typeof pickEvidenceSchema>
+  evidence: z.infer<typeof governedPickModelQualificationEvidenceSchema>
 ): FailureCode[] {
   const failures: FailureCode[] = [];
   if (evidence.evaluationStatus !== 'scored_not_approved') {
@@ -254,15 +284,42 @@ function pickFailures(
   const metrics = evidence.metrics;
   if (metrics === null) return [...failures, 'pick_metrics_unavailable'];
   const upperBounds: ReadonlyArray<readonly [boolean, FailureCode]> = [
-    [metrics.multiclassBrierScore > criteria.maximumMulticlassBrierScore, 'pick_brier_score_above_maximum'],
-    [metrics.rankedProbabilityScore > criteria.maximumRankedProbabilityScore, 'pick_ranked_probability_score_above_maximum'],
-    [metrics.contributionCrps > criteria.maximumContributionCrps, 'pick_contribution_crps_above_maximum'],
-    [metrics.meanAbsoluteContributionError > criteria.maximumMeanAbsoluteContributionError, 'pick_contribution_mae_above_maximum'],
-    [metrics.rootMeanSquaredContributionError > criteria.maximumRootMeanSquaredContributionError, 'pick_contribution_rmse_above_maximum'],
-    [metrics.meanAbsoluteGamesError > criteria.maximumMeanAbsoluteGamesError, 'pick_games_mae_above_maximum'],
-    [metrics.rootMeanSquaredGamesError > criteria.maximumRootMeanSquaredGamesError, 'pick_games_rmse_above_maximum'],
-    [metrics.meanEmpiricalIntervalWidth > criteria.maximumMeanEmpiricalIntervalWidth, 'pick_interval_width_above_maximum'],
-    [metrics.zeroProbabilityObservationCount > criteria.maximumZeroProbabilityObservationCount, 'pick_zero_probability_count_above_maximum'],
+    [
+      metrics.multiclassBrierScore > criteria.maximumMulticlassBrierScore,
+      'pick_brier_score_above_maximum',
+    ],
+    [
+      metrics.rankedProbabilityScore > criteria.maximumRankedProbabilityScore,
+      'pick_ranked_probability_score_above_maximum',
+    ],
+    [
+      metrics.contributionCrps > criteria.maximumContributionCrps,
+      'pick_contribution_crps_above_maximum',
+    ],
+    [
+      metrics.meanAbsoluteContributionError > criteria.maximumMeanAbsoluteContributionError,
+      'pick_contribution_mae_above_maximum',
+    ],
+    [
+      metrics.rootMeanSquaredContributionError > criteria.maximumRootMeanSquaredContributionError,
+      'pick_contribution_rmse_above_maximum',
+    ],
+    [
+      metrics.meanAbsoluteGamesError > criteria.maximumMeanAbsoluteGamesError,
+      'pick_games_mae_above_maximum',
+    ],
+    [
+      metrics.rootMeanSquaredGamesError > criteria.maximumRootMeanSquaredGamesError,
+      'pick_games_rmse_above_maximum',
+    ],
+    [
+      metrics.meanEmpiricalIntervalWidth > criteria.maximumMeanEmpiricalIntervalWidth,
+      'pick_interval_width_above_maximum',
+    ],
+    [
+      metrics.zeroProbabilityObservationCount > criteria.maximumZeroProbabilityObservationCount,
+      'pick_zero_probability_count_above_maximum',
+    ],
   ];
   for (const [failed, code] of upperBounds) if (failed) failures.push(code);
   if (metrics.multiclassLogLoss === null) failures.push('pick_log_loss_unavailable');
@@ -284,7 +341,10 @@ const qualifiedComponentSchema = commonComponentSchema
       'player_contribution_and_availability',
       'draft_pick_and_future_pick_distribution',
     ]),
-    validationEvidence: z.union([playerEvidenceSchema, pickEvidenceSchema]),
+    validationEvidence: z.union([
+      governedPlayerModelQualificationEvidenceSchema,
+      governedPickModelQualificationEvidenceSchema,
+    ]),
     passed: z.boolean(),
   })
   .strict();
@@ -299,27 +359,67 @@ export const governedValuationModelQualificationContentSchema = z
     policyArtifact: aflTradeArtifactRefSchema,
     player: qualifiedComponentSchema.extend({
       role: z.literal('player_contribution_and_availability'),
-      validationEvidence: playerEvidenceSchema,
+      validationEvidence: governedPlayerModelQualificationEvidenceSchema,
     }),
     pick: qualifiedComponentSchema.extend({
       role: z.literal('draft_pick_and_future_pick_distribution'),
-      validationEvidence: pickEvidenceSchema,
+      validationEvidence: governedPickModelQualificationEvidenceSchema,
     }),
     outcome: z.enum(['qualified', 'failed']),
-    failureCodes: z.array(failureCodeSchema).max(GOVERNED_VALUATION_MODEL_QUALIFICATION_FAILURE_CODES.length),
+    failureCodes: z
+      .array(failureCodeSchema)
+      .max(GOVERNED_VALUATION_MODEL_QUALIFICATION_FAILURE_CODES.length),
     publicationEligible: z.literal(false),
   })
   .strict()
   .superRefine((qualification, context) => {
-    const player = playerFailures(qualification.policy.player, qualification.player.validationEvidence);
+    const player = playerFailures(
+      qualification.policy.player,
+      qualification.player.validationEvidence
+    );
     const pick = pickFailures(qualification.policy.pick, qualification.pick.validationEvidence);
     const expectedFailures = [...player, ...pick];
     const artifactChecks: ReadonlyArray<readonly [boolean, (string | number)[], string]> = [
-      [doesAflTradeArtifactRefMatchCanonicalJson(qualification.policyArtifact, qualification.policy), ['policyArtifact'], 'Qualification policy artifact does not authenticate the declared policy.'],
-      [doesAflTradeArtifactRefMatchCanonicalJson(qualification.player.criteriaArtifact, qualification.policy.player), ['player', 'criteriaArtifact'], 'Player criteria artifact does not authenticate the declared criteria.'],
-      [doesAflTradeArtifactRefMatchCanonicalJson(qualification.pick.criteriaArtifact, qualification.policy.pick), ['pick', 'criteriaArtifact'], 'Pick criteria artifact does not authenticate the declared criteria.'],
-      [doesAflTradeArtifactRefMatchCanonicalJson(qualification.player.validationEvidenceArtifact, qualification.player.validationEvidence), ['player', 'validationEvidenceArtifact'], 'Player validation evidence artifact does not authenticate the retained evidence.'],
-      [doesAflTradeArtifactRefMatchCanonicalJson(qualification.pick.validationEvidenceArtifact, qualification.pick.validationEvidence), ['pick', 'validationEvidenceArtifact'], 'Pick validation evidence artifact does not authenticate the retained evidence.'],
+      [
+        doesAflTradeArtifactRefMatchCanonicalJson(
+          qualification.policyArtifact,
+          qualification.policy
+        ),
+        ['policyArtifact'],
+        'Qualification policy artifact does not authenticate the declared policy.',
+      ],
+      [
+        doesAflTradeArtifactRefMatchCanonicalJson(
+          qualification.player.criteriaArtifact,
+          qualification.policy.player
+        ),
+        ['player', 'criteriaArtifact'],
+        'Player criteria artifact does not authenticate the declared criteria.',
+      ],
+      [
+        doesAflTradeArtifactRefMatchCanonicalJson(
+          qualification.pick.criteriaArtifact,
+          qualification.policy.pick
+        ),
+        ['pick', 'criteriaArtifact'],
+        'Pick criteria artifact does not authenticate the declared criteria.',
+      ],
+      [
+        doesAflTradeArtifactRefMatchCanonicalJson(
+          qualification.player.validationEvidenceArtifact,
+          qualification.player.validationEvidence
+        ),
+        ['player', 'validationEvidenceArtifact'],
+        'Player validation evidence artifact does not authenticate the retained evidence.',
+      ],
+      [
+        doesAflTradeArtifactRefMatchCanonicalJson(
+          qualification.pick.validationEvidenceArtifact,
+          qualification.pick.validationEvidence
+        ),
+        ['pick', 'validationEvidenceArtifact'],
+        'Pick validation evidence artifact does not authenticate the retained evidence.',
+      ],
     ];
     for (const [valid, path, message] of artifactChecks) {
       if (!valid) context.addIssue({ code: 'custom', path, message });
@@ -328,7 +428,11 @@ export const governedValuationModelQualificationContentSchema = z
       qualification.player.runId === qualification.pick.runId ||
       qualification.player.protocolId === qualification.pick.protocolId
     ) {
-      context.addIssue({ code: 'custom', path: ['pick'], message: 'Player and pick qualification require distinct run and protocol lineage.' });
+      context.addIssue({
+        code: 'custom',
+        path: ['pick'],
+        message: 'Player and pick qualification require distinct run and protocol lineage.',
+      });
     }
     if (
       qualification.player.passed !== (player.length === 0) ||
@@ -336,7 +440,11 @@ export const governedValuationModelQualificationContentSchema = z
       qualification.outcome !== (expectedFailures.length === 0 ? 'qualified' : 'failed') ||
       JSON.stringify(qualification.failureCodes) !== JSON.stringify(expectedFailures)
     ) {
-      context.addIssue({ code: 'custom', path: ['outcome'], message: 'Qualification result must equal the recomputed criteria outcome.' });
+      context.addIssue({
+        code: 'custom',
+        path: ['outcome'],
+        message: 'Qualification result must equal the recomputed criteria outcome.',
+      });
     }
     const latestArtifactTime = Math.max(
       ...[
@@ -352,7 +460,11 @@ export const governedValuationModelQualificationContentSchema = z
       ].map(({ createdAt }) => Date.parse(createdAt))
     );
     if (latestArtifactTime > Date.parse(qualification.evaluatedAt)) {
-      context.addIssue({ code: 'custom', path: ['evaluatedAt'], message: 'Qualification cannot predate retained authority or validation evidence.' });
+      context.addIssue({
+        code: 'custom',
+        path: ['evaluatedAt'],
+        message: 'Qualification cannot predate retained authority or validation evidence.',
+      });
     }
   });
 
@@ -363,7 +475,13 @@ export const governedValuationModelQualificationSchema = z
   })
   .strict()
   .superRefine((qualification, context) => {
-    addAflTradeContentAddressIssue('model-qualification', qualification.qualificationId, qualification.content, context, ['qualificationId']);
+    addAflTradeContentAddressIssue(
+      'model-qualification',
+      qualification.qualificationId,
+      qualification.content,
+      context,
+      ['qualificationId']
+    );
   });
 
 export type GovernedValuationModelQualification = z.infer<
@@ -374,8 +492,14 @@ export function createGovernedValuationModelQualification(
   rawInput: z.input<typeof qualificationInputSchema>
 ): GovernedValuationModelQualification {
   const input = qualificationInputSchema.parse(rawInput);
-  const playerFailureCodes = playerFailures(input.policy.player, input.components.player.validationEvidence);
-  const pickFailureCodes = pickFailures(input.policy.pick, input.components.pick.validationEvidence);
+  const playerFailureCodes = playerFailures(
+    input.policy.player,
+    input.components.player.validationEvidence
+  );
+  const pickFailureCodes = pickFailures(
+    input.policy.pick,
+    input.components.pick.validationEvidence
+  );
   const failureCodes = [...playerFailureCodes, ...pickFailureCodes];
   const content = governedValuationModelQualificationContentSchema.parse({
     schemaVersion: SCHEMA_VERSION,

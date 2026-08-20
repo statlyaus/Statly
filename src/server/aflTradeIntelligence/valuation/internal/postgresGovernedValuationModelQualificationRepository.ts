@@ -1,4 +1,5 @@
 import {
+  doAflTradeArtifactRefsExactlyMatch,
   doesAflTradeArtifactRefMatchBytes,
   doesAflTradeArtifactRefMatchCanonicalJson,
   type AflTradeArtifactRef,
@@ -14,10 +15,17 @@ import type {
   AflOutcomeSqlTransaction,
 } from '../../outcomes/postgresOutcomeReleaseRepository';
 import {
+  deriveGovernedPickModelQualificationEvidence,
+  deriveGovernedPlayerModelQualificationEvidence,
   governedValuationModelQualificationSchema,
   type GovernedValuationModelQualification,
   type GovernedValuationModelQualificationGateRecord,
 } from './governedValuationModelQualification';
+import { governedValuationComponentRunManifestSchema } from './governedValuationComponentRunManifest';
+import {
+  loadGovernedNativeComponentValidationReport,
+  type GovernedNativeComponentValidationReport,
+} from './governedNativeComponentExecution';
 import {
   createGovernedValuationModelQualificationWork,
   governedValuationModelQualificationWorkSchema,
@@ -60,10 +68,7 @@ interface CurrentPairRow extends Record<string, unknown> {
 export class GovernedValuationModelQualificationRepositoryError extends Error {
   constructor(
     readonly code:
-      | 'INTEGRITY_MISMATCH'
-      | 'CONFLICTING_REPLAY'
-      | 'STALE_GATE_LEDGER'
-      | 'STALE_CURRENT_PAIR',
+      'INTEGRITY_MISMATCH' | 'CONFLICTING_REPLAY' | 'STALE_GATE_LEDGER' | 'STALE_CURRENT_PAIR',
     message: string,
     options?: ErrorOptions
   ) {
@@ -182,13 +187,108 @@ async function retainWork(
   );
 }
 
+interface NativeEvidenceRow extends Record<string, unknown> {
+  run_id: string;
+  role: string;
+  native_execution_artifact_id: string;
+  validation_report_id: string;
+  validation_report_artifact_id: string | null;
+  native_execution_json: unknown;
+  validation_report_json: unknown;
+  recorded_at: Date | string;
+}
+
+async function retainNativeValidationEvidence(
+  transaction: AflOutcomeSqlTransaction,
+  qualification: GovernedValuationModelQualification,
+  evidence: AuthenticatedQualificationArtifacts
+): Promise<void> {
+  const entries = [
+    {
+      runId: qualification.content.player.runId,
+      role: evidence.player.kind,
+      validationReportId: evidence.player.validationReport.validationReportId,
+      validationReportArtifactId: evidence.player.validationReportArtifact.artifactId,
+      nativeExecution: evidence.player.execution,
+      validationReport: evidence.player.validationReport,
+    },
+    {
+      runId: qualification.content.pick.runId,
+      role: evidence.pick.kind,
+      validationReportId: evidence.pick.validationReport.validationReportId,
+      validationReportArtifactId: null,
+      nativeExecution: evidence.pick.execution,
+      validationReport: evidence.pick.validationReport,
+    },
+  ] as const;
+  for (const entry of entries) {
+    await transaction.query(
+      `INSERT INTO outcome_governed_component_validation_evidence
+        (run_id,role,native_execution_artifact_id,validation_report_id,
+         validation_report_artifact_id,native_execution_json,validation_report_json,recorded_at)
+       SELECT run_id,$2,native_execution_artifact_id,$3,$4,$5::jsonb,$6::jsonb,$7
+         FROM outcome_governed_valuation_component_run WHERE run_id=$1
+       ON CONFLICT (run_id) DO NOTHING`,
+      [
+        entry.runId,
+        entry.role,
+        entry.validationReportId,
+        entry.validationReportArtifactId,
+        canonicalizeAflTradeJson(entry.nativeExecution),
+        canonicalizeAflTradeJson(entry.validationReport),
+        qualification.content.evaluatedAt,
+      ]
+    );
+    const retained = await transaction.query<NativeEvidenceRow>(
+      `SELECT run_id,role,native_execution_artifact_id,validation_report_id,
+          validation_report_artifact_id,native_execution_json,validation_report_json,recorded_at
+         FROM outcome_governed_component_validation_evidence WHERE run_id=$1`,
+      [entry.runId]
+    );
+    const row = retained.rows[0];
+    if (
+      retained.rows.length !== 1 ||
+      row === undefined ||
+      row.role !== entry.role ||
+      row.validation_report_id !== entry.validationReportId ||
+      row.validation_report_artifact_id !== entry.validationReportArtifactId ||
+      canonicalizeAflTradeJson(row.native_execution_json) !==
+        canonicalizeAflTradeJson(entry.nativeExecution) ||
+      canonicalizeAflTradeJson(row.validation_report_json) !==
+        canonicalizeAflTradeJson(entry.validationReport) ||
+      Date.parse(new Date(row.recorded_at).toISOString()) >
+        Date.parse(qualification.content.evaluatedAt)
+    ) {
+      throw new GovernedValuationModelQualificationRepositoryError(
+        'CONFLICTING_REPLAY',
+        'Component validation evidence conflicts with retained native authority.'
+      );
+    }
+  }
+}
+
+type PlayerNativeEvidence = Extract<
+  GovernedNativeComponentValidationReport,
+  { kind: 'player_contribution_and_availability' }
+>;
+type PickNativeEvidence = Extract<
+  GovernedNativeComponentValidationReport,
+  { kind: 'draft_pick_and_future_pick_distribution' }
+>;
+
+interface AuthenticatedQualificationArtifacts {
+  readonly player: PlayerNativeEvidence;
+  readonly pick: PickNativeEvidence;
+}
+
 async function authenticateArtifacts(input: {
   repository: AflTradeImmutableArtifactRepository;
   maximumBytes: number;
   qualification: GovernedValuationModelQualification;
   qualificationArtifact: AflTradeArtifactRef;
-}): Promise<void> {
+}): Promise<AuthenticatedQualificationArtifacts> {
   const content = input.qualification.content;
+  const documents = new Map<string, unknown>();
   const references = [
     input.qualificationArtifact,
     content.policyArtifact,
@@ -213,6 +313,85 @@ async function authenticateArtifacts(input: {
         `Qualification artifact custody failed for ${reference.artifactId}.`
       );
     }
+    if (
+      reference.artifactId === content.player.runArtifact.artifactId ||
+      reference.artifactId === content.pick.runArtifact.artifactId
+    ) {
+      try {
+        documents.set(reference.artifactId, JSON.parse(new TextDecoder().decode(loaded.bytes)));
+      } catch {
+        throw new GovernedValuationModelQualificationRepositoryError(
+          'INTEGRITY_MISMATCH',
+          `Qualification component run is not canonical JSON: ${reference.artifactId}.`
+        );
+      }
+    }
+  }
+  const playerRun = governedValuationComponentRunManifestSchema.safeParse(
+    documents.get(content.player.runArtifact.artifactId)
+  );
+  const pickRun = governedValuationComponentRunManifestSchema.safeParse(
+    documents.get(content.pick.runArtifact.artifactId)
+  );
+  if (
+    !playerRun.success ||
+    !pickRun.success ||
+    playerRun.data.runId !== content.player.runId ||
+    playerRun.data.content.role !== content.player.role ||
+    playerRun.data.content.protocolId !== content.player.protocolId ||
+    !doAflTradeArtifactRefsExactlyMatch(
+      playerRun.data.content.protocolArtifact,
+      content.player.protocolArtifact
+    ) ||
+    pickRun.data.runId !== content.pick.runId ||
+    pickRun.data.content.role !== content.pick.role ||
+    pickRun.data.content.protocolId !== content.pick.protocolId ||
+    !doAflTradeArtifactRefsExactlyMatch(
+      pickRun.data.content.protocolArtifact,
+      content.pick.protocolArtifact
+    )
+  ) {
+    throw new GovernedValuationModelQualificationRepositoryError(
+      'INTEGRITY_MISMATCH',
+      'Qualification component-run evidence does not match the selected role and protocol.'
+    );
+  }
+  try {
+    const [playerNative, pickNative] = await Promise.all([
+      loadGovernedNativeComponentValidationReport({
+        manifest: playerRun.data,
+        artifactRepository: input.repository,
+        maximumArtifactBytes: input.maximumBytes,
+      }),
+      loadGovernedNativeComponentValidationReport({
+        manifest: pickRun.data,
+        artifactRepository: input.repository,
+        maximumArtifactBytes: input.maximumBytes,
+      }),
+    ]);
+    if (
+      playerNative.kind !== 'player_contribution_and_availability' ||
+      pickNative.kind !== 'draft_pick_and_future_pick_distribution' ||
+      canonicalizeAflTradeJson(
+        deriveGovernedPlayerModelQualificationEvidence(playerNative.validationReport)
+      ) !== canonicalizeAflTradeJson(content.player.validationEvidence) ||
+      canonicalizeAflTradeJson(
+        deriveGovernedPickModelQualificationEvidence(pickNative.validationReport)
+      ) !== canonicalizeAflTradeJson(content.pick.validationEvidence)
+    ) {
+      throw new GovernedValuationModelQualificationRepositoryError(
+        'INTEGRITY_MISMATCH',
+        'Qualification evidence does not equal the selected native validation reports.'
+      );
+    }
+    return { player: playerNative, pick: pickNative };
+  } catch (cause) {
+    if (cause instanceof GovernedValuationModelQualificationRepositoryError) throw cause;
+    throw new GovernedValuationModelQualificationRepositoryError(
+      'INTEGRITY_MISMATCH',
+      'Qualification native validation evidence failed authentication.',
+      { cause }
+    );
   }
 }
 
@@ -268,13 +447,14 @@ export class PostgresGovernedValuationModelQualificationRepository {
         'Qualification artifact does not authenticate the exact evaluated record.'
       );
     }
-    await authenticateArtifacts({
+    const nativeEvidence = await authenticateArtifacts({
       repository: this.dependencies.artifactRepository,
       maximumBytes: this.dependencies.maximumArtifactBytes,
       qualification,
       qualificationArtifact: input.qualificationArtifact,
     });
     return this.dependencies.client.transaction(async (transaction) => {
+      await retainNativeValidationEvidence(transaction, qualification, nativeEvidence);
       const replay =
         (await retainQualification(transaction, qualification, input.qualificationArtifact)) ===
         'replayed';
@@ -306,7 +486,13 @@ export class PostgresGovernedValuationModelQualificationRepository {
           [existingCurrent.workId]
         );
         const work = governedValuationModelQualificationWorkSchema.parse(workResult.rows[0]?.value);
-        return { status: 'advanced', qualification, current: existingCurrent, work, idempotentReplay: true };
+        return {
+          status: 'advanced',
+          qualification,
+          current: existingCurrent,
+          work,
+          idempotentReplay: true,
+        };
       }
       const expectedRunIds = [
         qualification.content.player.runId,
@@ -314,13 +500,27 @@ export class PostgresGovernedValuationModelQualificationRepository {
       ] as const;
       for (const [index, record] of input.gateRecords.entries()) {
         const decision = record.decision.content;
+        const qualificationRetainedAt = Date.parse(input.qualificationArtifact.createdAt);
+        const qualificationEvaluatedAt = Date.parse(qualification.content.evaluatedAt);
+        const proposedAt = Date.parse(record.proposal.content.proposedAt);
+        const decidedAt = decision.decidedAt === null ? Number.NaN : Date.parse(decision.decidedAt);
+        const effectiveAt =
+          decision.effectiveAt === null ? Number.NaN : Date.parse(decision.effectiveAt);
         if (
           decision.authorityKind !== 'automated_validation_record' ||
           decision.scope.scopeKey !== qualification.content.scopeKey ||
+          !Number.isFinite(proposedAt) ||
+          !Number.isFinite(decidedAt) ||
+          !Number.isFinite(effectiveAt) ||
+          proposedAt < qualificationEvaluatedAt ||
+          proposedAt < qualificationRetainedAt ||
+          decidedAt < qualificationEvaluatedAt ||
+          decidedAt < qualificationRetainedAt ||
+          effectiveAt < qualificationEvaluatedAt ||
+          effectiveAt < qualificationRetainedAt ||
           !decision.authorityEvidenceIds.includes(input.qualificationArtifact.artifactId) ||
           !decision.affectedArtifacts.some(
-            ({ kind, artifactId }) =>
-              kind === 'model_run' && artifactId === expectedRunIds[index]
+            ({ kind, artifactId }) => kind === 'model_run' && artifactId === expectedRunIds[index]
           ) ||
           !decision.affectedArtifacts.some(
             ({ kind, artifactId }) =>
@@ -358,10 +558,7 @@ export class PostgresGovernedValuationModelQualificationRepository {
           updatedAt: authorityEffectiveAt,
         });
       } catch (cause) {
-        if (
-          cause instanceof AflTradeGateLedgerRepositoryError &&
-          cause.code === 'STALE_REVISION'
-        ) {
+        if (cause instanceof AflTradeGateLedgerRepositoryError && cause.code === 'STALE_REVISION') {
           throw new GovernedValuationModelQualificationRepositoryError(
             'STALE_GATE_LEDGER',
             'Gate ledger changed before the qualified pair could commit.',
