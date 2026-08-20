@@ -8,6 +8,7 @@ import {
   fitAflTradePickPavDistributionBenchmark,
 } from '@/server/aflTradeIntelligence/modeling/pickPavDistributionBenchmark';
 import { materializeAflTradePickPavObservationSet } from '@/server/aflTradeIntelligence/modeling/pickPavObservationService';
+import { deriveAflTradePickCalculationEvidence } from '@/server/aflTradeIntelligence/valuation/calculationNarrativeEvidence';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const addressed = (prefix: string, value: string) => `${prefix}:${sha(value)}`;
@@ -205,6 +206,54 @@ describe('exact-pick PAV distribution benchmark', () => {
 
     expect(() => aflTradePickPavDistributionBenchmarkSchema.parse(tampered)).toThrow(
       /exact fitted empirical distribution|content-address/i
+    );
+  });
+
+  it('derives the complete pick-value story from the authenticated empirical cohort', () => {
+    const benchmark = fitAflTradePickPavDistributionBenchmark(observationSet(), config);
+    const pick14 = benchmark.content.selectionCurve.find(
+      ({ selectionNumber }) => selectionNumber === 14
+    )!;
+    const cohort = benchmark.content.distributionBlocks[pick14.distributionBlockIndex]!;
+
+    expect(deriveAflTradePickCalculationEvidence(benchmark, 14)).toEqual({
+      kind: 'pick',
+      benchmarkId: benchmark.benchmarkId,
+      observationSetId: benchmark.content.observationSetId,
+      policyId: benchmark.content.policyId,
+      methodId: benchmark.content.methodId,
+      valueUnit: 'fixed_horizon_pav',
+      selectionNumber: 14,
+      cohort: {
+        minimumSelectionNumber: 14,
+        maximumSelectionNumber: 14,
+        observationCount: 2,
+        draftClassCount: 2,
+        sourceSelectionNumbers: [14],
+      },
+      expected: {
+        contribution: 70,
+        games: 10,
+      },
+      centralRange: {
+        contribution: { p10: 60, p50: 60, p90: 80 },
+        games: { p10: 10, p50: 10, p90: 10 },
+      },
+      outcomeProbabilities: cohort.distribution.outcomeProbabilities,
+      empiricalSupportObservationIds: cohort.empiricalSupport.map(
+        ({ observationId }) => observationId
+      ),
+      fixedHorizonSeasons: 1,
+      limitation:
+        'Training-only mature national-draft benchmark; active careers and held-out cohorts are excluded, not treated as zero.',
+    });
+  });
+
+  it('does not invent a cohort for a pick outside the authenticated model support', () => {
+    const benchmark = fitAflTradePickPavDistributionBenchmark(observationSet(), config);
+
+    expect(() => deriveAflTradePickCalculationEvidence(benchmark, 30)).toThrow(
+      /outside the authenticated pick-model support/i
     );
   });
 });

@@ -8,6 +8,7 @@ import {
   createAflTradePlayerPavPolicy,
   type AflTradePlayerPavObservation,
 } from '@/server/aflTradeIntelligence/modeling/playerPavObservationContracts';
+import { deriveAflTradePlayerCalculationEvidence } from '@/server/aflTradeIntelligence/valuation/calculationNarrativeEvidence';
 
 const digest = (marker: string) => marker.repeat(64);
 const calculationId = (seasonYear: number) =>
@@ -197,6 +198,69 @@ describe('player PAV observation contracts', () => {
     });
 
     expect(result.outcome.state).toBe('right_censored');
+    expect(deriveAflTradePlayerCalculationEvidence(result)).toMatchObject({
+      state: 'right_censored',
+      evidenceCutoffAt: '2018-01-01T00:00:00.000Z',
+      horizon: {
+        requiredSeasons: [2017, 2018, 2019],
+        observedSeasons: [2017],
+      },
+      totals: {
+        gamesPlayed: 2,
+        contribution: targetValues[0]!.totalPav,
+        contributionPerGame: targetValues[0]!.totalPav / 2,
+      },
+    });
+  });
+
+  it('derives the player-value story from exact receiving-club seasons and games', () => {
+    const player = observation(1, 'train', 2001);
+
+    expect(deriveAflTradePlayerCalculationEvidence(player)).toMatchObject({
+      kind: 'player',
+      state: 'mature_observed',
+      observationId: player.observationId,
+      releaseId: player.releaseId,
+      playerId: 'afl-player:fixture',
+      acquisitionSpell: player.acquisitionSpell,
+      predictionSeason: 2001,
+      evidenceCutoffAt: '2005-01-01T00:00:00.000Z',
+      horizon: {
+        requiredSeasons: [2002, 2003, 2004],
+        observedSeasons: [2002, 2003, 2004],
+      },
+      seasons: [
+        {
+          seasonYear: 2002,
+          gamesPlayed: 2,
+          contribution: 21,
+          contributionPerGame: 10.5,
+          calculationId: calculationId(2002),
+          sourceObservationIds: ['provider-row:2002:1', 'provider-row:2002:2'],
+        },
+        {
+          seasonYear: 2003,
+          gamesPlayed: 2,
+          contribution: 24,
+          contributionPerGame: 12,
+          calculationId: calculationId(2003),
+          sourceObservationIds: ['provider-row:2003:1', 'provider-row:2003:2'],
+        },
+        {
+          seasonYear: 2004,
+          gamesPlayed: 2,
+          contribution: 27,
+          contributionPerGame: 13.5,
+          calculationId: calculationId(2004),
+          sourceObservationIds: ['provider-row:2004:1', 'provider-row:2004:2'],
+        },
+      ],
+      totals: {
+        gamesPlayed: 6,
+        contribution: 72,
+        contributionPerGame: 12,
+      },
+    });
   });
 
   it('separates historical football availability from later calculation custody', () => {
@@ -273,6 +337,12 @@ describe('player PAV observation contracts', () => {
     expect(result.outcome).toEqual({
       state: 'unavailable',
       reason: 'feature_history_incomplete',
+    });
+    expect(deriveAflTradePlayerCalculationEvidence(result)).toMatchObject({
+      state: 'unavailable',
+      reason: 'feature_history_incomplete',
+      seasons: [],
+      totals: null,
     });
   });
 });
