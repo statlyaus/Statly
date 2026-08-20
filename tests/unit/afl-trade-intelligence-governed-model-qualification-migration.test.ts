@@ -36,5 +36,8 @@ describe('automated model-pair qualification migration', () => {
     expect(sql).toContain('validate_outcome_prepared_valuation_input_v2_artifact');
     expect(sql).toContain('outcome_automated_gate_pair_commit_guard');
     expect(sql).toContain('DEFERRABLE INITIALLY DEFERRED');
+    expect(sql).toContain('outcome_automated_gate_qualification_run_unique');
+    expect(sql).toContain('validate_outcome_governed_model_qualification_work');
+    expect(sql).toContain('Governed model qualification work evidence is immutable');
   });
 });

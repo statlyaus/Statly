@@ -67,6 +67,33 @@ async function retain(document: unknown, createdAt = retainedAt) {
   return reference;
 }
 
+async function retainWithMetadata(
+  document: unknown,
+  overrides: Partial<Pick<Awaited<ReturnType<typeof retain>>, 'mediaType' | 'createdAt'>>
+) {
+  const canonicalReference = createAflTradeCanonicalJsonArtifactRef(
+    document,
+    overrides.createdAt ?? retainedAt
+  );
+  const reference = { ...canonicalReference, ...overrides };
+  await pool.query(
+    `INSERT INTO outcome_artifact_custody
+      (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+       environment,custody_profile_id,created_at,verified_at,custody_json)
+     VALUES ($1,$2,$3,$4,$5,'derived_private','non_production',NULL,$6,$6,$7::jsonb)`,
+    [
+      reference.artifactId,
+      reference.contentSha256,
+      reference.storageUri,
+      reference.mediaType,
+      reference.byteLength,
+      reference.createdAt,
+      canonicalizeAflTradeJson({ assurance: 'disposable_metadata_mismatch_test' }),
+    ]
+  );
+  return reference;
+}
+
 beforeAll(async () => {
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], {
@@ -410,6 +437,53 @@ describe('governed model qualification PostgreSQL registry', () => {
         custodyMismatchArtifact.artifactId
       )
     ).rejects.toThrow(/custody|mismatch/i);
+    const wrongMediaEvidence = {
+      ...passing.qualification.content.player.validationEvidence,
+      comparableObservationCount: 121,
+    };
+    const wrongMediaContent = {
+      ...passing.qualification.content,
+      player: {
+        ...passing.qualification.content.player,
+        validationEvidence: wrongMediaEvidence,
+        validationEvidenceArtifact: await retainWithMetadata(wrongMediaEvidence, {
+          mediaType: 'text/plain',
+          createdAt: evaluatedAt,
+        }),
+      },
+    };
+    const wrongMediaQualification = {
+      qualificationId: createAflTradeContentAddress(
+        'model-qualification',
+        wrongMediaContent
+      ),
+      content: wrongMediaContent,
+    } as unknown as typeof passing.qualification;
+    const wrongMediaArtifact = await retain(wrongMediaQualification, evaluatedAt);
+    await expect(
+      insertQualificationDirectly(wrongMediaQualification, wrongMediaArtifact.artifactId)
+    ).rejects.toThrow(/lineage|mismatch/i);
+    const outerCustodyContent = {
+      ...passing.qualification.content,
+      scopeKey: 'afl-men:2026-outer-custody',
+    };
+    const outerCustodyQualification = {
+      qualificationId: createAflTradeContentAddress(
+        'model-qualification',
+        outerCustodyContent
+      ),
+      content: outerCustodyContent,
+    } as unknown as typeof passing.qualification;
+    const outerCustodyArtifact = await retainWithMetadata(outerCustodyQualification, {
+      mediaType: 'text/plain',
+      createdAt: evaluatedAt,
+    });
+    await expect(
+      insertQualificationDirectly(
+        outerCustodyQualification,
+        outerCustodyArtifact.artifactId
+      )
+    ).rejects.toThrow(/ancestry|mismatch/i);
     const conflictingPolicy = {
       ...passing.qualification.content.policy,
       player: {
@@ -543,27 +617,31 @@ describe('governed model qualification PostgreSQL registry', () => {
           canonicalizeAflTradeJson(unpairedGates[0].proposal),
         ]
       );
-      await unpairedClient.query(
-        `INSERT INTO outcome_gate_decision
-          (decision_id,proposal_id,gate,decision_key,version,environment,state,decided_at,
-           effective_at,revalidate_at,supersedes_decision_id,decision_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
-        [
-          unpairedGates[0].decision.decisionId,
-          unpairedGates[0].decision.content.proposalId,
-          unpairedGates[0].decision.content.gate,
-          unpairedGates[0].decision.content.decisionKey,
-          unpairedGates[0].decision.content.version,
-          unpairedGates[0].decision.content.environment,
-          unpairedGates[0].decision.content.state,
-          unpairedGates[0].decision.content.decidedAt,
-          unpairedGates[0].decision.content.effectiveAt,
-          unpairedGates[0].decision.content.revalidateAt,
-          unpairedGates[0].decision.content.supersedesDecisionId,
-          canonicalizeAflTradeJson(unpairedGates[0].decision),
-        ]
-      );
-      await expect(unpairedClient.query('COMMIT')).rejects.toThrow(/atomic|pair/i);
+      await expect(
+        (async () => {
+          await unpairedClient.query(
+            `INSERT INTO outcome_gate_decision
+              (decision_id,proposal_id,gate,decision_key,version,environment,state,decided_at,
+               effective_at,revalidate_at,supersedes_decision_id,decision_json)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+            [
+              unpairedGates[0].decision.decisionId,
+              unpairedGates[0].decision.content.proposalId,
+              unpairedGates[0].decision.content.gate,
+              unpairedGates[0].decision.content.decisionKey,
+              unpairedGates[0].decision.content.version,
+              unpairedGates[0].decision.content.environment,
+              unpairedGates[0].decision.content.state,
+              unpairedGates[0].decision.content.decidedAt,
+              unpairedGates[0].decision.content.effectiveAt,
+              unpairedGates[0].decision.content.revalidateAt,
+              unpairedGates[0].decision.content.supersedesDecisionId,
+              canonicalizeAflTradeJson(unpairedGates[0].decision),
+            ]
+          );
+          await unpairedClient.query('COMMIT');
+        })()
+      ).rejects.toThrow(/atomic|pair|unique|duplicate/i);
     } finally {
       await unpairedClient.query('ROLLBACK');
       unpairedClient.release();
@@ -576,6 +654,14 @@ describe('governed model qualification PostgreSQL registry', () => {
         gateRecords: gates,
       })
     ).resolves.toMatchObject({ status: 'advanced', idempotentReplay: true });
+    await expect(
+      pool.query(
+        `UPDATE outcome_governed_model_qualification_work
+            SET work_json=jsonb_set(work_json,'{content,cause}','"forged"'::jsonb)
+          WHERE work_id=$1`,
+        [advanced.work!.workId]
+      )
+    ).rejects.toThrow(/immutable/i);
 
     const failed = await qualificationFixture(runs, 'failed', false);
     await expect(

@@ -196,6 +196,9 @@ BEGIN
         OR automated_model_run_id NOT IN (
           qualification_row."player_run_id", qualification_row."pick_run_id"
         )
+        OR NEW."decision_key" IS DISTINCT FROM content->'scope'->>'scopeKey' || ':' ||
+          (CASE WHEN automated_model_run_id=qualification_row."player_run_id"
+             THEN 'player-model-validity' ELSE 'pick-model-validity' END)
         OR NOT (content->'authorityEvidenceIds' ? qualification_row."artifact_id")
         OR NOT (
           proposal_row."proposal_json"->'content'->'evidenceIds' ? qualification_row."artifact_id"
@@ -287,11 +290,14 @@ DECLARE
   pick_failed BOOLEAN := FALSE;
   player_run RECORD;
   pick_run RECORD;
+  qualification_artifact RECORD;
 BEGIN
   SELECT * INTO STRICT player_run FROM "outcome_governed_valuation_component_run"
    WHERE "run_id"=NEW."player_run_id" FOR KEY SHARE;
   SELECT * INTO STRICT pick_run FROM "outcome_governed_valuation_component_run"
    WHERE "run_id"=NEW."pick_run_id" FOR KEY SHARE;
+  SELECT * INTO STRICT qualification_artifact FROM "outcome_artifact_custody"
+   WHERE "artifact_id"=NEW."artifact_id" FOR KEY SHARE;
   policy:=content->'policy';
   player_evidence:=content->'player'->'validationEvidence';
   pick_evidence:=content->'pick'->'validationEvidence';
@@ -497,6 +503,25 @@ BEGIN
      )
     OR content->'player'->>'runId'=content->'pick'->>'runId'
     OR content->'player'->>'protocolId'=content->'pick'->>'protocolId'
+    OR content->'policyArtifact'->>'mediaType' IS DISTINCT FROM 'application/json'
+    OR (content->'policyArtifact'->>'byteLength')::BIGINT IS DISTINCT FROM
+       octet_length(convert_to(outcome_afl_trade_canonical_json(policy),'UTF8'))
+    OR content->'player'->'criteriaArtifact'->>'mediaType' IS DISTINCT FROM 'application/json'
+    OR (content->'player'->'criteriaArtifact'->>'byteLength')::BIGINT IS DISTINCT FROM
+       octet_length(convert_to(outcome_afl_trade_canonical_json(policy->'player'),'UTF8'))
+    OR content->'pick'->'criteriaArtifact'->>'mediaType' IS DISTINCT FROM 'application/json'
+    OR (content->'pick'->'criteriaArtifact'->>'byteLength')::BIGINT IS DISTINCT FROM
+       octet_length(convert_to(outcome_afl_trade_canonical_json(policy->'pick'),'UTF8'))
+    OR content->'player'->'validationEvidenceArtifact'->>'mediaType'
+       IS DISTINCT FROM 'application/json'
+    OR (content->'player'->'validationEvidenceArtifact'->>'byteLength')::BIGINT
+       IS DISTINCT FROM octet_length(convert_to(
+         outcome_afl_trade_canonical_json(player_evidence),'UTF8'))
+    OR content->'pick'->'validationEvidenceArtifact'->>'mediaType'
+       IS DISTINCT FROM 'application/json'
+    OR (content->'pick'->'validationEvidenceArtifact'->>'byteLength')::BIGINT
+       IS DISTINCT FROM octet_length(convert_to(
+         outcome_afl_trade_canonical_json(pick_evidence),'UTF8'))
   THEN RAISE EXCEPTION 'Governed model qualification lineage contract mismatch';
   END IF;
   IF (player_evidence->>'comparableObservationCount')::INTEGER <
@@ -589,6 +614,16 @@ BEGIN
       encode(sha256(convert_to(NEW."content_canonical_json",'UTF8')),'hex')
     OR NEW."artifact_id" IS DISTINCT FROM 'artifact:' || encode(sha256(convert_to(
       outcome_afl_trade_canonical_json(NEW."qualification_json"),'UTF8')),'hex')
+    OR qualification_artifact."content_sha256" IS DISTINCT FROM
+       substring(NEW."artifact_id" FROM length('artifact:') + 1)
+    OR qualification_artifact."storage_uri" IS DISTINCT FROM
+       'artifact://sha256/' || qualification_artifact."content_sha256"
+    OR qualification_artifact."media_type" IS DISTINCT FROM 'application/json'
+    OR qualification_artifact."byte_length" IS DISTINCT FROM
+       octet_length(convert_to(outcome_afl_trade_canonical_json(NEW."qualification_json"),'UTF8'))
+    OR qualification_artifact."environment" IS DISTINCT FROM
+       'non_production'::"OutcomeEnvironment"
+    OR qualification_artifact."created_at" IS DISTINCT FROM NEW."evaluated_at"
     OR player_run."role"<>'player_contribution_and_availability'
     OR pick_run."role"<>'draft_pick_and_future_pick_distribution'
     OR player_run."artifact_id" IS DISTINCT FROM content->'player'->'runArtifact'->>'artifactId'
@@ -622,6 +657,9 @@ BEGIN
   SELECT artifact->>'artifactId' INTO STRICT automated_qualification_id
     FROM jsonb_array_elements(NEW."decision_json"->'content'->'affectedArtifacts') artifact
     WHERE artifact->>'kind'='model_qualification';
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    'automated-gate-pair:' || automated_qualification_id,0
+  ));
   SELECT * INTO STRICT qualification_row
     FROM "outcome_governed_valuation_model_qualification"
     WHERE "qualification_id"=automated_qualification_id;
@@ -658,6 +696,23 @@ AFTER INSERT ON "outcome_gate_decision"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION "validate_outcome_automated_gate_pair_commit"();
 
+CREATE OR REPLACE FUNCTION "outcome_automated_gate_artifact_id"(
+  decision_document JSONB,
+  artifact_kind TEXT
+) RETURNS TEXT LANGUAGE SQL IMMUTABLE STRICT AS $$
+  SELECT artifact->>'artifactId'
+    FROM jsonb_array_elements(decision_document->'content'->'affectedArtifacts') artifact
+   WHERE artifact->>'kind'=artifact_kind
+   LIMIT 1
+$$;
+
+CREATE UNIQUE INDEX "outcome_automated_gate_qualification_run_unique"
+ON "outcome_gate_decision" (
+  outcome_automated_gate_artifact_id("decision_json",'model_qualification'),
+  outcome_automated_gate_artifact_id("decision_json",'model_run')
+)
+WHERE "decision_json"->'content'->>'authorityKind'='automated_validation_record';
+
 CREATE OR REPLACE FUNCTION "reject_outcome_governed_model_qualification_mutation"()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'Governed valuation model qualifications are append-only'; END $$;
@@ -683,6 +738,106 @@ CREATE TABLE "outcome_governed_model_qualification_work" (
   FOREIGN KEY ("player_gate3_decision_id") REFERENCES "outcome_gate_decision"("decision_id") ON DELETE RESTRICT,
   FOREIGN KEY ("pick_gate3_decision_id") REFERENCES "outcome_gate_decision"("decision_id") ON DELETE RESTRICT
 );
+
+CREATE OR REPLACE FUNCTION "validate_outcome_governed_model_qualification_work"()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+  content JSONB := NEW."work_json"->'content';
+  qualification RECORD;
+BEGIN
+  IF TG_OP='UPDATE' THEN
+    IF NEW."work_id" IS DISTINCT FROM OLD."work_id"
+      OR NEW."scope_key" IS DISTINCT FROM OLD."scope_key"
+      OR NEW."qualification_id" IS DISTINCT FROM OLD."qualification_id"
+      OR NEW."player_gate3_decision_id" IS DISTINCT FROM OLD."player_gate3_decision_id"
+      OR NEW."pick_gate3_decision_id" IS DISTINCT FROM OLD."pick_gate3_decision_id"
+      OR NEW."available_at" IS DISTINCT FROM OLD."available_at"
+      OR NEW."work_json" IS DISTINCT FROM OLD."work_json"
+      OR NEW."recorded_at" IS DISTINCT FROM OLD."recorded_at"
+    THEN RAISE EXCEPTION 'Governed model qualification work evidence is immutable';
+    END IF;
+    IF NOT (
+      NEW."status"=OLD."status"
+      OR (OLD."status"='pending' AND NEW."status" IN ('claimed','superseded'))
+      OR (OLD."status"='claimed' AND NEW."status" IN ('pending','completed','superseded'))
+    ) THEN RAISE EXCEPTION 'Invalid governed model qualification work status transition';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO STRICT qualification
+    FROM "outcome_governed_valuation_model_qualification"
+   WHERE "qualification_id"=NEW."qualification_id" FOR KEY SHARE;
+  IF outcome_afl_trade_jsonb_has_exact_keys(NEW."work_json",ARRAY['content','workId'])
+       IS DISTINCT FROM TRUE
+    OR outcome_afl_trade_jsonb_has_exact_keys(content,ARRAY[
+         'availableAt','cause','environment','pickGate3DecisionId','pickRunId',
+         'playerGate3DecisionId','playerRunId','publicationEligible','qualificationId',
+         'schemaVersion','scopeKey','status'
+       ]) IS DISTINCT FROM TRUE
+    OR NEW."work_json"->>'workId' IS DISTINCT FROM NEW."work_id"
+    OR content->>'schemaVersion' IS DISTINCT FROM
+       'governed-valuation-model-qualification-work/v1'
+    OR content->>'environment' IS DISTINCT FROM 'non_production'
+    OR content->>'cause' IS DISTINCT FROM 'current_qualified_model_pair_advanced'
+    OR content->>'status' IS DISTINCT FROM 'pending'
+    OR jsonb_typeof(content->'publicationEligible') IS DISTINCT FROM 'boolean'
+    OR content->'publicationEligible' IS DISTINCT FROM 'false'::JSONB
+    OR jsonb_typeof(content->'scopeKey') IS DISTINCT FROM 'string'
+    OR length(content->>'scopeKey') NOT BETWEEN 1 AND 200
+    OR content->>'scopeKey' !~ '^[a-zA-Z0-9][a-zA-Z0-9._:-]*$'
+    OR content->>'qualificationId' !~ '^model-qualification:[a-f0-9]{64}$'
+    OR content->>'playerRunId' !~ '^model-run:[a-f0-9]{64}$'
+    OR content->>'pickRunId' !~ '^model-run:[a-f0-9]{64}$'
+    OR content->>'playerGate3DecisionId' !~ '^gate-decision:[a-f0-9]{64}$'
+    OR content->>'pickGate3DecisionId' !~ '^gate-decision:[a-f0-9]{64}$'
+    OR jsonb_typeof(content->'availableAt') IS DISTINCT FROM 'string'
+    OR content->>'availableAt' !~
+       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
+    OR NEW."work_id" IS DISTINCT FROM 'model-qualification-work:' || encode(sha256(convert_to(
+       outcome_afl_trade_canonical_json(content),'UTF8')),'hex')
+    OR NEW."scope_key" IS DISTINCT FROM content->>'scopeKey'
+    OR NEW."qualification_id" IS DISTINCT FROM content->>'qualificationId'
+    OR NEW."player_gate3_decision_id" IS DISTINCT FROM content->>'playerGate3DecisionId'
+    OR NEW."pick_gate3_decision_id" IS DISTINCT FROM content->>'pickGate3DecisionId'
+    OR NEW."available_at" IS DISTINCT FROM (content->>'availableAt')::TIMESTAMPTZ
+    OR NEW."status" IS DISTINCT FROM 'pending'
+    OR qualification."outcome" IS DISTINCT FROM 'qualified'
+    OR qualification."scope_key" IS DISTINCT FROM NEW."scope_key"
+    OR qualification."player_run_id" IS DISTINCT FROM content->>'playerRunId'
+    OR qualification."pick_run_id" IS DISTINCT FROM content->>'pickRunId'
+    OR NOT EXISTS (
+      SELECT 1 FROM "outcome_gate_decision" decision
+       WHERE decision."decision_id"=NEW."player_gate3_decision_id"
+         AND EXISTS (SELECT 1 FROM jsonb_array_elements(
+           decision."decision_json"->'content'->'affectedArtifacts') artifact
+           WHERE artifact->>'kind'='model_run'
+             AND artifact->>'artifactId'=qualification."player_run_id")
+         AND EXISTS (SELECT 1 FROM jsonb_array_elements(
+           decision."decision_json"->'content'->'affectedArtifacts') artifact
+           WHERE artifact->>'kind'='model_qualification'
+             AND artifact->>'artifactId'=qualification."qualification_id")
+    )
+    OR NOT EXISTS (
+      SELECT 1 FROM "outcome_gate_decision" decision
+       WHERE decision."decision_id"=NEW."pick_gate3_decision_id"
+         AND EXISTS (SELECT 1 FROM jsonb_array_elements(
+           decision."decision_json"->'content'->'affectedArtifacts') artifact
+           WHERE artifact->>'kind'='model_run'
+             AND artifact->>'artifactId'=qualification."pick_run_id")
+         AND EXISTS (SELECT 1 FROM jsonb_array_elements(
+           decision."decision_json"->'content'->'affectedArtifacts') artifact
+           WHERE artifact->>'kind'='model_qualification'
+             AND artifact->>'artifactId'=qualification."qualification_id")
+    )
+  THEN RAISE EXCEPTION 'Governed model qualification work contract mismatch';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER "outcome_governed_model_qualification_work_validate"
+BEFORE INSERT OR UPDATE ON "outcome_governed_model_qualification_work"
+FOR EACH ROW EXECUTE FUNCTION "validate_outcome_governed_model_qualification_work"();
 
 CREATE OR REPLACE FUNCTION "reject_outcome_governed_model_qualification_work_delete"()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
