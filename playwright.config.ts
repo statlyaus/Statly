@@ -100,7 +100,7 @@ export default defineConfig({
   },
   webServer: {
     command: webServerCommand,
-    url: baseURL,
+    url: `${baseURL}/api/ping`,
     reuseExistingServer: false,
     timeout: 120_000,
   },
