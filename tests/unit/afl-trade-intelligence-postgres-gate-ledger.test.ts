@@ -514,7 +514,51 @@ describe('PostgreSQL AFL trade Gate decision ledger', () => {
 
     await expect(
       repository.appendDecision({ expectedRevision: 0, proposal, decision })
-    ).rejects.toMatchObject({ code: 'INVALID_APPEND' });
+    ).rejects.toMatchObject({
+      code: 'INVALID_APPEND',
+      message: 'Automated model-validity records must use the governed qualification boundary.',
+    });
+
+    const rights = sourceRights();
+    const sourceBoundAffectedArtifacts = [
+      ...affectedArtifacts,
+      { kind: 'source_rights' as const, artifactId: rights.rightsArtifactId },
+    ];
+    const sourceBoundProposalContent = {
+      ...proposal.content,
+      affectedArtifacts: sourceBoundAffectedArtifacts,
+    };
+    const sourceBoundProposal = aflTradeGateDecisionProposalSchema.parse({
+      proposalId: createAflTradeContentAddress('gate-proposal', sourceBoundProposalContent),
+      content: sourceBoundProposalContent,
+    });
+    const sourceBoundDecisionContent = {
+      ...decision.content,
+      proposalId: sourceBoundProposal.proposalId,
+      affectedArtifacts: sourceBoundAffectedArtifacts,
+    };
+    const sourceBoundDecision = aflTradeGateDecisionRecordSchema.parse({
+      decisionId: createAflTradeContentAddress('gate-decision', sourceBoundDecisionContent),
+      content: sourceBoundDecisionContent,
+    });
+    const sourceBoundRecord = {
+      sourceRights: rights,
+      proposal: sourceBoundProposal,
+      decision: sourceBoundDecision,
+    };
+
+    await expect(
+      repository.append({ expectedRevision: 0, ...sourceBoundRecord })
+    ).rejects.toMatchObject({
+      code: 'INVALID_APPEND',
+      message: 'The source-rights append boundary accepts only Gate 0A decisions.',
+    });
+    await expect(
+      repository.appendBatch({ expectedRevision: 0, records: [sourceBoundRecord] })
+    ).rejects.toMatchObject({
+      code: 'INVALID_APPEND',
+      message: 'The source-rights append boundary accepts only Gate 0A decisions.',
+    });
   });
 
   it('applies expected-revision CAS to a new generic gate append', async () => {

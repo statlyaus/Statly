@@ -141,6 +141,11 @@ describe('PostgreSQL governed private evaluation inspection repository', () => {
       { kind: 'valuation-input-bundle' },
       '2026-08-19T09:00:00.000Z'
     );
+    const qualificationId = addressed('model-qualification', 'qualification');
+    const qualificationPolicyVersion = addressed(
+      'model-qualification-policy',
+      'qualification-policy'
+    );
     const components = [
       'player_contribution_and_availability',
       'draft_pick_and_future_pick_distribution',
@@ -155,6 +160,8 @@ describe('PostgreSQL governed private evaluation inspection repository', () => {
       datasetAdmissionGateLedgerRevision: 10 + index,
       gate3DecisionId: addressed('gate-decision', `gate-${index}`),
       gate3DecisionVersion: 2,
+      qualificationId,
+      qualificationPolicyVersion,
     }));
     let captureTransaction: AflOutcomeSqlTransaction | null = null;
     const repository = createPostgresGovernedPrivateEvaluationInspectionRepository({

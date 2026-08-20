@@ -358,6 +358,21 @@ BEGIN
     OR pick_evidence->>'evaluationStatus' NOT IN (
        'scored_not_approved','insufficient_eligible_observations_not_approved',
        'invalid_zero_probability_not_approved')
+    OR jsonb_typeof(content->'publicationEligible') IS DISTINCT FROM 'boolean'
+    OR content->'publicationEligible' IS DISTINCT FROM 'false'::JSONB
+    OR jsonb_typeof(content->'player'->'passed') IS DISTINCT FROM 'boolean'
+    OR jsonb_typeof(content->'pick'->'passed') IS DISTINCT FROM 'boolean'
+    OR jsonb_typeof(content->'failureCodes') IS DISTINCT FROM 'array'
+    OR jsonb_typeof(content->'scopeKey') IS DISTINCT FROM 'string'
+    OR length(content->>'scopeKey') NOT BETWEEN 1 AND 200
+    OR content->>'scopeKey' !~ '^[a-zA-Z0-9][a-zA-Z0-9._:-]*$'
+    OR jsonb_typeof(content->'evaluatedAt') IS DISTINCT FROM 'string'
+    OR content->>'evaluatedAt' !~
+       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
+    OR jsonb_typeof(player_evidence->'validationReportId') IS DISTINCT FROM 'string'
+    OR player_evidence->>'validationReportId' !~ '^player-validation-report:[a-f0-9]{64}$'
+    OR jsonb_typeof(pick_evidence->'validationReportId') IS DISTINCT FROM 'string'
+    OR pick_evidence->>'validationReportId' !~ '^pick-pav-validation-report:[a-f0-9]{64}$'
   THEN RAISE EXCEPTION 'Governed model qualification nested contract mismatch';
   END IF;
   IF EXISTS (
@@ -466,6 +481,9 @@ BEGIN
          content->'pick'->'validationEvidenceArtifact'
        )) reference
        WHERE outcome_afl_trade_jsonb_is_artifact_ref(reference) IS DISTINCT FROM TRUE
+         OR "validate_outcome_prepared_valuation_input_v2_artifact"(
+              reference, 'non_production'::"OutcomeEnvironment"
+            ) IS DISTINCT FROM TRUE
      )
     OR EXISTS (
        SELECT 1 FROM jsonb_array_elements(jsonb_build_array(
@@ -536,11 +554,11 @@ BEGIN
     OR content->>'scopeKey' IS DISTINCT FROM NEW."scope_key"
     OR content->>'outcome' IS DISTINCT FROM NEW."outcome"
     OR content->'failureCodes' IS DISTINCT FROM expected_failure_codes
-    OR (content->'player'->>'passed')::BOOLEAN IS DISTINCT FROM (NOT player_failed)
-    OR (content->'pick'->>'passed')::BOOLEAN IS DISTINCT FROM (NOT pick_failed)
+    OR content->'player'->'passed' IS DISTINCT FROM to_jsonb(NOT player_failed)
+    OR content->'pick'->'passed' IS DISTINCT FROM to_jsonb(NOT pick_failed)
     OR content->>'outcome' IS DISTINCT FROM
       (CASE WHEN player_failed OR pick_failed THEN 'failed' ELSE 'qualified' END)
-    OR content->>'publicationEligible' IS DISTINCT FROM 'false'
+    OR content->'publicationEligible' IS DISTINCT FROM 'false'::JSONB
     OR content->'player'->>'runId' IS DISTINCT FROM NEW."player_run_id"
     OR content->'pick'->>'runId' IS DISTINCT FROM NEW."pick_run_id"
     OR content->'policyArtifact'->>'artifactId' IS DISTINCT FROM NEW."policy_artifact_id"
@@ -588,6 +606,57 @@ END $$;
 CREATE TRIGGER "outcome_governed_model_qualification_validate_insert"
 BEFORE INSERT ON "outcome_governed_valuation_model_qualification"
 FOR EACH ROW EXECUTE FUNCTION "validate_outcome_governed_model_qualification_insert"();
+
+CREATE OR REPLACE FUNCTION "validate_outcome_automated_gate_pair_commit"()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+  automated_qualification_id TEXT;
+  qualification_row RECORD;
+  decision_count INTEGER;
+  player_count INTEGER;
+  pick_count INTEGER;
+BEGIN
+  IF NEW."decision_json"->'content'->>'authorityKind'<>'automated_validation_record' THEN
+    RETURN NEW;
+  END IF;
+  SELECT artifact->>'artifactId' INTO STRICT automated_qualification_id
+    FROM jsonb_array_elements(NEW."decision_json"->'content'->'affectedArtifacts') artifact
+    WHERE artifact->>'kind'='model_qualification';
+  SELECT * INTO STRICT qualification_row
+    FROM "outcome_governed_valuation_model_qualification"
+    WHERE "qualification_id"=automated_qualification_id;
+  SELECT count(*),
+         count(*) FILTER (WHERE EXISTS (
+           SELECT 1
+             FROM jsonb_array_elements(decision."decision_json"->'content'->'affectedArtifacts') artifact
+            WHERE artifact->>'kind'='model_run'
+              AND artifact->>'artifactId'=qualification_row."player_run_id"
+         )),
+         count(*) FILTER (WHERE EXISTS (
+           SELECT 1
+             FROM jsonb_array_elements(decision."decision_json"->'content'->'affectedArtifacts') artifact
+            WHERE artifact->>'kind'='model_run'
+              AND artifact->>'artifactId'=qualification_row."pick_run_id"
+         ))
+    INTO decision_count,player_count,pick_count
+    FROM "outcome_gate_decision" decision
+   WHERE decision."decision_json"->'content'->>'authorityKind'='automated_validation_record'
+     AND EXISTS (
+       SELECT 1
+         FROM jsonb_array_elements(decision."decision_json"->'content'->'affectedArtifacts') artifact
+        WHERE artifact->>'kind'='model_qualification'
+          AND artifact->>'artifactId'=automated_qualification_id
+     );
+  IF decision_count<>2 OR player_count<>1 OR pick_count<>1 THEN
+    RAISE EXCEPTION 'Automated Gate 3 authority requires one atomic role-specific decision pair';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE CONSTRAINT TRIGGER "outcome_automated_gate_pair_commit_guard"
+AFTER INSERT ON "outcome_gate_decision"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION "validate_outcome_automated_gate_pair_commit"();
 
 CREATE OR REPLACE FUNCTION "reject_outcome_governed_model_qualification_mutation"()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$

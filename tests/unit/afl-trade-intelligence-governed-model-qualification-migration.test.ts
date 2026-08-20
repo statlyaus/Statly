@@ -33,5 +33,8 @@ describe('automated model-pair qualification migration', () => {
     expect(sql).toContain("'automated_validation_record'");
     expect(sql).toContain("'gate_3_model_validity'");
     expect(sql).toContain("'non_production'");
+    expect(sql).toContain('validate_outcome_prepared_valuation_input_v2_artifact');
+    expect(sql).toContain('outcome_automated_gate_pair_commit_guard');
+    expect(sql).toContain('DEFERRABLE INITIALLY DEFERRED');
   });
 });

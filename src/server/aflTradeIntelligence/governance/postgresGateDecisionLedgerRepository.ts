@@ -149,6 +149,15 @@ function parseAppendInput(input: AflTradeGateLedgerAppendInput): AflTradeGateLed
     );
   }
   if (
+    proposal.data.content.gate !== 'gate_0a_permission_to_evaluate' ||
+    decision.data.content.gate !== 'gate_0a_permission_to_evaluate'
+  ) {
+    throw new AflTradeGateLedgerRepositoryError(
+      'INVALID_APPEND',
+      'The source-rights append boundary accepts only Gate 0A decisions.'
+    );
+  }
+  if (
     !proposal.data.content.affectedArtifacts.some(
       (artifact) =>
         artifact.kind === 'source_rights' &&
@@ -382,6 +391,11 @@ export async function appendNewAflTradeGateDecisionsWithinTransaction(
   transaction: AflOutcomeSqlTransaction,
   input: Readonly<{
     expectedRevision: number;
+    scopeKey: string;
+    qualificationId: string;
+    qualificationArtifactId: string;
+    playerRunId: string;
+    pickRunId: string;
     records: readonly Readonly<{
       proposal: AflTradeGateDecisionProposal;
       decision: AflTradeGateDecisionRecord;
@@ -389,15 +403,54 @@ export async function appendNewAflTradeGateDecisionsWithinTransaction(
     updatedAt: string;
   }>
 ): Promise<AflTradeStoredGateLedger> {
-  if (input.records.length === 0) {
+  if (input.records.length !== 2) {
     throw new AflTradeGateLedgerRepositoryError(
       'INVALID_APPEND',
-      'A transaction-scoped Gate append requires at least one decision.'
+      'Governed model qualification requires exactly two linked Gate decisions.'
     );
   }
   const records = input.records.map((record) =>
     parseDecisionAppendInput({ ...record, expectedRevision: input.expectedRevision })
   );
+  const expectedRunIds = [input.playerRunId, input.pickRunId] as const;
+  for (const [index, record] of records.entries()) {
+    const proposal = record.proposal.content;
+    const decision = record.decision.content;
+    const proposalModelRuns = proposal.affectedArtifacts.filter(
+      ({ kind }) => kind === 'model_run'
+    );
+    const decisionModelRuns = decision.affectedArtifacts.filter(
+      ({ kind }) => kind === 'model_run'
+    );
+    const proposalQualifications = proposal.affectedArtifacts.filter(
+      ({ kind }) => kind === 'model_qualification'
+    );
+    const decisionQualifications = decision.affectedArtifacts.filter(
+      ({ kind }) => kind === 'model_qualification'
+    );
+    if (
+      proposal.gate !== 'gate_3_model_validity' ||
+      decision.gate !== 'gate_3_model_validity' ||
+      decision.authorityKind !== 'automated_validation_record' ||
+      proposal.scope.scopeKey !== input.scopeKey ||
+      decision.scope.scopeKey !== input.scopeKey ||
+      !proposal.evidenceIds.includes(input.qualificationArtifactId) ||
+      !decision.authorityEvidenceIds.includes(input.qualificationArtifactId) ||
+      proposalModelRuns.length !== 1 ||
+      proposalModelRuns[0]?.artifactId !== expectedRunIds[index] ||
+      decisionModelRuns.length !== 1 ||
+      decisionModelRuns[0]?.artifactId !== expectedRunIds[index] ||
+      proposalQualifications.length !== 1 ||
+      proposalQualifications[0]?.artifactId !== input.qualificationId ||
+      decisionQualifications.length !== 1 ||
+      decisionQualifications[0]?.artifactId !== input.qualificationId
+    ) {
+      throw new AflTradeGateLedgerRepositoryError(
+        'INVALID_APPEND',
+        'Transaction-scoped automated Gate decisions must bind the exact role-specific qualified pair.'
+      );
+    }
+  }
   const stored = await loadLedger(transaction, true);
   if (stored.revision !== input.expectedRevision) {
     throw new AflTradeGateLedgerRepositoryError(

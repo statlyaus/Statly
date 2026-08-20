@@ -349,6 +349,11 @@ export class PostgresGovernedValuationModelQualificationRepository {
       try {
         await appendNewAflTradeGateDecisionsWithinTransaction(transaction, {
           expectedRevision: input.expectedGateLedgerRevision,
+          scopeKey: qualification.content.scopeKey,
+          qualificationId: qualification.qualificationId,
+          qualificationArtifactId: input.qualificationArtifact.artifactId,
+          playerRunId: qualification.content.player.runId,
+          pickRunId: qualification.content.pick.runId,
           records: input.gateRecords,
           updatedAt: authorityEffectiveAt,
         });

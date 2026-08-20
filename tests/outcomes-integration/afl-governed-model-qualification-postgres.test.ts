@@ -326,6 +326,90 @@ describe('governed model qualification PostgreSQL registry', () => {
     await expect(
       insertQualificationDirectly(wrongRoleQualification, wrongRoleArtifact.artifactId)
     ).rejects.toThrow(/contract|mismatch/i);
+    const stringBooleanContent = {
+      ...passing.qualification.content,
+      publicationEligible: 'false',
+      player: { ...passing.qualification.content.player, passed: 'true' },
+    };
+    const stringBooleanQualification = {
+      qualificationId: createAflTradeContentAddress(
+        'model-qualification',
+        stringBooleanContent
+      ),
+      content: stringBooleanContent,
+    } as unknown as typeof passing.qualification;
+    const stringBooleanArtifact = await retain(stringBooleanQualification, evaluatedAt);
+    await expect(
+      insertQualificationDirectly(
+        stringBooleanQualification,
+        stringBooleanArtifact.artifactId
+      )
+    ).rejects.toThrow(/contract|mismatch/i);
+    const invalidScopeContent = {
+      ...passing.qualification.content,
+      scopeKey: 'invalid scope',
+    };
+    const invalidScopeQualification = {
+      qualificationId: createAflTradeContentAddress(
+        'model-qualification',
+        invalidScopeContent
+      ),
+      content: invalidScopeContent,
+    } as unknown as typeof passing.qualification;
+    const invalidScopeArtifact = await retain(invalidScopeQualification, evaluatedAt);
+    await expect(
+      insertQualificationDirectly(invalidScopeQualification, invalidScopeArtifact.artifactId)
+    ).rejects.toThrow(/contract|mismatch/i);
+    const invalidReportEvidence = {
+      ...passing.qualification.content.player.validationEvidence,
+      validationReportId: 'not a report id',
+    };
+    const invalidReportContent = {
+      ...passing.qualification.content,
+      player: {
+        ...passing.qualification.content.player,
+        validationEvidence: invalidReportEvidence,
+        validationEvidenceArtifact: await retain(invalidReportEvidence, evaluatedAt),
+      },
+    };
+    const invalidReportQualification = {
+      qualificationId: createAflTradeContentAddress(
+        'model-qualification',
+        invalidReportContent
+      ),
+      content: invalidReportContent,
+    } as unknown as typeof passing.qualification;
+    const invalidReportArtifact = await retain(invalidReportQualification, evaluatedAt);
+    await expect(
+      insertQualificationDirectly(
+        invalidReportQualification,
+        invalidReportArtifact.artifactId
+      )
+    ).rejects.toThrow(/contract|mismatch/i);
+    const custodyMismatchContent = {
+      ...passing.qualification.content,
+      player: {
+        ...passing.qualification.content.player,
+        validationEvidenceArtifact: {
+          ...passing.qualification.content.player.validationEvidenceArtifact,
+          createdAt: '2026-08-20T00:00:00.000Z',
+        },
+      },
+    };
+    const custodyMismatchQualification = {
+      qualificationId: createAflTradeContentAddress(
+        'model-qualification',
+        custodyMismatchContent
+      ),
+      content: custodyMismatchContent,
+    } as unknown as typeof passing.qualification;
+    const custodyMismatchArtifact = await retain(custodyMismatchQualification, evaluatedAt);
+    await expect(
+      insertQualificationDirectly(
+        custodyMismatchQualification,
+        custodyMismatchArtifact.artifactId
+      )
+    ).rejects.toThrow(/custody|mismatch/i);
     const conflictingPolicy = {
       ...passing.qualification.content.policy,
       player: {
@@ -430,6 +514,60 @@ describe('governed model qualification PostgreSQL registry', () => {
         },
       },
     });
+    const unpairedGates = createGovernedValuationModelQualificationGateRecords({
+      ...passing,
+      decidedAt: '2026-08-21T09:06:00.000Z',
+      automationPrincipal: 'statly-model-qualification-agent',
+      accountableOwner: 'statly-model-owner',
+      versions: { player: 2, pick: 2 },
+      supersedes: {
+        player: gates[0].decision.decisionId,
+        pick: gates[1].decision.decisionId,
+      },
+    });
+    const unpairedClient = await pool.connect();
+    try {
+      await unpairedClient.query('BEGIN');
+      await unpairedClient.query(
+        `INSERT INTO outcome_gate_proposal
+          (proposal_id,gate,decision_key,version,environment,scope_key,proposed_at,proposal_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+        [
+          unpairedGates[0].proposal.proposalId,
+          unpairedGates[0].proposal.content.gate,
+          unpairedGates[0].proposal.content.decisionKey,
+          unpairedGates[0].proposal.content.version,
+          unpairedGates[0].proposal.content.environment,
+          unpairedGates[0].proposal.content.scope.scopeKey,
+          unpairedGates[0].proposal.content.proposedAt,
+          canonicalizeAflTradeJson(unpairedGates[0].proposal),
+        ]
+      );
+      await unpairedClient.query(
+        `INSERT INTO outcome_gate_decision
+          (decision_id,proposal_id,gate,decision_key,version,environment,state,decided_at,
+           effective_at,revalidate_at,supersedes_decision_id,decision_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+        [
+          unpairedGates[0].decision.decisionId,
+          unpairedGates[0].decision.content.proposalId,
+          unpairedGates[0].decision.content.gate,
+          unpairedGates[0].decision.content.decisionKey,
+          unpairedGates[0].decision.content.version,
+          unpairedGates[0].decision.content.environment,
+          unpairedGates[0].decision.content.state,
+          unpairedGates[0].decision.content.decidedAt,
+          unpairedGates[0].decision.content.effectiveAt,
+          unpairedGates[0].decision.content.revalidateAt,
+          unpairedGates[0].decision.content.supersedesDecisionId,
+          canonicalizeAflTradeJson(unpairedGates[0].decision),
+        ]
+      );
+      await expect(unpairedClient.query('COMMIT')).rejects.toThrow(/atomic|pair/i);
+    } finally {
+      await unpairedClient.query('ROLLBACK');
+      unpairedClient.release();
+    }
     await expect(
       repository.register({
         ...passing,
