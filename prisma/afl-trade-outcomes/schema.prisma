@@ -4948,6 +4948,57 @@ model OutcomeGovernedValuationComponentRun {
   @@map("outcome_governed_valuation_component_run")
 }
 
+model OutcomeGovernedValuationModelQualification {
+  qualificationId          String   @id @map("qualification_id") @outcomes.Text
+  scopeKey                 String   @map("scope_key") @outcomes.Text
+  outcome                  String   @outcomes.Text
+  artifactId               String   @unique @map("artifact_id") @outcomes.Text
+  playerRunId              String   @map("player_run_id") @outcomes.Text
+  pickRunId                String   @map("pick_run_id") @outcomes.Text
+  policyArtifactId         String   @map("policy_artifact_id") @outcomes.Text
+  playerCriteriaArtifactId String   @map("player_criteria_artifact_id") @outcomes.Text
+  pickCriteriaArtifactId   String   @map("pick_criteria_artifact_id") @outcomes.Text
+  playerEvidenceArtifactId String   @map("player_evidence_artifact_id") @outcomes.Text
+  pickEvidenceArtifactId   String   @map("pick_evidence_artifact_id") @outcomes.Text
+  evaluatedAt              DateTime @map("evaluated_at") @outcomes.Timestamptz(3)
+  contentSha256            String   @map("content_sha256") @outcomes.Char(64)
+  contentCanonicalJson     String   @map("content_canonical_json") @outcomes.Text
+  qualificationJson        Json     @map("qualification_json")
+  recordedAt               DateTime @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+
+  @@index([scopeKey, evaluatedAt, qualificationId], map: "outcome_governed_model_qualification_scope_idx")
+  @@map("outcome_governed_valuation_model_qualification")
+}
+
+model OutcomeGovernedModelQualificationWork {
+  workId                String   @id @map("work_id") @outcomes.Text
+  scopeKey              String   @map("scope_key") @outcomes.Text
+  qualificationId       String   @unique @map("qualification_id") @outcomes.Text
+  playerGate3DecisionId String   @map("player_gate3_decision_id") @outcomes.Text
+  pickGate3DecisionId   String   @map("pick_gate3_decision_id") @outcomes.Text
+  availableAt           DateTime @map("available_at") @outcomes.Timestamptz(3)
+  status                String   @default("pending") @outcomes.Text
+  workJson              Json     @map("work_json")
+  recordedAt            DateTime @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+
+  @@index([status, availableAt, scopeKey], map: "outcome_governed_model_qualification_work_pending_idx")
+  @@map("outcome_governed_model_qualification_work")
+}
+
+model OutcomeCurrentGovernedValuationModelPair {
+  scopeKey              String   @id @map("scope_key") @outcomes.Text
+  revision              Int
+  qualificationId       String   @unique @map("qualification_id") @outcomes.Text
+  playerRunId           String   @map("player_run_id") @outcomes.Text
+  pickRunId             String   @map("pick_run_id") @outcomes.Text
+  playerGate3DecisionId String   @unique @map("player_gate3_decision_id") @outcomes.Text
+  pickGate3DecisionId   String   @unique @map("pick_gate3_decision_id") @outcomes.Text
+  workId                String   @unique @map("work_id") @outcomes.Text
+  advancedAt            DateTime @map("advanced_at") @outcomes.Timestamptz(3)
+
+  @@map("outcome_current_governed_valuation_model_pair")
+}
+
 model OutcomePrivateEvaluationAuthoritySnapshot {
   snapshotId               String                                        @id @map("snapshot_id") @outcomes.Text
   valuationScopeKey        String                                        @map("valuation_scope_key") @outcomes.Text

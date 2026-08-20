@@ -7,9 +7,10 @@ import {
   createAflTradeContentAddress,
 } from '../../artifacts/contentAddress';
 
-const SCHEMA_VERSION = 'governed-valuation-component-run/v1' as const;
-const LIMITATION =
+const LEGACY_LIMITATION =
   'Authenticated non-production component-run candidate only; Gate 3 approval, grades, production use, and publication remain prohibited.' as const;
+const LIMITATION =
+  'Authenticated non-production component-run candidate pending automated model-pair qualification; grades, production use, and publication remain prohibited.' as const;
 const instantSchema = z.iso.datetime({ offset: true });
 
 const nativeExecutionSchema = z.discriminatedUnion('kind', [
@@ -36,9 +37,8 @@ const nativeExecutionSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 
-export const governedValuationComponentRunManifestContentSchema = z
+const governedValuationComponentRunInputSchema = z
   .object({
-    schemaVersion: z.literal(SCHEMA_VERSION),
     environment: z.literal('non_production'),
     role: z.enum([
       'player_contribution_and_availability',
@@ -53,12 +53,13 @@ export const governedValuationComponentRunManifestContentSchema = z
     datasetAdmissionArtifact: aflTradeArtifactRefSchema,
     datasetAdmissionGateLedgerRevision: z.number().int().positive(),
     registeredAt: instantSchema,
-    approvalState: z.literal('gate_3_review_required'),
-    publicationEligible: z.literal(false),
-    limitation: z.literal(LIMITATION),
   })
-  .strict()
-  .superRefine((manifest, context) => {
+  .strict();
+
+function refineComponentRunManifest(
+  manifest: z.infer<typeof governedValuationComponentRunInputSchema>,
+  context: z.RefinementCtx
+) {
     const roleMatchesNativeExecution =
       manifest.role === 'player_contribution_and_availability'
         ? manifest.nativeExecution.kind === 'admitted_player_model_run'
@@ -94,7 +95,34 @@ export const governedValuationComponentRunManifestContentSchema = z
         message: 'Every component-run evidence artifact must exist before registration.',
       });
     }
-  });
+}
+
+const legacyGovernedValuationComponentRunManifestContentSchema =
+  governedValuationComponentRunInputSchema
+    .extend({
+      schemaVersion: z.literal('governed-valuation-component-run/v1'),
+      approvalState: z.literal('gate_3_review_required'),
+      publicationEligible: z.literal(false),
+      limitation: z.literal(LEGACY_LIMITATION),
+    })
+    .strict()
+    .superRefine(refineComponentRunManifest);
+
+const successorGovernedValuationComponentRunManifestContentSchema =
+  governedValuationComponentRunInputSchema
+    .extend({
+      schemaVersion: z.literal('governed-valuation-component-run/v2'),
+      qualificationState: z.literal('automated_qualification_pending'),
+      publicationEligible: z.literal(false),
+      limitation: z.literal(LIMITATION),
+    })
+    .strict()
+    .superRefine(refineComponentRunManifest);
+
+export const governedValuationComponentRunManifestContentSchema = z.union([
+  legacyGovernedValuationComponentRunManifestContentSchema,
+  successorGovernedValuationComponentRunManifestContentSchema,
+]);
 
 export const governedValuationComponentRunManifestSchema = z
   .object({
@@ -113,15 +141,12 @@ export type GovernedValuationComponentRunManifest = z.infer<
 >;
 
 export function createGovernedValuationComponentRunManifest(
-  input: Omit<
-    z.input<typeof governedValuationComponentRunManifestContentSchema>,
-    'schemaVersion' | 'approvalState' | 'publicationEligible' | 'limitation'
-  >
+  input: z.input<typeof governedValuationComponentRunInputSchema>
 ): GovernedValuationComponentRunManifest {
-  const content = governedValuationComponentRunManifestContentSchema.parse({
-    schemaVersion: SCHEMA_VERSION,
+  const content = successorGovernedValuationComponentRunManifestContentSchema.parse({
+    schemaVersion: 'governed-valuation-component-run/v2',
     ...input,
-    approvalState: 'gate_3_review_required',
+    qualificationState: 'automated_qualification_pending',
     publicationEligible: false,
     limitation: LIMITATION,
   });

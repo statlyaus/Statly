@@ -515,9 +515,15 @@ export function resolveAflTradeGateEligibility(
     return { status: 'blocked', decision, blockers: [stateBlockers[decision.content.state]] };
   }
 
+  const nonExpiringAutomatedGate3 =
+    decision.content.authorityKind === 'automated_validation_record' &&
+    decision.content.environment === 'non_production' &&
+    decision.content.gate === 'gate_3_model_validity' &&
+    decision.content.revalidateAt === null;
   if (
-    decision.content.revalidateAt === null ||
-    Date.parse(decision.content.revalidateAt) <= evaluatedAt
+    !nonExpiringAutomatedGate3 &&
+    (decision.content.revalidateAt === null ||
+      Date.parse(decision.content.revalidateAt) <= evaluatedAt)
   ) {
     return {
       status: 'blocked',

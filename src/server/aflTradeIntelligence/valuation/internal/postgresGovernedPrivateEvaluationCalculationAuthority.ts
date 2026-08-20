@@ -23,7 +23,8 @@ import { PostgresGovernedPrivateEvaluationMaterializationManifestRepository } fr
 
 const BLOCKER_MESSAGES = {
   source_blocked: 'The current factual source authority blocks this calculation.',
-  model_not_approved: 'The required model component has not received current external Gate 3 approval.',
+  model_not_approved:
+    'The required model component is not part of the exact current automated qualification.',
   insufficient_data: 'The prepared evidence is insufficient for this calculation.',
   identity_unresolved: 'A required trade or asset identity remains unresolved.',
   lineage_unresolved: 'A required asset lineage remains unresolved.',

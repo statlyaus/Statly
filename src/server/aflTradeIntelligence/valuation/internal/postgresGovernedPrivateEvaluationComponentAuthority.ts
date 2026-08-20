@@ -1,4 +1,5 @@
 import {
+  createAflTradeCanonicalJsonArtifactRef,
   doAflTradeArtifactRefsExactlyMatch,
   doesAflTradeArtifactRefMatchBytes,
   doesAflTradeArtifactRefMatchCanonicalJson,
@@ -21,6 +22,10 @@ import {
   GovernedValuationComponentRunRepositoryError,
   PostgresGovernedValuationComponentRunRepository,
 } from './postgresGovernedValuationComponentRunRepository';
+import {
+  governedValuationModelQualificationSchema,
+  type GovernedValuationModelQualification,
+} from './governedValuationModelQualification';
 
 interface GateHeadRow {
   readonly revision: number | string;
@@ -36,6 +41,16 @@ interface GateDecisionRow {
   readonly is_current: boolean;
 }
 
+interface CurrentQualificationRow {
+  readonly qualification_id: string;
+  readonly player_run_id: string;
+  readonly pick_run_id: string;
+  readonly player_gate3_decision_id: string;
+  readonly pick_gate3_decision_id: string;
+  readonly artifact_id: string;
+  readonly qualification_json: unknown;
+}
+
 type Unavailable = Readonly<{
   state: 'unavailable';
   blockers: readonly Readonly<{
@@ -49,7 +64,8 @@ const unavailable = (): Unavailable => ({
   blockers: [
     {
       code: 'model_not_approved',
-      message: 'Current external Gate 3 approval is unavailable for both governed model components.',
+      message:
+        'The exact current automated qualification is unavailable for both governed model components.',
     },
   ],
 });
@@ -123,6 +139,78 @@ async function loadGate3(input: {
   return { decision: parsed.data, artifact: input.artifact, isCurrent: row.is_current };
 }
 
+async function loadCurrentQualification(input: {
+  transaction: AflOutcomeSqlTransaction;
+  scopeKey: string;
+  artifactRepository: AflTradeImmutableArtifactRepository;
+  maximumArtifactBytes: number;
+}): Promise<
+  | null
+  | Readonly<{
+      qualification: GovernedValuationModelQualification;
+      artifact: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+      playerRunId: string;
+      pickRunId: string;
+      playerGate3DecisionId: string;
+      pickGate3DecisionId: string;
+    }>
+> {
+  const result = await input.transaction.query<CurrentQualificationRow>(
+    `SELECT current_pair.qualification_id,current_pair.player_run_id,current_pair.pick_run_id,
+       current_pair.player_gate3_decision_id,current_pair.pick_gate3_decision_id,
+       qualification.artifact_id,qualification.qualification_json
+       FROM outcome_current_governed_valuation_model_pair current_pair
+       JOIN outcome_governed_valuation_model_qualification qualification
+         ON qualification.qualification_id=current_pair.qualification_id
+      WHERE current_pair.scope_key=$1`,
+    [input.scopeKey]
+  );
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  if (result.rows.length !== 1 || row === undefined) {
+    throw new TypeError('Current governed model-pair identity is ambiguous.');
+  }
+  const qualification = governedValuationModelQualificationSchema.parse(row.qualification_json);
+  const artifact = createAflTradeCanonicalJsonArtifactRef(
+    qualification,
+    qualification.content.evaluatedAt
+  );
+  if (
+    qualification.qualificationId !== row.qualification_id ||
+    qualification.content.scopeKey !== input.scopeKey ||
+    qualification.content.player.runId !== row.player_run_id ||
+    qualification.content.pick.runId !== row.pick_run_id ||
+    artifact.artifactId !== row.artifact_id
+  ) {
+    throw new TypeError('Current governed model-pair SQL ancestry failed exact authentication.');
+  }
+  const retained = await input.artifactRepository.loadExact(artifact, input.maximumArtifactBytes);
+  if (
+    retained === null ||
+    !doAflTradeArtifactRefsExactlyMatch(retained.reference, artifact) ||
+    !doesAflTradeArtifactRefMatchBytes(artifact, retained.bytes)
+  ) {
+    throw new TypeError('Current governed model-pair retained bytes failed exact authentication.');
+  }
+  let physical: unknown;
+  try {
+    physical = JSON.parse(new TextDecoder().decode(retained.bytes));
+  } catch {
+    throw new TypeError('Current governed model-pair retained bytes are not valid JSON.');
+  }
+  if (canonicalizeAflTradeJson(physical) !== canonicalizeAflTradeJson(qualification)) {
+    throw new TypeError('Current governed model-pair SQL and retained bytes disagree.');
+  }
+  return {
+    qualification,
+    artifact,
+    playerRunId: row.player_run_id,
+    pickRunId: row.pick_run_id,
+    playerGate3DecisionId: row.player_gate3_decision_id,
+    pickGate3DecisionId: row.pick_gate3_decision_id,
+  };
+}
+
 export async function loadCurrentGovernedComponentAuthority(input: {
   transaction: AflOutcomeSqlTransaction;
   trace: GovernedPrivateEvaluationInputTrace;
@@ -149,6 +237,13 @@ export async function loadCurrentGovernedComponentAuthority(input: {
     throw new TypeError('Gate ledger head is unavailable or malformed.');
   }
   if (gateLedgerRevision === 0) return unavailable();
+  const currentQualification = await loadCurrentQualification({
+    transaction: input.transaction,
+    scopeKey: input.trace.content.selector.valuationScopeKey,
+    artifactRepository: input.artifactRepository,
+    maximumArtifactBytes: input.maximumArtifactBytes,
+  });
+  if (currentQualification === null) return unavailable();
   const repository = new PostgresGovernedValuationComponentRunRepository({
     client: transactionClient(input.transaction),
     artifactRepository: input.artifactRepository,
@@ -156,6 +251,22 @@ export async function loadCurrentGovernedComponentAuthority(input: {
   });
   const components: GovernedReadyComponentAuthority[] = [];
   for (const traceComponent of input.trace.content.components) {
+    const expected =
+      traceComponent.role === 'player_contribution_and_availability'
+        ? {
+            runId: currentQualification.playerRunId,
+            gate3DecisionId: currentQualification.playerGate3DecisionId,
+          }
+        : {
+            runId: currentQualification.pickRunId,
+            gate3DecisionId: currentQualification.pickGate3DecisionId,
+          };
+    if (
+      traceComponent.runId !== expected.runId ||
+      traceComponent.gate3DecisionId !== expected.gate3DecisionId
+    ) {
+      return unavailable();
+    }
     let run;
     try {
       run = await repository.loadExact(traceComponent.runId);
@@ -191,6 +302,9 @@ export async function loadCurrentGovernedComponentAuthority(input: {
           gate3IsCurrent: gate3.isCurrent,
           gateLedgerRevision,
           capturedAt: input.capturedAt,
+          qualification: currentQualification.qualification,
+          qualificationArtifact: currentQualification.artifact,
+          currentQualificationId: currentQualification.qualification.qualificationId,
         })
       );
     } catch (error) {

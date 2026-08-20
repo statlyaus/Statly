@@ -40,6 +40,7 @@ export const AFL_TRADE_GOVERNED_ARTIFACT_KINDS = [
   'dataset',
   'model_protocol',
   'model_run',
+  'model_qualification',
   'valuation_bundle',
   'publication',
   'projection',
@@ -62,6 +63,7 @@ const governedArtifactPrefixes = {
   dataset: 'dataset',
   model_protocol: 'model-protocol',
   model_run: 'model-run',
+  model_qualification: 'model-qualification',
   valuation_bundle: 'valuation-bundle',
   publication: 'publication',
   projection: 'projection',
@@ -252,7 +254,7 @@ const aflTradeGateDecisionRecordContentBaseSchema = z
     environment: z.enum(AFL_TRADE_DECISION_ENVIRONMENTS),
     scope: aflTradeGateScopeSchema,
     state: z.enum(AFL_TRADE_GATE_DECISION_STATES),
-    authorityKind: z.enum(['fixture', 'external_human_record']),
+    authorityKind: z.enum(['fixture', 'external_human_record', 'automated_validation_record']),
     accountableOwner: publicIdSchema,
     decidedBy: publicIdSchema.nullable(),
     reviewers: z.array(reviewerSchema).max(20),
@@ -345,13 +347,18 @@ function refineApprovedDecisionRecord(
   decision: AflTradeGateDecisionRecordContent,
   context: z.RefinementCtx
 ) {
-  if (decision.revalidateAt === null) {
+  const isNonExpiringAutomatedGate3 =
+    decision.authorityKind === 'automated_validation_record' &&
+    decision.environment === 'non_production' &&
+    decision.gate === 'gate_3_model_validity';
+  if (decision.revalidateAt === null && !isNonExpiringAutomatedGate3) {
     context.addIssue({
       code: 'custom',
       path: ['revalidateAt'],
       message: 'Approved decisions require a revalidation time.',
     });
   } else if (
+    decision.revalidateAt !== null &&
     decision.effectiveAt !== null &&
     Date.parse(decision.revalidateAt) <= Date.parse(decision.effectiveAt)
   ) {
@@ -366,6 +373,31 @@ function refineApprovedDecisionRecord(
       code: 'custom',
       path: ['authorityKind'],
       message: 'Production approval requires an externally recorded human decision.',
+    });
+  }
+}
+
+function refineAutomatedValidationRecord(
+  decision: AflTradeGateDecisionRecordContent,
+  context: z.RefinementCtx
+) {
+  if (decision.authorityKind !== 'automated_validation_record') return;
+  const modelRuns = decision.affectedArtifacts.filter(({ kind }) => kind === 'model_run');
+  const qualifications = decision.affectedArtifacts.filter(
+    ({ kind }) => kind === 'model_qualification'
+  );
+  if (
+    decision.gate !== 'gate_3_model_validity' ||
+    decision.environment !== 'non_production' ||
+    decision.reviewers.length !== 0 ||
+    modelRuns.length !== 1 ||
+    qualifications.length !== 1
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['authorityKind'],
+      message:
+        'Automated validation authority is limited to one qualified non-production Gate 3 model run.',
     });
   }
 }
@@ -393,6 +425,7 @@ export const aflTradeGateDecisionRecordContentSchema =
     refineFinalizedDecisionRecord(decision, context);
     if (decision.state === 'approved') refineApprovedDecisionRecord(decision, context);
     if (decision.state === 'withdrawn') refineWithdrawnDecisionRecord(decision, context);
+    refineAutomatedValidationRecord(decision, context);
   });
 
 export const aflTradeGateDecisionRecordSchema = z
