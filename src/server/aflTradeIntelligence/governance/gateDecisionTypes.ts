@@ -389,6 +389,8 @@ function refineAutomatedValidationRecord(
   if (
     decision.gate !== 'gate_3_model_validity' ||
     decision.environment !== 'non_production' ||
+    decision.state !== 'approved' ||
+    decision.revalidateAt !== null ||
     decision.reviewers.length !== 0 ||
     modelRuns.length !== 1 ||
     qualifications.length !== 1

@@ -241,18 +241,16 @@ async function loadLedger(
   );
   if (head.rows.length !== 1) throw invalidStored('The Gate ledger head is unavailable.');
 
-  const [proposalRows, decisionRows] = await Promise.all([
-    transaction.query<ProposalRow>(
-      `SELECT proposal_json
-       FROM outcome_gate_proposal
-       ORDER BY proposed_at, gate, decision_key, version, proposal_id`
-    ),
-    transaction.query<DecisionRow>(
-      `SELECT decision_json
-       FROM outcome_gate_decision
-       ORDER BY version, gate, decision_key, decision_id`
-    ),
-  ]);
+  const proposalRows = await transaction.query<ProposalRow>(
+    `SELECT proposal_json
+     FROM outcome_gate_proposal
+     ORDER BY proposed_at, gate, decision_key, version, proposal_id`
+  );
+  const decisionRows = await transaction.query<DecisionRow>(
+    `SELECT decision_json
+     FROM outcome_gate_decision
+     ORDER BY version, gate, decision_key, decision_id`
+  );
   const ledger = {
     proposals: proposalRows.rows.map((row) => parseProposal(row.proposal_json)),
     decisions: decisionRows.rows.map((row) => parseDecision(row.decision_json)),
@@ -378,6 +376,69 @@ async function insertDecision(
       decision,
     ]
   );
+}
+
+export async function appendNewAflTradeGateDecisionsWithinTransaction(
+  transaction: AflOutcomeSqlTransaction,
+  input: Readonly<{
+    expectedRevision: number;
+    records: readonly Readonly<{
+      proposal: AflTradeGateDecisionProposal;
+      decision: AflTradeGateDecisionRecord;
+    }>[];
+    updatedAt: string;
+  }>
+): Promise<AflTradeStoredGateLedger> {
+  if (input.records.length === 0) {
+    throw new AflTradeGateLedgerRepositoryError(
+      'INVALID_APPEND',
+      'A transaction-scoped Gate append requires at least one decision.'
+    );
+  }
+  const records = input.records.map((record) =>
+    parseDecisionAppendInput({ ...record, expectedRevision: input.expectedRevision })
+  );
+  const stored = await loadLedger(transaction, true);
+  if (stored.revision !== input.expectedRevision) {
+    throw new AflTradeGateLedgerRepositoryError(
+      'STALE_REVISION',
+      'The Gate ledger revision changed before the transaction-scoped append.'
+    );
+  }
+  let ledger = stored.ledger;
+  for (const record of records) {
+    if (findReplay(stored, record) !== 'none') {
+      throw new AflTradeGateLedgerRepositoryError(
+        'CONFLICTING_REPLAY',
+        'A transaction-scoped Gate append requires new proposal and decision identities.'
+      );
+    }
+    try {
+      ledger = appendAflTradeGateDecision(ledger, record.proposal, record.decision);
+    } catch (cause) {
+      throw new AflTradeGateLedgerRepositoryError(
+        'INVALID_APPEND',
+        'A Gate decision does not validly extend the transaction-scoped batch.',
+        { cause }
+      );
+    }
+    await insertProposal(transaction, record.proposal);
+    await insertDecision(transaction, record.decision);
+  }
+  const revision = stored.revision + records.length;
+  const updated = await transaction.query(
+    `UPDATE outcome_gate_ledger_head
+     SET revision=$1,updated_at=$2
+     WHERE singleton_id=1 AND revision=$3`,
+    [revision, input.updatedAt, stored.revision]
+  );
+  if (updated.rowCount !== 1) {
+    throw new AflTradeGateLedgerRepositoryError(
+      'STALE_REVISION',
+      'The locked Gate ledger head could not be advanced for the transaction-scoped batch.'
+    );
+  }
+  return { revision, ledger };
 }
 
 class PostgresAflTradeGateDecisionLedgerRepository implements AflTradeGateDecisionLedgerRepository {

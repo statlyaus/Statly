@@ -398,6 +398,8 @@ describe('AFL trade-intelligence gate decisions', () => {
     for (const invalidContent of [
       { ...decisionContent, environment: 'production' as const },
       { ...decisionContent, gate: 'gate_4_publication_api_readiness' as const },
+      { ...decisionContent, revalidateAt: '2027-08-21T09:00:00.000Z' },
+      { ...decisionContent, state: 'rejected' as const },
     ]) {
       expect(
         aflTradeGateDecisionRecordSchema.safeParse({

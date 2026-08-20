@@ -4,7 +4,10 @@ import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelli
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { aflTradeGateDecisionRecordSchema } from '@/server/aflTradeIntelligence/governance/gateDecisionTypes';
 import { authenticateGovernedReadyComponentAuthority } from '@/server/aflTradeIntelligence/valuation/internal/governedReadyComponentAuthority';
-import { createGovernedValuationModelQualification } from '@/server/aflTradeIntelligence/valuation/internal/governedValuationModelQualification';
+import {
+  createGovernedValuationModelQualification,
+  createGovernedValuationModelQualificationPolicy,
+} from '@/server/aflTradeIntelligence/valuation/internal/governedValuationModelQualification';
 import { createGovernedValuationComponentRunManifest } from '@/server/aflTradeIntelligence/valuation/internal/governedValuationComponentRunManifest';
 
 const capturedAt = '2026-08-20T10:00:00.000Z';
@@ -26,9 +29,7 @@ function qualificationFor(
   run: ReturnType<typeof createGovernedValuationComponentRunManifest>,
   options: Readonly<{ playerMinimumComparableObservations?: number }> = {}
 ) {
-  const policy = {
-    schemaVersion: 'governed-valuation-model-qualification-policy/v1' as const,
-    policyVersion: 'ready-authority-v1',
+  const policy = createGovernedValuationModelQualificationPolicy({
     player: {
       schemaVersion: 'governed-player-model-qualification-criteria/v1' as const,
       minimumComparableObservations: options.playerMinimumComparableObservations ?? 1,
@@ -53,7 +54,7 @@ function qualificationFor(
       maximumMeanEmpiricalIntervalWidth: 100,
       maximumZeroProbabilityObservationCount: 0,
     },
-  };
+  });
   const playerEvidence = {
     schemaVersion: 'governed-player-model-qualification-evidence/v1' as const,
     validationReportId: createAflTradeContentAddress('player-validation-report', 'ready-player'),
@@ -356,6 +357,21 @@ describe('governed ready component authority', () => {
         currentQualificationId: otherQualification.qualification.qualificationId,
       })
     ).toThrow(/exact component run/i);
+
+    const crossScope = replaceDecision(value, {
+      ...value.gate3Decision.content,
+      scope: { ...value.gate3Decision.content.scope, scopeKey: 'afl-men:2024-trades' },
+    });
+    expect(() =>
+      authenticateGovernedReadyComponentAuthority({
+        ...common,
+        ...crossScope,
+        gate3IsCurrent: true,
+        qualification: value.qualification,
+        qualificationArtifact: value.qualificationArtifact,
+        currentQualificationId: value.qualification.qualificationId,
+      })
+    ).toThrow(/exact run and qualification/i);
   });
 
   it('rejects a legacy pick fixture wrapper even when a Gate 3 record names it', () => {

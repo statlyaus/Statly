@@ -90,6 +90,7 @@ function requireExactAncestry(input: {
 function requireCurrentGate3(input: {
   readonly runId: string;
   readonly qualificationId: string;
+  readonly qualificationScopeKey: string;
   readonly decision: AflTradeGateDecisionRecord;
   readonly isCurrent: boolean;
   readonly capturedAt: string;
@@ -108,6 +109,7 @@ function requireCurrentGate3(input: {
     decision.authorityKind !== 'automated_validation_record' ||
     decision.effectiveAt === null ||
     decision.revalidateAt !== null ||
+    decision.scope.scopeKey !== input.qualificationScopeKey ||
     !decision.affectedArtifacts.some(
       ({ kind, artifactId }) => kind === 'model_run' && artifactId === input.runId
     ) ||
@@ -192,6 +194,7 @@ export function authenticateGovernedReadyComponentAuthority(input: {
   requireCurrentGate3({
     runId: input.run.manifest.runId,
     qualificationId: qualification.qualificationId,
+    qualificationScopeKey: qualification.content.scopeKey,
     decision: gate3Decision,
     isCurrent: input.gate3IsCurrent,
     capturedAt: input.capturedAt,

@@ -69,14 +69,40 @@ export const governedPickModelQualificationCriteriaSchema = z
     }
   });
 
-export const governedValuationModelQualificationPolicySchema = z
+const governedValuationModelQualificationThresholdsSchema = z
   .object({
-    schemaVersion: z.literal(POLICY_SCHEMA_VERSION),
-    policyVersion: publicIdSchema,
     player: governedPlayerModelQualificationCriteriaSchema,
     pick: governedPickModelQualificationCriteriaSchema,
   })
   .strict();
+
+export const governedValuationModelQualificationPolicySchema =
+  governedValuationModelQualificationThresholdsSchema
+    .extend({
+      schemaVersion: z.literal(POLICY_SCHEMA_VERSION),
+      policyVersion: aflTradeContentAddressedIdSchema('model-qualification-policy'),
+    })
+    .strict()
+    .superRefine((policy, context) => {
+      addAflTradeContentAddressIssue(
+        'model-qualification-policy',
+        policy.policyVersion,
+        { player: policy.player, pick: policy.pick },
+        context,
+        ['policyVersion']
+      );
+    });
+
+export function createGovernedValuationModelQualificationPolicy(
+  input: z.input<typeof governedValuationModelQualificationThresholdsSchema>
+): z.infer<typeof governedValuationModelQualificationPolicySchema> {
+  const thresholds = governedValuationModelQualificationThresholdsSchema.parse(input);
+  return governedValuationModelQualificationPolicySchema.parse({
+    schemaVersion: POLICY_SCHEMA_VERSION,
+    policyVersion: createAflTradeContentAddress('model-qualification-policy', thresholds),
+    ...thresholds,
+  });
+}
 
 const playerEvidenceSchema = z
   .object({

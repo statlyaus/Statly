@@ -227,6 +227,13 @@ CREATE OR REPLACE FUNCTION "validate_outcome_governed_model_qualification_insert
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
   content JSONB := NEW."qualification_json"->'content';
+  policy JSONB;
+  player_evidence JSONB;
+  pick_evidence JSONB;
+  pick_metrics JSONB;
+  expected_failure_codes JSONB := '[]'::JSONB;
+  player_failed BOOLEAN := FALSE;
+  pick_failed BOOLEAN := FALSE;
   player_run RECORD;
   pick_run RECORD;
 BEGIN
@@ -234,15 +241,77 @@ BEGIN
    WHERE "run_id"=NEW."player_run_id" FOR KEY SHARE;
   SELECT * INTO STRICT pick_run FROM "outcome_governed_valuation_component_run"
    WHERE "run_id"=NEW."pick_run_id" FOR KEY SHARE;
+  policy:=content->'policy';
+  player_evidence:=content->'player'->'validationEvidence';
+  pick_evidence:=content->'pick'->'validationEvidence';
+  pick_metrics:=pick_evidence->'metrics';
+  IF (player_evidence->>'comparableObservationCount')::INTEGER <
+       (policy->'player'->>'minimumComparableObservations')::INTEGER THEN
+    expected_failure_codes:=expected_failure_codes || jsonb_build_array('player_observation_count_below_minimum');
+    player_failed:=TRUE;
+  END IF;
+  IF player_evidence->>'acceptanceOutcome' IS DISTINCT FROM
+       policy->'player'->>'requiredAcceptanceOutcome' THEN
+    expected_failure_codes:=expected_failure_codes || jsonb_build_array('player_acceptance_outcome_not_met');
+    player_failed:=TRUE;
+  END IF;
+  IF player_evidence->>'relativeMaeImprovement' IS NULL OR
+     (player_evidence->>'relativeMaeImprovement')::NUMERIC <
+       (policy->'player'->>'minimumRelativeMaeImprovement')::NUMERIC THEN
+    expected_failure_codes:=expected_failure_codes || jsonb_build_array('player_mae_improvement_below_minimum');
+    player_failed:=TRUE;
+  END IF;
+  IF player_evidence->>'relativeRmseImprovement' IS NULL OR
+     (player_evidence->>'relativeRmseImprovement')::NUMERIC <
+       (policy->'player'->>'minimumRelativeRmseImprovement')::NUMERIC THEN
+    expected_failure_codes:=expected_failure_codes || jsonb_build_array('player_rmse_improvement_below_minimum');
+    player_failed:=TRUE;
+  END IF;
+  IF pick_evidence->>'evaluationStatus' IS DISTINCT FROM 'scored_not_approved' THEN
+    expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_evaluation_not_scored');
+    pick_failed:=TRUE;
+  END IF;
+  IF (pick_evidence->>'observationCount')::INTEGER <
+       (policy->'pick'->>'minimumObservations')::INTEGER THEN
+    expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_observation_count_below_minimum');
+    pick_failed:=TRUE;
+  END IF;
+  IF pick_metrics IS NULL OR pick_metrics='null'::JSONB THEN
+    expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_metrics_unavailable');
+    pick_failed:=TRUE;
+  ELSE
+    IF (pick_metrics->>'multiclassBrierScore')::NUMERIC > (policy->'pick'->>'maximumMulticlassBrierScore')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_brier_score_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'rankedProbabilityScore')::NUMERIC > (policy->'pick'->>'maximumRankedProbabilityScore')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_ranked_probability_score_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'contributionCrps')::NUMERIC > (policy->'pick'->>'maximumContributionCrps')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_contribution_crps_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'meanAbsoluteContributionError')::NUMERIC > (policy->'pick'->>'maximumMeanAbsoluteContributionError')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_contribution_mae_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'rootMeanSquaredContributionError')::NUMERIC > (policy->'pick'->>'maximumRootMeanSquaredContributionError')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_contribution_rmse_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'meanAbsoluteGamesError')::NUMERIC > (policy->'pick'->>'maximumMeanAbsoluteGamesError')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_games_mae_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'rootMeanSquaredGamesError')::NUMERIC > (policy->'pick'->>'maximumRootMeanSquaredGamesError')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_games_rmse_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'meanEmpiricalIntervalWidth')::NUMERIC > (policy->'pick'->>'maximumMeanEmpiricalIntervalWidth')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_interval_width_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'zeroProbabilityObservationCount')::INTEGER > (policy->'pick'->>'maximumZeroProbabilityObservationCount')::INTEGER THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_zero_probability_count_above_maximum'); pick_failed:=TRUE; END IF;
+    IF pick_metrics->>'multiclassLogLoss' IS NULL THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_log_loss_unavailable'); pick_failed:=TRUE;
+    ELSIF (pick_metrics->>'multiclassLogLoss')::NUMERIC > (policy->'pick'->>'maximumMulticlassLogLoss')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_log_loss_above_maximum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'empiricalP10P90Coverage')::NUMERIC < (policy->'pick'->>'minimumEmpiricalP10P90Coverage')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_coverage_below_minimum'); pick_failed:=TRUE; END IF;
+    IF (pick_metrics->>'empiricalP10P90Coverage')::NUMERIC > (policy->'pick'->>'maximumEmpiricalP10P90Coverage')::NUMERIC THEN expected_failure_codes:=expected_failure_codes || jsonb_build_array('pick_coverage_above_maximum'); pick_failed:=TRUE; END IF;
+  END IF;
   IF NEW."qualification_json"->>'qualificationId' IS DISTINCT FROM NEW."qualification_id"
     OR content->>'schemaVersion' IS DISTINCT FROM 'governed-valuation-model-qualification/v1'
     OR content->>'environment' IS DISTINCT FROM 'non_production'
     OR content->>'scopeKey' IS DISTINCT FROM NEW."scope_key"
     OR content->>'outcome' IS DISTINCT FROM NEW."outcome"
+    OR content->'failureCodes' IS DISTINCT FROM expected_failure_codes
+    OR (content->'player'->>'passed')::BOOLEAN IS DISTINCT FROM (NOT player_failed)
+    OR (content->'pick'->>'passed')::BOOLEAN IS DISTINCT FROM (NOT pick_failed)
+    OR content->>'outcome' IS DISTINCT FROM
+      (CASE WHEN player_failed OR pick_failed THEN 'failed' ELSE 'qualified' END)
     OR content->>'publicationEligible' IS DISTINCT FROM 'false'
     OR content->'player'->>'runId' IS DISTINCT FROM NEW."player_run_id"
     OR content->'pick'->>'runId' IS DISTINCT FROM NEW."pick_run_id"
     OR content->'policyArtifact'->>'artifactId' IS DISTINCT FROM NEW."policy_artifact_id"
+    OR policy->>'policyVersion' IS DISTINCT FROM 'model-qualification-policy:' || encode(sha256(convert_to(
+      outcome_afl_trade_canonical_json(jsonb_build_object('player',policy->'player','pick',policy->'pick')),'UTF8')),'hex')
+    OR NEW."policy_artifact_id" IS DISTINCT FROM 'artifact:' || encode(sha256(convert_to(
+      outcome_afl_trade_canonical_json(policy),'UTF8')),'hex')
     OR content->'player'->'criteriaArtifact'->>'artifactId'
       IS DISTINCT FROM NEW."player_criteria_artifact_id"
     OR content->'pick'->'criteriaArtifact'->>'artifactId'
@@ -251,6 +320,14 @@ BEGIN
       IS DISTINCT FROM NEW."player_evidence_artifact_id"
     OR content->'pick'->'validationEvidenceArtifact'->>'artifactId'
       IS DISTINCT FROM NEW."pick_evidence_artifact_id"
+    OR NEW."player_criteria_artifact_id" IS DISTINCT FROM 'artifact:' || encode(sha256(convert_to(
+      outcome_afl_trade_canonical_json(policy->'player'),'UTF8')),'hex')
+    OR NEW."pick_criteria_artifact_id" IS DISTINCT FROM 'artifact:' || encode(sha256(convert_to(
+      outcome_afl_trade_canonical_json(policy->'pick'),'UTF8')),'hex')
+    OR NEW."player_evidence_artifact_id" IS DISTINCT FROM 'artifact:' || encode(sha256(convert_to(
+      outcome_afl_trade_canonical_json(player_evidence),'UTF8')),'hex')
+    OR NEW."pick_evidence_artifact_id" IS DISTINCT FROM 'artifact:' || encode(sha256(convert_to(
+      outcome_afl_trade_canonical_json(pick_evidence),'UTF8')),'hex')
     OR (content->>'evaluatedAt')::TIMESTAMPTZ IS DISTINCT FROM NEW."evaluated_at"
     OR NEW."content_sha256" IS DISTINCT FROM substring(NEW."qualification_id" FROM 21)
     OR NEW."content_canonical_json" IS DISTINCT FROM outcome_afl_trade_canonical_json(content)
@@ -361,6 +438,14 @@ BEGIN
   IF qualification."outcome"<>'qualified' OR qualification."scope_key"<>target_scope_key
     OR work."qualification_id"<>qualification."qualification_id"
     OR work."scope_key"<>target_scope_key OR work."status"<>'pending'
+    OR work."available_at" IS DISTINCT FROM target_advanced_at
+    OR work."work_json"->'content'->>'scopeKey' IS DISTINCT FROM target_scope_key
+    OR work."work_json"->'content'->>'qualificationId' IS DISTINCT FROM qualification."qualification_id"
+    OR work."work_json"->'content'->>'playerRunId' IS DISTINCT FROM qualification."player_run_id"
+    OR work."work_json"->'content'->>'pickRunId' IS DISTINCT FROM qualification."pick_run_id"
+    OR work."work_json"->'content'->>'playerGate3DecisionId' IS DISTINCT FROM player_decision."decision_id"
+    OR work."work_json"->'content'->>'pickGate3DecisionId' IS DISTINCT FROM pick_decision."decision_id"
+    OR (work."work_json"->'content'->>'availableAt')::TIMESTAMPTZ IS DISTINCT FROM target_advanced_at
     OR work."player_gate3_decision_id"<>player_decision."decision_id"
     OR work."pick_gate3_decision_id"<>pick_decision."decision_id"
     OR player_decision."state"<>'approved' OR pick_decision."state"<>'approved'
@@ -368,8 +453,15 @@ BEGIN
     OR pick_decision."gate"<>'gate_3_model_validity'
     OR player_decision."environment"<>'non_production'::"OutcomeEnvironment"
     OR pick_decision."environment"<>'non_production'::"OutcomeEnvironment"
+    OR player_decision."decision_json"->'content'->'scope'->>'scopeKey' IS DISTINCT FROM target_scope_key
+    OR pick_decision."decision_json"->'content'->'scope'->>'scopeKey' IS DISTINCT FROM target_scope_key
     OR player_decision."decision_json"->'content'->>'authorityKind'<>'automated_validation_record'
     OR pick_decision."decision_json"->'content'->>'authorityKind'<>'automated_validation_record'
+    OR NOT (player_decision."decision_json"->'content'->'authorityEvidenceIds' ? qualification."artifact_id")
+    OR NOT (pick_decision."decision_json"->'content'->'authorityEvidenceIds' ? qualification."artifact_id")
+    OR target_advanced_at<qualification."evaluated_at"
+    OR target_advanced_at<player_decision."effective_at"
+    OR target_advanced_at<pick_decision."effective_at"
     OR NOT EXISTS (
       SELECT 1 FROM jsonb_array_elements(
         player_decision."decision_json"->'content'->'affectedArtifacts'

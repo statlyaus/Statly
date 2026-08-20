@@ -6,14 +6,9 @@ import {
 import { canonicalizeAflTradeJson } from '../../artifacts/contentAddress';
 import type { AflTradeImmutableArtifactRepository } from '../../artifacts/immutableArtifactRepository';
 import {
-  appendAflTradeGateDecision,
-  validateAflTradeGateDecisionLedger,
-  type AflTradeGateDecisionLedger,
-} from '../../governance/gateDecisionLedger';
-import {
-  aflTradeGateDecisionProposalSchema,
-  aflTradeGateDecisionRecordSchema,
-} from '../../governance/gateDecisionTypes';
+  AflTradeGateLedgerRepositoryError,
+  appendNewAflTradeGateDecisionsWithinTransaction,
+} from '../../governance/postgresGateDecisionLedgerRepository';
 import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
@@ -28,10 +23,6 @@ import {
   governedValuationModelQualificationWorkSchema,
   type GovernedValuationModelQualificationWork,
 } from './governedValuationModelQualificationWork';
-
-interface GateHeadRow extends Record<string, unknown> {
-  revision: number;
-}
 
 interface JsonRow extends Record<string, unknown> {
   value: unknown;
@@ -115,80 +106,6 @@ async function loadCurrentFrom(
     );
   }
   return result.rows[0] ? currentPair(result.rows[0]) : null;
-}
-
-async function loadGateLedger(
-  transaction: AflOutcomeSqlTransaction
-): Promise<{ revision: number; ledger: AflTradeGateDecisionLedger }> {
-  const head = await transaction.query<GateHeadRow>(
-    `SELECT revision FROM outcome_gate_ledger_head WHERE singleton_id=1 FOR UPDATE`
-  );
-  const proposals = await transaction.query<JsonRow>(
-    `SELECT proposal_json AS value FROM outcome_gate_proposal
-     ORDER BY proposed_at,gate,decision_key,version,proposal_id`
-  );
-  const decisions = await transaction.query<JsonRow>(
-    `SELECT decision_json AS value FROM outcome_gate_decision
-     ORDER BY version,gate,decision_key,decision_id`
-  );
-  const ledger = {
-    proposals: proposals.rows.map(({ value }) => aflTradeGateDecisionProposalSchema.parse(value)),
-    decisions: decisions.rows.map(({ value }) => aflTradeGateDecisionRecordSchema.parse(value)),
-  };
-  if (
-    head.rows.length !== 1 ||
-    !validateAflTradeGateDecisionLedger(ledger).valid ||
-    head.rows[0]!.revision !== ledger.decisions.length
-  ) {
-    throw new GovernedValuationModelQualificationRepositoryError(
-      'INTEGRITY_MISMATCH',
-      'Stored Gate ledger failed exact authentication.'
-    );
-  }
-  return { revision: head.rows[0].revision, ledger };
-}
-
-async function insertGateRecord(
-  transaction: AflOutcomeSqlTransaction,
-  record: GovernedValuationModelQualificationGateRecord
-): Promise<void> {
-  const proposal = record.proposal;
-  const decision = record.decision;
-  await transaction.query(
-    `INSERT INTO outcome_gate_proposal
-      (proposal_id,gate,decision_key,version,environment,scope_key,proposed_at,proposal_json)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
-    [
-      proposal.proposalId,
-      proposal.content.gate,
-      proposal.content.decisionKey,
-      proposal.content.version,
-      proposal.content.environment,
-      proposal.content.scope.scopeKey,
-      proposal.content.proposedAt,
-      canonicalizeAflTradeJson(proposal),
-    ]
-  );
-  await transaction.query(
-    `INSERT INTO outcome_gate_decision
-      (decision_id,proposal_id,gate,decision_key,version,environment,state,decided_at,
-       effective_at,revalidate_at,supersedes_decision_id,decision_json)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
-    [
-      decision.decisionId,
-      decision.content.proposalId,
-      decision.content.gate,
-      decision.content.decisionKey,
-      decision.content.version,
-      decision.content.environment,
-      decision.content.state,
-      decision.content.decidedAt,
-      decision.content.effectiveAt,
-      decision.content.revalidateAt,
-      decision.content.supersedesDecisionId,
-      canonicalizeAflTradeJson(decision),
-    ]
-  );
 }
 
 async function retainQualification(
@@ -391,14 +308,6 @@ export class PostgresGovernedValuationModelQualificationRepository {
         const work = governedValuationModelQualificationWorkSchema.parse(workResult.rows[0]?.value);
         return { status: 'advanced', qualification, current: existingCurrent, work, idempotentReplay: true };
       }
-      const gate = await loadGateLedger(transaction);
-      if (gate.revision !== input.expectedGateLedgerRevision) {
-        throw new GovernedValuationModelQualificationRepositoryError(
-          'STALE_GATE_LEDGER',
-          'Gate ledger changed before the qualified pair could commit.'
-        );
-      }
-      let candidate = gate.ledger;
       const expectedRunIds = [
         qualification.content.player.runId,
         qualification.content.pick.runId,
@@ -407,6 +316,8 @@ export class PostgresGovernedValuationModelQualificationRepository {
         const decision = record.decision.content;
         if (
           decision.authorityKind !== 'automated_validation_record' ||
+          decision.scope.scopeKey !== qualification.content.scopeKey ||
+          !decision.authorityEvidenceIds.includes(input.qualificationArtifact.artifactId) ||
           !decision.affectedArtifacts.some(
             ({ kind, artifactId }) =>
               kind === 'model_run' && artifactId === expectedRunIds[index]
@@ -421,25 +332,44 @@ export class PostgresGovernedValuationModelQualificationRepository {
             'Gate 3 records do not cite the exact role-specific run and shared qualification.'
           );
         }
-        candidate = appendAflTradeGateDecision(candidate, record.proposal, record.decision);
-        await insertGateRecord(transaction, record);
       }
-      const updatedHead = await transaction.query(
-        `UPDATE outcome_gate_ledger_head SET revision=$1,updated_at=$2
-         WHERE singleton_id=1 AND revision=$3`,
-        [gate.revision + 2, qualification.content.evaluatedAt, gate.revision]
-      );
-      if (updatedHead.rowCount !== 1) {
-        throw new GovernedValuationModelQualificationRepositoryError(
-          'STALE_GATE_LEDGER',
-          'Gate ledger head changed before the qualified pair could commit.'
-        );
+      const authorityEffectiveAt = new Date(
+        Math.max(
+          ...input.gateRecords.map(({ decision }) => {
+            if (decision.content.effectiveAt === null) {
+              throw new GovernedValuationModelQualificationRepositoryError(
+                'INTEGRITY_MISMATCH',
+                'Automated Gate 3 authority must have an effective time.'
+              );
+            }
+            return Date.parse(decision.content.effectiveAt);
+          })
+        )
+      ).toISOString();
+      try {
+        await appendNewAflTradeGateDecisionsWithinTransaction(transaction, {
+          expectedRevision: input.expectedGateLedgerRevision,
+          records: input.gateRecords,
+          updatedAt: authorityEffectiveAt,
+        });
+      } catch (cause) {
+        if (
+          cause instanceof AflTradeGateLedgerRepositoryError &&
+          cause.code === 'STALE_REVISION'
+        ) {
+          throw new GovernedValuationModelQualificationRepositoryError(
+            'STALE_GATE_LEDGER',
+            'Gate ledger changed before the qualified pair could commit.',
+            { cause }
+          );
+        }
+        throw cause;
       }
       const work = createGovernedValuationModelQualificationWork({
         qualification,
         playerGate3DecisionId: input.gateRecords[0].decision.decisionId,
         pickGate3DecisionId: input.gateRecords[1].decision.decisionId,
-        availableAt: qualification.content.evaluatedAt,
+        availableAt: authorityEffectiveAt,
       });
       await retainWork(transaction, work);
       let revisionResult;
@@ -454,10 +384,16 @@ export class PostgresGovernedValuationModelQualificationRepository {
             input.gateRecords[1].decision.decisionId,
             work.workId,
             input.expectedCurrentRevision,
-            qualification.content.evaluatedAt,
+            authorityEffectiveAt,
           ]
         );
       } catch (cause) {
+        if (
+          !(cause instanceof Error) ||
+          !cause.message.includes('Stale current model-pair revision')
+        ) {
+          throw cause;
+        }
         throw new GovernedValuationModelQualificationRepositoryError(
           'STALE_CURRENT_PAIR',
           'Current model pair changed before the qualification could advance.',

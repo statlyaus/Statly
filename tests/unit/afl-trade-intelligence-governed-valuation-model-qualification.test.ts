@@ -5,6 +5,7 @@ import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/arti
 import {
   createGovernedValuationModelQualification,
   createGovernedValuationModelQualificationGateRecords,
+  createGovernedValuationModelQualificationPolicy,
 } from '@/server/aflTradeIntelligence/valuation/internal/governedValuationModelQualification';
 
 const evaluatedAt = '2026-08-21T09:00:00.000Z';
@@ -15,9 +16,7 @@ function ref(prefix: string, label: string) {
 }
 
 function fixture() {
-  const policy = {
-    schemaVersion: 'governed-valuation-model-qualification-policy/v1' as const,
-    policyVersion: 'afl-men-private-model-pair-v1',
+  const policy = createGovernedValuationModelQualificationPolicy({
     player: {
       schemaVersion: 'governed-player-model-qualification-criteria/v1' as const,
       minimumComparableObservations: 100,
@@ -42,7 +41,7 @@ function fixture() {
       maximumMeanEmpiricalIntervalWidth: 80,
       maximumZeroProbabilityObservationCount: 0,
     },
-  };
+  });
   const playerEvidence = {
     schemaVersion: 'governed-player-model-qualification-evidence/v1' as const,
     validationReportId: createAflTradeContentAddress('player-validation-report', 'player-report'),
@@ -119,6 +118,9 @@ describe('governed valuation model qualification', () => {
     const qualification = createGovernedValuationModelQualification(input);
 
     expect(qualification.qualificationId).toMatch(/^model-qualification:[a-f0-9]{64}$/u);
+    expect(qualification.content.policy.policyVersion).toMatch(
+      /^model-qualification-policy:[a-f0-9]{64}$/u
+    );
     expect(qualification.content).toMatchObject({
       environment: 'non_production',
       scopeKey: input.scopeKey,
@@ -162,6 +164,18 @@ describe('governed valuation model qualification', () => {
 
   it('rejects criteria or evidence that are not authenticated by their retained references', () => {
     const input = fixture();
+    const conflictingPolicy = {
+      ...input.policy,
+      player: { ...input.policy.player, minimumComparableObservations: 101 },
+    };
+    expect(() =>
+      createGovernedValuationModelQualification({
+        ...input,
+        policy: conflictingPolicy,
+        policyArtifact: createAflTradeCanonicalJsonArtifactRef(conflictingPolicy, evaluatedAt),
+      })
+    ).toThrow(/policyVersion|content-address/i);
+
     expect(() =>
       createGovernedValuationModelQualification({
         ...input,

@@ -2,12 +2,16 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
-import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import {
+  canonicalizeAflTradeJson,
+  createAflTradeContentAddress,
+} from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import {
   createGovernedValuationModelQualification,
   createGovernedValuationModelQualificationGateRecords,
+  createGovernedValuationModelQualificationPolicy,
 } from '@/server/aflTradeIntelligence/valuation/internal/governedValuationModelQualification';
 import { createGovernedValuationComponentRunManifest } from '@/server/aflTradeIntelligence/valuation/internal/governedValuationComponentRunManifest';
 import { PostgresGovernedValuationComponentRunRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedValuationComponentRunRepository';
@@ -32,6 +36,7 @@ const pool = new Pool({
 const artifacts = createAflTradeFixtureArtifactRepository({ artifactClass: 'derived_private' });
 const retainedAt = '2026-08-21T08:00:00.000Z';
 const evaluatedAt = '2026-08-21T09:00:00.000Z';
+const authorityAt = '2026-08-21T09:05:00.000Z';
 
 function scopedDatabaseUrl(targetSchema: string) {
   const scoped = new URL(databaseUrl);
@@ -122,9 +127,7 @@ async function qualificationFixture(
   suffix: string,
   passing: boolean
 ) {
-  const policy = {
-    schemaVersion: 'governed-valuation-model-qualification-policy/v1' as const,
-    policyVersion: `afl-men-private-model-pair-${suffix}`,
+  const policy = createGovernedValuationModelQualificationPolicy({
     player: {
       schemaVersion: 'governed-player-model-qualification-criteria/v1' as const,
       minimumComparableObservations: 100,
@@ -149,10 +152,13 @@ async function qualificationFixture(
       maximumMeanEmpiricalIntervalWidth: 80,
       maximumZeroProbabilityObservationCount: 0,
     },
-  };
+  });
   const playerEvidence = {
     schemaVersion: 'governed-player-model-qualification-evidence/v1' as const,
-    validationReportId: `player-validation-report:${'e'.repeat(64)}`,
+    validationReportId: createAflTradeContentAddress(
+      'player-validation-report',
+      `player-${suffix}`
+    ),
     comparableObservationCount: 120,
     acceptanceOutcome: 'meets_declared_predictive_thresholds' as const,
     relativeMaeImprovement: passing ? 0.08 : 0.01,
@@ -160,7 +166,10 @@ async function qualificationFixture(
   };
   const pickEvidence = {
     schemaVersion: 'governed-pick-model-qualification-evidence/v1' as const,
-    validationReportId: `pick-pav-validation-report:${'f'.repeat(64)}`,
+    validationReportId: createAflTradeContentAddress(
+      'pick-pav-validation-report',
+      `pick-${suffix}`
+    ),
     evaluationStatus: 'scored_not_approved' as const,
     scope: 'final_test' as const,
     observationCount: 40,
@@ -211,6 +220,38 @@ async function qualificationFixture(
   return { qualification, qualificationArtifact };
 }
 
+async function insertQualificationDirectly(
+  qualification: Awaited<ReturnType<typeof qualificationFixture>>['qualification'],
+  artifactId: string
+) {
+  const content = qualification.content;
+  return pool.query(
+    `INSERT INTO outcome_governed_valuation_model_qualification
+      (qualification_id,scope_key,outcome,artifact_id,player_run_id,pick_run_id,
+       policy_artifact_id,player_criteria_artifact_id,pick_criteria_artifact_id,
+       player_evidence_artifact_id,pick_evidence_artifact_id,evaluated_at,content_sha256,
+       content_canonical_json,qualification_json)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
+    [
+      qualification.qualificationId,
+      content.scopeKey,
+      content.outcome,
+      artifactId,
+      content.player.runId,
+      content.pick.runId,
+      content.policyArtifact.artifactId,
+      content.player.criteriaArtifact.artifactId,
+      content.pick.criteriaArtifact.artifactId,
+      content.player.validationEvidenceArtifact.artifactId,
+      content.pick.validationEvidenceArtifact.artifactId,
+      content.evaluatedAt,
+      qualification.qualificationId.slice('model-qualification:'.length),
+      canonicalizeAflTradeJson(content),
+      canonicalizeAflTradeJson(qualification),
+    ]
+  );
+}
+
 describe('governed model qualification PostgreSQL registry', () => {
   it('advances one passing pair atomically, replays it, and isolates failed or stale candidates', async () => {
     const runs = await componentRuns();
@@ -220,9 +261,62 @@ describe('governed model qualification PostgreSQL registry', () => {
       maximumArtifactBytes: 1024 * 1024,
     });
     const passing = await qualificationFixture(runs, 'v1', true);
+    const forgedEvidence = {
+      ...passing.qualification.content.player.validationEvidence,
+      relativeMaeImprovement: 0,
+    };
+    const forgedContent = {
+      ...passing.qualification.content,
+      player: {
+        ...passing.qualification.content.player,
+        validationEvidence: forgedEvidence,
+        validationEvidenceArtifact: await retain(forgedEvidence, evaluatedAt),
+      },
+    };
+    const forgedQualification = {
+      qualificationId: createAflTradeContentAddress('model-qualification', forgedContent),
+      content: forgedContent,
+    };
+    const forgedArtifact = await retain(forgedQualification, evaluatedAt);
+    await expect(
+      insertQualificationDirectly(forgedQualification, forgedArtifact.artifactId)
+    ).rejects.toThrow(/ancestry|mismatch/i);
+    const conflictingPolicy = {
+      ...passing.qualification.content.policy,
+      player: {
+        ...passing.qualification.content.policy.player,
+        minimumComparableObservations: 101,
+      },
+    };
+    const conflictingPolicyContent = {
+      ...passing.qualification.content,
+      policy: conflictingPolicy,
+      policyArtifact: await retain(conflictingPolicy, evaluatedAt),
+      player: {
+        ...passing.qualification.content.player,
+        criteriaArtifact: await retain(conflictingPolicy.player, evaluatedAt),
+      },
+    };
+    const conflictingPolicyQualification = {
+      qualificationId: createAflTradeContentAddress(
+        'model-qualification',
+        conflictingPolicyContent
+      ),
+      content: conflictingPolicyContent,
+    };
+    const conflictingPolicyArtifact = await retain(
+      conflictingPolicyQualification,
+      evaluatedAt
+    );
+    await expect(
+      insertQualificationDirectly(
+        conflictingPolicyQualification,
+        conflictingPolicyArtifact.artifactId
+      )
+    ).rejects.toThrow(/ancestry|mismatch/i);
     const gates = createGovernedValuationModelQualificationGateRecords({
       ...passing,
-      decidedAt: evaluatedAt,
+      decidedAt: authorityAt,
       automationPrincipal: 'statly-model-qualification-agent',
       accountableOwner: 'statly-model-owner',
       versions: { player: 1, pick: 1 },
@@ -239,7 +333,13 @@ describe('governed model qualification PostgreSQL registry', () => {
       status: 'advanced',
       idempotentReplay: false,
       current: { revision: 1, qualificationId: passing.qualification.qualificationId },
-      work: { content: { status: 'pending', cause: 'current_qualified_model_pair_advanced' } },
+      work: {
+        content: {
+          status: 'pending',
+          cause: 'current_qualified_model_pair_advanced',
+          availableAt: authorityAt,
+        },
+      },
     });
     await expect(
       repository.register({
@@ -265,7 +365,7 @@ describe('governed model qualification PostgreSQL registry', () => {
     const stale = await qualificationFixture(runs, 'v2', true);
     const staleGates = createGovernedValuationModelQualificationGateRecords({
       ...stale,
-      decidedAt: evaluatedAt,
+      decidedAt: '2026-08-21T09:10:00.000Z',
       automationPrincipal: 'statly-model-qualification-agent',
       accountableOwner: 'statly-model-owner',
       versions: { player: 2, pick: 2 },
@@ -274,6 +374,41 @@ describe('governed model qualification PostgreSQL registry', () => {
         pick: gates[1].decision.decisionId,
       },
     });
+    const crossScopeProposalContent = {
+      ...staleGates[0].proposal.content,
+      scope: { ...staleGates[0].proposal.content.scope, scopeKey: 'afl-men:2025-trades' },
+    };
+    const crossScopeProposal = {
+      proposalId: createAflTradeContentAddress('gate-proposal', crossScopeProposalContent),
+      content: crossScopeProposalContent,
+    };
+    const crossScopeDecisionContent = {
+      ...staleGates[0].decision.content,
+      proposalId: crossScopeProposal.proposalId,
+      scope: crossScopeProposalContent.scope,
+    };
+    const crossScopeGates = [
+      {
+        proposal: crossScopeProposal,
+        decision: {
+          decisionId: createAflTradeContentAddress('gate-decision', crossScopeDecisionContent),
+          content: crossScopeDecisionContent,
+        },
+      },
+      staleGates[1],
+    ] as const;
+    await expect(
+      repository.register({
+        ...stale,
+        expectedGateLedgerRevision: 2,
+        expectedCurrentRevision: 1,
+        gateRecords: crossScopeGates,
+      })
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<GovernedValuationModelQualificationRepositoryError>>({
+        code: 'INTEGRITY_MISMATCH',
+      })
+    );
     await expect(
       repository.register({
         ...stale,
