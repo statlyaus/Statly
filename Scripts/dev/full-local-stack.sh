@@ -58,7 +58,7 @@ if [[ "$STATLY_LOCAL_REUSE_OUTCOMES_DATABASE" == "true" ]]; then
     }
   '
 else
-  export AFL_OUTCOMES_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/postgres?sslmode=disable"
+  export AFL_OUTCOMES_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/statly_outcomes_test?sslmode=disable"
 fi
 export AFL_TRADE_LOCAL_ARTIFACT_ROOT="${AFL_TRADE_LOCAL_ARTIFACT_ROOT:-$ROOT_DIR/.statly-local/afl-trade-artifacts}"
 OUTCOMES_NONCE_PATH="$ROOT_DIR/.statly-local/afl-trade-outcomes-runtime-nonce"
@@ -176,7 +176,8 @@ if [[ "$STATLY_NEXT_DEV_BUNDLER" == "webpack" ]]; then
   WEB_COMMAND="./node_modules/.bin/next dev --webpack"
 fi
 
-npx concurrently -k -n web,socket,draft-worker -c blue,magenta,green \
+npx concurrently -k -n web,socket,draft-worker,valuation-worker -c blue,magenta,green,cyan \
   "$WEB_COMMAND" \
   "npm:socket" \
-  "npm:draft-worker:dev"
+  "npm:draft-worker:dev" \
+  "npm:outcomes:valuation:worker-local"

@@ -5368,6 +5368,26 @@ model OutcomePrivateEvaluationExecutionAttempt {
   @@map("outcome_private_evaluation_execution_attempt")
 }
 
+model OutcomePrivateValuationDispatchRequest {
+  requestId        String    @id @map("request_id") @outcomes.Text
+  scopeKey         String    @map("scope_key") @outcomes.Text
+  triggerKind      String    @map("trigger_kind") @outcomes.Text
+  scheduledFor     DateTime  @map("scheduled_for") @outcomes.Timestamptz(3)
+  authorityKey     String    @map("authority_key") @outcomes.Text
+  status           String    @default("pending") @outcomes.Text
+  availableAt      DateTime  @map("available_at") @outcomes.Timestamptz(3)
+  claimId          String?   @map("claim_id") @outcomes.Text
+  leaseTokenSha256 String?   @map("lease_token_sha256") @outcomes.Char(64)
+  leaseExpiresAt   DateTime? @map("lease_expires_at") @outcomes.Timestamptz(3)
+  claimedAt        DateTime? @map("claimed_at") @outcomes.Timestamptz(3)
+  completedAt      DateTime? @map("completed_at") @outcomes.Timestamptz(3)
+  resultJson       Json?     @map("result_json")
+  requestJson      Json      @map("request_json")
+
+  @@index([status, availableAt, scopeKey], map: "outcome_private_valuation_dispatch_due_idx")
+  @@map("outcome_private_valuation_dispatch_request")
+}
+
 model OutcomePrivateEvaluationTransitionReceipt {
   transitionId         String                                        @id @map("transition_id") @outcomes.Text
   transitionIntentId   String                                        @unique @map("transition_intent_id") @outcomes.Text

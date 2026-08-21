@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 
 export const AFL_TRADE_LOCAL_OUTCOMES_PORT = 55432;
-export const AFL_TRADE_LOCAL_OUTCOMES_DATABASE_URL = `postgresql://postgres:postgres@127.0.0.1:${AFL_TRADE_LOCAL_OUTCOMES_PORT}/postgres?sslmode=disable`;
+export const AFL_TRADE_LOCAL_OUTCOMES_DATABASE_URL = `postgresql://postgres:postgres@127.0.0.1:${AFL_TRADE_LOCAL_OUTCOMES_PORT}/statly_outcomes_test?sslmode=disable`;
 
 const cursorSecret = Buffer.from('statly-local-only-cursor-secret-v1', 'utf8').toString('base64');
 

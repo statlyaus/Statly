@@ -86,6 +86,8 @@
     "outcomes:modeling:prepare-local-source-qualification": "tsx Scripts/dev/prepare-local-afl-trade-valuation-source-qualification.ts",
     "outcomes:modeling:record-private-evaluation-authority": "tsx Scripts/dev/record-local-afl-trade-private-valuation-evaluation.ts",
     "outcomes:modeling:record-private-reviewed-evaluation-authority": "tsx Scripts/dev/record-local-afl-trade-private-reviewed-evaluation.ts",
+    "outcomes:valuation:run-local": "tsx Scripts/dev/run-local-afl-private-valuation.ts",
+    "outcomes:valuation:worker-local": "tsx Scripts/dev/run-local-afl-private-valuation-worker.ts",
     "init-firebase-db": "tsx Scripts/initialize-firebase-db.ts",
     "check:etl": "tsx Scripts/check-etl-setup.ts",
     "player-data:dry-run": "tsx Scripts/player-data-convergence-dry-run.ts",
