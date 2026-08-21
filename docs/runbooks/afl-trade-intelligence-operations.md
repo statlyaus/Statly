@@ -834,13 +834,18 @@ npx vitest run --config vitest.config.unit.ts \
   tests/unit/afl-trade-intelligence-governed-private-evaluation-workspace.test.ts \
   tests/unit/afl-trade-intelligence-governed-evaluation-panel.test.tsx \
   tests/unit/afl-trade-intelligence-private-local-workbook-reads.test.ts \
+  tests/unit/afl-trade-intelligence-current-valuation-cohort-runner.test.ts \
+  tests/unit/afl-trade-intelligence-private-valuation-scheduling.test.ts \
   tests/unit/local-workbook-trade-evaluation-page.test.tsx \
+  tests/unit/local-private-reviewed-trade-calculation-panel.test.tsx \
   tests/unit/afl-trade-intelligence-private-governed-exact-export-route.test.ts \
   --coverage.enabled=false
 
 AFL_OUTCOMES_TEST_DATABASE_URL='<owned-disposable-loopback-postgresql>' \
   npx vitest run --config vitest.config.outcomes-int.ts \
-  tests/outcomes-integration/afl-governed-private-evaluation-lifecycle-postgres.test.ts
+  tests/outcomes-integration/afl-governed-private-evaluation-lifecycle-postgres.test.ts \
+  tests/outcomes-integration/afl-private-evaluation-batch-postgres.test.ts \
+  tests/outcomes-integration/afl-private-valuation-scheduling-postgres.test.ts
 ```
 
 The provisioned integration command is permitted only when the caller owns the disposable database.
@@ -850,14 +855,82 @@ workspace, verifies the exact withdrawn generation without reactivation, rejects
 and rollback, rejects mutation of append-only receipts, and proves the composite scope key prevents
 cross-scope reads. Remove only the container/schema and artifact directory created for that run.
 
-This is not yet the complete launch proof. Before any beta or public grade, implement and review the
-real ready inspector and automatic component draw-set materialization, expose construct, rollback,
-recover, and verify through an authenticated local operator adapter, recheck every retained release,
-Gate, admission, model, calculation-head, and private-authority token at serializable activation, and
-run a signed-in browser rehearsal covering archive, detail, all four views, asset drill-down, exact
-download bytes, withdrawal, and unavailable real inputs. Real HPN/PAV and pick-model runs still require
-their external approvals. Until those conditions pass, archive transactions remain factual records
-with grades explicitly unavailable.
+### Operating automatic local private valuation
+
+The local full-stack launcher starts one backend valuation worker. It authenticates the exact loopback
+`statly_outcomes_test` runtime nonce and private artifact root, performs startup catch-up, and then polls
+durable dispatch work. The schedule is Monday 19:00 in `Australia/Melbourne`, calculated as a calendar
+occurrence rather than a 604800-second interval, so daylight-saving changes do not move the local time.
+Startup coalesces missed weeks to the latest occurrence. A newly committed qualified model pair also
+enqueues immediate work. Neither trigger promotes factual data or prepares model evidence: execution
+begins only from the exact current authenticated prepared-v3 head.
+
+To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
+or response loss:
+
+```sh
+npm run outcomes:valuation:run-local -- \
+  --scope 'afl-men:<year>-trades' \
+  --operation '<stable-incident-or-recalculation-key>'
+```
+
+The command is backend-only and fails closed unless the database is loopback PostgreSQL named exactly
+`statly_outcomes_test`. Reusing the operation key returns or completes the exact retained request; do
+not substitute a random key merely because the first command lost its response.
+
+For each cohort, verify the retained capture names the expected factual-release revision, model-pair
+revision, prepared-v3 revision, and prior batch revision. Expected unavailable members remain explicit
+batch entries. Ready members use durable work cycles with at most eight concurrent executions, a
+three-attempt budget, fenced leases and heartbeats. `retry_pending` and `stale_authority` dispatches are
+rescheduled rather than marked complete. An unexpected construction, custody, or programming failure
+retains diagnostics and leaves the previous current batch unchanged. No individual generation becomes
+visible while the batch is being built.
+
+After a cause has been corrected, open a fresh three-attempt repair cycle with a stable repair ID and
+reason, then route the same ad-hoc request through the coordinator:
+
+```sh
+npm run outcomes:valuation:run-local -- \
+  --scope 'afl-men:<year>-trades' \
+  --operation '<stable-recalculation-key>' \
+  --repair-reason '<bounded backend incident reason>' \
+  --repair-operation 'cohort-execution-repair:<64-hex-digest>'
+```
+
+Repair does not weaken or refresh factual/model authority. The immutable prior terminal cycle remains
+available, and replay of the repair operation returns the same retained cycle.
+
+Emergency withdrawal and rollback are backend governance operations, not user controls. Individual
+withdrawal appends exact batch, trade, generation, principal, and reason evidence; current reads for
+that member become unavailable without falling back to another generation. Whole-batch rollback uses
+the batch repository's fenced `rollback` transition and may target only a complete batch that was
+previously active. It advances one batch pointer, retains the replaced transition, and never loops
+through per-trade heads. Do not label activation of a never-current batch as rollback, edit a batch or
+receipt, or use a factual/publication rollback as private calculation authority.
+
+Verify an automatic run by checking:
+
+1. one retained dispatch request and its terminal or rescheduled status;
+2. one cohort capture and execution cycle for the exact authority revisions;
+3. one work row per ready trade, contiguous attempts, and retained causes for unavailable or exhausted
+   work;
+4. exhaustive batch membership and counts equal to the prepared-v3 trade set;
+5. one current-batch transition and revision, with unchanged replay creating no additional generation,
+   batch, or lifecycle receipt;
+6. archive summary, detail, internal reader API, and exact JSON artifacts authenticate under the same
+   generation and projection manifest for each current ready member; and
+7. unavailable grades render as `—` while detailed blocker, retry, and diagnostic causes remain in
+   backend evidence.
+
+The implemented operating path remains local, private, non-production, and publication-prohibited.
+Pure tests prove deterministic two-, three-, and four-club construction and the eight-worker pool
+bound. Migrated disposable PostgreSQL tests separately prove ready-generation staging/replay, atomic
+visibility, pinned reads, withdrawal/rollback, unavailable isolation, and exhaustive registration plus
+unchanged replay of a 783-member blocked cohort. The multi-club PostgreSQL fixture exercises persisted
+batch/read behavior over retained projection bytes; it is not an end-to-end production construction
+run. These fixtures are not real AFL calibration evidence. A real admitted source/model/prepared
+cohort, a complete scheduled source-to-prepared pipeline, hosted operations, registered-reader access,
+and publication Gates remain outside this proof.
 
 ### Rehearsing fixture-only valuation publication
 

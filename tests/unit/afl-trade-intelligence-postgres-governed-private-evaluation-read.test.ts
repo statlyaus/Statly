@@ -69,9 +69,7 @@ class ReadSqlClient implements AflOutcomeSqlClient {
     throw new Error(`Unexpected SQL: ${sql}`);
   }
 
-  async transaction<T>(
-    work: (transaction: AflOutcomeSqlTransaction) => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
     return work(this);
   }
 }
@@ -87,6 +85,40 @@ async function retainedArtifacts(): Promise<AflTradeImmutableArtifactRepository>
 }
 
 describe('PostgreSQL governed private evaluation read repository', () => {
+  it('resolves archive, detail, backend API, and JSON from one current batch generation', async () => {
+    const client = new ReadSqlClient();
+    const repository = createPostgresGovernedPrivateEvaluationReadRepository({
+      client,
+      artifactRepository: await retainedArtifacts(),
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      principalId: 'firebase:registered-reader',
+      authorizeReader: async () => true,
+    });
+
+    const results = await Promise.all(
+      (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map((kind) =>
+        repository.read({ selector, selection: { kind: 'current' }, document: { kind } })
+      )
+    );
+
+    expect(results.every(({ state }) => state === 'available')).toBe(true);
+    expect(
+      new Set(
+        results.map((result) =>
+          result.state === 'available' ? result.generationId : 'unavailable'
+        )
+      )
+    ).toEqual(new Set([materialization.generation.generationId]));
+    expect(
+      new Set(
+        results.map((result) =>
+          result.state === 'available' ? result.projectionManifestId : 'unavailable'
+        )
+      )
+    ).toEqual(new Set([materialization.projectionManifest.projectionManifestId]));
+    expect(client.queryCount).toBe(4);
+  });
+
   it('authenticates current and explicit historical projection bytes', async () => {
     const client = new ReadSqlClient();
     const repository = createPostgresGovernedPrivateEvaluationReadRepository({
@@ -202,7 +234,8 @@ describe('PostgreSQL governed private evaluation read repository', () => {
         const result = await stored.loadExact(reference, maximumBytes);
         if (
           result === null ||
-          reference.artifactId !== materialization.projectionManifest.content.documents[1]?.artifact.artifactId
+          reference.artifactId !==
+            materialization.projectionManifest.content.documents[1]?.artifact.artifactId
         ) {
           return result;
         }
@@ -269,9 +302,7 @@ describe('PostgreSQL governed private evaluation read repository', () => {
         schemaVersion: 'governed-private-evaluation-projection-manifest/v999',
       },
     };
-    const manifestBytes = new TextEncoder().encode(
-      canonicalizeAflTradeJson(unsupportedManifest)
-    );
+    const manifestBytes = new TextEncoder().encode(canonicalizeAflTradeJson(unsupportedManifest));
     const manifestArtifact = createAflTradeByteArtifactRef(
       manifestBytes,
       'application/json',
@@ -288,10 +319,7 @@ describe('PostgreSQL governed private evaluation read repository', () => {
       ),
       content: generationContent,
     };
-    const generationArtifact = createAflTradeCanonicalJsonArtifactRef(
-      generation,
-      generatedAt
-    );
+    const generationArtifact = createAflTradeCanonicalJsonArtifactRef(generation, generatedAt);
     const artifacts = await retainedArtifacts();
     await artifacts.putIfAbsent(manifestArtifact, manifestBytes);
     await artifacts.putIfAbsent(

@@ -418,6 +418,14 @@ describe('private local workbook trade evaluation page', () => {
       '/dev/afl-trade-evaluation?year=2025'
     );
     expect(screen.queryByRole('link', { name: /export/i })).not.toBeInTheDocument();
+    const governed = screen.getByRole('region', {
+      name: 'Automatic governed package calculation',
+    });
+    expect(within(governed).getByText('Current package grade: —')).toBeVisible();
+    expect(within(governed).queryByText(/no grade/iu)).not.toBeInTheDocument();
+    expect(
+      within(governed).queryByText(/not found|withdrawn|authentication|projection/iu)
+    ).not.toBeInTheDocument();
     expect(loadTradeMock).toHaveBeenCalledWith(FLANDERS_TRADE_ID);
   });
 
@@ -450,12 +458,14 @@ describe('private local workbook trade evaluation page', () => {
     expect(within(governed).getByRole('article', { name: 'St Kilda package' })).toBeVisible();
     expect(within(governed).getByText(/92 - 70 = \+22 fixed_horizon_pav/u)).toBeVisible();
     fireEvent.click(within(governed).getAllByText('Pick 14 calculation and lineage')[0]!);
-    expect(within(governed).getAllByText(/48 observations across 12 draft classes/u)).not.toHaveLength(0);
-    expect(within(governed).getByRole('link', { name: 'Download exact JSON evidence' })).toHaveAttribute(
+    expect(
+      within(governed).getAllByText(/48 observations across 12 draft classes/u)
+    ).not.toHaveLength(0);
+    expect(
+      within(governed).getByRole('link', { name: 'Download exact JSON evidence' })
+    ).toHaveAttribute(
       'href',
-      `/api/dev/afl-trade-evaluation/${encodeURIComponent(
-        evaluation.detail.trade.tradeId
-      )}/export`
+      `/api/dev/afl-trade-evaluation/${encodeURIComponent(evaluation.detail.trade.tradeId)}/export`
     );
     expect(within(governed).queryByText(/asset grade/iu)).not.toBeInTheDocument();
   });

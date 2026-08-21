@@ -1897,10 +1897,32 @@ admitted end-to-end model release must automatically calculate its supported his
 every transaction outside that cohort remains explicitly unavailable rather than inheriting a score
 from a different model version or evidence set.
 
-The current foundation does not yet perform this automatic cohort calculation. It retains the
-prepared-input, materialisation, lifecycle, projection, and exact-read seams needed by that target;
-later automation stages own complete construction, batch activation, archive coverage, and coverage
-reporting.
+The local private runtime now performs automatic cohort calculation after an exact current prepared-v3
+input set and an automatically qualified player/pick model pair exist. It captures the factual-release,
+prepared-head, model-pair, and current-batch revisions; attempts every ready trade with bounded
+concurrency; retains expected unavailability per trade; and refuses the whole candidate batch when an
+unexpected construction or custody failure occurs. Each ready calculation is staged under the fixed
+`system:weekly-valuation-coordinator` principal. Only after exhaustive membership and ancestry checks
+pass does one fenced PostgreSQL transition make the batch current. Readers therefore see the previous
+complete batch or the replacement complete batch, never a partly advanced cohort.
+
+Execution is durable and restart-safe. A content-addressed cohort capture, work cycle, per-trade work
+record, attempt, result, and batch binding survive process failure. Ready work uses targeted
+`(prepared_input_set_id, trade_id)` reads and shared cohort parents are cached; the worker runs at most
+eight trades concurrently. Transient PostgreSQL and transport failures receive three attempts across
+durable leases with heartbeats, capped backoff, claim fencing, and an exact terminal cause. Exhausted
+work remains closed until a backend repair operation opens a new three-attempt cycle. Repeating an
+unchanged successful run returns the exact current batch without reconstructing trades.
+
+The local full-stack worker drains retained pending dispatches at startup and enqueues only the latest
+missed Monday 19:00 `Australia/Melbourne` occurrence. A newly qualified model pair separately enqueues
+immediate work. The calendar calculation preserves local wall-clock time across daylight-saving
+changes and coalesces missed weekly occurrences. An authenticated backend-only command can enqueue the
+same coordinator ad hoc using a caller-supplied stable operation key. This is not a complete
+new-game-data pipeline:
+fitzRoy capture, canonical factual promotion, model observation/benchmark rebuild, and prepared-v3
+activation remain separately governed upstream processes. The weekly run consumes whatever exact
+prepared-v3 head is current; it never promotes source data or invents model authority.
 
 A structurally valid fixture report always retains `publicationReady: false` and the remaining
 external blockers: a real historical-data run, component-model calibration exit criteria, downstream
@@ -1929,19 +1951,20 @@ authority.
 Failure leaves the public archive available without numerical valuation. Product design must not turn
 a failed or missing model into hidden fallback numbers.
 
-### Target MVP registered-reader valuation surface
+### Local private valuation reader surface
 
-This section defines the target reader contract. The current local foundation admits only the
-explicit signed-in development reader and wires governed detail and exact JSON export. Archive cards
-still expose factual transactions and readiness without consuming retained `archive_summary` bytes.
-Broader registered-reader admission and atomic archive/detail/API/export parity arrive with the later
-private batch reader cutover.
+The current implementation remains a local development surface admitted only to the explicit signed-in
+development reader. Each current read joins the single current private-evaluation batch pointer to the
+trade's exact batch entry before loading a generation. The generation's one projection manifest binds
+the `archive_summary`, `detail`, `reader_api`, and `json_export` artifacts; all four are authenticated
+from retained bytes and therefore resolve one batch entry, generation, and manifest. The workbook
+archive still supplies factual transaction membership and readiness, while governed numerical
+documents remain private and publication-prohibited.
 
-Any user may register, but valuation reads require an authenticated registered reader. Readers may
-open the archive and trade detail and download a permitted JSON calculation-evidence export. They
-cannot inspect construction authority or invoke activation, withdrawal, rollback, recovery, or
-reconstruction operations. Internal authenticated routes may serve the website and export, but the MVP
-does not document or promise a third-party valuation API.
+The current reader is the authenticated local development operator. A future registered-reader surface
+may admit registered users to archive, detail, and permitted JSON calculation evidence without exposing
+construction authority or lifecycle operations. Internal authenticated routes serve the present local
+screen and export; the MVP does not document or promise a third-party valuation API.
 
 Every activated valuation generation retains one content-addressed projection manifest that binds:
 
@@ -1951,14 +1974,15 @@ Every activated valuation generation retains one content-addressed projection ma
 - the exact retained JSON export byte artifact, including its media type, digest, and byte length.
 
 Runtime HTML, React output, authentication state, filters, pagination, and build identifiers are not
-retained as calculation evidence. In the target surface, archive, detail, internal transport, and export authenticate and
-replay the same retained derivation before serving it. They expose the same generation and projection
+retained as calculation evidence. Archive summary, detail, internal transport, and export authenticate
+and replay the same retained derivation before serving it. They expose the same generation and projection
 manifest identities, and export serves the retained bytes directly rather than serializing a fresh
 runtime object. The registered-reader export contains the public facts, model summaries, arithmetic,
 reason codes, and lineage needed to verify the published calculation; it excludes private source
 custody, review material, credentials, operator authority, and publication controls.
 
-The sole governed module interface is `inspect`, `execute`, and exact `read`. Its external selector is
+The sole governed workspace interface remains `inspect`, `execute`, and exact `read`; automated staging
+is internal to the PostgreSQL workspace factory and is not a caller-mintable authority. Its selector is
 the composite `(valuationScopeKey, tradeId)` identity. `read` accepts only current selection or one
 explicit generation identifier; it has no latest-generation alias or silent fallback. Withdrawal makes
 the current valuation explicitly unavailable, while an authenticated exact historical generation read
@@ -1966,25 +1990,26 @@ remains available with its inactive, superseded, or withdrawn lifecycle label. R
 generation versions use exhaustive version dispatch and either an authenticated compatible projection
 or an explicit `projection_unavailable` state; the reader never invents missing projection bytes.
 
-Target lifecycle mutations are authenticated operator actions. Construction first retains a transition
-intent, dormant generation, projection documents, projection manifest, and exact export bytes. A
-serializable compare-and-swap activation then advances the composite lifecycle head and appends its
-receipt. A stable operation identifier makes retry resume or return that same attempt rather than
-creating another generation. Withdrawal removes current selection without fallback. Rollback may
-select a previously active generation only inside its retained authority window at trusted database
-time. Reconstruction verification is read-only: it replays retained parents and compares exact
-generation, manifest, document, narrative, and export bytes without changing the lifecycle head.
+Construction first retains an authenticated automated intent, dormant generation, projection
+documents, projection manifest, and exact export bytes. Per-trade lifecycle receipts remain immutable,
+but current visibility is owned by the batch head: a serializable compare-and-swap activates all batch
+members together. A stable operation identifier makes retry resume or return that same attempt rather
+than creating another generation. An individually withdrawn batch member becomes unavailable without
+selecting a fallback generation. Whole-batch rollback selects only a previously active complete batch
+and records a new transition; historical parents may be selected without pretending they are the
+current factual/model cohort. Reconstruction verification is read-only.
 
-MVP proof has two explicitly different lanes. The current fabricated `test_fixture`, non-production,
-publication-prohibited foundation proves deterministic generation construction, immutable staging,
-low-level serializable activation, authenticated detail and exact export, withdrawal, restart-safe
-historical reads, and reconstruction using disposable PostgreSQL. Its governed workspace deliberately
-returns construction unavailable, and unavailable real authority cannot rollback or recover a fixture
-grade. Later batch work must reintroduce rollback and recovery only with exact eligible reactivation
-authority. The real-private-input lane proves missing factual or model authority remains unavailable,
-activates no grade or export, and never borrows authority from the fixture lane. Unauthorized detail
-and export requests fail before database or artifact access. Archive parity and complete browser
-narrative assertions remain target reader proof rather than claims made by this foundation.
+The proof has explicitly separate lanes. Pure deterministic, non-production fixtures prove two-,
+three-, and four-club projection construction and the eight-worker concurrency bound. Migrated
+PostgreSQL fixtures separately prove authenticated staging/replay, exhaustive atomic batches, pinned
+projection reads, member withdrawal, whole-batch rollback, and exact replay of a 783-member blocked
+cohort. The multi-club PostgreSQL test retains deterministic projection bytes and exercises batch/read
+behavior; it does not claim to run the production construction workspace end to end. The private-input
+lane proves missing factual or model evidence remains explicitly unavailable and never borrows
+authority from a fixture. These are engineering proofs, not evidence of real AFL calibration, a factual
+release, registered-reader availability, hosted operation, or publication readiness. In the
+user-facing private screen an unavailable package grade is `—`; detailed blocker and retry causes stay
+in backend evidence.
 
 ## Immutable publication
 

@@ -84,8 +84,8 @@ export default async function LocalWorkbookTradeEvaluationPage({
               <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
                 Transaction identity comes from the pinned private workbook. Reviewed historical
                 player PAV is shown where an exact player identity and season calculation exist;
-                unsupported assets remain unavailable. The separate synthetic scenario stays
-                clearly isolated. Neither lane has publication or production authority.
+                unsupported assets remain unavailable. The separate synthetic scenario stays clearly
+                isolated. Neither lane has publication or production authority.
               </p>
             </div>
             <span className="rounded-full border border-warning/35 bg-warning/10 px-3 py-1.5 text-xs font-semibold text-foreground">
@@ -176,21 +176,18 @@ export default async function LocalWorkbookTradeEvaluationPage({
               </div>
               <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <dt className="font-semibold text-foreground">Projection manifest</dt>
-                <dd className="mt-1 break-all font-mono">
-                  {governedRead.projectionManifestId}
-                </dd>
+                <dd className="mt-1 break-all font-mono">{governedRead.projectionManifestId}</dd>
               </div>
             </dl>
             <AflTradePackageEvaluationPanel narrative={governedDocument.narrative} />
           </>
         ) : (
-          <p className="mt-4 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-foreground">
-            Automatic package scores and grades are unavailable: {governedRead?.state ===
-            'unavailable'
-              ? governedRead.reason.replaceAll('_', ' ')
-              : 'no active authenticated generation'}
-            . No fallback score is shown.
-          </p>
+          <div className="mt-4 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-foreground">
+            <p className="font-semibold">Current package grade: —</p>
+            <p className="mt-1 text-muted-foreground">
+              An authenticated complete package calculation is not currently available.
+            </p>
+          </div>
         )}
       </section>
 
@@ -253,32 +250,32 @@ export default async function LocalWorkbookTradeEvaluationPage({
           {detail.assets.map((asset) => {
             const calculatedAsset = calculationAssets.get(asset.id);
             return (
-            <li key={asset.id} className="grid gap-4 py-4 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Workbook trade record
-                </p>
-                <p className="font-semibold text-foreground">{asset.assetText}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {asset.clubName} · {asset.assetType.replaceAll('_', ' ')}
-                </p>
-              </div>
-              <div className="text-sm">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Governed numerical evidence
-                </p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {calculatedAsset?.state === 'calculated'
-                    ? 'Reviewed historical PAV linked'
-                    : 'Unavailable at this gate'}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {calculatedAsset?.state === 'calculated'
-                    ? 'See the component calculation above; predictive and grade authority remain unavailable.'
-                    : 'Exact identity or selection lineage and supported calculation evidence are required.'}
-                </p>
-              </div>
-            </li>
+              <li key={asset.id} className="grid gap-4 py-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Workbook trade record
+                  </p>
+                  <p className="font-semibold text-foreground">{asset.assetText}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {asset.clubName} · {asset.assetType.replaceAll('_', ' ')}
+                  </p>
+                </div>
+                <div className="text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Governed numerical evidence
+                  </p>
+                  <p className="mt-1 font-semibold text-foreground">
+                    {calculatedAsset?.state === 'calculated'
+                      ? 'Reviewed historical PAV linked'
+                      : 'Unavailable at this gate'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {calculatedAsset?.state === 'calculated'
+                      ? 'See the component calculation above; predictive and grade authority remain unavailable.'
+                      : 'Exact identity or selection lineage and supported calculation evidence are required.'}
+                  </p>
+                </div>
+              </li>
             );
           })}
         </ul>

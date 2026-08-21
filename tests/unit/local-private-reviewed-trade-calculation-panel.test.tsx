@@ -112,9 +112,8 @@ describe('local private reviewed trade calculation panel', () => {
     expect(within(player!).getAllByText('Defence')).not.toHaveLength(0);
     expect(within(player!).getAllByText('11 games · season 2025')).not.toHaveLength(0);
     expect(within(player!).getByText('12 confirmed post-trade games')).toBeVisible();
-    expect(screen.getByText('Overall trade grade: unavailable')).toBeVisible();
-    expect(
-      screen.getByText(/Pick selection lineage has not been reviewed/i)
-    ).toBeVisible();
+    expect(screen.getByText('Overall trade grade: —')).toBeVisible();
+    expect(screen.queryByText(/no grade/iu)).not.toBeInTheDocument();
+    expect(screen.getByText(/Pick selection lineage has not been reviewed/i)).toBeVisible();
   });
 });
