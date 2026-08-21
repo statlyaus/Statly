@@ -35,6 +35,9 @@ const batchBlockerSchema = z
       'reconciliation_failed',
       'engineering_unavailable',
       'component_output_unavailable',
+      'unsupported_trade',
+      'policy_unavailable',
+      'temporal_evidence_unavailable',
     ]),
     message: z.string().trim().min(1).max(2_000),
   })
@@ -66,9 +69,7 @@ const batchContentSchema = z
     preparedInputSetRevision: z.number().int().positive(),
     factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
     modelQualificationId: aflTradeContentAddressedIdSchema('model-qualification'),
-    modelQualificationWorkId: aflTradeContentAddressedIdSchema(
-      'model-qualification-work'
-    ),
+    modelQualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
     entries: z.array(governedPrivateEvaluationBatchEntrySchema).min(1).max(10_000),
     tradeCount: z.number().int().positive(),
     readyCount: z.number().int().nonnegative(),
@@ -117,9 +118,7 @@ export const governedPrivateEvaluationBatchSchema = z
     );
   });
 
-export type GovernedPrivateEvaluationBatch = z.infer<
-  typeof governedPrivateEvaluationBatchSchema
->;
+export type GovernedPrivateEvaluationBatch = z.infer<typeof governedPrivateEvaluationBatchSchema>;
 
 export function createGovernedPrivateEvaluationBatchOperationId(input: {
   readonly scopeKey: string;
@@ -181,9 +180,7 @@ const withdrawalContentSchema = z
 
 export const governedPrivateEvaluationBatchWithdrawalSchema = z
   .object({
-    withdrawalId: aflTradeContentAddressedIdSchema(
-      'private-evaluation-batch-withdrawal'
-    ),
+    withdrawalId: aflTradeContentAddressedIdSchema('private-evaluation-batch-withdrawal'),
     content: withdrawalContentSchema,
   })
   .strict()
@@ -215,10 +212,7 @@ export function createGovernedPrivateEvaluationBatchWithdrawal(
     limitation: WITHDRAWAL_LIMITATION,
   });
   return governedPrivateEvaluationBatchWithdrawalSchema.parse({
-    withdrawalId: createAflTradeContentAddress(
-      'private-evaluation-batch-withdrawal',
-      content
-    ),
+    withdrawalId: createAflTradeContentAddress('private-evaluation-batch-withdrawal', content),
     content,
   });
 }

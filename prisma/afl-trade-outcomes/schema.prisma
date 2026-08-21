@@ -5195,6 +5195,7 @@ model OutcomePrivateEvaluationBatch {
   contentCanonicalJson        String   @map("content_canonical_json") @outcomes.Text
   batchJson                   Json     @map("batch_json")
   registeredAt                DateTime @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  cohortBinding               OutcomePrivateEvaluationCohortBatch?
 
   @@index([scopeKey, createdAt], map: "outcome_private_evaluation_batch_scope_created_idx")
   @@map("outcome_private_evaluation_batch")
@@ -5253,6 +5254,46 @@ model OutcomePrivateEvaluationBatchWithdrawal {
 
   @@unique([batchId, tradeId], map: "outcome_private_evaluation_batch_withdrawal_trade_key")
   @@map("outcome_private_evaluation_batch_withdrawal")
+}
+
+model OutcomePrivateEvaluationCohortCapture {
+  operationId               String   @id @map("operation_id") @outcomes.Text
+  scopeKey                  String   @map("scope_key") @outcomes.Text
+  preparedInputSetId        String   @map("prepared_input_set_id") @outcomes.Text
+  preparedInputSetRevision  Int      @map("prepared_input_set_revision")
+  modelQualificationWorkId String   @map("model_qualification_work_id") @outcomes.Text
+  factualReleaseRevision   Int      @map("factual_release_revision")
+  modelPairRevision        Int      @map("model_pair_revision")
+  expectedBatchRevision     Int      @map("expected_batch_revision")
+  capturedAt                DateTime @map("captured_at") @outcomes.Timestamptz(3)
+  failure                   OutcomePrivateEvaluationCohortFailure?
+  batchBinding              OutcomePrivateEvaluationCohortBatch?
+
+  @@map("outcome_private_evaluation_cohort_capture")
+}
+
+model OutcomePrivateEvaluationCohortBatch {
+  batchId     String @id @map("batch_id") @outcomes.Text
+  operationId String @unique @map("operation_id") @outcomes.Text
+  batch       OutcomePrivateEvaluationBatch @relation(fields: [batchId], references: [batchId], onDelete: Restrict)
+  capture     OutcomePrivateEvaluationCohortCapture @relation(fields: [operationId], references: [operationId], onDelete: Restrict)
+
+  @@map("outcome_private_evaluation_cohort_batch")
+}
+
+model OutcomePrivateEvaluationCohortFailure {
+  diagnosticId              String   @id @map("diagnostic_id") @outcomes.Text
+  operationId               String   @unique @map("operation_id") @outcomes.Text
+  scopeKey                  String   @map("scope_key") @outcomes.Text
+  preparedInputSetId        String   @map("prepared_input_set_id") @outcomes.Text
+  preparedInputSetRevision  Int      @map("prepared_input_set_revision")
+  modelQualificationWorkId String   @map("model_qualification_work_id") @outcomes.Text
+  expectedBatchRevision     Int      @map("expected_batch_revision")
+  diagnosticJson            Json     @map("diagnostic_json")
+  recordedAt                DateTime @map("recorded_at") @outcomes.Timestamptz(3)
+  capture                   OutcomePrivateEvaluationCohortCapture @relation(fields: [operationId], references: [operationId], onDelete: Restrict)
+
+  @@map("outcome_private_evaluation_cohort_failure")
 }
 
 model OutcomePrivateEvaluationTransitionReceipt {
