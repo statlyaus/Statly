@@ -1094,6 +1094,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0065_automated_private_evaluation_authority',
       '0066_atomic_private_evaluation_batches',
       '0067_private_evaluation_cohort_runner',
+      '0068_durable_private_evaluation_execution',
     ]);
 
     const tables = await query<{ table_name: string }>(

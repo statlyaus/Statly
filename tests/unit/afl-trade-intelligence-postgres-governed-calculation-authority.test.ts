@@ -10,6 +10,10 @@ import type {
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { createPostgresGovernedPrivateEvaluationCalculationAuthorityCapture } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationCalculationAuthority';
 import { createAflTradePreparedValuationInputSet } from '@/server/aflTradeIntelligence/valuation/preparedValuationInputSet';
+import {
+  AflTradePreparedValuationInputCohortCache,
+  loadCurrentAflTradePreparedValuationInputTradeFromTransaction,
+} from '@/server/aflTradeIntelligence/valuation/postgresPreparedValuationInputSetStore';
 
 import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
 
@@ -143,9 +147,10 @@ class ReadyPreparedAuthorityTransaction implements AflOutcomeSqlTransaction {
     if (sql.includes('FROM outcome_private_evaluation_materialization_manifest')) {
       if (this.retainManifestRow) {
         const manifest = this.fixture.calculation.materializationManifest;
-        const artifact = prepared.content.entries[0]!.state === 'ready'
-          ? prepared.content.entries[0]!.materializationManifestArtifact
-          : undefined;
+        const artifact =
+          prepared.content.entries[0]!.state === 'ready'
+            ? prepared.content.entries[0]!.materializationManifestArtifact
+            : undefined;
         if (artifact === undefined) throw new Error('Expected ready manifest artifact.');
         return {
           rows: [
@@ -215,6 +220,34 @@ async function retainReadyFixtureArtifacts(
 }
 
 describe('PostgreSQL governed calculation-authority capture', () => {
+  it('authenticates shared prepared parents once and uses one targeted lookup per trade', async () => {
+    const transaction = new ReadyPreparedAuthorityTransaction();
+    const cache = new AflTradePreparedValuationInputCohortCache();
+    const selector = transaction.fixture.calculation.trace.content.selector;
+
+    await loadCurrentAflTradePreparedValuationInputTradeFromTransaction(
+      transaction,
+      { scopeKey: selector.valuationScopeKey, tradeId: selector.tradeId },
+      cache
+    );
+    await loadCurrentAflTradePreparedValuationInputTradeFromTransaction(
+      transaction,
+      { scopeKey: selector.valuationScopeKey, tradeId: selector.tradeId },
+      cache
+    );
+
+    expect(
+      transaction.calls.filter(({ sql }) =>
+        sql.includes('FROM outcome_prepared_valuation_input_set prepared')
+      )
+    ).toHaveLength(1);
+    expect(
+      transaction.calls.filter(({ sql }) =>
+        sql.includes('WHERE prepared_input_set_id=$1 AND trade_id=$2')
+      )
+    ).toHaveLength(2);
+  });
+
   it('fails closed when no current authenticated v3 prepared trade exists', async () => {
     const transaction = new NoPreparedAuthorityTransaction();
     const capture = createPostgresGovernedPrivateEvaluationCalculationAuthorityCapture({
@@ -238,8 +271,7 @@ describe('PostgreSQL governed calculation-authority capture', () => {
       blockers: [
         {
           code: 'insufficient_data',
-          message:
-            'No current authenticated v3 prepared calculation inputs cover this trade.',
+          message: 'No current authenticated v3 prepared calculation inputs cover this trade.',
         },
       ],
     });
@@ -288,10 +320,7 @@ describe('PostgreSQL governed calculation-authority capture', () => {
       artifactClass: 'derived_private',
     });
     const manifest = transaction.fixture.calculation.materializationManifest;
-    const reference = createAflTradeCanonicalJsonArtifactRef(
-      manifest,
-      manifest.content.createdAt
-    );
+    const reference = createAflTradeCanonicalJsonArtifactRef(manifest, manifest.content.createdAt);
     await artifactRepository.putIfAbsent(
       reference,
       new TextEncoder().encode(canonicalizeAflTradeJson(manifest))

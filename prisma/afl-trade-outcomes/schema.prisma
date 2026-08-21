@@ -4401,6 +4401,7 @@ model OutcomePreparedValuationInputSet {
   entries                      OutcomePreparedValuationInputEntry[]
   currentHeads                 OutcomeCurrentPreparedValuationInputSet[]
   currentValuationCohortResult OutcomeCurrentValuationCohortOperationResult?
+  privateExecutionCycles       OutcomePrivateEvaluationExecutionCycle[]
 
   @@index([environment, scopeKey, preparedAt], map: "outcome_prepared_valuation_input_set_scope_idx")
   @@index([factualReleaseId, preparedAt], map: "outcome_prepared_valuation_input_set_release_idx")
@@ -5003,6 +5004,7 @@ model OutcomeGovernedModelQualificationWork {
   workJson                         Json                                     @map("work_json")
   recordedAt                       DateTime                                 @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
   currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
+  privateExecutionCycles           OutcomePrivateEvaluationExecutionCycle[]
 
   @@index([status, availableAt, scopeKey], map: "outcome_governed_model_qualification_work_pending_idx")
   @@map("outcome_governed_model_qualification_work")
@@ -5294,6 +5296,76 @@ model OutcomePrivateEvaluationCohortFailure {
   capture                   OutcomePrivateEvaluationCohortCapture @relation(fields: [operationId], references: [operationId], onDelete: Restrict)
 
   @@map("outcome_private_evaluation_cohort_failure")
+}
+
+model OutcomePrivateEvaluationExecutionCycle {
+  cycleId                  String                                   @id @map("cycle_id") @outcomes.Text
+  inputFingerprint         String                                   @map("input_fingerprint") @outcomes.Text
+  scopeKey                 String                                   @map("scope_key") @outcomes.Text
+  preparedInputSetId       String                                   @map("prepared_input_set_id") @outcomes.Text
+  preparedInputSetRevision Int                                      @map("prepared_input_set_revision")
+  factualReleaseRevision   Int                                      @map("factual_release_revision")
+  modelQualificationWorkId String                                   @map("model_qualification_work_id") @outcomes.Text
+  modelPairRevision        Int                                      @map("model_pair_revision")
+  repairSequence           Int                                      @map("repair_sequence")
+  openingCause             String                                   @map("opening_cause") @outcomes.Text
+  openingPrincipalId       String                                   @map("opening_principal_id") @outcomes.Text
+  repairOperationId        String?                                  @unique @map("repair_operation_id") @outcomes.Text
+  repairReason             String?                                  @map("repair_reason") @outcomes.Text
+  repairsCycleId           String?                                  @map("repairs_cycle_id") @outcomes.Text
+  maximumAttempts          Int                                      @map("maximum_attempts")
+  openedAt                 DateTime                                 @map("opened_at") @outcomes.Timestamptz(3)
+  cycleJson                Json                                     @map("cycle_json")
+  preparedInputSet         OutcomePreparedValuationInputSet         @relation(fields: [preparedInputSetId], references: [preparedInputSetId], onDelete: Restrict)
+  modelQualificationWork   OutcomeGovernedModelQualificationWork    @relation(fields: [modelQualificationWorkId], references: [workId], onDelete: Restrict)
+  repairsCycle             OutcomePrivateEvaluationExecutionCycle?  @relation("PrivateExecutionCycleRepair", fields: [repairsCycleId], references: [cycleId], onDelete: Restrict)
+  repairCycles             OutcomePrivateEvaluationExecutionCycle[] @relation("PrivateExecutionCycleRepair")
+  work                     OutcomePrivateEvaluationExecutionWork[]
+
+  @@unique([inputFingerprint, repairSequence], map: "outcome_private_evaluation_execution_cycle_identity")
+  @@map("outcome_private_evaluation_execution_cycle")
+}
+
+model OutcomePrivateEvaluationExecutionWork {
+  cycleId           String                                     @map("cycle_id") @outcomes.Text
+  tradeId           String                                     @map("trade_id") @outcomes.Text
+  status            String                                     @outcomes.Text
+  attemptCount      Int                                        @default(0) @map("attempt_count")
+  availableAt       DateTime                                   @map("available_at") @outcomes.Timestamptz(3)
+  currentClaimId    String?                                    @map("current_claim_id") @outcomes.Text
+  leaseTokenSha256  String?                                    @map("lease_token_sha256") @outcomes.Char(64)
+  leaseExpiresAt    DateTime?                                  @map("lease_expires_at") @outcomes.Timestamptz(3)
+  heartbeatAt       DateTime?                                  @map("heartbeat_at") @outcomes.Timestamptz(3)
+  terminalStage     String?                                    @map("terminal_stage") @outcomes.Text
+  terminalCauseJson Json?                                      @map("terminal_cause_json")
+  resultJson        Json?                                      @map("result_json")
+  cycle             OutcomePrivateEvaluationExecutionCycle     @relation(fields: [cycleId], references: [cycleId], onDelete: Restrict)
+  attempts          OutcomePrivateEvaluationExecutionAttempt[]
+
+  @@id([cycleId, tradeId])
+  @@index([cycleId, status, availableAt, tradeId], map: "outcome_private_evaluation_execution_work_claim_idx")
+  @@map("outcome_private_evaluation_execution_work")
+}
+
+model OutcomePrivateEvaluationExecutionAttempt {
+  claimId          String                                @id @map("claim_id") @outcomes.Text
+  cycleId          String                                @map("cycle_id") @outcomes.Text
+  tradeId          String                                @map("trade_id") @outcomes.Text
+  attemptNumber    Int                                   @map("attempt_number")
+  workerId         String                                @map("worker_id") @outcomes.Text
+  leaseTokenSha256 String                                @map("lease_token_sha256") @outcomes.Char(64)
+  claimedAt        DateTime                              @map("claimed_at") @outcomes.Timestamptz(3)
+  leaseExpiresAt   DateTime                              @map("lease_expires_at") @outcomes.Timestamptz(3)
+  heartbeatAt      DateTime                              @map("heartbeat_at") @outcomes.Timestamptz(3)
+  finishedAt       DateTime?                             @map("finished_at") @outcomes.Timestamptz(3)
+  outcome          String?                               @outcomes.Text
+  terminalStage    String?                               @map("terminal_stage") @outcomes.Text
+  causeJson        Json?                                 @map("cause_json")
+  resultJson       Json?                                 @map("result_json")
+  work             OutcomePrivateEvaluationExecutionWork @relation(fields: [cycleId, tradeId], references: [cycleId, tradeId], onDelete: Restrict)
+
+  @@unique([cycleId, tradeId, attemptNumber], map: "outcome_private_evaluation_execution_attempt_number")
+  @@map("outcome_private_evaluation_execution_attempt")
 }
 
 model OutcomePrivateEvaluationTransitionReceipt {

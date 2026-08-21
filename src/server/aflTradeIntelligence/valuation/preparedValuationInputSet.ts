@@ -71,9 +71,7 @@ const readyEntryV2Schema = z
   .object({
     tradeId: publicIdSchema,
     state: z.literal('ready'),
-    calculationInputPackageId: aflTradeContentAddressedIdSchema(
-      'valuation-calculation-input'
-    ),
+    calculationInputPackageId: aflTradeContentAddressedIdSchema('valuation-calculation-input'),
     calculationInputArtifact: aflTradeArtifactRefSchema,
     inputTraceId: aflTradeContentAddressedIdSchema('private-evaluation-input-trace'),
     inputTraceArtifact: aflTradeArtifactRefSchema,
@@ -131,7 +129,7 @@ const aflTradePreparedValuationInputEntryV2Schema = z.discriminatedUnion('state'
   blockedEntrySchema,
 ]);
 
-const aflTradePreparedValuationInputEntryV3Schema = z.discriminatedUnion('state', [
+export const aflTradePreparedValuationInputEntryV3Schema = z.discriminatedUnion('state', [
   readyEntryV3Schema,
   blockedEntrySchema,
 ]);
@@ -160,9 +158,7 @@ const aflTradePreparedValuationInputSetContentV1Schema = z
     factualReleaseArtifact: aflTradeArtifactRefSchema,
     releaseMembershipArtifact: aflTradeArtifactRefSchema,
     preparationAuthority: z.literal('source_policy_preflight_only'),
-    qualificationOperation: z.literal(
-      'valuation_model_training_and_derived_feature_creation'
-    ),
+    qualificationOperation: z.literal('valuation_model_training_and_derived_feature_creation'),
     qualificationReportId: aflTradeContentAddressedIdSchema('valuation-source-qualification'),
     qualificationReportArtifact: aflTradeArtifactRefSchema,
     sourceQualificationEvidenceRefs: z.array(aflTradeArtifactRefSchema).min(1).max(1_000),
@@ -290,9 +286,7 @@ const aflTradePreparedValuationInputSetContentV2Schema = z
     factualReleaseArtifact: aflTradeArtifactRefSchema,
     releaseMembershipArtifact: aflTradeArtifactRefSchema,
     preparationAuthority: z.literal('authenticated_calculation_evidence_snapshot'),
-    qualificationOperation: z.literal(
-      'valuation_model_training_and_derived_feature_creation'
-    ),
+    qualificationOperation: z.literal('valuation_model_training_and_derived_feature_creation'),
     qualificationReportId: aflTradeContentAddressedIdSchema('valuation-source-qualification'),
     qualificationReportArtifact: aflTradeArtifactRefSchema,
     sourceQualificationEvidenceRefs: z.array(aflTradeArtifactRefSchema).min(1).max(1_000),
@@ -425,9 +419,7 @@ const aflTradePreparedValuationInputSetContentV3Schema = z
     factualReleaseArtifact: aflTradeArtifactRefSchema,
     releaseMembershipArtifact: aflTradeArtifactRefSchema,
     preparationAuthority: z.literal('authenticated_calculation_evidence_snapshot'),
-    qualificationOperation: z.literal(
-      'valuation_model_training_and_derived_feature_creation'
-    ),
+    qualificationOperation: z.literal('valuation_model_training_and_derived_feature_creation'),
     qualificationReportId: aflTradeContentAddressedIdSchema('valuation-source-qualification'),
     qualificationReportArtifact: aflTradeArtifactRefSchema,
     sourceQualificationEvidenceRefs: z.array(aflTradeArtifactRefSchema).min(1).max(1_000),
@@ -497,8 +489,8 @@ const aflTradePreparedValuationInputSetContentV3Schema = z
         message: 'Prepared input-set counts must match the exact entry classifications.',
       });
     }
-    const manifestIds = readyEntries.map(({ materializationManifestId }) =>
-      materializationManifestId
+    const manifestIds = readyEntries.map(
+      ({ materializationManifestId }) => materializationManifestId
     );
     if (new Set(manifestIds).size !== manifestIds.length) {
       context.addIssue({
@@ -507,8 +499,8 @@ const aflTradePreparedValuationInputSetContentV3Schema = z
         message: 'Ready prepared entries require unique materialization manifest identities.',
       });
     }
-    const readyArtifacts = readyEntries.map(({ materializationManifestArtifact }) =>
-      materializationManifestArtifact
+    const readyArtifacts = readyEntries.map(
+      ({ materializationManifestArtifact }) => materializationManifestArtifact
     );
     const artifactIds = [
       content.valuationInputBundleArtifact.artifactId,

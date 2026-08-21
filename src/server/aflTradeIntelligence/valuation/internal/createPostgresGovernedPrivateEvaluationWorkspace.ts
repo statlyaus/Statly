@@ -13,6 +13,7 @@ import { createPostgresGovernedPrivateEvaluationReconstructionRepository } from 
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from './postgresGovernedPrivateEvaluationStagingRepository';
 import { createPostgresGovernedPrivateEvaluationMaterializationReplay } from './postgresGovernedPrivateEvaluationMaterializationReplay';
 import type { GovernedPrivateEvaluationReadRequest } from './governedPrivateEvaluationWorkspaceContracts';
+import { AflTradePreparedValuationInputCohortCache } from '../postgresPreparedValuationInputSetStore';
 
 export function createPostgresGovernedPrivateEvaluationWorkspace(dependencies: {
   readonly client: AflOutcomeSqlClient;
@@ -45,6 +46,7 @@ export function createPostgresGovernedPrivateEvaluationWorkspace(dependencies: {
     createPostgresGovernedPrivateEvaluationCalculationAuthorityCapture({
       artifactRepository: dependencies.artifactRepository,
       maximumArtifactBytes: dependencies.maximumArtifactBytes,
+      preparedInputCache: new AflTradePreparedValuationInputCohortCache(),
     });
   const inspection = createPostgresGovernedPrivateEvaluationInspectionRepository({
     client: dependencies.client,
@@ -178,9 +180,7 @@ export function createPostgresGovernedPrivateEvaluationWorkspace(dependencies: {
 
   return createGovernedPrivateEvaluationWorkspaceForInternalComposition({
     stageAutomated:
-      automatedStaging === undefined
-        ? undefined
-        : (request) => automatedStaging.stage(request),
+      automatedStaging === undefined ? undefined : (request) => automatedStaging.stage(request),
     inspect: (request) => inspection.inspect(request),
     execute: (request) => execution.execute(request),
     read: (request) => read.read(request),

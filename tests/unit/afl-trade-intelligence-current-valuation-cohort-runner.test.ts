@@ -44,6 +44,75 @@ function requestFor(authority: ReturnType<typeof capture>) {
 }
 
 describe('automatic private evaluation cohort runner', () => {
+  it('leaves the batch unchanged while durable transient work is waiting for retry', async () => {
+    const authority = capture(['trade-a', 'trade-b']);
+    const registerBatch = vi.fn();
+    const advanceBatch = vi.fn();
+    const runner = createAflTradePrivateEvaluationCohortRunner({
+      captureCurrent: async () => ({ capture: authority, currentBatch: null }),
+      stageTrade: async ({ selector }) =>
+        selector.tradeId === 'trade-a'
+          ? { state: 'retry_pending', availableAt: '2026-08-21T09:00:05.000Z' }
+          : {
+              state: 'activated',
+              generationId: `local-private-trade-evaluation-generation:${digest('b')}`,
+              generatedAt: '2026-08-21T09:01:00.000Z',
+            },
+      retainUnexpectedDiagnostics: vi.fn(),
+      registerBatch,
+      advanceBatch,
+    });
+
+    await expect(runner.run(requestFor(authority))).resolves.toEqual({
+      state: 'retry_pending',
+      pendingTradeIds: ['trade-a'],
+    });
+    expect(registerBatch).not.toHaveBeenCalled();
+    expect(advanceBatch).not.toHaveBeenCalled();
+  });
+
+  it('enforces the versioned maximum concurrency', async () => {
+    const authority = capture(
+      Array.from({ length: 783 }, (_, index) =>
+        `trade-${index.toString().padStart(3, '0')}`
+      )
+    );
+    let active = 0;
+    let observedMaximum = 0;
+    const runner = createAflTradePrivateEvaluationCohortRunner({
+      captureCurrent: async () => ({ capture: authority, currentBatch: null }),
+      stageTrade: async ({ selector }) => {
+        active += 1;
+        observedMaximum = Math.max(observedMaximum, active);
+        await Promise.resolve();
+        active -= 1;
+        return {
+          state: 'activated',
+          generationId: `local-private-trade-evaluation-generation:${Number(
+            selector.tradeId.slice('trade-'.length)
+          )
+            .toString(16)
+            .padStart(64, '0')}`,
+          generatedAt: '2026-08-21T09:01:00.000Z',
+        };
+      },
+      retainUnexpectedDiagnostics: vi.fn(),
+      registerBatch: async (batch) => batch,
+      advanceBatch: async ({ batchId, expectedRevision }) => ({
+        scopeKey,
+        batchId,
+        revision: expectedRevision + 1,
+        transitionId: `private-evaluation-batch-transition:${digest('f')}`,
+        activatedAt: '2026-08-21T09:01:00.000Z',
+      }),
+    });
+
+    await expect(runner.run(requestFor(authority))).resolves.toMatchObject({
+      state: 'activated',
+    });
+    expect(observedMaximum).toBe(8);
+  });
+
   it('attempts every trade, retains unexpected diagnostics, and does not activate', async () => {
     const authority = capture(['trade-a', 'trade-b', 'trade-c', 'trade-d']);
     const attempted: string[] = [];

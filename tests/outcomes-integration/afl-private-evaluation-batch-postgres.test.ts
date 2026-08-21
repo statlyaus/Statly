@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   canonicalizeAflTradeJson,
@@ -170,6 +170,11 @@ afterAll(async () => {
   await pool.end();
   await adminPool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
   await adminPool.end();
+});
+
+beforeEach(async () => {
+  await pool.query(`TRUNCATE outcome_private_evaluation_execution_attempt,
+    outcome_private_evaluation_execution_work,outcome_private_evaluation_execution_cycle`);
 });
 
 function batch(at: string) {
@@ -489,6 +494,30 @@ async function seedReadyRunnerGeneration(input: {
         canonicalizeAflTradeJson(generation),
       ]
     );
+    const transitionId = createAflTradeContentAddress('private-evaluation-transition', {
+      operationId: input.operationId,
+      tradeId: input.tradeId,
+    });
+    await seed.query(
+      `INSERT INTO outcome_private_evaluation_transition_receipt
+        (transition_id,transition_intent_id,operation_id,valuation_scope_key,trade_id,
+         artifact_id,action,from_revision,from_status,from_generation_id,to_revision,
+         to_status,to_generation_id,transitioned_at,content_sha256,content_canonical_json,receipt_json)
+       VALUES ($1,$2,$3,$4,$5,$6,'construct_and_activate',0,'absent',NULL,1,
+               'active',$7,$8,$9,'{}','{}'::jsonb)
+       ON CONFLICT DO NOTHING`,
+      [
+        transitionId,
+        transitionIntentId,
+        input.operationId,
+        scopeKey,
+        input.tradeId,
+        `artifact:${(input.tradeId === 'trade-a' ? 'a' : 'b').repeat(64)}`,
+        generationId,
+        input.generatedAt,
+        transitionId.slice('private-evaluation-transition:'.length),
+      ]
+    );
     await seed.query('COMMIT');
   } catch (error) {
     await seed.query('ROLLBACK');
@@ -799,9 +828,9 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         },
       },
     });
-    await expect(conflictingReplay.runCurrent(scopeKey)).resolves.toMatchObject({
-      state: 'unexpected_failure',
-      diagnostics: [{ tradeId: 'trade-a', message: 'exact retained ancestry failure' }],
+    await expect(conflictingReplay.runCurrent(scopeKey)).resolves.toEqual({
+      state: 'exhausted',
+      exhaustedTradeIds: ['trade-a'],
     });
     await expect(
       pool.query(`SELECT diagnostic_json FROM outcome_private_evaluation_cohort_failure`)
@@ -892,6 +921,128 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     await expect(repository.loadCurrent(scopeKey)).resolves.toMatchObject({
       head: { revision: 4 },
     });
+  });
+
+  it('classifies PostgreSQL serialization failures and resumes attempts two and three after restart', async () => {
+    const manifestDigest = '5'.repeat(64);
+    const readyEntry = {
+      tradeId: 'trade-a',
+      state: 'ready' as const,
+      materializationManifestId: `private-evaluation-materialization-manifest:${manifestDigest}`,
+      materializationManifestArtifact: artifactRef('5', createdAt),
+    };
+    const setup = await pool.connect();
+    try {
+      await setup.query('BEGIN');
+      await setup.query(`SET LOCAL session_replication_role='replica'`);
+      await setup.query(
+        `UPDATE outcome_prepared_valuation_input_entry
+            SET state='ready',entry_canonical_json=$2::text,entry_json=$2::jsonb
+          WHERE prepared_input_set_id=$1 AND trade_id='trade-a'`,
+        [preparedInputSetId, canonicalizeAflTradeJson(readyEntry)]
+      );
+      await setup.query(
+        `UPDATE outcome_current_prepared_valuation_input_set SET revision=5 WHERE scope_key=$1`,
+        [scopeKey]
+      );
+      await setup.query('COMMIT');
+    } finally {
+      setup.release();
+    }
+    const createRunner = () =>
+      createPostgresAflTradePrivateEvaluationCohortRunner({
+        client: createPgAflOutcomeSqlClient(pool),
+        batchRepository: new PostgresGovernedPrivateEvaluationBatchRepository(
+          createPgAflOutcomeSqlClient(pool),
+          async () => true
+        ),
+        workspace: {
+          stageAutomated: async ({ selector }) => {
+            if (selector.tradeId === 'trade-a') {
+              throw Object.assign(new Error('serialization conflict'), { code: '40001' });
+            }
+            return {
+              state: 'unavailable' as const,
+              blockers: [{ code: 'insufficient_data', message: 'No retained observations.' }],
+            };
+          },
+          inspect: async () => {
+            throw new Error('Not used by the cohort runner.');
+          },
+          execute: async () => {
+            throw new Error('Not used by the cohort runner.');
+          },
+          read: async () => {
+            throw new Error('Not used by the cohort runner.');
+          },
+        },
+      });
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const result = await createRunner().runCurrent(scopeKey);
+      expect(result).toEqual(
+        attempt < 3
+          ? { state: 'retry_pending', pendingTradeIds: ['trade-a'] }
+          : { state: 'exhausted', exhaustedTradeIds: ['trade-a'] }
+      );
+      if (attempt < 3) {
+        const due = await pool.connect();
+        try {
+          await due.query('BEGIN');
+          await due.query(`SET LOCAL session_replication_role='replica'`);
+          await due.query(
+            `UPDATE outcome_private_evaluation_execution_work
+                SET available_at=transaction_timestamp()-interval '1 second'
+              WHERE trade_id='trade-a' AND status='retry_wait'`
+          );
+          await due.query('COMMIT');
+        } finally {
+          due.release();
+        }
+      }
+    }
+    await expect(
+      pool.query(
+        `SELECT attempt_number,outcome,cause_json FROM outcome_private_evaluation_execution_attempt
+          WHERE trade_id='trade-a' ORDER BY attempt_number`
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        { attempt_number: 1, outcome: 'transient_failure', cause_json: { code: 'postgres_40001' } },
+        { attempt_number: 2, outcome: 'transient_failure', cause_json: { code: 'postgres_40001' } },
+        { attempt_number: 3, outcome: 'transient_failure', cause_json: { code: 'postgres_40001' } },
+      ],
+    });
+    const repairRunner = createRunner();
+    const repairOperationId = `cohort-execution-repair:${'5'.repeat(64)}`;
+    const repairReason = 'The retained serialization outage was corrected by the backend operator.';
+    const repaired = await repairRunner.repairCurrent(scopeKey, repairReason, repairOperationId);
+    expect(repaired).toMatchObject({
+      content: {
+        repairSequence: 1,
+        openingPrincipalId: 'system:weekly-valuation-coordinator',
+        repairReason,
+      },
+    });
+    await expect(repairRunner.runCurrent(scopeKey)).resolves.toEqual({
+      state: 'retry_pending',
+      pendingTradeIds: ['trade-a'],
+    });
+    const shifted = await pool.connect();
+    try {
+      await shifted.query('BEGIN');
+      await shifted.query(`SET LOCAL session_replication_role='replica'`);
+      await shifted.query(
+        `UPDATE outcome_current_prepared_valuation_input_set SET revision=6 WHERE scope_key=$1`,
+        [scopeKey]
+      );
+      await shifted.query('COMMIT');
+    } finally {
+      shifted.release();
+    }
+    await expect(
+      repairRunner.repairCurrent(scopeKey, repairReason, repairOperationId)
+    ).resolves.toEqual(repaired);
   });
 
   it.each(['factual release', 'model pair'] as const)(

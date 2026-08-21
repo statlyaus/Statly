@@ -136,6 +136,12 @@ interface Dependencies {
         state: 'unavailable';
         blockers: readonly Readonly<{ code: string; message: string }>[];
       }>
+    | Readonly<{ state: 'retry_pending'; availableAt: string }>
+    | Readonly<{
+        state: 'exhausted';
+        stage: string;
+        cause: Readonly<{ code: string; message: string }>;
+      }>
     | Readonly<{ state: 'stale_authority' }>
   >;
   readonly retainUnexpectedDiagnostics: (input: {
@@ -221,6 +227,8 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
 
       const diagnostics: AflTradePrivateEvaluationCohortUnexpectedDiagnostic[] = [];
       let stale = false;
+      const pendingTradeIds: string[] = [];
+      const exhaustedTradeIds: string[] = [];
       type CompletedEntry = Readonly<{
         entry: GovernedPrivateEvaluationBatch['content']['entries'][number];
         generatedAt: string | null;
@@ -260,6 +268,14 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
           }
           if (result.state === 'stale_authority') {
             stale = true;
+            return null;
+          }
+          if (result.state === 'retry_pending') {
+            pendingTradeIds.push(entry.tradeId);
+            return null;
+          }
+          if (result.state === 'exhausted') {
+            exhaustedTradeIds.push(entry.tradeId);
             return null;
           }
           return {
@@ -312,7 +328,18 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
           diagnostics: retained ?? diagnostics,
         };
       }
-      if (stale || entries.some((entry) => entry === null)) {
+      if (stale) {
+        return { state: 'stale_authority' as const };
+      }
+      pendingTradeIds.sort();
+      if (pendingTradeIds.length > 0) {
+        return { state: 'retry_pending' as const, pendingTradeIds };
+      }
+      exhaustedTradeIds.sort();
+      if (exhaustedTradeIds.length > 0) {
+        return { state: 'exhausted' as const, exhaustedTradeIds };
+      }
+      if (entries.some((entry) => entry === null)) {
         return { state: 'stale_authority' as const };
       }
       const completed = entries.filter(

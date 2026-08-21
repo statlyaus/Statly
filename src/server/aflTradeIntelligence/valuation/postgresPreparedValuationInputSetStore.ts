@@ -57,9 +57,31 @@ export interface AflTradeCurrentPreparedValuationInputSet {
   readonly preparedInputSet: AflTradePreparedValuationInputSet;
 }
 
-export interface AflTradeCurrentPreparedValuationInputTrade
-  extends AflTradeCurrentPreparedValuationInputSet {
+export interface AflTradeCurrentPreparedValuationInputTrade extends AflTradeCurrentPreparedValuationInputSet {
   readonly entry: AflTradePreparedValuationInputEntry;
+}
+
+export class AflTradePreparedValuationInputCohortCache {
+  private key: string | null = null;
+  private value: Promise<AflTradePreparedValuationInputSet> | null = null;
+
+  load(
+    head: AflTradeCurrentPreparedValuationInputHead,
+    loader: () => Promise<AflTradePreparedValuationInputSet>
+  ): Promise<AflTradePreparedValuationInputSet> {
+    const key = `${head.scopeKey}\u0000${head.preparedInputSetId}\u0000${head.revision}`;
+    if (this.key !== key || this.value === null) {
+      this.key = key;
+      this.value = loader().catch((error: unknown) => {
+        if (this.key === key) {
+          this.key = null;
+          this.value = null;
+        }
+        throw error;
+      });
+    }
+    return this.value;
+  }
 }
 
 export class AflTradePreparedValuationInputSetStoreError extends Error {
@@ -216,8 +238,7 @@ async function loadCurrentFromClient(
   const head = authenticateCurrentHead(row);
   const preparedInputSet = await loadExactFromClient(client, head.preparedInputSetId);
   if (
-    preparedInputSet.content.schemaVersion !==
-      'afl-trade-prepared-valuation-input-set/v3' ||
+    preparedInputSet.content.schemaVersion !== 'afl-trade-prepared-valuation-input-set/v3' ||
     preparedInputSet.content.scopeKey !== scopeKey ||
     head.scopeKey !== scopeKey
   ) {
@@ -231,17 +252,57 @@ async function loadCurrentFromClient(
 
 export async function loadCurrentAflTradePreparedValuationInputTradeFromTransaction(
   transaction: AflOutcomeSqlTransaction,
-  input: { readonly scopeKey: string; readonly tradeId: string }
+  input: { readonly scopeKey: string; readonly tradeId: string },
+  cache?: AflTradePreparedValuationInputCohortCache
 ): Promise<AflTradeCurrentPreparedValuationInputTrade | null> {
   if (input.scopeKey.trim() === '' || input.tradeId.trim() === '') {
     throw new TypeError('Current prepared trade authority requires a complete selector.');
   }
-  const current = await loadCurrentFromClient(transaction, input.scopeKey);
-  if (!current) return null;
-  const entry = current.preparedInputSet.content.entries.find(
-    ({ tradeId }) => tradeId === input.tradeId
+  const headResult = await transaction.query<CurrentPreparedSetHeadRow>(
+    `SELECT scope_key,prepared_input_set_id,revision,activated_at
+       FROM outcome_current_prepared_valuation_input_set WHERE scope_key=$1`,
+    [input.scopeKey]
   );
-  return entry ? { ...current, entry } : null;
+  const headRow = headResult.rows[0];
+  if (headRow === undefined) return null;
+  const head = authenticateCurrentHead(headRow);
+  const preparedInputSet = await (cache?.load(head, () =>
+    loadExactFromClient(transaction, head.preparedInputSetId)
+  ) ?? loadExactFromClient(transaction, head.preparedInputSetId));
+  if (
+    preparedInputSet.content.schemaVersion !== 'afl-trade-prepared-valuation-input-set/v3' ||
+    preparedInputSet.content.scopeKey !== input.scopeKey ||
+    head.scopeKey !== input.scopeKey
+  ) {
+    throw new AflTradePreparedValuationInputSetStoreError(
+      'INTEGRITY_MISMATCH',
+      'Current prepared valuation input head does not authenticate finalized v3 scope authority.'
+    );
+  }
+  const entryResult = await transaction.query<PreparedEntryRow>(
+    `SELECT ordinal,trade_id,state,entry_canonical_json,entry_json
+       FROM outcome_prepared_valuation_input_entry
+      WHERE prepared_input_set_id=$1 AND trade_id=$2`,
+    [head.preparedInputSetId, input.tradeId]
+  );
+  const row = entryResult.rows[0];
+  if (row === undefined) return null;
+  const expected = preparedInputSet.content.entries[row.ordinal - 1];
+  if (
+    entryResult.rows.length !== 1 ||
+    row.ordinal < 1 ||
+    row.trade_id !== input.tradeId ||
+    expected?.tradeId !== row.trade_id ||
+    expected.state !== row.state ||
+    row.entry_canonical_json !== canonicalizeAflTradeJson(expected) ||
+    canonicalizeAflTradeJson(row.entry_json) !== canonicalizeAflTradeJson(expected)
+  ) {
+    throw new AflTradePreparedValuationInputSetStoreError(
+      'INTEGRITY_MISMATCH',
+      'Targeted prepared trade custody disagrees with its authenticated parent.'
+    );
+  }
+  return { head, preparedInputSet, entry: expected };
 }
 
 export interface AflTradePreparedValuationInputSetStore {
@@ -418,10 +479,7 @@ export class PostgresAflTradePreparedValuationInputSetStore implements AflTradeP
     }
     return this.client.transaction(async (transaction) => {
       await transaction.query(`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`);
-      return loadCurrentAflTradePreparedValuationInputTradeFromTransaction(
-        transaction,
-        input
-      );
+      return loadCurrentAflTradePreparedValuationInputTradeFromTransaction(transaction, input);
     });
   }
 }
