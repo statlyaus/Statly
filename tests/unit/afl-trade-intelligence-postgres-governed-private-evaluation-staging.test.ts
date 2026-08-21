@@ -29,6 +29,7 @@ class StagingSqlClient implements AflOutcomeSqlClient {
   readonly custodyParameters: readonly unknown[][] = [];
   intentParameters: readonly unknown[] | null = null;
   private readonly artifacts = new Map<string, AflTradeArtifactRef>();
+  private intentRegistered = false;
 
   constructor(
     private readonly retainedIntent: unknown,
@@ -46,6 +47,9 @@ class StagingSqlClient implements AflOutcomeSqlClient {
     parameters: readonly unknown[] = []
   ): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.sql.push(statement);
+    if (statement.includes('pg_advisory_xact_lock(hashtextextended($1,0))')) {
+      return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+    }
     if (statement.includes("date_trunc('milliseconds',transaction_timestamp())")) {
       return {
         rows: [{ trusted_at: new Date(now) }],
@@ -74,9 +78,13 @@ class StagingSqlClient implements AflOutcomeSqlClient {
     }
     if (statement.includes('INSERT INTO outcome_private_evaluation_transition_intent')) {
       this.intentParameters = parameters;
+      this.intentRegistered = true;
       return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('FROM outcome_private_evaluation_transition_intent')) {
+      if (!this.intentRegistered) {
+        return { rows: [], rowCount: 0 } as AflOutcomeSqlQueryResult<Row>;
+      }
       return {
         rows: [
           {
@@ -141,6 +149,9 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
     expect(client.sql.some((sql) => sql.includes('INSERT INTO outcome_artifact_custody'))).toBe(
       true
     );
+    expect(
+      client.sql.some((sql) => sql.includes('pg_advisory_xact_lock(hashtextextended($1,0))'))
+    ).toBe(true);
     expect(
       client.sql.some((sql) =>
         sql.includes('authority_snapshot_id')
