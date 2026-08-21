@@ -1091,6 +1091,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0062_authenticated_prepared_v3_ancestry',
       '0063_governed_pick_pav_model_execution',
       '0064_automated_model_pair_qualification',
+      '0065_automated_private_evaluation_authority',
     ]);
 
     const tables = await query<{ table_name: string }>(
@@ -1100,6 +1101,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
     const tableNames = new Set(tables.rows.map(({ table_name }) => table_name));
     for (const expected of [
       'outcome_artifact_custody',
+      'outcome_current_valuation_cohort_operation',
+      'outcome_current_valuation_cohort_operation_result',
       'outcome_governed_pick_pav_model_execution',
       'outcome_source_capture_attempt',
       'outcome_source_capture_season',

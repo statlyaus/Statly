@@ -10,8 +10,13 @@ import type {
   AflOutcomeSqlQueryResult,
   AflOutcomeSqlTransaction,
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
-import { createGovernedPrivateEvaluationTransitionIntent } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
+import { createGovernedPrivateEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationGeneration';
+import {
+  createAutomatedGovernedPrivateEvaluationTransitionIntent,
+  createGovernedPrivateEvaluationTransitionIntent,
+} from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
+import { createGovernedPrivateEvaluationNarrativeFixture } from '../testUtils/governedPrivateEvaluationFixture';
 
 const selector = {
   valuationScopeKey: 'afl-trade-history:test-fixture',
@@ -182,6 +187,80 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
 
     await expect(repository.stage({ intent, intentArtifact: artifact })).rejects.toThrow(
       /complete verified generation/i
+    );
+  });
+
+  it('rejects a legacy generation presented under automated construction authority', async () => {
+    const automatedSelector = {
+      valuationScopeKey: selector.valuationScopeKey,
+      tradeId: 'trade:adelaide-st-kilda',
+    };
+    const intent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
+      selector: automatedSelector,
+      inspectionId: `private-evaluation-inspection:${'a'.repeat(64)}`,
+      authoritySnapshotId: `private-evaluation-authority-snapshot:${'b'.repeat(64)}`,
+      operationId: `private-evaluation-operation:${'c'.repeat(64)}`,
+      action: { kind: 'construct_and_activate' },
+      expectedHead: { status: 'absent', revision: 0, generationId: null },
+      constructionAuthority: {
+        kind: 'automated_private_calculation_agent',
+        principalId: 'system:weekly-valuation-coordinator',
+      },
+      requestedAt: now,
+      expiresAt: '2026-08-19T10:05:00.000Z',
+    });
+    const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, now);
+    const legacy = createGovernedPrivateEvaluationGeneration({
+      selector: automatedSelector,
+      transitionIntentId: intent.transitionIntentId,
+      generatedAt: now,
+      narrative: createGovernedPrivateEvaluationNarrativeFixture(),
+    });
+    const repository = createPostgresGovernedPrivateEvaluationStagingRepository({
+      client: new StagingSqlClient(intent, intentArtifact),
+      artifactRepository: createAflTradeFixtureArtifactRepository({
+        artifactClass: 'derived_private',
+      }),
+      maximumArtifactBytes: 1_000_000,
+      automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    });
+
+    await expect(
+      repository.stage({ intent, intentArtifact, materialization: legacy })
+    ).rejects.toThrow(/complete verified generation/i);
+  });
+
+  it('rejects automated construction from a principal other than the configured agent', async () => {
+    const automatedSelector = {
+      valuationScopeKey: selector.valuationScopeKey,
+      tradeId: 'trade:adelaide-st-kilda',
+    };
+    const intent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
+      selector: automatedSelector,
+      inspectionId: `private-evaluation-inspection:${'a'.repeat(64)}`,
+      authoritySnapshotId: `private-evaluation-authority-snapshot:${'b'.repeat(64)}`,
+      operationId: `private-evaluation-operation:${'c'.repeat(64)}`,
+      action: { kind: 'construct_and_activate' },
+      expectedHead: { status: 'absent', revision: 0, generationId: null },
+      constructionAuthority: {
+        kind: 'automated_private_calculation_agent',
+        principalId: 'system:unconfigured-agent',
+      },
+      requestedAt: now,
+      expiresAt: '2026-08-19T10:05:00.000Z',
+    });
+    const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, now);
+    const repository = createPostgresGovernedPrivateEvaluationStagingRepository({
+      client: new StagingSqlClient(intent, intentArtifact),
+      artifactRepository: createAflTradeFixtureArtifactRepository({
+        artifactClass: 'derived_private',
+      }),
+      maximumArtifactBytes: 1_000_000,
+      automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    });
+
+    await expect(repository.stage({ intent, intentArtifact })).rejects.toThrow(
+      /exact configured system principal/i
     );
   });
 

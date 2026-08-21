@@ -17,8 +17,8 @@ import {
   type GovernedPrivateEvaluationRetainedArtifact,
 } from '../governedPrivateEvaluationGeneration';
 import {
-  governedPrivateEvaluationTransitionIntentSchema,
-  type GovernedPrivateEvaluationTransitionIntent,
+  parseAnyGovernedPrivateEvaluationTransitionIntent,
+  type AnyGovernedPrivateEvaluationTransitionIntent,
 } from './governedPrivateEvaluationLifecycle';
 
 interface CustodyRow {
@@ -139,10 +139,26 @@ async function registerCustody(
 
 async function insertIntent(
   transaction: AflOutcomeSqlTransaction,
-  intent: GovernedPrivateEvaluationTransitionIntent,
+  intent: AnyGovernedPrivateEvaluationTransitionIntent,
   artifact: AflTradeArtifactRef
 ): Promise<void> {
   const content = intent.content;
+  const existing = await transaction.query<IntentRow>(
+    `SELECT intent_json,artifact_id
+       FROM outcome_private_evaluation_transition_intent
+      WHERE transition_intent_id=$1 FOR KEY SHARE`,
+    [intent.transitionIntentId]
+  );
+  if (existing.rows[0] !== undefined) {
+    if (
+      existing.rows.length !== 1 ||
+      !same(existing.rows[0].intent_json, intent) ||
+      existing.rows[0].artifact_id !== artifact.artifactId
+    ) {
+      throw new TypeError('Private evaluation transition intent replay conflicts.');
+    }
+    return;
+  }
   await transaction.query(
     `INSERT INTO outcome_private_evaluation_transition_intent
       (transition_intent_id,inspection_id,authority_snapshot_id,operation_id,valuation_scope_key,trade_id,
@@ -150,7 +166,7 @@ async function insertIntent(
        expected_head_generation_id,target_generation_id,requested_at,expires_at,
        content_sha256,content_canonical_json,intent_json)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
-     ON CONFLICT (transition_intent_id) DO NOTHING`,
+    `,
     [
       intent.transitionIntentId,
       content.inspectionId,
@@ -195,13 +211,29 @@ async function insertGeneration(
   const generationArtifact = byKind.get('generation')!;
   const narrativeArtifact = byKind.get('calculation_narrative')!;
   const manifestArtifact = byKind.get('projection_manifest')!;
+  const existing = await transaction.query<GenerationRow>(
+    `SELECT generation_json,generation_artifact_id
+       FROM outcome_local_private_trade_evaluation_generation
+      WHERE generation_id=$1 FOR KEY SHARE`,
+    [generation.generationId]
+  );
+  if (existing.rows[0] !== undefined) {
+    if (
+      existing.rows.length !== 1 ||
+      !same(existing.rows[0].generation_json, generation) ||
+      existing.rows[0].generation_artifact_id !== generationArtifact.reference.artifactId
+    ) {
+      throw new TypeError('Private evaluation dormant generation replay conflicts.');
+    }
+    return;
+  }
   await transaction.query(
     `INSERT INTO outcome_local_private_trade_evaluation_generation
       (generation_id,valuation_scope_key,trade_id,transition_intent_id,
        generation_artifact_id,narrative_artifact_id,projection_manifest_artifact_id,
        generated_at,content_sha256,content_canonical_json,generation_json)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
-     ON CONFLICT (generation_id) DO NOTHING`,
+    `,
     [
       generation.generationId,
       generation.content.selector.valuationScopeKey,
@@ -235,6 +267,7 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
   readonly client: AflOutcomeSqlClient;
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
+  readonly automatedPrincipalId?: string;
 }) {
   const repositoryAssurance = dependencies.artifactRepository.assurance;
   if (repositoryAssurance === 'durable_object_storage') {
@@ -246,6 +279,12 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
     dependencies.maximumArtifactBytes <= 0
   ) {
     throw new TypeError('Private evaluation staging requires bounded private fixture custody.');
+  }
+  if (
+    dependencies.automatedPrincipalId !== undefined &&
+    !/^system:[a-z0-9][a-z0-9._:-]{0,199}$/u.test(dependencies.automatedPrincipalId)
+  ) {
+    throw new TypeError('Private evaluation staging received an invalid automated principal.');
   }
   const custody = {
     environment:
@@ -272,20 +311,45 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
     },
 
     async stage(input: {
-      readonly intent: GovernedPrivateEvaluationTransitionIntent;
+      readonly intent: AnyGovernedPrivateEvaluationTransitionIntent;
       readonly intentArtifact: AflTradeArtifactRef;
       readonly materialization?: GovernedPrivateEvaluationGenerationMaterialization;
     }) {
-      const intent = governedPrivateEvaluationTransitionIntentSchema.parse(input.intent);
+      const intent = parseAnyGovernedPrivateEvaluationTransitionIntent(input.intent);
       const intentArtifact = aflTradeArtifactRefSchema.parse(input.intentArtifact);
       const constructing = intent.content.action.kind === 'construct_and_activate';
+      const automated = intent.content.schemaVersion === 'private-evaluation-transition-intent/v2';
+      const automatedAuthority = intent.content.schemaVersion ===
+        'private-evaluation-transition-intent/v2'
+        ? intent.content.constructionAuthority
+        : null;
       if (
-        constructing !== (input.materialization !== undefined) ||
-        (input.materialization !== undefined &&
-          (!verifyGovernedPrivateEvaluationGeneration(input.materialization) ||
-            input.materialization.generation.content.transitionIntentId !==
+        automated &&
+        (dependencies.automatedPrincipalId === undefined ||
+          automatedAuthority?.principalId !== dependencies.automatedPrincipalId)
+      ) {
+        throw new TypeError(
+          'Automated private staging requires the exact configured system principal.'
+        );
+      }
+      const materialization = input.materialization;
+      if (
+        constructing !== (materialization !== undefined) ||
+        (materialization !== undefined &&
+          (!verifyGovernedPrivateEvaluationGeneration(materialization) ||
+            materialization.generation.content.transitionIntentId !==
               intent.transitionIntentId ||
-            !same(input.materialization.generation.content.selector, intent.content.selector)))
+            !same(materialization.generation.content.selector, intent.content.selector))) ||
+        (automated &&
+          (materialization?.generation.content.schemaVersion !==
+            'local-private-trade-evaluation-generation/v2' ||
+            materialization.projectionManifest.content.schemaVersion !==
+              'governed-private-evaluation-projection-manifest/v2' ||
+            !('constructionAuthority' in materialization.generation.content) ||
+            !same(
+              materialization.generation.content.constructionAuthority,
+              automatedAuthority
+            )))
       ) {
         throw new TypeError('Construction staging requires one complete verified generation.');
       }
@@ -308,6 +372,10 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
         );
       }
       return dependencies.client.transaction(async (transaction) => {
+        await transaction.query(
+          `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
+          [intent.transitionIntentId]
+        );
         const verifiedAt = await loadTrustedTime(transaction);
         for (const artifact of retained) {
           await registerCustody(transaction, artifact.reference, verifiedAt, custody);

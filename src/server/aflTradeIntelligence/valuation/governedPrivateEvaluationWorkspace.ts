@@ -1,4 +1,6 @@
 import type {
+  GovernedPrivateEvaluationAutomatedStageRequest,
+  GovernedPrivateEvaluationAutomatedStageResult,
   GovernedPrivateEvaluationExecuteRequest,
   GovernedPrivateEvaluationExecuteResult,
   GovernedPrivateEvaluationInspectRequest,
@@ -8,6 +10,8 @@ import type {
 } from './internal/governedPrivateEvaluationWorkspaceContracts';
 
 export type {
+  GovernedPrivateEvaluationAutomatedStageRequest,
+  GovernedPrivateEvaluationAutomatedStageResult,
   GovernedPrivateEvaluationExecuteRequest,
   GovernedPrivateEvaluationExecuteResult,
   GovernedPrivateEvaluationInspectRequest,
@@ -17,6 +21,9 @@ export type {
 };
 
 export interface GovernedPrivateEvaluationWorkspace {
+  stageAutomated(
+    request: GovernedPrivateEvaluationAutomatedStageRequest
+  ): Promise<GovernedPrivateEvaluationAutomatedStageResult>;
   inspect(
     request: GovernedPrivateEvaluationInspectRequest
   ): Promise<GovernedPrivateEvaluationInspectResult>;

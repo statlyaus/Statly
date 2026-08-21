@@ -276,3 +276,203 @@ export function createGovernedPrivateEvaluationTransitionReceipt(input: {
     content,
   });
 }
+
+const AUTOMATED_LIMITATION =
+  'Automated private calculation only; it grants no source approval, production, publication, withdrawal, rollback, or recovery authority.' as const;
+const automatedConstructionAuthoritySchema = z
+  .object({
+    kind: z.literal('automated_private_calculation_agent'),
+    principalId: z.string().regex(/^system:[a-z0-9][a-z0-9._:-]{0,199}$/u),
+  })
+  .strict();
+const automatedTransitionActionSchema = z
+  .object({ kind: z.literal('construct_and_activate') })
+  .strict();
+const automatedTransitionIntentContentSchema = z
+  .object({
+    schemaVersion: z.literal('private-evaluation-transition-intent/v2'),
+    environment: z.literal('non_production'),
+    publicationProhibited: z.literal(true),
+    selector: governedPrivateEvaluationSelectorSchema,
+    inspectionId: aflTradeContentAddressedIdSchema('private-evaluation-inspection'),
+    authoritySnapshotId: aflTradeContentAddressedIdSchema(
+      'private-evaluation-authority-snapshot'
+    ),
+    operationId: aflTradeContentAddressedIdSchema('private-evaluation-operation'),
+    action: automatedTransitionActionSchema,
+    expectedHead: lifecycleHeadSchema,
+    constructionAuthority: automatedConstructionAuthoritySchema,
+    requestedAt: instantSchema,
+    expiresAt: instantSchema,
+    limitation: z.literal(AUTOMATED_LIMITATION),
+  })
+  .strict()
+  .superRefine((intent, context) => {
+    if (Date.parse(intent.expiresAt) <= Date.parse(intent.requestedAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expiresAt'],
+        message: 'An automated transition intent requires a positive validity window.',
+      });
+    }
+  });
+
+export const automatedGovernedPrivateEvaluationTransitionIntentSchema = z
+  .object({
+    transitionIntentId: aflTradeContentAddressedIdSchema(
+      'private-evaluation-transition-intent'
+    ),
+    content: automatedTransitionIntentContentSchema,
+  })
+  .strict()
+  .superRefine((intent, context) => {
+    addAflTradeContentAddressIssue(
+      'private-evaluation-transition-intent',
+      intent.transitionIntentId,
+      intent.content,
+      context,
+      ['transitionIntentId']
+    );
+  });
+
+export type AutomatedGovernedPrivateEvaluationTransitionIntent = z.infer<
+  typeof automatedGovernedPrivateEvaluationTransitionIntentSchema
+>;
+
+export function createAutomatedGovernedPrivateEvaluationTransitionIntent(
+  input: Omit<
+    z.input<typeof automatedTransitionIntentContentSchema>,
+    'schemaVersion' | 'environment' | 'publicationProhibited' | 'limitation'
+  >
+): AutomatedGovernedPrivateEvaluationTransitionIntent {
+  const content = automatedTransitionIntentContentSchema.parse({
+    schemaVersion: 'private-evaluation-transition-intent/v2',
+    environment: 'non_production',
+    publicationProhibited: true,
+    ...input,
+    limitation: AUTOMATED_LIMITATION,
+  });
+  return automatedGovernedPrivateEvaluationTransitionIntentSchema.parse({
+    transitionIntentId: createAflTradeContentAddress(
+      'private-evaluation-transition-intent',
+      content
+    ),
+    content,
+  });
+}
+
+const automatedTransitionReceiptContentSchema = z
+  .object({
+    schemaVersion: z.literal('private-evaluation-transition-receipt/v2'),
+    environment: z.literal('non_production'),
+    publicationProhibited: z.literal(true),
+    intent: automatedGovernedPrivateEvaluationTransitionIntentSchema,
+    selector: governedPrivateEvaluationSelectorSchema,
+    action: automatedTransitionActionSchema,
+    previousTransitionId: transitionIdSchema.nullable(),
+    fromHead: lifecycleHeadSchema,
+    toHead: lifecycleHeadSchema,
+    transitionedAt: instantSchema,
+    limitation: z.literal(AUTOMATED_LIMITATION),
+  })
+  .strict()
+  .superRefine((receipt, context) => {
+    const intent = receipt.intent.content;
+    const inWindow =
+      Date.parse(receipt.transitionedAt) >= Date.parse(intent.requestedAt) &&
+      Date.parse(receipt.transitionedAt) <= Date.parse(intent.expiresAt);
+    if (
+      receipt.selector.valuationScopeKey !== intent.selector.valuationScopeKey ||
+      receipt.selector.tradeId !== intent.selector.tradeId ||
+      receipt.fromHead.status !== intent.expectedHead.status ||
+      receipt.fromHead.revision !== intent.expectedHead.revision ||
+      receipt.fromHead.generationId !== intent.expectedHead.generationId ||
+      receipt.toHead.status !== 'active' ||
+      receipt.toHead.revision !== receipt.fromHead.revision + 1 ||
+      receipt.toHead.generationId === null ||
+      (receipt.fromHead.status === 'absent') !== (receipt.previousTransitionId === null) ||
+      !inWindow
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['toHead'],
+        message: 'An automated receipt must bind one exact construct-and-activate transition.',
+      });
+    }
+  });
+
+export const automatedGovernedPrivateEvaluationTransitionReceiptSchema = z
+  .object({
+    transitionId: transitionIdSchema,
+    content: automatedTransitionReceiptContentSchema,
+  })
+  .strict()
+  .superRefine((receipt, context) => {
+    addAflTradeContentAddressIssue(
+      'private-evaluation-transition',
+      receipt.transitionId,
+      receipt.content,
+      context,
+      ['transitionId']
+    );
+  });
+
+export type AutomatedGovernedPrivateEvaluationTransitionReceipt = z.infer<
+  typeof automatedGovernedPrivateEvaluationTransitionReceiptSchema
+>;
+export type AnyGovernedPrivateEvaluationTransitionIntent =
+  | GovernedPrivateEvaluationTransitionIntent
+  | AutomatedGovernedPrivateEvaluationTransitionIntent;
+export type AnyGovernedPrivateEvaluationTransitionReceipt =
+  | GovernedPrivateEvaluationTransitionReceipt
+  | AutomatedGovernedPrivateEvaluationTransitionReceipt;
+
+export function parseAnyGovernedPrivateEvaluationTransitionIntent(
+  value: unknown
+): AnyGovernedPrivateEvaluationTransitionIntent {
+  const version = (value as { readonly content?: { readonly schemaVersion?: unknown } } | null)
+    ?.content?.schemaVersion;
+  return version === 'private-evaluation-transition-intent/v2'
+    ? automatedGovernedPrivateEvaluationTransitionIntentSchema.parse(value)
+    : governedPrivateEvaluationTransitionIntentSchema.parse(value);
+}
+
+export function parseAnyGovernedPrivateEvaluationTransitionReceipt(
+  value: unknown
+): AnyGovernedPrivateEvaluationTransitionReceipt {
+  const version = (value as { readonly content?: { readonly schemaVersion?: unknown } } | null)
+    ?.content?.schemaVersion;
+  return version === 'private-evaluation-transition-receipt/v2'
+    ? automatedGovernedPrivateEvaluationTransitionReceiptSchema.parse(value)
+    : governedPrivateEvaluationTransitionReceiptSchema.parse(value);
+}
+
+export function createAutomatedGovernedPrivateEvaluationTransitionReceipt(input: {
+  readonly intent: AutomatedGovernedPrivateEvaluationTransitionIntent;
+  readonly previousTransitionId: string | null;
+  readonly toGenerationId: string;
+  readonly transitionedAt: string;
+}): AutomatedGovernedPrivateEvaluationTransitionReceipt {
+  const intent = automatedGovernedPrivateEvaluationTransitionIntentSchema.parse(input.intent);
+  const content = automatedTransitionReceiptContentSchema.parse({
+    schemaVersion: 'private-evaluation-transition-receipt/v2',
+    environment: 'non_production',
+    publicationProhibited: true,
+    intent,
+    selector: intent.content.selector,
+    action: intent.content.action,
+    previousTransitionId: input.previousTransitionId,
+    fromHead: intent.content.expectedHead,
+    toHead: {
+      status: 'active',
+      revision: intent.content.expectedHead.revision + 1,
+      generationId: input.toGenerationId,
+    },
+    transitionedAt: input.transitionedAt,
+    limitation: AUTOMATED_LIMITATION,
+  });
+  return automatedGovernedPrivateEvaluationTransitionReceiptSchema.parse({
+    transitionId: createAflTradeContentAddress('private-evaluation-transition', content),
+    content,
+  });
+}

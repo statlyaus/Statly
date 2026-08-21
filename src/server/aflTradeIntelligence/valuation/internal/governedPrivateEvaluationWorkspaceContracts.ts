@@ -137,6 +137,43 @@ export const governedPrivateEvaluationExecuteRequestSchema = z
   })
   .strict();
 
+export const governedPrivateEvaluationAutomatedStageRequestSchema = z
+  .object({
+    selector: governedPrivateEvaluationSelectorSchema,
+    operationId: operationIdSchema,
+  })
+  .strict();
+
+export const governedPrivateEvaluationAutomatedStageResultSchema = z.discriminatedUnion(
+  'state',
+  [
+    z
+      .object({
+        state: z.literal('activated'),
+        selector: governedPrivateEvaluationSelectorSchema,
+        operationId: operationIdSchema,
+        generationId: generationIdSchema,
+        head: lifecycleHeadSchema,
+      })
+      .strict(),
+    z
+      .object({
+        state: z.literal('unavailable'),
+        selector: governedPrivateEvaluationSelectorSchema,
+        operationId: operationIdSchema,
+        blockers: z.array(blockerSchema).min(1).max(10_000),
+      })
+      .strict(),
+    z
+      .object({
+        state: z.literal('stale_authority'),
+        selector: governedPrivateEvaluationSelectorSchema,
+        operationId: operationIdSchema,
+      })
+      .strict(),
+  ]
+);
+
 const executionResultBase = {
   selector: governedPrivateEvaluationSelectorSchema,
   inspectionId: inspectionIdSchema,
@@ -296,6 +333,12 @@ export type GovernedPrivateEvaluationExecuteRequest = z.infer<
 >;
 export type GovernedPrivateEvaluationExecuteResult = z.infer<
   typeof governedPrivateEvaluationExecuteResultSchema
+>;
+export type GovernedPrivateEvaluationAutomatedStageRequest = z.infer<
+  typeof governedPrivateEvaluationAutomatedStageRequestSchema
+>;
+export type GovernedPrivateEvaluationAutomatedStageResult = z.infer<
+  typeof governedPrivateEvaluationAutomatedStageResultSchema
 >;
 export type GovernedPrivateEvaluationReadRequest = z.infer<
   typeof governedPrivateEvaluationReadRequestSchema
