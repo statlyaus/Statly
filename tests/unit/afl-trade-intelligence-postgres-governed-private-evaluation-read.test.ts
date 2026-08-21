@@ -37,16 +37,16 @@ class ReadSqlClient implements AflOutcomeSqlClient {
 
   async query<Row>(sql: string): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.queryCount += 1;
-    if (sql.includes('FROM outcome_local_private_trade_evaluation_head h')) {
+    if (sql.includes('FROM outcome_current_private_evaluation_batch h')) {
       return {
         rows:
           this.status === 'absent'
             ? []
             : [
                 {
-                  status: this.status,
-                  generation_json:
-                    this.status === 'active' ? this.generationJson : null,
+                  state: 'ready',
+                  generation_json: this.generationJson,
+                  withdrawal_id: this.status === 'withdrawn' ? 'withdrawal:fixture' : null,
                 },
               ],
         rowCount: this.status === 'absent' ? 0 : 1,
@@ -57,11 +57,10 @@ class ReadSqlClient implements AflOutcomeSqlClient {
         rows: [
           {
             generation_json: this.generationJson,
-            head_status: this.status === 'absent' ? null : this.status,
-            head_generation_id: this.status === 'active' ? this.activeGenerationId : null,
-            last_action: this.status === 'withdrawn' ? 'withdraw' : null,
-            last_from_generation_id:
-              this.status === 'withdrawn' ? materialization.generation.generationId : null,
+            batch_current:
+              this.status !== 'absent' &&
+              this.activeGenerationId === materialization.generation.generationId,
+            batch_withdrawn: this.status === 'withdrawn',
           },
         ],
         rowCount: 1,

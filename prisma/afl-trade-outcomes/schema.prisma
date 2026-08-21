@@ -5179,6 +5179,82 @@ model OutcomeLocalPrivateTradeEvaluationHead {
   @@map("outcome_local_private_trade_evaluation_head")
 }
 
+model OutcomePrivateEvaluationBatch {
+  batchId                     String   @id @map("batch_id") @outcomes.Text
+  scopeKey                    String   @map("scope_key") @outcomes.Text
+  preparedInputSetId          String   @map("prepared_input_set_id") @outcomes.Text
+  preparedInputSetRevision    Int      @map("prepared_input_set_revision")
+  factualReleaseId            String   @map("factual_release_id") @outcomes.Text
+  modelQualificationId        String   @map("model_qualification_id") @outcomes.Text
+  modelQualificationWorkId    String   @map("model_qualification_work_id") @outcomes.Text
+  tradeCount                  Int      @map("trade_count")
+  readyCount                  Int      @map("ready_count")
+  unavailableCount            Int      @map("unavailable_count")
+  createdAt                   DateTime @map("created_at") @outcomes.Timestamptz(3)
+  contentSha256               String   @map("content_sha256") @outcomes.Char(64)
+  contentCanonicalJson        String   @map("content_canonical_json") @outcomes.Text
+  batchJson                   Json     @map("batch_json")
+  registeredAt                DateTime @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+
+  @@index([scopeKey, createdAt], map: "outcome_private_evaluation_batch_scope_created_idx")
+  @@map("outcome_private_evaluation_batch")
+}
+
+model OutcomePrivateEvaluationBatchEntry {
+  batchId      String  @map("batch_id") @outcomes.Text
+  ordinal      Int
+  tradeId      String  @map("trade_id") @outcomes.Text
+  state        String  @outcomes.Text
+  generationId String? @map("generation_id") @outcomes.Text
+  entryJson    Json    @map("entry_json")
+
+  @@id([batchId, ordinal])
+  @@unique([batchId, tradeId], map: "outcome_private_evaluation_batch_entry_trade_key")
+  @@index([tradeId, batchId], map: "outcome_private_evaluation_batch_entry_trade_idx")
+  @@map("outcome_private_evaluation_batch_entry")
+}
+
+model OutcomePrivateEvaluationBatchTransition {
+  transitionId   String   @id @map("transition_id") @outcomes.Text
+  operationId    String   @unique @map("operation_id") @outcomes.Text
+  scopeKey       String   @map("scope_key") @outcomes.Text
+  principalId   String   @map("principal_id") @outcomes.Text
+  action         String   @outcomes.Text
+  fromRevision   Int      @map("from_revision")
+  fromBatchId    String?  @map("from_batch_id") @outcomes.Text
+  toRevision     Int      @map("to_revision")
+  toBatchId      String   @map("to_batch_id") @outcomes.Text
+  transitionedAt DateTime @default(dbgenerated("transaction_timestamp()")) @map("transitioned_at") @outcomes.Timestamptz(3)
+
+  @@map("outcome_private_evaluation_batch_transition")
+}
+
+model OutcomeCurrentPrivateEvaluationBatch {
+  scopeKey         String   @id @map("scope_key") @outcomes.Text
+  batchId          String   @map("batch_id") @outcomes.Text
+  revision         Int
+  lastTransitionId String   @map("last_transition_id") @outcomes.Text
+  activatedAt      DateTime @default(dbgenerated("transaction_timestamp()")) @map("activated_at") @outcomes.Timestamptz(3)
+
+  @@map("outcome_current_private_evaluation_batch")
+}
+
+model OutcomePrivateEvaluationBatchWithdrawal {
+  withdrawalId  String   @id @map("withdrawal_id") @outcomes.Text
+  scopeKey      String   @map("scope_key") @outcomes.Text
+  batchId       String   @map("batch_id") @outcomes.Text
+  tradeId       String   @map("trade_id") @outcomes.Text
+  generationId  String   @map("generation_id") @outcomes.Text
+  principalId   String   @map("principal_id") @outcomes.Text
+  reason        String   @outcomes.Text
+  withdrawnAt   DateTime @map("withdrawn_at") @outcomes.Timestamptz(3)
+  withdrawalJson Json    @map("withdrawal_json")
+  registeredAt  DateTime @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+
+  @@unique([batchId, tradeId], map: "outcome_private_evaluation_batch_withdrawal_trade_key")
+  @@map("outcome_private_evaluation_batch_withdrawal")
+}
+
 model OutcomePrivateEvaluationTransitionReceipt {
   transitionId         String                                        @id @map("transition_id") @outcomes.Text
   transitionIntentId   String                                        @unique @map("transition_intent_id") @outcomes.Text

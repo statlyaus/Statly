@@ -32,6 +32,11 @@ import {
 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
 import { createPostgresGovernedPrivateEvaluationLifecycleRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationLifecycleRepository';
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
+import {
+  createGovernedPrivateEvaluationBatch,
+  createGovernedPrivateEvaluationBatchOperationId,
+} from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationBatch';
+import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
 import { createGovernedPrivateEvaluationNarrativeFixture } from '../testUtils/governedPrivateEvaluationFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
@@ -953,6 +958,71 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
     await expect(
       automatedLifecycle.commitAutomated({ receipt, receiptArtifact })
     ).resolves.toMatchObject({ state: 'replayed' });
+    const batchAuthoritySeed = await pool.connect();
+    try {
+      await batchAuthoritySeed.query('BEGIN');
+      await batchAuthoritySeed.query(`SET LOCAL session_replication_role='replica'`);
+      await batchAuthoritySeed.query(
+        `INSERT INTO outcome_release_manifest
+          (release_id,scope_key,environment,created_at,effective_through,manifest_json)
+         VALUES ($1,'fixture-release-scope','non_production',$2,$2,'{}'::jsonb)
+         ON CONFLICT DO NOTHING`,
+        [`outcome-release:${'4'.repeat(64)}`, requestedAt]
+      );
+      await batchAuthoritySeed.query(
+        `INSERT INTO outcome_active_release(scope_key,release_id,activated_at,revision)
+         VALUES ('fixture-release-scope',$1,$2,1) ON CONFLICT DO NOTHING`,
+        [`outcome-release:${'4'.repeat(64)}`, requestedAt]
+      );
+      await batchAuthoritySeed.query(
+        `INSERT INTO outcome_governed_model_qualification_work
+          (work_id,scope_key,qualification_id,player_gate3_decision_id,
+           pick_gate3_decision_id,available_at,status,work_json)
+         VALUES ($1,$2,$3,$4,$5,$6,'pending','{}'::jsonb) ON CONFLICT DO NOTHING`,
+        [
+          `model-qualification-work:${'4'.repeat(64)}`,
+          automatedSelector.valuationScopeKey,
+          `model-qualification:${'c'.repeat(64)}`,
+          `gate-decision:${'b'.repeat(64)}`,
+          `gate-decision:${'2'.repeat(64)}`,
+          requestedAt,
+        ]
+      );
+      await batchAuthoritySeed.query('COMMIT');
+    } finally {
+      batchAuthoritySeed.release();
+    }
+    const readyBatch = createGovernedPrivateEvaluationBatch({
+      scopeKey: automatedSelector.valuationScopeKey,
+      preparedInputSetId: `prepared-valuation-input-set:${'3'.repeat(64)}`,
+      preparedInputSetRevision: 1,
+      factualReleaseId: `outcome-release:${'4'.repeat(64)}`,
+      modelQualificationId: `model-qualification:${'c'.repeat(64)}`,
+      modelQualificationWorkId: `model-qualification-work:${'4'.repeat(64)}`,
+      entries: [{
+        tradeId: automatedSelector.tradeId,
+        state: 'ready',
+        generationId: materialization.generation.generationId,
+      }],
+      createdAt: requestedAt,
+    });
+    const batchRepository = new PostgresGovernedPrivateEvaluationBatchRepository(
+      client,
+      async () => true
+    );
+    await expect(batchRepository.register(readyBatch)).resolves.toEqual(readyBatch);
+    await expect(batchRepository.advance({
+      scopeKey: readyBatch.content.scopeKey,
+      batchId: readyBatch.batchId,
+      expectedRevision: 0,
+      operationId: createGovernedPrivateEvaluationBatchOperationId({
+        scopeKey: readyBatch.content.scopeKey,
+        batchId: readyBatch.batchId,
+        expectedRevision: 0,
+        action: 'activate',
+      }),
+      action: 'activate',
+    })).resolves.toMatchObject({ batchId: readyBatch.batchId, revision: 1 });
     const wrongPredecessorContent = {
       ...receipt.content,
       previousTransitionId: `private-evaluation-transition:${'f'.repeat(64)}`,
