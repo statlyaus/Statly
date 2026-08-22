@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '../valuation/postgresCurrentValuationCohortRunner';
 import { createPostgresGovernedPrivateEvaluationWorkspace } from '../valuation/internal/createPostgresGovernedPrivateEvaluationWorkspace';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '../valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
@@ -10,7 +11,6 @@ import {
 } from '../valuation/postgresPrivateValuationScheduling';
 import { createLocalAflTradePrivateDerivedArtifactRepository } from './localFileConditionalObjectStore';
 
-const AUTOMATED_PRINCIPAL = 'system:weekly-valuation-coordinator';
 const MAXIMUM_ARTIFACT_BYTES = 4 * 1024 * 1024;
 
 export function createLocalAflTradePrivateValuationRuntime(input: {
@@ -28,8 +28,7 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
     client,
     artifactRepository: artifacts,
     maximumArtifactBytes: MAXIMUM_ARTIFACT_BYTES,
-    principalId: AUTOMATED_PRINCIPAL,
-    automatedPrincipalId: AUTOMATED_PRINCIPAL,
+    principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
     authorizeReader: async () => false,
   });
   const runner = createPostgresAflTradePrivateEvaluationCohortRunner({
