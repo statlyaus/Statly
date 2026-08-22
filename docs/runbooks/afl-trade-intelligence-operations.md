@@ -887,12 +887,13 @@ retains diagnostics and leaves the previous current batch unchanged. No individu
 visible while the batch is being built.
 
 After a cause has been corrected, open a fresh three-attempt repair cycle with a stable repair ID and
-reason, then route the same ad-hoc request through the coordinator:
+reason, then route it through a new ad-hoc request key. Reuse that new key only when recovering from a
+lost response; the exhausted request's original key continues to replay its retained terminal result:
 
 ```sh
 npm run outcomes:valuation:run-local -- \
   --scope 'afl-men:<year>-trades' \
-  --operation '<stable-recalculation-key>' \
+  --operation '<new-stable-recalculation-key>' \
   --repair-reason '<bounded backend incident reason>' \
   --repair-operation 'cohort-execution-repair:<64-hex-digest>'
 ```

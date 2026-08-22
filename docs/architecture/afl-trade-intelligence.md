@@ -1974,12 +1974,14 @@ Every activated valuation generation retains one content-addressed projection ma
 - the exact retained JSON export byte artifact, including its media type, digest, and byte length.
 
 Runtime HTML, React output, authentication state, filters, pagination, and build identifiers are not
-retained as calculation evidence. Archive summary, detail, internal transport, and export authenticate
-and replay the same retained derivation before serving it. They expose the same generation and projection
+retained as calculation evidence. Governed detail, internal transport, and export authenticate and
+replay the same retained derivation before serving it. They expose the same generation and projection
 manifest identities, and export serves the retained bytes directly rather than serializing a fresh
-runtime object. The registered-reader export contains the public facts, model summaries, arithmetic,
-reason codes, and lineage needed to verify the published calculation; it excludes private source
-custody, review material, credentials, operator authority, and publication controls.
+runtime object. The workbook archive currently supplies factual transaction membership and readiness;
+replaying its retained `archive_summary` projection through the governed reader remains future work.
+The registered-reader export contains the public facts, model summaries, arithmetic, reason codes, and
+lineage needed to verify the published calculation; it excludes private source custody, review material,
+credentials, operator authority, and publication controls.
 
 The sole governed workspace interface remains `inspect`, `execute`, and exact `read`; automated staging
 is internal to the PostgreSQL workspace factory and is not a caller-mintable authority. Its selector is
