@@ -76,6 +76,8 @@ describe('local full stack development architecture', () => {
     expect(source).toContain('npm:dev');
     expect(source).toContain('npm:socket');
     expect(source).toContain('npm:draft-worker:dev');
+    expect(source).toContain('npm:outcomes:valuation:worker-local');
+    expect(source).not.toContain('launchctl');
     expect(source).toContain('export SOCKET_PORT="3002"');
     expect(source).toContain('export SOCKETIO_PORT="3002"');
     expect(source).toContain('export SOCKET_IO_PORT="3002"');

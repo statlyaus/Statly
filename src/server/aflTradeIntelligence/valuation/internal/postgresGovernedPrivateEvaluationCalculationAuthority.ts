@@ -14,7 +14,11 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../../outcomes/postgresOutcomeReleaseRepository';
-import { loadCurrentAflTradePreparedValuationInputTradeFromTransaction } from '../postgresPreparedValuationInputSetStore';
+import { aflTradePreparedValuationInputEntryV3Schema } from '../preparedValuationInputSet';
+import {
+  AflTradePreparedValuationInputCohortCache,
+  loadCurrentAflTradePreparedValuationInputTradeFromTransaction,
+} from '../postgresPreparedValuationInputSetStore';
 import { aflTradeValuationCalculationInputPackageSchema } from '../valuationCalculationInputPackage';
 import { governedPrivateEvaluationInputTraceSchema } from './governedPrivateEvaluationInputTrace';
 import { capturePostgresGovernedPrivateEvaluationCurrentAuthority } from './postgresGovernedPrivateEvaluationCurrentAuthority';
@@ -39,12 +43,10 @@ type CapturedBlocker = Extract<
   { state: 'unavailable' }
 >['blockers'][number];
 
-function inspectionBlocker(
-  blocker: {
-    readonly code: keyof typeof BLOCKER_MESSAGES;
-    readonly subject: { readonly kind: string; readonly id: string };
-  }
-): CapturedBlocker {
+function inspectionBlocker(blocker: {
+  readonly code: keyof typeof BLOCKER_MESSAGES;
+  readonly subject: { readonly kind: string; readonly id: string };
+}): CapturedBlocker {
   const code =
     blocker.code === 'component_output_unavailable'
       ? 'model_not_approved'
@@ -86,12 +88,11 @@ async function loadJsonArtifact(input: {
   }
 }
 
-export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCapture(
-  dependencies: {
-    readonly artifactRepository: AflTradeImmutableArtifactRepository;
-    readonly maximumArtifactBytes: number;
-  }
-) {
+export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCapture(dependencies: {
+  readonly artifactRepository: AflTradeImmutableArtifactRepository;
+  readonly maximumArtifactBytes: number;
+  readonly preparedInputCache?: AflTradePreparedValuationInputCohortCache;
+}) {
   if (
     dependencies.artifactRepository.artifactClass !== 'derived_private' ||
     !Number.isSafeInteger(dependencies.maximumArtifactBytes) ||
@@ -108,7 +109,8 @@ export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCaptu
   }): Promise<GovernedPrivateEvaluationCapturedCalculationAuthority> {
     const current = await loadCurrentAflTradePreparedValuationInputTradeFromTransaction(
       input.transaction,
-      { scopeKey: input.selector.valuationScopeKey, tradeId: input.selector.tradeId }
+      { scopeKey: input.selector.valuationScopeKey, tradeId: input.selector.tradeId },
+      dependencies.preparedInputCache
     );
     if (current === null) {
       return {
@@ -125,10 +127,7 @@ export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCaptu
     if (prepared.schemaVersion !== 'afl-trade-prepared-valuation-input-set/v3') {
       throw new TypeError('Current calculation authority is not an authenticated v3 prepared set.');
     }
-    const entry = prepared.entries.find(({ tradeId }) => tradeId === input.selector.tradeId);
-    if (entry === undefined) {
-      throw new TypeError('Authenticated prepared authority omitted its selected trade.');
-    }
+    const entry = aflTradePreparedValuationInputEntryV3Schema.parse(current.entry);
     if (entry.state === 'blocked') {
       return {
         state: 'unavailable',
@@ -189,9 +188,7 @@ export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCaptu
       })
     );
     if (!valuationInputBundle.success) {
-      throw new TypeError(
-        'Retained valuation input bundle failed exact contract authentication.'
-      );
+      throw new TypeError('Retained valuation input bundle failed exact contract authentication.');
     }
     const bundle = valuationInputBundle.data;
     const nestedBundleArtifacts = [
@@ -257,13 +254,9 @@ export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCaptu
       trace.content.selector.tradeId !== input.selector.tradeId ||
       trace.content.factualReleaseId !== prepared.factualReleaseId ||
       trace.content.valuationInputBundleId !== bundle.valuationInputBundleId ||
-      canonicalizeAflTradeJson(traceComponents) !==
-        canonicalizeAflTradeJson(bundleComponents) ||
+      canonicalizeAflTradeJson(traceComponents) !== canonicalizeAflTradeJson(bundleComponents) ||
       calculation.calculationInputPackageId !== manifest.calculationInputPackageId ||
-      !doesAflTradeArtifactRefMatchCanonicalJson(
-        manifest.calculationInputArtifact,
-        calculation
-      ) ||
+      !doesAflTradeArtifactRefMatchCanonicalJson(manifest.calculationInputArtifact, calculation) ||
       calculation.content.tradeId !== input.selector.tradeId ||
       calculation.content.valuationInputBundleId !== bundle.valuationInputBundleId ||
       calculation.content.authority.kind !== 'authenticated_non_production' ||

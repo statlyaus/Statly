@@ -211,6 +211,18 @@ describe('GovernedPrivateEvaluationWorkspace', () => {
     });
     expect(adapters.read).toHaveBeenCalledTimes(2);
 
+    await expect(
+      workspace.read({
+        selector,
+        selection: {
+          kind: 'batch',
+          batchId: `private-evaluation-batch:${'f'.repeat(64)}`,
+        },
+        document: { kind: 'detail' },
+      } as never)
+    ).rejects.toThrow();
+    expect(adapters.read).toHaveBeenCalledTimes(2);
+
     const bytes = new TextEncoder().encode('{"retained":true}\n');
     adapters.read.mockResolvedValueOnce({
       state: 'available',

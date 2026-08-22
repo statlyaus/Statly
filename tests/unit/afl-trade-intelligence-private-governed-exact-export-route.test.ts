@@ -12,6 +12,7 @@ vi.mock('@/server/aflTradeIntelligence/development/privateLocalWorkbookReads', (
 import { GET } from '@/app/api/dev/afl-trade-evaluation/[tradeId]/export/route';
 
 const tradeId = 'trade:carlton-fremantle-gold-coast';
+const generationId = `local-private-trade-evaluation-generation:${'a'.repeat(64)}`;
 
 describe('GET /api/dev/afl-trade-evaluation/[tradeId]/export', () => {
   beforeEach(() => {
@@ -20,8 +21,29 @@ describe('GET /api/dev/afl-trade-evaluation/[tradeId]/export', () => {
 
   it('rejects an invalid trade id before private reads', async () => {
     const response = await GET(
-      new NextRequest('http://localhost/api/dev/afl-trade-evaluation/bad/export'),
+      new NextRequest(
+        `http://localhost/api/dev/afl-trade-evaluation/bad/export?generationId=${encodeURIComponent(generationId)}`
+      ),
       { params: Promise.resolve({ tradeId: '../bad' }) }
+    );
+
+    expect(response.status).toBe(400);
+    expect(loadExactJsonExportMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing', ''],
+    ['malformed', '?generationId=not-a-generation'],
+    [
+      'repeated',
+      `?generationId=${encodeURIComponent(generationId)}&generationId=${encodeURIComponent(generationId)}`,
+    ],
+  ])('rejects a %s generation identity before private reads', async (_label, query) => {
+    const response = await GET(
+      new NextRequest(
+        `http://localhost/api/dev/afl-trade-evaluation/${encodeURIComponent(tradeId)}/export${query}`
+      ),
+      { params: Promise.resolve({ tradeId: encodeURIComponent(tradeId) }) }
     );
 
     expect(response.status).toBe(400);
@@ -35,7 +57,7 @@ describe('GET /api/dev/afl-trade-evaluation/[tradeId]/export', () => {
       {
         state: 'unavailable',
         selector: { valuationScopeKey: 'afl-men:2025-trades', tradeId },
-        selection: { kind: 'current' },
+        selection: { kind: 'generation', generationId },
         document: { kind: 'json_export' },
         reason: 'withdrawn',
       },
@@ -45,7 +67,7 @@ describe('GET /api/dev/afl-trade-evaluation/[tradeId]/export', () => {
 
     const response = await GET(
       new NextRequest(
-        `http://localhost/api/dev/afl-trade-evaluation/${encodeURIComponent(tradeId)}/export`
+        `http://localhost/api/dev/afl-trade-evaluation/${encodeURIComponent(tradeId)}/export?generationId=${encodeURIComponent(generationId)}`
       ),
       { params: Promise.resolve({ tradeId: encodeURIComponent(tradeId) }) }
     );
@@ -59,8 +81,8 @@ describe('GET /api/dev/afl-trade-evaluation/[tradeId]/export', () => {
     loadExactJsonExportMock.mockResolvedValue({
       state: 'available',
       selector: { valuationScopeKey: 'afl-men:2025-trades', tradeId },
-      selection: { kind: 'current' },
-      generationId: `local-private-trade-evaluation-generation:${'a'.repeat(64)}`,
+      selection: { kind: 'generation', generationId },
+      generationId,
       projectionManifestId: `private-evaluation-projection-manifest:${'b'.repeat(64)}`,
       lifecycle: { status: 'active', current: true },
       document: {
@@ -78,7 +100,7 @@ describe('GET /api/dev/afl-trade-evaluation/[tradeId]/export', () => {
 
     const response = await GET(
       new NextRequest(
-        `http://localhost/api/dev/afl-trade-evaluation/${encodeURIComponent(tradeId)}/export`
+        `http://localhost/api/dev/afl-trade-evaluation/${encodeURIComponent(tradeId)}/export?generationId=${encodeURIComponent(generationId)}`
       ),
       { params: Promise.resolve({ tradeId: encodeURIComponent(tradeId) }) }
     );
@@ -91,10 +113,11 @@ describe('GET /api/dev/afl-trade-evaluation/[tradeId]/export', () => {
       'trade-carlton-fremantle-gold-coast'
     );
     expect(response.headers.get('X-Statly-Generation-Id')).toBe(
-      `local-private-trade-evaluation-generation:${'a'.repeat(64)}`
+      generationId
     );
     expect(response.headers.get('X-Statly-Projection-Manifest-Id')).toBe(
       `private-evaluation-projection-manifest:${'b'.repeat(64)}`
     );
+    expect(loadExactJsonExportMock).toHaveBeenCalledWith(tradeId, generationId);
   });
 });

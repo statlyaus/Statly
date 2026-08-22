@@ -3,10 +3,7 @@ import type {
   LocalPrivateReviewedTradeCalculation,
 } from '@/server/aflTradeIntelligence/development/localPrivateReviewedTradeCalculation';
 
-type CalculatedAsset = Extract<
-  LocalPrivateReviewedTradeAssetCalculation,
-  { state: 'calculated' }
->;
+type CalculatedAsset = Extract<LocalPrivateReviewedTradeAssetCalculation, { state: 'calculated' }>;
 type CalculationView = CalculatedAsset['atTrade'];
 
 const VIEW_LABELS = {
@@ -33,12 +30,9 @@ function unavailableReason(reason: string): string {
     post_trade_season_unavailable: 'No full reviewed post-trade league season is loaded yet.',
     no_reviewed_receiving_club_allocation:
       'The reviewed seasons contain no allocation for this player at the receiving club.',
-    predictive_model_not_authorized:
-      'No authorized predictive model exists for remaining value.',
-    player_identity_unavailable:
-      'The workbook player name has no exact reviewed player identity.',
-    player_identity_ambiguous:
-      'The workbook player name maps to more than one reviewed identity.',
+    predictive_model_not_authorized: 'No authorized predictive model exists for remaining value.',
+    player_identity_unavailable: 'The workbook player name has no exact reviewed player identity.',
+    player_identity_ambiguous: 'The workbook player name maps to more than one reviewed identity.',
     selection_lineage_not_reviewed:
       'Pick selection lineage has not been reviewed, so no player value is attached.',
     asset_kind_unsupported: 'This asset kind is not supported by the reviewed calculation.',
@@ -46,21 +40,13 @@ function unavailableReason(reason: string): string {
   return explanations[reason] ?? reason.replaceAll('_', ' ');
 }
 
-function ViewSummary({
-  name,
-  view,
-}: {
-  name: keyof typeof VIEW_LABELS;
-  view: CalculationView;
-}) {
+function ViewSummary({ name, view }: { name: keyof typeof VIEW_LABELS; view: CalculationView }) {
   return (
     <section className="rounded-lg border border-border bg-background p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-foreground">{VIEW_LABELS[name]}</h4>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            {VIEW_DESCRIPTIONS[name]}
-          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{VIEW_DESCRIPTIONS[name]}</p>
         </div>
         {view.state === 'available' ? (
           <p className="shrink-0 text-right">
@@ -128,8 +114,8 @@ function ViewSummary({
             </dl>
             <p className="mt-3 break-all font-mono">
               {view.calculationIds.length} authenticated calculation
-              {view.calculationIds.length === 1 ? '' : 's'} · {view.allocationIds.length}{' '}
-              allocation{view.allocationIds.length === 1 ? '' : 's'}
+              {view.calculationIds.length === 1 ? '' : 's'} · {view.allocationIds.length} allocation
+              {view.allocationIds.length === 1 ? '' : 's'}
             </p>
           </details>
         </>
@@ -222,9 +208,9 @@ export function LocalPrivateReviewedTradeCalculationPanel({
             Confirmed historical player calculation
           </h2>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Real HPN season PAV calculated from reviewed local match rows. Asset scores show offence,
-            midfield, and defence; they are historical contribution values, not forecasts or trade
-            grades.
+            Real HPN season PAV calculated from reviewed local match rows. Asset scores show
+            offence, midfield, and defence; they are historical contribution values, not forecasts
+            or trade grades.
           </p>
         </div>
         <span className="rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-foreground">
@@ -239,10 +225,10 @@ export function LocalPrivateReviewedTradeCalculationPanel({
       </ul>
 
       <div className="mt-5 rounded-lg border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
-        <p className="font-semibold text-foreground">Overall trade grade: unavailable</p>
+        <p className="font-semibold text-foreground">Overall trade grade: —</p>
         <p className="mt-1">
           A letter grade requires complete values for every player and pick plus an authenticated
-          comparison distribution. No grade is inferred from partial historical PAV.
+          comparison distribution. Partial historical PAV is not used to infer one.
         </p>
       </div>
 

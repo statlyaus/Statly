@@ -22,6 +22,7 @@ const selector = {
   tradeId: 'trade:adelaide-st-kilda',
 };
 const generatedAt = '2026-08-19T10:00:00.000Z';
+const batchId = `private-evaluation-batch:${'b'.repeat(64)}`;
 const materialization = createGovernedPrivateEvaluationGeneration({
   selector,
   transitionIntentId: `private-evaluation-transition-intent:${'a'.repeat(64)}`,
@@ -32,21 +33,23 @@ const materialization = createGovernedPrivateEvaluationGeneration({
 class ReadSqlClient implements AflOutcomeSqlClient {
   status: 'active' | 'withdrawn' | 'absent' = 'active';
   activeGenerationId: string | null = materialization.generation.generationId;
+  historicalWithdrawal = false;
   generationJson: unknown = materialization.generation;
   queryCount = 0;
 
   async query<Row>(sql: string): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.queryCount += 1;
-    if (sql.includes('FROM outcome_local_private_trade_evaluation_head h')) {
+    if (sql.includes('FROM outcome_current_private_evaluation_batch h')) {
       return {
         rows:
           this.status === 'absent'
             ? []
             : [
                 {
-                  status: this.status,
-                  generation_json:
-                    this.status === 'active' ? this.generationJson : null,
+                  batch_id: batchId,
+                  state: 'ready',
+                  generation_json: this.generationJson,
+                  withdrawal_id: this.status === 'withdrawn' ? 'withdrawal:fixture' : null,
                 },
               ],
         rowCount: this.status === 'absent' ? 0 : 1,
@@ -57,11 +60,11 @@ class ReadSqlClient implements AflOutcomeSqlClient {
         rows: [
           {
             generation_json: this.generationJson,
-            head_status: this.status === 'absent' ? null : this.status,
-            head_generation_id: this.status === 'active' ? this.activeGenerationId : null,
-            last_action: this.status === 'withdrawn' ? 'withdraw' : null,
-            last_from_generation_id:
-              this.status === 'withdrawn' ? materialization.generation.generationId : null,
+            selected_batch_id: batchId,
+            batch_current:
+              this.status !== 'absent' &&
+              this.activeGenerationId === materialization.generation.generationId,
+            batch_withdrawn: this.status === 'withdrawn' || this.historicalWithdrawal,
           },
         ],
         rowCount: 1,
@@ -70,9 +73,7 @@ class ReadSqlClient implements AflOutcomeSqlClient {
     throw new Error(`Unexpected SQL: ${sql}`);
   }
 
-  async transaction<T>(
-    work: (transaction: AflOutcomeSqlTransaction) => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
     return work(this);
   }
 }
@@ -88,6 +89,40 @@ async function retainedArtifacts(): Promise<AflTradeImmutableArtifactRepository>
 }
 
 describe('PostgreSQL governed private evaluation read repository', () => {
+  it('resolves archive, detail, backend API, and JSON from one current batch generation', async () => {
+    const client = new ReadSqlClient();
+    const repository = createPostgresGovernedPrivateEvaluationReadRepository({
+      client,
+      artifactRepository: await retainedArtifacts(),
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      principalId: 'firebase:registered-reader',
+      authorizeReader: async () => true,
+    });
+
+    const results = await Promise.all(
+      (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map((kind) =>
+        repository.read({ selector, selection: { kind: 'current' }, document: { kind } })
+      )
+    );
+
+    expect(results.every(({ state }) => state === 'available')).toBe(true);
+    expect(
+      new Set(
+        results.map((result) =>
+          result.state === 'available' ? result.generationId : 'unavailable'
+        )
+      )
+    ).toEqual(new Set([materialization.generation.generationId]));
+    expect(
+      new Set(
+        results.map((result) =>
+          result.state === 'available' ? result.projectionManifestId : 'unavailable'
+        )
+      )
+    ).toEqual(new Set([materialization.projectionManifest.projectionManifestId]));
+    expect(client.queryCount).toBe(4);
+  });
+
   it('authenticates current and explicit historical projection bytes', async () => {
     const client = new ReadSqlClient();
     const repository = createPostgresGovernedPrivateEvaluationReadRepository({
@@ -195,6 +230,33 @@ describe('PostgreSQL governed private evaluation read repository', () => {
     });
   });
 
+  it('preserves a withdrawn lifecycle label after another batch becomes current', async () => {
+    const client = new ReadSqlClient();
+    client.activeGenerationId = `local-private-trade-evaluation-generation:${'f'.repeat(64)}`;
+    client.historicalWithdrawal = true;
+    const repository = createPostgresGovernedPrivateEvaluationReadRepository({
+      client,
+      artifactRepository: await retainedArtifacts(),
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      principalId: 'firebase:registered-reader',
+      authorizeReader: async () => true,
+    });
+
+    await expect(
+      repository.read({
+        selector,
+        selection: {
+          kind: 'generation',
+          generationId: materialization.generation.generationId,
+        },
+        document: { kind: 'detail' },
+      })
+    ).resolves.toMatchObject({
+      state: 'available',
+      lifecycle: { status: 'withdrawn', current: false },
+    });
+  });
+
   it('fails closed when any retained generation byte is altered', async () => {
     const stored = await retainedArtifacts();
     const tampered: AflTradeImmutableArtifactRepository = {
@@ -203,7 +265,8 @@ describe('PostgreSQL governed private evaluation read repository', () => {
         const result = await stored.loadExact(reference, maximumBytes);
         if (
           result === null ||
-          reference.artifactId !== materialization.projectionManifest.content.documents[1]?.artifact.artifactId
+          reference.artifactId !==
+            materialization.projectionManifest.content.documents[1]?.artifact.artifactId
         ) {
           return result;
         }
@@ -270,9 +333,7 @@ describe('PostgreSQL governed private evaluation read repository', () => {
         schemaVersion: 'governed-private-evaluation-projection-manifest/v999',
       },
     };
-    const manifestBytes = new TextEncoder().encode(
-      canonicalizeAflTradeJson(unsupportedManifest)
-    );
+    const manifestBytes = new TextEncoder().encode(canonicalizeAflTradeJson(unsupportedManifest));
     const manifestArtifact = createAflTradeByteArtifactRef(
       manifestBytes,
       'application/json',
@@ -289,10 +350,7 @@ describe('PostgreSQL governed private evaluation read repository', () => {
       ),
       content: generationContent,
     };
-    const generationArtifact = createAflTradeCanonicalJsonArtifactRef(
-      generation,
-      generatedAt
-    );
+    const generationArtifact = createAflTradeCanonicalJsonArtifactRef(generation, generatedAt);
     const artifacts = await retainedArtifacts();
     await artifacts.putIfAbsent(manifestArtifact, manifestBytes);
     await artifacts.putIfAbsent(

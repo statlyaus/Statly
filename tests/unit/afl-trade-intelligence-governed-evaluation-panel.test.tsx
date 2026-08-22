@@ -16,8 +16,12 @@ describe('AFL trade package evaluation panel', () => {
     expect(within(adelaide).getByText('Received')).toBeInTheDocument();
     expect(within(adelaide).getByText('Gave up')).toBeInTheDocument();
     expect(within(adelaide).getByText(/92 - 70 = \+22 fixed_horizon_pav/u)).toBeInTheDocument();
-    expect(within(adelaide).getByLabelText(/Adelaide provisional package grade A\+/u)).toBeInTheDocument();
-    expect(within(stKilda).getByLabelText(/St Kilda provisional package grade D/u)).toBeInTheDocument();
+    expect(
+      within(adelaide).getByLabelText(/Adelaide provisional package grade A\+/u)
+    ).toBeInTheDocument();
+    expect(
+      within(stKilda).getByLabelText(/St Kilda provisional package grade D/u)
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Realized' }));
     expect(
@@ -38,12 +42,39 @@ describe('AFL trade package evaluation panel', () => {
     const narrative = createGovernedPrivateEvaluationNarrativeFixture();
     render(<AflTradePackageEvaluationPanel narrative={narrative.content} />);
 
-    expect(screen.getAllByText(/92 = 72 realized \+ 20 remaining fixed_horizon_pav/u)).not.toHaveLength(0);
+    expect(
+      screen.getAllByText(/92 = 72 realized \+ 20 remaining fixed_horizon_pav/u)
+    ).not.toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'At trade' }));
     expect(
-      screen.getAllByText(/70 fixed_horizon_pav expected from 48 observations across 12 draft classes/u)
+      screen.getAllByText(
+        /70 fixed_horizon_pav expected from 48 observations across 12 draft classes/u
+      )
     ).not.toHaveLength(0);
     expect(screen.getAllByRole('article')).toHaveLength(2);
+  });
+
+  it('renders unavailable current package grades as an em dash without reason prose', () => {
+    const fixture = createGovernedPrivateEvaluationNarrativeFixture();
+    const narrative = {
+      ...fixture.content,
+      views: fixture.content.views.map((view) => ({
+        ...view,
+        clubs: view.clubs.map((club) => ({
+          ...club,
+          grade: {
+            grade: null,
+            state: 'unavailable' as const,
+            reasonCode: 'grade_confidence_authority_unavailable',
+          },
+        })),
+      })),
+    };
+
+    render(<AflTradePackageEvaluationPanel narrative={narrative} />);
+
+    expect(screen.getAllByText('—')).toHaveLength(2);
+    expect(screen.queryByText(/no grade|confidence authority/iu)).not.toBeInTheDocument();
   });
 
   it.each([3, 4] as const)(
@@ -59,8 +90,12 @@ describe('AFL trade package evaluation panel', () => {
         const clubPackage = screen.getByRole('article', {
           name: `Fixture Club ${index + 1} package`,
         });
-        expect(within(clubPackage).getByRole('region', { name: 'Received package' })).toBeInTheDocument();
-        expect(within(clubPackage).getByRole('region', { name: 'Gave up package' })).toBeInTheDocument();
+        expect(
+          within(clubPackage).getByRole('region', { name: 'Received package' })
+        ).toBeInTheDocument();
+        expect(
+          within(clubPackage).getByRole('region', { name: 'Gave up package' })
+        ).toBeInTheDocument();
         expect(
           within(clubPackage).getByLabelText(
             `Fixture Club ${index + 1} provisional package grade B`
@@ -69,10 +104,7 @@ describe('AFL trade package evaluation panel', () => {
       }
       const current = narrative.content.views.find(({ view }) => view === 'current')!;
       expect(
-        current.clubs.reduce(
-          (total, club) => total + club.arithmetic.estimatedAdvantageMean,
-          0
-        )
+        current.clubs.reduce((total, club) => total + club.arithmetic.estimatedAdvantageMean, 0)
       ).toBe(0);
     }
   );
