@@ -441,12 +441,6 @@ async function seedReadyRunnerAuthority(input: {
       new TextEncoder().encode(canonicalizeAflTradeJson(document))
     );
   }
-  const existing = await pool.query<{ readonly generation_id: string }>(
-    `SELECT generation_id FROM outcome_local_private_trade_evaluation_generation
-      WHERE generation_id=$1`,
-    [generationId]
-  );
-  if (existing.rows.length === 1) return { generationId, manifestId, manifestArtifact };
   const seed = await pool.connect();
   try {
     await seed.query('BEGIN');
@@ -1506,6 +1500,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     });
     if (activated.state !== 'activated') throw new Error('Expected an activated cohort.');
     const activatedBatchId = activated.batch.batchId;
+    const visibleGenerationByTrade = new Map<string, string>();
     const reader = createPostgresGovernedPrivateEvaluationReadRepository({
       client: createPgAflOutcomeSqlClient(pool),
       artifactRepository,
@@ -1517,17 +1512,27 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       const narrative = replays.get(tradeId)!;
       if (narrative.state !== 'ready') throw new Error('Expected ready narrative.');
       expect(narrative.narrative.content.views[0]?.clubs).toHaveLength(clubCount);
+      const currentRead = await reader.read({
+        selector: { valuationScopeKey: scopeKey, tradeId },
+        selection: { kind: 'current' },
+        document: { kind: 'detail' },
+      });
+      if (currentRead.state !== 'available') throw new Error('Expected current generation.');
+      visibleGenerationByTrade.set(tradeId, currentRead.generationId);
       const reads = await Promise.all(
         (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map((kind) =>
           reader.read({
             selector: { valuationScopeKey: scopeKey, tradeId },
-            selection: { kind: 'current' },
+            selection: { kind: 'generation', generationId: currentRead.generationId },
             document: { kind },
           })
         )
       );
       expect(
-        reads.every((read) => read.state === 'available' && read.batchId === activatedBatchId)
+        reads.every(
+          (read) =>
+            read.state === 'available' && read.generationId === currentRead.generationId
+        )
       ).toBe(true);
     }
     await expect(
@@ -1608,13 +1613,28 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         })
       );
     }
-    const attempted = new Set<string>();
+    const attempts = new Map<string, number>();
     const failureWorkspace = {
       ...workspace,
       stageAutomated: async (input: Parameters<typeof automated.stage>[0]) => {
-        attempted.add(input.selector.tradeId);
+        const attempt = (attempts.get(input.selector.tradeId) ?? 0) + 1;
+        attempts.set(input.selector.tradeId, attempt);
+        if (input.selector.tradeId === 'trade-a' && attempt === 1) {
+          const conflict = new Error('transient serialization conflict') as Error & {
+            code: string;
+          };
+          conflict.code = '40001';
+          throw conflict;
+        }
         if (input.selector.tradeId === 'trade-b') {
           throw new TypeError('exact multi-club construction failure');
+        }
+        if (input.selector.tradeId === 'trade-c') {
+          const conflict = new Error('transient deadlock exhausted') as Error & {
+            code: string;
+          };
+          conflict.code = '40P01';
+          throw conflict;
         }
         return automated.stage(input);
       },
@@ -1628,9 +1648,12 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       state: 'unexpected_failure',
       diagnostics: [
         { tradeId: 'trade-b', message: 'exact multi-club construction failure' },
+        { tradeId: 'trade-c', message: 'transient deadlock exhausted' },
       ],
     });
-    expect([...attempted].sort()).toEqual(['trade-a', 'trade-b', 'trade-c']);
+    expect(attempts.get('trade-a')).toBe(2);
+    expect(attempts.get('trade-b')).toBe(1);
+    expect(attempts.get('trade-c')).toBe(3);
     await expect(repository.loadCurrent(scopeKey)).resolves.toMatchObject({
       head: { batchId: activatedBatchId, revision: current.head_revision + 1 },
     });
@@ -1641,7 +1664,10 @@ describe('PostgreSQL atomic private evaluation batches', () => {
           selection: { kind: 'current' },
           document: { kind: 'detail' },
         })
-      ).resolves.toMatchObject({ state: 'available', batchId: activatedBatchId });
+      ).resolves.toMatchObject({
+        state: 'available',
+        generationId: visibleGenerationByTrade.get(tradeId),
+      });
     }
     await expect(
       pool.query(

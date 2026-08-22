@@ -32,7 +32,7 @@ const tradeEvaluation = {
   detail: { trade: { tradeId: 'trade:carlton-fremantle-gold-coast', year: 2025 } },
   publicationEligible: false,
 } as LocalWorkbookTradeEvaluation;
-const governedBatchId = `private-evaluation-batch:${'b'.repeat(64)}`;
+const governedGenerationId = `local-private-trade-evaluation-generation:${'c'.repeat(64)}`;
 
 function governedRead(
   kind: 'detail' | 'json_export',
@@ -46,8 +46,7 @@ function governedRead(
       tradeId: 'trade:carlton-fremantle-gold-coast',
     },
     selection,
-    batchId: governedBatchId,
-    generationId: `local-private-trade-evaluation-generation:${'c'.repeat(64)}`,
+    generationId: governedGenerationId,
     projectionManifestId: `private-evaluation-projection-manifest:${'d'.repeat(64)}`,
     lifecycle: { status: 'active', current: true },
     document: {
@@ -311,7 +310,10 @@ describe('private local workbook reads', () => {
       .mockResolvedValue(governedRead('json_export', exportBytes));
     const { reads } = dependencies({ trade: tradeEvaluation, readGovernedEvaluation });
 
-    const exported = await reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast');
+    const exported = await reads.loadExactJsonExport(
+      'trade:carlton-fremantle-gold-coast',
+      governedGenerationId
+    );
     expect(exported).toMatchObject({
       state: 'available',
       document: { kind: 'json_export' },
@@ -324,29 +326,29 @@ describe('private local workbook reads', () => {
       authenticate: vi.fn().mockResolvedValue('another-authenticated-user'),
     });
     await expect(
-      concealed.reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast')
+      concealed.reads.loadExactJsonExport(
+        'trade:carlton-fremantle-gold-coast',
+        governedGenerationId
+      )
     ).resolves.toBeNull();
   });
 
-  it('pins a JSON export to the exact batch used for the preceding detail read', async () => {
-    const detailBytes = new TextEncoder().encode('{"detail":"batch-a"}');
-    const exportBytes = new TextEncoder().encode('{"export":"batch-a"}\n');
-    const readGovernedEvaluation = vi
-      .fn()
-      .mockResolvedValueOnce(governedRead('detail', detailBytes))
-      .mockResolvedValueOnce(
-        governedRead('json_export', exportBytes, {
-          kind: 'batch',
-          batchId: governedBatchId,
-        })
-      );
-    const { reads } = dependencies({ trade: tradeEvaluation, readGovernedEvaluation });
+  it('reads an explicit JSON generation after the workbook service is recreated', async () => {
+    const exportBytes = new TextEncoder().encode('{"export":"generation-a"}\n');
+    const readGovernedEvaluation = vi.fn().mockResolvedValue(
+      governedRead('json_export', exportBytes, {
+        kind: 'generation',
+        generationId: governedGenerationId,
+      })
+    );
+    const restarted = dependencies({ trade: tradeEvaluation, readGovernedEvaluation });
 
-    await reads.loadTrade('trade:carlton-fremantle-gold-coast');
-    await reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast');
+    await restarted.reads.loadExactJsonExport(
+      'trade:carlton-fremantle-gold-coast',
+      governedGenerationId
+    );
 
-    expect(readGovernedEvaluation).toHaveBeenNthCalledWith(
-      2,
+    expect(readGovernedEvaluation).toHaveBeenCalledWith(
       expect.objectContaining({ AFL_TRADE_LOCAL_ARTIFACT_ROOT: '/private/statly-artifacts' }),
       'statly-dev-tester',
       {
@@ -354,7 +356,7 @@ describe('private local workbook reads', () => {
           valuationScopeKey: 'afl-men:2025-trades',
           tradeId: 'trade:carlton-fremantle-gold-coast',
         },
-        selection: { kind: 'batch', batchId: governedBatchId },
+        selection: { kind: 'generation', generationId: governedGenerationId },
         document: { kind: 'json_export' },
       }
     );
@@ -376,9 +378,9 @@ describe('private local workbook reads', () => {
       await expect(reads.loadTrade('trade:carlton-fremantle-gold-coast')).rejects.toThrow(
         'Governed private evaluation artifact configuration is invalid.'
       );
-      await expect(reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast')).rejects.toThrow(
-        'Governed private evaluation artifact configuration is invalid.'
-      );
+      await expect(
+        reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast', governedGenerationId)
+      ).rejects.toThrow('Governed private evaluation artifact configuration is invalid.');
       expect(readGovernedEvaluation).not.toHaveBeenCalled();
     }
   );

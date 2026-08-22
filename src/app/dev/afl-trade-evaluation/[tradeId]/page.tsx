@@ -159,7 +159,7 @@ export default async function LocalWorkbookTradeEvaluationPage({
             <Link
               href={`/api/dev/afl-trade-evaluation/${encodeURIComponent(
                 detail.trade.tradeId
-              )}/export`}
+              )}/export?generationId=${encodeURIComponent(governedRead.generationId)}`}
               className="inline-flex min-h-11 items-center rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Download exact JSON evidence

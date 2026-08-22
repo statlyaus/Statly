@@ -55,20 +55,6 @@ class ReadSqlClient implements AflOutcomeSqlClient {
         rowCount: this.status === 'absent' ? 0 : 1,
       } as AflOutcomeSqlQueryResult<Row>;
     }
-    if (sql.includes('FROM outcome_private_evaluation_batch target_batch')) {
-      return {
-        rows: [
-          {
-            batch_id: batchId,
-            state: 'ready',
-            generation_json: this.generationJson,
-            withdrawal_id: this.status === 'withdrawn' ? 'withdrawal:fixture' : null,
-            batch_current: this.activeGenerationId === materialization.generation.generationId,
-          },
-        ],
-        rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
-    }
     if (sql.includes('outcome_local_private_trade_evaluation_generation')) {
       return {
         rows: [
@@ -125,7 +111,6 @@ describe('PostgreSQL governed private evaluation read repository', () => {
       state: 'available',
       selector,
       selection: { kind: 'current' },
-      batchId,
       generationId: materialization.generation.generationId,
       projectionManifestId: materialization.projectionManifest.projectionManifestId,
       lifecycle: { status: 'active', current: true },
@@ -142,24 +127,10 @@ describe('PostgreSQL governed private evaluation read repository', () => {
     });
     expect(exported).toMatchObject({
       state: 'available',
-      batchId,
       lifecycle: { status: 'active', current: true },
     });
     if (exported.state !== 'available') throw new Error('Expected exact export bytes.');
     expect(new TextDecoder().decode(exported.bytes).endsWith('\n')).toBe(true);
-
-    await expect(
-      repository.read({
-        selector,
-        selection: { kind: 'batch', batchId },
-        document: { kind: 'reader_api' },
-      })
-    ).resolves.toMatchObject({
-      state: 'available',
-      selection: { kind: 'batch', batchId },
-      batchId,
-      generationId: materialization.generation.generationId,
-    });
   });
 
   it('keeps withdrawn current reads unavailable while preserving explicit history', async () => {

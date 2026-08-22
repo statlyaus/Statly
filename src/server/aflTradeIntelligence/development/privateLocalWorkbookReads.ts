@@ -51,7 +51,10 @@ type TradeResult = Promise<PrivateLocalWorkbookTradeEvaluation | null>;
 export interface PrivateLocalWorkbookReads {
   loadArchive(query: ArchiveQuery): ArchiveResult;
   loadTrade(tradeId: string): TradeResult;
-  loadExactJsonExport(tradeId: string): Promise<GovernedPrivateEvaluationReadResult | null>;
+  loadExactJsonExport(
+    tradeId: string,
+    generationId: string
+  ): Promise<GovernedPrivateEvaluationReadResult | null>;
 }
 
 export interface PrivateLocalWorkbookReadDependencies {
@@ -154,8 +157,6 @@ export function createPrivateLocalWorkbookReads(
       calculation: Promise<LocalPrivateReviewedTradeCalculation | null>;
     }>
   >();
-  const governedBatchByRuntimeAndTrade = new Map<string, string>();
-
   async function admit(): Promise<Readonly<{
     environment: Readonly<PrivateLocalWorkbookReadEnvironment>;
     principalId: string;
@@ -186,13 +187,6 @@ export function createPrivateLocalWorkbookReads(
       selection,
       document,
     };
-  }
-
-  function governedBatchCacheKey(
-    environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
-    evaluation: LocalWorkbookTradeEvaluation
-  ): string {
-    return `${environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE}\0afl-men:${evaluation.detail.trade.year}-trades\0${evaluation.detail.trade.tradeId}`;
   }
 
   async function inspectCurrentValuationReadiness(
@@ -276,16 +270,10 @@ export function createPrivateLocalWorkbookReads(
         principalId,
         governedRequest(evaluation, { kind: 'detail' })
       );
-      const batchCacheKey = governedBatchCacheKey(environment, evaluation);
-      if (governedEvaluation.state === 'available' && governedEvaluation.batchId !== null) {
-        governedBatchByRuntimeAndTrade.set(batchCacheKey, governedEvaluation.batchId);
-      } else {
-        governedBatchByRuntimeAndTrade.delete(batchCacheKey);
-      }
       return { ...evaluation, governedEvaluation };
     },
 
-    async loadExactJsonExport(tradeId) {
+    async loadExactJsonExport(tradeId, generationId) {
       const admitted = await admit();
       if (admitted === null || dependencies.readGovernedEvaluation === undefined) return null;
       const { environment, principalId } = admitted;
@@ -302,25 +290,15 @@ export function createPrivateLocalWorkbookReads(
           : undefined
       );
       if (evaluation === null) return null;
-      const batchCacheKey = governedBatchCacheKey(environment, evaluation);
-      const batchId = governedBatchByRuntimeAndTrade.get(batchCacheKey);
-      const governedEvaluation = await dependencies.readGovernedEvaluation(
+      return dependencies.readGovernedEvaluation(
         environment,
         principalId,
         governedRequest(
           evaluation,
           { kind: 'json_export' },
-          batchId === undefined ? { kind: 'current' } : { kind: 'batch', batchId }
+          { kind: 'generation', generationId }
         )
       );
-      if (
-        batchId === undefined &&
-        governedEvaluation.state === 'available' &&
-        governedEvaluation.batchId !== null
-      ) {
-        governedBatchByRuntimeAndTrade.set(batchCacheKey, governedEvaluation.batchId);
-      }
-      return governedEvaluation;
     },
   };
 }
