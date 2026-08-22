@@ -11,6 +11,7 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from './automatedPrivateEvaluationPolicy';
 import type { createAflTradeCalculationNarrative } from './tradeCalculationNarrative';
 
 type CalculationNarrative = ReturnType<typeof createAflTradeCalculationNarrative>;
@@ -32,7 +33,7 @@ export interface GovernedPrivateEvaluationRetainedArtifact {
   readonly bytes: Uint8Array;
 }
 
-interface ProjectionManifest {
+interface ProjectionManifestV1 {
   readonly projectionManifestId: string;
   readonly content: {
     readonly schemaVersion: 'governed-private-evaluation-projection-manifest/v1';
@@ -47,7 +48,26 @@ interface ProjectionManifest {
   };
 }
 
-interface EvaluationGeneration {
+interface ProjectionManifestV2 {
+  readonly projectionManifestId: string;
+  readonly content: {
+    readonly schemaVersion: 'governed-private-evaluation-projection-manifest/v2';
+    readonly environment: 'non_production';
+    readonly selector: GovernedPrivateEvaluationSelector;
+    readonly narrativeId: string;
+    readonly generatedAt: string;
+    readonly documents: readonly Readonly<{
+      kind: ReaderDocumentKind;
+      artifact: AflTradeArtifactRef;
+    }>[];
+    readonly runtimeHtmlRetention: 'prohibited';
+    readonly publicationProhibited: true;
+  };
+}
+
+type ProjectionManifest = ProjectionManifestV1 | ProjectionManifestV2;
+
+interface EvaluationGenerationV1 {
   readonly generationId: string;
   readonly content: {
     readonly schemaVersion: 'local-private-trade-evaluation-generation/v1';
@@ -63,6 +83,29 @@ interface EvaluationGeneration {
     readonly publicationProhibited: true;
   };
 }
+
+interface EvaluationGenerationV2 {
+  readonly generationId: string;
+  readonly content: {
+    readonly schemaVersion: 'local-private-trade-evaluation-generation/v2';
+    readonly environment: 'non_production';
+    readonly selector: GovernedPrivateEvaluationSelector;
+    readonly transitionIntentId: string;
+    readonly narrativeId: string;
+    readonly narrativeArtifact: AflTradeArtifactRef;
+    readonly projectionManifestId: string;
+    readonly projectionManifestArtifact: AflTradeArtifactRef;
+    readonly generatedAt: string;
+    readonly constructionAuthority: {
+      readonly kind: 'automated_private_calculation_agent';
+      readonly principalId: typeof AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID;
+    };
+    readonly activationReceipt: 'separate_append_only_transition';
+    readonly publicationProhibited: true;
+  };
+}
+
+type EvaluationGeneration = EvaluationGenerationV1 | EvaluationGenerationV2;
 
 export interface GovernedPrivateEvaluationDetailDocument {
   readonly schemaVersion: 'governed-private-evaluation-detail/v1';
@@ -113,6 +156,37 @@ const retainedGenerationV1Schema = z
       .strict(),
   })
   .strict();
+const automatedConstructionAuthoritySchema = z
+  .object({
+    kind: z.literal('automated_private_calculation_agent'),
+    principalId: z.literal(AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID),
+  })
+  .strict();
+const retainedGenerationV2Schema = z
+  .object({
+    generationId: aflTradeContentAddressedIdSchema('local-private-trade-evaluation-generation'),
+    content: z
+      .object({
+        schemaVersion: z.literal('local-private-trade-evaluation-generation/v2'),
+        environment: z.literal('non_production'),
+        selector: retainedSelectorSchema,
+        transitionIntentId: aflTradeContentAddressedIdSchema(
+          'private-evaluation-transition-intent'
+        ),
+        narrativeId: aflTradeContentAddressedIdSchema('trade-calculation-narrative'),
+        narrativeArtifact: aflTradeArtifactRefSchema,
+        projectionManifestId: aflTradeContentAddressedIdSchema(
+          'private-evaluation-projection-manifest'
+        ),
+        projectionManifestArtifact: aflTradeArtifactRefSchema,
+        generatedAt: z.iso.datetime({ offset: true }),
+        constructionAuthority: automatedConstructionAuthoritySchema,
+        activationReceipt: z.literal('separate_append_only_transition'),
+        publicationProhibited: z.literal(true),
+      })
+      .strict(),
+  })
+  .strict();
 const retainedProjectionManifestV1Schema = z
   .object({
     projectionManifestId: aflTradeContentAddressedIdSchema(
@@ -139,6 +213,34 @@ const retainedProjectionManifestV1Schema = z
       .strict(),
   })
   .strict();
+const retainedProjectionManifestV2Schema = z
+  .object({
+    projectionManifestId: aflTradeContentAddressedIdSchema(
+      'private-evaluation-projection-manifest'
+    ),
+    content: z
+      .object({
+        schemaVersion: z.literal('governed-private-evaluation-projection-manifest/v2'),
+        environment: z.literal('non_production'),
+        selector: retainedSelectorSchema,
+        narrativeId: aflTradeContentAddressedIdSchema('trade-calculation-narrative'),
+        generatedAt: z.iso.datetime({ offset: true }),
+        documents: z
+          .array(
+            z
+              .object({
+                kind: readerDocumentKindSchema,
+                artifact: aflTradeArtifactRefSchema,
+              })
+              .strict()
+          )
+          .length(4),
+        runtimeHtmlRetention: z.literal('prohibited'),
+        publicationProhibited: z.literal(true),
+      })
+      .strict(),
+  })
+  .strict();
 
 export class UnsupportedGovernedPrivateEvaluationProjectionVersionError extends Error {}
 
@@ -154,30 +256,36 @@ export function parseGovernedPrivateEvaluationGeneration(
   value: unknown
 ): EvaluationGeneration {
   const version = retainedSchemaVersion(value);
-  if (
-    version !== null &&
-    version !== 'local-private-trade-evaluation-generation/v1'
-  ) {
+  if (version === 'local-private-trade-evaluation-generation/v1') {
+    return retainedGenerationV1Schema.parse(value) as EvaluationGenerationV1;
+  }
+  if (version === 'local-private-trade-evaluation-generation/v2') {
+    return retainedGenerationV2Schema.parse(value) as EvaluationGenerationV2;
+  }
+  if (version !== null) {
     throw new UnsupportedGovernedPrivateEvaluationProjectionVersionError(
       `Unsupported private evaluation generation version: ${version}`
     );
   }
-  return retainedGenerationV1Schema.parse(value) as EvaluationGeneration;
+  return retainedGenerationV1Schema.parse(value) as EvaluationGenerationV1;
 }
 
 export function parseGovernedPrivateEvaluationProjectionManifest(
   value: unknown
 ): ProjectionManifest {
   const version = retainedSchemaVersion(value);
-  if (
-    version !== null &&
-    version !== 'governed-private-evaluation-projection-manifest/v1'
-  ) {
+  if (version === 'governed-private-evaluation-projection-manifest/v1') {
+    return retainedProjectionManifestV1Schema.parse(value) as ProjectionManifestV1;
+  }
+  if (version === 'governed-private-evaluation-projection-manifest/v2') {
+    return retainedProjectionManifestV2Schema.parse(value) as ProjectionManifestV2;
+  }
+  if (version !== null) {
     throw new UnsupportedGovernedPrivateEvaluationProjectionVersionError(
       `Unsupported private evaluation projection manifest version: ${version}`
     );
   }
-  return retainedProjectionManifestV1Schema.parse(value) as ProjectionManifest;
+  return retainedProjectionManifestV1Schema.parse(value) as ProjectionManifestV1;
 }
 
 const encoder = new TextEncoder();
@@ -367,6 +475,72 @@ export function createGovernedPrivateEvaluationGeneration(input: {
     content: generationContent,
   };
   artifacts.push(retained('generation', canonicalBytes(generation), input.generatedAt));
+  return { projectionManifest, generation, artifacts };
+}
+
+export function createAutomatedGovernedPrivateEvaluationGeneration(input: {
+  readonly selector: GovernedPrivateEvaluationSelector;
+  readonly transitionIntentId: string;
+  readonly generatedAt: string;
+  readonly constructionAuthority: z.infer<typeof automatedConstructionAuthoritySchema>;
+  readonly narrative: CalculationNarrative;
+}): GovernedPrivateEvaluationGenerationMaterialization {
+  const constructionAuthority = automatedConstructionAuthoritySchema.parse(
+    input.constructionAuthority
+  );
+  const legacyMaterialization = createGovernedPrivateEvaluationGeneration(input);
+  const documentArtifacts = legacyMaterialization.artifacts.slice(0, 5);
+  const projectionManifestContent: ProjectionManifestV2['content'] = {
+    schemaVersion: 'governed-private-evaluation-projection-manifest/v2',
+    environment: 'non_production',
+    selector: { ...input.selector },
+    narrativeId: input.narrative.narrativeId,
+    generatedAt: input.generatedAt,
+    documents: documentArtifacts.slice(1).map(({ kind, reference }) => ({
+      kind: kind as ReaderDocumentKind,
+      artifact: reference,
+    })),
+    runtimeHtmlRetention: 'prohibited',
+    publicationProhibited: true,
+  };
+  const projectionManifest: ProjectionManifestV2 = {
+    projectionManifestId: createAflTradeContentAddress(
+      'private-evaluation-projection-manifest',
+      projectionManifestContent
+    ),
+    content: projectionManifestContent,
+  };
+  const manifestArtifact = retained(
+    'projection_manifest',
+    canonicalBytes(projectionManifest),
+    input.generatedAt
+  );
+  const generationContent: EvaluationGenerationV2['content'] = {
+    schemaVersion: 'local-private-trade-evaluation-generation/v2',
+    environment: 'non_production',
+    selector: { ...input.selector },
+    transitionIntentId: input.transitionIntentId,
+    narrativeId: input.narrative.narrativeId,
+    narrativeArtifact: documentArtifacts[0]!.reference,
+    projectionManifestId: projectionManifest.projectionManifestId,
+    projectionManifestArtifact: manifestArtifact.reference,
+    generatedAt: input.generatedAt,
+    constructionAuthority,
+    activationReceipt: 'separate_append_only_transition',
+    publicationProhibited: true,
+  };
+  const generation: EvaluationGenerationV2 = {
+    generationId: createAflTradeContentAddress(
+      'local-private-trade-evaluation-generation',
+      generationContent
+    ),
+    content: generationContent,
+  };
+  const artifacts = [
+    ...documentArtifacts,
+    manifestArtifact,
+    retained('generation', canonicalBytes(generation), input.generatedAt),
+  ];
   return { projectionManifest, generation, artifacts };
 }
 

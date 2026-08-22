@@ -61,10 +61,15 @@ function createWorkspace() {
 }
 
 describe('GovernedPrivateEvaluationWorkspace', () => {
-  it('exposes only inspect, execute, and read', () => {
+  it('exposes only governed inspection, execution, automated staging, and reads', () => {
     const { workspace } = createWorkspace();
 
-    expect(Object.keys(workspace).sort()).toEqual(['execute', 'inspect', 'read']);
+    expect(Object.keys(workspace).sort()).toEqual([
+      'execute',
+      'inspect',
+      'read',
+      'stageAutomated',
+    ]);
   });
 
   it('keeps the internal composition constructor out of production imports', () => {

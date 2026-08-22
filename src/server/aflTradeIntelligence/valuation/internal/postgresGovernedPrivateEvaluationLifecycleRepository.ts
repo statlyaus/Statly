@@ -11,8 +11,13 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../../outcomes/postgresOutcomeReleaseRepository';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEvaluationPolicy';
+import { parseGovernedPrivateEvaluationGeneration } from '../governedPrivateEvaluationGeneration';
 import {
+  automatedGovernedPrivateEvaluationTransitionReceiptSchema,
   governedPrivateEvaluationTransitionReceiptSchema,
+  type AnyGovernedPrivateEvaluationTransitionReceipt,
+  type AutomatedGovernedPrivateEvaluationTransitionReceipt,
   type GovernedPrivateEvaluationTransitionReceipt,
 } from './governedPrivateEvaluationLifecycle';
 import { authenticateGovernedPrivateEvaluationAuthorityInspection } from './governedPrivateEvaluationAuthoritySnapshot';
@@ -67,7 +72,7 @@ interface StoredAuthorityRow {
   readonly inspection_artifact_created_at: Date | string;
 }
 
-type LifecycleHead = GovernedPrivateEvaluationTransitionReceipt['content']['toHead'];
+type LifecycleHead = AnyGovernedPrivateEvaluationTransitionReceipt['content']['toHead'];
 
 export type GovernedPrivateEvaluationLifecycleCommitResult =
   | {
@@ -144,7 +149,7 @@ async function loadHeadForUpdate(
 
 async function proveResultGeneration(
   transaction: AflOutcomeSqlTransaction,
-  receipt: GovernedPrivateEvaluationTransitionReceipt
+  receipt: AnyGovernedPrivateEvaluationTransitionReceipt
 ): Promise<void> {
   const { action, selector, toHead, fromHead, previousTransitionId, intent } = receipt.content;
   if (action.kind === 'withdraw') return;
@@ -178,8 +183,11 @@ async function proveResultGeneration(
       throw new TypeError('Rollback requires a generation previously activated for this selector.');
     }
   }
-  const generation = await transaction.query<{ generation_id: string }>(
-    `SELECT generation_id
+  const generation = await transaction.query<{
+    generation_id: string;
+    generation_json: unknown;
+  }>(
+    `SELECT generation_id,generation_json
        FROM outcome_local_private_trade_evaluation_generation
       WHERE valuation_scope_key=$1 AND trade_id=$2 AND generation_id=$3
         AND ($4<>'construct_and_activate' OR transition_intent_id=$5)
@@ -194,6 +202,23 @@ async function proveResultGeneration(
   );
   if (generation.rows.length !== 1) {
     throw new TypeError('The lifecycle result generation is absent or escaped its transition intent.');
+  }
+  if (receipt.content.schemaVersion === 'private-evaluation-transition-receipt/v2') {
+    const retainedGeneration = parseGovernedPrivateEvaluationGeneration(
+      generation.rows[0]!.generation_json
+    );
+    if (
+      retainedGeneration.content.schemaVersion !==
+        'local-private-trade-evaluation-generation/v2' ||
+      !same(
+        retainedGeneration.content.constructionAuthority,
+        receipt.content.intent.content.constructionAuthority
+      )
+    ) {
+      throw new TypeError(
+        'Automated lifecycle activation requires the exact v2 system construction authority.'
+      );
+    }
   }
 }
 
@@ -275,7 +300,7 @@ async function authenticateStoredAuthorityArtifacts(input: {
 
 async function proveStoredAuthority(
   transaction: AflOutcomeSqlTransaction,
-  receipt: GovernedPrivateEvaluationTransitionReceipt,
+  receipt: AnyGovernedPrivateEvaluationTransitionReceipt,
   artifactRepository: AflTradeImmutableArtifactRepository,
   maximumArtifactBytes: number
 ): Promise<void> {
@@ -366,6 +391,16 @@ async function proveStoredAuthority(
     maximumArtifactBytes,
   });
   if (
+    content.schemaVersion === 'private-evaluation-transition-receipt/v2' &&
+    (retained.snapshot.content.schemaVersion !==
+      'private-evaluation-authority-snapshot/v3' ||
+      retained.inspection.content.schemaVersion !== 'private-evaluation-inspection/v3')
+  ) {
+    throw new TypeError(
+      'Automated lifecycle activation requires exact non-production v3 calculation authority.'
+    );
+  }
+  if (
     !same(retained.result.selector, content.selector) ||
     retained.inspection.content.lastTransitionId !== content.previousTransitionId ||
     retained.result.state !== row.inspection_state ||
@@ -429,7 +464,7 @@ async function proveCurrentOperatorAuthority(
 
 async function insertReceiptAndCasHead(
   transaction: AflOutcomeSqlTransaction,
-  receipt: GovernedPrivateEvaluationTransitionReceipt,
+  receipt: AnyGovernedPrivateEvaluationTransitionReceipt,
   artifact: AflTradeArtifactRef
 ): Promise<void> {
   const content = receipt.content;
@@ -493,7 +528,13 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
   readonly client: AflOutcomeSqlClient;
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
+  readonly enableAutomatedPrivateCalculation?: true;
 }) {
+  if ('automatedPrincipalId' in dependencies) {
+    throw new TypeError(
+      'Lifecycle commits do not accept a caller-supplied automated principal.'
+    );
+  }
   if (
     dependencies.artifactRepository.artifactClass !== 'derived_private' ||
     !Number.isSafeInteger(dependencies.maximumArtifactBytes) ||
@@ -501,67 +542,123 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
   ) {
     throw new TypeError('Lifecycle commits require bounded private artifact custody.');
   }
+  const automatedCalculationEnabled =
+    dependencies.enableAutomatedPrivateCalculation === true;
+  async function commitReceipt(input: {
+    readonly receipt: AnyGovernedPrivateEvaluationTransitionReceipt;
+    readonly receiptArtifact: AflTradeArtifactRef;
+    readonly requireOperatorAuthority: boolean;
+  }): Promise<GovernedPrivateEvaluationLifecycleCommitResult> {
+    const receipt = input.receipt;
+    const artifact = aflTradeArtifactRefSchema.parse(input.receiptArtifact);
+    if (!doesAflTradeArtifactRefMatchCanonicalJson(artifact, receipt)) {
+      throw new TypeError('The lifecycle receipt artifact does not authenticate its exact JSON.');
+    }
+    return dependencies.client.transaction(async (transaction) => {
+      await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
+      const existing = await transaction.query<ExistingReceiptRow>(
+        `SELECT receipt_json,artifact_id
+           FROM outcome_private_evaluation_transition_receipt
+          WHERE operation_id=$1 FOR KEY SHARE`,
+        [receipt.content.intent.content.operationId]
+      );
+      if (existing.rows.length > 0) {
+        if (
+          existing.rows.length !== 1 ||
+          !same(existing.rows[0]?.receipt_json, receipt) ||
+          existing.rows[0]?.artifact_id !== artifact.artifactId
+        ) {
+          throw new TypeError('The lifecycle operation replay conflicts with retained evidence.');
+        }
+        const current = await loadHeadForUpdate(transaction, receipt.content.selector);
+        if (
+          sameHead(current.head, receipt.content.toHead) &&
+          current.lastTransitionId === receipt.transitionId
+        ) {
+          return {
+            state: 'replayed',
+            head: current.head,
+            transitionId: receipt.transitionId,
+          };
+        }
+        return {
+          state: 'conflict',
+          expectedHead: receipt.content.toHead,
+          actualHead: current.head,
+        };
+      }
+      const trusted = await transaction.query<TrustedTimeRow>(
+        `SELECT date_trunc('milliseconds',transaction_timestamp()) AS trusted_at`
+      );
+      if (
+        trusted.rows.length !== 1 ||
+        trusted.rows[0] === undefined ||
+        parseTime(trusted.rows[0].trusted_at) < parseTime(receipt.content.transitionedAt) ||
+        parseTime(trusted.rows[0].trusted_at) >
+          parseTime(receipt.content.intent.content.expiresAt)
+      ) {
+        throw new TypeError('The lifecycle transition is future-dated or its authority expired.');
+      }
+      const current = await loadHeadForUpdate(transaction, receipt.content.selector);
+      if (
+        !sameHead(current.head, receipt.content.fromHead) ||
+        current.lastTransitionId !== receipt.content.previousTransitionId
+      ) {
+        return {
+          state: 'conflict',
+          expectedHead: receipt.content.fromHead,
+          actualHead: current.head,
+        };
+      }
+      await proveStoredAuthority(
+        transaction,
+        receipt,
+        dependencies.artifactRepository,
+        dependencies.maximumArtifactBytes
+      );
+      if (input.requireOperatorAuthority) {
+        await proveCurrentOperatorAuthority(
+          transaction,
+          receipt as GovernedPrivateEvaluationTransitionReceipt
+        );
+      }
+      await proveResultGeneration(transaction, receipt);
+      await insertReceiptAndCasHead(transaction, receipt, artifact);
+      return { state: 'committed', head: receipt.content.toHead, transitionId: receipt.transitionId };
+    });
+  }
   return {
     async commit(input: {
       readonly receipt: GovernedPrivateEvaluationTransitionReceipt;
       readonly receiptArtifact: AflTradeArtifactRef;
     }): Promise<GovernedPrivateEvaluationLifecycleCommitResult> {
       const receipt = governedPrivateEvaluationTransitionReceiptSchema.parse(input.receipt);
-      const artifact = aflTradeArtifactRefSchema.parse(input.receiptArtifact);
-      if (!doesAflTradeArtifactRefMatchCanonicalJson(artifact, receipt)) {
-        throw new TypeError('The lifecycle receipt artifact does not authenticate its exact JSON.');
+      return commitReceipt({
+        receipt,
+        receiptArtifact: input.receiptArtifact,
+        requireOperatorAuthority: true,
+      });
+    },
+    async commitAutomated(input: {
+      readonly receipt: AutomatedGovernedPrivateEvaluationTransitionReceipt;
+      readonly receiptArtifact: AflTradeArtifactRef;
+    }): Promise<GovernedPrivateEvaluationLifecycleCommitResult> {
+      const receipt = automatedGovernedPrivateEvaluationTransitionReceiptSchema.parse(
+        input.receipt
+      );
+      if (
+        !automatedCalculationEnabled ||
+        receipt.content.intent.content.constructionAuthority.principalId !==
+          AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID
+      ) {
+        throw new TypeError(
+          'Automated lifecycle activation requires the exact configured system principal.'
+        );
       }
-      return dependencies.client.transaction(async (transaction) => {
-        await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
-        const existing = await transaction.query<ExistingReceiptRow>(
-          `SELECT receipt_json,artifact_id
-             FROM outcome_private_evaluation_transition_receipt
-            WHERE operation_id=$1 FOR KEY SHARE`,
-          [receipt.content.intent.content.operationId]
-        );
-        if (existing.rows.length > 0) {
-          if (
-            existing.rows.length !== 1 ||
-            !same(existing.rows[0]?.receipt_json, receipt) ||
-            existing.rows[0]?.artifact_id !== artifact.artifactId
-          ) {
-            throw new TypeError('The lifecycle operation replay conflicts with retained evidence.');
-          }
-          return { state: 'replayed', head: receipt.content.toHead, transitionId: receipt.transitionId };
-        }
-        const trusted = await transaction.query<TrustedTimeRow>(
-          `SELECT date_trunc('milliseconds',transaction_timestamp()) AS trusted_at`
-        );
-        if (
-          trusted.rows.length !== 1 ||
-          trusted.rows[0] === undefined ||
-          parseTime(trusted.rows[0].trusted_at) < parseTime(receipt.content.transitionedAt) ||
-          parseTime(trusted.rows[0].trusted_at) >
-            parseTime(receipt.content.intent.content.expiresAt)
-        ) {
-          throw new TypeError('The lifecycle transition is future-dated or its authority expired.');
-        }
-        const current = await loadHeadForUpdate(transaction, receipt.content.selector);
-        if (
-          !sameHead(current.head, receipt.content.fromHead) ||
-          current.lastTransitionId !== receipt.content.previousTransitionId
-        ) {
-          return {
-            state: 'conflict',
-            expectedHead: receipt.content.fromHead,
-            actualHead: current.head,
-          };
-        }
-        await proveStoredAuthority(
-          transaction,
-          receipt,
-          dependencies.artifactRepository,
-          dependencies.maximumArtifactBytes
-        );
-        await proveCurrentOperatorAuthority(transaction, receipt);
-        await proveResultGeneration(transaction, receipt);
-        await insertReceiptAndCasHead(transaction, receipt, artifact);
-        return { state: 'committed', head: receipt.content.toHead, transitionId: receipt.transitionId };
+      return commitReceipt({
+        receipt,
+        receiptArtifact: input.receiptArtifact,
+        requireOperatorAuthority: false,
       });
     },
   };

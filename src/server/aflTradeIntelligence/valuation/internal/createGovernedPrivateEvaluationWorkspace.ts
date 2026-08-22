@@ -2,18 +2,24 @@ import { doesAflTradeArtifactRefMatchBytes } from '../../artifacts/artifactRefer
 import { canonicalizeAflTradeJson } from '../../artifacts/contentAddress';
 import type { GovernedPrivateEvaluationWorkspace } from '../governedPrivateEvaluationWorkspace';
 import {
+  governedPrivateEvaluationAutomatedStageRequestSchema,
+  governedPrivateEvaluationAutomatedStageResultSchema,
   governedPrivateEvaluationExecuteRequestSchema,
   governedPrivateEvaluationExecuteResultSchema,
   governedPrivateEvaluationInspectRequestSchema,
   governedPrivateEvaluationInspectResultSchema,
   governedPrivateEvaluationReadRequestSchema,
   governedPrivateEvaluationReadResultSchema,
+  type GovernedPrivateEvaluationAutomatedStageRequest,
   type GovernedPrivateEvaluationExecuteRequest,
   type GovernedPrivateEvaluationInspectRequest,
   type GovernedPrivateEvaluationReadRequest,
 } from './governedPrivateEvaluationWorkspaceContracts';
 
 interface GovernedPrivateEvaluationInternalComposition {
+  readonly stageAutomated?: (
+    request: GovernedPrivateEvaluationAutomatedStageRequest
+  ) => Promise<unknown>;
   readonly inspect: (request: GovernedPrivateEvaluationInspectRequest) => Promise<unknown>;
   readonly execute: (request: GovernedPrivateEvaluationExecuteRequest) => Promise<unknown>;
   readonly read: (request: GovernedPrivateEvaluationReadRequest) => Promise<unknown>;
@@ -27,6 +33,25 @@ export function createGovernedPrivateEvaluationWorkspaceForInternalComposition(
   composition: GovernedPrivateEvaluationInternalComposition
 ): GovernedPrivateEvaluationWorkspace {
   return {
+    async stageAutomated(unparsedRequest) {
+      if (composition.stageAutomated === undefined) {
+        throw new TypeError('Automated private staging is not configured for this workspace.');
+      }
+      const request = governedPrivateEvaluationAutomatedStageRequestSchema.parse(
+        unparsedRequest
+      );
+      const result = governedPrivateEvaluationAutomatedStageResultSchema.parse(
+        await composition.stageAutomated(request)
+      );
+      if (
+        result.operationId !== request.operationId ||
+        !sameCanonicalJson(result.selector, request.selector)
+      ) {
+        throw new RangeError('Automated private staging escaped its request authority.');
+      }
+      return result;
+    },
+
     async inspect(unparsedRequest) {
       const request = governedPrivateEvaluationInspectRequestSchema.parse(unparsedRequest);
       const result = governedPrivateEvaluationInspectResultSchema.parse(

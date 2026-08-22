@@ -150,6 +150,7 @@ model OutcomeReleaseManifest {
   preparedValuationInputSets          OutcomePreparedValuationInputSet[]
   privateValuationEvaluationDecisions OutcomePrivateValuationEvaluationDecision[]
   privateValuationEvaluationHeads     OutcomePrivateValuationEvaluationHead[]
+  currentValuationCohortOperations    OutcomeCurrentValuationCohortOperation[]
 
   @@index([scopeKey, createdAt])
   @@map("outcome_release_manifest")
@@ -4377,28 +4378,29 @@ model OutcomeValuationSourceQualificationReport {
 }
 
 model OutcomePreparedValuationInputSet {
-  preparedInputSetId       String                                    @id @map("prepared_input_set_id")
-  contentSha256            String                                    @map("content_sha256") @outcomes.Char(64)
-  schemaVersion            String                                    @map("schema_version")
-  environment              OutcomeEnvironment
-  scopeKey                 String                                    @map("scope_key")
-  factualReleaseScopeKey   String                                    @map("factual_release_scope_key")
-  factualReleaseId         String                                    @map("factual_release_id")
-  qualificationReportId    String                                    @map("qualification_report_id")
-  tradeCount               Int                                       @map("trade_count")
-  readyCount               Int                                       @map("ready_count")
-  blockedCount             Int                                       @map("blocked_count")
-  preparedAt               DateTime                                  @map("prepared_at") @outcomes.Timestamptz(3)
-  contentCanonicalJson     String                                    @map("content_canonical_json") @outcomes.Text
-  preparedSetCanonicalJson String                                    @map("prepared_set_canonical_json") @outcomes.Text
-  preparedSetJson          Json                                      @map("prepared_set_json")
-  finalizedAt              DateTime?                                 @map("finalized_at") @outcomes.Timestamptz(3)
-  registeredAt             DateTime                                  @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
-  registeredBy             String                                    @default(dbgenerated("CURRENT_USER")) @map("registered_by")
-  factualRelease           OutcomeReleaseManifest                    @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
-  qualificationReport      OutcomeValuationSourceQualificationReport @relation(fields: [qualificationReportId], references: [qualificationReportId], onDelete: Restrict)
-  entries                  OutcomePreparedValuationInputEntry[]
-  currentHeads             OutcomeCurrentPreparedValuationInputSet[]
+  preparedInputSetId           String                                        @id @map("prepared_input_set_id")
+  contentSha256                String                                        @map("content_sha256") @outcomes.Char(64)
+  schemaVersion                String                                        @map("schema_version")
+  environment                  OutcomeEnvironment
+  scopeKey                     String                                        @map("scope_key")
+  factualReleaseScopeKey       String                                        @map("factual_release_scope_key")
+  factualReleaseId             String                                        @map("factual_release_id")
+  qualificationReportId        String                                        @map("qualification_report_id")
+  tradeCount                   Int                                           @map("trade_count")
+  readyCount                   Int                                           @map("ready_count")
+  blockedCount                 Int                                           @map("blocked_count")
+  preparedAt                   DateTime                                      @map("prepared_at") @outcomes.Timestamptz(3)
+  contentCanonicalJson         String                                        @map("content_canonical_json") @outcomes.Text
+  preparedSetCanonicalJson     String                                        @map("prepared_set_canonical_json") @outcomes.Text
+  preparedSetJson              Json                                          @map("prepared_set_json")
+  finalizedAt                  DateTime?                                     @map("finalized_at") @outcomes.Timestamptz(3)
+  registeredAt                 DateTime                                      @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
+  registeredBy                 String                                        @default(dbgenerated("CURRENT_USER")) @map("registered_by")
+  factualRelease               OutcomeReleaseManifest                        @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
+  qualificationReport          OutcomeValuationSourceQualificationReport     @relation(fields: [qualificationReportId], references: [qualificationReportId], onDelete: Restrict)
+  entries                      OutcomePreparedValuationInputEntry[]
+  currentHeads                 OutcomeCurrentPreparedValuationInputSet[]
+  currentValuationCohortResult OutcomeCurrentValuationCohortOperationResult?
 
   @@index([environment, scopeKey, preparedAt], map: "outcome_prepared_valuation_input_set_scope_idx")
   @@index([factualReleaseId, preparedAt], map: "outcome_prepared_valuation_input_set_release_idx")
@@ -4968,37 +4970,39 @@ model OutcomeGovernedComponentValidationEvidence {
 }
 
 model OutcomeGovernedValuationModelQualification {
-  qualificationId          String   @id @map("qualification_id") @outcomes.Text
-  scopeKey                 String   @map("scope_key") @outcomes.Text
-  outcome                  String   @outcomes.Text
-  artifactId               String   @unique @map("artifact_id") @outcomes.Text
-  playerRunId              String   @map("player_run_id") @outcomes.Text
-  pickRunId                String   @map("pick_run_id") @outcomes.Text
-  policyArtifactId         String   @map("policy_artifact_id") @outcomes.Text
-  playerCriteriaArtifactId String   @map("player_criteria_artifact_id") @outcomes.Text
-  pickCriteriaArtifactId   String   @map("pick_criteria_artifact_id") @outcomes.Text
-  playerEvidenceArtifactId String   @map("player_evidence_artifact_id") @outcomes.Text
-  pickEvidenceArtifactId   String   @map("pick_evidence_artifact_id") @outcomes.Text
-  evaluatedAt              DateTime @map("evaluated_at") @outcomes.Timestamptz(3)
-  contentSha256            String   @map("content_sha256") @outcomes.Char(64)
-  contentCanonicalJson     String   @map("content_canonical_json") @outcomes.Text
-  qualificationJson        Json     @map("qualification_json")
-  recordedAt               DateTime @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  qualificationId                  String                                   @id @map("qualification_id") @outcomes.Text
+  scopeKey                         String                                   @map("scope_key") @outcomes.Text
+  outcome                          String                                   @outcomes.Text
+  artifactId                       String                                   @unique @map("artifact_id") @outcomes.Text
+  playerRunId                      String                                   @map("player_run_id") @outcomes.Text
+  pickRunId                        String                                   @map("pick_run_id") @outcomes.Text
+  policyArtifactId                 String                                   @map("policy_artifact_id") @outcomes.Text
+  playerCriteriaArtifactId         String                                   @map("player_criteria_artifact_id") @outcomes.Text
+  pickCriteriaArtifactId           String                                   @map("pick_criteria_artifact_id") @outcomes.Text
+  playerEvidenceArtifactId         String                                   @map("player_evidence_artifact_id") @outcomes.Text
+  pickEvidenceArtifactId           String                                   @map("pick_evidence_artifact_id") @outcomes.Text
+  evaluatedAt                      DateTime                                 @map("evaluated_at") @outcomes.Timestamptz(3)
+  contentSha256                    String                                   @map("content_sha256") @outcomes.Char(64)
+  contentCanonicalJson             String                                   @map("content_canonical_json") @outcomes.Text
+  qualificationJson                Json                                     @map("qualification_json")
+  recordedAt                       DateTime                                 @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
 
   @@index([scopeKey, evaluatedAt, qualificationId], map: "outcome_governed_model_qualification_scope_idx")
   @@map("outcome_governed_valuation_model_qualification")
 }
 
 model OutcomeGovernedModelQualificationWork {
-  workId                String   @id @map("work_id") @outcomes.Text
-  scopeKey              String   @map("scope_key") @outcomes.Text
-  qualificationId       String   @unique @map("qualification_id") @outcomes.Text
-  playerGate3DecisionId String   @map("player_gate3_decision_id") @outcomes.Text
-  pickGate3DecisionId   String   @map("pick_gate3_decision_id") @outcomes.Text
-  availableAt           DateTime @map("available_at") @outcomes.Timestamptz(3)
-  status                String   @default("pending") @outcomes.Text
-  workJson              Json     @map("work_json")
-  recordedAt            DateTime @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  workId                           String                                   @id @map("work_id") @outcomes.Text
+  scopeKey                         String                                   @map("scope_key") @outcomes.Text
+  qualificationId                  String                                   @unique @map("qualification_id") @outcomes.Text
+  playerGate3DecisionId            String                                   @map("player_gate3_decision_id") @outcomes.Text
+  pickGate3DecisionId              String                                   @map("pick_gate3_decision_id") @outcomes.Text
+  availableAt                      DateTime                                 @map("available_at") @outcomes.Timestamptz(3)
+  status                           String                                   @default("pending") @outcomes.Text
+  workJson                         Json                                     @map("work_json")
+  recordedAt                       DateTime                                 @default(dbgenerated("clock_timestamp()")) @map("recorded_at") @outcomes.Timestamptz(3)
+  currentValuationCohortOperations OutcomeCurrentValuationCohortOperation[]
 
   @@index([status, availableAt, scopeKey], map: "outcome_governed_model_qualification_work_pending_idx")
   @@map("outcome_governed_model_qualification_work")
@@ -5016,6 +5020,38 @@ model OutcomeCurrentGovernedValuationModelPair {
   advancedAt            DateTime @map("advanced_at") @outcomes.Timestamptz(3)
 
   @@map("outcome_current_governed_valuation_model_pair")
+}
+
+model OutcomeCurrentValuationCohortOperation {
+  operationId                   String                                        @id @map("operation_id") @outcomes.Text
+  scopeKey                      String                                        @map("scope_key") @outcomes.Text
+  factualReleaseId              String                                        @map("factual_release_id") @outcomes.Text
+  factualReleaseRevision        Int                                           @map("factual_release_revision")
+  modelQualificationId          String                                        @map("model_qualification_id") @outcomes.Text
+  modelQualificationWorkId      String                                        @map("model_qualification_work_id") @outcomes.Text
+  modelQualificationRevision    Int                                           @map("model_qualification_revision")
+  expectedPreparedInputRevision Int                                           @map("expected_prepared_input_revision")
+  capturedAt                    DateTime                                      @map("captured_at") @outcomes.Timestamptz(3)
+  contextSha256                 String                                        @map("context_sha256") @outcomes.Char(64)
+  contextCanonicalJson          String                                        @map("context_canonical_json") @outcomes.Text
+  contextJson                   Json                                          @map("context_json")
+  factualRelease                OutcomeReleaseManifest                        @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_release_fkey")
+  modelQualification            OutcomeGovernedValuationModelQualification    @relation(fields: [modelQualificationId], references: [qualificationId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_qualification_fkey")
+  modelQualificationWork        OutcomeGovernedModelQualificationWork         @relation(fields: [modelQualificationWorkId], references: [workId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_work_fkey")
+  result                        OutcomeCurrentValuationCohortOperationResult?
+
+  @@map("outcome_current_valuation_cohort_operation")
+}
+
+model OutcomeCurrentValuationCohortOperationResult {
+  operationId        String                                 @id @map("operation_id") @outcomes.Text
+  preparedInputSetId String                                 @unique @map("prepared_input_set_id") @outcomes.Text
+  headRevision       Int                                    @map("head_revision")
+  completedAt        DateTime                               @map("completed_at") @outcomes.Timestamptz(3)
+  operation          OutcomeCurrentValuationCohortOperation @relation(fields: [operationId], references: [operationId], onDelete: Restrict, map: "outcome_current_cohort_result_operation_fkey")
+  preparedInputSet   OutcomePreparedValuationInputSet       @relation(fields: [preparedInputSetId], references: [preparedInputSetId], onDelete: Restrict, map: "outcome_current_cohort_result_prepared_fkey")
+
+  @@map("outcome_current_valuation_cohort_operation_result")
 }
 
 model OutcomePrivateEvaluationAuthoritySnapshot {

@@ -10,8 +10,13 @@ import type {
   AflOutcomeSqlQueryResult,
   AflOutcomeSqlTransaction,
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
-import { createGovernedPrivateEvaluationTransitionIntent } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
+import { createGovernedPrivateEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationGeneration';
+import {
+  createAutomatedGovernedPrivateEvaluationTransitionIntent,
+  createGovernedPrivateEvaluationTransitionIntent,
+} from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
+import { createGovernedPrivateEvaluationNarrativeFixture } from '../testUtils/governedPrivateEvaluationFixture';
 
 const selector = {
   valuationScopeKey: 'afl-trade-history:test-fixture',
@@ -24,6 +29,7 @@ class StagingSqlClient implements AflOutcomeSqlClient {
   readonly custodyParameters: readonly unknown[][] = [];
   intentParameters: readonly unknown[] | null = null;
   private readonly artifacts = new Map<string, AflTradeArtifactRef>();
+  private intentRegistered = false;
 
   constructor(
     private readonly retainedIntent: unknown,
@@ -41,6 +47,9 @@ class StagingSqlClient implements AflOutcomeSqlClient {
     parameters: readonly unknown[] = []
   ): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.sql.push(statement);
+    if (statement.includes('pg_advisory_xact_lock(hashtextextended($1,0))')) {
+      return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+    }
     if (statement.includes("date_trunc('milliseconds',transaction_timestamp())")) {
       return {
         rows: [{ trusted_at: new Date(now) }],
@@ -69,9 +78,13 @@ class StagingSqlClient implements AflOutcomeSqlClient {
     }
     if (statement.includes('INSERT INTO outcome_private_evaluation_transition_intent')) {
       this.intentParameters = parameters;
+      this.intentRegistered = true;
       return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('FROM outcome_private_evaluation_transition_intent')) {
+      if (!this.intentRegistered) {
+        return { rows: [], rowCount: 0 } as AflOutcomeSqlQueryResult<Row>;
+      }
       return {
         rows: [
           {
@@ -137,6 +150,9 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
       true
     );
     expect(
+      client.sql.some((sql) => sql.includes('pg_advisory_xact_lock(hashtextextended($1,0))'))
+    ).toBe(true);
+    expect(
       client.sql.some((sql) =>
         sql.includes('authority_snapshot_id')
       )
@@ -182,6 +198,79 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
 
     await expect(repository.stage({ intent, intentArtifact: artifact })).rejects.toThrow(
       /complete verified generation/i
+    );
+  });
+
+  it('rejects a legacy generation presented under automated construction authority', async () => {
+    const automatedSelector = {
+      valuationScopeKey: selector.valuationScopeKey,
+      tradeId: 'trade:adelaide-st-kilda',
+    };
+    const intent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
+      selector: automatedSelector,
+      inspectionId: `private-evaluation-inspection:${'a'.repeat(64)}`,
+      authoritySnapshotId: `private-evaluation-authority-snapshot:${'b'.repeat(64)}`,
+      operationId: `private-evaluation-operation:${'c'.repeat(64)}`,
+      action: { kind: 'construct_and_activate' },
+      expectedHead: { status: 'absent', revision: 0, generationId: null },
+      constructionAuthority: {
+        kind: 'automated_private_calculation_agent',
+        principalId: 'system:weekly-valuation-coordinator',
+      },
+      requestedAt: now,
+      expiresAt: '2026-08-19T10:05:00.000Z',
+    });
+    const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, now);
+    const legacy = createGovernedPrivateEvaluationGeneration({
+      selector: automatedSelector,
+      transitionIntentId: intent.transitionIntentId,
+      generatedAt: now,
+      narrative: createGovernedPrivateEvaluationNarrativeFixture(),
+    });
+    const repository = createPostgresGovernedPrivateEvaluationStagingRepository({
+      client: new StagingSqlClient(intent, intentArtifact),
+      artifactRepository: createAflTradeFixtureArtifactRepository({
+        artifactClass: 'derived_private',
+      }),
+      maximumArtifactBytes: 1_000_000,
+      enableAutomatedPrivateCalculation: true,
+    });
+
+    await expect(
+      repository.stage({ intent, intentArtifact, materialization: legacy })
+    ).rejects.toThrow(/complete verified generation/i);
+  });
+
+  it('rejects automated construction when automated calculation is not enabled', async () => {
+    const automatedSelector = {
+      valuationScopeKey: selector.valuationScopeKey,
+      tradeId: 'trade:adelaide-st-kilda',
+    };
+    const intent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
+      selector: automatedSelector,
+      inspectionId: `private-evaluation-inspection:${'a'.repeat(64)}`,
+      authoritySnapshotId: `private-evaluation-authority-snapshot:${'b'.repeat(64)}`,
+      operationId: `private-evaluation-operation:${'c'.repeat(64)}`,
+      action: { kind: 'construct_and_activate' },
+      expectedHead: { status: 'absent', revision: 0, generationId: null },
+      constructionAuthority: {
+        kind: 'automated_private_calculation_agent',
+        principalId: 'system:weekly-valuation-coordinator',
+      },
+      requestedAt: now,
+      expiresAt: '2026-08-19T10:05:00.000Z',
+    });
+    const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, now);
+    const repository = createPostgresGovernedPrivateEvaluationStagingRepository({
+      client: new StagingSqlClient(intent, intentArtifact),
+      artifactRepository: createAflTradeFixtureArtifactRepository({
+        artifactClass: 'derived_private',
+      }),
+      maximumArtifactBytes: 1_000_000,
+    });
+
+    await expect(repository.stage({ intent, intentArtifact })).rejects.toThrow(
+      /exact configured system principal/i
     );
   });
 
