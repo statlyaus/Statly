@@ -131,7 +131,7 @@ describe('automatic private evaluation cohort runner', () => {
       expect(result.batch.content.tradeCount).toBe(1);
       expect(result.batch.content.createdAt).toBe('2026-08-21T09:01:00.000Z');
       expect(narrative.content.views[0]?.clubs).toHaveLength(clubCount);
-      expect(result.head.revision).toBe(3);
+      expect(result.transition.revision).toBe(3);
     }
   );
 

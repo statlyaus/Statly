@@ -6,6 +6,7 @@ import {
   createAutomatedGovernedPrivateEvaluationGeneration,
   type GovernedPrivateEvaluationGenerationMaterialization,
 } from '../governedPrivateEvaluationGeneration';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEvaluationPolicy';
 import {
   createAutomatedGovernedPrivateEvaluationTransitionIntent,
   createAutomatedGovernedPrivateEvaluationTransitionReceipt,
@@ -54,7 +55,6 @@ interface StagedOperation {
 }
 
 interface Dependencies {
-  readonly principalId: string;
   readonly trustedNow: () => Promise<string>;
   readonly loadStaged: (operationId: string) => Promise<StagedOperation | null>;
   readonly captureAuthority: (input: { readonly selector: Selector }) => Promise<CapturedAuthority>;
@@ -93,8 +93,10 @@ function same(left: unknown, right: unknown): boolean {
 export function createAutomatedGovernedPrivateEvaluationStagingService(
   dependencies: Dependencies
 ) {
-  if (!/^system:[a-z0-9][a-z0-9._:-]{0,199}$/u.test(dependencies.principalId)) {
-    throw new TypeError('Automated private staging requires one narrow system principal.');
+  if ('principalId' in dependencies) {
+    throw new TypeError(
+      'Automated private staging does not accept a caller-supplied principal.'
+    );
   }
   const activate = async (input: {
     readonly request: z.infer<typeof requestSchema>;
@@ -141,7 +143,7 @@ export function createAutomatedGovernedPrivateEvaluationStagingService(
       const existing = await dependencies.loadStaged(request.operationId);
       if (existing !== null) {
         if (
-          existing.principalId !== dependencies.principalId ||
+          existing.principalId !== AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID ||
           !same(existing.selector, request.selector)
         ) {
           throw new TypeError('Automated private staging replay conflicts with its operation.');
@@ -192,7 +194,7 @@ export function createAutomatedGovernedPrivateEvaluationStagingService(
       }
       const constructionAuthority = {
         kind: 'automated_private_calculation_agent' as const,
-        principalId: dependencies.principalId,
+        principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
       };
       const intent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
         selector: request.selector,

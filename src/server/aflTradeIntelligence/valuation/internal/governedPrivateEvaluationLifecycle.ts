@@ -5,6 +5,7 @@ import {
   aflTradeContentAddressedIdSchema,
   createAflTradeContentAddress,
 } from '../../artifacts/contentAddress';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEvaluationPolicy';
 import { governedPrivateEvaluationSelectorSchema } from './governedPrivateEvaluationWorkspaceContracts';
 
 const LIMITATION =
@@ -282,7 +283,7 @@ const AUTOMATED_LIMITATION =
 const automatedConstructionAuthoritySchema = z
   .object({
     kind: z.literal('automated_private_calculation_agent'),
-    principalId: z.string().regex(/^system:[a-z0-9][a-z0-9._:-]{0,199}$/u),
+    principalId: z.literal(AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID),
   })
   .strict();
 const automatedTransitionActionSchema = z

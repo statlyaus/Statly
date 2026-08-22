@@ -524,7 +524,10 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       },
     });
     const automaticallyActivated = await automaticRunner.runCurrent(scopeKey);
-    expect(automaticallyActivated).toMatchObject({ state: 'activated', head: { revision: 1 } });
+    expect(automaticallyActivated).toMatchObject({
+      state: 'activated',
+      transition: { revision: 1 },
+    });
     await expect(automaticRunner.runCurrent(scopeKey)).resolves.toMatchObject({
       state: 'already_current',
       head: { revision: 1 },
@@ -579,6 +582,21 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       action: 'activate',
     });
     expect(replacement).toMatchObject({ batchId: second.batchId, revision: 3 });
+    await expect(
+      repository.advance({
+        scopeKey,
+        batchId: first.batchId,
+        expectedRevision: 1,
+        operationId: operation(first.batchId, 1, 'activate'),
+        action: 'activate',
+      })
+    ).resolves.toEqual(activation);
+    await expect(
+      pool.query<{ batch_id: string; revision: number }>(
+        `SELECT batch_id,revision FROM outcome_current_private_evaluation_batch WHERE scope_key=$1`,
+        [scopeKey]
+      )
+    ).resolves.toMatchObject({ rows: [{ batch_id: second.batchId, revision: 3 }] });
     const authorityShift = await pool.connect();
     try {
       await authorityShift.query('BEGIN');
@@ -1021,7 +1039,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     await expect(replay.runCurrent(scopeKey)).resolves.toMatchObject({
       state: 'activated',
       batch: { batchId: bound.rows[0]!.batch_id },
-      head: { revision: 5 },
+      transition: { revision: 5 },
     });
     await expect(
       pool.query(
@@ -1178,7 +1196,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     await expect(replay.runCurrent(scopeKey)).resolves.toMatchObject({
       state: 'activated',
       batch: { batchId: bound.rows[0]!.batch_id, content: { readyCount: 2 } },
-      head: { revision: current.head_revision + 1 },
+      transition: { revision: current.head_revision + 1 },
     });
     await expect(
       pool.query(

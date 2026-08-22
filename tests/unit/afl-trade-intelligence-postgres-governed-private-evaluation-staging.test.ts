@@ -29,6 +29,7 @@ class StagingSqlClient implements AflOutcomeSqlClient {
   readonly custodyParameters: readonly unknown[][] = [];
   intentParameters: readonly unknown[] | null = null;
   private readonly artifacts = new Map<string, AflTradeArtifactRef>();
+  private intentRegistered = false;
 
   constructor(
     private readonly retainedIntent: unknown,
@@ -46,6 +47,9 @@ class StagingSqlClient implements AflOutcomeSqlClient {
     parameters: readonly unknown[] = []
   ): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.sql.push(statement);
+    if (statement.includes('pg_advisory_xact_lock(hashtextextended($1,0))')) {
+      return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+    }
     if (statement.includes("date_trunc('milliseconds',transaction_timestamp())")) {
       return {
         rows: [{ trusted_at: new Date(now) }],
@@ -74,9 +78,13 @@ class StagingSqlClient implements AflOutcomeSqlClient {
     }
     if (statement.includes('INSERT INTO outcome_private_evaluation_transition_intent')) {
       this.intentParameters = parameters;
+      this.intentRegistered = true;
       return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
     }
     if (statement.includes('FROM outcome_private_evaluation_transition_intent')) {
+      if (!this.intentRegistered) {
+        return { rows: [], rowCount: 0 } as AflOutcomeSqlQueryResult<Row>;
+      }
       return {
         rows: [
           {
@@ -141,6 +149,9 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
     expect(client.sql.some((sql) => sql.includes('INSERT INTO outcome_artifact_custody'))).toBe(
       true
     );
+    expect(
+      client.sql.some((sql) => sql.includes('pg_advisory_xact_lock(hashtextextended($1,0))'))
+    ).toBe(true);
     expect(
       client.sql.some((sql) =>
         sql.includes('authority_snapshot_id')
@@ -222,7 +233,7 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
         artifactClass: 'derived_private',
       }),
       maximumArtifactBytes: 1_000_000,
-      automatedPrincipalId: 'system:weekly-valuation-coordinator',
+      enableAutomatedPrivateCalculation: true,
     });
 
     await expect(
@@ -230,7 +241,7 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
     ).rejects.toThrow(/complete verified generation/i);
   });
 
-  it('rejects automated construction from a principal other than the configured agent', async () => {
+  it('rejects automated construction when automated calculation is not enabled', async () => {
     const automatedSelector = {
       valuationScopeKey: selector.valuationScopeKey,
       tradeId: 'trade:adelaide-st-kilda',
@@ -244,7 +255,7 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
       expectedHead: { status: 'absent', revision: 0, generationId: null },
       constructionAuthority: {
         kind: 'automated_private_calculation_agent',
-        principalId: 'system:unconfigured-agent',
+        principalId: 'system:weekly-valuation-coordinator',
       },
       requestedAt: now,
       expiresAt: '2026-08-19T10:05:00.000Z',
@@ -256,7 +267,6 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
         artifactClass: 'derived_private',
       }),
       maximumArtifactBytes: 1_000_000,
-      automatedPrincipalId: 'system:weekly-valuation-coordinator',
     });
 
     await expect(repository.stage({ intent, intentArtifact })).rejects.toThrow(

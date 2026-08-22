@@ -16,6 +16,7 @@ import {
   type GovernedPrivateEvaluationGenerationMaterialization,
   type GovernedPrivateEvaluationRetainedArtifact,
 } from '../governedPrivateEvaluationGeneration';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEvaluationPolicy';
 import {
   parseAnyGovernedPrivateEvaluationTransitionIntent,
   type AnyGovernedPrivateEvaluationTransitionIntent,
@@ -267,8 +268,13 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
   readonly client: AflOutcomeSqlClient;
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
-  readonly automatedPrincipalId?: string;
+  readonly enableAutomatedPrivateCalculation?: true;
 }) {
+  if ('automatedPrincipalId' in dependencies) {
+    throw new TypeError(
+      'Private evaluation staging does not accept a caller-supplied automated principal.'
+    );
+  }
   const repositoryAssurance = dependencies.artifactRepository.assurance;
   if (repositoryAssurance === 'durable_object_storage') {
     throw new TypeError('Private evaluation staging requires private local custody.');
@@ -280,12 +286,8 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
   ) {
     throw new TypeError('Private evaluation staging requires bounded private fixture custody.');
   }
-  if (
-    dependencies.automatedPrincipalId !== undefined &&
-    !/^system:[a-z0-9][a-z0-9._:-]{0,199}$/u.test(dependencies.automatedPrincipalId)
-  ) {
-    throw new TypeError('Private evaluation staging received an invalid automated principal.');
-  }
+  const automatedCalculationEnabled =
+    dependencies.enableAutomatedPrivateCalculation === true;
   const custody = {
     environment:
       dependencies.artifactRepository.assurance === 'local_non_production_filesystem'
@@ -325,8 +327,8 @@ export function createPostgresGovernedPrivateEvaluationStagingRepository(depende
         : null;
       if (
         automated &&
-        (dependencies.automatedPrincipalId === undefined ||
-          automatedAuthority?.principalId !== dependencies.automatedPrincipalId)
+        (!automatedCalculationEnabled ||
+          automatedAuthority?.principalId !== AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID)
       ) {
         throw new TypeError(
           'Automated private staging requires the exact configured system principal.'

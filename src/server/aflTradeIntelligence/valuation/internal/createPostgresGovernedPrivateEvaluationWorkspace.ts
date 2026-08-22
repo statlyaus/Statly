@@ -19,27 +19,34 @@ export function createPostgresGovernedPrivateEvaluationWorkspace(dependencies: {
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
   readonly principalId: string;
-  readonly automatedPrincipalId?: string;
+  readonly enableAutomatedPrivateCalculation?: true;
   readonly authorizeReader: (input: {
     readonly principalId: string;
     readonly selector: GovernedPrivateEvaluationReadRequest['selector'];
   }) => Promise<boolean>;
 }) {
+  if ('automatedPrincipalId' in dependencies) {
+    throw new TypeError(
+      'The PostgreSQL private evaluation workspace does not accept a caller-supplied automated principal.'
+    );
+  }
+  const automatedCalculationEnabled =
+    dependencies.enableAutomatedPrivateCalculation === true;
   const staging = createPostgresGovernedPrivateEvaluationStagingRepository({
     client: dependencies.client,
     artifactRepository: dependencies.artifactRepository,
     maximumArtifactBytes: dependencies.maximumArtifactBytes,
-    ...(dependencies.automatedPrincipalId === undefined
+    ...(!automatedCalculationEnabled
       ? {}
-      : { automatedPrincipalId: dependencies.automatedPrincipalId }),
+      : { enableAutomatedPrivateCalculation: true as const }),
   });
   const lifecycle = createPostgresGovernedPrivateEvaluationLifecycleRepository({
     client: dependencies.client,
     artifactRepository: dependencies.artifactRepository,
     maximumArtifactBytes: dependencies.maximumArtifactBytes,
-    ...(dependencies.automatedPrincipalId === undefined
+    ...(!automatedCalculationEnabled
       ? {}
-      : { automatedPrincipalId: dependencies.automatedPrincipalId }),
+      : { enableAutomatedPrivateCalculation: true as const }),
   });
   const captureCalculationAuthority =
     createPostgresGovernedPrivateEvaluationCalculationAuthorityCapture({
@@ -78,10 +85,9 @@ export function createPostgresGovernedPrivateEvaluationWorkspace(dependencies: {
     maximumArtifactBytes: dependencies.maximumArtifactBytes,
   });
   const automatedStaging =
-    dependencies.automatedPrincipalId === undefined
+    !automatedCalculationEnabled
       ? undefined
       : createAutomatedGovernedPrivateEvaluationStagingService({
-          principalId: dependencies.automatedPrincipalId,
           trustedNow: async () => {
             const result = await dependencies.client.query<{ readonly trusted_at: Date | string }>(
               `SELECT date_trunc('milliseconds',transaction_timestamp()) AS trusted_at`

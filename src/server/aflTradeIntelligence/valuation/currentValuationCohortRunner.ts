@@ -10,7 +10,10 @@ import {
   governedPrivateEvaluationBatchSchema,
   type GovernedPrivateEvaluationBatch,
 } from './internal/governedPrivateEvaluationBatch';
-import type { GovernedPrivateEvaluationBatchHead } from './internal/postgresGovernedPrivateEvaluationBatchRepository';
+import type {
+  GovernedPrivateEvaluationBatchHead,
+  GovernedPrivateEvaluationBatchTransitionResult,
+} from './internal/postgresGovernedPrivateEvaluationBatchRepository';
 
 const idSchema = z.string().trim().min(1).max(400);
 const blockerCodeSchema = z.enum([
@@ -153,7 +156,7 @@ interface Dependencies {
     readonly operationId: string;
     readonly action: 'activate';
     readonly cohortOperationId: string;
-  }) => Promise<GovernedPrivateEvaluationBatchHead>;
+  }) => Promise<GovernedPrivateEvaluationBatchTransitionResult>;
 }
 
 export function createAflTradePrivateEvaluationCohortRunOperationId(input: {
@@ -340,7 +343,7 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
         const retained = governedPrivateEvaluationBatchSchema.parse(
           await dependencies.registerBatch(batch)
         );
-        const head = await dependencies.advanceBatch({
+        const transition = await dependencies.advanceBatch({
           scopeKey: capture.scopeKey,
           batchId: retained.batchId,
           expectedRevision: capture.expectedBatchRevision,
@@ -353,7 +356,7 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
           action: 'activate',
           cohortOperationId: request.operationId,
         });
-        return { state: 'activated' as const, batch: retained, head };
+        return { state: 'activated' as const, batch: retained, transition };
       } catch (error) {
         if (error instanceof AflTradePrivateEvaluationCohortStaleAuthorityError) {
           return { state: 'stale_authority' as const };

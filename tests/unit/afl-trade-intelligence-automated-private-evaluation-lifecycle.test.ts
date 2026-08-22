@@ -53,5 +53,14 @@ describe('automated governed private evaluation lifecycle', () => {
       ...intent.content,
       action: { kind: 'withdraw', reason: 'not allowed' },
     } as never)).toThrow();
+    expect(() =>
+      createAutomatedGovernedPrivateEvaluationTransitionIntent({
+        ...intent.content,
+        constructionAuthority: {
+          kind: 'automated_private_calculation_agent',
+          principalId: 'system:unconfigured-agent',
+        },
+      })
+    ).toThrow(/weekly-valuation-coordinator/i);
   });
 });
