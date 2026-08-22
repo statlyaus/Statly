@@ -18,8 +18,7 @@ describe('automated private evaluation staging', () => {
         generationId: input.materialization.generation.generationId,
       };
     });
-    const service = createAutomatedGovernedPrivateEvaluationStagingService({
-      principalId: 'system:weekly-valuation-coordinator',
+    const dependencies = {
       trustedNow: async () => '2026-08-21T09:00:00.000Z',
       loadStaged: async () => staged === null ? null : ({
         selector: staged.intent.content.selector,
@@ -49,7 +48,15 @@ describe('automated private evaluation staging', () => {
         head: receipt.content.toHead,
         transitionId: receipt.transitionId,
       }),
-    });
+    };
+    const legacyDependencies = {
+      ...dependencies,
+      principalId: 'system:weekly-valuation-coordinator',
+    };
+    expect(() =>
+      createAutomatedGovernedPrivateEvaluationStagingService(legacyDependencies)
+    ).toThrow('does not accept a caller-supplied principal');
+    const service = createAutomatedGovernedPrivateEvaluationStagingService(dependencies);
     const request = {
       selector: fixture.materializationManifest.content.selector,
       operationId: `private-evaluation-operation:${'c'.repeat(64)}`,

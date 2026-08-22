@@ -233,7 +233,7 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
         artifactClass: 'derived_private',
       }),
       maximumArtifactBytes: 1_000_000,
-      automatedPrincipalId: 'system:weekly-valuation-coordinator',
+      enableAutomatedPrivateCalculation: true,
     });
 
     await expect(
@@ -241,7 +241,7 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
     ).rejects.toThrow(/complete verified generation/i);
   });
 
-  it('rejects automated construction from a principal other than the configured agent', async () => {
+  it('rejects automated construction when automated calculation is not enabled', async () => {
     const automatedSelector = {
       valuationScopeKey: selector.valuationScopeKey,
       tradeId: 'trade:adelaide-st-kilda',
@@ -255,7 +255,7 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
       expectedHead: { status: 'absent', revision: 0, generationId: null },
       constructionAuthority: {
         kind: 'automated_private_calculation_agent',
-        principalId: 'system:unconfigured-agent',
+        principalId: 'system:weekly-valuation-coordinator',
       },
       requestedAt: now,
       expiresAt: '2026-08-19T10:05:00.000Z',
@@ -267,7 +267,6 @@ describe('PostgreSQL governed private evaluation staging repository', () => {
         artifactClass: 'derived_private',
       }),
       maximumArtifactBytes: 1_000_000,
-      automatedPrincipalId: 'system:weekly-valuation-coordinator',
     });
 
     await expect(repository.stage({ intent, intentArtifact })).rejects.toThrow(
