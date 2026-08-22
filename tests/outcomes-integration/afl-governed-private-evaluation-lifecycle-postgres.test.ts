@@ -593,13 +593,13 @@ beforeAll(async () => {
     client,
     artifactRepository,
     maximumArtifactBytes: 4 * 1024 * 1024,
-    automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    enableAutomatedPrivateCalculation: true,
   });
   lifecycle = createPostgresGovernedPrivateEvaluationLifecycleRepository({
     client,
     artifactRepository,
     maximumArtifactBytes: 4 * 1024 * 1024,
-    automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    enableAutomatedPrivateCalculation: true,
   });
   const automatedArtifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
     rootDirectory: artifactRoot,
@@ -610,13 +610,13 @@ beforeAll(async () => {
     client,
     artifactRepository: automatedArtifactRepository,
     maximumArtifactBytes: 4 * 1024 * 1024,
-    automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    enableAutomatedPrivateCalculation: true,
   });
   automatedLifecycle = createPostgresGovernedPrivateEvaluationLifecycleRepository({
     client,
     artifactRepository: automatedArtifactRepository,
     maximumArtifactBytes: 4 * 1024 * 1024,
-    automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    enableAutomatedPrivateCalculation: true,
   });
 });
 
@@ -891,13 +891,20 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       ]
     )).rejects.toThrow(/invalid inspection authority/i);
     const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, requestedAt);
-    const forgedIntent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
+    const forgedIntentContent = {
       ...intent.content,
       constructionAuthority: {
-        kind: 'automated_private_calculation_agent',
+        kind: 'automated_private_calculation_agent' as const,
         principalId: 'system:unconfigured-agent',
       },
-    });
+    };
+    const forgedIntent = {
+      transitionIntentId: createAflTradeContentAddress(
+        'private-evaluation-transition-intent',
+        forgedIntentContent
+      ),
+      content: forgedIntentContent,
+    };
     const forgedArtifact = createAflTradeCanonicalJsonArtifactRef(forgedIntent, requestedAt);
     await automatedStaging.retainArtifact({
       reference: forgedArtifact,
