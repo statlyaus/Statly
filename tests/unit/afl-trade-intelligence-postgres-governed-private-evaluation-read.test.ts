@@ -32,6 +32,7 @@ const materialization = createGovernedPrivateEvaluationGeneration({
 class ReadSqlClient implements AflOutcomeSqlClient {
   status: 'active' | 'withdrawn' | 'absent' = 'active';
   activeGenerationId: string | null = materialization.generation.generationId;
+  historicalWithdrawal = false;
   generationJson: unknown = materialization.generation;
   queryCount = 0;
 
@@ -60,7 +61,9 @@ class ReadSqlClient implements AflOutcomeSqlClient {
             batch_current:
               this.status !== 'absent' &&
               this.activeGenerationId === materialization.generation.generationId,
-            batch_withdrawn: this.status === 'withdrawn',
+            current_batch_withdrawn: this.status === 'withdrawn',
+            retained_batch_withdrawn:
+              this.status === 'withdrawn' || this.historicalWithdrawal,
           },
         ],
         rowCount: 1,
@@ -191,6 +194,33 @@ describe('PostgreSQL governed private evaluation read repository', () => {
     ).resolves.toMatchObject({
       state: 'available',
       lifecycle: { status: 'superseded', current: false },
+    });
+  });
+
+  it('preserves a withdrawn lifecycle label after another batch becomes current', async () => {
+    const client = new ReadSqlClient();
+    client.activeGenerationId = `local-private-trade-evaluation-generation:${'f'.repeat(64)}`;
+    client.historicalWithdrawal = true;
+    const repository = createPostgresGovernedPrivateEvaluationReadRepository({
+      client,
+      artifactRepository: await retainedArtifacts(),
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      principalId: 'firebase:registered-reader',
+      authorizeReader: async () => true,
+    });
+
+    await expect(
+      repository.read({
+        selector,
+        selection: {
+          kind: 'generation',
+          generationId: materialization.generation.generationId,
+        },
+        document: { kind: 'detail' },
+      })
+    ).resolves.toMatchObject({
+      state: 'available',
+      lifecycle: { status: 'withdrawn', current: false },
     });
   });
 
