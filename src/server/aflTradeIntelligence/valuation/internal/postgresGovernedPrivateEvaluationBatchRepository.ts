@@ -6,8 +6,8 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../../outcomes/postgresOutcomeReleaseRepository';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEvaluationPolicy';
 import {
-  GOVERNED_PRIVATE_EVALUATION_BATCH_AGENT_PRINCIPAL,
   createGovernedPrivateEvaluationBatchOperationId,
   governedPrivateEvaluationBatchSchema,
   governedPrivateEvaluationBatchWithdrawalSchema,
@@ -166,7 +166,7 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
           input.expectedRevision,
           input.operationId,
           input.action,
-          GOVERNED_PRIVATE_EVALUATION_BATCH_AGENT_PRINCIPAL,
+          AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
         ]
       );
       if (result.rows.length !== 1) {

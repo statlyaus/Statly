@@ -5,13 +5,12 @@ import {
   aflTradeContentAddressedIdSchema,
   createAflTradeContentAddress,
 } from '../../artifacts/contentAddress';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEvaluationPolicy';
 
 const LIMITATION =
   'Private non-production evaluation batch only; it grants no factual, production, or publication authority.' as const;
 const WITHDRAWAL_LIMITATION =
   'Emergency private-reader suppression only; it does not alter factual, model, production, or publication authority.' as const;
-export const GOVERNED_PRIVATE_EVALUATION_BATCH_AGENT_PRINCIPAL =
-  'system:weekly-valuation-coordinator' as const;
 const scopedIdSchema = z
   .string()
   .trim()
@@ -129,7 +128,7 @@ export function createGovernedPrivateEvaluationBatchOperationId(input: {
 }): string {
   return createAflTradeContentAddress('private-evaluation-batch-operation', {
     ...input,
-    principalId: GOVERNED_PRIVATE_EVALUATION_BATCH_AGENT_PRINCIPAL,
+    principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
   });
 }
 
