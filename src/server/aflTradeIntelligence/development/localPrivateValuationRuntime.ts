@@ -42,7 +42,13 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
   });
   return createPostgresAflTradePrivateValuationDispatcher({
     repository: new PostgresAflTradePrivateValuationScheduleRepository(client),
-    runner,
+    runner: {
+      // Keep the established prepared-v3 path until factual admission can consume accepted capture
+      // custody. Running capture here and then runCurrent would calculate the old prepared head.
+      run: ({ request }) => runner.runCurrent(request.scopeKey),
+      repairCurrent: (scopeKey, reason, repairOperationId) =>
+        runner.repairCurrent(scopeKey, reason, repairOperationId),
+    },
     workerId: input.workerId,
   });
 }

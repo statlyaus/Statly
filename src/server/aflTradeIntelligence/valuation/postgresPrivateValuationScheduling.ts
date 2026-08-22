@@ -26,7 +26,13 @@ interface ClaimRow {
 }
 
 export interface AflTradePrivateValuationDispatchRunner {
-  runCurrent(scopeKey: string): Promise<unknown>;
+  run(input: {
+    readonly request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>;
+    readonly claim: {
+      readonly claimId: string;
+      readonly leaseToken: string;
+    };
+  }): Promise<unknown>;
   repairCurrent(scopeKey: string, reason: string, repairOperationId: string): Promise<unknown>;
 }
 
@@ -177,7 +183,7 @@ export class PostgresAflTradePrivateValuationScheduleRepository {
   async reschedule(input: {
     readonly claimId: string;
     readonly leaseToken: string;
-    readonly state: 'retry_pending' | 'stale_authority';
+    readonly state: 'retry_pending' | 'stale_authority' | 'transient_failure';
   }): Promise<void> {
     await this.client.transaction(async (transaction) => {
       await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
@@ -219,19 +225,35 @@ export function createPostgresAflTradePrivateValuationDispatcher(dependencies: {
       if (heartbeatFailure !== null) throw heartbeatFailure;
     };
     try {
-      const result = await dependencies.runner.runCurrent(claim.request.scopeKey);
+      const result = await dependencies.runner.run({
+        request: claim.request,
+        claim: {
+          claimId: claim.claimId,
+          leaseToken: claim.leaseToken,
+        },
+      });
       await stopHeartbeat();
       if (
         typeof result === 'object' &&
         result !== null &&
         'state' in result &&
-        (result.state === 'retry_pending' || result.state === 'stale_authority')
+        (result.state === 'retry_pending' ||
+          result.state === 'stale_authority' ||
+          result.state === 'transient_failure')
       ) {
         await dependencies.repository.reschedule({
           claimId: claim.claimId,
           leaseToken: claim.leaseToken,
           state: result.state,
         });
+        const retained = await dependencies.repository.load(claim.request.requestId);
+        if (retained?.status === 'completed') {
+          return {
+            state: 'completed' as const,
+            requestId: claim.request.requestId,
+            result: retained.result,
+          };
+        }
         return { state: 'rescheduled' as const, requestId: claim.request.requestId, result };
       }
       const terminal = terminalResultSchema.parse({
