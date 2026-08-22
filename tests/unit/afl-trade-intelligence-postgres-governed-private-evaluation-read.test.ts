@@ -22,6 +22,7 @@ const selector = {
   tradeId: 'trade:adelaide-st-kilda',
 };
 const generatedAt = '2026-08-19T10:00:00.000Z';
+const batchId = `private-evaluation-batch:${'b'.repeat(64)}`;
 const materialization = createGovernedPrivateEvaluationGeneration({
   selector,
   transitionIntentId: `private-evaluation-transition-intent:${'a'.repeat(64)}`,
@@ -32,6 +33,7 @@ const materialization = createGovernedPrivateEvaluationGeneration({
 class ReadSqlClient implements AflOutcomeSqlClient {
   status: 'active' | 'withdrawn' | 'absent' = 'active';
   activeGenerationId: string | null = materialization.generation.generationId;
+  historicalWithdrawal = false;
   generationJson: unknown = materialization.generation;
   queryCount = 0;
 
@@ -44,6 +46,7 @@ class ReadSqlClient implements AflOutcomeSqlClient {
             ? []
             : [
                 {
+                  batch_id: batchId,
                   state: 'ready',
                   generation_json: this.generationJson,
                   withdrawal_id: this.status === 'withdrawn' ? 'withdrawal:fixture' : null,
@@ -57,10 +60,11 @@ class ReadSqlClient implements AflOutcomeSqlClient {
         rows: [
           {
             generation_json: this.generationJson,
+            selected_batch_id: batchId,
             batch_current:
               this.status !== 'absent' &&
               this.activeGenerationId === materialization.generation.generationId,
-            batch_withdrawn: this.status === 'withdrawn',
+            batch_withdrawn: this.status === 'withdrawn' || this.historicalWithdrawal,
           },
         ],
         rowCount: 1,
@@ -223,6 +227,33 @@ describe('PostgreSQL governed private evaluation read repository', () => {
     ).resolves.toMatchObject({
       state: 'available',
       lifecycle: { status: 'superseded', current: false },
+    });
+  });
+
+  it('preserves a withdrawn lifecycle label after another batch becomes current', async () => {
+    const client = new ReadSqlClient();
+    client.activeGenerationId = `local-private-trade-evaluation-generation:${'f'.repeat(64)}`;
+    client.historicalWithdrawal = true;
+    const repository = createPostgresGovernedPrivateEvaluationReadRepository({
+      client,
+      artifactRepository: await retainedArtifacts(),
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      principalId: 'firebase:registered-reader',
+      authorizeReader: async () => true,
+    });
+
+    await expect(
+      repository.read({
+        selector,
+        selection: {
+          kind: 'generation',
+          generationId: materialization.generation.generationId,
+        },
+        document: { kind: 'detail' },
+      })
+    ).resolves.toMatchObject({
+      state: 'available',
+      lifecycle: { status: 'withdrawn', current: false },
     });
   });
 

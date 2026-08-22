@@ -11,6 +11,7 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from './automatedPrivateEvaluationPolicy';
 import type { createAflTradeCalculationNarrative } from './tradeCalculationNarrative';
 
 type CalculationNarrative = ReturnType<typeof createAflTradeCalculationNarrative>;
@@ -97,7 +98,7 @@ interface EvaluationGenerationV2 {
     readonly generatedAt: string;
     readonly constructionAuthority: {
       readonly kind: 'automated_private_calculation_agent';
-      readonly principalId: string;
+      readonly principalId: typeof AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID;
     };
     readonly activationReceipt: 'separate_append_only_transition';
     readonly publicationProhibited: true;
@@ -158,7 +159,7 @@ const retainedGenerationV1Schema = z
 const automatedConstructionAuthoritySchema = z
   .object({
     kind: z.literal('automated_private_calculation_agent'),
-    principalId: z.string().regex(/^system:[a-z0-9][a-z0-9._:-]{0,199}$/u),
+    principalId: z.literal(AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID),
   })
   .strict();
 const retainedGenerationV2Schema = z

@@ -11,6 +11,7 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../../outcomes/postgresOutcomeReleaseRepository';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEvaluationPolicy';
 import { parseGovernedPrivateEvaluationGeneration } from '../governedPrivateEvaluationGeneration';
 import {
   automatedGovernedPrivateEvaluationTransitionReceiptSchema,
@@ -527,8 +528,13 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
   readonly client: AflOutcomeSqlClient;
   readonly artifactRepository: AflTradeImmutableArtifactRepository;
   readonly maximumArtifactBytes: number;
-  readonly automatedPrincipalId?: string;
+  readonly enableAutomatedPrivateCalculation?: true;
 }) {
+  if ('automatedPrincipalId' in dependencies) {
+    throw new TypeError(
+      'Lifecycle commits do not accept a caller-supplied automated principal.'
+    );
+  }
   if (
     dependencies.artifactRepository.artifactClass !== 'derived_private' ||
     !Number.isSafeInteger(dependencies.maximumArtifactBytes) ||
@@ -536,12 +542,8 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
   ) {
     throw new TypeError('Lifecycle commits require bounded private artifact custody.');
   }
-  if (
-    dependencies.automatedPrincipalId !== undefined &&
-    !/^system:[a-z0-9][a-z0-9._:-]{0,199}$/u.test(dependencies.automatedPrincipalId)
-  ) {
-    throw new TypeError('Lifecycle commits received an invalid automated principal.');
-  }
+  const automatedCalculationEnabled =
+    dependencies.enableAutomatedPrivateCalculation === true;
   async function commitReceipt(input: {
     readonly receipt: AnyGovernedPrivateEvaluationTransitionReceipt;
     readonly receiptArtifact: AflTradeArtifactRef;
@@ -645,9 +647,9 @@ export function createPostgresGovernedPrivateEvaluationLifecycleRepository(depen
         input.receipt
       );
       if (
-        dependencies.automatedPrincipalId === undefined ||
+        !automatedCalculationEnabled ||
         receipt.content.intent.content.constructionAuthority.principalId !==
-          dependencies.automatedPrincipalId
+          AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID
       ) {
         throw new TypeError(
           'Automated lifecycle activation requires the exact configured system principal.'

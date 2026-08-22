@@ -128,13 +128,13 @@ describe('automatic private evaluation cohort runner', () => {
     if (first.state !== 'activated') throw new Error('Expected activated batch.');
     retainedCurrent = {
       batch: first.batch,
-      head: first.head,
+      head: first.transition,
       authority: {
         factualReleaseRevision: authority.factualReleaseRevision,
         modelPairRevision: authority.modelPairRevision,
       },
     };
-    currentAuthority = { ...authority, expectedBatchRevision: first.head.revision };
+    currentAuthority = { ...authority, expectedBatchRevision: first.transition.revision };
     await expect(runner.run(requestFor(currentAuthority))).resolves.toMatchObject({
       state: 'already_current',
       batch: { batchId: first.batch.batchId },
@@ -188,6 +188,29 @@ describe('automatic private evaluation cohort runner', () => {
     expect(advanceBatch).not.toHaveBeenCalled();
   });
 
+  it('retains unexpected diagnostics in locale-independent code-unit order', async () => {
+    const authority = capture(['trade-Z', 'trade-a']);
+    const retainUnexpectedDiagnostics = vi.fn(async ({ diagnostics }) => diagnostics);
+    const runner = createAflTradePrivateEvaluationCohortRunner({
+      captureCurrent: async () => ({ capture: authority, currentBatch: null }),
+      stageTrade: async ({ selector }) => {
+        throw new Error(`Failure for ${selector.tradeId}.`);
+      },
+      retainUnexpectedDiagnostics,
+      registerBatch: vi.fn(),
+      advanceBatch: vi.fn(),
+    });
+
+    await expect(runner.run(requestFor(authority))).resolves.toMatchObject({
+      state: 'unexpected_failure',
+      diagnostics: [{ tradeId: 'trade-Z' }, { tradeId: 'trade-a' }],
+    });
+    expect(retainUnexpectedDiagnostics).toHaveBeenCalledOnce();
+    expect(retainUnexpectedDiagnostics.mock.calls[0]?.[0]).toMatchObject({
+      diagnostics: [{ tradeId: 'trade-Z' }, { tradeId: 'trade-a' }],
+    });
+  });
+
   it.each([2, 3, 4])(
     'constructs and atomically activates a deterministic %i-club example',
     async (clubCount) => {
@@ -233,7 +256,7 @@ describe('automatic private evaluation cohort runner', () => {
       expect(result.batch.content.tradeCount).toBe(1);
       expect(result.batch.content.createdAt).toBe('2026-08-21T09:01:00.000Z');
       expect(narrative.content.views[0]?.clubs).toHaveLength(clubCount);
-      expect(result.head.revision).toBe(3);
+      expect(result.transition.revision).toBe(3);
     }
   );
 

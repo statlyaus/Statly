@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
+import { aflTradeContentAddressedIdSchema } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { privateLocalWorkbookReads } from '@/server/aflTradeIntelligence/development/privateLocalWorkbookReads';
 import { parseAflTradePublicRouteParam } from '@/server/aflTradeIntelligence/runtime/publicTradeRouteParam';
 
@@ -9,18 +10,29 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const privateHeaders = { 'Cache-Control': 'private, no-store' } as const;
+const generationIdSchema = aflTradeContentAddressedIdSchema(
+  'local-private-trade-evaluation-generation'
+);
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ tradeId: string }> }
 ) {
   const tradeId = parseAflTradePublicRouteParam((await params).tradeId);
   if (tradeId === null) {
     return new NextResponse(null, { status: 400, headers: privateHeaders });
   }
+  const generationIds = request.nextUrl.searchParams.getAll('generationId');
+  const generationId = generationIdSchema.safeParse(generationIds[0]);
+  if (generationIds.length !== 1 || !generationId.success) {
+    return new NextResponse(null, { status: 400, headers: privateHeaders });
+  }
 
   try {
-    const result = await privateLocalWorkbookReads.loadExactJsonExport(tradeId);
+    const result = await privateLocalWorkbookReads.loadExactJsonExport(
+      tradeId,
+      generationId.data
+    );
     if (result === null || result.state !== 'available') {
       return new NextResponse(null, { status: 404, headers: privateHeaders });
     }

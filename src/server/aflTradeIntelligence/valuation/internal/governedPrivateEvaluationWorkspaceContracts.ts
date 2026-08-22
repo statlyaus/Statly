@@ -292,19 +292,21 @@ export const governedPrivateEvaluationReadRequestSchema = z
   })
   .strict();
 
+const availableReadResultSchema = z
+  .object({
+    state: z.literal('available'),
+    selector: governedPrivateEvaluationSelectorSchema,
+    selection: readSelectionSchema,
+    generationId: generationIdSchema,
+    projectionManifestId: projectionManifestIdSchema,
+    lifecycle: readLifecycleSchema,
+    document: readDocumentSchema.extend({ artifact: aflTradeArtifactRefSchema }).strict(),
+    bytes: readArtifactBytesSchema,
+  })
+  .strict();
+
 export const governedPrivateEvaluationReadResultSchema = z.discriminatedUnion('state', [
-  z
-    .object({
-      state: z.literal('available'),
-      selector: governedPrivateEvaluationSelectorSchema,
-      selection: readSelectionSchema,
-      generationId: generationIdSchema,
-      projectionManifestId: projectionManifestIdSchema,
-      lifecycle: readLifecycleSchema,
-      document: readDocumentSchema.extend({ artifact: aflTradeArtifactRefSchema }).strict(),
-      bytes: readArtifactBytesSchema,
-    })
-    .strict(),
+  availableReadResultSchema,
   z
     .object({
       state: z.literal('unavailable'),
