@@ -213,16 +213,33 @@ export function createPostgresGovernedPrivateEvaluationReadRepository(dependenci
         lifecycle = { status: 'active', current: true };
       } else {
         const result = await dependencies.client.query<GenerationRow>(
-          `SELECT g.generation_json,(current_entry.generation_id=g.generation_id) AS batch_current,
-                  (withdrawal.withdrawal_id IS NOT NULL) AS batch_withdrawn
+          `SELECT g.generation_json,
+                  COALESCE(membership.batch_current,FALSE) AS batch_current,
+                  COALESCE(membership.batch_withdrawn,FALSE) AS batch_withdrawn
              FROM outcome_local_private_trade_evaluation_generation g
-             LEFT JOIN outcome_current_private_evaluation_batch current_batch
-               ON current_batch.scope_key=g.valuation_scope_key
-             LEFT JOIN outcome_private_evaluation_batch_entry current_entry
-               ON current_entry.batch_id=current_batch.batch_id AND current_entry.trade_id=g.trade_id
-             LEFT JOIN outcome_private_evaluation_batch_withdrawal withdrawal
-               ON withdrawal.batch_id=current_batch.batch_id AND withdrawal.trade_id=g.trade_id
-              AND withdrawal.generation_id=g.generation_id
+             LEFT JOIN LATERAL (
+               SELECT (current_batch.batch_id=retained_batch.batch_id) AS batch_current,
+                      (withdrawal.withdrawal_id IS NOT NULL) AS batch_withdrawn
+                 FROM outcome_private_evaluation_batch_entry retained_entry
+                 JOIN outcome_private_evaluation_batch retained_batch
+                   ON retained_batch.batch_id=retained_entry.batch_id
+                 JOIN outcome_private_evaluation_batch_transition activated
+                   ON activated.scope_key=retained_batch.scope_key
+                  AND activated.to_batch_id=retained_batch.batch_id
+                  AND activated.action IN ('activate','rollback')
+                 LEFT JOIN outcome_current_private_evaluation_batch current_batch
+                   ON current_batch.scope_key=retained_batch.scope_key
+                 LEFT JOIN outcome_private_evaluation_batch_withdrawal withdrawal
+                   ON withdrawal.batch_id=retained_entry.batch_id
+                  AND withdrawal.trade_id=retained_entry.trade_id
+                  AND withdrawal.generation_id=retained_entry.generation_id
+                WHERE retained_batch.scope_key=g.valuation_scope_key
+                  AND retained_entry.trade_id=g.trade_id
+                  AND retained_entry.generation_id=g.generation_id
+                ORDER BY (current_batch.batch_id=retained_batch.batch_id) DESC,
+                         activated.to_revision DESC
+                LIMIT 1
+             ) membership ON TRUE
             WHERE g.valuation_scope_key=$1 AND g.trade_id=$2 AND g.generation_id=$3
               AND EXISTS (
                 SELECT 1 FROM outcome_private_evaluation_transition_receipt activated
@@ -244,7 +261,7 @@ export function createPostgresGovernedPrivateEvaluationReadRepository(dependenci
         lifecycle =
           row.batch_current && !row.batch_withdrawn
             ? { status: 'active', current: true }
-            : row.batch_current && row.batch_withdrawn
+            : row.batch_withdrawn
               ? { status: 'withdrawn', current: false }
               : { status: 'superseded', current: false };
       }

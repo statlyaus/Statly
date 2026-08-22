@@ -10,7 +10,10 @@ import type {
   LocalWorkbookEvaluationService,
   LocalWorkbookTradeEvaluation,
 } from '@/server/aflTradeIntelligence/development/localWorkbookEvaluation';
-import type { GovernedPrivateEvaluationReadResult } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationWorkspace';
+import type {
+  GovernedPrivateEvaluationReadRequest,
+  GovernedPrivateEvaluationReadResult,
+} from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationWorkspace';
 
 const admittedEnvironment: PrivateLocalWorkbookReadEnvironment = {
   NODE_ENV: 'development',
@@ -29,10 +32,12 @@ const tradeEvaluation = {
   detail: { trade: { tradeId: 'trade:carlton-fremantle-gold-coast', year: 2025 } },
   publicationEligible: false,
 } as LocalWorkbookTradeEvaluation;
+const governedGenerationId = `local-private-trade-evaluation-generation:${'c'.repeat(64)}`;
 
 function governedRead(
   kind: 'detail' | 'json_export',
-  bytes: Uint8Array
+  bytes: Uint8Array,
+  selection: GovernedPrivateEvaluationReadRequest['selection'] = { kind: 'current' }
 ): GovernedPrivateEvaluationReadResult {
   return {
     state: 'available',
@@ -40,8 +45,8 @@ function governedRead(
       valuationScopeKey: 'afl-men:2025-trades',
       tradeId: 'trade:carlton-fremantle-gold-coast',
     },
-    selection: { kind: 'current' },
-    generationId: `local-private-trade-evaluation-generation:${'c'.repeat(64)}`,
+    selection,
+    generationId: governedGenerationId,
     projectionManifestId: `private-evaluation-projection-manifest:${'d'.repeat(64)}`,
     lifecycle: { status: 'active', current: true },
     document: {
@@ -184,9 +189,9 @@ describe('private local workbook reads', () => {
     });
 
     await expect(reads.loadArchive({ year: 2025 })).resolves.toMatchObject(archive);
-    await expect(
-      reads.loadTrade('trade:carlton-fremantle-gold-coast')
-    ).resolves.toMatchObject({ detail: tradeEvaluation.detail });
+    await expect(reads.loadTrade('trade:carlton-fremantle-gold-coast')).resolves.toMatchObject({
+      detail: tradeEvaluation.detail,
+    });
   });
 
   it('does not read workbook data when PostgreSQL rejects the runtime nonce', async () => {
@@ -273,14 +278,10 @@ describe('private local workbook reads', () => {
 
   it('derives the governed selector from the real transaction and returns authenticated detail bytes', async () => {
     const detailBytes = new TextEncoder().encode('{"detail":"retained"}');
-    const readGovernedEvaluation = vi
-      .fn()
-      .mockResolvedValue(governedRead('detail', detailBytes));
+    const readGovernedEvaluation = vi.fn().mockResolvedValue(governedRead('detail', detailBytes));
     const { reads } = dependencies({ trade: tradeEvaluation, readGovernedEvaluation });
 
-    await expect(
-      reads.loadTrade('trade:carlton-fremantle-gold-coast')
-    ).resolves.toMatchObject({
+    await expect(reads.loadTrade('trade:carlton-fremantle-gold-coast')).resolves.toMatchObject({
       detail: tradeEvaluation.detail,
       governedEvaluation: {
         state: 'available',
@@ -310,7 +311,8 @@ describe('private local workbook reads', () => {
     const { reads } = dependencies({ trade: tradeEvaluation, readGovernedEvaluation });
 
     const exported = await reads.loadExactJsonExport(
-      'trade:carlton-fremantle-gold-coast'
+      'trade:carlton-fremantle-gold-coast',
+      governedGenerationId
     );
     expect(exported).toMatchObject({
       state: 'available',
@@ -324,8 +326,40 @@ describe('private local workbook reads', () => {
       authenticate: vi.fn().mockResolvedValue('another-authenticated-user'),
     });
     await expect(
-      concealed.reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast')
+      concealed.reads.loadExactJsonExport(
+        'trade:carlton-fremantle-gold-coast',
+        governedGenerationId
+      )
     ).resolves.toBeNull();
+  });
+
+  it('reads an explicit JSON generation after the workbook service is recreated', async () => {
+    const exportBytes = new TextEncoder().encode('{"export":"generation-a"}\n');
+    const readGovernedEvaluation = vi.fn().mockResolvedValue(
+      governedRead('json_export', exportBytes, {
+        kind: 'generation',
+        generationId: governedGenerationId,
+      })
+    );
+    const restarted = dependencies({ trade: tradeEvaluation, readGovernedEvaluation });
+
+    await restarted.reads.loadExactJsonExport(
+      'trade:carlton-fremantle-gold-coast',
+      governedGenerationId
+    );
+
+    expect(readGovernedEvaluation).toHaveBeenCalledWith(
+      expect.objectContaining({ AFL_TRADE_LOCAL_ARTIFACT_ROOT: '/private/statly-artifacts' }),
+      'statly-dev-tester',
+      {
+        selector: {
+          valuationScopeKey: 'afl-men:2025-trades',
+          tradeId: 'trade:carlton-fremantle-gold-coast',
+        },
+        selection: { kind: 'generation', generationId: governedGenerationId },
+        document: { kind: 'json_export' },
+      }
+    );
   });
 
   it.each([undefined, 'relative/artifacts'])(
@@ -341,11 +375,11 @@ describe('private local workbook reads', () => {
         readGovernedEvaluation,
       });
 
+      await expect(reads.loadTrade('trade:carlton-fremantle-gold-coast')).rejects.toThrow(
+        'Governed private evaluation artifact configuration is invalid.'
+      );
       await expect(
-        reads.loadTrade('trade:carlton-fremantle-gold-coast')
-      ).rejects.toThrow('Governed private evaluation artifact configuration is invalid.');
-      await expect(
-        reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast')
+        reads.loadExactJsonExport('trade:carlton-fremantle-gold-coast', governedGenerationId)
       ).rejects.toThrow('Governed private evaluation artifact configuration is invalid.');
       expect(readGovernedEvaluation).not.toHaveBeenCalled();
     }

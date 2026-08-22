@@ -6,12 +6,14 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../../outcomes/postgresOutcomeReleaseRepository';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEvaluationPolicy';
 import {
-  GOVERNED_PRIVATE_EVALUATION_BATCH_AGENT_PRINCIPAL,
   createGovernedPrivateEvaluationBatchOperationId,
   governedPrivateEvaluationBatchSchema,
+  governedPrivateEvaluationBatchRollbackSchema,
   governedPrivateEvaluationBatchWithdrawalSchema,
   type GovernedPrivateEvaluationBatch,
+  type GovernedPrivateEvaluationBatchRollback,
   type GovernedPrivateEvaluationBatchWithdrawal,
 } from './governedPrivateEvaluationBatch';
 
@@ -19,20 +21,24 @@ interface BatchRow {
   readonly batch_json: unknown;
 }
 
-interface HeadRow {
+interface TransitionRow {
   readonly batch_id: string;
   readonly revision: number;
   readonly transition_id: string;
   readonly activated_at: Date | string;
 }
 
-export interface GovernedPrivateEvaluationBatchHead {
+type HeadRow = TransitionRow;
+
+export interface GovernedPrivateEvaluationBatchTransitionResult {
   readonly scopeKey: string;
   readonly batchId: string;
   readonly revision: number;
   readonly transitionId: string;
   readonly activatedAt: string;
 }
+
+export type GovernedPrivateEvaluationBatchHead = GovernedPrivateEvaluationBatchTransitionResult;
 
 export class GovernedPrivateEvaluationBatchConflictError extends Error {}
 
@@ -62,12 +68,15 @@ function isAmbiguousRegistrationAuthorityFailure(error: unknown): boolean {
 function instant(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(date.getTime())) {
-    throw new TypeError('Private evaluation batch head has an invalid trusted time.');
+    throw new TypeError('Private evaluation batch transition has an invalid trusted time.');
   }
   return date.toISOString();
 }
 
-function head(scopeKey: string, row: HeadRow): GovernedPrivateEvaluationBatchHead {
+function transitionResult(
+  scopeKey: string,
+  row: TransitionRow
+): GovernedPrivateEvaluationBatchTransitionResult {
   return {
     scopeKey,
     batchId: row.batch_id,
@@ -75,6 +84,10 @@ function head(scopeKey: string, row: HeadRow): GovernedPrivateEvaluationBatchHea
     transitionId: row.transition_id,
     activatedAt: instant(row.activated_at),
   };
+}
+
+function head(scopeKey: string, row: HeadRow): GovernedPrivateEvaluationBatchHead {
+  return transitionResult(scopeKey, row);
 }
 
 async function loadExact(
@@ -94,7 +107,7 @@ async function loadExact(
 export class PostgresGovernedPrivateEvaluationBatchRepository {
   constructor(
     private readonly client: AflOutcomeSqlClient,
-    private readonly authorizeEmergencyWithdrawal: (input: {
+    private readonly authorizeEmergencyOperation: (input: {
       readonly principalId: string;
       readonly scopeKey: string;
       readonly at: string;
@@ -255,9 +268,9 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     readonly batchId: string;
     readonly expectedRevision: number;
     readonly operationId: string;
-    readonly action: 'activate' | 'rollback';
+    readonly action: 'activate';
     readonly cohortOperationId?: string;
-  }): Promise<GovernedPrivateEvaluationBatchHead> {
+  }): Promise<GovernedPrivateEvaluationBatchTransitionResult> {
     if (
       input.operationId !==
       createGovernedPrivateEvaluationBatchOperationId({
@@ -273,7 +286,7 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
       return await this.client.transaction(async (transaction) => {
         await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
         const captured = input.cohortOperationId !== undefined;
-        const result = await transaction.query<HeadRow>(
+        const result = await transaction.query<TransitionRow>(
           captured
             ? `SELECT batch_id,revision,transition_id,activated_at
                  FROM advance_outcome_current_private_evaluation_batch_from_capture(
@@ -287,14 +300,14 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
             input.expectedRevision,
             input.operationId,
             input.action,
-            GOVERNED_PRIVATE_EVALUATION_BATCH_AGENT_PRINCIPAL,
+            AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
             ...(captured ? [input.cohortOperationId!] : []),
           ]
         );
         if (result.rows.length !== 1) {
-          throw new TypeError('Private evaluation batch transition returned no exact head.');
+          throw new TypeError('Private evaluation batch transition returned no exact result.');
         }
-        return head(input.scopeKey, result.rows[0]!);
+        return transitionResult(input.scopeKey, result.rows[0]!);
       });
     } catch (error) {
       if (isAuthorityConflict(error)) {
@@ -307,9 +320,43 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     }
   }
 
+  async rollback(
+    unparsed: GovernedPrivateEvaluationBatchRollback
+  ): Promise<GovernedPrivateEvaluationBatchTransitionResult> {
+    const rollback = governedPrivateEvaluationBatchRollbackSchema.parse(unparsed);
+    const authorized = await this.authorizeEmergencyOperation({
+      principalId: rollback.content.principalId,
+      scopeKey: rollback.content.scopeKey,
+      at: rollback.content.authorizedAt,
+    });
+    if (!authorized) throw new TypeError('Emergency batch rollback authority is unavailable.');
+    try {
+      return await this.client.transaction(async (transaction) => {
+        await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
+        const result = await transaction.query<TransitionRow>(
+          `SELECT batch_id,revision,transition_id,activated_at
+             FROM rollback_outcome_current_private_evaluation_batch($1::jsonb)`,
+          [canonicalizeAflTradeJson(rollback)]
+        );
+        if (result.rows.length !== 1) {
+          throw new TypeError('Private evaluation batch rollback returned no exact result.');
+        }
+        return transitionResult(rollback.content.scopeKey, result.rows[0]!);
+      });
+    } catch (error) {
+      if (isAuthorityConflict(error)) {
+        throw new GovernedPrivateEvaluationBatchConflictError(
+          'Private evaluation batch rollback lost current authority.',
+          { cause: error }
+        );
+      }
+      throw error;
+    }
+  }
+
   async withdraw(unparsed: GovernedPrivateEvaluationBatchWithdrawal) {
     const withdrawal = governedPrivateEvaluationBatchWithdrawalSchema.parse(unparsed);
-    const authorized = await this.authorizeEmergencyWithdrawal({
+    const authorized = await this.authorizeEmergencyOperation({
       principalId: withdrawal.content.principalId,
       scopeKey: withdrawal.content.scopeKey,
       at: withdrawal.content.withdrawnAt,

@@ -455,7 +455,9 @@ describe('private local workbook trade evaluation page', () => {
       'href',
       `/api/dev/afl-trade-evaluation/${encodeURIComponent(
         evaluation.detail.trade.tradeId
-      )}/export`
+      )}/export?generationId=${encodeURIComponent(
+        evaluation.governedEvaluation.generationId
+      )}`
     );
     expect(within(governed).queryByText(/asset grade/iu)).not.toBeInTheDocument();
   });
