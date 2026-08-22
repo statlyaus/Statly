@@ -382,13 +382,18 @@ BEGIN
   SELECT * INTO retained FROM "outcome_private_evaluation_batch_transition"
    WHERE "operation_id"=requested_operation_id FOR KEY SHARE;
   IF FOUND THEN
-    SELECT h."batch_id",h."revision",h."last_transition_id",h."activated_at"
-      INTO batch_id,revision,transition_id,activated_at
-      FROM "outcome_current_private_evaluation_batch" h WHERE h."scope_key"=requested_scope_key;
-    IF retained."scope_key"<>requested_scope_key OR retained."to_batch_id"<>requested_batch_id OR
-       retained."action"<>requested_action OR transition_id<>retained."transition_id" THEN
+    IF retained."scope_key" IS DISTINCT FROM requested_scope_key OR
+       retained."to_batch_id" IS DISTINCT FROM requested_batch_id OR
+       retained."action" IS DISTINCT FROM requested_action OR
+       retained."principal_id" IS DISTINCT FROM requested_principal_id OR
+       retained."from_revision" IS DISTINCT FROM expected_revision OR
+       retained."to_revision" IS DISTINCT FROM expected_revision+1 THEN
       RAISE EXCEPTION 'Private evaluation batch operation replay is stale or conflicting';
     END IF;
+    batch_id:=retained."to_batch_id";
+    revision:=retained."to_revision";
+    transition_id:=retained."transition_id";
+    activated_at:=retained."transitioned_at";
     RETURN NEXT; RETURN;
   END IF;
   IF "validate_outcome_private_evaluation_batch_complete"(

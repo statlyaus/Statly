@@ -19,14 +19,14 @@ interface BatchRow {
   readonly batch_json: unknown;
 }
 
-interface HeadRow {
+interface TransitionRow {
   readonly batch_id: string;
   readonly revision: number;
   readonly transition_id: string;
   readonly activated_at: Date | string;
 }
 
-export interface GovernedPrivateEvaluationBatchHead {
+export interface GovernedPrivateEvaluationBatchTransitionResult {
   readonly scopeKey: string;
   readonly batchId: string;
   readonly revision: number;
@@ -37,12 +37,15 @@ export interface GovernedPrivateEvaluationBatchHead {
 function instant(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(date.getTime())) {
-    throw new TypeError('Private evaluation batch head has an invalid trusted time.');
+    throw new TypeError('Private evaluation batch transition has an invalid trusted time.');
   }
   return date.toISOString();
 }
 
-function head(scopeKey: string, row: HeadRow): GovernedPrivateEvaluationBatchHead {
+function transitionResult(
+  scopeKey: string,
+  row: TransitionRow
+): GovernedPrivateEvaluationBatchTransitionResult {
   return {
     scopeKey,
     batchId: row.batch_id,
@@ -143,7 +146,7 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     readonly expectedRevision: number;
     readonly operationId: string;
     readonly action: 'activate' | 'rollback';
-  }): Promise<GovernedPrivateEvaluationBatchHead> {
+  }): Promise<GovernedPrivateEvaluationBatchTransitionResult> {
     if (
       input.operationId !==
       createGovernedPrivateEvaluationBatchOperationId({
@@ -157,7 +160,7 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     }
     return this.client.transaction(async (transaction) => {
       await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
-      const result = await transaction.query<HeadRow>(
+      const result = await transaction.query<TransitionRow>(
         `SELECT batch_id,revision,transition_id,activated_at
            FROM advance_outcome_current_private_evaluation_batch($1,$2,$3,$4,$5,$6)`,
         [
@@ -170,9 +173,9 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
         ]
       );
       if (result.rows.length !== 1) {
-        throw new TypeError('Private evaluation batch transition returned no exact head.');
+        throw new TypeError('Private evaluation batch transition returned no exact result.');
       }
-      return head(input.scopeKey, result.rows[0]!);
+      return transitionResult(input.scopeKey, result.rows[0]!);
     });
   }
 

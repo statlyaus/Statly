@@ -233,6 +233,19 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       action: 'activate',
     });
     expect(replacement).toMatchObject({ batchId: second.batchId, revision: 2 });
+    await expect(repository.advance({
+      scopeKey,
+      batchId: first.batchId,
+      expectedRevision: 0,
+      operationId: operation(first.batchId, 0, 'activate'),
+      action: 'activate',
+    })).resolves.toEqual(activation);
+    await expect(
+      pool.query<{ batch_id: string; revision: number }>(
+        `SELECT batch_id,revision FROM outcome_current_private_evaluation_batch WHERE scope_key=$1`,
+        [scopeKey]
+      )
+    ).resolves.toMatchObject({ rows: [{ batch_id: second.batchId, revision: 2 }] });
     const authorityShift = await pool.connect();
     try {
       await authorityShift.query('BEGIN');
