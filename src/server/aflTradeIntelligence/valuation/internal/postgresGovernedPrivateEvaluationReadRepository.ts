@@ -24,16 +24,21 @@ import {
 } from './governedPrivateEvaluationWorkspaceContracts';
 
 interface CurrentRow {
+  readonly batch_id: string;
   readonly state: 'ready' | 'unavailable';
   readonly generation_json: unknown | null;
   readonly withdrawal_id: string | null;
 }
 
+interface BatchRow extends CurrentRow {
+  readonly batch_current: boolean;
+}
+
 interface GenerationRow {
   readonly generation_json: unknown;
+  readonly selected_batch_id: string | null;
   readonly batch_current: boolean;
-  readonly current_batch_withdrawn: boolean;
-  readonly retained_batch_withdrawn: boolean;
+  readonly batch_withdrawn: boolean;
 }
 
 type DocumentKind = GovernedPrivateEvaluationReadRequest['document']['kind'];
@@ -185,13 +190,14 @@ export function createPostgresGovernedPrivateEvaluationReadRepository(dependenci
       });
       if (!authorized) return unavailable(request, 'not_found');
       let generationJson: unknown;
+      let batchId: string | null;
       let lifecycle: {
         readonly status: 'active' | 'withdrawn' | 'superseded';
         readonly current: boolean;
       };
       if (request.selection.kind === 'current') {
         const result = await dependencies.client.query<CurrentRow>(
-          `SELECT e.state,g.generation_json,w.withdrawal_id
+          `SELECT h.batch_id,e.state,g.generation_json,w.withdrawal_id
              FROM outcome_current_private_evaluation_batch h
              JOIN outcome_private_evaluation_batch_entry e
                ON e.batch_id=h.batch_id AND e.trade_id=$2
@@ -211,33 +217,82 @@ export function createPostgresGovernedPrivateEvaluationReadRepository(dependenci
         if (row.state !== 'ready' || row.generation_json === null)
           return unavailable(request, 'authentication_failed');
         generationJson = row.generation_json;
+        batchId = row.batch_id;
         lifecycle = { status: 'active', current: true };
+      } else if (request.selection.kind === 'batch') {
+        const result = await dependencies.client.query<BatchRow>(
+          `SELECT target_batch.batch_id,entry.state,generation.generation_json,
+                  withdrawal.withdrawal_id,
+                  (current_batch.batch_id=target_batch.batch_id) AS batch_current
+             FROM outcome_private_evaluation_batch target_batch
+             JOIN outcome_private_evaluation_batch_entry entry
+               ON entry.batch_id=target_batch.batch_id AND entry.trade_id=$2
+             LEFT JOIN outcome_local_private_trade_evaluation_generation generation
+               ON generation.valuation_scope_key=target_batch.scope_key
+              AND generation.trade_id=entry.trade_id
+              AND generation.generation_id=entry.generation_id
+             LEFT JOIN outcome_private_evaluation_batch_withdrawal withdrawal
+               ON withdrawal.batch_id=entry.batch_id AND withdrawal.trade_id=entry.trade_id
+              AND withdrawal.generation_id=entry.generation_id
+             LEFT JOIN outcome_current_private_evaluation_batch current_batch
+               ON current_batch.scope_key=target_batch.scope_key
+            WHERE target_batch.scope_key=$1 AND target_batch.batch_id=$3
+              AND EXISTS (
+                SELECT 1 FROM outcome_private_evaluation_batch_transition activated
+                 WHERE activated.scope_key=target_batch.scope_key
+                   AND activated.to_batch_id=target_batch.batch_id
+                   AND activated.action IN ('activate','rollback')
+              )`,
+          [
+            request.selector.valuationScopeKey,
+            request.selector.tradeId,
+            request.selection.batchId,
+          ]
+        );
+        if (result.rows.length === 0) return unavailable(request, 'not_found');
+        if (result.rows.length !== 1) return unavailable(request, 'authentication_failed');
+        const row = result.rows[0]!;
+        if (row.state === 'unavailable') return unavailable(request, 'projection_unavailable');
+        if (row.state !== 'ready' || row.generation_json === null)
+          return unavailable(request, 'authentication_failed');
+        generationJson = row.generation_json;
+        batchId = row.batch_id;
+        lifecycle =
+          row.withdrawal_id !== null
+            ? { status: 'withdrawn', current: false }
+            : row.batch_current
+              ? { status: 'active', current: true }
+              : { status: 'superseded', current: false };
       } else {
         const result = await dependencies.client.query<GenerationRow>(
-          `SELECT g.generation_json,(current_entry.generation_id=g.generation_id) AS batch_current,
-                  (current_withdrawal.withdrawal_id IS NOT NULL) AS current_batch_withdrawn,
-                  EXISTS (
-                    SELECT 1
-                      FROM outcome_private_evaluation_batch_entry retained_entry
-                      JOIN outcome_private_evaluation_batch retained_batch
-                        ON retained_batch.batch_id=retained_entry.batch_id
-                      JOIN outcome_private_evaluation_batch_withdrawal retained_withdrawal
-                        ON retained_withdrawal.batch_id=retained_entry.batch_id
-                       AND retained_withdrawal.trade_id=retained_entry.trade_id
-                       AND retained_withdrawal.generation_id=retained_entry.generation_id
-                     WHERE retained_batch.scope_key=g.valuation_scope_key
-                       AND retained_entry.trade_id=g.trade_id
-                       AND retained_entry.generation_id=g.generation_id
-                  ) AS retained_batch_withdrawn
+          `SELECT g.generation_json,membership.batch_id AS selected_batch_id,
+                  COALESCE(membership.batch_current,FALSE) AS batch_current,
+                  COALESCE(membership.batch_withdrawn,FALSE) AS batch_withdrawn
              FROM outcome_local_private_trade_evaluation_generation g
-             LEFT JOIN outcome_current_private_evaluation_batch current_batch
-               ON current_batch.scope_key=g.valuation_scope_key
-             LEFT JOIN outcome_private_evaluation_batch_entry current_entry
-               ON current_entry.batch_id=current_batch.batch_id AND current_entry.trade_id=g.trade_id
-             LEFT JOIN outcome_private_evaluation_batch_withdrawal current_withdrawal
-               ON current_withdrawal.batch_id=current_batch.batch_id
-              AND current_withdrawal.trade_id=g.trade_id
-              AND current_withdrawal.generation_id=g.generation_id
+             LEFT JOIN LATERAL (
+               SELECT retained_batch.batch_id,
+                      (current_batch.batch_id=retained_batch.batch_id) AS batch_current,
+                      (withdrawal.withdrawal_id IS NOT NULL) AS batch_withdrawn
+                 FROM outcome_private_evaluation_batch_entry retained_entry
+                 JOIN outcome_private_evaluation_batch retained_batch
+                   ON retained_batch.batch_id=retained_entry.batch_id
+                 JOIN outcome_private_evaluation_batch_transition activated
+                   ON activated.scope_key=retained_batch.scope_key
+                  AND activated.to_batch_id=retained_batch.batch_id
+                  AND activated.action IN ('activate','rollback')
+                 LEFT JOIN outcome_current_private_evaluation_batch current_batch
+                   ON current_batch.scope_key=retained_batch.scope_key
+                 LEFT JOIN outcome_private_evaluation_batch_withdrawal withdrawal
+                   ON withdrawal.batch_id=retained_entry.batch_id
+                  AND withdrawal.trade_id=retained_entry.trade_id
+                  AND withdrawal.generation_id=retained_entry.generation_id
+                WHERE retained_batch.scope_key=g.valuation_scope_key
+                  AND retained_entry.trade_id=g.trade_id
+                  AND retained_entry.generation_id=g.generation_id
+                ORDER BY (current_batch.batch_id=retained_batch.batch_id) DESC,
+                         activated.to_revision DESC
+                LIMIT 1
+             ) membership ON TRUE
             WHERE g.valuation_scope_key=$1 AND g.trade_id=$2 AND g.generation_id=$3
               AND EXISTS (
                 SELECT 1 FROM outcome_private_evaluation_transition_receipt activated
@@ -256,10 +311,11 @@ export function createPostgresGovernedPrivateEvaluationReadRepository(dependenci
         if (result.rows.length !== 1) return unavailable(request, 'authentication_failed');
         const row = result.rows[0]!;
         generationJson = row.generation_json;
+        batchId = row.selected_batch_id;
         lifecycle =
-          row.batch_current && !row.current_batch_withdrawn
+          row.batch_current && !row.batch_withdrawn
             ? { status: 'active', current: true }
-            : row.current_batch_withdrawn || row.retained_batch_withdrawn
+            : row.batch_withdrawn
               ? { status: 'withdrawn', current: false }
               : { status: 'superseded', current: false };
       }
@@ -284,6 +340,7 @@ export function createPostgresGovernedPrivateEvaluationReadRepository(dependenci
           state: 'available',
           selector: request.selector,
           selection: request.selection,
+          batchId,
           generationId: materialization.generation.generationId,
           projectionManifestId: materialization.projectionManifest.projectionManifestId,
           lifecycle,

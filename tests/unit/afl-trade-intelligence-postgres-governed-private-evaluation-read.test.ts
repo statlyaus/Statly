@@ -22,6 +22,7 @@ const selector = {
   tradeId: 'trade:adelaide-st-kilda',
 };
 const generatedAt = '2026-08-19T10:00:00.000Z';
+const batchId = `private-evaluation-batch:${'b'.repeat(64)}`;
 const materialization = createGovernedPrivateEvaluationGeneration({
   selector,
   transitionIntentId: `private-evaluation-transition-intent:${'a'.repeat(64)}`,
@@ -45,6 +46,7 @@ class ReadSqlClient implements AflOutcomeSqlClient {
             ? []
             : [
                 {
+                  batch_id: batchId,
                   state: 'ready',
                   generation_json: this.generationJson,
                   withdrawal_id: this.status === 'withdrawn' ? 'withdrawal:fixture' : null,
@@ -53,17 +55,30 @@ class ReadSqlClient implements AflOutcomeSqlClient {
         rowCount: this.status === 'absent' ? 0 : 1,
       } as AflOutcomeSqlQueryResult<Row>;
     }
+    if (sql.includes('FROM outcome_private_evaluation_batch target_batch')) {
+      return {
+        rows: [
+          {
+            batch_id: batchId,
+            state: 'ready',
+            generation_json: this.generationJson,
+            withdrawal_id: this.status === 'withdrawn' ? 'withdrawal:fixture' : null,
+            batch_current: this.activeGenerationId === materialization.generation.generationId,
+          },
+        ],
+        rowCount: 1,
+      } as AflOutcomeSqlQueryResult<Row>;
+    }
     if (sql.includes('outcome_local_private_trade_evaluation_generation')) {
       return {
         rows: [
           {
             generation_json: this.generationJson,
+            selected_batch_id: batchId,
             batch_current:
               this.status !== 'absent' &&
               this.activeGenerationId === materialization.generation.generationId,
-            current_batch_withdrawn: this.status === 'withdrawn',
-            retained_batch_withdrawn:
-              this.status === 'withdrawn' || this.historicalWithdrawal,
+            batch_withdrawn: this.status === 'withdrawn' || this.historicalWithdrawal,
           },
         ],
         rowCount: 1,
@@ -110,6 +125,7 @@ describe('PostgreSQL governed private evaluation read repository', () => {
       state: 'available',
       selector,
       selection: { kind: 'current' },
+      batchId,
       generationId: materialization.generation.generationId,
       projectionManifestId: materialization.projectionManifest.projectionManifestId,
       lifecycle: { status: 'active', current: true },
@@ -126,10 +142,24 @@ describe('PostgreSQL governed private evaluation read repository', () => {
     });
     expect(exported).toMatchObject({
       state: 'available',
+      batchId,
       lifecycle: { status: 'active', current: true },
     });
     if (exported.state !== 'available') throw new Error('Expected exact export bytes.');
     expect(new TextDecoder().decode(exported.bytes).endsWith('\n')).toBe(true);
+
+    await expect(
+      repository.read({
+        selector,
+        selection: { kind: 'batch', batchId },
+        document: { kind: 'reader_api' },
+      })
+    ).resolves.toMatchObject({
+      state: 'available',
+      selection: { kind: 'batch', batchId },
+      batchId,
+      generationId: materialization.generation.generationId,
+    });
   });
 
   it('keeps withdrawn current reads unavailable while preserving explicit history', async () => {

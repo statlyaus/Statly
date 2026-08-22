@@ -19,6 +19,7 @@ const generationIdSchema = aflTradeContentAddressedIdSchema(
 const projectionManifestIdSchema = aflTradeContentAddressedIdSchema(
   'private-evaluation-projection-manifest'
 );
+const batchIdSchema = aflTradeContentAddressedIdSchema('private-evaluation-batch');
 
 export const governedPrivateEvaluationSelectorSchema = z
   .object({
@@ -252,6 +253,7 @@ export const governedPrivateEvaluationExecuteResultSchema = z.discriminatedUnion
 
 const readSelectionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('current') }).strict(),
+  z.object({ kind: z.literal('batch'), batchId: batchIdSchema }).strict(),
   z.object({ kind: z.literal('generation'), generationId: generationIdSchema }).strict(),
 ]);
 const readDocumentSchema = z
@@ -292,19 +294,38 @@ export const governedPrivateEvaluationReadRequestSchema = z
   })
   .strict();
 
+const availableReadResultSchema = z
+  .object({
+    state: z.literal('available'),
+    selector: governedPrivateEvaluationSelectorSchema,
+    selection: readSelectionSchema,
+    batchId: batchIdSchema.nullable(),
+    generationId: generationIdSchema,
+    projectionManifestId: projectionManifestIdSchema,
+    lifecycle: readLifecycleSchema,
+    document: readDocumentSchema.extend({ artifact: aflTradeArtifactRefSchema }).strict(),
+    bytes: readArtifactBytesSchema,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    if (result.selection.kind === 'current' && result.batchId === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['batchId'],
+        message: 'A current private evaluation read must retain its exact current batch.',
+      });
+    }
+    if (result.selection.kind === 'batch' && result.batchId !== result.selection.batchId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['batchId'],
+        message: 'A batch-pinned private evaluation read must retain its selected batch.',
+      });
+    }
+  });
+
 export const governedPrivateEvaluationReadResultSchema = z.discriminatedUnion('state', [
-  z
-    .object({
-      state: z.literal('available'),
-      selector: governedPrivateEvaluationSelectorSchema,
-      selection: readSelectionSchema,
-      generationId: generationIdSchema,
-      projectionManifestId: projectionManifestIdSchema,
-      lifecycle: readLifecycleSchema,
-      document: readDocumentSchema.extend({ artifact: aflTradeArtifactRefSchema }).strict(),
-      bytes: readArtifactBytesSchema,
-    })
-    .strict(),
+  availableReadResultSchema,
   z
     .object({
       state: z.literal('unavailable'),
