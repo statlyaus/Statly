@@ -10,8 +10,10 @@ import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../automatedPrivateEv
 import {
   createGovernedPrivateEvaluationBatchOperationId,
   governedPrivateEvaluationBatchSchema,
+  governedPrivateEvaluationBatchRollbackSchema,
   governedPrivateEvaluationBatchWithdrawalSchema,
   type GovernedPrivateEvaluationBatch,
+  type GovernedPrivateEvaluationBatchRollback,
   type GovernedPrivateEvaluationBatchWithdrawal,
 } from './governedPrivateEvaluationBatch';
 
@@ -105,7 +107,7 @@ async function loadExact(
 export class PostgresGovernedPrivateEvaluationBatchRepository {
   constructor(
     private readonly client: AflOutcomeSqlClient,
-    private readonly authorizeEmergencyWithdrawal: (input: {
+    private readonly authorizeEmergencyOperation: (input: {
       readonly principalId: string;
       readonly scopeKey: string;
       readonly at: string;
@@ -266,7 +268,7 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     readonly batchId: string;
     readonly expectedRevision: number;
     readonly operationId: string;
-    readonly action: 'activate' | 'rollback';
+    readonly action: 'activate';
     readonly cohortOperationId?: string;
   }): Promise<GovernedPrivateEvaluationBatchTransitionResult> {
     if (
@@ -318,9 +320,43 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     }
   }
 
+  async rollback(
+    unparsed: GovernedPrivateEvaluationBatchRollback
+  ): Promise<GovernedPrivateEvaluationBatchTransitionResult> {
+    const rollback = governedPrivateEvaluationBatchRollbackSchema.parse(unparsed);
+    const authorized = await this.authorizeEmergencyOperation({
+      principalId: rollback.content.principalId,
+      scopeKey: rollback.content.scopeKey,
+      at: rollback.content.authorizedAt,
+    });
+    if (!authorized) throw new TypeError('Emergency batch rollback authority is unavailable.');
+    try {
+      return await this.client.transaction(async (transaction) => {
+        await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
+        const result = await transaction.query<TransitionRow>(
+          `SELECT batch_id,revision,transition_id,activated_at
+             FROM rollback_outcome_current_private_evaluation_batch($1::jsonb)`,
+          [canonicalizeAflTradeJson(rollback)]
+        );
+        if (result.rows.length !== 1) {
+          throw new TypeError('Private evaluation batch rollback returned no exact result.');
+        }
+        return transitionResult(rollback.content.scopeKey, result.rows[0]!);
+      });
+    } catch (error) {
+      if (isAuthorityConflict(error)) {
+        throw new GovernedPrivateEvaluationBatchConflictError(
+          'Private evaluation batch rollback lost current authority.',
+          { cause: error }
+        );
+      }
+      throw error;
+    }
+  }
+
   async withdraw(unparsed: GovernedPrivateEvaluationBatchWithdrawal) {
     const withdrawal = governedPrivateEvaluationBatchWithdrawalSchema.parse(unparsed);
-    const authorized = await this.authorizeEmergencyWithdrawal({
+    const authorized = await this.authorizeEmergencyOperation({
       principalId: withdrawal.content.principalId,
       scopeKey: withdrawal.content.scopeKey,
       at: withdrawal.content.withdrawnAt,

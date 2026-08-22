@@ -12,11 +12,12 @@ import {
 import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { createAutomatedGovernedPrivateEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationGeneration';
-import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '@/server/aflTradeIntelligence/valuation/internal/automatedPrivateEvaluationPolicy';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '@/server/aflTradeIntelligence/valuation/automatedPrivateEvaluationPolicy';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortRunner';
 import {
   createGovernedPrivateEvaluationBatch,
   createGovernedPrivateEvaluationBatchOperationId,
+  createGovernedPrivateEvaluationBatchRollback,
   type GovernedPrivateEvaluationBatch,
 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationBatch';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
@@ -35,16 +36,14 @@ const pool = new Pool({
   connectionString: databaseUrl,
   options: `-c search_path=${schemaName}`,
 });
-const scopeKey = 'afl-men:2026-private-batch';
+const scopeKey = 'afl-men:2026-trades';
 const preparedInputSetId = `prepared-valuation-input-set:${'1'.repeat(64)}`;
 const factualReleaseId = `outcome-release:${'2'.repeat(64)}`;
 const modelQualificationId = `model-qualification:${'3'.repeat(64)}`;
 const modelQualificationWorkId = `model-qualification-work:${'4'.repeat(64)}`;
 const createdAt = '2026-08-20T09:00:00.000Z';
 let artifactRoot = '';
-let artifactRepository: ReturnType<
-  typeof createLocalAflTradePrivateDerivedArtifactRepository
->;
+let artifactRepository: ReturnType<typeof createLocalAflTradePrivateDerivedArtifactRepository>;
 
 beforeAll(async () => {
   artifactRoot = await mkdtemp(join(tmpdir(), 'statly-private-batch-runner-'));
@@ -236,6 +235,93 @@ async function insertBatchParent(retained: GovernedPrivateEvaluationBatch) {
   );
 }
 
+async function trustedNow(): Promise<string> {
+  const result = await pool.query<{ trusted_at: Date }>(
+    `SELECT date_trunc('milliseconds',clock_timestamp()) AS trusted_at`
+  );
+  return result.rows[0]!.trusted_at.toISOString();
+}
+
+async function seedPrivateEvaluationOperator(input: {
+  readonly principalId: string;
+  readonly authorizedAt: string;
+}) {
+  const evidenceDocument = {
+    evidenceKind: 'reviewer_authority_evidence',
+    environment: 'test_fixture',
+    principalRef: input.principalId,
+    role: 'afl_trade_private_evaluation_operator',
+    scopeKey,
+    provider: 'statly_modeling',
+    capabilityId: 'manage_private_trade_evaluation',
+    competition: 'AFLM',
+  };
+  const authorityEvidenceId = createAflTradeContentAddress(
+    'reviewer-authority-evidence',
+    evidenceDocument
+  );
+  const decisionId = createAflTradeContentAddress('review-decision', {
+    authorityEvidenceId,
+    decision: 'approved',
+  });
+  const digest = createAflTradeContentAddress('fixture-authority-artifact', {
+    authorityEvidenceId,
+  }).slice('fixture-authority-artifact:'.length);
+  const seed = await pool.connect();
+  try {
+    await seed.query('BEGIN');
+    await seed.query(`SET LOCAL session_replication_role='replica'`);
+    await seed.query(
+      `INSERT INTO outcome_artifact_custody
+        (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+         environment,created_at,verified_at,custody_json)
+       VALUES ($1,$2,$3,'application/json',128,'derived_private','non_production',$4,$4,'{}'::jsonb)`,
+      [`artifact:${digest}`, digest, `artifact://sha256/${digest}`, input.authorizedAt]
+    );
+    await seed.query(
+      `INSERT INTO outcome_review_decision
+        (decision_id,subject_type,subject_id,decision,rationale,evidence_json,decided_by,decided_at)
+       VALUES ($1,'governed_evidence_reference',$2,'approved',$3,'{}'::jsonb,'fixture-governance-writer',$4)`,
+      [
+        decisionId,
+        authorityEvidenceId,
+        'Authorize the fixture operator for emergency private batch rollback.',
+        input.authorizedAt,
+      ]
+    );
+    await seed.query(
+      `INSERT INTO outcome_governed_evidence_reference
+       (reference_id,reference_sha256,evidence_kind,artifact_id,environment,status,
+         approval_decision_id,created_at,evidence_canonical_json,evidence_json)
+       VALUES ($1,$2,'reviewer_authority_evidence',$3,'test_fixture','approved',$4,$5,$6,$7::jsonb)`,
+      [
+        authorityEvidenceId,
+        authorityEvidenceId.slice('reviewer-authority-evidence:'.length),
+        `artifact:${digest}`,
+        decisionId,
+        input.authorizedAt,
+        canonicalizeAflTradeJson(evidenceDocument),
+        canonicalizeAflTradeJson(evidenceDocument),
+      ]
+    );
+    await seed.query(
+      `INSERT INTO outcome_operational_principal_authority
+        (authority_evidence_id,principal_ref,role,scope_key,provider,capability_id,
+         competition,valid_from_season,valid_through_season,valid_from,valid_through)
+       VALUES ($1,$2,'afl_trade_private_evaluation_operator',$3,'statly_modeling',
+               'manage_private_trade_evaluation','AFLM',1897,2200,$4,'2099-01-01T00:00:00.000Z')`,
+      [authorityEvidenceId, input.principalId, scopeKey, input.authorizedAt]
+    );
+    await seed.query('COMMIT');
+  } catch (error) {
+    await seed.query('ROLLBACK');
+    throw error;
+  } finally {
+    seed.release();
+  }
+  return authorityEvidenceId;
+}
+
 function artifactRef(marker: string, at: string) {
   const digest = createAflTradeContentAddress('fixture-artifact', { marker }).slice(
     'fixture-artifact:'.length
@@ -335,9 +421,7 @@ async function seedReadyRunnerGeneration(input: {
   });
   const generation = materialization.generation;
   const generationId = generation.generationId;
-  const generationArtifact = materialization.artifacts.find(
-    ({ kind }) => kind === 'generation'
-  )!;
+  const generationArtifact = materialization.artifacts.find(({ kind }) => kind === 'generation')!;
   for (const artifact of materialization.artifacts) {
     await artifactRepository.putIfAbsent(artifact.reference, artifact.bytes);
   }
@@ -574,22 +658,18 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     await expect(repository.register(first)).resolves.toEqual(first);
     await expect(repository.register(first)).resolves.toEqual(first);
     await repository.register(second);
-    const operation = (
-      batchId: string,
-      expectedRevision: number,
-      action: 'activate' | 'rollback'
-    ) =>
+    const operation = (batchId: string, expectedRevision: number) =>
       createGovernedPrivateEvaluationBatchOperationId({
         scopeKey,
         batchId,
         expectedRevision,
-        action,
+        action: 'activate',
       });
     const activation = await repository.advance({
       scopeKey,
       batchId: first.batchId,
       expectedRevision: 1,
-      operationId: operation(first.batchId, 1, 'activate'),
+      operationId: operation(first.batchId, 1),
       action: 'activate',
     });
     expect(activation).toMatchObject({ batchId: first.batchId, revision: 2 });
@@ -598,7 +678,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         scopeKey,
         batchId: first.batchId,
         expectedRevision: 1,
-        operationId: operation(first.batchId, 1, 'activate'),
+        operationId: operation(first.batchId, 1),
         action: 'activate',
       })
     ).resolves.toEqual(activation);
@@ -607,7 +687,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         scopeKey,
         batchId: second.batchId,
         expectedRevision: 1,
-        operationId: operation(second.batchId, 1, 'activate'),
+        operationId: operation(second.batchId, 1),
         action: 'activate',
       })
     ).rejects.toThrow(/compare-and-swap|lost current authority/i);
@@ -615,7 +695,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       scopeKey,
       batchId: second.batchId,
       expectedRevision: 2,
-      operationId: operation(second.batchId, 2, 'activate'),
+      operationId: operation(second.batchId, 2),
       action: 'activate',
     });
     expect(replacement).toMatchObject({ batchId: second.batchId, revision: 3 });
@@ -624,7 +704,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         scopeKey,
         batchId: first.batchId,
         expectedRevision: 1,
-        operationId: operation(first.batchId, 1, 'activate'),
+        operationId: operation(first.batchId, 1),
         action: 'activate',
       })
     ).resolves.toEqual(activation);
@@ -665,19 +745,100 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         scopeKey,
         batchId: second.batchId,
         expectedRevision: 2,
-        operationId: operation(second.batchId, 2, 'activate'),
+        operationId: operation(second.batchId, 2),
         action: 'activate',
       })
     ).resolves.toEqual(replacement);
+    const rollbackPrincipalId = 'firebase:fixture-batch-rollback-operator';
+    const authorizedAt = await trustedNow();
+    const authorityEvidenceId = await seedPrivateEvaluationOperator({
+      principalId: rollbackPrincipalId,
+      authorizedAt,
+    });
+    const rollback = createGovernedPrivateEvaluationBatchRollback({
+      scopeKey,
+      fromBatchId: second.batchId,
+      toBatchId: first.batchId,
+      expectedRevision: 3,
+      principalId: rollbackPrincipalId,
+      authorityEvidenceId,
+      reason: 'Restore the prior complete private batch after an integrity incident.',
+      authorizedAt,
+      expiresAt: new Date(Date.parse(authorizedAt) + 15 * 60 * 1_000).toISOString(),
+    });
+    const rollbackResult = await repository.rollback(rollback);
+    expect(rollbackResult).toMatchObject({ batchId: first.batchId, revision: 4 });
+    await expect(repository.rollback(rollback)).resolves.toEqual(rollbackResult);
+    const missingEvidenceAuthorizedAt = await trustedNow();
+    const missingEvidenceRollback = createGovernedPrivateEvaluationBatchRollback({
+      ...rollback.content,
+      fromBatchId: first.batchId,
+      toBatchId: second.batchId,
+      expectedRevision: 4,
+      authorityEvidenceId: `reviewer-authority-evidence:${'0'.repeat(64)}`,
+      authorizedAt: missingEvidenceAuthorizedAt,
+      expiresAt: new Date(
+        Date.parse(missingEvidenceAuthorizedAt) + 15 * 60 * 1_000
+      ).toISOString(),
+    });
+    await expect(repository.rollback(missingEvidenceRollback)).rejects.toThrow(
+      /governed operator authority/i
+    );
+    const expiredAuthorizedAt = new Date(Date.now() - 16 * 60 * 1_000).toISOString();
+    const expiredPrincipalId = 'firebase:fixture-expired-batch-rollback-operator';
+    const expiredEvidenceId = await seedPrivateEvaluationOperator({
+      principalId: expiredPrincipalId,
+      authorizedAt: expiredAuthorizedAt,
+    });
     await expect(
-      repository.advance({
+      repository.rollback(
+        createGovernedPrivateEvaluationBatchRollback({
+          ...rollback.content,
+          fromBatchId: first.batchId,
+          toBatchId: second.batchId,
+          expectedRevision: 4,
+          principalId: expiredPrincipalId,
+          authorityEvidenceId: expiredEvidenceId,
+          authorizedAt: expiredAuthorizedAt,
+          expiresAt: new Date(
+            Date.parse(expiredAuthorizedAt) + 15 * 60 * 1_000
+          ).toISOString(),
+        })
+      )
+    ).rejects.toThrow(/governed operator authority/i);
+    const forgedOperationId = createAflTradeContentAddress(
+      'private-evaluation-batch-operation',
+      { forged: true }
+    );
+    const forgedTransitionId = createAflTradeContentAddress(
+      'private-evaluation-batch-transition',
+      {
+        operationId: forgedOperationId,
         scopeKey,
-        batchId: first.batchId,
-        expectedRevision: 3,
-        operationId: operation(first.batchId, 3, 'rollback'),
         action: 'rollback',
-      })
-    ).resolves.toMatchObject({ batchId: first.batchId, revision: 4 });
+        principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
+        fromRevision: 4,
+        fromBatchId: first.batchId,
+        toRevision: 5,
+        toBatchId: second.batchId,
+      }
+    );
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_private_evaluation_batch_transition
+          (transition_id,operation_id,scope_key,principal_id,action,from_revision,
+           from_batch_id,to_revision,to_batch_id,transitioned_at)
+         VALUES ($1,$2,$3,$4,'rollback',4,$5,5,$6,date_trunc('milliseconds',transaction_timestamp()))`,
+        [
+          forgedTransitionId,
+          forgedOperationId,
+          scopeKey,
+          AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
+          first.batchId,
+          second.batchId,
+        ]
+      )
+    ).rejects.toThrow(/authority|check constraint/i);
     const authorityRestore = await pool.connect();
     try {
       await authorityRestore.query('BEGIN');
@@ -702,14 +863,20 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     }
     const neverActivated = batch('2026-08-20T09:00:00.002Z');
     await repository.register(neverActivated);
+    const neverActivatedAuthorizedAt = await trustedNow();
     await expect(
-      repository.advance({
-        scopeKey,
-        batchId: neverActivated.batchId,
-        expectedRevision: 4,
-        operationId: operation(neverActivated.batchId, 4, 'rollback'),
-        action: 'rollback',
-      })
+      repository.rollback(
+        createGovernedPrivateEvaluationBatchRollback({
+          ...rollback.content,
+          fromBatchId: first.batchId,
+          toBatchId: neverActivated.batchId,
+          expectedRevision: 4,
+          authorizedAt: neverActivatedAuthorizedAt,
+          expiresAt: new Date(
+            Date.parse(neverActivatedAuthorizedAt) + 15 * 60 * 1_000
+          ).toISOString(),
+        })
+      )
     ).rejects.toThrow(/compare-and-swap|lost current authority/i);
     await expect(
       pool.query(
@@ -718,7 +885,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
           scopeKey,
           second.batchId,
           4,
-          operation(second.batchId, 4, 'activate'),
+          operation(second.batchId, 4),
           'activate',
           'system:unauthorized-coordinator',
         ]
@@ -1262,13 +1429,12 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     });
     for (const entry of currentEntries.rows) {
       const reads = await Promise.all(
-        (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map(
-          (kind) =>
-            reader.read({
-              selector: { valuationScopeKey: scopeKey, tradeId: entry.trade_id },
-              selection: { kind: 'current' },
-              document: { kind },
-            })
+        (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map((kind) =>
+          reader.read({
+            selector: { valuationScopeKey: scopeKey, tradeId: entry.trade_id },
+            selection: { kind: 'current' },
+            document: { kind },
+          })
         )
       );
       expect(

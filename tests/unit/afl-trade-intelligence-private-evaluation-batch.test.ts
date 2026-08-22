@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createGovernedPrivateEvaluationBatch,
+  createGovernedPrivateEvaluationBatchRollback,
   createGovernedPrivateEvaluationBatchWithdrawal,
 } from '../../src/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationBatch';
 
@@ -66,5 +67,39 @@ describe('governed private evaluation batch', () => {
 
     expect(withdrawal.content.publicationEligible).toBe(false);
     expect(withdrawal.content.batchId).toBe(retained.batchId);
+  });
+
+  it('binds emergency rollback to governed operator evidence and an exact 15-minute window', () => {
+    const from = batch();
+    const to = createGovernedPrivateEvaluationBatch({
+      ...from.content,
+      createdAt: '2026-08-21T09:01:00.000Z',
+    });
+    const rollback = createGovernedPrivateEvaluationBatchRollback({
+      scopeKey: from.content.scopeKey,
+      fromBatchId: from.batchId,
+      toBatchId: to.batchId,
+      expectedRevision: 2,
+      principalId: 'operator:fixture',
+      authorityEvidenceId: id('reviewer-authority-evidence', 'f'),
+      reason: 'Restore the last authenticated complete batch after an integrity incident.',
+      authorizedAt: '2026-08-21T09:05:00.000Z',
+      expiresAt: '2026-08-21T09:20:00.000Z',
+    });
+
+    expect(rollback.operationId).toMatch(/^private-evaluation-batch-operation:/u);
+    expect(rollback.content).toMatchObject({
+      environment: 'non_production',
+      fromBatchId: from.batchId,
+      toBatchId: to.batchId,
+      authorityEvidenceId: id('reviewer-authority-evidence', 'f'),
+      publicationEligible: false,
+    });
+    expect(() =>
+      createGovernedPrivateEvaluationBatchRollback({
+        ...rollback.content,
+        expiresAt: '2026-08-21T09:20:00.001Z',
+      })
+    ).toThrow(/15-minute/i);
   });
 });

@@ -11,6 +11,9 @@ const LIMITATION =
   'Private non-production evaluation batch only; it grants no factual, production, or publication authority.' as const;
 const WITHDRAWAL_LIMITATION =
   'Emergency private-reader suppression only; it does not alter factual, model, production, or publication authority.' as const;
+const ROLLBACK_LIMITATION =
+  'Emergency private batch rollback only; it restores previously authenticated private visibility and grants no factual, model, production, or publication authority.' as const;
+const ROLLBACK_AUTHORIZATION_WINDOW_MILLISECONDS = 15 * 60 * 1_000;
 const scopedIdSchema = z
   .string()
   .trim()
@@ -123,7 +126,7 @@ export function createGovernedPrivateEvaluationBatchOperationId(input: {
   readonly scopeKey: string;
   readonly batchId: string;
   readonly expectedRevision: number;
-  readonly action: 'activate' | 'rollback';
+  readonly action: 'activate';
 }): string {
   return createAflTradeContentAddress('private-evaluation-batch-operation', {
     ...input,
@@ -157,6 +160,82 @@ export function createGovernedPrivateEvaluationBatch(
   });
   return governedPrivateEvaluationBatchSchema.parse({
     batchId: createAflTradeContentAddress('private-evaluation-batch', content),
+    content,
+  });
+}
+
+const rollbackContentSchema = z
+  .object({
+    schemaVersion: z.literal('governed-private-evaluation-batch-rollback/v1'),
+    environment: z.literal('non_production'),
+    scopeKey: scopedIdSchema,
+    fromBatchId: batchIdSchema,
+    toBatchId: batchIdSchema,
+    expectedRevision: z.number().int().positive(),
+    principalId: z.string().trim().min(1).max(400),
+    authorityEvidenceId: aflTradeContentAddressedIdSchema('reviewer-authority-evidence'),
+    reason: z.string().trim().min(1).max(2_000),
+    authorizedAt: instantSchema,
+    expiresAt: instantSchema,
+    publicationEligible: z.literal(false),
+    limitation: z.literal(ROLLBACK_LIMITATION),
+  })
+  .strict()
+  .superRefine((rollback, context) => {
+    if (rollback.fromBatchId === rollback.toBatchId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['toBatchId'],
+        message: 'Emergency rollback must restore a different retained batch.',
+      });
+    }
+    if (
+      Date.parse(rollback.expiresAt) - Date.parse(rollback.authorizedAt) !==
+      ROLLBACK_AUTHORIZATION_WINDOW_MILLISECONDS
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expiresAt'],
+        message: 'Emergency rollback authorization must use an exact 15-minute window.',
+      });
+    }
+  });
+
+export const governedPrivateEvaluationBatchRollbackSchema = z
+  .object({
+    operationId: aflTradeContentAddressedIdSchema('private-evaluation-batch-operation'),
+    content: rollbackContentSchema,
+  })
+  .strict()
+  .superRefine((rollback, context) => {
+    addAflTradeContentAddressIssue(
+      'private-evaluation-batch-operation',
+      rollback.operationId,
+      rollback.content,
+      context,
+      ['operationId']
+    );
+  });
+
+export type GovernedPrivateEvaluationBatchRollback = z.infer<
+  typeof governedPrivateEvaluationBatchRollbackSchema
+>;
+
+export function createGovernedPrivateEvaluationBatchRollback(
+  input: Omit<
+    z.input<typeof rollbackContentSchema>,
+    'schemaVersion' | 'environment' | 'publicationEligible' | 'limitation'
+  >
+): GovernedPrivateEvaluationBatchRollback {
+  const content = rollbackContentSchema.parse({
+    ...input,
+    schemaVersion: 'governed-private-evaluation-batch-rollback/v1',
+    environment: 'non_production',
+    publicationEligible: false,
+    limitation: ROLLBACK_LIMITATION,
+  });
+  return governedPrivateEvaluationBatchRollbackSchema.parse({
+    operationId: createAflTradeContentAddress('private-evaluation-batch-operation', content),
     content,
   });
 }
