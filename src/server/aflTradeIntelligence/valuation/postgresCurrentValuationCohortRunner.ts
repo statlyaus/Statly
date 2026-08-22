@@ -59,6 +59,29 @@ function instant(value: Date | string): string {
   return parsed.toISOString();
 }
 
+function postgresConflictCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null;
+  const code = (error as { readonly code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
+async function retryPostgresConflict<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (
+        attempt === 3 ||
+        !['40001', '40P01'].includes(postgresConflictCode(error) ?? '')
+      ) {
+        throw error;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, attempt * 10));
+    }
+  }
+  throw new TypeError('PostgreSQL conflict retry exhausted without an outcome.');
+}
+
 export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies: {
   readonly client: AflOutcomeSqlClient;
   readonly workspace: GovernedPrivateEvaluationWorkspace;
@@ -254,7 +277,9 @@ export function createPostgresAflTradePrivateEvaluationCohortRunner(dependencies
       const runner = createAflTradePrivateEvaluationCohortRunner({
         captureCurrent: async () => captured,
         stageTrade: async (input) => {
-          const staged = await dependencies.workspace.stageAutomated(input);
+          const staged = await retryPostgresConflict(() =>
+            dependencies.workspace.stageAutomated(input)
+          );
           if (staged.state !== 'activated') return staged;
           const retained = await dependencies.client.query<{ readonly generation_json: unknown }>(
             `SELECT generation_json

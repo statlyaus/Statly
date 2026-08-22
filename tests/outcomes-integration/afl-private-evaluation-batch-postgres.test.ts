@@ -6,14 +6,21 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  createAflTradeCanonicalJsonArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
-import { createAutomatedGovernedPrivateEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationGeneration';
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '@/server/aflTradeIntelligence/valuation/automatedPrivateEvaluationPolicy';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortRunner';
+import { createAutomatedGovernedPrivateEvaluationStagingService } from '@/server/aflTradeIntelligence/valuation/internal/automatedGovernedPrivateEvaluationStagingService';
+import { createReadyGovernedPrivateEvaluationAuthorityInspectionV3 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationAuthoritySnapshot';
+import { createPostgresGovernedPrivateEvaluationLifecycleRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationLifecycleRepository';
+import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
+import { automatedGovernedPrivateEvaluationTransitionIntentSchema } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
 import {
   createGovernedPrivateEvaluationBatch,
   createGovernedPrivateEvaluationBatchOperationId,
@@ -22,7 +29,10 @@ import {
 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationBatch';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
 import { createPostgresGovernedPrivateEvaluationReadRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationReadRepository';
+import { replayGovernedPrivateEvaluationMaterialization } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationMaterializer';
+import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
 import { createGovernedPrivateEvaluationNarrativeFixture } from '../testUtils/governedPrivateEvaluationFixture';
+import { createGovernedPrivateEvaluationMultiClubNarrativeFixture } from '../testUtils/governedPrivateEvaluationMultiClubFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
@@ -336,18 +346,24 @@ function artifactRef(marker: string, at: string) {
   } as const;
 }
 
-async function seedReadyRunnerGeneration(input: {
+async function seedReadyRunnerAuthority(input: {
   readonly tradeId: string;
-  readonly operationId: string;
   readonly generatedAt: string;
   readonly preparedInputSetRevision: number;
   readonly factualReleaseRevision: number;
+  readonly head?: {
+    readonly status: 'absent' | 'active' | 'withdrawn';
+    readonly revision: number;
+    readonly generationId: string | null;
+  };
+  readonly previousTransitionId?: string | null;
 }) {
-  const marker = input.tradeId === 'trade-a' ? '6' : '7';
-  const manifestDigest = marker.repeat(64);
-  const bundleDigest = (input.tradeId === 'trade-a' ? '8' : '9').repeat(64);
-  const manifestArtifact = artifactRef(marker, createdAt);
-  const bundleArtifact = artifactRef(input.tradeId === 'trade-a' ? '8' : '9', createdAt);
+  const manifestDigest = createAflTradeContentAddress('fixture-ready-manifest', {
+    tradeId: input.tradeId,
+  }).slice('fixture-ready-manifest:'.length);
+  const bundleDigest = '8'.repeat(64);
+  const manifestArtifact = artifactRef(`manifest:${input.tradeId}`, createdAt);
+  const bundleArtifact = artifactRef('shared-ready-bundle', createdAt);
   const manifestId = `private-evaluation-materialization-manifest:${manifestDigest}`;
   const bundleId = `valuation-input-bundle:${bundleDigest}`;
   const component = (
@@ -363,7 +379,7 @@ async function seedReadyRunnerGeneration(input: {
     gate3DecisionId: `gate-decision:${(index === 0 ? 'd' : 'e').repeat(64)}`,
     gate3DecisionVersion: 1,
     qualificationId: modelQualificationId,
-    qualificationPolicyVersion: 'fixture-policy/v1',
+    qualificationPolicyVersion: `model-qualification-policy:${'f'.repeat(64)}`,
   });
   const calculationAuthority = {
     state: 'ready',
@@ -384,46 +400,46 @@ async function seedReadyRunnerGeneration(input: {
       component('draft_pick_and_future_pick_distribution', 1),
     ],
   } as const;
-  const transitionIntentId = createAflTradeContentAddress('private-evaluation-transition-intent', {
-    operationId: input.operationId,
-    tradeId: input.tradeId,
-  });
-  const retainedGeneration = await pool.query<{ readonly generation_id: string }>(
-    `SELECT generation_id FROM outcome_local_private_trade_evaluation_generation
-      WHERE transition_intent_id=$1`,
-    [transitionIntentId]
-  );
-  if (retainedGeneration.rows.length === 1) {
-    return {
-      generationId: retainedGeneration.rows[0]!.generation_id,
-      manifestId,
-      manifestArtifact,
-    };
-  }
-  const narrativeFixture = createGovernedPrivateEvaluationNarrativeFixture();
-  const narrativeContent = {
-    ...narrativeFixture.content,
-    tradeId: input.tradeId,
-    valuationCaseId: `valuation-case:${(input.tradeId === 'trade-a' ? 'a' : 'b').repeat(64)}`,
-  };
-  const materialization = createAutomatedGovernedPrivateEvaluationGeneration({
+  const authorityValidThrough = new Date(
+    Date.parse(input.generatedAt) + 5 * 60 * 1_000
+  ).toISOString();
+  const authorityInspection = createReadyGovernedPrivateEvaluationAuthorityInspectionV3({
     selector: { valuationScopeKey: scopeKey, tradeId: input.tradeId },
-    transitionIntentId,
-    generatedAt: input.generatedAt,
-    constructionAuthority: {
-      kind: 'automated_private_calculation_agent',
-      principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
-    },
-    narrative: {
-      narrativeId: createAflTradeContentAddress('trade-calculation-narrative', narrativeContent),
-      content: narrativeContent,
-    },
+    head: input.head ?? { status: 'absent', revision: 0, generationId: null },
+    capturedAt: input.generatedAt,
+    validThrough: authorityValidThrough,
+    lastTransitionId: input.previousTransitionId ?? null,
+    preparedInputHeadRevision: input.preparedInputSetRevision,
+    preparedInputSetId,
+    factualRegistryRevision: input.factualReleaseRevision,
+    factualReleaseId,
+    activeFactualReleaseRevision: input.factualReleaseRevision,
+    privateValuationDecisionId:
+      `private-valuation-evaluation-decision:${'a'.repeat(64)}`,
+    privateValuationDecisionRevision: 1,
+    materializationManifestId: manifestId,
+    materializationManifestArtifact: manifestArtifact,
+    valuationInputBundleId: bundleId,
+    valuationInputBundleArtifact: bundleArtifact,
+    gateLedgerRevision: 2,
+    components: calculationAuthority.components,
   });
-  const generation = materialization.generation;
-  const generationId = generation.generationId;
-  const generationArtifact = materialization.artifacts.find(({ kind }) => kind === 'generation')!;
-  for (const artifact of materialization.artifacts) {
-    await artifactRepository.putIfAbsent(artifact.reference, artifact.bytes);
+  const snapshotArtifact = createAflTradeCanonicalJsonArtifactRef(
+    authorityInspection.snapshot,
+    input.generatedAt
+  );
+  const inspectionArtifact = createAflTradeCanonicalJsonArtifactRef(
+    authorityInspection.inspection,
+    input.generatedAt
+  );
+  for (const [document, reference] of [
+    [authorityInspection.snapshot, snapshotArtifact],
+    [authorityInspection.inspection, inspectionArtifact],
+  ] as const) {
+    await artifactRepository.putIfAbsent(
+      reference,
+      new TextEncoder().encode(canonicalizeAflTradeJson(document))
+    );
   }
   const existing = await pool.query<{ readonly generation_id: string }>(
     `SELECT generation_id FROM outcome_local_private_trade_evaluation_generation
@@ -438,7 +454,8 @@ async function seedReadyRunnerGeneration(input: {
     for (const ref of [
       manifestArtifact,
       bundleArtifact,
-      ...materialization.artifacts.map(({ reference }) => reference),
+      snapshotArtifact,
+      inspectionArtifact,
     ]) {
       await seed.query(
         `INSERT INTO outcome_artifact_custody
@@ -459,9 +476,10 @@ async function seedReadyRunnerGeneration(input: {
     await seed.query(
       `UPDATE outcome_governed_valuation_model_qualification
           SET qualification_json=jsonb_build_object('content',jsonb_build_object(
-            'policy',jsonb_build_object('policyVersion','fixture-policy/v1')))
+            'policy',jsonb_build_object(
+              'policyVersion',$2::text)))
         WHERE qualification_id=$1`,
-      [modelQualificationId]
+      [modelQualificationId, `model-qualification-policy:${'f'.repeat(64)}`]
     );
     for (const [index, authority] of calculationAuthority.components.entries()) {
       await seed.query(
@@ -529,85 +547,53 @@ async function seedReadyRunnerGeneration(input: {
         }),
       ]
     );
-    const snapshotId = createAflTradeContentAddress('private-evaluation-authority-snapshot', {
-      operationId: input.operationId,
-      tradeId: input.tradeId,
-    });
     await seed.query(
       `INSERT INTO outcome_private_evaluation_authority_snapshot
         (snapshot_id,valuation_scope_key,trade_id,artifact_id,captured_at,valid_through,
          expected_head_status,expected_head_revision,expected_head_generation_id,
          content_sha256,content_canonical_json,snapshot_json)
-       VALUES ($1,$2,$3,$4,$5,'2099-01-01T00:00:00.000Z','absent',0,NULL,$6,'{}',$7::jsonb)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
+       ON CONFLICT DO NOTHING`,
       [
-        snapshotId,
+        authorityInspection.snapshot.snapshotId,
         scopeKey,
         input.tradeId,
-        `artifact:${(input.tradeId === 'trade-a' ? '4' : '5').repeat(64)}`,
-        createdAt,
-        snapshotId.slice('private-evaluation-authority-snapshot:'.length),
-        canonicalizeAflTradeJson({ content: { calculationAuthority } }),
+        snapshotArtifact.artifactId,
+        input.generatedAt,
+        authorityValidThrough,
+        input.head?.status ?? 'absent',
+        input.head?.revision ?? 0,
+        input.head?.generationId ?? null,
+        authorityInspection.snapshot.snapshotId.slice(
+          'private-evaluation-authority-snapshot:'.length
+        ),
+        canonicalizeAflTradeJson(authorityInspection.snapshot.content),
+        canonicalizeAflTradeJson(authorityInspection.snapshot),
       ]
     );
-    const inspectionId = createAflTradeContentAddress('private-evaluation-inspection', {
-      operationId: input.operationId,
-      tradeId: input.tradeId,
-    });
     await seed.query(
       `INSERT INTO outcome_private_evaluation_inspection_receipt
         (inspection_id,snapshot_id,valuation_scope_key,trade_id,artifact_id,state,
          inspected_at,valid_through,expected_head_status,expected_head_revision,
          expected_head_generation_id,content_sha256,content_canonical_json,receipt_json)
-       VALUES ($1,$2,$3,$4,$5,'ready',$6,'2099-01-01T00:00:00.000Z','absent',0,NULL,$7,'{}','{}'::jsonb)`,
-      [
-        inspectionId,
-        snapshotId,
-        scopeKey,
-        input.tradeId,
-        `artifact:${(input.tradeId === 'trade-a' ? '6' : '7').repeat(64)}`,
-        createdAt,
-        inspectionId.slice('private-evaluation-inspection:'.length),
-      ]
-    );
-    await seed.query(
-      `INSERT INTO outcome_private_evaluation_transition_intent
-        (transition_intent_id,inspection_id,authority_snapshot_id,operation_id,
-         valuation_scope_key,trade_id,artifact_id,action,expected_head_status,
-         expected_head_revision,expected_head_generation_id,target_generation_id,
-         requested_at,expires_at,content_sha256,content_canonical_json,intent_json)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'construct_and_activate','absent',0,NULL,NULL,
-               $8,'2099-01-01T00:00:00.000Z',$9,'{}','{}'::jsonb)
+       VALUES ($1,$2,$3,$4,$5,'ready',$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
        ON CONFLICT DO NOTHING`,
       [
-        transitionIntentId,
-        inspectionId,
-        snapshotId,
-        input.operationId,
+        authorityInspection.inspection.inspectionId,
+        authorityInspection.snapshot.snapshotId,
         scopeKey,
         input.tradeId,
-        `artifact:${(input.tradeId === 'trade-a' ? '8' : '9').repeat(64)}`,
-        createdAt,
-        transitionIntentId.slice('private-evaluation-transition-intent:'.length),
-      ]
-    );
-    await seed.query(
-      `INSERT INTO outcome_local_private_trade_evaluation_generation
-        (generation_id,valuation_scope_key,trade_id,transition_intent_id,
-         generation_artifact_id,narrative_artifact_id,projection_manifest_artifact_id,
-         generated_at,content_sha256,content_canonical_json,generation_json)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'{}',$10::jsonb)
-       ON CONFLICT DO NOTHING`,
-      [
-        generationId,
-        scopeKey,
-        input.tradeId,
-        transitionIntentId,
-        generationArtifact.reference.artifactId,
-        generation.content.narrativeArtifact.artifactId,
-        generation.content.projectionManifestArtifact.artifactId,
+        inspectionArtifact.artifactId,
         input.generatedAt,
-        generationId.slice('local-private-trade-evaluation-generation:'.length),
-        canonicalizeAflTradeJson(generation),
+        authorityValidThrough,
+        input.head?.status ?? 'absent',
+        input.head?.revision ?? 0,
+        input.head?.generationId ?? null,
+        authorityInspection.inspection.inspectionId.slice(
+          'private-evaluation-inspection:'.length
+        ),
+        canonicalizeAflTradeJson(authorityInspection.inspection.content),
+        canonicalizeAflTradeJson(authorityInspection.inspection),
       ]
     );
     await seed.query('COMMIT');
@@ -617,7 +603,16 @@ async function seedReadyRunnerGeneration(input: {
   } finally {
     seed.release();
   }
-  return { generationId, manifestId, manifestArtifact };
+  return {
+    manifestId,
+    manifestArtifact,
+    calculationAuthority,
+    inspectionId: authorityInspection.inspection.inspectionId,
+    snapshotId: authorityInspection.snapshot.snapshotId,
+    validThrough: authorityInspection.inspection.content.validThrough,
+    head: input.head ?? { status: 'absent' as const, revision: 0, generationId: null },
+    previousTransitionId: input.previousTransitionId ?? null,
+  };
 }
 
 describe('PostgreSQL atomic private evaluation batches', () => {
@@ -1254,8 +1249,8 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     ).resolves.toMatchObject({ rows: [{ count: 1 }] });
   });
 
-  it('replays real ready generations into the identical post-generation batch', async () => {
-    const authority = await pool.query<{
+  it('constructs 2/3/4-club generations through real lifecycle custody and isolates failures', async () => {
+    const authorityRows = await pool.query<{
       readonly prepared_revision: number;
       readonly factual_revision: number;
       readonly head_revision: number;
@@ -1273,76 +1268,207 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         WHERE prepared_head.scope_key=$1`,
       [scopeKey]
     );
-    const current = authority.rows[0]!;
-    const ready = await pool.connect();
+    const current = authorityRows.rows[0]!;
+    const nextPreparedRevision = current.prepared_revision + 1;
+    const inspectedAt = await trustedNow();
+    const clubCounts = new Map([
+      ['trade-a', 2],
+      ['trade-b', 3],
+      ['trade-c', 4],
+    ] as const);
+    const baseFixture = createGovernedPrivateEvaluationAuthenticatedCalculationFixture();
+    const baseReplay = replayGovernedPrivateEvaluationMaterialization({
+      ...baseFixture,
+      playerObservations: [],
+    });
+    if (baseReplay.state !== 'ready') throw new Error('Expected ready fixture replay.');
+    const replays = new Map(
+      [...clubCounts].map(([tradeId, clubCount]) => {
+        const source =
+          clubCount === 2
+            ? createGovernedPrivateEvaluationNarrativeFixture()
+            : createGovernedPrivateEvaluationMultiClubNarrativeFixture(clubCount);
+        const content = { ...source.content, tradeId };
+        return [
+          tradeId,
+          {
+            ...baseReplay,
+            narrative: {
+              narrativeId: createAflTradeContentAddress('trade-calculation-narrative', content),
+              content,
+            },
+          },
+        ] as const;
+      })
+    );
+    const stagedAuthorities = new Map<
+      string,
+      Awaited<ReturnType<typeof seedReadyRunnerAuthority>>
+    >();
+    for (const tradeId of clubCounts.keys()) {
+      stagedAuthorities.set(
+        tradeId,
+        await seedReadyRunnerAuthority({
+          tradeId,
+          generatedAt: inspectedAt,
+          preparedInputSetRevision: nextPreparedRevision,
+          factualReleaseRevision: current.factual_revision,
+        })
+      );
+    }
+    const blockedEvidence = artifactRef('multi-club-blocked', createdAt);
+    const prepared = await pool.connect();
     try {
-      await ready.query('BEGIN');
-      await ready.query(`SET LOCAL session_replication_role='replica'`);
-      for (const tradeId of ['trade-a', 'trade-b']) {
-        const marker = tradeId === 'trade-a' ? '6' : '7';
-        const manifestDigest = marker.repeat(64);
+      await prepared.query('BEGIN');
+      await prepared.query(`SET LOCAL session_replication_role='replica'`);
+      await prepared.query(
+        `UPDATE outcome_prepared_valuation_input_set
+            SET trade_count=4,ready_count=3,blocked_count=1
+          WHERE prepared_input_set_id=$1`,
+        [preparedInputSetId]
+      );
+      let ordinal = 1;
+      for (const tradeId of clubCounts.keys()) {
+        const authority = stagedAuthorities.get(tradeId)!;
         const entry = {
           tradeId,
-          state: 'ready',
-          materializationManifestId: `private-evaluation-materialization-manifest:${manifestDigest}`,
-          materializationManifestArtifact: artifactRef(marker, createdAt),
-        } as const;
-        await ready.query(
-          `UPDATE outcome_prepared_valuation_input_entry
-              SET state='ready',entry_canonical_json=$3::text,entry_json=$3::jsonb
-            WHERE prepared_input_set_id=$1 AND trade_id=$2`,
-          [preparedInputSetId, tradeId, canonicalizeAflTradeJson(entry)]
+          state: 'ready' as const,
+          materializationManifestId: authority.manifestId,
+          materializationManifestArtifact: authority.manifestArtifact,
+        };
+        await prepared.query(
+          `INSERT INTO outcome_prepared_valuation_input_entry
+            (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
+           VALUES ($1,$2,$3,'ready',$4::text,$4::jsonb)
+           ON CONFLICT (prepared_input_set_id,trade_id) DO UPDATE
+             SET ordinal=EXCLUDED.ordinal,state=EXCLUDED.state,
+                 entry_canonical_json=EXCLUDED.entry_canonical_json,
+                 entry_json=EXCLUDED.entry_json`,
+          [preparedInputSetId, ordinal, tradeId, canonicalizeAflTradeJson(entry)]
         );
+        ordinal += 1;
       }
-      await ready.query(
+      const unavailableEntry = {
+        tradeId: 'trade-d',
+        state: 'blocked' as const,
+        blockers: [
+          {
+            code: 'component_output_unavailable' as const,
+            subject: { kind: 'trade' as const, id: 'trade-d' },
+            evidenceRefs: [blockedEvidence],
+          },
+        ],
+      };
+      await prepared.query(
+        `INSERT INTO outcome_prepared_valuation_input_entry
+          (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
+         VALUES ($1,4,'trade-d','blocked',$2::text,$2::jsonb)
+         ON CONFLICT (prepared_input_set_id,trade_id) DO UPDATE
+           SET ordinal=EXCLUDED.ordinal,state=EXCLUDED.state,
+               entry_canonical_json=EXCLUDED.entry_canonical_json,
+               entry_json=EXCLUDED.entry_json`,
+        [preparedInputSetId, canonicalizeAflTradeJson(unavailableEntry)]
+      );
+      await prepared.query(
         `UPDATE outcome_current_prepared_valuation_input_set
             SET revision=$2 WHERE scope_key=$1`,
-        [scopeKey, current.prepared_revision + 1]
+        [scopeKey, nextPreparedRevision]
       );
-      await ready.query('COMMIT');
+      await prepared.query('COMMIT');
     } catch (error) {
-      await ready.query('ROLLBACK');
+      await prepared.query('ROLLBACK');
       throw error;
     } finally {
-      ready.release();
+      prepared.release();
     }
-    const stageAutomated = async (input: {
-      readonly selector: { readonly valuationScopeKey: string; readonly tradeId: string };
-      readonly operationId: string;
-    }) => {
-      const capture = await pool.query<{
-        readonly captured_at: Date;
-        readonly trusted_at: Date;
-        readonly prepared_input_set_revision: number;
-        readonly factual_release_revision: number;
-      }>(
-        `SELECT captured_at,date_trunc('milliseconds',transaction_timestamp()) AS trusted_at,
-                prepared_input_set_revision,factual_release_revision
-           FROM outcome_private_evaluation_cohort_capture
-          WHERE scope_key=$1 ORDER BY captured_at DESC LIMIT 1`,
-        [scopeKey]
-      );
-      const retainedCapture = capture.rows[0]!;
-      const generatedAt = retainedCapture.trusted_at.toISOString();
-      const generation = await seedReadyRunnerGeneration({
-        tradeId: input.selector.tradeId,
-        operationId: input.operationId,
-        generatedAt,
-        preparedInputSetRevision: retainedCapture.prepared_input_set_revision,
-        factualReleaseRevision: retainedCapture.factual_release_revision,
-      });
-      return { state: 'activated' as const, generationId: generation.generationId };
-    };
+
+    const stagingRepository = createPostgresGovernedPrivateEvaluationStagingRepository({
+      client: createPgAflOutcomeSqlClient(pool),
+      artifactRepository,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      enableAutomatedPrivateCalculation: true,
+    });
+    const lifecycleRepository = createPostgresGovernedPrivateEvaluationLifecycleRepository({
+      client: createPgAflOutcomeSqlClient(pool),
+      artifactRepository,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      enableAutomatedPrivateCalculation: true,
+    });
+    const automated = createAutomatedGovernedPrivateEvaluationStagingService({
+      trustedNow: async () => inspectedAt,
+      loadStaged: async (operationId) => {
+        const retained = await pool.query<{
+          readonly intent_json: unknown;
+          readonly generation_id: string;
+          readonly receipt_json: { readonly content?: { readonly lastTransitionId?: unknown } };
+        }>(
+          `SELECT intent.intent_json,generation.generation_id,inspection.receipt_json
+             FROM outcome_private_evaluation_transition_intent intent
+             JOIN outcome_local_private_trade_evaluation_generation generation
+               ON generation.transition_intent_id=intent.transition_intent_id
+             JOIN outcome_private_evaluation_inspection_receipt inspection
+               ON inspection.inspection_id=intent.inspection_id
+            WHERE intent.operation_id=$1`,
+          [operationId]
+        );
+        if (retained.rows[0] === undefined) return null;
+        const intent = automatedGovernedPrivateEvaluationTransitionIntentSchema.parse(
+          retained.rows[0].intent_json
+        );
+        const previousTransitionId =
+          retained.rows[0].receipt_json.content?.lastTransitionId;
+        if (previousTransitionId !== null && typeof previousTransitionId !== 'string') {
+          throw new TypeError('Fixture replay lost its exact predecessor.');
+        }
+        return {
+          selector: intent.content.selector,
+          principalId: intent.content.constructionAuthority.principalId,
+          generationId: retained.rows[0].generation_id,
+          intent,
+          previousTransitionId,
+        };
+      },
+      captureAuthority: async ({ selector }) => {
+        const authority = stagedAuthorities.get(selector.tradeId);
+        if (authority === undefined) {
+          return {
+            state: 'unavailable' as const,
+            selector,
+            blockers: [{ code: 'insufficient_data', message: 'No fixture authority.' }],
+          };
+        }
+        return {
+          state: 'ready' as const,
+          selector,
+          inspectionId: authority.inspectionId,
+          authoritySnapshotId: authority.snapshotId,
+          validThrough: authority.validThrough,
+          head: authority.head,
+          previousTransitionId: authority.previousTransitionId,
+          materializationManifestId: authority.manifestId,
+        };
+      },
+      replayMaterialization: async ({ materializationManifestId }) => {
+        const tradeId = [...stagedAuthorities].find(
+          ([, authority]) => authority.manifestId === materializationManifestId
+        )?.[0];
+        if (tradeId === undefined) throw new TypeError('Unknown fixture manifest.');
+        return replays.get(tradeId)!;
+      },
+      stage: (input) => stagingRepository.stage(input),
+      retainArtifact: (input) => stagingRepository.retainArtifact(input),
+      commit: (input) => lifecycleRepository.commitAutomated(input),
+    });
     const workspace = {
-      stageAutomated,
+      stageAutomated: (input: Parameters<typeof automated.stage>[0]) => automated.stage(input),
       inspect: async () => {
-        throw new Error('Not used by the cohort runner.');
+        throw new Error('Not used by the cohort proof.');
       },
       execute: async () => {
-        throw new Error('Not used by the cohort runner.');
+        throw new Error('Not used by the cohort proof.');
       },
       read: async () => {
-        throw new Error('Not used by the cohort runner.');
+        throw new Error('Not used by the cohort proof.');
       },
     };
     const interruptedRepository = new PostgresGovernedPrivateEvaluationBatchRepository(
@@ -1350,98 +1476,179 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       async () => true
     );
     interruptedRepository.advance = async () => {
-      throw new Error('simulated ready interruption before batch CAS');
+      throw new Error('simulated multi-club interruption before batch CAS');
     };
-    const interrupted = createPostgresAflTradePrivateEvaluationCohortRunner({
+    const interruptedRunner = createPostgresAflTradePrivateEvaluationCohortRunner({
       client: createPgAflOutcomeSqlClient(pool),
       batchRepository: interruptedRepository,
       workspace,
     });
-    await expect(interrupted.runCurrent(scopeKey)).rejects.toThrow(
-      'simulated ready interruption before batch CAS'
+    await expect(interruptedRunner.runCurrent(scopeKey)).rejects.toThrow(
+      'simulated multi-club interruption before batch CAS'
     );
-    const bound = await pool.query<{
-      readonly batch_id: string;
-      readonly operation_id: string;
-      readonly created_at: Date;
-      readonly captured_at: Date;
-      readonly maximum_generated_at: Date;
-    }>(
-      `SELECT binding.batch_id,binding.operation_id,batch.created_at,capture.captured_at,
-              max(generation.generated_at) AS maximum_generated_at
-         FROM outcome_private_evaluation_cohort_batch binding
-         JOIN outcome_private_evaluation_cohort_capture capture
-           ON capture.operation_id=binding.operation_id
-         JOIN outcome_private_evaluation_batch batch ON batch.batch_id=binding.batch_id
-         JOIN outcome_private_evaluation_batch_entry entry ON entry.batch_id=batch.batch_id
-         JOIN outcome_local_private_trade_evaluation_generation generation
-           ON generation.generation_id=entry.generation_id
-        WHERE capture.expected_batch_revision=$1
-        GROUP BY binding.batch_id,binding.operation_id,batch.created_at,capture.captured_at`,
-      [current.head_revision]
-    );
-    expect(bound.rows).toHaveLength(1);
-    expect(bound.rows[0]!.created_at.toISOString()).toBe(
-      bound.rows[0]!.maximum_generated_at.toISOString()
-    );
-    expect(bound.rows[0]!.created_at.getTime()).toBeGreaterThan(
-      bound.rows[0]!.captured_at.getTime()
-    );
-
-    const replayRepository = new PostgresGovernedPrivateEvaluationBatchRepository(
+    const repository = new PostgresGovernedPrivateEvaluationBatchRepository(
       createPgAflOutcomeSqlClient(pool),
       async () => true
     );
-    const replay = createPostgresAflTradePrivateEvaluationCohortRunner({
+    const runner = createPostgresAflTradePrivateEvaluationCohortRunner({
       client: createPgAflOutcomeSqlClient(pool),
-      batchRepository: replayRepository,
+      batchRepository: repository,
       workspace,
     });
-    await expect(replay.runCurrent(scopeKey)).resolves.toMatchObject({
+    const activated = await runner.runCurrent(scopeKey);
+    if (activated.state === 'unexpected_failure') {
+      throw new Error(JSON.stringify(activated.diagnostics));
+    }
+    expect(activated).toMatchObject({
       state: 'activated',
-      batch: { batchId: bound.rows[0]!.batch_id, content: { readyCount: 2 } },
+      batch: { content: { tradeCount: 4, readyCount: 3, unavailableCount: 1 } },
       transition: { revision: current.head_revision + 1 },
     });
-    await expect(
-      pool.query(
-        `SELECT count(*)::int AS count FROM outcome_private_evaluation_cohort_batch
-          WHERE operation_id=$1`,
-        [bound.rows[0]!.operation_id]
-      )
-    ).resolves.toMatchObject({ rows: [{ count: 1 }] });
-    const currentEntries = await pool.query<{
-      readonly trade_id: string;
-      readonly generation_id: string;
-    }>(
-      `SELECT trade_id,generation_id
-         FROM outcome_private_evaluation_batch_entry
-        WHERE batch_id=$1
-        ORDER BY trade_id`,
-      [bound.rows[0]!.batch_id]
-    );
-    expect(currentEntries.rows).toHaveLength(2);
+    if (activated.state !== 'activated') throw new Error('Expected an activated cohort.');
+    const activatedBatchId = activated.batch.batchId;
     const reader = createPostgresGovernedPrivateEvaluationReadRepository({
       client: createPgAflOutcomeSqlClient(pool),
       artifactRepository,
       maximumArtifactBytes: 4 * 1024 * 1024,
-      principalId: 'firebase:fixture-private-reader',
+      principalId: 'firebase:multi-club-reader',
       authorizeReader: async () => true,
     });
-    for (const entry of currentEntries.rows) {
+    for (const [tradeId, clubCount] of clubCounts) {
+      const narrative = replays.get(tradeId)!;
+      if (narrative.state !== 'ready') throw new Error('Expected ready narrative.');
+      expect(narrative.narrative.content.views[0]?.clubs).toHaveLength(clubCount);
       const reads = await Promise.all(
         (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map((kind) =>
           reader.read({
-            selector: { valuationScopeKey: scopeKey, tradeId: entry.trade_id },
+            selector: { valuationScopeKey: scopeKey, tradeId },
             selection: { kind: 'current' },
             document: { kind },
           })
         )
       );
       expect(
-        reads.every(
-          (read) => read.state === 'available' && read.generationId === entry.generation_id
-        )
+        reads.every((read) => read.state === 'available' && read.batchId === activatedBatchId)
       ).toBe(true);
     }
+    await expect(
+      reader.read({
+        selector: { valuationScopeKey: scopeKey, tradeId: 'trade-d' },
+        selection: { kind: 'current' },
+        document: { kind: 'detail' },
+      })
+    ).resolves.toMatchObject({ state: 'unavailable', reason: 'projection_unavailable' });
+
+    const countsBeforeReplay = await pool.query<{
+      readonly intents: number;
+      readonly generations: number;
+      readonly receipts: number;
+      readonly batches: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM outcome_private_evaluation_transition_intent
+           WHERE valuation_scope_key=$1) AS intents,
+         (SELECT count(*)::int FROM outcome_local_private_trade_evaluation_generation
+           WHERE valuation_scope_key=$1) AS generations,
+         (SELECT count(*)::int FROM outcome_private_evaluation_transition_receipt
+           WHERE valuation_scope_key=$1) AS receipts,
+         (SELECT count(*)::int FROM outcome_private_evaluation_batch
+           WHERE scope_key=$1) AS batches`,
+      [scopeKey]
+    );
+    await expect(runner.runCurrent(scopeKey)).resolves.toMatchObject({
+      state: 'already_current',
+      head: { batchId: activatedBatchId },
+    });
+    await expect(
+      pool.query(
+        `SELECT
+           (SELECT count(*)::int FROM outcome_private_evaluation_transition_intent
+             WHERE valuation_scope_key=$1) AS intents,
+           (SELECT count(*)::int FROM outcome_local_private_trade_evaluation_generation
+             WHERE valuation_scope_key=$1) AS generations,
+           (SELECT count(*)::int FROM outcome_private_evaluation_transition_receipt
+             WHERE valuation_scope_key=$1) AS receipts,
+           (SELECT count(*)::int FROM outcome_private_evaluation_batch
+             WHERE scope_key=$1) AS batches`,
+        [scopeKey]
+      )
+    ).resolves.toEqual(countsBeforeReplay);
+
+    const failedPreparedRevision = nextPreparedRevision + 1;
+    await pool.query(
+      `UPDATE outcome_current_prepared_valuation_input_set SET revision=$2 WHERE scope_key=$1`,
+      [scopeKey, failedPreparedRevision]
+    );
+    const currentTradeHeads = await pool.query<{
+      readonly trade_id: string;
+      readonly status: 'active';
+      readonly revision: number;
+      readonly generation_id: string;
+      readonly last_transition_id: string;
+    }>(
+      `SELECT trade_id,status,revision,generation_id,last_transition_id
+         FROM outcome_local_private_trade_evaluation_head
+        WHERE valuation_scope_key=$1 AND trade_id=ANY($2::text[])`,
+      [scopeKey, [...clubCounts.keys()]]
+    );
+    for (const head of currentTradeHeads.rows) {
+      stagedAuthorities.set(
+        head.trade_id,
+        await seedReadyRunnerAuthority({
+          tradeId: head.trade_id,
+          generatedAt: inspectedAt,
+          preparedInputSetRevision: failedPreparedRevision,
+          factualReleaseRevision: current.factual_revision,
+          head: {
+            status: head.status,
+            revision: head.revision,
+            generationId: head.generation_id,
+          },
+          previousTransitionId: head.last_transition_id,
+        })
+      );
+    }
+    const attempted = new Set<string>();
+    const failureWorkspace = {
+      ...workspace,
+      stageAutomated: async (input: Parameters<typeof automated.stage>[0]) => {
+        attempted.add(input.selector.tradeId);
+        if (input.selector.tradeId === 'trade-b') {
+          throw new TypeError('exact multi-club construction failure');
+        }
+        return automated.stage(input);
+      },
+    };
+    const failureRunner = createPostgresAflTradePrivateEvaluationCohortRunner({
+      client: createPgAflOutcomeSqlClient(pool),
+      batchRepository: repository,
+      workspace: failureWorkspace,
+    });
+    await expect(failureRunner.runCurrent(scopeKey)).resolves.toMatchObject({
+      state: 'unexpected_failure',
+      diagnostics: [
+        { tradeId: 'trade-b', message: 'exact multi-club construction failure' },
+      ],
+    });
+    expect([...attempted].sort()).toEqual(['trade-a', 'trade-b', 'trade-c']);
+    await expect(repository.loadCurrent(scopeKey)).resolves.toMatchObject({
+      head: { batchId: activatedBatchId, revision: current.head_revision + 1 },
+    });
+    for (const tradeId of clubCounts.keys()) {
+      await expect(
+        reader.read({
+          selector: { valuationScopeKey: scopeKey, tradeId },
+          selection: { kind: 'current' },
+          document: { kind: 'detail' },
+        })
+      ).resolves.toMatchObject({ state: 'available', batchId: activatedBatchId });
+    }
+    await expect(
+      pool.query(
+        `SELECT diagnostic_json FROM outcome_private_evaluation_cohort_failure
+          WHERE diagnostic_json->'content'->'diagnostics' @>
+                '[{"tradeId":"trade-b"}]'::jsonb`
+      )
+    ).resolves.toMatchObject({ rows: [{ diagnostic_json: expect.any(Object) }] });
   });
 });
