@@ -51,7 +51,10 @@ type TradeResult = Promise<PrivateLocalWorkbookTradeEvaluation | null>;
 export interface PrivateLocalWorkbookReads {
   loadArchive(query: ArchiveQuery): ArchiveResult;
   loadTrade(tradeId: string): TradeResult;
-  loadExactJsonExport(tradeId: string): Promise<GovernedPrivateEvaluationReadResult | null>;
+  loadExactJsonExport(
+    tradeId: string,
+    generationId: string
+  ): Promise<GovernedPrivateEvaluationReadResult | null>;
 }
 
 export interface PrivateLocalWorkbookReadDependencies {
@@ -154,7 +157,6 @@ export function createPrivateLocalWorkbookReads(
       calculation: Promise<LocalPrivateReviewedTradeCalculation | null>;
     }>
   >();
-
   async function admit(): Promise<Readonly<{
     environment: Readonly<PrivateLocalWorkbookReadEnvironment>;
     principalId: string;
@@ -174,14 +176,15 @@ export function createPrivateLocalWorkbookReads(
 
   function governedRequest(
     evaluation: LocalWorkbookTradeEvaluation,
-    document: GovernedPrivateEvaluationReadRequest['document']
+    document: GovernedPrivateEvaluationReadRequest['document'],
+    selection: GovernedPrivateEvaluationReadRequest['selection'] = { kind: 'current' }
   ): GovernedPrivateEvaluationReadRequest {
     return {
       selector: {
         valuationScopeKey: `afl-men:${evaluation.detail.trade.year}-trades`,
         tradeId: evaluation.detail.trade.tradeId,
       },
-      selection: { kind: 'current' },
+      selection,
       document,
     };
   }
@@ -220,11 +223,7 @@ export function createPrivateLocalWorkbookReads(
     const cacheKey = `${environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE}\0${workbookSha256}\0${detail.trade.tradeId}`;
     const current = calculationByRuntimeAndTrade.get(cacheKey);
     if (current?.generation === generation) return current.calculation;
-    const calculation = dependencies.loadPrivateCalculation(
-      environment,
-      detail,
-      workbookSha256
-    );
+    const calculation = dependencies.loadPrivateCalculation(environment, detail, workbookSha256);
     const entry = Object.freeze({ generation, calculation });
     calculationByRuntimeAndTrade.set(cacheKey, entry);
     try {
@@ -242,10 +241,8 @@ export function createPrivateLocalWorkbookReads(
       const admitted = await admit();
       if (admitted === null) return null;
       const { environment } = admitted;
-      return dependencies.evaluation.loadArchive(
-        query,
-        environment,
-        (scopeKey) => inspectCurrentValuationReadiness(environment, scopeKey)
+      return dependencies.evaluation.loadArchive(query, environment, (scopeKey) =>
+        inspectCurrentValuationReadiness(environment, scopeKey)
       );
     },
 
@@ -276,7 +273,7 @@ export function createPrivateLocalWorkbookReads(
       return { ...evaluation, governedEvaluation };
     },
 
-    async loadExactJsonExport(tradeId) {
+    async loadExactJsonExport(tradeId, generationId) {
       const admitted = await admit();
       if (admitted === null || dependencies.readGovernedEvaluation === undefined) return null;
       const { environment, principalId } = admitted;
@@ -296,7 +293,11 @@ export function createPrivateLocalWorkbookReads(
       return dependencies.readGovernedEvaluation(
         environment,
         principalId,
-        governedRequest(evaluation, { kind: 'json_export' })
+        governedRequest(
+          evaluation,
+          { kind: 'json_export' },
+          { kind: 'generation', generationId }
+        )
       );
     },
   };
@@ -326,10 +327,10 @@ async function loadAdmittedPrivateCalculation(
   workbookSha256: string
 ): Promise<LocalPrivateReviewedTradeCalculation> {
   const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
-  return loadPostgresLocalPrivateReviewedTradeCalculation(
-    createPgAflOutcomeSqlClient(pool),
-    { detail, workbookSha256 }
-  );
+  return loadPostgresLocalPrivateReviewedTradeCalculation(createPgAflOutcomeSqlClient(pool), {
+    detail,
+    workbookSha256,
+  });
 }
 
 async function readLocalValuationReadinessGeneration(

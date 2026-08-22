@@ -206,8 +206,13 @@ CREATE TABLE "outcome_private_evaluation_batch_transition" (
   "transition_id" TEXT PRIMARY KEY,
   "operation_id" TEXT NOT NULL UNIQUE,
   "scope_key" TEXT NOT NULL,
-  "principal_id" TEXT NOT NULL CHECK ("principal_id"='system:weekly-valuation-coordinator'),
+  "principal_id" TEXT NOT NULL,
   "action" TEXT NOT NULL CHECK ("action" IN ('activate','rollback')),
+  "authority_evidence_id" TEXT REFERENCES "outcome_governed_evidence_reference"("reference_id") ON DELETE RESTRICT,
+  "reason" TEXT,
+  "authorized_at" TIMESTAMPTZ(3),
+  "expires_at" TIMESTAMPTZ(3),
+  "authorization_json" JSONB,
   "from_revision" INTEGER NOT NULL CHECK ("from_revision">=0),
   "from_batch_id" TEXT REFERENCES "outcome_private_evaluation_batch"("batch_id") ON DELETE RESTRICT,
   "to_revision" INTEGER NOT NULL CHECK ("to_revision">0),
@@ -215,6 +220,16 @@ CREATE TABLE "outcome_private_evaluation_batch_transition" (
   "transitioned_at" TIMESTAMPTZ(3) NOT NULL DEFAULT transaction_timestamp(),
   CONSTRAINT "outcome_private_evaluation_batch_transition_revision_check"
     CHECK ("to_revision"="from_revision"+1),
+  CONSTRAINT "outcome_private_evaluation_batch_transition_authority_check"
+    CHECK (
+      ("action"='activate' AND "principal_id"='system:weekly-valuation-coordinator'
+        AND "authority_evidence_id" IS NULL AND "reason" IS NULL
+        AND "authorized_at" IS NULL AND "expires_at" IS NULL AND "authorization_json" IS NULL)
+      OR
+      ("action"='rollback' AND "principal_id"<>'system:weekly-valuation-coordinator'
+        AND "authority_evidence_id" IS NOT NULL AND "reason" IS NOT NULL
+        AND "authorized_at" IS NOT NULL AND "expires_at" IS NOT NULL AND "authorization_json" IS NOT NULL)
+    ),
   CONSTRAINT "outcome_private_evaluation_batch_transition_id_check"
     CHECK ("transition_id" ~ '^private-evaluation-batch-transition:[a-f0-9]{64}$')
 );
@@ -275,7 +290,8 @@ CREATE OR REPLACE FUNCTION "validate_outcome_private_evaluation_batch_activation
 $$;
 
 CREATE OR REPLACE FUNCTION "validate_outcome_private_evaluation_batch_transition"() RETURNS TRIGGER AS $$
-DECLARE current_head RECORD; target_scope TEXT; expected_id TEXT;
+DECLARE current_head RECORD; target_scope TEXT; expected_id TEXT; content JSONB;
+  operator_authority_count INTEGER;
 BEGIN
   SELECT "scope_key" INTO target_scope FROM "outcome_private_evaluation_batch"
    WHERE "batch_id"=NEW."to_batch_id" FOR KEY SHARE;
@@ -289,33 +305,99 @@ BEGIN
       'toRevision',NEW."to_revision",'toBatchId',NEW."to_batch_id"
     )),'UTF8')),'hex');
   IF target_scope IS NULL OR target_scope IS DISTINCT FROM NEW."scope_key" OR
-     NEW."principal_id" IS DISTINCT FROM 'system:weekly-valuation-coordinator' OR
-     NEW."operation_id" IS DISTINCT FROM 'private-evaluation-batch-operation:'||encode(sha256(convert_to(
-       "outcome_afl_trade_canonical_json"(jsonb_build_object(
-         'scopeKey',NEW."scope_key",'batchId',NEW."to_batch_id",
-         'expectedRevision',NEW."from_revision",'action',NEW."action",
-         'principalId',NEW."principal_id"
-       )),'UTF8')),'hex') OR NEW."transition_id" IS DISTINCT FROM expected_id OR
+     NEW."transition_id" IS DISTINCT FROM expected_id OR
      "validate_outcome_private_evaluation_batch_complete"(
        NEW."scope_key",NEW."to_batch_id"
      ) IS DISTINCT FROM TRUE OR
-     (NEW."action"='activate' AND
-       "validate_outcome_private_evaluation_batch_activation_target"(
-         NEW."scope_key",NEW."to_batch_id"
-       ) IS DISTINCT FROM TRUE) OR
      COALESCE(current_head."revision",0) IS DISTINCT FROM NEW."from_revision" OR
      current_head."batch_id" IS DISTINCT FROM NEW."from_batch_id" OR
-     (NEW."action"='rollback' AND (
-       NEW."from_batch_id" IS NULL OR NEW."from_batch_id"=NEW."to_batch_id" OR
-       NOT EXISTS (
-         SELECT 1 FROM "outcome_private_evaluation_batch_transition" prior_activation
-          WHERE prior_activation."scope_key"=NEW."scope_key"
-            AND prior_activation."to_batch_id"=NEW."to_batch_id"
-       )
-     )) THEN
+     NEW."transitioned_at" IS DISTINCT FROM date_trunc('milliseconds',transaction_timestamp()) THEN
     RAISE EXCEPTION 'Private evaluation batch transition is stale, cross-scope, or unauthenticated';
   END IF;
+  IF NEW."action"='activate' THEN
+    IF NEW."principal_id" IS DISTINCT FROM 'system:weekly-valuation-coordinator' OR
+       NEW."operation_id" IS DISTINCT FROM 'private-evaluation-batch-operation:'||encode(sha256(convert_to(
+         "outcome_afl_trade_canonical_json"(jsonb_build_object(
+           'scopeKey',NEW."scope_key",'batchId',NEW."to_batch_id",
+           'expectedRevision',NEW."from_revision",'action','activate',
+           'principalId',NEW."principal_id"
+         )),'UTF8')),'hex') OR
+       NEW."authority_evidence_id" IS NOT NULL OR NEW."reason" IS NOT NULL OR
+       NEW."authorized_at" IS NOT NULL OR NEW."expires_at" IS NOT NULL OR
+       NEW."authorization_json" IS NOT NULL OR
+       "validate_outcome_private_evaluation_batch_activation_target"(
+         NEW."scope_key",NEW."to_batch_id"
+       ) IS DISTINCT FROM TRUE THEN
+      RAISE EXCEPTION 'Private evaluation batch activation is unauthenticated';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  content:=NEW."authorization_json"->'content';
+  SELECT count(*) INTO operator_authority_count
+    FROM "outcome_operational_principal_authority" authority
+    JOIN "outcome_governed_evidence_reference" evidence
+      ON evidence."reference_id"=authority."authority_evidence_id"
+    JOIN "outcome_review_decision" approval
+      ON approval."decision_id"=evidence."approval_decision_id"
+   WHERE authority."authority_evidence_id"=NEW."authority_evidence_id"
+     AND authority."principal_ref"=NEW."principal_id"
+     AND authority."role"='afl_trade_private_evaluation_operator'
+     AND authority."scope_key"=NEW."scope_key"
+     AND authority."provider"='statly_modeling'
+     AND authority."capability_id"='manage_private_trade_evaluation'
+     AND authority."competition"='AFLM'
+     AND authority."valid_from"<=NEW."authorized_at"
+     AND (authority."valid_through" IS NULL OR authority."valid_through">NEW."authorized_at")
+     AND authority."valid_from"<=transaction_timestamp()
+     AND (authority."valid_through" IS NULL OR authority."valid_through">transaction_timestamp())
+     AND evidence."environment"='test_fixture'::"OutcomeEnvironment"
+     AND evidence."status"='approved'::"OutcomeRecordStatus"
+     AND approval."decision"='approved'
+     AND NOT EXISTS (
+       SELECT 1 FROM "outcome_review_decision" successor
+        WHERE successor."supersedes_decision_id"=approval."decision_id"
+     );
+  IF NEW."from_batch_id" IS NULL OR NEW."from_batch_id"=NEW."to_batch_id" OR
+     NOT EXISTS (
+       SELECT 1 FROM "outcome_private_evaluation_batch_transition" prior_activation
+        WHERE prior_activation."scope_key"=NEW."scope_key"
+          AND prior_activation."action" IN ('activate','rollback')
+          AND prior_activation."to_batch_id"=NEW."to_batch_id"
+     ) OR
+     operator_authority_count IS DISTINCT FROM 1 OR
+     jsonb_typeof(NEW."authorization_json") IS DISTINCT FROM 'object' OR
+     (SELECT count(*) FROM jsonb_object_keys(NEW."authorization_json"))<>2 OR
+     NEW."authorization_json"->>'operationId' IS DISTINCT FROM NEW."operation_id" OR
+     jsonb_typeof(content) IS DISTINCT FROM 'object' OR
+     (SELECT count(*) FROM jsonb_object_keys(content))<>13 OR
+     content->>'schemaVersion' IS DISTINCT FROM 'governed-private-evaluation-batch-rollback/v1' OR
+     content->>'environment' IS DISTINCT FROM 'non_production' OR
+     content->'publicationEligible' IS DISTINCT FROM 'false'::jsonb OR
+     content->>'scopeKey' IS DISTINCT FROM NEW."scope_key" OR
+     content->>'fromBatchId' IS DISTINCT FROM NEW."from_batch_id" OR
+     content->>'toBatchId' IS DISTINCT FROM NEW."to_batch_id" OR
+     (content->>'expectedRevision')::integer IS DISTINCT FROM NEW."from_revision" OR
+     content->>'principalId' IS DISTINCT FROM NEW."principal_id" OR
+     content->>'authorityEvidenceId' IS DISTINCT FROM NEW."authority_evidence_id" OR
+     content->>'reason' IS DISTINCT FROM NEW."reason" OR
+     content->>'principalId' IS DISTINCT FROM btrim(content->>'principalId') OR
+     char_length(content->>'principalId') NOT BETWEEN 1 AND 400 OR
+     content->>'reason' IS DISTINCT FROM btrim(content->>'reason') OR
+     char_length(content->>'reason') NOT BETWEEN 1 AND 2000 OR
+     (content->>'authorizedAt')::timestamptz IS DISTINCT FROM NEW."authorized_at" OR
+     (content->>'expiresAt')::timestamptz IS DISTINCT FROM NEW."expires_at" OR
+     NEW."expires_at" IS DISTINCT FROM NEW."authorized_at"+interval '15 minutes' OR
+     NEW."authorized_at">transaction_timestamp() OR NEW."expires_at"<=transaction_timestamp() OR
+     content->>'limitation' IS DISTINCT FROM
+       'Emergency private batch rollback only; it restores previously authenticated private visibility and grants no factual, model, production, or publication authority.' OR
+     NEW."operation_id" IS DISTINCT FROM 'private-evaluation-batch-operation:'||encode(sha256(convert_to(
+       "outcome_afl_trade_canonical_json"(content),'UTF8')),'hex') THEN
+    RAISE EXCEPTION 'Private evaluation batch rollback lacks current governed operator authority';
+  END IF;
   RETURN NEW;
+EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range OR datetime_field_overflow THEN
+  RAISE EXCEPTION 'Private evaluation batch rollback authority has invalid typed fields';
 END;
 $$ LANGUAGE plpgsql;
 CREATE TRIGGER "outcome_private_evaluation_batch_transition_validate"
@@ -363,7 +445,7 @@ CREATE OR REPLACE FUNCTION "advance_outcome_current_private_evaluation_batch"(
 ) RETURNS TABLE(batch_id TEXT,revision INTEGER,transition_id TEXT,activated_at TIMESTAMPTZ) AS $$
 DECLARE current_head RECORD; target RECORD; retained RECORD; next_revision INTEGER; new_transition_id TEXT;
 BEGIN
-  IF requested_action NOT IN ('activate','rollback') OR expected_revision<0 OR
+  IF requested_action IS DISTINCT FROM 'activate' OR expected_revision<0 OR
      requested_principal_id IS DISTINCT FROM 'system:weekly-valuation-coordinator' OR
      requested_operation_id IS DISTINCT FROM 'private-evaluation-batch-operation:'||encode(sha256(convert_to(
        "outcome_afl_trade_canonical_json"(jsonb_build_object(
@@ -382,31 +464,40 @@ BEGIN
   SELECT * INTO retained FROM "outcome_private_evaluation_batch_transition"
    WHERE "operation_id"=requested_operation_id FOR KEY SHARE;
   IF FOUND THEN
-    SELECT h."batch_id",h."revision",h."last_transition_id",h."activated_at"
-      INTO batch_id,revision,transition_id,activated_at
-      FROM "outcome_current_private_evaluation_batch" h WHERE h."scope_key"=requested_scope_key;
-    IF retained."scope_key"<>requested_scope_key OR retained."to_batch_id"<>requested_batch_id OR
-       retained."action"<>requested_action OR transition_id<>retained."transition_id" THEN
+    IF retained."scope_key" IS DISTINCT FROM requested_scope_key OR
+       retained."to_batch_id" IS DISTINCT FROM requested_batch_id OR
+       retained."action" IS DISTINCT FROM requested_action OR
+       retained."principal_id" IS DISTINCT FROM requested_principal_id OR
+       retained."from_revision" IS DISTINCT FROM expected_revision OR
+       retained."to_revision" IS DISTINCT FROM expected_revision+1 OR
+       NOT (
+         EXISTS (SELECT 1 FROM "outcome_current_private_evaluation_batch" head
+                  WHERE head."scope_key"=requested_scope_key
+                    AND head."last_transition_id"=retained."transition_id")
+         OR EXISTS (SELECT 1 FROM "outcome_private_evaluation_batch_transition" successor
+                     WHERE successor."scope_key"=requested_scope_key
+                       AND successor."from_revision"=retained."to_revision"
+                       AND successor."from_batch_id"=retained."to_batch_id")
+       ) THEN
       RAISE EXCEPTION 'Private evaluation batch operation replay is stale or conflicting';
     END IF;
+    batch_id:=retained."to_batch_id";
+    revision:=retained."to_revision";
+    transition_id:=retained."transition_id";
+    activated_at:=retained."transitioned_at";
     RETURN NEXT; RETURN;
   END IF;
   IF "validate_outcome_private_evaluation_batch_complete"(
        requested_scope_key,requested_batch_id
      ) IS DISTINCT FROM TRUE OR
-     (requested_action='activate' AND
-       "validate_outcome_private_evaluation_batch_activation_target"(
-         requested_scope_key,requested_batch_id
-       ) IS DISTINCT FROM TRUE) THEN
+     "validate_outcome_private_evaluation_batch_activation_target"(
+       requested_scope_key,requested_batch_id
+     ) IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION 'Private evaluation batch target is incomplete or cross-scope';
   END IF;
   SELECT * INTO current_head FROM "outcome_current_private_evaluation_batch"
    WHERE "scope_key"=requested_scope_key FOR UPDATE;
-  IF COALESCE(current_head."revision",0)<>expected_revision OR
-     (requested_action='rollback' AND (current_head."batch_id" IS NULL OR current_head."batch_id"=requested_batch_id OR
-       NOT EXISTS (SELECT 1 FROM "outcome_private_evaluation_batch_transition" prior_activation
-         WHERE prior_activation."scope_key"=requested_scope_key
-           AND prior_activation."to_batch_id"=requested_batch_id))) THEN
+  IF COALESCE(current_head."revision",0)<>expected_revision THEN
     RAISE EXCEPTION 'Private evaluation batch heads require fenced compare-and-swap';
   END IF;
   next_revision:=expected_revision+1;
@@ -418,23 +509,143 @@ BEGIN
       'toRevision',next_revision,'toBatchId',requested_batch_id
     )),'UTF8')),'hex');
   INSERT INTO "outcome_private_evaluation_batch_transition"
-    ("transition_id","operation_id","scope_key","principal_id","action","from_revision","from_batch_id","to_revision","to_batch_id")
+    ("transition_id","operation_id","scope_key","principal_id","action","from_revision",
+     "from_batch_id","to_revision","to_batch_id","transitioned_at")
   VALUES (new_transition_id,requested_operation_id,requested_scope_key,requested_principal_id,requested_action,
-          expected_revision,current_head."batch_id",next_revision,requested_batch_id);
+          expected_revision,current_head."batch_id",next_revision,requested_batch_id,
+          date_trunc('milliseconds',transaction_timestamp()));
   IF current_head."scope_key" IS NULL THEN
     INSERT INTO "outcome_current_private_evaluation_batch"
-      ("scope_key","batch_id","revision","last_transition_id")
-    VALUES (requested_scope_key,requested_batch_id,next_revision,new_transition_id);
+      ("scope_key","batch_id","revision","last_transition_id","activated_at")
+    VALUES (requested_scope_key,requested_batch_id,next_revision,new_transition_id,
+            date_trunc('milliseconds',transaction_timestamp()));
   ELSE
     UPDATE "outcome_current_private_evaluation_batch" SET
       "batch_id"=requested_batch_id,"revision"=next_revision,
-      "last_transition_id"=new_transition_id,"activated_at"=transaction_timestamp()
+      "last_transition_id"=new_transition_id,
+      "activated_at"=date_trunc('milliseconds',transaction_timestamp())
      WHERE "scope_key"=requested_scope_key;
   END IF;
   SELECT h."batch_id",h."revision",h."last_transition_id",h."activated_at"
     INTO batch_id,revision,transition_id,activated_at
     FROM "outcome_current_private_evaluation_batch" h WHERE h."scope_key"=requested_scope_key;
   RETURN NEXT;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "rollback_outcome_current_private_evaluation_batch"(
+  requested_rollback JSONB
+) RETURNS TABLE(batch_id TEXT,revision INTEGER,transition_id TEXT,activated_at TIMESTAMPTZ) AS $$
+DECLARE content JSONB; current_head RECORD; target RECORD; retained RECORD;
+  requested_scope_key TEXT; requested_from_batch_id TEXT; requested_batch_id TEXT;
+  requested_operation_id TEXT; requested_principal_id TEXT; requested_authority_evidence_id TEXT;
+  requested_reason TEXT; requested_authorized_at TIMESTAMPTZ; requested_expires_at TIMESTAMPTZ;
+  expected_revision INTEGER; next_revision INTEGER; new_transition_id TEXT;
+BEGIN
+  IF jsonb_typeof(requested_rollback) IS DISTINCT FROM 'object' OR
+     (SELECT count(*) FROM jsonb_object_keys(requested_rollback))<>2 OR
+     jsonb_typeof(requested_rollback->'content') IS DISTINCT FROM 'object' THEN
+    RAISE EXCEPTION 'Private evaluation batch rollback request is invalid';
+  END IF;
+  content:=requested_rollback->'content';
+  requested_operation_id:=requested_rollback->>'operationId';
+  requested_scope_key:=content->>'scopeKey';
+  requested_from_batch_id:=content->>'fromBatchId';
+  requested_batch_id:=content->>'toBatchId';
+  expected_revision:=(content->>'expectedRevision')::integer;
+  requested_principal_id:=content->>'principalId';
+  requested_authority_evidence_id:=content->>'authorityEvidenceId';
+  requested_reason:=content->>'reason';
+  requested_authorized_at:=(content->>'authorizedAt')::timestamptz;
+  requested_expires_at:=(content->>'expiresAt')::timestamptz;
+  IF requested_scope_key IS NULL OR requested_operation_id IS NULL OR expected_revision<=0 THEN
+    RAISE EXCEPTION 'Private evaluation batch rollback request is invalid';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('private-evaluation-batch-head:'||requested_scope_key,0)
+  );
+  SELECT * INTO retained FROM "outcome_private_evaluation_batch_transition"
+   WHERE "operation_id"=requested_operation_id FOR KEY SHARE;
+  IF FOUND THEN
+    IF retained."scope_key" IS DISTINCT FROM requested_scope_key OR
+       retained."from_batch_id" IS DISTINCT FROM requested_from_batch_id OR
+       retained."to_batch_id" IS DISTINCT FROM requested_batch_id OR
+       retained."action" IS DISTINCT FROM 'rollback' OR
+       retained."principal_id" IS DISTINCT FROM requested_principal_id OR
+       retained."authority_evidence_id" IS DISTINCT FROM requested_authority_evidence_id OR
+       retained."reason" IS DISTINCT FROM requested_reason OR
+       retained."authorized_at" IS DISTINCT FROM requested_authorized_at OR
+       retained."expires_at" IS DISTINCT FROM requested_expires_at OR
+       retained."from_revision" IS DISTINCT FROM expected_revision OR
+       retained."to_revision" IS DISTINCT FROM expected_revision+1 OR
+       retained."authorization_json" IS DISTINCT FROM requested_rollback OR
+       NOT (
+         EXISTS (SELECT 1 FROM "outcome_current_private_evaluation_batch" head
+                  WHERE head."scope_key"=requested_scope_key
+                    AND head."last_transition_id"=retained."transition_id")
+         OR EXISTS (SELECT 1 FROM "outcome_private_evaluation_batch_transition" successor
+                     WHERE successor."scope_key"=requested_scope_key
+                       AND successor."from_revision"=retained."to_revision"
+                       AND successor."from_batch_id"=retained."to_batch_id")
+       ) THEN
+      RAISE EXCEPTION 'Private evaluation batch operation replay is stale or conflicting';
+    END IF;
+    batch_id:=retained."to_batch_id";
+    revision:=retained."to_revision";
+    transition_id:=retained."transition_id";
+    activated_at:=retained."transitioned_at";
+    RETURN NEXT; RETURN;
+  END IF;
+
+  SELECT target_row.* INTO target FROM "outcome_private_evaluation_batch" target_row
+   WHERE target_row."batch_id"=requested_batch_id
+     AND target_row."scope_key"=requested_scope_key FOR KEY SHARE;
+  SELECT * INTO current_head FROM "outcome_current_private_evaluation_batch"
+   WHERE "scope_key"=requested_scope_key FOR UPDATE;
+  IF target."batch_id" IS NULL OR
+     "validate_outcome_private_evaluation_batch_complete"(
+       requested_scope_key,requested_batch_id
+     ) IS DISTINCT FROM TRUE OR
+     current_head."revision" IS DISTINCT FROM expected_revision OR
+     current_head."batch_id" IS DISTINCT FROM requested_from_batch_id OR
+     requested_from_batch_id IS NULL OR requested_from_batch_id=requested_batch_id OR
+     NOT EXISTS (
+       SELECT 1 FROM "outcome_private_evaluation_batch_transition" prior_transition
+        WHERE prior_transition."scope_key"=requested_scope_key
+          AND prior_transition."to_batch_id"=requested_batch_id
+     ) THEN
+    RAISE EXCEPTION 'Private evaluation batch heads require fenced compare-and-swap';
+  END IF;
+
+  next_revision:=expected_revision+1;
+  new_transition_id:='private-evaluation-batch-transition:'||encode(sha256(convert_to(
+    "outcome_afl_trade_canonical_json"(jsonb_build_object(
+      'operationId',requested_operation_id,'scopeKey',requested_scope_key,'action','rollback',
+      'principalId',requested_principal_id,
+      'fromRevision',expected_revision,'fromBatchId',requested_from_batch_id,
+      'toRevision',next_revision,'toBatchId',requested_batch_id
+    )),'UTF8')),'hex');
+  INSERT INTO "outcome_private_evaluation_batch_transition"
+    ("transition_id","operation_id","scope_key","principal_id","action",
+     "authority_evidence_id","reason","authorized_at","expires_at","authorization_json",
+     "from_revision","from_batch_id","to_revision","to_batch_id","transitioned_at")
+  VALUES (new_transition_id,requested_operation_id,requested_scope_key,requested_principal_id,'rollback',
+          requested_authority_evidence_id,requested_reason,requested_authorized_at,requested_expires_at,
+          requested_rollback,expected_revision,requested_from_batch_id,next_revision,requested_batch_id,
+          date_trunc('milliseconds',transaction_timestamp()));
+  UPDATE "outcome_current_private_evaluation_batch" SET
+    "batch_id"=requested_batch_id,"revision"=next_revision,
+    "last_transition_id"=new_transition_id,
+    "activated_at"=date_trunc('milliseconds',transaction_timestamp())
+   WHERE "scope_key"=requested_scope_key;
+  SELECT head."batch_id",head."revision",head."last_transition_id",head."activated_at"
+    INTO batch_id,revision,transition_id,activated_at
+    FROM "outcome_current_private_evaluation_batch" head
+   WHERE head."scope_key"=requested_scope_key;
+  RETURN NEXT;
+EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range OR datetime_field_overflow THEN
+  RAISE EXCEPTION 'Private evaluation batch rollback request has invalid typed fields';
 END;
 $$ LANGUAGE plpgsql;
 

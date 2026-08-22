@@ -1106,36 +1106,47 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
   receipt RECORD;
   prior RECORD;
+  prior_exists BOOLEAN;
 BEGIN
   SELECT * INTO receipt FROM "outcome_private_evaluation_transition_receipt"
    WHERE "transition_id"=NEW."last_transition_id" FOR KEY SHARE;
-  IF TG_OP='INSERT' THEN
-    SELECT * INTO prior FROM "outcome_local_private_trade_evaluation_head"
-     WHERE "valuation_scope_key"=NEW."valuation_scope_key"
-       AND "trade_id"=NEW."trade_id" FOR KEY SHARE;
-  END IF;
   IF receipt."transition_id" IS NULL
     OR receipt."valuation_scope_key" IS DISTINCT FROM NEW."valuation_scope_key"
     OR receipt."trade_id" IS DISTINCT FROM NEW."trade_id"
     OR receipt."to_revision" IS DISTINCT FROM NEW."revision"
     OR receipt."to_status" IS DISTINCT FROM NEW."status"
     OR receipt."to_generation_id" IS DISTINCT FROM NEW."generation_id"
-    OR (TG_OP='INSERT' AND prior."revision" IS NULL AND (
-      receipt."from_revision"<>0 OR receipt."from_status"<>'absent'
+  THEN
+    RAISE EXCEPTION 'Private evaluation head must advance through its exact retained receipt';
+  END IF;
+
+  IF TG_OP='INSERT' THEN
+    SELECT * INTO prior FROM "outcome_local_private_trade_evaluation_head"
+     WHERE "valuation_scope_key"=NEW."valuation_scope_key"
+       AND "trade_id"=NEW."trade_id" FOR KEY SHARE;
+    prior_exists := FOUND;
+    IF NOT prior_exists AND (
+      receipt."from_revision" IS DISTINCT FROM 0
+      OR receipt."from_status" IS DISTINCT FROM 'absent'
       OR receipt."from_generation_id" IS NOT NULL
-      OR receipt."receipt_json"->'content'->>'previousTransitionId' IS NOT NULL))
-    OR (TG_OP='INSERT' AND prior."revision" IS NOT NULL AND (
+      OR receipt."receipt_json"->'content'->>'previousTransitionId' IS NOT NULL)
+    THEN
+      RAISE EXCEPTION 'Private evaluation head must advance through its exact retained receipt';
+    ELSIF prior_exists AND (
       receipt."from_revision" IS DISTINCT FROM prior."revision"
       OR receipt."from_status" IS DISTINCT FROM prior."status"
       OR receipt."from_generation_id" IS DISTINCT FROM prior."generation_id"
       OR receipt."receipt_json"->'content'->>'previousTransitionId'
-         IS DISTINCT FROM prior."last_transition_id"))
-    OR (TG_OP='UPDATE' AND (
+         IS DISTINCT FROM prior."last_transition_id")
+    THEN
+      RAISE EXCEPTION 'Private evaluation head must advance through its exact retained receipt';
+    END IF;
+  ELSIF TG_OP='UPDATE' AND (
       receipt."from_revision" IS DISTINCT FROM OLD."revision"
       OR receipt."from_status" IS DISTINCT FROM OLD."status"
       OR receipt."from_generation_id" IS DISTINCT FROM OLD."generation_id"
       OR receipt."receipt_json"->'content'->>'previousTransitionId'
-         IS DISTINCT FROM OLD."last_transition_id"))
+         IS DISTINCT FROM OLD."last_transition_id")
   THEN
     RAISE EXCEPTION 'Private evaluation head must advance through its exact retained receipt';
   END IF;

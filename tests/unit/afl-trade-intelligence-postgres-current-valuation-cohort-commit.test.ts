@@ -15,40 +15,45 @@ class CommitTransaction implements AflOutcomeSqlTransaction {
   retainedContext: unknown | null = null;
   retainedResult: { prepared_input_set_id: string; head_revision: number } | null = null;
 
-  async query<Row>(
+  private operationResultQuery(
     sql: string,
     parameters: readonly unknown[] = []
-  ): Promise<AflOutcomeSqlQueryResult<Row>> {
-    if (sql.includes('SET TRANSACTION ISOLATION LEVEL')) return { rows: [], rowCount: 0 };
-    if (sql.includes('pg_advisory_xact_lock')) return { rows: [{}], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+  ): AflOutcomeSqlQueryResult<unknown> | null {
     if (sql.includes('FROM outcome_current_valuation_cohort_operation_result')) {
       return {
         rows: this.retainedResult === null ? [] : [this.retainedResult],
         rowCount: this.retainedResult === null ? 0 : 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      };
     }
     if (sql.includes('FROM outcome_current_valuation_cohort_operation')) {
       return {
         rows: this.retainedContext === null ? [] : [{ context_json: this.retainedContext }],
         rowCount: this.retainedContext === null ? 0 : 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      };
     }
     if (sql.includes('INSERT INTO outcome_current_valuation_cohort_operation_result')) {
       this.retainedResult = {
         prepared_input_set_id: String(parameters[1]),
         head_revision: Number(parameters[2]),
       };
-      return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+      return { rows: [], rowCount: 1 };
     }
     if (sql.includes('INSERT INTO outcome_current_valuation_cohort_operation')) {
       this.retainedContext = JSON.parse(String(parameters[11]));
-      return { rows: [], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+      return { rows: [], rowCount: 1 };
     }
+    return null;
+  }
+
+  private currentAuthorityQuery(sql: string): AflOutcomeSqlQueryResult<unknown> | null {
     if (sql.includes('transaction_timestamp()')) {
-      return { rows: [{ captured_at: '2026-08-21T09:00:00.000Z' }], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+      return { rows: [{ captured_at: '2026-08-21T09:00:00.000Z' }], rowCount: 1 };
     }
     if (sql.includes('FROM outcome_active_release')) {
-      return { rows: [{ release_id: `outcome-release:${'2'.repeat(64)}`, revision: 7 }], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+      return {
+        rows: [{ release_id: `outcome-release:${'2'.repeat(64)}`, revision: 7 }],
+        rowCount: 1,
+      };
     }
     if (sql.includes('FROM outcome_current_governed_valuation_model_pair')) {
       return {
@@ -60,12 +65,7 @@ class CommitTransaction implements AflOutcomeSqlTransaction {
           work_id: `model-qualification-work:${'0'.repeat(64)}`,
         }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
-    }
-    if (sql.includes('activate_outcome_current_prepared_valuation_input_set')) {
-      this.activated = true;
-      this.activatedPreparedInputSetId = String(parameters[1]);
-      return { rows: [{ activate_outcome_current_prepared_valuation_input_set: 12 }], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+      };
     }
     if (sql.includes('FROM outcome_current_prepared_valuation_input_set')) {
       return {
@@ -78,8 +78,37 @@ class CommitTransaction implements AflOutcomeSqlTransaction {
           activated_at: '2026-08-21T09:00:00.000Z',
         }],
         rowCount: 1,
-      } as AflOutcomeSqlQueryResult<Row>;
+      };
     }
+    return null;
+  }
+
+  private activationQuery(
+    sql: string,
+    parameters: readonly unknown[]
+  ): AflOutcomeSqlQueryResult<unknown> | null {
+    if (!sql.includes('activate_outcome_current_prepared_valuation_input_set')) return null;
+    this.activated = true;
+    this.activatedPreparedInputSetId = String(parameters[1]);
+    return {
+      rows: [{ activate_outcome_current_prepared_valuation_input_set: 12 }],
+      rowCount: 1,
+    };
+  }
+
+  async query<Row>(
+    sql: string,
+    parameters: readonly unknown[] = []
+  ): Promise<AflOutcomeSqlQueryResult<Row>> {
+    if (sql.includes('SET TRANSACTION ISOLATION LEVEL')) return { rows: [], rowCount: 0 };
+    if (sql.includes('pg_advisory_xact_lock')) {
+      return { rows: [{}], rowCount: 1 } as AflOutcomeSqlQueryResult<Row>;
+    }
+    const result =
+      this.operationResultQuery(sql, parameters) ??
+      this.currentAuthorityQuery(sql) ??
+      this.activationQuery(sql, parameters);
+    if (result !== null) return result as AflOutcomeSqlQueryResult<Row>;
     throw new Error(`Unexpected SQL: ${sql}`);
   }
 }

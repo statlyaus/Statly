@@ -256,13 +256,13 @@ async function registerMaterializationManifest() {
   return { manifest, manifestArtifact };
 }
 
-function preparedSet(inputTraceArtifact = artifact('c')) {
+function preparedSet(inputTraceArtifact = artifact('2')) {
   const entries = [
     {
       tradeId: 'trade-a',
       state: 'ready' as const,
       calculationInputPackageId: `valuation-calculation-input:${digest('4')}`,
-      calculationInputArtifact: artifact('b'),
+      calculationInputArtifact: artifact('1'),
       inputTraceId: `private-evaluation-input-trace:${digest('5')}`,
       inputTraceArtifact,
     },
@@ -273,7 +273,7 @@ function preparedSet(inputTraceArtifact = artifact('c')) {
         {
           code: 'lineage_unresolved' as const,
           subject: { kind: 'lineage' as const, id: 'asset:pick-12' },
-          evidenceRefs: [artifact('d')],
+          evidenceRefs: [artifact('3')],
         },
       ],
     },
@@ -301,7 +301,7 @@ function preparedSet(inputTraceArtifact = artifact('c')) {
     ),
     sourceQualificationEvidenceRefs: qualificationReport.content.sourceRightsEvidenceRefs,
     valuationInputBundleId: `valuation-input-bundle:${digest('6')}`,
-    valuationInputBundleArtifact: artifact('a'),
+    valuationInputBundleArtifact: artifact('0'),
     releaseTradeIds: ['trade-a', 'trade-b'],
     entries,
     tradeCount: 2,
@@ -350,7 +350,7 @@ beforeAll(async () => {
     createPgAflOutcomeSqlClient(pool)
   ).register(qualificationReport);
   await Promise.all([
-    ...['a', 'b', 'c', 'd'].map((character) => artifact(character)),
+    ...['0', '1', '2', '3'].map((character) => artifact(character)),
     qualificationReport.content.factualReleaseArtifact,
     qualificationReport.content.releaseMembershipArtifact,
     createAflTradeCanonicalJsonArtifactRef(
@@ -446,6 +446,10 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
       valuationBundle.valuationInputBundle.content.packagePolicy.listSpotPolicyArtifact,
       valuationBundle.valuationInputBundle.content.packagePolicy.scarcityPolicyArtifact,
       valuationBundle.valuationInputBundle.content.packagePolicy.roleCongestionPolicyArtifact,
+      valuationBundle.valuationInputBundle.content.simulation.lowReturnDefinitionArtifact,
+      valuationBundle.valuationInputBundle.content.simulation.eliteOutcomeDefinitionArtifact,
+      valuationBundle.valuationInputBundle.content.simulation.practicalEquivalenceDefinitionArtifact,
+      valuationBundle.valuationInputBundle.content.explanationPolicyArtifact,
     ].map(retainArtifact));
     const modelQualificationId = `model-qualification:${digest('9')}`;
     const modelQualificationWorkId = `model-qualification-work:${digest('0')}`;

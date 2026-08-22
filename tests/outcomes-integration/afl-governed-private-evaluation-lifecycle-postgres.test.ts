@@ -35,8 +35,10 @@ import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/serv
 import {
   createGovernedPrivateEvaluationBatch,
   createGovernedPrivateEvaluationBatchOperationId,
+  createGovernedPrivateEvaluationBatchWithdrawal,
 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationBatch';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
+import { createPostgresGovernedPrivateEvaluationReadRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationReadRepository';
 import { createGovernedPrivateEvaluationNarrativeFixture } from '../testUtils/governedPrivateEvaluationFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
@@ -66,6 +68,9 @@ let lifecycle: ReturnType<typeof createPostgresGovernedPrivateEvaluationLifecycl
 let automatedStaging: ReturnType<
   typeof createPostgresGovernedPrivateEvaluationStagingRepository
 >;
+let automatedArtifactRepository: ReturnType<
+  typeof createLocalAflTradePrivateDerivedArtifactRepository
+>;
 let automatedLifecycle: ReturnType<
   typeof createPostgresGovernedPrivateEvaluationLifecycleRepository
 >;
@@ -85,10 +90,11 @@ function canonicalBytes(value: unknown): Uint8Array {
   return new TextEncoder().encode(canonicalizeAflTradeJson(value));
 }
 
-function createAutomatedNarrativeFixture() {
+function createAutomatedNarrativeFixture(tradeId = selector.tradeId) {
   const fixture = createGovernedPrivateEvaluationNarrativeFixture();
   const content = {
     ...fixture.content,
+    tradeId,
     valuationCaseId: `valuation-case:${'e'.repeat(64)}`,
   };
   return {
@@ -114,15 +120,17 @@ async function seedPrivateEvaluationOperator(
   authorizedAt: string,
   options: {
     readonly principalId?: string;
+    readonly scopeKey?: string;
     readonly validThrough?: string;
   } = {}
 ) {
   const principalId = options.principalId ?? 'firebase:test-operator';
+  const scopeKey = options.scopeKey ?? selector.valuationScopeKey;
   const validThrough = options.validThrough ?? '2099-01-01T00:00:00.000Z';
   const authorityContent = {
     principalRef: principalId,
     role: 'afl_trade_private_evaluation_operator',
-    scopeKey: selector.valuationScopeKey,
+    scopeKey,
     provider: 'statly_modeling',
     capabilityId: 'manage_private_trade_evaluation',
     competition: 'AFLM',
@@ -186,7 +194,7 @@ async function seedPrivateEvaluationOperator(
       [
         authorityEvidenceId,
         principalId,
-        selector.valuationScopeKey,
+        scopeKey,
         authorizedAt,
         validThrough,
       ]
@@ -593,15 +601,15 @@ beforeAll(async () => {
     client,
     artifactRepository,
     maximumArtifactBytes: 4 * 1024 * 1024,
-    automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    enableAutomatedPrivateCalculation: true,
   });
   lifecycle = createPostgresGovernedPrivateEvaluationLifecycleRepository({
     client,
     artifactRepository,
     maximumArtifactBytes: 4 * 1024 * 1024,
-    automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    enableAutomatedPrivateCalculation: true,
   });
-  const automatedArtifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
+  automatedArtifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
     rootDirectory: artifactRoot,
     repositoryId: 'governed-automated-lifecycle-postgres-proof',
     maximumObjectBytes: 4 * 1024 * 1024,
@@ -610,13 +618,13 @@ beforeAll(async () => {
     client,
     artifactRepository: automatedArtifactRepository,
     maximumArtifactBytes: 4 * 1024 * 1024,
-    automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    enableAutomatedPrivateCalculation: true,
   });
   automatedLifecycle = createPostgresGovernedPrivateEvaluationLifecycleRepository({
     client,
     artifactRepository: automatedArtifactRepository,
     maximumArtifactBytes: 4 * 1024 * 1024,
-    automatedPrincipalId: 'system:weekly-valuation-coordinator',
+    enableAutomatedPrivateCalculation: true,
   });
 });
 
@@ -635,7 +643,7 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
     ).toISOString();
     const automatedSelector = {
       ...selector,
-      valuationScopeKey: 'afl-trade-history:automated-non-production',
+      valuationScopeKey: 'afl-men:2026-trades',
     };
     const manifestId =
       `private-evaluation-materialization-manifest:${'3'.repeat(64)}`;
@@ -891,13 +899,20 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       ]
     )).rejects.toThrow(/invalid inspection authority/i);
     const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, requestedAt);
-    const forgedIntent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
+    const forgedIntentContent = {
       ...intent.content,
       constructionAuthority: {
-        kind: 'automated_private_calculation_agent',
+        kind: 'automated_private_calculation_agent' as const,
         principalId: 'system:unconfigured-agent',
       },
-    });
+    };
+    const forgedIntent = {
+      transitionIntentId: createAflTradeContentAddress(
+        'private-evaluation-transition-intent',
+        forgedIntentContent
+      ),
+      content: forgedIntentContent,
+    };
     const forgedArtifact = createAflTradeCanonicalJsonArtifactRef(forgedIntent, requestedAt);
     await automatedStaging.retainArtifact({
       reference: forgedArtifact,
@@ -958,6 +973,103 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
     await expect(
       automatedLifecycle.commitAutomated({ receipt, receiptArtifact })
     ).resolves.toMatchObject({ state: 'replayed' });
+    const peerSelector = {
+      ...automatedSelector,
+      tradeId: 'trade:automated-private-evaluation-peer',
+    };
+    const peerManifestId =
+      `private-evaluation-materialization-manifest:${'9'.repeat(64)}`;
+    const peerAuthorityEvidence = {
+      materializationManifestId: peerManifestId,
+      materializationManifestArtifact: createAflTradeCanonicalJsonArtifactRef(
+        { manifestId: peerManifestId, kind: 'authenticated-materialization' },
+        requestedAt
+      ),
+      valuationInputBundleArtifact: automatedAuthorityEvidence.valuationInputBundleArtifact,
+    };
+    const peerPreparedSeed = await pool.connect();
+    try {
+      await peerPreparedSeed.query('BEGIN');
+      await peerPreparedSeed.query(`SET LOCAL session_replication_role='replica'`);
+      await peerPreparedSeed.query(
+        `UPDATE outcome_prepared_valuation_input_set
+            SET trade_count=2,ready_count=2,blocked_count=0
+          WHERE prepared_input_set_id=$1`,
+        [inspection.snapshot.content.calculationAuthority.preparedInputSetId]
+      );
+      await peerPreparedSeed.query(
+        `INSERT INTO outcome_prepared_valuation_input_entry
+          (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
+         VALUES ($1,2,$2,'ready','{}',$3::jsonb)`,
+        [
+          inspection.snapshot.content.calculationAuthority.preparedInputSetId,
+          peerSelector.tradeId,
+          canonicalizeAflTradeJson({ materializationManifestId: peerManifestId }),
+        ]
+      );
+      await peerPreparedSeed.query('COMMIT');
+    } catch (error) {
+      await peerPreparedSeed.query('ROLLBACK');
+      throw error;
+    } finally {
+      peerPreparedSeed.release();
+    }
+    const peerRequestedAt = await trustedNow();
+    const peerInspection = await seedInspection(
+      { status: 'absent', revision: 0, generationId: null },
+      peerRequestedAt,
+      peerAuthorityEvidence,
+      peerSelector
+    );
+    const peerIntent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
+      selector: peerSelector,
+      inspectionId: peerInspection.inspectionId,
+      authoritySnapshotId: peerInspection.snapshotId,
+      operationId: createAflTradeContentAddress('private-evaluation-operation', {
+        marker: 'automated-stage-peer',
+      }),
+      action: { kind: 'construct_and_activate' },
+      expectedHead: { status: 'absent', revision: 0, generationId: null },
+      constructionAuthority,
+      requestedAt: peerRequestedAt,
+      expiresAt: peerInspection.validThrough,
+    });
+    const peerMaterialization = createAutomatedGovernedPrivateEvaluationGeneration({
+      selector: peerSelector,
+      transitionIntentId: peerIntent.transitionIntentId,
+      generatedAt: fixtureGenerationCreatedAt,
+      constructionAuthority,
+      narrative: createAutomatedNarrativeFixture(peerSelector.tradeId),
+    });
+    const peerIntentArtifact = createAflTradeCanonicalJsonArtifactRef(
+      peerIntent,
+      peerRequestedAt
+    );
+    await automatedStaging.stage({
+      intent: peerIntent,
+      intentArtifact: peerIntentArtifact,
+      materialization: peerMaterialization,
+    });
+    const peerReceipt = createAutomatedGovernedPrivateEvaluationTransitionReceipt({
+      intent: peerIntent,
+      previousTransitionId: null,
+      toGenerationId: peerMaterialization.generation.generationId,
+      transitionedAt: peerRequestedAt,
+    });
+    const peerReceiptArtifact = createAflTradeCanonicalJsonArtifactRef(
+      peerReceipt,
+      peerRequestedAt
+    );
+    await automatedStaging.retainArtifact({
+      reference: peerReceiptArtifact,
+      bytes: canonicalBytes(peerReceipt),
+    });
+    await expect(
+      automatedLifecycle.commitAutomated({
+        receipt: peerReceipt,
+        receiptArtifact: peerReceiptArtifact,
+      })
+    ).resolves.toMatchObject({ state: 'committed' });
     const batchAuthoritySeed = await pool.connect();
     try {
       await batchAuthoritySeed.query('BEGIN');
@@ -999,19 +1111,26 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       factualReleaseId: `outcome-release:${'4'.repeat(64)}`,
       modelQualificationId: `model-qualification:${'c'.repeat(64)}`,
       modelQualificationWorkId: `model-qualification-work:${'4'.repeat(64)}`,
-      entries: [{
-        tradeId: automatedSelector.tradeId,
-        state: 'ready',
-        generationId: materialization.generation.generationId,
-      }],
-      createdAt: requestedAt,
+      entries: [
+        {
+          tradeId: automatedSelector.tradeId,
+          state: 'ready',
+          generationId: materialization.generation.generationId,
+        },
+        {
+          tradeId: peerSelector.tradeId,
+          state: 'ready',
+          generationId: peerMaterialization.generation.generationId,
+        },
+      ],
+      createdAt: peerRequestedAt,
     });
     const batchRepository = new PostgresGovernedPrivateEvaluationBatchRepository(
       client,
       async () => true
     );
     await expect(batchRepository.register(readyBatch)).resolves.toEqual(readyBatch);
-    await expect(batchRepository.advance({
+    const activatedBatchHead = await batchRepository.advance({
       scopeKey: readyBatch.content.scopeKey,
       batchId: readyBatch.batchId,
       expectedRevision: 0,
@@ -1022,7 +1141,100 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
         action: 'activate',
       }),
       action: 'activate',
-    })).resolves.toMatchObject({ batchId: readyBatch.batchId, revision: 1 });
+    });
+    expect(activatedBatchHead).toMatchObject({ batchId: readyBatch.batchId, revision: 1 });
+    const reader = createPostgresGovernedPrivateEvaluationReadRepository({
+      client,
+      artifactRepository: automatedArtifactRepository,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      principalId: 'firebase:fixture-private-reader',
+      authorizeReader: async () => true,
+    });
+    for (const [targetSelector, targetGenerationId] of [
+      [automatedSelector, materialization.generation.generationId],
+      [peerSelector, peerMaterialization.generation.generationId],
+    ] as const) {
+      const reads = await Promise.all(
+        (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map(
+          (kind) =>
+            reader.read({
+              selector: targetSelector,
+              selection: { kind: 'current' },
+              document: { kind },
+            })
+        )
+      );
+      expect(reads).toHaveLength(4);
+      expect(
+        reads.every(
+          (read) => read.state === 'available' && read.generationId === targetGenerationId
+        )
+      ).toBe(true);
+    }
+    const withdrawalPrincipal = 'firebase:fixture-batch-withdrawal-operator';
+    await seedPrivateEvaluationOperator(requestedAt, {
+      principalId: withdrawalPrincipal,
+      scopeKey: automatedSelector.valuationScopeKey,
+    });
+    const withdrawnAt = await trustedNow();
+    const withdrawal = createGovernedPrivateEvaluationBatchWithdrawal({
+      scopeKey: readyBatch.content.scopeKey,
+      batchId: readyBatch.batchId,
+      tradeId: automatedSelector.tradeId,
+      generationId: materialization.generation.generationId,
+      principalId: withdrawalPrincipal,
+      reason: 'Prove one current batch member can be suppressed without changing its peer.',
+      withdrawnAt,
+    });
+    await expect(batchRepository.withdraw(withdrawal)).resolves.toEqual(withdrawal);
+    await expect(batchRepository.withdraw(withdrawal)).resolves.toEqual(withdrawal);
+    await expect(
+      reader.read({
+        selector: automatedSelector,
+        selection: { kind: 'current' },
+        document: { kind: 'detail' },
+      })
+    ).resolves.toMatchObject({ state: 'unavailable', reason: 'withdrawn' });
+    await expect(
+      reader.read({
+        selector: automatedSelector,
+        selection: {
+          kind: 'generation',
+          generationId: materialization.generation.generationId,
+        },
+        document: { kind: 'json_export' },
+      })
+    ).resolves.toMatchObject({
+      state: 'available',
+      generationId: materialization.generation.generationId,
+      lifecycle: { status: 'withdrawn', current: false },
+    });
+    await expect(
+      reader.read({
+        selector: peerSelector,
+        selection: { kind: 'current' },
+        document: { kind: 'detail' },
+      })
+    ).resolves.toMatchObject({
+      state: 'available',
+      generationId: peerMaterialization.generation.generationId,
+      lifecycle: { status: 'active', current: true },
+    });
+    await expect(
+      pool.query(
+        `SELECT batch_id,revision,last_transition_id AS transition_id
+           FROM outcome_current_private_evaluation_batch WHERE scope_key=$1`,
+        [readyBatch.content.scopeKey]
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          batch_id: activatedBatchHead.batchId,
+          revision: activatedBatchHead.revision,
+          transition_id: activatedBatchHead.transitionId,
+        },
+      ],
+    });
     const wrongPredecessorContent = {
       ...receipt.content,
       previousTransitionId: `private-evaluation-transition:${'f'.repeat(64)}`,
