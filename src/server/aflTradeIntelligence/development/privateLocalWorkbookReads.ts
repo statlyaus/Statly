@@ -154,6 +154,7 @@ export function createPrivateLocalWorkbookReads(
       calculation: Promise<LocalPrivateReviewedTradeCalculation | null>;
     }>
   >();
+  const governedBatchByRuntimeAndTrade = new Map<string, string>();
 
   async function admit(): Promise<Readonly<{
     environment: Readonly<PrivateLocalWorkbookReadEnvironment>;
@@ -174,16 +175,24 @@ export function createPrivateLocalWorkbookReads(
 
   function governedRequest(
     evaluation: LocalWorkbookTradeEvaluation,
-    document: GovernedPrivateEvaluationReadRequest['document']
+    document: GovernedPrivateEvaluationReadRequest['document'],
+    selection: GovernedPrivateEvaluationReadRequest['selection'] = { kind: 'current' }
   ): GovernedPrivateEvaluationReadRequest {
     return {
       selector: {
         valuationScopeKey: `afl-men:${evaluation.detail.trade.year}-trades`,
         tradeId: evaluation.detail.trade.tradeId,
       },
-      selection: { kind: 'current' },
+      selection,
       document,
     };
+  }
+
+  function governedBatchCacheKey(
+    environment: Readonly<PrivateLocalWorkbookReadEnvironment>,
+    evaluation: LocalWorkbookTradeEvaluation
+  ): string {
+    return `${environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE}\0afl-men:${evaluation.detail.trade.year}-trades\0${evaluation.detail.trade.tradeId}`;
   }
 
   async function inspectCurrentValuationReadiness(
@@ -220,11 +229,7 @@ export function createPrivateLocalWorkbookReads(
     const cacheKey = `${environment.STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE}\0${workbookSha256}\0${detail.trade.tradeId}`;
     const current = calculationByRuntimeAndTrade.get(cacheKey);
     if (current?.generation === generation) return current.calculation;
-    const calculation = dependencies.loadPrivateCalculation(
-      environment,
-      detail,
-      workbookSha256
-    );
+    const calculation = dependencies.loadPrivateCalculation(environment, detail, workbookSha256);
     const entry = Object.freeze({ generation, calculation });
     calculationByRuntimeAndTrade.set(cacheKey, entry);
     try {
@@ -242,10 +247,8 @@ export function createPrivateLocalWorkbookReads(
       const admitted = await admit();
       if (admitted === null) return null;
       const { environment } = admitted;
-      return dependencies.evaluation.loadArchive(
-        query,
-        environment,
-        (scopeKey) => inspectCurrentValuationReadiness(environment, scopeKey)
+      return dependencies.evaluation.loadArchive(query, environment, (scopeKey) =>
+        inspectCurrentValuationReadiness(environment, scopeKey)
       );
     },
 
@@ -273,6 +276,12 @@ export function createPrivateLocalWorkbookReads(
         principalId,
         governedRequest(evaluation, { kind: 'detail' })
       );
+      const batchCacheKey = governedBatchCacheKey(environment, evaluation);
+      if (governedEvaluation.state === 'available' && governedEvaluation.batchId !== null) {
+        governedBatchByRuntimeAndTrade.set(batchCacheKey, governedEvaluation.batchId);
+      } else {
+        governedBatchByRuntimeAndTrade.delete(batchCacheKey);
+      }
       return { ...evaluation, governedEvaluation };
     },
 
@@ -293,11 +302,25 @@ export function createPrivateLocalWorkbookReads(
           : undefined
       );
       if (evaluation === null) return null;
-      return dependencies.readGovernedEvaluation(
+      const batchCacheKey = governedBatchCacheKey(environment, evaluation);
+      const batchId = governedBatchByRuntimeAndTrade.get(batchCacheKey);
+      const governedEvaluation = await dependencies.readGovernedEvaluation(
         environment,
         principalId,
-        governedRequest(evaluation, { kind: 'json_export' })
+        governedRequest(
+          evaluation,
+          { kind: 'json_export' },
+          batchId === undefined ? { kind: 'current' } : { kind: 'batch', batchId }
+        )
       );
+      if (
+        batchId === undefined &&
+        governedEvaluation.state === 'available' &&
+        governedEvaluation.batchId !== null
+      ) {
+        governedBatchByRuntimeAndTrade.set(batchCacheKey, governedEvaluation.batchId);
+      }
+      return governedEvaluation;
     },
   };
 }
@@ -326,10 +349,10 @@ async function loadAdmittedPrivateCalculation(
   workbookSha256: string
 ): Promise<LocalPrivateReviewedTradeCalculation> {
   const pool = getLocalOutcomesRuntimePool(environment.AFL_OUTCOMES_DATABASE_URL!);
-  return loadPostgresLocalPrivateReviewedTradeCalculation(
-    createPgAflOutcomeSqlClient(pool),
-    { detail, workbookSha256 }
-  );
+  return loadPostgresLocalPrivateReviewedTradeCalculation(createPgAflOutcomeSqlClient(pool), {
+    detail,
+    workbookSha256,
+  });
 }
 
 async function readLocalValuationReadinessGeneration(
