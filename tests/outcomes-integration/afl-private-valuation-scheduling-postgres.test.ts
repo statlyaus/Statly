@@ -178,12 +178,30 @@ describe('private valuation scheduling PostgreSQL boundary', () => {
     });
     const running = dispatcher.dispatchOne();
     await vi.waitFor(() => expect(runCurrent).toHaveBeenCalledOnce());
-    await pool.query(
+    const shortenedLease = await pool.query<{ lease_expires_at: Date }>(
       `UPDATE outcome_private_valuation_dispatch_request
-          SET lease_expires_at=transaction_timestamp()+interval '10 milliseconds'
-        WHERE status='claimed'`
+          SET lease_expires_at=transaction_timestamp()+interval '250 milliseconds'
+        WHERE status='claimed'
+        RETURNING lease_expires_at`
     );
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    const shortenedLeaseExpiresAt = shortenedLease.rows[0]?.lease_expires_at;
+    expect(shortenedLeaseExpiresAt).toBeInstanceOf(Date);
+    await vi.waitFor(async () => {
+      const renewal = await pool.query<{ renewed: boolean }>(
+        `SELECT lease_expires_at>$1::timestamptz+interval '60 seconds' AS renewed
+           FROM outcome_private_valuation_dispatch_request
+          WHERE status='claimed'`,
+        [shortenedLeaseExpiresAt]
+      );
+      expect(renewal.rows[0]?.renewed).toBe(true);
+    });
+    await vi.waitFor(async () => {
+      const clock = await pool.query<{ original_lease_expired: boolean }>(
+        `SELECT transaction_timestamp()>$1::timestamptz AS original_lease_expired`,
+        [shortenedLeaseExpiresAt]
+      );
+      expect(clock.rows[0]?.original_lease_expired).toBe(true);
+    });
     await expect(repository.claim('second-worker')).resolves.toBeNull();
     await expect(dispatcher.dispatchRequest(requestId)).resolves.toEqual({
       state: 'waiting',
