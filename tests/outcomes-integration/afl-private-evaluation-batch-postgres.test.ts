@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -5,8 +9,10 @@ import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
-import { parseGovernedPrivateEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationGeneration';
+import { createAutomatedGovernedPrivateEvaluationGeneration } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationGeneration';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '@/server/aflTradeIntelligence/valuation/internal/automatedPrivateEvaluationPolicy';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortRunner';
 import {
   createGovernedPrivateEvaluationBatch,
@@ -14,6 +20,8 @@ import {
   type GovernedPrivateEvaluationBatch,
 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationBatch';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
+import { createPostgresGovernedPrivateEvaluationReadRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationReadRepository';
+import { createGovernedPrivateEvaluationNarrativeFixture } from '../testUtils/governedPrivateEvaluationFixture';
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
 const databaseUrl =
@@ -33,8 +41,18 @@ const factualReleaseId = `outcome-release:${'2'.repeat(64)}`;
 const modelQualificationId = `model-qualification:${'3'.repeat(64)}`;
 const modelQualificationWorkId = `model-qualification-work:${'4'.repeat(64)}`;
 const createdAt = '2026-08-20T09:00:00.000Z';
+let artifactRoot = '';
+let artifactRepository: ReturnType<
+  typeof createLocalAflTradePrivateDerivedArtifactRepository
+>;
 
 beforeAll(async () => {
+  artifactRoot = await mkdtemp(join(tmpdir(), 'statly-private-batch-runner-'));
+  artifactRepository = createLocalAflTradePrivateDerivedArtifactRepository({
+    rootDirectory: artifactRoot,
+    repositoryId: 'private-batch-runner-postgres-proof',
+    maximumObjectBytes: 4 * 1024 * 1024,
+  });
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
   const scoped = new URL(databaseUrl);
   scoped.searchParams.set('schema', schemaName);
@@ -170,6 +188,7 @@ afterAll(async () => {
   await pool.end();
   await adminPool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
   await adminPool.end();
+  if (artifactRoot !== '') await rm(artifactRoot, { recursive: true, force: true });
 });
 
 function batch(at: string) {
@@ -283,31 +302,45 @@ async function seedReadyRunnerGeneration(input: {
     operationId: input.operationId,
     tradeId: input.tradeId,
   });
-  const generationId = createAflTradeContentAddress('local-private-trade-evaluation-generation', {
-    operationId: input.operationId,
+  const retainedGeneration = await pool.query<{ readonly generation_id: string }>(
+    `SELECT generation_id FROM outcome_local_private_trade_evaluation_generation
+      WHERE transition_intent_id=$1`,
+    [transitionIntentId]
+  );
+  if (retainedGeneration.rows.length === 1) {
+    return {
+      generationId: retainedGeneration.rows[0]!.generation_id,
+      manifestId,
+      manifestArtifact,
+    };
+  }
+  const narrativeFixture = createGovernedPrivateEvaluationNarrativeFixture();
+  const narrativeContent = {
+    ...narrativeFixture.content,
     tradeId: input.tradeId,
-  });
-  const generation = {
-    generationId,
-    content: {
-      schemaVersion: 'local-private-trade-evaluation-generation/v2',
-      environment: 'non_production',
-      selector: { valuationScopeKey: scopeKey, tradeId: input.tradeId },
-      transitionIntentId,
-      narrativeId: `trade-calculation-narrative:${'1'.repeat(64)}`,
-      narrativeArtifact: artifactRef(`${input.tradeId}-narrative`, input.generatedAt),
-      projectionManifestId: `private-evaluation-projection-manifest:${'3'.repeat(64)}`,
-      projectionManifestArtifact: artifactRef(`${input.tradeId}-projection`, input.generatedAt),
-      generatedAt: input.generatedAt,
-      constructionAuthority: {
-        kind: 'automated_private_calculation_agent',
-        principalId: 'system:weekly-valuation-coordinator',
-      },
-      activationReceipt: 'separate_append_only_transition',
-      publicationProhibited: true,
+    valuationCaseId: `valuation-case:${(input.tradeId === 'trade-a' ? 'a' : 'b').repeat(64)}`,
+  };
+  const materialization = createAutomatedGovernedPrivateEvaluationGeneration({
+    selector: { valuationScopeKey: scopeKey, tradeId: input.tradeId },
+    transitionIntentId,
+    generatedAt: input.generatedAt,
+    constructionAuthority: {
+      kind: 'automated_private_calculation_agent',
+      principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
     },
-  } as const;
-  parseGovernedPrivateEvaluationGeneration(generation);
+    narrative: {
+      narrativeId: createAflTradeContentAddress('trade-calculation-narrative', narrativeContent),
+      content: narrativeContent,
+    },
+  });
+  const generation = materialization.generation;
+  const generationId = generation.generationId;
+  const generationArtifact = materialization.artifacts.find(
+    ({ kind }) => kind === 'generation'
+  )!;
+  for (const artifact of materialization.artifacts) {
+    await artifactRepository.putIfAbsent(artifact.reference, artifact.bytes);
+  }
   const existing = await pool.query<{ readonly generation_id: string }>(
     `SELECT generation_id FROM outcome_local_private_trade_evaluation_generation
       WHERE generation_id=$1`,
@@ -318,7 +351,11 @@ async function seedReadyRunnerGeneration(input: {
   try {
     await seed.query('BEGIN');
     await seed.query(`SET LOCAL session_replication_role='replica'`);
-    for (const ref of [manifestArtifact, bundleArtifact]) {
+    for (const ref of [
+      manifestArtifact,
+      bundleArtifact,
+      ...materialization.artifacts.map(({ reference }) => reference),
+    ]) {
       await seed.query(
         `INSERT INTO outcome_artifact_custody
           (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
@@ -481,7 +518,7 @@ async function seedReadyRunnerGeneration(input: {
         scopeKey,
         input.tradeId,
         transitionIntentId,
-        generation.content.narrativeArtifact.artifactId,
+        generationArtifact.reference.artifactId,
         generation.content.narrativeArtifact.artifactId,
         generation.content.projectionManifestArtifact.artifactId,
         input.generatedAt,
@@ -1205,5 +1242,40 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         [bound.rows[0]!.operation_id]
       )
     ).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    const currentEntries = await pool.query<{
+      readonly trade_id: string;
+      readonly generation_id: string;
+    }>(
+      `SELECT trade_id,generation_id
+         FROM outcome_private_evaluation_batch_entry
+        WHERE batch_id=$1
+        ORDER BY trade_id`,
+      [bound.rows[0]!.batch_id]
+    );
+    expect(currentEntries.rows).toHaveLength(2);
+    const reader = createPostgresGovernedPrivateEvaluationReadRepository({
+      client: createPgAflOutcomeSqlClient(pool),
+      artifactRepository,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      principalId: 'firebase:fixture-private-reader',
+      authorizeReader: async () => true,
+    });
+    for (const entry of currentEntries.rows) {
+      const reads = await Promise.all(
+        (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map(
+          (kind) =>
+            reader.read({
+              selector: { valuationScopeKey: scopeKey, tradeId: entry.trade_id },
+              selection: { kind: 'current' },
+              document: { kind },
+            })
+        )
+      );
+      expect(
+        reads.every(
+          (read) => read.state === 'available' && read.generationId === entry.generation_id
+        )
+      ).toBe(true);
+    }
   });
 });
