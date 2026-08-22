@@ -90,7 +90,16 @@ export async function runLocalAflPrivateValuationWorker(input: {
       }
       if (!input.signal.aborted) {
         await wait(input.pollMilliseconds ?? POLL_MILLISECONDS, input.signal);
-        await runtime.enqueueStartupCatchUp((input.now ?? (() => new Date().toISOString()))());
+        try {
+          await runtime.enqueueStartupCatchUp((input.now ?? (() => new Date().toISOString()))());
+        } catch (error) {
+          output(
+            JSON.stringify({
+              state: 'catch_up_failed',
+              message: error instanceof Error ? error.message : 'Unknown valuation worker failure.',
+            })
+          );
+        }
       }
       if (dispatched === 0 && (input.pollMilliseconds ?? POLL_MILLISECONDS) === 0) break;
     }
@@ -104,8 +113,9 @@ if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).
   const controller = new AbortController();
   process.once('SIGINT', () => controller.abort());
   process.once('SIGTERM', () => controller.abort());
-  runLocalAflPrivateValuationWorker({ env: process.env, signal: controller.signal }).catch(() => {
-    process.stderr.write('Local private valuation worker failed closed.\n');
+  runLocalAflPrivateValuationWorker({ env: process.env, signal: controller.signal }).catch((error) => {
+    const message = error instanceof Error ? error.message : 'Unknown valuation worker failure.';
+    process.stderr.write(`Local private valuation worker failed closed: ${message}\n`);
     process.exitCode = 1;
   });
 }
