@@ -86,6 +86,29 @@ describe('automatic private evaluation cohort runner', () => {
     expect(advanceBatch).not.toHaveBeenCalled();
   });
 
+  it('retains unexpected diagnostics in locale-independent code-unit order', async () => {
+    const authority = capture(['trade-Z', 'trade-a']);
+    const retainUnexpectedDiagnostics = vi.fn(async ({ diagnostics }) => diagnostics);
+    const runner = createAflTradePrivateEvaluationCohortRunner({
+      captureCurrent: async () => ({ capture: authority, currentBatch: null }),
+      stageTrade: async ({ selector }) => {
+        throw new Error(`Failure for ${selector.tradeId}.`);
+      },
+      retainUnexpectedDiagnostics,
+      registerBatch: vi.fn(),
+      advanceBatch: vi.fn(),
+    });
+
+    await expect(runner.run(requestFor(authority))).resolves.toMatchObject({
+      state: 'unexpected_failure',
+      diagnostics: [{ tradeId: 'trade-Z' }, { tradeId: 'trade-a' }],
+    });
+    expect(retainUnexpectedDiagnostics).toHaveBeenCalledOnce();
+    expect(retainUnexpectedDiagnostics.mock.calls[0]?.[0]).toMatchObject({
+      diagnostics: [{ tradeId: 'trade-Z' }, { tradeId: 'trade-a' }],
+    });
+  });
+
   it.each([2, 3, 4])(
     'constructs and atomically activates a deterministic %i-club example',
     async (clubCount) => {

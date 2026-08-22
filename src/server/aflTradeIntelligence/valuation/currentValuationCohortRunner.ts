@@ -10,6 +10,7 @@ import {
   governedPrivateEvaluationBatchSchema,
   type GovernedPrivateEvaluationBatch,
 } from './internal/governedPrivateEvaluationBatch';
+import { compareAflTradeCodeUnits } from './deterministicProbabilityMeasure';
 import type {
   GovernedPrivateEvaluationBatchHead,
   GovernedPrivateEvaluationBatchTransitionResult,
@@ -303,7 +304,9 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
         })
       );
 
-      diagnostics.sort((left, right) => left.tradeId.localeCompare(right.tradeId));
+      diagnostics.sort((left, right) =>
+        compareAflTradeCodeUnits(left.tradeId, right.tradeId)
+      );
       if (diagnostics.length > 0) {
         const retained = await dependencies.retainUnexpectedDiagnostics({
           request,
