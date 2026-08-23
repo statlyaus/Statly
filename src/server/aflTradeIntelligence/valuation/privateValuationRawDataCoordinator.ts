@@ -2,8 +2,11 @@ import { z } from 'zod';
 
 import { canonicalizeAflTradeJson } from '../artifacts/contentAddress';
 import {
+  aflTradePrivateValuationCaptureSourceRoleSchema,
+  getAflTradePrivateValuationCaptureSourceRole,
   parseAflTradePrivateValuationCaptureBinding,
   type AflTradePrivateValuationCaptureBinding,
+  type AflTradePrivateValuationCaptureSourceRole,
 } from './privateValuationCaptureBinding';
 import { aflTradePrivateValuationDispatchRequestSchema } from './privateValuationScheduling';
 
@@ -21,31 +24,39 @@ const capturedNormalizationSchema = z
 
 export interface AflTradePrivateValuationCaptureBindingRepository {
   load(
-    request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>
+    request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>,
+    sourceRole?: AflTradePrivateValuationCaptureSourceRole
   ): Promise<AflTradePrivateValuationCaptureBinding | null>;
   accept(input: {
     readonly request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>;
     readonly claim: z.infer<typeof claimSchema>;
+    readonly sourceRole?: AflTradePrivateValuationCaptureSourceRole;
     readonly normalizationRunId: string;
   }): Promise<AflTradePrivateValuationCaptureBinding>;
 }
 
 function requireBindingForRequest(
   binding: AflTradePrivateValuationCaptureBinding,
-  request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>
+  request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>,
+  sourceRole: AflTradePrivateValuationCaptureSourceRole
 ): AflTradePrivateValuationCaptureBinding {
   const parsed = parseAflTradePrivateValuationCaptureBinding(binding);
   if (canonicalizeAflTradeJson(parsed.content.request) !== canonicalizeAflTradeJson(request)) {
     throw new TypeError('Accepted capture binding conflicts with the requested dispatch.');
+  }
+  if (getAflTradePrivateValuationCaptureSourceRole(parsed) !== sourceRole) {
+    throw new TypeError('Accepted capture binding conflicts with the requested source role.');
   }
   return parsed;
 }
 
 export function createAflTradePrivateValuationRawDataCoordinator(dependencies: {
   readonly captureBindings: AflTradePrivateValuationCaptureBindingRepository;
+  readonly sourceRole?: AflTradePrivateValuationCaptureSourceRole;
   readonly capture: (input: {
     readonly request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>;
     readonly claim: z.infer<typeof claimSchema>;
+    readonly sourceRole: AflTradePrivateValuationCaptureSourceRole;
   }) => Promise<z.infer<typeof capturedNormalizationSchema>>;
 }) {
   return {
@@ -55,9 +66,12 @@ export function createAflTradePrivateValuationRawDataCoordinator(dependencies: {
     }) {
       const request = aflTradePrivateValuationDispatchRequestSchema.parse(input.request);
       const claim = claimSchema.parse(input.claim);
-      const retained = await dependencies.captureBindings.load(request);
+      const sourceRole = aflTradePrivateValuationCaptureSourceRoleSchema.parse(
+        dependencies.sourceRole ?? 'factual_input'
+      );
+      const retained = await dependencies.captureBindings.load(request, sourceRole);
       if (retained !== null) {
-        const binding = requireBindingForRequest(retained, request);
+        const binding = requireBindingForRequest(retained, request, sourceRole);
         return {
           state: 'capture_accepted' as const,
           requestId: request.requestId,
@@ -67,15 +81,17 @@ export function createAflTradePrivateValuationRawDataCoordinator(dependencies: {
       }
 
       const captured = capturedNormalizationSchema.parse(
-        await dependencies.capture({ request, claim })
+        await dependencies.capture({ request, claim, sourceRole })
       );
       const binding = requireBindingForRequest(
         await dependencies.captureBindings.accept({
           request,
           claim,
+          sourceRole,
           normalizationRunId: captured.normalizationRunId,
         }),
-        request
+        request,
+        sourceRole
       );
       if (binding.content.dispatchClaimId !== claim.claimId) {
         throw new TypeError('Accepted capture binding disagrees with the live dispatch claim.');

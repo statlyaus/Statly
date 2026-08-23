@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   createAflTradeHpnPavFieldMap,
   createAflTradeHpnPavSeasonInputSet,
 } from '@/server/aflTradeIntelligence/modeling/hpnPavInputContracts';
+import { aflTradeHpnProjectedFieldMapSchema } from '@/server/aflTradeIntelligence/modeling/hpnProjectedFieldMap';
 
 const sha = (character: string) => character.repeat(64);
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -96,6 +98,81 @@ function resultFieldMap() {
       completionStatus: 'status',
       completedValues: ['completed'],
     },
+  });
+}
+
+function projectedFieldMap(
+  fieldMap: ReturnType<typeof resultFieldMap> | ReturnType<typeof playerFieldMap>,
+  character: string
+) {
+  const createdAt = '2026-08-09T00:00:00.000Z';
+  const candidateArtifact = createAflTradeCanonicalJsonArtifactRef(
+    { candidate: character },
+    createdAt
+  );
+  const approvalDecisionArtifact = createAflTradeCanonicalJsonArtifactRef(
+    { decision: character },
+    createdAt
+  );
+  const semanticBindings =
+    fieldMap.content.inputKind === 'completed_match_result'
+      ? [
+          { semanticField: 'awayClub', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayClub } },
+          { semanticField: 'awayPoints', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayPoints } },
+          { semanticField: 'completionStatus', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.completionStatus } },
+          { semanticField: 'homeClub', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homeClub } },
+          { semanticField: 'homePoints', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homePoints } },
+          { semanticField: 'match', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match } },
+        ]
+      : [
+          { semanticField: 'clearances', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.clearances } },
+          { semanticField: 'club', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.club } },
+          { semanticField: 'freeKicksAgainst', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksAgainst } },
+          { semanticField: 'freeKicksFor', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksFor } },
+          { semanticField: 'goalAssists', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.goalAssists } },
+          { semanticField: 'hitOuts', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.hitOuts } },
+          { semanticField: 'inside50s', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.inside50s } },
+          { semanticField: 'marks', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marks } },
+          { semanticField: 'marksInside50', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marksInside50 } },
+          { semanticField: 'match', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match } },
+          { semanticField: 'onePercenters', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.onePercenters } },
+          { semanticField: 'player', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.player } },
+          { semanticField: 'rebound50s', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.rebound50s } },
+          { semanticField: 'tackles', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.tackles } },
+          { semanticField: 'totalPoints', mapping: fieldMap.content.bindings.totalPoints },
+        ];
+  const content = {
+    schemaVersion: 'afl-trade-hpn-projected-field-map/v1' as const,
+    environment: 'non_production' as const,
+    purpose: 'private_confirmed_realized_hpn_pav' as const,
+    competition: 'AFLM' as const,
+    provider: fieldMap.content.provider,
+    capabilityId: fieldMap.content.capabilityId,
+    sourceSchemaSha256: fieldMap.content.sourceSchemaSha256,
+    inputKind: fieldMap.content.inputKind,
+    validFromSeason: fieldMap.content.validFromSeason,
+    validThroughSeason: fieldMap.content.validThroughSeason,
+    candidateId: `hpn-field-map-candidate:${sha(character)}`,
+    candidateArtifact,
+    approvalDecisionId: `hpn-field-map-review-decision:${sha(character)}`,
+    approvalDecisionArtifact,
+    semanticBindings,
+    completionRule:
+      fieldMap.content.inputKind === 'completed_match_result'
+        ? {
+            kind: 'source_status' as const,
+            completedValues: fieldMap.content.bindings.completedValues,
+          }
+        : null,
+    createdAt,
+    publicationEligible: false as const,
+    publicationProhibited: true as const,
+    limitation:
+      'Private non-production projection map only; it grants no factual release, model training, publication, production, activation, or live-capture authority.' as const,
+  };
+  return aflTradeHpnProjectedFieldMapSchema.parse({
+    fieldMapId: createAflTradeContentAddress('hpn-pav-field-map', content),
+    content,
   });
 }
 
@@ -283,6 +360,29 @@ describe('HPN PAV governed input contracts', () => {
       corroboratingPlayerRows: 4,
     });
     expect(inputSet.content.publicationEligible).toBe(false);
+  });
+
+  it('seals projected-map authority without manufacturing legacy field maps', () => {
+    const legacy = fixture();
+    const projectedMaps = legacy.fieldMaps.map((fieldMap, index) =>
+      projectedFieldMap(fieldMap, String(index + 1))
+    );
+    const sourceRuns = legacy.sourceRuns.map((run, index) => ({
+      ...run,
+      fieldMapId: projectedMaps[index]!.fieldMapId,
+    }));
+
+    const inputSet = createAflTradeHpnPavSeasonInputSet({
+      ...legacy,
+      environment: 'non_production',
+      fieldMaps: projectedMaps,
+      sourceRuns,
+    });
+
+    expect(inputSet.content.schemaVersion).toBe('afl-trade-hpn-pav-input-set/v2');
+    expect(inputSet.content.fieldMaps).toEqual(
+      [...projectedMaps].sort((left, right) => left.fieldMapId.localeCompare(right.fieldMapId))
+    );
   });
 
   it('rejects an omitted completed match or a run row that is not conserved', () => {

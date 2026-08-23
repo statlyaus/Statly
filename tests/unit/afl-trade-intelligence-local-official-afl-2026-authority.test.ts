@@ -39,7 +39,7 @@ describe('local official AFL 2026 authority', () => {
         operations: {
           internal_quality_evaluation: 'allowed',
           model_training: 'blocked',
-          derived_feature_creation: 'blocked',
+          derived_feature_creation: 'allowed',
           public_derived_output: 'blocked',
           public_fact_display: 'blocked',
         },

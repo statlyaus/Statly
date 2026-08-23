@@ -360,12 +360,15 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
               AND capture.anchor_season_year BETWEEN 2021 AND 2025)
           OR (capture.provider='official_afl'
               AND capture.capability_id='official-afl-player-stats'
+              AND capture.anchor_season_year=2026)
+          OR (capture.provider='afl_tables'
+              AND capture.capability_id='afl-tables-results'
               AND capture.anchor_season_year=2026))
       ORDER BY capture.capture_id
       FOR KEY SHARE OF capture,custody,rights`
   );
-  if (result.rows.length !== 6) {
-    throw new TypeError('The exact retained provider capture set must contain six captures.');
+  if (result.rows.length !== 7) {
+    throw new TypeError('The exact retained provider capture set must contain seven captures.');
   }
   const rightsByArtifactId = new Map<string, AflTradeArtifactRef>();
   const sourceCaptures = result.rows.map((row) => {
@@ -401,9 +404,9 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
       }),
     };
   });
-  if (rightsByArtifactId.size !== 2) {
+  if (rightsByArtifactId.size !== 3) {
     throw new TypeError(
-      'The exact retained provider capture set must retain two rights artifacts.'
+      'The exact retained provider capture set must retain three rights artifacts.'
     );
   }
   return {
@@ -415,9 +418,9 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
 }
 
 /**
- * Authenticates the complete retained AFL Tables 2021-2025 and official-AFL 2026 private review
- * sets in one database snapshot. Missing, superseded, extra, or custody-mismatched evidence fails
- * before an evaluation bundle can exist.
+ * Authenticates the complete retained AFL Tables 2021-2025 player data, official-AFL 2026 player
+ * data, and AFL Tables 2026 results evidence in one database snapshot. Missing, superseded, extra,
+ * or custody-mismatched evidence fails before an evaluation bundle can exist.
  */
 export async function loadExactLocalReviewedProviderEvidenceBundle(
   transaction: AflOutcomeSqlTransaction,

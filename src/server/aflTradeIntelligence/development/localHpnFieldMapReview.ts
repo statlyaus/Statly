@@ -69,7 +69,8 @@ export async function approveLocalAflTradeHpnFieldMapCandidates(
   authority: ProjectionWriter
 ): Promise<readonly LocalAflTradeHpnFieldMapApproval[]> {
   const keys = input.candidates.map(
-    ({ seasonYear, candidate }) => `${seasonYear}:${candidate.content.inputKind}`
+    ({ seasonYear, candidate }) =>
+      `${seasonYear}:${candidate.content.provider}:${candidate.content.capabilityId}:${candidate.content.inputKind}`
   );
   if (
     input.candidates.length === 0 ||
@@ -158,6 +159,17 @@ export async function reviewLocalAflTradeHpnFieldMaps(
   }>
 ) {
   const assembled = await assembleLocalAflTradeHpnLeagueSeasonReviewPacket(client, input);
+  const expectedCount = assembled.eligibilityReports.reduce(
+    (count, { report }) =>
+      count + report.content.sources.filter(({ selectionState }) => selectionState === 'selected').length,
+    0
+  );
+  if (
+    assembled.fieldMapCandidates.length !== expectedCount ||
+    assembled.sourceUseAssessments.length !== expectedCount
+  ) {
+    throw new TypeError('The complete requested HPN field-map review set was not assembled.');
+  }
   const approvals = await approveLocalAflTradeHpnFieldMapCandidates(
     {
       candidates: assembled.fieldMapCandidates,
@@ -167,7 +179,6 @@ export async function reviewLocalAflTradeHpnFieldMaps(
     },
     new PostgresAflTradeHpnProjectedFieldMapAuthority(client)
   );
-  const expectedCount = (input.throughSeason - input.fromSeason + 1) * 2;
   if (approvals.length !== expectedCount) {
     throw new TypeError('The complete requested HPN field-map review set was not approved.');
   }

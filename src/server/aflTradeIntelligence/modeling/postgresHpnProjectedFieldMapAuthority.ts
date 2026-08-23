@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import {
   doAflTradeArtifactRefsExactlyMatch,
   doesAflTradeArtifactRefMatchCanonicalJson,
@@ -46,6 +48,19 @@ interface StoredProjectionRow {
   map_json: unknown;
   current_decision_id: string;
 }
+
+const currentSourceSelectionSchema = z
+  .object({
+    provider: z.string().trim().min(1).max(240),
+    capabilityId: z.string().trim().min(1).max(240),
+    inputKind: z.enum(['completed_match_result', 'player_match_stats']),
+    sourceSchemaSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    providerDecodeMapId: z.string().trim().min(1).max(240),
+    seasonYear: z.number().int().min(1998).max(2200),
+    rightsArtifactId: z.string().regex(/^source-rights:[a-f0-9]{64}$/u),
+    valuationScopeKey: z.string().trim().min(1).max(240),
+  })
+  .strict();
 
 function digestFromId(id: string): string {
   return id.slice(id.indexOf(':') + 1);
@@ -331,5 +346,92 @@ export class PostgresAflTradeHpnProjectedFieldMapAuthority {
       throw new Error('Durable HPN projected field-map ancestry failed exact authentication.');
     }
     return projectedFieldMap;
+  }
+
+  async loadCurrentForSource(
+    input: z.input<typeof currentSourceSelectionSchema>
+  ): Promise<AflTradeHpnProjectedFieldMap | null> {
+    const source = currentSourceSelectionSchema.parse(input);
+    const result = await this.client.query<{ readonly field_map_id: string }>(
+      `SELECT map.field_map_id
+         FROM outcome_hpn_projected_field_map map
+         JOIN outcome_hpn_field_map_candidate candidate
+           ON candidate.candidate_id=map.candidate_id
+         JOIN outcome_hpn_field_map_review_decision approval
+           ON approval.decision_id=map.approval_decision_id
+         JOIN outcome_private_reviewed_evaluation_decision evaluation
+           ON evaluation.decision_id=
+                approval.source_use_assessment_json#>>'{content,evaluationDecisionId}'
+          AND evaluation.evidence_bundle_id=
+                approval.source_use_assessment_json#>>'{content,evidenceBundleId}'
+          AND evaluation.valuation_scope_key=
+                approval.source_use_assessment_json#>>'{content,valuationScopeKey}'
+          AND evaluation.status='authorized'
+         JOIN outcome_private_reviewed_evaluation_head evaluation_head
+           ON evaluation_head.decision_id=evaluation.decision_id
+          AND evaluation_head.evidence_bundle_id=evaluation.evidence_bundle_id
+          AND evaluation_head.valuation_scope_key=evaluation.valuation_scope_key
+          AND evaluation_head.status='authorized'
+         JOIN outcome_private_reviewed_evidence_bundle evidence_bundle
+           ON evidence_bundle.evidence_bundle_id=evaluation.evidence_bundle_id
+          AND evidence_bundle.evidence_scope_key=evaluation_head.evidence_scope_key
+         JOIN LATERAL (
+           SELECT latest.decision_id,latest.decision
+             FROM outcome_hpn_field_map_review_decision latest
+            WHERE latest.candidate_id=candidate.candidate_id
+            ORDER BY latest.registered_at DESC,latest.decision_id DESC LIMIT 1
+         ) current_decision ON true
+        WHERE map.environment='non_production'
+          AND map.competition='AFLM'
+          AND map.provider=$1
+          AND map.capability_id=$2
+          AND map.input_kind=$3
+          AND map.source_schema_sha256=$4
+          AND map.valid_from_season<=$5
+          AND map.valid_through_season>=$5
+          AND approval.source_use_assessment_json#>>'{content,rightsArtifactId}'=$6
+          AND candidate.candidate_json#>>'{content,providerDecodeMapId}'=$7
+          AND approval.source_use_assessment_json#>>'{content,valuationScopeKey}'=$8
+          AND approval.source_use_assessment_json#>'{content,reasons}'='[]'::jsonb
+          AND evaluation.decision_json#>>'{content,status}'='authorized'
+          AND evaluation.decision_json#>>'{content,valuationScopeKey}'=$8
+          AND evaluation.decision_json#>>'{content,evidenceBundleId}'=
+                evidence_bundle.evidence_bundle_id
+          AND evaluation.decision_json#>'{content,permissions,derivedCalculations}'=
+                'true'::jsonb
+          AND evaluation.decision_json#>'{content,permissions,internalEvaluation}'=
+                'true'::jsonb
+          AND evaluation.decision_json#>'{content,publicationProhibited}'='true'::jsonb
+          AND current_decision.decision_id=approval.decision_id
+          AND current_decision.decision='approved'
+        ORDER BY map.field_map_id`,
+      [
+        source.provider,
+        source.capabilityId,
+        source.inputKind,
+        source.sourceSchemaSha256,
+        source.seasonYear,
+        source.rightsArtifactId,
+        source.providerDecodeMapId,
+        source.valuationScopeKey,
+      ]
+    );
+    if (result.rows.length === 0) return null;
+    if (result.rows.length !== 1) {
+      throw new TypeError('More than one current HPN field map matches the exact source.');
+    }
+    const fieldMap = await this.loadCurrentExact(result.rows[0]!.field_map_id);
+    if (
+      fieldMap === null ||
+      fieldMap.content.provider !== source.provider ||
+      fieldMap.content.capabilityId !== source.capabilityId ||
+      fieldMap.content.inputKind !== source.inputKind ||
+      fieldMap.content.sourceSchemaSha256 !== source.sourceSchemaSha256 ||
+      fieldMap.content.validFromSeason > source.seasonYear ||
+      fieldMap.content.validThroughSeason < source.seasonYear
+    ) {
+      throw new TypeError('The selected HPN field map failed exact source authentication.');
+    }
+    return fieldMap;
   }
 }

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { sha256AflTradeCanonicalJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import {
   LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA,
+  LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA,
+  createLocalAflTradeAflTablesResultsAuthority,
   createLocalAflTradeFiveSeasonAflTablesAuthority,
 } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { createAflTradeFitzRoyInvocation } from '@/server/aflTradeIntelligence/source/fitzRoyCaptureContracts';
@@ -38,7 +40,7 @@ describe('local five-season AFL Tables authority', () => {
         operations: {
           internal_quality_evaluation: 'allowed',
           model_training: 'blocked',
-          derived_feature_creation: 'blocked',
+          derived_feature_creation: 'allowed',
           public_derived_output: 'blocked',
           public_fact_display: 'blocked',
         },
@@ -114,9 +116,59 @@ describe('local five-season AFL Tables authority', () => {
     expect(authority.fieldMap.validThroughSeason).toBe(2021);
   });
 
+  it('binds current-season completed results to their exact offline-inspected fitzRoy schema', () => {
+    const authority = createLocalAflTradeAflTablesResultsAuthority(2026);
+    const invocation = createAflTradeFitzRoyInvocation(authority.capture.captureRequest);
+
+    expect(LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA.map(({ name }) => name)).toEqual([
+      'Game',
+      'Date',
+      'Round',
+      'Home.Team',
+      'Home.Goals',
+      'Home.Behinds',
+      'Home.Points',
+      'Away.Team',
+      'Away.Goals',
+      'Away.Behinds',
+      'Away.Points',
+      'Venue',
+      'Margin',
+      'Season',
+      'Round.Type',
+      'Round.Number',
+    ]);
+    expect(authority.capture.captureRequest).toMatchObject({
+      capabilityId: 'afl-tables-results',
+      authorizationSeason: 2026,
+      parameters: { season: 2026, roundNumber: null },
+    });
+    expect(authority.capture.sourceRights.content.acquisition.capabilities).toEqual([
+      {
+        capabilityId: 'afl-tables-results',
+        provider: 'afl_tables',
+        directFunction: 'fetch_results_afltables',
+      },
+    ]);
+    expect(authority.capture.ledger.decisions[0]?.content).toMatchObject({
+      state: 'approved',
+      authorityKind: 'external_human_record',
+    });
+    expect(authority.fieldMap).toMatchObject({
+      capabilityId: 'afl-tables-results',
+      observationKind: 'match_universe',
+      invocationArgumentsSha256: sha256AflTradeCanonicalJson(invocation.arguments),
+      match: {
+        nativeMatchId: { sourceField: 'Game', required: true },
+        homeClubName: { sourceField: 'Home.Team', required: true },
+        awayClubName: { sourceField: 'Away.Team', required: true },
+      },
+    });
+  });
+
   it('rejects seasons outside the approved five-season local load', () => {
-    expect(() => createLocalAflTradeFiveSeasonAflTablesAuthority(2026)).toThrow(
-      '2021 through 2025'
+    expect(() => createLocalAflTradeFiveSeasonAflTablesAuthority(2027)).toThrow(
+      '2021 through 2026'
     );
   });
 });

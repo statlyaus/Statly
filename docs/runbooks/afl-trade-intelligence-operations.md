@@ -836,6 +836,7 @@ npx vitest run --config vitest.config.unit.ts \
   tests/unit/afl-trade-intelligence-private-local-workbook-reads.test.ts \
   tests/unit/afl-trade-intelligence-current-valuation-cohort-runner.test.ts \
   tests/unit/afl-trade-intelligence-private-valuation-scheduling.test.ts \
+  tests/unit/afl-trade-intelligence-private-valuation-hpn-preparation.test.ts \
   tests/unit/local-workbook-trade-evaluation-page.test.tsx \
   tests/unit/local-private-reviewed-trade-calculation-panel.test.tsx \
   tests/unit/afl-trade-intelligence-private-governed-exact-export-route.test.ts \
@@ -845,7 +846,10 @@ AFL_OUTCOMES_TEST_DATABASE_URL='<owned-disposable-loopback-postgresql>' \
   npx vitest run --config vitest.config.outcomes-int.ts \
   tests/outcomes-integration/afl-governed-private-evaluation-lifecycle-postgres.test.ts \
   tests/outcomes-integration/afl-private-evaluation-batch-postgres.test.ts \
-  tests/outcomes-integration/afl-private-valuation-scheduling-postgres.test.ts
+  tests/outcomes-integration/afl-private-valuation-scheduling-postgres.test.ts \
+  tests/outcomes-integration/afl-private-valuation-capture-binding-postgres.test.ts \
+  tests/outcomes-integration/afl-hpn-pav-projected-input-postgres.test.ts \
+  tests/outcomes-integration/afl-private-valuation-hpn-preparation-postgres.test.ts
 ```
 
 The provisioned integration command is permitted only when the caller owns the disposable database.
@@ -864,6 +868,15 @@ occurrence rather than a 604800-second interval, so daylight-saving changes do n
 Startup coalesces missed weeks to the latest occurrence. A newly committed qualified model pair also
 enqueues immediate work. Neither trigger promotes factual data or prepares model evidence: execution
 begins only from the exact current authenticated prepared-v3 head.
+
+The repository now also contains a backend-only HPN preparation seam for the next upstream cutover.
+It accepts an exact retained dispatch plus its live claim, replays the private factual output, and
+accepts three separately authenticated source roles: AFL Tables completed results, AFL Tables primary
+player statistics, and Official AFL corroborating player statistics. It then requires one current
+reviewed HPN projection for each exact source and uses the existing HPN input/calculation repositories.
+This seam is not yet invoked by the local worker, and it must not be described as automatic weekly
+raw-data recalculation until the later model and prepared-v3 stages are composed into the same runner.
+Do not bypass missing HPN map reviews or identity resolutions; those states remain backend blockers.
 
 To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
 or response loss:

@@ -1918,11 +1918,22 @@ The local full-stack worker drains retained pending dispatches at startup and en
 missed Monday 19:00 `Australia/Melbourne` occurrence. A newly qualified model pair separately enqueues
 immediate work. The calendar calculation preserves local wall-clock time across daylight-saving
 changes and coalesces missed weekly occurrences. An authenticated backend-only command can enqueue the
-same coordinator ad hoc using a caller-supplied stable operation key. This is not a complete
-new-game-data pipeline:
-fitzRoy capture, canonical factual promotion, model observation/benchmark rebuild, and prepared-v3
-activation remain separately governed upstream processes. The weekly run consumes whatever exact
-prepared-v3 head is current; it never promotes source data or invents model authority.
+same coordinator ad hoc using a caller-supplied stable operation key.
+
+The upstream path now has a claim-fenced HPN preparation boundary, but it is not yet wired into the
+weekly worker. Given one exact dispatch and live claim, it reuses the retained private factual output,
+accepts one result capture plus primary and corroborating player-stat captures under distinct source
+roles, resolves one current reviewed HPN map for each exact provider/capability/schema/season lane,
+and delegates input construction and calculation to the existing content-addressed HPN repositories.
+Restart reloads accepted captures and the existing HPN input/calculation records. Missing or stale
+source custody, map approval, identity resolution, factual-universe coverage, or method authority
+fails closed before downstream authority changes. The current public release pointer and publication
+Gates remain untouched.
+
+This is still not a complete new-game-data pipeline. The deployed weekly runner continues to consume
+whatever exact prepared-v3 head is current. Model observation rebuild, bounded model execution,
+automatic qualification handoff, and prepared-v3 activation still need to be composed after HPN
+preparation before the worker can run raw data through to recalculation without manual orchestration.
 
 A structurally valid fixture report always retains `publicationReady: false` and the remaining
 external blockers: a real historical-data run, component-model calibration exit criteria, downstream

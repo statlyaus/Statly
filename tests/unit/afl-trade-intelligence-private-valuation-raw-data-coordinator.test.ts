@@ -57,7 +57,7 @@ describe('private valuation raw-data coordinator', () => {
       binding: retained,
       idempotentReplay: true,
     });
-    expect(load).toHaveBeenCalledWith(request);
+    expect(load).toHaveBeenCalledWith(request, 'factual_input');
     expect(capture).not.toHaveBeenCalled();
     expect(accept).not.toHaveBeenCalled();
   });
@@ -80,10 +80,11 @@ describe('private valuation raw-data coordinator', () => {
       binding: candidate,
       idempotentReplay: false,
     });
-    expect(capture).toHaveBeenCalledWith({ request, claim });
+    expect(capture).toHaveBeenCalledWith({ request, claim, sourceRole: 'factual_input' });
     expect(accept).toHaveBeenCalledWith({
       request,
       claim,
+      sourceRole: 'factual_input',
       normalizationRunId: candidate.content.normalizationRunId,
     });
   });

@@ -1316,6 +1316,7 @@ model OutcomeHpnProjectedFieldMap {
   approvalDecision      OutcomeHpnFieldMapReviewDecision   @relation(fields: [approvalDecisionId], references: [decisionId], onDelete: Restrict)
   reviewedResultSeasons OutcomeHpnReviewedSeasonUniverse[] @relation("OutcomeHpnReviewedResultFieldMap")
   reviewedPlayerSeasons OutcomeHpnReviewedSeasonUniverse[] @relation("OutcomeHpnReviewedPlayerFieldMap")
+  pavInputRuns          OutcomeHpnPavInputRun[]
 
   @@index([environment, competition, provider, capabilityId, inputKind, validFromSeason, validThroughSeason], map: "outcome_hpn_projected_field_map_lookup_idx")
   @@map("outcome_hpn_projected_field_map")
@@ -1532,12 +1533,14 @@ model OutcomeHpnPavInputRun {
   inputSetId         String                          @map("input_set_id")
   ordinal            Int
   normalizationRunId String                          @map("normalization_run_id")
-  fieldMapId         String                          @map("field_map_id")
+  fieldMapId         String?                         @map("field_map_id")
+  projectedFieldMapId String?                        @map("projected_field_map_id")
   inputKind          String                          @map("input_kind")
   role               String?
   inputSet           OutcomeHpnPavInputSet           @relation(fields: [inputSetId], references: [inputSetId], onDelete: Restrict)
   normalizationRun   OutcomeProviderNormalizationRun @relation(fields: [normalizationRunId], references: [normalizationRunId], onDelete: Restrict)
-  fieldMap           OutcomeHpnPavFieldMap           @relation(fields: [fieldMapId], references: [fieldMapId], onDelete: Restrict)
+  fieldMap           OutcomeHpnPavFieldMap?          @relation(fields: [fieldMapId], references: [fieldMapId], onDelete: Restrict)
+  projectedFieldMap  OutcomeHpnProjectedFieldMap?    @relation(fields: [projectedFieldMapId], references: [fieldMapId], onDelete: Restrict)
   rows               OutcomeHpnPavInputRow[]
 
   @@id([inputSetId, normalizationRunId])
@@ -5402,7 +5405,7 @@ model OutcomePrivateValuationDispatchRequest {
   claimSequence         Int       @default(0) @map("claim_sequence")
   transientFailureCount Int       @default(0) @map("transient_failure_count")
   attempts              OutcomePrivateValuationDispatchAttempt[]
-  captureBinding        OutcomePrivateValuationCaptureBinding?
+  captureBindings       OutcomePrivateValuationCaptureBinding[]
   sourceAdmission       OutcomePrivateValuationSourceAdmission?
   factualOutput         OutcomePrivateValuationFactualOutput?
 
@@ -5434,7 +5437,8 @@ model OutcomePrivateValuationDispatchAttempt {
 
 model OutcomePrivateValuationCaptureBinding {
   bindingId             String                                    @id @map("binding_id") @outcomes.Text
-  requestId             String                                    @unique @map("request_id") @outcomes.Text
+  requestId             String                                    @map("request_id") @outcomes.Text
+  sourceRole            String                                    @default("factual_input") @map("source_role") @outcomes.Text
   dispatchClaimId       String                                    @map("dispatch_claim_id") @outcomes.Text
   attemptSequence       Int                                       @map("attempt_sequence")
   attemptNumber         Int                                       @map("attempt_number")
@@ -5452,6 +5456,7 @@ model OutcomePrivateValuationCaptureBinding {
   sourceAdmission       OutcomePrivateValuationSourceAdmission?
   factualOutput         OutcomePrivateValuationFactualOutput?
 
+  @@unique([requestId, sourceRole], map: "outcome_private_valuation_capture_binding_request_role_key")
   @@unique([bindingId, normalizationRunId], map: "outcome_private_valuation_capture_binding_id_run_key")
   @@index([normalizationRunId, sourceCaptureId], map: "outcome_private_valuation_capture_binding_source_idx")
   @@map("outcome_private_valuation_capture_binding")
