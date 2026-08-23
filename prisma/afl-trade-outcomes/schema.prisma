@@ -151,6 +151,7 @@ model OutcomeReleaseManifest {
   privateValuationEvaluationDecisions OutcomePrivateValuationEvaluationDecision[]
   privateValuationEvaluationHeads     OutcomePrivateValuationEvaluationHead[]
   currentValuationCohortOperations    OutcomeCurrentValuationCohortOperation[]
+  privateValuationFactualOutput       OutcomePrivateValuationFactualOutput?
 
   @@index([scopeKey, createdAt])
   @@map("outcome_release_manifest")
@@ -392,6 +393,7 @@ model OutcomeSourceCapture {
   valuationDatasetAdmissions  OutcomeValuationDatasetAdmissionSource[]
   valuationDatasetFieldSets   OutcomeValuationDatasetConsumedFieldSet[]
   privateValuationCaptureBindings OutcomePrivateValuationCaptureBinding[] @relation("PrivateValuationCaptureSource")
+  privateValuationSourceAdmission OutcomePrivateValuationSourceAdmission?
 
   @@unique([captureId, attemptId, sourceSnapshotId], map: "outcome_source_capture_exact_ancestry_key")
   @@index([provider, dataset, capturedAt], map: "outcome_source_capture_provider_captured_idx")
@@ -2425,6 +2427,8 @@ model OutcomeProviderFactBatch {
   completedAt                     DateTime?           @map("completed_at") @outcomes.Timestamptz(3)
   finalizedAt                     DateTime?           @map("finalized_at") @outcomes.Timestamptz(3)
   receiptJson                     Json                @map("receipt_json")
+  privateValuationFactualOutputs  OutcomePrivateValuationFactualOutput[]
+  privateValuationSourceAdmissions OutcomePrivateValuationSourceAdmission[]
 
   @@unique([normalizationRunId, extractorVersion, factBatchSha256], map: "outcome_provider_fact_batch_idempotency_key")
   @@unique([factBatchId, normalizationRunId], map: "outcome_provider_fact_batch_run_key")
@@ -2670,6 +2674,8 @@ model OutcomeFactualReconciliationRun {
   reconciledFacts     OutcomeReconciledFactualMetric[]
   spellMetricMembers  OutcomeAcquisitionSpellMetricVersionMember[]
   hpnPavInputSets     OutcomeHpnPavInputSet[]
+  privateValuationFactualOutputs OutcomePrivateValuationFactualOutput[]
+  privateValuationSourceAdmissions OutcomePrivateValuationSourceAdmission[]
 
   @@unique([policyId, competition, seasonYear, algorithmVersion, inputSetSha256], map: "outcome_factual_run_idempotency_key")
   @@index([environment, competition, seasonYear, status], map: "outcome_factual_run_scope_idx")
@@ -2961,6 +2967,7 @@ model OutcomeFactualReleaseCandidate {
   publicFactualArchive            OutcomePublicFactualArchive?
   valuationDatasets               OutcomeValuationDatasetCandidate[]
   valuationDatasetAuthorities     OutcomeValuationDatasetOperationAuthority[]
+  privateValuationFactualOutput    OutcomePrivateValuationFactualOutput?
 
   @@index([environment, scopeKey, status], map: "outcome_factual_release_candidate_scope_idx")
   @@index([promotionBackedCorpusId, status], map: "outcome_factual_candidate_promotion_corpus_idx")
@@ -3539,6 +3546,7 @@ model OutcomeAcquisitionSpellMetricBatch {
   policy         OutcomeAcquisitionSpellMetricPolicy    @relation(fields: [policyId], references: [policyId], onDelete: Restrict)
   spellVersion   OutcomeAcquisitionSpellVersion         @relation(fields: [spellVersionId], references: [spellVersionId], onDelete: Restrict)
   metrics        OutcomeAcquisitionSpellMetricVersion[]
+  privateValuationFactualOutputs OutcomePrivateValuationFactualOutputSpellBatch[]
 
   @@unique([policyId, spellVersionId, batchSha256], map: "outcome_spell_metric_batch_idempotency_key")
   @@map("outcome_acquisition_spell_metric_batch")
@@ -5395,6 +5403,8 @@ model OutcomePrivateValuationDispatchRequest {
   transientFailureCount Int       @default(0) @map("transient_failure_count")
   attempts              OutcomePrivateValuationDispatchAttempt[]
   captureBinding        OutcomePrivateValuationCaptureBinding?
+  sourceAdmission       OutcomePrivateValuationSourceAdmission?
+  factualOutput         OutcomePrivateValuationFactualOutput?
 
   @@index([status, availableAt, scopeKey], map: "outcome_private_valuation_dispatch_due_idx")
   @@map("outcome_private_valuation_dispatch_request")
@@ -5439,9 +5449,69 @@ model OutcomePrivateValuationCaptureBinding {
   dispatchAttempt       OutcomePrivateValuationDispatchAttempt     @relation("PrivateValuationCaptureDispatchAttempt", fields: [requestId, attemptSequence, dispatchClaimId], references: [requestId, attemptSequence, claimId], onDelete: Restrict)
   sourceCapture         OutcomeSourceCapture                       @relation("PrivateValuationCaptureSource", fields: [sourceCaptureId, sourceCaptureAttemptId, sourceSnapshotId], references: [captureId, attemptId, sourceSnapshotId], onDelete: Restrict)
   normalizationRun      OutcomeProviderNormalizationRun            @relation("PrivateValuationCaptureNormalization", fields: [normalizationRunId, sourceCaptureId], references: [normalizationRunId, captureId], onDelete: Restrict)
+  sourceAdmission       OutcomePrivateValuationSourceAdmission?
+  factualOutput         OutcomePrivateValuationFactualOutput?
 
+  @@unique([bindingId, normalizationRunId], map: "outcome_private_valuation_capture_binding_id_run_key")
   @@index([normalizationRunId, sourceCaptureId], map: "outcome_private_valuation_capture_binding_source_idx")
   @@map("outcome_private_valuation_capture_binding")
+}
+
+model OutcomePrivateValuationSourceAdmission {
+  admissionId       String                                   @id @map("admission_id") @outcomes.Text
+  requestId         String                                   @unique @map("request_id") @outcomes.Text
+  captureBindingId  String                                   @unique @map("capture_binding_id") @outcomes.Text
+  sourceCaptureId   String                                   @unique @map("source_capture_id") @outcomes.Text
+  normalizationRunId String                                  @map("normalization_run_id") @outcomes.Text
+  factBatchId       String                                   @map("fact_batch_id") @outcomes.Text
+  factualRunId      String                                   @map("factual_run_id") @outcomes.Text
+  admittedAt        DateTime                                 @map("admitted_at") @outcomes.Timestamptz(3)
+  admissionJson     Json                                     @map("admission_json")
+  request           OutcomePrivateValuationDispatchRequest   @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
+  captureBinding    OutcomePrivateValuationCaptureBinding    @relation(fields: [captureBindingId, normalizationRunId], references: [bindingId, normalizationRunId], onDelete: Restrict)
+  sourceCapture     OutcomeSourceCapture                     @relation(fields: [sourceCaptureId], references: [captureId], onDelete: Restrict)
+  factBatch         OutcomeProviderFactBatch                  @relation(fields: [factBatchId, normalizationRunId], references: [factBatchId, normalizationRunId], onDelete: Restrict)
+  factualRun        OutcomeFactualReconciliationRun           @relation(fields: [factualRunId], references: [factualRunId], onDelete: Restrict)
+  factualOutput     OutcomePrivateValuationFactualOutput?
+
+  @@unique([captureBindingId, normalizationRunId], map: "outcome_private_valuation_source_admission_binding_run_key")
+  @@map("outcome_private_valuation_source_admission")
+}
+
+model OutcomePrivateValuationFactualOutput {
+  outputId            String                                              @id @map("output_id") @outcomes.Text
+  requestId           String                                              @unique @map("request_id") @outcomes.Text
+  captureBindingId    String                                              @unique @map("capture_binding_id") @outcomes.Text
+  sourceAdmissionId   String                                              @unique @map("source_admission_id") @outcomes.Text
+  normalizationRunId  String                                              @map("normalization_run_id") @outcomes.Text
+  factBatchId         String                                              @map("fact_batch_id") @outcomes.Text
+  factualRunId        String                                              @map("factual_run_id") @outcomes.Text
+  candidateId         String                                              @unique @map("candidate_id") @outcomes.Text
+  factualReleaseId    String                                              @unique @map("factual_release_id") @outcomes.Text
+  preparedAt          DateTime                                            @map("prepared_at") @outcomes.Timestamptz(3)
+  outputJson          Json                                                @map("output_json")
+  request             OutcomePrivateValuationDispatchRequest             @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
+  captureBinding      OutcomePrivateValuationCaptureBinding               @relation(fields: [captureBindingId], references: [bindingId], onDelete: Restrict)
+  sourceAdmission     OutcomePrivateValuationSourceAdmission              @relation(fields: [sourceAdmissionId], references: [admissionId], onDelete: Restrict)
+  factBatch           OutcomeProviderFactBatch                            @relation(fields: [factBatchId], references: [factBatchId], onDelete: Restrict)
+  factualRun          OutcomeFactualReconciliationRun                     @relation(fields: [factualRunId], references: [factualRunId], onDelete: Restrict)
+  candidate           OutcomeFactualReleaseCandidate                      @relation(fields: [candidateId], references: [candidateId], onDelete: Restrict)
+  factualRelease      OutcomeReleaseManifest                              @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
+  spellMetricBatches  OutcomePrivateValuationFactualOutputSpellBatch[]
+
+  @@map("outcome_private_valuation_factual_output")
+}
+
+model OutcomePrivateValuationFactualOutputSpellBatch {
+  outputId String                                       @map("output_id") @outcomes.Text
+  batchId  String                                       @map("batch_id") @outcomes.Text
+  ordinal  Int
+  output   OutcomePrivateValuationFactualOutput          @relation(fields: [outputId], references: [outputId], onDelete: Restrict)
+  batch    OutcomeAcquisitionSpellMetricBatch            @relation(fields: [batchId], references: [batchId], onDelete: Restrict)
+
+  @@id([outputId, batchId])
+  @@unique([outputId, ordinal], map: "outcome_private_factual_output_spell_ordinal_key")
+  @@map("outcome_private_valuation_factual_output_spell_batch")
 }
 
 model OutcomePrivateEvaluationTransitionReceipt {
