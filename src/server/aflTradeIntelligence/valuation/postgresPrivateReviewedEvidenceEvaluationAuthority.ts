@@ -91,6 +91,57 @@ function exactJson(left: unknown, right: unknown): boolean {
   }
 }
 
+function exactEvidenceWithoutBundleTime(
+  left: AflTradePrivateReviewedEvidenceBundle,
+  right: AflTradePrivateReviewedEvidenceBundle
+): boolean {
+  const { createdAt: _leftCreatedAt, ...leftEvidence } = left.content;
+  const { createdAt: _rightCreatedAt, ...rightEvidence } = right.content;
+  return exactJson(leftEvidence, rightEvidence);
+}
+
+function isExactResultsSuccessor(
+  current: AflTradePrivateReviewedEvidenceBundle,
+  successor: AflTradePrivateReviewedEvidenceBundle
+): boolean {
+  const currentCaptures = current.content.sourceCaptures.map((capture) =>
+    canonicalizeAflTradeJson(capture)
+  );
+  const currentRights = current.content.sourceRightsEvidenceRefs.map((reference) =>
+    canonicalizeAflTradeJson(reference)
+  );
+  const addedCaptures = successor.content.sourceCaptures.filter(
+    (capture) => !currentCaptures.includes(canonicalizeAflTradeJson(capture))
+  );
+  const addedRights = successor.content.sourceRightsEvidenceRefs.filter(
+    (reference) => !currentRights.includes(canonicalizeAflTradeJson(reference))
+  );
+  return (
+    current.content.sourceCaptures.length === 6 &&
+    current.content.sourceRightsEvidenceRefs.length === 2 &&
+    successor.content.sourceCaptures.length === 7 &&
+    successor.content.sourceRightsEvidenceRefs.length === 3 &&
+    successor.content.candidateCount === current.content.candidateCount &&
+    successor.content.decisionCount === current.content.decisionCount &&
+    exactJson(successor.content.reviewSets, current.content.reviewSets) &&
+    currentCaptures.every((capture) =>
+      successor.content.sourceCaptures.some(
+        (candidate) => canonicalizeAflTradeJson(candidate) === capture
+      )
+    ) &&
+    currentRights.every((reference) =>
+      successor.content.sourceRightsEvidenceRefs.some(
+        (candidate) => canonicalizeAflTradeJson(candidate) === reference
+      )
+    ) &&
+    addedCaptures.length === 1 &&
+    addedCaptures[0]?.provider === 'afl_tables' &&
+    addedCaptures[0]?.capabilityId === 'afl-tables-results' &&
+    addedCaptures[0]?.seasonYear === 2026 &&
+    addedRights.length === 1
+  );
+}
+
 function assertBundleRow(row: BundleRow, bundle: AflTradePrivateReviewedEvidenceBundle): void {
   if (
     bundle.evidenceBundleId !== row.evidence_bundle_id ||
@@ -263,10 +314,7 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
           'The private reviewed-evidence decision changed before this write.'
         );
       }
-      if (
-        (!current && input.status === 'withdrawn') ||
-        current?.decision.content.status === input.status
-      ) {
+      if (!current && input.status === 'withdrawn') {
         throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
           'INVALID_INPUT',
           'A private reviewed-evidence decision must change the current authority state.'
@@ -276,11 +324,38 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
         `SELECT transaction_timestamp()::timestamptz(3) AS decided_at`
       );
       const decidedAt = isoTimestamp(clock.rows[0]!.decided_at);
-      const bundle =
-        current?.bundle ??
-        (await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt));
-      if (current) await requireCurrentEvidence(transaction, bundle);
-      else await persistBundle(transaction, bundle);
+      let bundle = current?.bundle ?? null;
+      if (current?.decision.content.status === input.status) {
+        if (input.status !== 'authorized') {
+          throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+            'INVALID_INPUT',
+            'A private reviewed-evidence decision must change the current authority state.'
+          );
+        }
+        const successor = await loadExactLocalReviewedProviderEvidenceBundle(
+          transaction,
+          decidedAt
+        );
+        if (exactEvidenceWithoutBundleTime(current.bundle, successor)) {
+          throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+            'INVALID_INPUT',
+            'The exact reviewed-evidence authority is already current.'
+          );
+        }
+        if (!isExactResultsSuccessor(current.bundle, successor)) {
+          throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+            'EVIDENCE_MISMATCH',
+            'Reviewed evidence may advance only by the exact AFL Tables results successor.'
+          );
+        }
+        await persistBundle(transaction, successor);
+        bundle = successor;
+      } else if (bundle === null) {
+        bundle = await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt);
+        await persistBundle(transaction, bundle);
+      } else {
+        await requireCurrentEvidence(transaction, bundle);
+      }
 
       const decision = createAflTradePrivateReviewedEvidenceEvaluationDecision({
         status: input.status,

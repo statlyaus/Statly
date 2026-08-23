@@ -6,9 +6,20 @@ import {
   aflTradeSha256Schema,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import {
+  listAflTradeHpnCandidateSourceFields,
+  type AflTradeHpnSemanticBindingCandidate,
+} from './hpnFieldMapCandidate';
+import { listAflTradeHpnRequiredSemanticFields } from './hpnCalculationEligibility';
+import {
+  aflTradeHpnProjectedFieldMapSchema,
+  type AflTradeHpnProjectedFieldMap,
+} from './hpnProjectedFieldMap';
 
 export const AFL_TRADE_HPN_PAV_FIELD_MAP_SCHEMA_VERSION = 'afl-trade-hpn-pav-field-map/v1' as const;
 export const AFL_TRADE_HPN_PAV_INPUT_SET_SCHEMA_VERSION = 'afl-trade-hpn-pav-input-set/v1' as const;
+export const AFL_TRADE_HPN_PAV_INPUT_SET_V2_SCHEMA_VERSION =
+  'afl-trade-hpn-pav-input-set/v2' as const;
 export const AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY =
   'private_exact_finalized_provider_rows_current_resolutions_no_publication_or_fantasy_ownership' as const;
 
@@ -397,33 +408,54 @@ function isOrdered(values: readonly string[]): boolean {
   return values.every((value, index) => index === 0 || values[index - 1]! < value);
 }
 
-const inputSetContentSchema = z
+const inputSetCountsSchema = z
   .object({
+    completedMatches: z.number().int().positive(),
+    resultRows: z.number().int().positive(),
+    primaryPlayerRows: z.number().int().positive(),
+    corroboratingPlayerRows: z.number().int().positive(),
+  })
+  .strict();
+
+const inputSetBase = {
+  authorityBoundary: z.literal(AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY),
+  publicationEligible: z.literal(false),
+  competition: z.literal('AFLM'),
+  seasonYear: seasonSchema,
+  effectiveThrough: instantSchema,
+  createdAt: instantSchema,
+  methodId: aflTradeContentAddressedIdSchema('hpn-pav-method'),
+  factualUniverse: factualUniverseSchema,
+  sourceRuns: z.array(sourceRunSchema).min(3).max(100),
+  completedMatches: z.array(completedMatchSchema).min(1).max(1_000),
+  rows: z.array(inputRowSchema).min(3).max(100_000),
+  counts: inputSetCountsSchema,
+};
+
+const legacyInputSetContentSchema = z
+  .object({
+    ...inputSetBase,
     schemaVersion: z.literal(AFL_TRADE_HPN_PAV_INPUT_SET_SCHEMA_VERSION),
-    authorityBoundary: z.literal(AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY),
-    publicationEligible: z.literal(false),
     environment: z.enum(['test_fixture', 'non_production', 'production']),
-    competition: z.literal('AFLM'),
-    seasonYear: seasonSchema,
-    effectiveThrough: instantSchema,
-    createdAt: instantSchema,
-    methodId: aflTradeContentAddressedIdSchema('hpn-pav-method'),
-    factualUniverse: factualUniverseSchema,
     fieldMaps: z.array(aflTradeHpnPavFieldMapSchema).min(3).max(100),
-    sourceRuns: z.array(sourceRunSchema).min(3).max(100),
-    completedMatches: z.array(completedMatchSchema).min(1).max(1_000),
-    rows: z.array(inputRowSchema).min(3).max(100_000),
-    counts: z
-      .object({
-        completedMatches: z.number().int().positive(),
-        resultRows: z.number().int().positive(),
-        primaryPlayerRows: z.number().int().positive(),
-        corroboratingPlayerRows: z.number().int().positive(),
-      })
-      .strict(),
   })
   .strict()
   .superRefine(addInputSetIssues);
+
+const projectedInputSetContentSchema = z
+  .object({
+    ...inputSetBase,
+    schemaVersion: z.literal(AFL_TRADE_HPN_PAV_INPUT_SET_V2_SCHEMA_VERSION),
+    environment: z.literal('non_production'),
+    fieldMaps: z.array(aflTradeHpnProjectedFieldMapSchema).min(3).max(100),
+  })
+  .strict()
+  .superRefine(addInputSetIssues);
+
+const inputSetContentSchema = z.union([
+  legacyInputSetContentSchema,
+  projectedInputSetContentSchema,
+]);
 
 export const aflTradeHpnPavSeasonInputSetSchema = z
   .object({
@@ -442,6 +474,9 @@ export const aflTradeHpnPavSeasonInputSetSchema = z
   });
 
 export type AflTradeHpnPavFieldMap = z.infer<typeof aflTradeHpnPavFieldMapSchema>;
+export type AflTradeHpnPavInputFieldMap =
+  | AflTradeHpnPavFieldMap
+  | AflTradeHpnProjectedFieldMap;
 export type AflTradeHpnPavSeasonInputSet = z.infer<typeof aflTradeHpnPavSeasonInputSetSchema>;
 
 export function aflTradeHpnPavReviewedFields(
@@ -486,10 +521,50 @@ function sourceNumber(row: z.infer<typeof playerRowSchema>, field: string): numb
   return value;
 }
 
+function projectedBinding(
+  fieldMap: AflTradeHpnProjectedFieldMap['content'],
+  semanticField: AflTradeHpnSemanticBindingCandidate['semanticField']
+): AflTradeHpnSemanticBindingCandidate['mapping'] | undefined {
+  return fieldMap.semanticBindings.find(
+    (binding) => binding.semanticField === semanticField
+  )?.mapping;
+}
+
+function projectedSourceNumber(
+  row: z.infer<typeof playerRowSchema>,
+  fieldMap: AflTradeHpnProjectedFieldMap['content'],
+  semanticField: AflTradeHpnSemanticBindingCandidate['semanticField']
+): number {
+  const mapping = projectedBinding(fieldMap, semanticField);
+  if (mapping?.kind === 'direct') return sourceNumber(row, mapping.sourceField);
+  if (mapping?.kind === 'goals_plus_behinds') {
+    return sourceNumber(row, mapping.goals) * 6 + sourceNumber(row, mapping.behinds);
+  }
+  return Number.NaN;
+}
+
 function statsFromSource(
   row: z.infer<typeof playerRowSchema>,
-  fieldMap: Extract<z.infer<typeof fieldMapContentSchema>, { inputKind: 'player_match_stats' }>
+  fieldMap:
+    | Extract<z.infer<typeof fieldMapContentSchema>, { inputKind: 'player_match_stats' }>
+    | AflTradeHpnProjectedFieldMap['content']
 ) {
+  if (fieldMap.schemaVersion === 'afl-trade-hpn-projected-field-map/v1') {
+    return {
+      totalPoints: projectedSourceNumber(row, fieldMap, 'totalPoints'),
+      hitOuts: projectedSourceNumber(row, fieldMap, 'hitOuts'),
+      goalAssists: projectedSourceNumber(row, fieldMap, 'goalAssists'),
+      inside50s: projectedSourceNumber(row, fieldMap, 'inside50s'),
+      marks: projectedSourceNumber(row, fieldMap, 'marks'),
+      marksInside50: projectedSourceNumber(row, fieldMap, 'marksInside50'),
+      freeKicksFor: projectedSourceNumber(row, fieldMap, 'freeKicksFor'),
+      freeKicksAgainst: projectedSourceNumber(row, fieldMap, 'freeKicksAgainst'),
+      rebound50s: projectedSourceNumber(row, fieldMap, 'rebound50s'),
+      onePercenters: projectedSourceNumber(row, fieldMap, 'onePercenters'),
+      clearances: projectedSourceNumber(row, fieldMap, 'clearances'),
+      tackles: projectedSourceNumber(row, fieldMap, 'tackles'),
+    };
+  }
   const bindings = fieldMap.bindings;
   const totalPoints =
     bindings.totalPoints.kind === 'total_points'
@@ -510,6 +585,49 @@ function statsFromSource(
     clearances: sourceNumber(row, bindings.clearances),
     tackles: sourceNumber(row, bindings.tackles),
   };
+}
+
+function reviewedFields(fieldMap: AflTradeHpnPavInputFieldMap['content']): string[] {
+  if (fieldMap.schemaVersion === 'afl-trade-hpn-projected-field-map/v1') {
+    return [
+      ...new Set(
+        fieldMap.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
+      ),
+    ].sort(ordinalCompare);
+  }
+  return aflTradeHpnPavReviewedFields(fieldMap);
+}
+
+function projectedResultMatchesSource(
+  row: z.infer<typeof resultRowSchema>,
+  fieldMap: AflTradeHpnProjectedFieldMap['content']
+): boolean {
+  const homePoints = projectedBinding(fieldMap, 'homePoints');
+  const awayPoints = projectedBinding(fieldMap, 'awayPoints');
+  if (
+    homePoints?.kind !== 'direct' ||
+    awayPoints?.kind !== 'direct' ||
+    row.homePoints !== row.source.sourceValues[homePoints.sourceField] ||
+    row.awayPoints !== row.source.sourceValues[awayPoints.sourceField]
+  ) {
+    return false;
+  }
+  const completion = projectedBinding(fieldMap, 'completionStatus');
+  if (fieldMap.completionRule?.kind === 'source_status') {
+    return (
+      completion?.kind === 'direct' &&
+      typeof row.source.sourceValues[completion.sourceField] === 'string' &&
+      fieldMap.completionRule.completedValues.includes(
+        row.source.sourceValues[completion.sourceField] as string
+      )
+    );
+  }
+  return (
+    fieldMap.completionRule?.kind === 'reviewed_final_score_presence' &&
+    completion?.kind === 'reviewed_final_scores' &&
+    row.source.sourceValues[completion.homePointsField] === row.homePoints &&
+    row.source.sourceValues[completion.awayPointsField] === row.awayPoints
+  );
 }
 
 function addInputSetIssues(
@@ -576,6 +694,20 @@ function addInputSetIssues(
         message: 'Every PAV source run must match its reviewed map, season, scope, and chronology.',
       });
     }
+    if (fieldMap?.content.schemaVersion === 'afl-trade-hpn-projected-field-map/v1') {
+      const expected = listAflTradeHpnRequiredSemanticFields(fieldMap.content.inputKind);
+      const actual = fieldMap.content.semanticBindings.map(({ semanticField }) => semanticField);
+      if (
+        actual.length !== expected.length ||
+        actual.some((semanticField, index) => semanticField !== expected[index])
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fieldMaps'],
+          message: 'A projected PAV map must bind every required semantic field exactly once.',
+        });
+      }
+    }
     const runRows = input.rows.filter(
       ({ source }) => source.normalizationRunId === run.normalizationRunId
     );
@@ -604,7 +736,7 @@ function addInputSetIssues(
       });
       continue;
     }
-    const reviewed = aflTradeHpnPavReviewedFields(fieldMap.content);
+    const reviewed = reviewedFields(fieldMap.content);
     if (
       row.source.sourceFields.length !== reviewed.length ||
       row.source.sourceFields.some((field, index) => field !== reviewed[index])
@@ -626,14 +758,19 @@ function addInputSetIssues(
           message: 'Result authority has the wrong entity kind.',
         });
       }
-      const bindings = fieldMap.content.bindings;
-      const sourceStatus = row.source.sourceValues[bindings.completionStatus];
-      if (
-        row.homePoints !== row.source.sourceValues[bindings.homePoints] ||
-        row.awayPoints !== row.source.sourceValues[bindings.awayPoints] ||
-        typeof sourceStatus !== 'string' ||
-        !bindings.completedValues.includes(sourceStatus)
-      ) {
+      const valuesMatch =
+        fieldMap.content.schemaVersion === 'afl-trade-hpn-projected-field-map/v1'
+          ? projectedResultMatchesSource(row, fieldMap.content)
+          : row.homePoints === row.source.sourceValues[fieldMap.content.bindings.homePoints] &&
+            row.awayPoints === row.source.sourceValues[fieldMap.content.bindings.awayPoints] &&
+            typeof row.source.sourceValues[fieldMap.content.bindings.completionStatus] ===
+              'string' &&
+            fieldMap.content.bindings.completedValues.includes(
+              row.source.sourceValues[
+                fieldMap.content.bindings.completionStatus
+              ] as string
+            );
+      if (!valuesMatch) {
         context.addIssue({
           code: 'custom',
           message: 'Result values do not match staged source fields.',
@@ -832,10 +969,15 @@ export function createAflTradeHpnPavFieldMap(
   });
 }
 
-type CreateInputSet = Omit<
-  z.input<typeof inputSetContentSchema>,
+type CreateLegacyInputSet = Omit<
+  z.input<typeof legacyInputSetContentSchema>,
   'schemaVersion' | 'authorityBoundary' | 'publicationEligible' | 'counts'
 >;
+type CreateProjectedInputSet = Omit<
+  z.input<typeof projectedInputSetContentSchema>,
+  'schemaVersion' | 'authorityBoundary' | 'publicationEligible' | 'counts'
+>;
+type CreateInputSet = CreateLegacyInputSet | CreateProjectedInputSet;
 
 export function createAflTradeHpnPavSeasonInputSet(
   unparsedInput: CreateInputSet
@@ -846,6 +988,15 @@ export function createAflTradeHpnPavSeasonInputSet(
   const fieldMaps = [...unparsedInput.fieldMaps].sort((left, right) =>
     ordinalCompare(left.fieldMapId, right.fieldMapId)
   );
+  const usesProjectedMaps = fieldMaps.every(
+    ({ content }) => content.schemaVersion === 'afl-trade-hpn-projected-field-map/v1'
+  );
+  const usesLegacyMaps = fieldMaps.every(
+    ({ content }) => content.schemaVersion === AFL_TRADE_HPN_PAV_FIELD_MAP_SCHEMA_VERSION
+  );
+  if (!usesProjectedMaps && !usesLegacyMaps) {
+    throw new TypeError('One HPN input set cannot mix legacy and projected map authority.');
+  }
   const sourceRuns = [...unparsedInput.sourceRuns].sort((left, right) =>
     ordinalCompare(left.normalizationRunId, right.normalizationRunId)
   );
@@ -871,7 +1022,9 @@ export function createAflTradeHpnPavSeasonInputSet(
   };
   const content = inputSetContentSchema.parse({
     ...unparsedInput,
-    schemaVersion: AFL_TRADE_HPN_PAV_INPUT_SET_SCHEMA_VERSION,
+    schemaVersion: usesProjectedMaps
+      ? AFL_TRADE_HPN_PAV_INPUT_SET_V2_SCHEMA_VERSION
+      : AFL_TRADE_HPN_PAV_INPUT_SET_SCHEMA_VERSION,
     authorityBoundary: AFL_TRADE_HPN_PAV_INPUT_AUTHORITY_BOUNDARY,
     publicationEligible: false,
     fieldMaps,

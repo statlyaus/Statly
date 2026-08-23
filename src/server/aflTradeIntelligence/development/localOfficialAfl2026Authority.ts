@@ -182,7 +182,7 @@ function sourceFieldUse(sourceField: string) {
     uses: {
       archive_fact: 'allowed' as const,
       model_training: 'blocked' as const,
-      derived_feature: 'blocked' as const,
+      derived_feature: 'allowed' as const,
       public_display: 'blocked' as const,
     },
     attributionRequired: true,
@@ -208,7 +208,7 @@ export function createLocalAflTradeOfficialAfl2026Authority() {
     dataset: 'Official AFL 2026 player match statistics',
     datasetVersion: `fitzroy-${AFL_TRADE_FITZROY_PINNED_VERSION}`,
     intendedPurpose:
-      'Current-season concluded AFL player appearances and goals for the disposable local factual-release rehearsal.',
+      'Current-season concluded AFL player appearances, goals, and private HPN calculation for the disposable local rehearsal.',
     scope: {
       competitions: ['AFLM'],
       seasonRanges: [{ from: 2026, to: 2026 }],
@@ -232,7 +232,7 @@ export function createLocalAflTradeOfficialAfl2026Authority() {
       metadata_hash_retention: 'allowed' as const,
       internal_quality_evaluation: 'allowed' as const,
       model_training: 'blocked' as const,
-      derived_feature_creation: 'blocked' as const,
+      derived_feature_creation: 'allowed' as const,
       public_derived_output: 'blocked' as const,
       public_fact_display: 'blocked' as const,
       raw_field_redistribution: 'blocked' as const,

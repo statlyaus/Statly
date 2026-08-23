@@ -1,12 +1,16 @@
 import { createHash } from 'node:crypto';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   canonicalizeAflTradeJson,
   sha256AflTradeCanonicalJson,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
-import { createAflTradeByteArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  createAflTradeByteArtifactRef,
+  createAflTradeCanonicalJsonArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradeFinalizedHpnPavCalculationService } from '@/server/aflTradeIntelligence/modeling/hpnPavCalculationService';
 import { PostgresAflTradeHpnPavCalculationRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavCalculationRepository';
 import type {
@@ -18,9 +22,11 @@ import {
   aflTradeHpnPavSeasonInputSetSchema,
   createAflTradeHpnPavFieldMap,
 } from '@/server/aflTradeIntelligence/modeling/hpnPavInputContracts';
+import { aflTradeHpnProjectedFieldMapSchema } from '@/server/aflTradeIntelligence/modeling/hpnProjectedFieldMap';
 import { AflTradeHpnPavInputError } from '@/server/aflTradeIntelligence/modeling/hpnPavInputRepository';
 import { createAflTradeHpnPavMethod } from '@/server/aflTradeIntelligence/modeling/hpnPlayerApproximateValue';
 import { PostgresAflTradeHpnPavInputRepository } from '@/server/aflTradeIntelligence/modeling/postgresHpnPavInputRepository';
+import { PostgresAflTradeHpnProjectedFieldMapAuthority } from '@/server/aflTradeIntelligence/modeling/postgresHpnProjectedFieldMapAuthority';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const addressed = (prefix: string, value: string) => `${prefix}:${sha(value)}`;
@@ -105,6 +111,81 @@ function resultMap() {
   });
 }
 
+function projectedMap(
+  fieldMap: ReturnType<typeof resultMap> | ReturnType<typeof playerMap>,
+  suffix: string
+) {
+  const createdAt = '2026-08-09T00:00:00.000Z';
+  const candidateArtifact = createAflTradeCanonicalJsonArtifactRef(
+    { candidate: suffix },
+    createdAt
+  );
+  const approvalDecisionArtifact = createAflTradeCanonicalJsonArtifactRef(
+    { decision: suffix },
+    createdAt
+  );
+  const semanticBindings =
+    fieldMap.content.inputKind === 'completed_match_result'
+      ? [
+          { semanticField: 'awayClub', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayClub } },
+          { semanticField: 'awayPoints', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.awayPoints } },
+          { semanticField: 'completionStatus', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.completionStatus } },
+          { semanticField: 'homeClub', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homeClub } },
+          { semanticField: 'homePoints', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.homePoints } },
+          { semanticField: 'match', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match } },
+        ]
+      : [
+          { semanticField: 'clearances', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.clearances } },
+          { semanticField: 'club', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.club } },
+          { semanticField: 'freeKicksAgainst', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksAgainst } },
+          { semanticField: 'freeKicksFor', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.freeKicksFor } },
+          { semanticField: 'goalAssists', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.goalAssists } },
+          { semanticField: 'hitOuts', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.hitOuts } },
+          { semanticField: 'inside50s', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.inside50s } },
+          { semanticField: 'marks', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marks } },
+          { semanticField: 'marksInside50', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.marksInside50 } },
+          { semanticField: 'match', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.match } },
+          { semanticField: 'onePercenters', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.onePercenters } },
+          { semanticField: 'player', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.player } },
+          { semanticField: 'rebound50s', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.rebound50s } },
+          { semanticField: 'tackles', mapping: { kind: 'direct', sourceField: fieldMap.content.bindings.tackles } },
+          { semanticField: 'totalPoints', mapping: fieldMap.content.bindings.totalPoints },
+        ];
+  const content = {
+    schemaVersion: 'afl-trade-hpn-projected-field-map/v1' as const,
+    environment: 'non_production' as const,
+    purpose: 'private_confirmed_realized_hpn_pav' as const,
+    competition: 'AFLM' as const,
+    provider: fieldMap.content.provider,
+    capabilityId: fieldMap.content.capabilityId,
+    sourceSchemaSha256: fieldMap.content.sourceSchemaSha256,
+    inputKind: fieldMap.content.inputKind,
+    validFromSeason: fieldMap.content.validFromSeason,
+    validThroughSeason: fieldMap.content.validThroughSeason,
+    candidateId: addressed('hpn-field-map-candidate', suffix),
+    candidateArtifact,
+    approvalDecisionId: addressed('hpn-field-map-review-decision', suffix),
+    approvalDecisionArtifact,
+    semanticBindings,
+    completionRule:
+      fieldMap.content.inputKind === 'completed_match_result'
+        ? {
+            kind: 'source_status' as const,
+            completedValues: fieldMap.content.bindings.completedValues,
+          }
+        : null,
+    createdAt,
+    publicationEligible: false as const,
+    publicationProhibited: true as const,
+    limitation:
+      'Private non-production projection map only; it grants no factual release, model training, publication, production, activation, or live-capture authority.' as const,
+  };
+  return aflTradeHpnProjectedFieldMapSchema.parse({
+    fieldMapId: createAflTradeContentAddress('hpn-pav-field-map', content),
+    content,
+  });
+}
+
 interface FakeOptions {
   omitLastRow?: boolean;
   resultStatus?: string;
@@ -112,14 +193,11 @@ interface FakeOptions {
   omitUniverseAppearance?: boolean;
   membershipDrift?: boolean;
   sourceMembershipDrift?: boolean;
+  projectedMaps?: boolean;
 }
 
 class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
-  readonly maps = [
-    resultMap(),
-    playerMap('afl_tables', 'primary'),
-    playerMap('footywire', 'corroborating'),
-  ];
+  readonly maps;
   readonly resultRunId = addressed('provider-normalization-run', 'result-run');
   readonly primaryRunId = addressed('provider-normalization-run', 'primary-run');
   readonly corroboratingRunId = addressed('provider-normalization-run', 'corroborating-run');
@@ -134,7 +212,16 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
   calculationPlayerCount = 0;
   transactionTimestampReads = 0;
 
-  constructor(private readonly options: FakeOptions = {}) {}
+  constructor(private readonly options: FakeOptions = {}) {
+    const legacyMaps = [
+      resultMap(),
+      playerMap('afl_tables', 'primary'),
+      playerMap('footywire', 'corroborating'),
+    ] as const;
+    this.maps = options.projectedMaps
+      ? legacyMaps.map((map, index) => projectedMap(map, `projected:${index}`))
+      : legacyMaps;
+  }
 
   async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
     return work(this);
@@ -308,7 +395,10 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
           : [{ input_set_json: this.storedInput, finalized_at: this.finalizedAt }]
       );
     }
-    if (sql.includes('FROM jsonb_to_recordset($1::jsonb)') && sql.includes('pav_map.map_json')) {
+    if (
+      sql.includes('FROM jsonb_to_recordset($1::jsonb)') &&
+      sql.includes('JOIN outcome_provider_normalization_run run')
+    ) {
       const requested = JSON.parse(String(parameters[0])) as Array<{
         normalizationRunId: string;
         fieldMapId: string;
@@ -322,7 +412,9 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
             capture_id: `capture:${map.content.provider}:2025`,
             source_snapshot_id: addressed('source-snapshot', `snapshot:${map.content.provider}`),
             source_artifact_id: addressed('artifact', `artifact:${map.content.provider}`),
-            capture_environment: 'test_fixture',
+            capture_environment: this.options.projectedMaps ? 'non_production' : 'test_fixture',
+            capture_provider: map.content.provider,
+            capture_capability_id: map.content.capabilityId,
             capture_status: 'approved',
             captured_at: '2025-09-27T00:00:00.000Z',
             finalized_at: '2026-08-09T00:00:00.000Z',
@@ -334,11 +426,21 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
             run_status: 'staged',
             capability_id: map.content.capabilityId,
             source_schema_sha256: map.content.sourceSchemaSha256,
-            field_map_json: map,
           };
         })
       );
     }
+    if (sql.includes('SELECT legacy.map_json AS legacy_map_json')) {
+      const fieldMapId = String(parameters[0]);
+      const map = this.maps.find((candidate) => candidate.fieldMapId === fieldMapId);
+      return this.result([
+        {
+          legacy_map_json:
+            map?.content.schemaVersion === 'afl-trade-hpn-pav-field-map/v1' ? map : null,
+        },
+      ]);
+    }
+    if (sql.includes('SELECT candidate.candidate_json')) return this.result([]);
     if (sql.includes('FROM outcome_provider_decoded_row decoded')) {
       const rows = this.decodedRows();
       return this.result(this.options.omitLastRow ? rows.slice(0, -1) : rows);
@@ -431,7 +533,9 @@ class FakeHpnPavSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransacti
 
 function request(client: FakeHpnPavSqlClient) {
   return {
-    environment: 'test_fixture' as const,
+    environment: (client.maps[0]!.content.environment === 'non_production'
+      ? 'non_production'
+      : 'test_fixture') as 'test_fixture' | 'non_production',
     competition: 'AFLM' as const,
     seasonYear: 2025,
     methodId: method.methodId,
@@ -461,6 +565,35 @@ function request(client: FakeHpnPavSqlClient) {
 }
 
 describe('PostgresAflTradeHpnPavInputRepository', () => {
+  it('builds and replays through the existing seam from approved projected maps', async () => {
+    const client = new FakeHpnPavSqlClient({ projectedMaps: true });
+    const repository = new PostgresAflTradeHpnPavInputRepository(client);
+    const loadCurrentExact = vi
+      .spyOn(PostgresAflTradeHpnProjectedFieldMapAuthority.prototype, 'loadCurrentExact')
+      .mockImplementation(async (fieldMapId) =>
+        client.maps.find((map) => map.fieldMapId === fieldMapId) ?? null
+      );
+
+    try {
+      const first = await repository.buildAndPersistSeasonInputSet(request(client), {
+        environment: 'non_production',
+      });
+      const replay = await repository.buildAndPersistSeasonInputSet(request(client), {
+        environment: 'non_production',
+      });
+
+      expect(first.idempotentReplay).toBe(false);
+      expect(replay).toEqual({ inputSet: first.inputSet, idempotentReplay: true });
+      expect(first.inputSet.content.schemaVersion).toBe('afl-trade-hpn-pav-input-set/v2');
+      expect(first.inputSet.content.fieldMaps).toEqual(
+        [...client.maps].sort((left, right) => left.fieldMapId.localeCompare(right.fieldMapId))
+      );
+      expect(loadCurrentExact).toHaveBeenCalledTimes(3);
+    } finally {
+      loadCurrentExact.mockRestore();
+    }
+  });
+
   it('derives, persists, and exactly replays a complete cross-provider season input set', async () => {
     const client = new FakeHpnPavSqlClient();
     const repository = new PostgresAflTradeHpnPavInputRepository(client);

@@ -11,6 +11,7 @@ const sourceSchema = z
     captureId: publicIdSchema,
     provider: z.enum(['afl_tables', 'official_afl']),
     capabilityId: z.enum([
+      'afl-tables-results',
       'afl-tables-player-stats',
       'official-afl-player-stats',
     ]),
@@ -49,7 +50,10 @@ export type LocalAflTradeHpnReviewSnapshot = Readonly<{
     seasonYear: number;
     captureId: string;
     provider: 'afl_tables' | 'official_afl';
-    capabilityId: 'afl-tables-player-stats' | 'official-afl-player-stats';
+    capabilityId:
+      | 'afl-tables-results'
+      | 'afl-tables-player-stats'
+      | 'official-afl-player-stats';
     normalizationRunId: string;
     providerDecodeMap: unknown;
     rights: unknown;
@@ -189,7 +193,7 @@ const LOAD_REVIEW_SNAPSHOT_SQL = `WITH authority AS MATERIALIZED (
    WHERE capture.environment='non_production' AND capture.status='staged'
      AND capture.anchor_season_year BETWEEN $2 AND $3
      AND capture.capability_id IN (
-       'afl-tables-player-stats','official-afl-player-stats'
+       'afl-tables-results','afl-tables-player-stats','official-afl-player-stats'
      )
 )
 SELECT transaction_timestamp() AS trusted_at,authority.bundle_json AS reviewed_evidence_bundle_json,

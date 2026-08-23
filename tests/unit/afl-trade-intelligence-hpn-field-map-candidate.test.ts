@@ -8,7 +8,10 @@ import {
   createLocalAflTradeHpnCompletedResultFieldMapCandidate,
   createLocalAflTradeHpnPlayerFieldMapCandidate,
 } from '@/server/aflTradeIntelligence/development/localHpnFieldMapCandidates';
-import { createLocalAflTradeFiveSeasonAflTablesAuthority } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
+import {
+  createLocalAflTradeAflTablesResultsAuthority,
+  createLocalAflTradeFiveSeasonAflTablesAuthority,
+} from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { createLocalAflTradeOfficialAfl2026Authority } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Authority';
 
 const createdAt = '2026-08-16T04:00:00.000Z';
@@ -190,9 +193,9 @@ describe('HPN field-map review candidate', () => {
   });
 
   it('proposes an explicit reviewed final-score projection instead of inventing a status field', () => {
-    const providerDecodeMap = createLocalAflTradeFiveSeasonAflTablesAuthority(2025).fieldMap;
+    const providerDecodeMap = createLocalAflTradeAflTablesResultsAuthority(2026).fieldMap;
     const resultCandidate = createLocalAflTradeHpnCompletedResultFieldMapCandidate({
-      seasonYear: 2025,
+      seasonYear: 2026,
       providerDecodeMap,
       providerDecodeMapArtifact: createAflTradeCanonicalJsonArtifactRef(
         providerDecodeMap,
@@ -218,7 +221,7 @@ describe('HPN field-map review candidate', () => {
     ).toMatchObject({
       mapping: {
         kind: 'composite_key',
-        sourceFields: ['Date', 'Home.team', 'Away.team'],
+        sourceFields: ['Date', 'Home.Team', 'Away.Team'],
       },
     });
     expect(
@@ -229,8 +232,8 @@ describe('HPN field-map review candidate', () => {
       mapping: {
         kind: 'reviewed_final_scores',
         matchDateField: 'Date',
-        homePointsField: 'Home.score',
-        awayPointsField: 'Away.score',
+        homePointsField: 'Home.Points',
+        awayPointsField: 'Away.Points',
       },
     });
     expect(resultCandidate.content).not.toHaveProperty('completedValues');

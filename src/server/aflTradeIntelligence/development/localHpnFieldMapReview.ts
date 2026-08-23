@@ -69,7 +69,8 @@ export async function approveLocalAflTradeHpnFieldMapCandidates(
   authority: ProjectionWriter
 ): Promise<readonly LocalAflTradeHpnFieldMapApproval[]> {
   const keys = input.candidates.map(
-    ({ seasonYear, candidate }) => `${seasonYear}:${candidate.content.inputKind}`
+    ({ seasonYear, candidate }) =>
+      `${seasonYear}:${candidate.content.provider}:${candidate.content.capabilityId}:${candidate.content.inputKind}`
   );
   if (
     input.candidates.length === 0 ||
@@ -167,7 +168,7 @@ export async function reviewLocalAflTradeHpnFieldMaps(
     },
     new PostgresAflTradeHpnProjectedFieldMapAuthority(client)
   );
-  const expectedCount = (input.throughSeason - input.fromSeason + 1) * 2;
+  const expectedCount = (input.throughSeason - input.fromSeason + 1) * 3;
   if (approvals.length !== expectedCount) {
     throw new TypeError('The complete requested HPN field-map review set was not approved.');
   }

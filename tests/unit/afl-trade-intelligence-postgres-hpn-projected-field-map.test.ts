@@ -36,6 +36,24 @@ async function prepareDatabase(database: PGlite): Promise<void> {
   await database.exec(`
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
     CREATE TYPE "OutcomeEnvironment" AS ENUM ('test_fixture','non_production','production');
+    CREATE TABLE outcome_private_reviewed_evidence_bundle (
+      evidence_bundle_id TEXT PRIMARY KEY,
+      evidence_scope_key TEXT NOT NULL
+    );
+    CREATE TABLE outcome_private_reviewed_evaluation_decision (
+      decision_id TEXT PRIMARY KEY,
+      evidence_bundle_id TEXT NOT NULL,
+      valuation_scope_key TEXT NOT NULL,
+      status TEXT NOT NULL,
+      decision_json JSONB NOT NULL
+    );
+    CREATE TABLE outcome_private_reviewed_evaluation_head (
+      decision_id TEXT PRIMARY KEY,
+      evidence_bundle_id TEXT NOT NULL,
+      valuation_scope_key TEXT NOT NULL,
+      evidence_scope_key TEXT NOT NULL,
+      status TEXT NOT NULL
+    );
   `);
   await database.exec(MIGRATION);
 }
@@ -89,7 +107,7 @@ function approvedProjection(input: { readonly decision: 'approved' | 'rejected';
     valuationScopeKey: 'workbook:2025',
     evaluationDecisionId: 'private-reviewed-evaluation-decision:fixture',
     state: 'permitted_private_calculation' as const,
-    rightsArtifactId: `artifact:${'1'.repeat(64)}`,
+    rightsArtifactId: `source-rights:${'1'.repeat(64)}`,
     evidenceBundleId: 'private-reviewed-evidence:fixture',
     fields: [...new Set(
       candidate.content.semanticBindings.flatMap(listAflTradeHpnCandidateSourceFields)
@@ -145,6 +163,48 @@ function approvedProjection(input: { readonly decision: 'approved' | 'rejected';
   };
 }
 
+async function seedReviewedEvaluation(
+  database: PGlite,
+  projection: ReturnType<typeof approvedProjection>
+): Promise<void> {
+  const { evaluationDecisionId, evidenceBundleId, valuationScopeKey } =
+    projection.sourceUseAssessment.content;
+  if (evaluationDecisionId === null || valuationScopeKey === null) {
+    throw new TypeError('The projected-map fixture requires exact reviewed evaluation authority.');
+  }
+  await database.query(
+    `INSERT INTO outcome_private_reviewed_evidence_bundle
+       (evidence_bundle_id,evidence_scope_key)
+     VALUES ($1,'afl-player-match-reviewed-2021-2026')`,
+    [evidenceBundleId]
+  );
+  await database.query(
+    `INSERT INTO outcome_private_reviewed_evaluation_decision
+       (decision_id,evidence_bundle_id,valuation_scope_key,status,decision_json)
+     VALUES ($1,$2,$3,'authorized',$4::jsonb)`,
+    [
+      evaluationDecisionId,
+      evidenceBundleId,
+      valuationScopeKey,
+      JSON.stringify({
+        content: {
+          status: 'authorized',
+          valuationScopeKey,
+          evidenceBundleId,
+          permissions: { derivedCalculations: true, internalEvaluation: true },
+          publicationProhibited: true,
+        },
+      }),
+    ]
+  );
+  await database.query(
+    `INSERT INTO outcome_private_reviewed_evaluation_head
+       (decision_id,evidence_bundle_id,valuation_scope_key,evidence_scope_key,status)
+     VALUES ($1,$2,$3,'afl-player-match-reviewed-2021-2026','authorized')`,
+    [evaluationDecisionId, evidenceBundleId, valuationScopeKey]
+  );
+}
+
 describe('candidate-first HPN projected field-map PostgreSQL authority', () => {
   let database: PGlite | null = null;
 
@@ -163,6 +223,7 @@ describe('candidate-first HPN projected field-map PostgreSQL authority', () => {
       decision: 'approved',
       rationale: 'Approve the exact private projection.',
     });
+    await seedReviewedEvaluation(database, projection);
 
     await expect(authority.registerApprovedProjection(projection)).resolves.toEqual(
       projection.projectedFieldMap
@@ -173,6 +234,54 @@ describe('candidate-first HPN projected field-map PostgreSQL authority', () => {
     await expect(
       authority.loadCurrentExact(projection.projectedFieldMap!.fieldMapId)
     ).resolves.toEqual(projection.projectedFieldMap);
+    await expect(
+      authority.loadCurrentForSource({
+        provider: projection.candidate.content.provider,
+        capabilityId: projection.candidate.content.capabilityId,
+        inputKind: projection.candidate.content.inputKind,
+        sourceSchemaSha256: projection.candidate.content.sourceSchemaSha256,
+        providerDecodeMapId: projection.candidate.content.providerDecodeMapId,
+        seasonYear: 2025,
+        rightsArtifactId: projection.sourceUseAssessment.content.rightsArtifactId,
+        valuationScopeKey: projection.sourceUseAssessment.content.valuationScopeKey!,
+      })
+    ).resolves.toEqual(projection.projectedFieldMap);
+    await expect(
+      authority.loadCurrentForSource({
+        provider: projection.candidate.content.provider,
+        capabilityId: projection.candidate.content.capabilityId,
+        inputKind: projection.candidate.content.inputKind,
+        sourceSchemaSha256: 'f'.repeat(64),
+        providerDecodeMapId: projection.candidate.content.providerDecodeMapId,
+        seasonYear: 2025,
+        rightsArtifactId: projection.sourceUseAssessment.content.rightsArtifactId,
+        valuationScopeKey: projection.sourceUseAssessment.content.valuationScopeKey!,
+      })
+    ).resolves.toBeNull();
+    await expect(
+      authority.loadCurrentForSource({
+        provider: projection.candidate.content.provider,
+        capabilityId: projection.candidate.content.capabilityId,
+        inputKind: projection.candidate.content.inputKind,
+        sourceSchemaSha256: projection.candidate.content.sourceSchemaSha256,
+        providerDecodeMapId: 'provider-field-map:another-reviewed-map',
+        seasonYear: 2025,
+        rightsArtifactId: projection.sourceUseAssessment.content.rightsArtifactId,
+        valuationScopeKey: projection.sourceUseAssessment.content.valuationScopeKey!,
+      })
+    ).resolves.toBeNull();
+    await expect(
+      authority.loadCurrentForSource({
+        provider: projection.candidate.content.provider,
+        capabilityId: projection.candidate.content.capabilityId,
+        inputKind: projection.candidate.content.inputKind,
+        sourceSchemaSha256: projection.candidate.content.sourceSchemaSha256,
+        providerDecodeMapId: projection.candidate.content.providerDecodeMapId,
+        seasonYear: 2025,
+        rightsArtifactId: projection.sourceUseAssessment.content.rightsArtifactId,
+        valuationScopeKey: 'workbook:another-scope',
+      })
+    ).resolves.toBeNull();
 
     const counts = await database.query<{
       candidates: number;

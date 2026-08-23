@@ -3,7 +3,9 @@ import {
   sha256AflTradeCanonicalJson,
 } from '../artifacts/contentAddress';
 import {
+  AFL_TRADE_FITZROY_CAPTURE_REQUEST_SCHEMA_VERSION,
   createAflTradeFitzRoyInvocation,
+  parseAflTradeFitzRoyCaptureRequest,
   type AflTradeFitzRoyCaptureRequest,
 } from '../source/fitzRoyCaptureContracts';
 import type { AflTradeFitzRoyCaptureCommand } from '../source/fitzRoyCaptureRuntime';
@@ -137,6 +139,25 @@ export const LOCAL_AFL_TABLES_PLAYER_STATS_FIELD_SCHEMA = [
   character('Home.Away'),
 ] satisfies readonly LocalAflTablesFieldDescriptor[];
 
+export const LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA = [
+  number('Game'),
+  { ...number('Date'), classes: ['Date'] },
+  character('Round'),
+  character('Home.Team'),
+  integer('Home.Goals'),
+  integer('Home.Behinds'),
+  integer('Home.Points'),
+  character('Away.Team'),
+  integer('Away.Goals'),
+  integer('Away.Behinds'),
+  integer('Away.Points'),
+  character('Venue'),
+  integer('Margin'),
+  integer('Season'),
+  character('Round.Type'),
+  integer('Round.Number'),
+] satisfies readonly LocalAflTablesFieldDescriptor[];
+
 function artifact(label: string): string {
   return `artifact:${sha256AflTradeCanonicalJson({
     boundary: 'local-five-season-afl-tables',
@@ -151,7 +172,7 @@ function sourceFieldUse(sourceField: string) {
     uses: {
       archive_fact: 'allowed' as const,
       model_training: 'blocked' as const,
-      derived_feature: 'blocked' as const,
+      derived_feature: 'allowed' as const,
       public_display: 'blocked' as const,
     },
     attributionRequired: true,
@@ -163,10 +184,17 @@ function requireCaptureRequest(season: number): AflTradeFitzRoyCaptureRequest {
   const captureRequest = createLocalAflTradeFiveSeasonCapturePlan().find(
     ({ authorizationSeason }) => authorizationSeason === season
   );
-  if (!captureRequest) {
-    throw new TypeError('The local AFL Tables authority is limited to seasons 2021 through 2025.');
+  if (captureRequest) return captureRequest;
+  if (season === 2026) {
+    return parseAflTradeFitzRoyCaptureRequest({
+      schemaVersion: AFL_TRADE_FITZROY_CAPTURE_REQUEST_SCHEMA_VERSION,
+      capabilityId: 'afl-tables-player-stats',
+      competition: 'AFLM',
+      authorizationSeason: season,
+      parameters: { season, rescrape: false, rescrapeStartSeason: null },
+    });
   }
-  return captureRequest;
+  throw new TypeError('The local AFL Tables authority is limited to seasons 2021 through 2026.');
 }
 
 export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) {
@@ -210,14 +238,14 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
   const rightsContent = {
     ...approvedPolicy.content,
     intendedPurpose:
-      'Private identity, match, and factual review for the disposable local workbook rehearsal.',
+      'Private identity, factual review, and derived HPN calculation for the disposable local workbook rehearsal.',
     operations: {
       bounded_evaluation_capture: 'allowed' as const,
       raw_evidence_retention: 'allowed' as const,
       metadata_hash_retention: 'allowed' as const,
       internal_quality_evaluation: 'allowed' as const,
       model_training: 'blocked' as const,
-      derived_feature_creation: 'blocked' as const,
+      derived_feature_creation: 'allowed' as const,
       public_derived_output: 'blocked' as const,
       public_fact_display: 'blocked' as const,
       raw_field_redistribution: 'blocked' as const,
@@ -345,6 +373,122 @@ export function createLocalAflTradeFiveSeasonAflTablesAuthority(season: number) 
         zeroSemantics: 'provider_zero_may_mean_missing',
       },
     ],
+    achievement: null,
+  });
+  return { capture, fieldMap, gateDecisionId: gate.decision.decisionId };
+}
+
+export function createLocalAflTradeAflTablesResultsAuthority(season: number) {
+  const playerAuthority = createLocalAflTradeFiveSeasonAflTablesAuthority(season);
+  const captureRequest = parseAflTradeFitzRoyCaptureRequest({
+    schemaVersion: AFL_TRADE_FITZROY_CAPTURE_REQUEST_SCHEMA_VERSION,
+    capabilityId: 'afl-tables-results',
+    competition: 'AFLM',
+    authorizationSeason: season,
+    parameters: { season, roundNumber: null },
+  });
+  const invocation = createAflTradeFitzRoyInvocation(captureRequest);
+  const exactFields = LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA.map(({ name }) => name);
+  const rightsContent = {
+    ...playerAuthority.capture.sourceRights.content,
+    registerId: `afl-tables-results-local-${season}-fitzroy-1.7.0`,
+    dataset: 'AFL Tables completed match results through fitzRoy',
+    intendedPurpose:
+      'Private completed-match universe for the non-production HPN calculation input.',
+    acquisition: {
+      ...playerAuthority.capture.sourceRights.content.acquisition,
+      capabilities: [
+        {
+          capabilityId: 'afl-tables-results',
+          provider: 'afl_tables' as const,
+          directFunction: 'fetch_results_afltables',
+        },
+      ],
+    },
+    fields: exactFields.map(sourceFieldUse),
+  };
+  const sourceRights = aflTradeSourceRightsProposalSchema.parse({
+    rightsArtifactId: createAflTradeContentAddress('source-rights', rightsContent),
+    content: rightsContent,
+  });
+  const gate = createApprovedAflTradeFitzRoyGateRecords({
+    sourceRights,
+    environment: 'non_production',
+    version: 1,
+    supersedesDecisionId: null,
+    decidedAt: '2026-08-14T00:00:02.000Z',
+    effectiveAt: '2026-08-14T00:00:02.000Z',
+    revalidateAt: '2027-08-13T00:00:00.000Z',
+    accountableOwner: 'local-factual-release-owner',
+    reviewer: {
+      id: 'local-source-governance-reviewer',
+      role: 'source-governance-reviewer',
+      evidenceId: artifact('results-source-governance-review'),
+    },
+    authorityEvidenceId: artifact('local-user-approval'),
+    rateLimitEvidenceId: artifact('rate-limit'),
+  });
+  const capture: AflTradeFitzRoyCaptureCommand = {
+    sourceRights,
+    ledger: { proposals: [gate.proposal], decisions: [gate.decision] },
+    gateRequest: {
+      decisionKey: gate.proposal.content.decisionKey,
+      environment: 'non_production',
+      rightsArtifactId: sourceRights.rightsArtifactId,
+      competition: 'AFLM',
+      season,
+      accessMechanism: 'automated_web',
+      capabilityId: 'afl-tables-results',
+      geography: 'global',
+      commercialContext: 'internal-evaluation',
+      audience: 'internal',
+      operations: [
+        'bounded_evaluation_capture',
+        'raw_evidence_retention',
+        'metadata_hash_retention',
+        'internal_quality_evaluation',
+      ],
+      fieldUses: exactFields.map((sourceField) => ({
+        sourceField,
+        use: 'archive_fact' as const,
+      })),
+      rawRetentionDays: 365,
+      metadataRetentionDays: null,
+      cacheSeconds: 86_400,
+    },
+    captureRequest,
+  };
+  const fieldMap = parseAflTradeFitzRoyFieldMap({
+    schemaVersion: AFL_TRADE_FITZROY_FIELD_MAP_SCHEMA_VERSION,
+    mapId: `afl-tables-results-local-${season}-v1`,
+    capabilityId: 'afl-tables-results',
+    fitzRoyVersion: '1.7.0',
+    sourceSchemaSha256: createDecodedFieldSchemaSha256(LOCAL_AFL_TABLES_RESULTS_FIELD_SCHEMA),
+    exactOrderedFields: exactFields,
+    observationKind: 'match_universe',
+    competition: 'AFLM',
+    invocationArgumentsSha256: sha256AflTradeCanonicalJson(invocation.arguments),
+    validFromSeason: season,
+    validThroughSeason: season,
+    seasonField: { sourceField: 'Season', required: true },
+    roundLabelField: { sourceField: 'Round', required: true },
+    observedDateField: { sourceField: 'Date', required: true },
+    naturalKeyFields: ['Season', 'Round', 'Date', 'Home.Team', 'Away.Team'],
+    approvedAt: '2026-08-14T00:00:03.000Z',
+    approvalDecisionId: `local-afl-tables-results-field-map-review-${season}`,
+    identity: null,
+    match: {
+      nativeMatchId: { sourceField: 'Game', required: true },
+      season: { sourceField: 'Season', required: true },
+      roundLabel: { sourceField: 'Round', required: true },
+      matchDate: { sourceField: 'Date', required: true },
+      homeClubNativeId: null,
+      homeClubName: { sourceField: 'Home.Team', required: true },
+      awayClubNativeId: null,
+      awayClubName: { sourceField: 'Away.Team', required: true },
+      status: null,
+    },
+    metrics: [],
     achievement: null,
   });
   return { capture, fieldMap, gateDecisionId: gate.decision.decisionId };
