@@ -282,6 +282,44 @@ async function persistBundle(
   }
 }
 
+async function resolveDecisionBundle(
+  transaction: AflOutcomeSqlTransaction,
+  current: CurrentDecision | null,
+  status: RecordAflTradePrivateReviewedEvidenceEvaluationDecisionInput['status'],
+  decidedAt: string
+): Promise<AflTradePrivateReviewedEvidenceBundle> {
+  if (current?.decision.content.status === status) {
+    if (status !== 'authorized') {
+      throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+        'INVALID_INPUT',
+        'A private reviewed-evidence decision must change the current authority state.'
+      );
+    }
+    const successor = await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt);
+    if (exactEvidenceWithoutBundleTime(current.bundle, successor)) {
+      throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+        'INVALID_INPUT',
+        'The exact reviewed-evidence authority is already current.'
+      );
+    }
+    if (!isExactResultsSuccessor(current.bundle, successor)) {
+      throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
+        'EVIDENCE_MISMATCH',
+        'Reviewed evidence may advance only by the exact AFL Tables results successor.'
+      );
+    }
+    await persistBundle(transaction, successor);
+    return successor;
+  }
+  if (current === null) {
+    const initial = await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt);
+    await persistBundle(transaction, initial);
+    return initial;
+  }
+  await requireCurrentEvidence(transaction, current.bundle);
+  return current.bundle;
+}
+
 export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
@@ -324,38 +362,7 @@ export class PostgresAflTradePrivateReviewedEvidenceEvaluationAuthority {
         `SELECT transaction_timestamp()::timestamptz(3) AS decided_at`
       );
       const decidedAt = isoTimestamp(clock.rows[0]!.decided_at);
-      let bundle = current?.bundle ?? null;
-      if (current?.decision.content.status === input.status) {
-        if (input.status !== 'authorized') {
-          throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
-            'INVALID_INPUT',
-            'A private reviewed-evidence decision must change the current authority state.'
-          );
-        }
-        const successor = await loadExactLocalReviewedProviderEvidenceBundle(
-          transaction,
-          decidedAt
-        );
-        if (exactEvidenceWithoutBundleTime(current.bundle, successor)) {
-          throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
-            'INVALID_INPUT',
-            'The exact reviewed-evidence authority is already current.'
-          );
-        }
-        if (!isExactResultsSuccessor(current.bundle, successor)) {
-          throw new AflTradePrivateReviewedEvidenceEvaluationPersistenceError(
-            'EVIDENCE_MISMATCH',
-            'Reviewed evidence may advance only by the exact AFL Tables results successor.'
-          );
-        }
-        await persistBundle(transaction, successor);
-        bundle = successor;
-      } else if (bundle === null) {
-        bundle = await loadExactLocalReviewedProviderEvidenceBundle(transaction, decidedAt);
-        await persistBundle(transaction, bundle);
-      } else {
-        await requireCurrentEvidence(transaction, bundle);
-      }
+      const bundle = await resolveDecisionBundle(transaction, current, input.status, decidedAt);
 
       const decision = createAflTradePrivateReviewedEvidenceEvaluationDecision({
         status: input.status,
