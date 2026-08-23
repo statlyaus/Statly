@@ -9,6 +9,7 @@ import {
 } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesAuthority';
 import { createLocalAflTradeOfficialAfl2026Authority } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Authority';
 import { createAflTradePrivateValuationFactualOutput } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
+import { createAflTradePrivateValuationHpnSourceAdmission } from '@/server/aflTradeIntelligence/valuation/privateValuationHpnSourceAdmission';
 import {
   aflTradePrivateValuationDispatchRequestSchema,
   createAflTradePrivateValuationDispatchRequestId,
@@ -42,6 +43,10 @@ const request = aflTradePrivateValuationDispatchRequestSchema.parse({
 });
 
 class PreparationSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransaction {
+  readonly events: string[] = [];
+  heartbeatCount = 0;
+  failHeartbeatAt: number | undefined;
+
   constructor(private readonly retainedRequest = request) {}
 
   async transaction<T>(work: (transaction: AflOutcomeSqlTransaction) => Promise<T>): Promise<T> {
@@ -50,10 +55,17 @@ class PreparationSqlClient implements AflOutcomeSqlClient, AflOutcomeSqlTransact
 
   async query<Row>(sql: string): Promise<AflOutcomeSqlQueryResult<Row>> {
     if (sql.startsWith('SET LOCAL ROLE')) return this.result([]);
+    if (sql.startsWith('RESET ROLE')) return this.result([]);
     if (sql.includes('load_outcome_private_valuation_dispatch_request_for_claim')) {
+      this.events.push('claim-check');
       return this.result([{ request_json: this.retainedRequest }]);
     }
     if (sql.includes('heartbeat_outcome_private_valuation_dispatch')) {
+      this.heartbeatCount += 1;
+      this.events.push('heartbeat');
+      if (this.heartbeatCount === this.failHeartbeatAt) {
+        throw new Error('Private valuation dispatch claim was lost');
+      }
       return this.result([{ heartbeat_outcome_private_valuation_dispatch: null }]);
     }
     if (sql.includes('max(capture.captured_at)')) {
@@ -109,6 +121,7 @@ afterEach(() => {
 
 describe('private valuation HPN preparation', () => {
   it('composes three exact capture lanes into the existing HPN input and calculation owners', async () => {
+    const sqlClient = new PreparationSqlClient();
     const roles = [
       'hpn_completed_results',
       'hpn_primary_player_stats',
@@ -194,15 +207,54 @@ describe('private valuation HPN preparation', () => {
       }) as never);
     const buildInput = vi
       .spyOn(PostgresAflTradeHpnPavInputRepository.prototype, 'buildAndPersistSeasonInputSet')
-      .mockResolvedValue({
-        inputSet: { inputSetId: addressed('hpn-pav-input-set', 'input') } as never,
-        idempotentReplay: false,
+      .mockImplementation(async () => {
+        sqlClient.events.push('input');
+        return {
+          inputSet: { inputSetId: addressed('hpn-pav-input-set', 'input') } as never,
+          idempotentReplay: false,
+        };
+      });
+    const retainedAdmissions = new Map<
+      (typeof roles)[number],
+      ReturnType<typeof createAflTradePrivateValuationHpnSourceAdmission>
+    >();
+    const admitHpnSource = vi
+      .spyOn(
+        PostgresAflTradePrivateValuationCaptureBindingRepository.prototype,
+        'admitHpnSource'
+      )
+      .mockImplementation(async ({ binding, projectedFieldMapId }) => {
+        if (binding.content.schemaVersion !== 'afl-trade-private-valuation-capture-binding/v2') {
+          throw new TypeError('The unit fixture requires role-aware capture custody.');
+        }
+        const sourceRole = binding.content.sourceRole as (typeof roles)[number];
+        const retained = retainedAdmissions.get(sourceRole);
+        if (retained !== undefined) {
+          return { state: 'already_admitted', admission: retained };
+        }
+        const admission = createAflTradePrivateValuationHpnSourceAdmission({
+          requestId: request.requestId,
+          dispatchClaimId: claim.claimId,
+          attemptSequence: binding.content.attemptSequence,
+          attemptNumber: binding.content.attemptNumber,
+          sourceRole,
+          captureBindingId: binding.bindingId,
+          sourceCaptureId: binding.content.sourceCaptureId,
+          normalizationRunId: binding.content.normalizationRunId,
+          projectedFieldMapId,
+          admittedAt: '2026-08-12T00:04:00.000Z',
+        });
+        retainedAdmissions.set(sourceRole, admission);
+        return { state: 'admitted', admission };
       });
     const calculate = vi
       .spyOn(PostgresAflTradeHpnPavCalculationRepository.prototype, 'calculateAndPersist')
-      .mockResolvedValue({
-        calculation: { calculationId: addressed('hpn-pav-season', 'calculation') } as never,
-        idempotentReplay: false,
+      .mockImplementation(async () => {
+        sqlClient.events.push('calculation');
+        return {
+          calculation: { calculationId: addressed('hpn-pav-season', 'calculation') } as never,
+          idempotentReplay: false,
+        };
       });
     const captureSource = vi.fn(async ({ sourceRole }: { sourceRole: string }) => ({
       normalizationRunId: addressed('provider-normalization-run', sourceRole),
@@ -212,7 +264,7 @@ describe('private valuation HPN preparation', () => {
       .mockResolvedValueOnce({ state: 'prepared' as const, output: factualOutput() })
       .mockResolvedValue({ state: 'already_prepared' as const, output: factualOutput() });
     const preparation = new PostgresAflTradePrivateValuationHpnPreparation(
-      new PreparationSqlClient(),
+      sqlClient,
       {
         factualPreparation: { prepare: prepareFactual },
         methodId: addressed('hpn-pav-method', 'method'),
@@ -230,12 +282,22 @@ describe('private valuation HPN preparation', () => {
       captureBindingIds: roles.map((_role) =>
         expect.stringMatching(/^private-valuation-capture-binding:[a-f0-9]{64}$/u)
       ),
+      sourceAdmissionIds: roles.map((_role) =>
+        expect.stringMatching(/^private-valuation-hpn-source-admission:[a-f0-9]{64}$/u)
+      ),
       publicationEligible: false,
     });
     expect(loadBinding).toHaveBeenCalledTimes(3);
     expect(acceptBinding).toHaveBeenCalledTimes(3);
     expect(captureSource.mock.calls.map(([input]) => input.sourceRole)).toEqual(roles);
     expect(selectedMaps).toHaveBeenCalledTimes(3);
+    expect(admitHpnSource).toHaveBeenCalledTimes(3);
+    for (const [admissionInput] of admitHpnSource.mock.calls.slice(0, 3)) {
+      expect(admissionInput.factualOutputId).toBe(factualOutput().outputId);
+    }
+    expect(Math.max(...admitHpnSource.mock.invocationCallOrder)).toBeLessThan(
+      buildInput.mock.invocationCallOrder[0]!
+    );
     expect(buildInput).toHaveBeenCalledWith(
       expect.objectContaining({
         environment: 'non_production',
@@ -251,15 +313,37 @@ describe('private valuation HPN preparation', () => {
       { environment: 'non_production' }
     );
     expect(calculate).toHaveBeenCalledTimes(1);
+    expect(sqlClient.events.slice(-4)).toEqual([
+      'heartbeat',
+      'input',
+      'calculation',
+      'heartbeat',
+    ]);
 
-    buildInput.mockResolvedValue({
-      inputSet: { inputSetId: addressed('hpn-pav-input-set', 'input') } as never,
-      idempotentReplay: true,
+    buildInput.mockImplementation(async () => {
+      sqlClient.events.push('input');
+      return {
+        inputSet: { inputSetId: addressed('hpn-pav-input-set', 'input') } as never,
+        idempotentReplay: true,
+      };
     });
-    calculate.mockResolvedValue({
-      calculation: { calculationId: addressed('hpn-pav-season', 'calculation') } as never,
-      idempotentReplay: true,
+    calculate.mockImplementation(async () => {
+      sqlClient.events.push('calculation');
+      return {
+        calculation: { calculationId: addressed('hpn-pav-season', 'calculation') } as never,
+        idempotentReplay: true,
+      };
     });
+    sqlClient.failHeartbeatAt = sqlClient.heartbeatCount + 5;
+    await expect(
+      preparation.prepare({ requestId: request.requestId, claim })
+    ).rejects.toThrow('Private valuation dispatch claim was lost');
+    expect(sqlClient.events.slice(-3)).toEqual([
+      'input',
+      'calculation',
+      'heartbeat',
+    ]);
+    sqlClient.failHeartbeatAt = undefined;
     await expect(preparation.prepare({ requestId: request.requestId, claim })).resolves.toMatchObject({
       state: 'already_prepared',
       inputSetId: addressed('hpn-pav-input-set', 'input'),
@@ -267,6 +351,7 @@ describe('private valuation HPN preparation', () => {
     });
     expect(captureSource).toHaveBeenCalledTimes(3);
     expect(acceptBinding).toHaveBeenCalledTimes(3);
+    expect(admitHpnSource).toHaveBeenCalledTimes(9);
   });
 
   it('fails closed before HPN persistence when exact accepted source custody is missing', async () => {

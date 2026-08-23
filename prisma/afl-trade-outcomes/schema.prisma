@@ -394,6 +394,7 @@ model OutcomeSourceCapture {
   valuationDatasetFieldSets   OutcomeValuationDatasetConsumedFieldSet[]
   privateValuationCaptureBindings OutcomePrivateValuationCaptureBinding[] @relation("PrivateValuationCaptureSource")
   privateValuationSourceAdmission OutcomePrivateValuationSourceAdmission?
+  privateValuationHpnSourceAdmission OutcomePrivateValuationHpnSourceAdmission?
 
   @@unique([captureId, attemptId, sourceSnapshotId], map: "outcome_source_capture_exact_ancestry_key")
   @@index([provider, dataset, capturedAt], map: "outcome_source_capture_provider_captured_idx")
@@ -1215,6 +1216,7 @@ model OutcomeProviderNormalizationRun {
   hpnPavInputRuns           OutcomeHpnPavInputRun[]
   hpnReviewedSeasons        OutcomeHpnReviewedSeasonUniverse[]
   privateValuationCaptureBindings OutcomePrivateValuationCaptureBinding[] @relation("PrivateValuationCaptureNormalization")
+  privateValuationHpnSourceAdmission OutcomePrivateValuationHpnSourceAdmission?
 
   @@unique([captureId, fieldMapId, decoderVersion, normalizerVersion], map: "outcome_provider_normalization_idempotency_key")
   @@unique([normalizationRunId, captureId], map: "outcome_provider_normalization_run_capture_key")
@@ -1317,6 +1319,7 @@ model OutcomeHpnProjectedFieldMap {
   reviewedResultSeasons OutcomeHpnReviewedSeasonUniverse[] @relation("OutcomeHpnReviewedResultFieldMap")
   reviewedPlayerSeasons OutcomeHpnReviewedSeasonUniverse[] @relation("OutcomeHpnReviewedPlayerFieldMap")
   pavInputRuns          OutcomeHpnPavInputRun[]
+  privateValuationHpnSourceAdmissions OutcomePrivateValuationHpnSourceAdmission[]
 
   @@index([environment, competition, provider, capabilityId, inputKind, validFromSeason, validThroughSeason], map: "outcome_hpn_projected_field_map_lookup_idx")
   @@map("outcome_hpn_projected_field_map")
@@ -5407,6 +5410,7 @@ model OutcomePrivateValuationDispatchRequest {
   attempts              OutcomePrivateValuationDispatchAttempt[]
   captureBindings       OutcomePrivateValuationCaptureBinding[]
   sourceAdmission       OutcomePrivateValuationSourceAdmission?
+  hpnSourceAdmissions OutcomePrivateValuationHpnSourceAdmission[]
   factualOutput         OutcomePrivateValuationFactualOutput?
 
   @@index([status, availableAt, scopeKey], map: "outcome_private_valuation_dispatch_due_idx")
@@ -5428,6 +5432,7 @@ model OutcomePrivateValuationDispatchAttempt {
   resultJson       Json?                                  @map("result_json")
   request          OutcomePrivateValuationDispatchRequest @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
   captureBindings  OutcomePrivateValuationCaptureBinding[] @relation("PrivateValuationCaptureDispatchAttempt")
+  hpnSourceAdmissions OutcomePrivateValuationHpnSourceAdmission[]
 
   @@unique([requestId, attemptSequence], map: "outcome_private_valuation_dispatch_attempt_sequence")
   @@unique([requestId, attemptSequence, claimId], map: "outcome_private_valuation_dispatch_attempt_fence")
@@ -5454,6 +5459,7 @@ model OutcomePrivateValuationCaptureBinding {
   sourceCapture         OutcomeSourceCapture                       @relation("PrivateValuationCaptureSource", fields: [sourceCaptureId, sourceCaptureAttemptId, sourceSnapshotId], references: [captureId, attemptId, sourceSnapshotId], onDelete: Restrict)
   normalizationRun      OutcomeProviderNormalizationRun            @relation("PrivateValuationCaptureNormalization", fields: [normalizationRunId, sourceCaptureId], references: [normalizationRunId, captureId], onDelete: Restrict)
   sourceAdmission       OutcomePrivateValuationSourceAdmission?
+  hpnSourceAdmission OutcomePrivateValuationHpnSourceAdmission?
   factualOutput         OutcomePrivateValuationFactualOutput?
 
   @@unique([requestId, sourceRole], map: "outcome_private_valuation_capture_binding_request_role_key")
@@ -5481,6 +5487,31 @@ model OutcomePrivateValuationSourceAdmission {
 
   @@unique([captureBindingId, normalizationRunId], map: "outcome_private_valuation_source_admission_binding_run_key")
   @@map("outcome_private_valuation_source_admission")
+}
+
+model OutcomePrivateValuationHpnSourceAdmission {
+  admissionId         String                                 @id @map("admission_id") @outcomes.Text
+  requestId           String                                 @map("request_id") @outcomes.Text
+  sourceRole          String                                 @map("source_role") @outcomes.Text
+  dispatchClaimId     String                                 @map("dispatch_claim_id") @outcomes.Text
+  attemptSequence     Int                                    @map("attempt_sequence")
+  attemptNumber       Int                                    @map("attempt_number")
+  captureBindingId    String                                 @unique @map("capture_binding_id") @outcomes.Text
+  sourceCaptureId     String                                 @unique @map("source_capture_id") @outcomes.Text
+  normalizationRunId  String                                 @unique @map("normalization_run_id") @outcomes.Text
+  projectedFieldMapId String                                 @map("projected_field_map_id") @outcomes.Text
+  admittedAt          DateTime                               @map("admitted_at") @outcomes.Timestamptz(3)
+  admissionJson       Json                                   @map("admission_json")
+  request             OutcomePrivateValuationDispatchRequest @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
+  dispatchAttempt     OutcomePrivateValuationDispatchAttempt @relation(fields: [requestId, attemptSequence, dispatchClaimId], references: [requestId, attemptSequence, claimId], onDelete: Restrict)
+  captureBinding      OutcomePrivateValuationCaptureBinding  @relation(fields: [captureBindingId], references: [bindingId], onDelete: Restrict)
+  sourceCapture       OutcomeSourceCapture                   @relation(fields: [sourceCaptureId], references: [captureId], onDelete: Restrict)
+  normalizationRun    OutcomeProviderNormalizationRun        @relation(fields: [normalizationRunId], references: [normalizationRunId], onDelete: Restrict)
+  projectedFieldMap   OutcomeHpnProjectedFieldMap            @relation(fields: [projectedFieldMapId], references: [fieldMapId], onDelete: Restrict)
+
+  @@unique([requestId, sourceRole], map: "outcome_private_valuation_hpn_source_admission_request_role_key")
+  @@index([projectedFieldMapId, admittedAt], map: "outcome_private_valuation_hpn_source_admission_map_idx")
+  @@map("outcome_private_valuation_hpn_source_admission")
 }
 
 model OutcomePrivateValuationFactualOutput {
