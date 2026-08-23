@@ -1102,6 +1102,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0073_automated_nonproduction_source_admission',
       '0074_bind_factual_output_to_source_admission',
       '0075_versioned_release_acquisition_spell_eligibility',
+      '0076_role_aware_private_valuation_capture_binding',
+      '0077_projected_hpn_pav_input_authority',
     ]);
 
     const tables = await query<{ table_name: string }>(
