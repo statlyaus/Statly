@@ -225,6 +225,53 @@ describe.sequential('private valuation factual preparation in PostgreSQL', () =>
       ).rejects.toThrow(/finalized acquisition-spell metrics from the exact factual run/);
       await transaction.query('ROLLBACK TO SAVEPOINT mixed_run_attack');
     });
+    await client.transaction(async (transaction) => {
+      await transaction.query('SAVEPOINT extra_source_attack');
+      await transaction.query(`SET LOCAL session_replication_role='replica'`);
+      await transaction.query(
+        `INSERT INTO outcome_release_source_capture
+          (release_id,capture_id,ordinal,record_sha256,membership_json)
+         SELECT $1,$2,COALESCE(MAX(ordinal),0)+1,$3,'{}'::jsonb
+           FROM outcome_release_source_capture
+          WHERE release_id=$1`,
+        [
+          result.output.content.factualRelease.releaseId,
+          `source-capture:${'e'.repeat(64)}`,
+          'e'.repeat(64),
+        ]
+      );
+      await transaction.query(`SET LOCAL session_replication_role='origin'`);
+      await expect(
+        materializeAflTradePrivateValuationFactualOutput(transaction, {
+          requestId: staged.requestId,
+          candidateId: result.output.content.candidate.candidateId,
+        })
+      ).rejects.toThrow(/exact finalized fact, reconciliation, and candidate chain/);
+      await transaction.query('ROLLBACK TO SAVEPOINT extra_source_attack');
+
+      await transaction.query('SAVEPOINT extra_run_attack');
+      await transaction.query(`SET LOCAL session_replication_role='replica'`);
+      await transaction.query(
+        `INSERT INTO outcome_release_factual_run_member
+          (candidate_id,factual_run_id,ordinal,record_sha256,membership_json)
+         SELECT $1,$2,COALESCE(MAX(ordinal),0)+1,$3,'{}'::jsonb
+           FROM outcome_release_factual_run_member
+          WHERE candidate_id=$1`,
+        [
+          result.output.content.candidate.candidateId,
+          `factual-reconciliation-run:${'d'.repeat(64)}`,
+          'd'.repeat(64),
+        ]
+      );
+      await transaction.query(`SET LOCAL session_replication_role='origin'`);
+      await expect(
+        materializeAflTradePrivateValuationFactualOutput(transaction, {
+          requestId: staged.requestId,
+          candidateId: result.output.content.candidate.candidateId,
+        })
+      ).rejects.toThrow(/exact finalized fact, reconciliation, and candidate chain/);
+      await transaction.query('ROLLBACK TO SAVEPOINT extra_run_attack');
+    });
     await expect(
       outcomesPool.query(
         `SELECT
