@@ -391,7 +391,9 @@ model OutcomeSourceCapture {
   canonicalPromotionRuns      OutcomeExternalCanonicalPromotionImportRun[]
   valuationDatasetAdmissions  OutcomeValuationDatasetAdmissionSource[]
   valuationDatasetFieldSets   OutcomeValuationDatasetConsumedFieldSet[]
+  privateValuationCaptureBindings OutcomePrivateValuationCaptureBinding[] @relation("PrivateValuationCaptureSource")
 
+  @@unique([captureId, attemptId, sourceSnapshotId], map: "outcome_source_capture_exact_ancestry_key")
   @@index([provider, dataset, capturedAt], map: "outcome_source_capture_provider_captured_idx")
   @@index([sourceArtifactId], map: "outcome_source_capture_artifact_idx")
   @@map("outcome_source_capture")
@@ -1210,6 +1212,7 @@ model OutcomeProviderNormalizationRun {
   resolutionProposals       OutcomeProviderResolutionProposal[]
   hpnPavInputRuns           OutcomeHpnPavInputRun[]
   hpnReviewedSeasons        OutcomeHpnReviewedSeasonUniverse[]
+  privateValuationCaptureBindings OutcomePrivateValuationCaptureBinding[] @relation("PrivateValuationCaptureNormalization")
 
   @@unique([captureId, fieldMapId, decoderVersion, normalizerVersion], map: "outcome_provider_normalization_idempotency_key")
   @@unique([normalizationRunId, captureId], map: "outcome_provider_normalization_run_capture_key")
@@ -5388,9 +5391,57 @@ model OutcomePrivateValuationDispatchRequest {
   completedAt      DateTime? @map("completed_at") @outcomes.Timestamptz(3)
   resultJson       Json?     @map("result_json")
   requestJson      Json      @map("request_json")
+  claimSequence         Int       @default(0) @map("claim_sequence")
+  transientFailureCount Int       @default(0) @map("transient_failure_count")
+  attempts              OutcomePrivateValuationDispatchAttempt[]
+  captureBinding        OutcomePrivateValuationCaptureBinding?
 
   @@index([status, availableAt, scopeKey], map: "outcome_private_valuation_dispatch_due_idx")
   @@map("outcome_private_valuation_dispatch_request")
+}
+
+model OutcomePrivateValuationDispatchAttempt {
+  claimId          String                                 @id @map("claim_id") @outcomes.Text
+  requestId        String                                 @map("request_id") @outcomes.Text
+  attemptSequence  Int                                    @map("attempt_sequence")
+  attemptNumber    Int                                    @map("attempt_number")
+  workerId         String                                 @map("worker_id") @outcomes.Text
+  leaseTokenSha256 String                                 @map("lease_token_sha256") @outcomes.Char(64)
+  claimedAt        DateTime                               @map("claimed_at") @outcomes.Timestamptz(3)
+  leaseExpiresAt   DateTime                               @map("lease_expires_at") @outcomes.Timestamptz(3)
+  heartbeatAt      DateTime                               @map("heartbeat_at") @outcomes.Timestamptz(3)
+  finishedAt       DateTime?                              @map("finished_at") @outcomes.Timestamptz(3)
+  outcome          String?                                @outcomes.Text
+  resultJson       Json?                                  @map("result_json")
+  request          OutcomePrivateValuationDispatchRequest @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
+  captureBindings  OutcomePrivateValuationCaptureBinding[] @relation("PrivateValuationCaptureDispatchAttempt")
+
+  @@unique([requestId, attemptSequence], map: "outcome_private_valuation_dispatch_attempt_sequence")
+  @@unique([requestId, attemptSequence, claimId], map: "outcome_private_valuation_dispatch_attempt_fence")
+  @@index([requestId, attemptSequence], map: "outcome_private_valuation_dispatch_attempt_request_idx")
+  @@map("outcome_private_valuation_dispatch_attempt")
+}
+
+model OutcomePrivateValuationCaptureBinding {
+  bindingId             String                                    @id @map("binding_id") @outcomes.Text
+  requestId             String                                    @unique @map("request_id") @outcomes.Text
+  dispatchClaimId       String                                    @map("dispatch_claim_id") @outcomes.Text
+  attemptSequence       Int                                       @map("attempt_sequence")
+  attemptNumber         Int                                       @map("attempt_number")
+  sourceCaptureId       String                                    @map("source_capture_id")
+  sourceCaptureAttemptId String                                   @map("source_capture_attempt_id")
+  sourceSnapshotId      String                                    @map("source_snapshot_id")
+  captureReceiptId      String                                    @map("capture_receipt_id")
+  normalizationRunId    String                                    @map("normalization_run_id")
+  acceptedAt            DateTime                                  @map("accepted_at") @outcomes.Timestamptz(3)
+  bindingJson           Json                                      @map("binding_json")
+  request               OutcomePrivateValuationDispatchRequest    @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
+  dispatchAttempt       OutcomePrivateValuationDispatchAttempt     @relation("PrivateValuationCaptureDispatchAttempt", fields: [requestId, attemptSequence, dispatchClaimId], references: [requestId, attemptSequence, claimId], onDelete: Restrict)
+  sourceCapture         OutcomeSourceCapture                       @relation("PrivateValuationCaptureSource", fields: [sourceCaptureId, sourceCaptureAttemptId, sourceSnapshotId], references: [captureId, attemptId, sourceSnapshotId], onDelete: Restrict)
+  normalizationRun      OutcomeProviderNormalizationRun            @relation("PrivateValuationCaptureNormalization", fields: [normalizationRunId, sourceCaptureId], references: [normalizationRunId, captureId], onDelete: Restrict)
+
+  @@index([normalizationRunId, sourceCaptureId], map: "outcome_private_valuation_capture_binding_source_idx")
+  @@map("outcome_private_valuation_capture_binding")
 }
 
 model OutcomePrivateEvaluationTransitionReceipt {
