@@ -31,7 +31,8 @@ const method = createAflTradeHpnPavMethod({
   capturedAt: '2026-08-16T02:00:00.000Z',
 });
 
-function snapshot(input: { withMethod?: boolean } = {}) {
+function snapshot(input: { withMethod?: boolean; withResults?: boolean } = {}) {
+  const withResults = input.withResults ?? true;
   const authority2024 = createLocalAflTradeFiveSeasonAflTablesAuthority(2024);
   const authority2025 = createLocalAflTradeFiveSeasonAflTablesAuthority(2025);
   const results2024 = createLocalAflTradeAflTablesResultsAuthority(2024);
@@ -81,22 +82,28 @@ function snapshot(input: { withMethod?: boolean } = {}) {
         seasonYear: 2025,
         sourceArtifact: sourceArtifact(2025),
       },
-      {
-        captureId: 'capture:afl-tables-results:2024',
-        provider: 'afl_tables',
-        capabilityId: 'afl-tables-results',
-        seasonYear: 2024,
-        sourceArtifact: sourceArtifact(2024),
-      },
-      {
-        captureId: 'capture:afl-tables-results:2025',
-        provider: 'afl_tables',
-        capabilityId: 'afl-tables-results',
-        seasonYear: 2025,
-        sourceArtifact: sourceArtifact(2025),
-      },
+      ...(withResults
+        ? [
+            {
+              captureId: 'capture:afl-tables-results:2024',
+              provider: 'afl_tables' as const,
+              capabilityId: 'afl-tables-results',
+              seasonYear: 2024,
+              sourceArtifact: sourceArtifact(2024),
+            },
+            {
+              captureId: 'capture:afl-tables-results:2025',
+              provider: 'afl_tables' as const,
+              capabilityId: 'afl-tables-results',
+              seasonYear: 2025,
+              sourceArtifact: sourceArtifact(2025),
+            },
+          ]
+        : []),
     ],
-    sourceRightsEvidenceRefs: [rightsArtifact, resultsRightsArtifact],
+    sourceRightsEvidenceRefs: withResults
+      ? [rightsArtifact, resultsRightsArtifact]
+      : [rightsArtifact],
     createdAt: '2026-08-16T03:30:00.000Z',
   });
   const evidenceBundleArtifact = createAflTradeCanonicalJsonArtifactRef(
@@ -159,9 +166,9 @@ function snapshot(input: { withMethod?: boolean } = {}) {
     method_json: input.withMethod ? method : null,
     method_registered_at: input.withMethod ? methodRegisteredAt : null,
     sources_json: [
-      resultSource(2024, results2024.fieldMap, '2'),
+      ...(withResults ? [resultSource(2024, results2024.fieldMap, '2')] : []),
       playerSource(2024, authority2024.fieldMap, '4'),
-      resultSource(2025, results2025.fieldMap, '3'),
+      ...(withResults ? [resultSource(2025, results2025.fieldMap, '3')] : []),
       playerSource(2025, authority2025.fieldMap, '5'),
     ],
   };
@@ -287,5 +294,29 @@ describe('local HPN league-season review assembler', () => {
         expect.objectContaining({ document: method }),
       ])
     );
+  });
+
+  it('preserves historical result and player mappings from one AFL Tables source', async () => {
+    const assembled = await assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
+      new FixtureClient(snapshot({ withResults: false })),
+      {
+        valuationScopeKey: 'workbook:2025',
+        fromSeason: 2024,
+        throughSeason: 2025,
+      }
+    );
+
+    expect(assembled.fieldMapCandidates).toHaveLength(4);
+    expect(assembled.sourceUseAssessments).toHaveLength(4);
+    for (const { report } of assembled.eligibilityReports) {
+      expect(report.content.sources).toMatchObject([
+        { selectionState: 'selected', inputKind: 'completed_match_result', role: null },
+        { selectionState: 'selected', inputKind: 'player_match_stats', role: 'primary' },
+        { selectionState: 'missing', inputKind: 'player_match_stats', role: 'corroborating' },
+      ]);
+      expect(report.content.sources[0]!.normalizationRunId).toBe(
+        report.content.sources[1]!.normalizationRunId
+      );
+    }
   });
 });

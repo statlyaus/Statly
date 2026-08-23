@@ -403,21 +403,23 @@ export async function assembleLocalAflTradeHpnLeagueSeasonReviewPacket(
 
   for (let seasonYear = input.fromSeason; seasonYear <= input.throughSeason; seasonYear += 1) {
     const selected = snapshot.sources.filter((source) => source.seasonYear === seasonYear);
-    const resultSource = prepareResultSource(
-      requireAtMostOne(
-        selected.filter(({ capabilityId }) => capabilityId === 'afl-tables-results'),
-        'completed-results'
+    const primary = requireAtMostOne(
+      selected.filter(
+        ({ provider, capabilityId }) =>
+          provider === 'afl_tables' && capabilityId === 'afl-tables-player-stats'
       ),
+      'primary player-stat'
+    );
+    const dedicatedResults = requireAtMostOne(
+      selected.filter(({ capabilityId }) => capabilityId === 'afl-tables-results'),
+      'completed-results'
+    );
+    const resultSource = prepareResultSource(
+      dedicatedResults ?? primary,
       seasonYear
     );
     const primarySource = preparePlayerSource(
-      requireAtMostOne(
-        selected.filter(
-          ({ provider, capabilityId }) =>
-            provider === 'afl_tables' && capabilityId === 'afl-tables-player-stats'
-        ),
-        'primary player-stat'
-      ),
+      primary,
       seasonYear,
       'primary'
     );
