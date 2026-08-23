@@ -1921,14 +1921,30 @@ changes and coalesces missed weekly occurrences. An authenticated backend-only c
 same coordinator ad hoc using a caller-supplied stable operation key.
 
 The upstream path now has a claim-fenced HPN preparation boundary, but it is not yet wired into the
-weekly worker. Given one exact dispatch and live claim, it reuses the retained private factual output,
+weekly worker. Given one exact dispatch and live claim, it requires the exact immutable private
+factual output already retained for that request,
 accepts one result capture plus primary and corroborating player-stat captures under distinct source
-roles, resolves one current reviewed HPN map for each exact provider/capability/schema/season lane,
-and delegates input construction and calculation to the existing content-addressed HPN repositories.
-Restart reloads accepted captures and the existing HPN input/calculation records. Missing or stale
-source custody, map approval, identity resolution, factual-universe coverage, or method authority
-fails closed before downstream authority changes. The current public release pointer and publication
-Gates remain untouched.
+roles, and resolves one current reviewed HPN map for each exact provider/capability/schema/season lane.
+Before input construction, PostgreSQL admits each role independently under a live dispatch claim.
+The immutable, content-addressed receipt binds the original accepted claim attempt, capture binding, source capture,
+normalization run, source role, and projected map. That transaction alone may advance the exact capture
+from `staged` to `approved`; it rechecks the current provider-map review, projected-map review,
+reviewed source-use decision, and source rights after taking the same candidate and reviewed-evidence
+locks as their owning writers. Concurrent calls converge on one receipt per request and role. After a
+lease handoff, only the new live claimant may admit or replay the original accepted binding; an expired
+claimant and superseded authority fail closed.
+
+Only after all three receipts exist does preparation delegate input construction and calculation to
+the existing content-addressed HPN repositories. Both repositories run inside one outer PostgreSQL
+transaction that heartbeats and locks the live claim before input persistence, then revalidates the
+claim immediately before commit. Claim loss or any calculation failure rolls back the input set,
+calculation, and head together. Restart reloads accepted captures, revalidates and replays the
+admissions, and reuses the existing HPN input/calculation records. The HPN receipts grant
+private calculation source authority only: they are separate from factual admission and grant no
+model-training, model-qualification, prepared-head, public-display, publication, production, or
+activation authority. Missing or stale source custody, map approval, identity resolution,
+factual-universe coverage, or method authority fails closed before downstream authority changes. The
+current public release pointer and publication Gates remain untouched.
 
 This is still not a complete new-game-data pipeline. The deployed weekly runner continues to consume
 whatever exact prepared-v3 head is current. Model observation rebuild, bounded model execution,

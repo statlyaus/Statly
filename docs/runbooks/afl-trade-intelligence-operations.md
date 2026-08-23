@@ -870,13 +870,46 @@ enqueues immediate work. Neither trigger promotes factual data or prepares model
 begins only from the exact current authenticated prepared-v3 head.
 
 The repository now also contains a backend-only HPN preparation seam for the next upstream cutover.
-It accepts an exact retained dispatch plus its live claim, replays the private factual output, and
+It accepts an exact retained dispatch plus its live claim, requires the exact immutable factual output
+already retained for that request, and
 accepts three separately authenticated source roles: AFL Tables completed results, AFL Tables primary
 player statistics, and Official AFL corroborating player statistics. It then requires one current
-reviewed HPN projection for each exact source and uses the existing HPN input/calculation repositories.
-This seam is not yet invoked by the local worker, and it must not be described as automatic weekly
-raw-data recalculation until the later model and prepared-v3 stages are composed into the same runner.
-Do not bypass missing HPN map reviews or identity resolutions; those states remain backend blockers.
+reviewed HPN projection for each exact source. PostgreSQL must retain one immutable HPN source
+admission for each role before the input repository runs. Each receipt binds the original dispatch
+attempt that accepted its capture, plus the capture binding, staged capture, normalization run, and
+projected field map. Only a caller holding the current live claim may run that transaction, which may
+advance the bound capture to `approved`; never update capture status manually.
+
+For a retained request, inspect the private ledger without reading raw source rows:
+
+```sql
+SELECT admission.source_role,admission.admission_id,admission.capture_binding_id,
+       admission.normalization_run_id,admission.projected_field_map_id,
+       capture.status
+  FROM outcome_private_valuation_hpn_source_admission admission
+  JOIN outcome_source_capture capture
+    ON capture.capture_id=admission.source_capture_id
+ WHERE admission.request_id='<private-valuation-dispatch:64-hex>'
+ ORDER BY admission.source_role;
+```
+
+Success requires exactly the three named roles, three content-addressed admission IDs, and `approved`
+for each exact capture. Concurrent or restarted preparation returns the same receipts and creates no
+new capture, admission, input set, or calculation. A reclaimed worker cannot use its expired claim;
+the new live claimant may admit the original accepted binding or replay its already-retained receipt
+only after PostgreSQL revalidates the current decode map, projected map, reviewed source-use decision,
+and rights under the owning authority locks. The receipt remains bound to the claim that accepted its
+capture, while the caller must hold the request's current live claim.
+
+If admission fails, leave the staged capture and prior prepared/current valuation state unchanged.
+Correct or supersede the provider review, projected HPN review, source-use decision, rights evidence,
+or capture through its owning workflow; do not mutate an admission or weaken HPN input validation.
+The seam then uses the existing HPN input/calculation repositories inside one claim-fenced PostgreSQL
+transaction. It heartbeats before input persistence and immediately before commit, so a lost claim or
+calculation failure rolls back the input set, calculation, and current HPN head together. It is not yet invoked by the local
+worker, and it must not be described as automatic weekly raw-data recalculation until the later model
+and prepared-v3 stages are composed into the same runner. Do not bypass missing HPN map reviews or
+identity resolutions; those states remain backend blockers.
 
 To request the same coordinator ad hoc, supply a stable operation key that can be reused after process
 or response loss:

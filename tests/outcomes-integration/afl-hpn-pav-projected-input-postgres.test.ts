@@ -33,8 +33,11 @@ import {
   AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_LIMITATION,
   AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_V2_SCHEMA_VERSION,
   aflTradePrivateValuationCaptureBindingSchema,
+  type AflTradePrivateValuationCaptureBinding,
 } from '@/server/aflTradeIntelligence/valuation/privateValuationCaptureBinding';
 import { createAflTradePrivateValuationFactualOutput } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
+import { createAflTradePrivateValuationHpnSourceAdmission } from '@/server/aflTradeIntelligence/valuation/privateValuationHpnSourceAdmission';
+import { createAflTradePrivateValuationSourceAdmission } from '@/server/aflTradeIntelligence/valuation/privateValuationSourceAdmission';
 import { PostgresAflTradePrivateValuationHpnPreparation } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationHpnPreparation';
 import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
 import {
@@ -143,6 +146,15 @@ const reviewedCaptureSources = [
     authority: createLocalAflTradeAflTablesResultsAuthority(seasonYear),
   },
 ] as const satisfies readonly ReviewedCaptureSource[];
+
+let retainedBackdatedAdmissionFixture:
+  | Readonly<{
+      requestId: string;
+      originalClaimId: string;
+      binding: AflTradePrivateValuationCaptureBinding;
+      projected: ReturnType<typeof projection>;
+    }>
+  | undefined;
 
 const reviewedSourceArtifact = (suffix: string) =>
   createAflTradeCanonicalJsonArtifactRef({ sourceCapture: suffix }, fixtureAt);
@@ -534,7 +546,7 @@ async function seedSourceAndFactualAuthority(
            provider,dataset,dataset_version,access_mechanism,capability_id,competition,
            anchor_season_year,effective_at,captured_at,status,manifest_json)
          VALUES ($1,$2,$3,$4,'non_production',$5,$6,'fixture','fixture',$7,$8,$9,$10,$10,
-                 'approved',$11::jsonb)
+                 'staged',$11::jsonb)
          ON CONFLICT (capture_id) DO NOTHING`,
         [
           captureId,
@@ -1087,6 +1099,15 @@ async function retainHpnCaptureBindings(
   request: Awaited<ReturnType<typeof enqueueAndClaim>>['claim']['request'],
   claim: Awaited<ReturnType<typeof enqueueAndClaim>>['claim']
 ) {
+  const factualAdmission = createAflTradePrivateValuationSourceAdmission({
+    requestId: request.requestId,
+    captureBindingId: id('private-valuation-capture-binding', 'factual-input'),
+    sourceCaptureId: id('source-capture', 'factual-input'),
+    normalizationRunId: id('provider-normalization-run', 'factual-input'),
+    factBatchId: id('source-fact-batch', 'fixture'),
+    factualRunId: id('factual-reconciliation-run', 'projected-input'),
+    admittedAt: projectionAt,
+  });
   const bindings = lanes.map((lane) => {
     const sourceRights = lane.authority.capture.sourceRights;
     const content = {
@@ -1122,6 +1143,24 @@ async function retainHpnCaptureBindings(
     });
   });
   await client.transaction(async (transaction) => {
+    await transaction.query(`SET LOCAL session_replication_role='replica'`);
+    await transaction.query(
+      `INSERT INTO outcome_private_valuation_source_admission
+        (admission_id,request_id,capture_binding_id,source_capture_id,
+         normalization_run_id,fact_batch_id,factual_run_id,admitted_at,admission_json)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+      [
+        factualAdmission.admissionId,
+        factualAdmission.content.requestId,
+        factualAdmission.content.captureBindingId,
+        factualAdmission.content.sourceCaptureId,
+        factualAdmission.content.normalizationRunId,
+        factualAdmission.content.factBatchId,
+        factualAdmission.content.factualRunId,
+        factualAdmission.content.admittedAt,
+        canonicalizeAflTradeJson(factualAdmission),
+      ]
+    );
     for (const binding of bindings) {
       if (
         binding.content.schemaVersion !==
@@ -1150,18 +1189,19 @@ async function retainHpnCaptureBindings(
         ]
       );
     }
+    await transaction.query(`SET LOCAL session_replication_role='origin'`);
   });
-  return bindings;
+  return { bindings, factualAdmission };
 }
 
-function factualOutput(requestId: string) {
+function factualOutput(requestId: string, sourceAdmissionId: string) {
   const factualRunId = id('factual-reconciliation-run', 'projected-input');
   return createAflTradePrivateValuationFactualOutput({
     requestId,
     valuationScopeKey: 'afl-men:2026-trades',
     captureBindingId: id('private-valuation-capture-binding', 'factual-input'),
-    sourceAdmissionId: id('private-valuation-source-admission', 'factual-input'),
-    normalizationRunId: id('provider-normalization-run', 'primary'),
+    sourceAdmissionId,
+    normalizationRunId: id('provider-normalization-run', 'factual-input'),
     factBatch: {
       batchId: id('source-fact-batch', 'fixture'),
       batchSha256: sha256('fixture'),
@@ -1188,6 +1228,42 @@ function factualOutput(requestId: string) {
       releaseSha256: sha256('fixture'),
     },
     preparedAt: projectionAt,
+  });
+}
+
+async function retainFactualOutput(
+  requestId: string,
+  output: ReturnType<typeof factualOutput>
+): Promise<void> {
+  await client.transaction(async (transaction) => {
+    await transaction.query(`SET LOCAL session_replication_role='replica'`);
+    await transaction.query(
+      `INSERT INTO outcome_private_valuation_factual_output
+        (output_id,request_id,capture_binding_id,source_admission_id,normalization_run_id,
+         fact_batch_id,factual_run_id,candidate_id,factual_release_id,prepared_at,output_json)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+      [
+        output.outputId,
+        requestId,
+        output.content.captureBindingId,
+        output.content.sourceAdmissionId,
+        output.content.normalizationRunId,
+        output.content.factBatch.batchId,
+        output.content.reconciliation.factualRunId,
+        output.content.candidate.candidateId,
+        output.content.factualRelease.releaseId,
+        output.content.preparedAt,
+        canonicalizeAflTradeJson(output),
+      ]
+    );
+    for (const [index, batch] of output.content.spellMetricBatches.entries()) {
+      await transaction.query(
+        `INSERT INTO outcome_private_valuation_factual_output_spell_batch
+          (output_id,batch_id,ordinal) VALUES ($1,$2,$3)`,
+        [output.outputId, batch.batchId, index + 1]
+      );
+    }
+    await transaction.query(`SET LOCAL session_replication_role='origin'`);
   });
 }
 
@@ -1703,8 +1779,38 @@ describe.sequential('private valuation HPN preparation with projected authority 
       )
     );
     const { requestId, claim } = await enqueueAndClaim('projected-hpn-coordinator');
-    const bindings = await retainHpnCaptureBindings(claim.request, claim);
-    const output = factualOutput(requestId);
+    const { bindings, factualAdmission } = await retainHpnCaptureBindings(
+      claim.request,
+      claim
+    );
+    const schedule = new PostgresAflTradePrivateValuationScheduleRepository(client);
+    await schedule.reschedule({
+      claimId: claim.claimId,
+      leaseToken: claim.leaseToken,
+      state: 'retry_pending',
+    });
+    await client.query(`SELECT pg_sleep(5.05)`);
+    const recoveredClaim = await schedule.claim(
+      'system:weekly-valuation-coordinator',
+      requestId
+    );
+    if (recoveredClaim === null) {
+      throw new TypeError('The HPN coordinator fixture did not reclaim its dispatch.');
+    }
+    expect(recoveredClaim.claimId).not.toBe(claim.claimId);
+    const publicPointersBefore = await client.query<{
+      active_release: unknown;
+      active_publication: unknown;
+    }>(
+      `SELECT
+         (SELECT COALESCE(jsonb_agg(to_jsonb(active_release)
+                    ORDER BY active_release.scope_key),'[]'::jsonb)
+            FROM outcome_active_release active_release) AS active_release,
+         (SELECT COALESCE(jsonb_agg(to_jsonb(active_publication)
+                    ORDER BY active_publication.scope_key),'[]'::jsonb)
+            FROM outcome_valuation_active_publication active_publication) AS active_publication`
+    );
+    const output = factualOutput(requestId, factualAdmission.admissionId);
     const methodBytes = new TextEncoder().encode('<html>Disposable HPN method evidence</html>');
     const method = createAflTradeHpnPavMethod({
       sourceArtifact: createAflTradeByteArtifactRef(
@@ -1735,22 +1841,85 @@ describe.sequential('private valuation HPN preparation with projected authority 
     };
     const preparationInput = {
       requestId,
-      claim: { claimId: claim.claimId, leaseToken: claim.leaseToken },
-    };
-    const first = await new PostgresAflTradePrivateValuationHpnPreparation(client, {
-      factualPreparation: { prepare: async () => ({ state: 'prepared' as const, output }) },
-      methodId: method.methodId,
-      methodAuthority,
-      captureSource,
-    }).prepare(preparationInput);
-    const replay = await new PostgresAflTradePrivateValuationHpnPreparation(client, {
-      factualPreparation: {
-        prepare: async () => ({ state: 'already_prepared' as const, output }),
+      claim: {
+        claimId: recoveredClaim.claimId,
+        leaseToken: recoveredClaim.leaseToken,
       },
-      methodId: method.methodId,
-      methodAuthority,
-      captureSource,
-    }).prepare(preparationInput);
+    };
+    const missingOutputPreparation = new PostgresAflTradePrivateValuationHpnPreparation(
+      client,
+      {
+        factualPreparation: { prepare: async () => ({ state: 'prepared' as const, output }) },
+        methodId: method.methodId,
+        methodAuthority,
+        captureSource,
+      }
+    );
+    await expect(missingOutputPreparation.prepare(preparationInput)).rejects.toThrow(
+      'Private valuation HPN source admission lacks exact factual authority'
+    );
+    const beforeExactOutput = await client.query<{
+      inputs: number;
+      calculations: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::integer FROM outcome_hpn_pav_input_set) AS inputs,
+         (SELECT count(*)::integer FROM outcome_hpn_pav_calculation) AS calculations`
+    );
+    expect(beforeExactOutput.rows).toEqual([{ inputs: 0, calculations: 0 }]);
+    await retainFactualOutput(requestId, output);
+    await client.query(
+      `CREATE FUNCTION hpn_calculation_failure_test() RETURNS trigger
+         LANGUAGE plpgsql AS $$
+       BEGIN
+         RAISE EXCEPTION 'HPN calculation persistence failed';
+       END $$`
+    );
+    await client.query(
+      `CREATE TRIGGER hpn_calculation_failure_test
+         BEFORE INSERT ON outcome_hpn_pav_calculation
+         FOR EACH ROW EXECUTE FUNCTION hpn_calculation_failure_test()`
+    );
+    try {
+      await expect(missingOutputPreparation.prepare(preparationInput)).rejects.toThrow(
+        'HPN calculation persistence failed'
+      );
+    } finally {
+      await client.query(
+        `DROP TRIGGER hpn_calculation_failure_test ON outcome_hpn_pav_calculation`
+      );
+      await client.query(`DROP FUNCTION hpn_calculation_failure_test()`);
+    }
+    const afterClaimLoss = await client.query<{
+      inputs: number;
+      calculations: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::integer FROM outcome_hpn_pav_input_set) AS inputs,
+         (SELECT count(*)::integer FROM outcome_hpn_pav_calculation) AS calculations`
+    );
+    expect(afterClaimLoss.rows).toEqual([{ inputs: 0, calculations: 0 }]);
+    const concurrent = await Promise.all([
+      new PostgresAflTradePrivateValuationHpnPreparation(client, {
+        factualPreparation: { prepare: async () => ({ state: 'prepared' as const, output }) },
+        methodId: method.methodId,
+        methodAuthority,
+        captureSource,
+      }).prepare(preparationInput),
+      new PostgresAflTradePrivateValuationHpnPreparation(client, {
+        factualPreparation: {
+          prepare: async () => ({ state: 'already_prepared' as const, output }),
+        },
+        methodId: method.methodId,
+        methodAuthority,
+        captureSource,
+      }).prepare(preparationInput),
+    ]);
+    const first = concurrent.find(({ state }) => state === 'prepared');
+    const replay = concurrent.find(({ state }) => state === 'already_prepared');
+    if (!first || !replay) {
+      throw new TypeError('Concurrent HPN preparation did not converge on one retained result.');
+    }
 
     expect(first).toMatchObject({
       state: 'prepared',
@@ -1759,9 +1928,104 @@ describe.sequential('private valuation HPN preparation with projected authority 
       inputSetId: expect.stringMatching(/^hpn-pav-input-set:[a-f0-9]{64}$/),
       calculationId: expect.stringMatching(/^hpn-pav-season:[a-f0-9]{64}$/),
       captureBindingIds: bindings.map(({ bindingId }) => bindingId),
+      sourceAdmissionIds: [
+        expect.stringMatching(/^private-valuation-hpn-source-admission:[a-f0-9]{64}$/),
+        expect.stringMatching(/^private-valuation-hpn-source-admission:[a-f0-9]{64}$/),
+        expect.stringMatching(/^private-valuation-hpn-source-admission:[a-f0-9]{64}$/),
+      ],
       publicationEligible: false,
     });
     expect(replay).toEqual({ ...first, state: 'already_prepared' });
+    retainedBackdatedAdmissionFixture = {
+      requestId,
+      originalClaimId: claim.claimId,
+      binding: bindings[0]!,
+      projected: projections[0]!,
+    };
+    const retainedAdmissions = await client.query<{
+      dispatch_claim_id: string;
+      attempt_sequence: number;
+    }>(
+      `SELECT dispatch_claim_id,attempt_sequence
+         FROM outcome_private_valuation_hpn_source_admission
+        WHERE request_id=$1 ORDER BY source_role`,
+      [requestId]
+    );
+    expect(retainedAdmissions.rows).toEqual([
+      { dispatch_claim_id: claim.claimId, attempt_sequence: 1 },
+      { dispatch_claim_id: claim.claimId, attempt_sequence: 1 },
+      { dispatch_claim_id: claim.claimId, attempt_sequence: 1 },
+    ]);
+    const forgedAdmission = createAflTradePrivateValuationHpnSourceAdmission({
+      requestId,
+      dispatchClaimId: claim.claimId,
+      attemptSequence: 1,
+      attemptNumber: 1,
+      sourceRole: lanes[0]!.sourceRole,
+      captureBindingId: bindings[0]!.bindingId,
+      sourceCaptureId: bindings[1]!.content.sourceCaptureId,
+      normalizationRunId: bindings[1]!.content.normalizationRunId,
+      projectedFieldMapId: projections[0]!.projectedFieldMap!.fieldMapId,
+      admittedAt: projectionAt,
+    });
+    await expect(
+      client.query(
+        `INSERT INTO outcome_private_valuation_hpn_source_admission
+          (admission_id,request_id,source_role,dispatch_claim_id,attempt_sequence,
+           attempt_number,capture_binding_id,source_capture_id,normalization_run_id,
+           projected_field_map_id,admitted_at,admission_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+        [
+          forgedAdmission.admissionId,
+          requestId,
+          forgedAdmission.content.sourceRole,
+          claim.claimId,
+          1,
+          1,
+          forgedAdmission.content.captureBindingId,
+          forgedAdmission.content.sourceCaptureId,
+          forgedAdmission.content.normalizationRunId,
+          forgedAdmission.content.projectedFieldMapId,
+          forgedAdmission.content.admittedAt,
+          canonicalizeAflTradeJson(forgedAdmission),
+        ]
+      )
+    ).rejects.toThrow('Private valuation HPN source admission custody is invalid');
+    const wrongMapAdmission = createAflTradePrivateValuationHpnSourceAdmission({
+      requestId,
+      dispatchClaimId: claim.claimId,
+      attemptSequence: 1,
+      attemptNumber: 1,
+      sourceRole: lanes[0]!.sourceRole,
+      captureBindingId: bindings[0]!.bindingId,
+      sourceCaptureId: bindings[0]!.content.sourceCaptureId,
+      normalizationRunId: bindings[0]!.content.normalizationRunId,
+      projectedFieldMapId: projections[1]!.projectedFieldMap!.fieldMapId,
+      admittedAt: projectionAt,
+    });
+    await expect(
+      client.query(
+        `INSERT INTO outcome_private_valuation_hpn_source_admission
+          (admission_id,request_id,source_role,dispatch_claim_id,attempt_sequence,
+           attempt_number,capture_binding_id,source_capture_id,normalization_run_id,
+           projected_field_map_id,admitted_at,admission_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+        [
+          wrongMapAdmission.admissionId,
+          requestId,
+          wrongMapAdmission.content.sourceRole,
+          claim.claimId,
+          1,
+          1,
+          wrongMapAdmission.content.captureBindingId,
+          wrongMapAdmission.content.sourceCaptureId,
+          wrongMapAdmission.content.normalizationRunId,
+          wrongMapAdmission.content.projectedFieldMapId,
+          wrongMapAdmission.content.admittedAt,
+          canonicalizeAflTradeJson(wrongMapAdmission),
+        ]
+      )
+    ).rejects.toThrow('Private valuation HPN source admission custody is invalid');
     const stored = await client.query<{
       input_status: string;
       calculation_status: string;
@@ -1788,6 +2052,20 @@ describe.sequential('private valuation HPN preparation with projected authority 
         projected_maps: 3,
       },
     ]);
+    await expect(
+      client.query<{
+        active_release: unknown;
+        active_publication: unknown;
+      }>(
+        `SELECT
+           (SELECT COALESCE(jsonb_agg(to_jsonb(active_release)
+                      ORDER BY active_release.scope_key),'[]'::jsonb)
+              FROM outcome_active_release active_release) AS active_release,
+           (SELECT COALESCE(jsonb_agg(to_jsonb(active_publication)
+                      ORDER BY active_publication.scope_key),'[]'::jsonb)
+              FROM outcome_valuation_active_publication active_publication) AS active_publication`
+      )
+    ).resolves.toEqual(publicPointersBefore);
   });
 
   it('rejects a reviewed-evidence successor with duplicated members behind claimed 7/3 counts', async () => {
@@ -2229,4 +2507,75 @@ describe.sequential('private valuation HPN preparation with projected authority 
       })
     ).rejects.toThrow(/exact current source authority/i);
   }, 60_000);
+
+  it('rejects a backdated direct admission after its projected map is superseded', async () => {
+    const fixture = retainedBackdatedAdmissionFixture;
+    if (fixture === undefined) {
+      throw new TypeError('The backdated-admission fixture was not retained.');
+    }
+    const successorAt = '2026-08-22T00:00:00.000Z';
+    const rejectedDecision = createAflTradeHpnFieldMapReviewDecision({
+      candidate: fixture.projected.candidate,
+      candidateArtifact: fixture.projected.candidateArtifact,
+      sourceUseAssessment: fixture.projected.sourceUseAssessment,
+      sourceUseAssessmentArtifact: fixture.projected.sourceUseAssessmentArtifact,
+      decision: 'rejected',
+      reviewerId: 'projected-hpn-input-fixture-reviewer',
+      rationale: 'Supersede the disposable projection for a backdating regression.',
+      decidedAt: successorAt,
+    });
+    await new PostgresAflTradeHpnProjectedFieldMapAuthority(client).registerDecision({
+      candidate: fixture.projected.candidate,
+      candidateArtifact: fixture.projected.candidateArtifact,
+      sourceUseAssessment: fixture.projected.sourceUseAssessment,
+      sourceUseAssessmentArtifact: fixture.projected.sourceUseAssessmentArtifact,
+      reviewDecision: rejectedDecision,
+      decisionArtifact: createAflTradeCanonicalJsonArtifactRef(
+        rejectedDecision,
+        successorAt
+      ),
+    });
+    const binding = fixture.binding;
+    if (
+      binding.content.schemaVersion !==
+      AFL_TRADE_PRIVATE_VALUATION_CAPTURE_BINDING_V2_SCHEMA_VERSION
+    ) {
+      throw new TypeError('The backdated-admission fixture requires role-aware custody.');
+    }
+    const backdated = createAflTradePrivateValuationHpnSourceAdmission({
+      requestId: fixture.requestId,
+      dispatchClaimId: fixture.originalClaimId,
+      attemptSequence: binding.content.attemptSequence,
+      attemptNumber: binding.content.attemptNumber,
+      sourceRole: binding.content.sourceRole,
+      captureBindingId: binding.bindingId,
+      sourceCaptureId: binding.content.sourceCaptureId,
+      normalizationRunId: binding.content.normalizationRunId,
+      projectedFieldMapId: fixture.projected.projectedFieldMap!.fieldMapId,
+      admittedAt: projectionAt,
+    });
+    await expect(
+      client.query(
+        `INSERT INTO outcome_private_valuation_hpn_source_admission
+          (admission_id,request_id,source_role,dispatch_claim_id,attempt_sequence,
+           attempt_number,capture_binding_id,source_capture_id,normalization_run_id,
+           projected_field_map_id,admitted_at,admission_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+        [
+          backdated.admissionId,
+          backdated.content.requestId,
+          backdated.content.sourceRole,
+          backdated.content.dispatchClaimId,
+          backdated.content.attemptSequence,
+          backdated.content.attemptNumber,
+          backdated.content.captureBindingId,
+          backdated.content.sourceCaptureId,
+          backdated.content.normalizationRunId,
+          backdated.content.projectedFieldMapId,
+          backdated.content.admittedAt,
+          canonicalizeAflTradeJson(backdated),
+        ]
+      )
+    ).rejects.toThrow('Private valuation HPN source admission custody is invalid');
+  });
 });

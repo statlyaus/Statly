@@ -9,9 +9,13 @@ import {
 import { createLocalAflTradeOfficialAfl2026Authority } from '../development/localOfficialAfl2026Authority';
 import type { AflTradeHpnPavMethodAuthority } from '../modeling/hpnPavCalculationService';
 import { PostgresAflTradeHpnPavCalculationRepository } from '../modeling/postgresHpnPavCalculationRepository';
+import type { AflTradeHpnPavSeasonInputRequest } from '../modeling/hpnPavInputRepository';
 import { PostgresAflTradeHpnPavInputRepository } from '../modeling/postgresHpnPavInputRepository';
 import { PostgresAflTradeHpnProjectedFieldMapAuthority } from '../modeling/postgresHpnProjectedFieldMapAuthority';
-import type { AflOutcomeSqlClient } from '../outcomes/postgresOutcomeReleaseRepository';
+import type {
+  AflOutcomeSqlClient,
+  AflOutcomeSqlTransaction,
+} from '../outcomes/postgresOutcomeReleaseRepository';
 import type { AflTradeFitzRoyCaptureCommand } from '../source/fitzRoyCaptureRuntime';
 import type { AflTradeFitzRoyFieldMap } from '../source/fitzRoyObservationContracts';
 import {
@@ -54,6 +58,7 @@ export type AflTradePrivateValuationHpnPreparationResult = Readonly<{
   inputSetId: string;
   calculationId: string;
   captureBindingIds: readonly string[];
+  sourceAdmissionIds: readonly string[];
   publicationEligible: false;
 }>;
 
@@ -100,6 +105,13 @@ function sourceLanes(seasonYear: number): readonly SourceLane[] {
 
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function transactionClient(transaction: AflOutcomeSqlTransaction): AflOutcomeSqlClient {
+  return {
+    query: transaction.query.bind(transaction),
+    transaction: async (work) => work(transaction),
+  };
 }
 
 function requireExactLaneBinding(
@@ -198,6 +210,18 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
     await new PostgresAflTradePrivateValuationScheduleRepository(this.client).heartbeat(claim);
   }
 
+  private async renewClaimInTransaction(
+    transaction: AflOutcomeSqlTransaction,
+    claim: z.infer<typeof claimSchema>
+  ): Promise<void> {
+    await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
+    await transaction.query(`SELECT heartbeat_outcome_private_valuation_dispatch($1,$2)`, [
+      claim.claimId,
+      sha256(claim.leaseToken),
+    ]);
+    await transaction.query(`RESET ROLE`);
+  }
+
   async prepare(input: {
     readonly requestId: string;
     readonly claim: { readonly claimId: string; readonly leaseToken: string };
@@ -229,7 +253,10 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
     }
 
     const fieldMapAuthority = new PostgresAflTradeHpnProjectedFieldMapAuthority(this.client);
-    const sources = [];
+    const captureBindingRepository =
+      new PostgresAflTradePrivateValuationCaptureBindingRepository(this.client);
+    const sources: AflTradeHpnPavSeasonInputRequest['sources'] = [];
+    const sourceAdmissions = [];
     for (let index = 0; index < lanes.length; index += 1) {
       const lane = lanes[index]!;
       const binding = bindings[index]!;
@@ -250,6 +277,14 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
       if (fieldMap === null) {
         throw new TypeError(`No current reviewed HPN field map exists for ${lane.sourceRole}.`);
       }
+      const sourceAdmission = await captureBindingRepository.admitHpnSource({
+        request,
+        claim,
+        factualOutputId: factual.output.outputId,
+        binding,
+        projectedFieldMapId: fieldMap.fieldMapId,
+      });
+      sourceAdmissions.push(sourceAdmission);
       sources.push({
         normalizationRunId: binding.content.normalizationRunId,
         fieldMapId: fieldMap.fieldMapId,
@@ -258,41 +293,49 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
       });
     }
 
-    await this.renewClaim(claim);
-    const inputSet = await new PostgresAflTradeHpnPavInputRepository(
-      this.client
-    ).buildAndPersistSeasonInputSet(
-      {
-        environment: 'non_production',
-        competition: 'AFLM',
-        seasonYear,
-        methodId,
-        factualRunId: factual.output.content.reconciliation.factualRunId,
-        effectiveThrough: await this.loadEffectiveThrough(
-          bindings.map(({ content }) => content.normalizationRunId)
-        ),
-        sources,
-      },
-      { environment: 'non_production' }
+    const effectiveThrough = await this.loadEffectiveThrough(
+      bindings.map(({ content }) => content.normalizationRunId)
     );
-    await this.renewClaim(claim);
-    const calculation = await new PostgresAflTradeHpnPavCalculationRepository(
-      this.client,
-      this.dependencies.methodAuthority
-    ).calculateAndPersist(
-      {
-        inputSetId: inputSet.inputSet.inputSetId,
-        environment: 'non_production',
-        competition: 'AFLM',
-        seasonYear,
-        methodId,
-      },
-      { environment: 'non_production' }
+    const { inputSet, calculation } = await this.client.transaction(
+      async (transaction) => {
+        await this.renewClaimInTransaction(transaction, claim);
+        const claimFencedClient = transactionClient(transaction);
+        const inputSet = await new PostgresAflTradeHpnPavInputRepository(
+          claimFencedClient
+        ).buildAndPersistSeasonInputSet(
+          {
+            environment: 'non_production',
+            competition: 'AFLM',
+            seasonYear,
+            methodId,
+            factualRunId: factual.output.content.reconciliation.factualRunId,
+            effectiveThrough,
+            sources,
+          },
+          { environment: 'non_production' }
+        );
+        const calculation = await new PostgresAflTradeHpnPavCalculationRepository(
+          claimFencedClient,
+          this.dependencies.methodAuthority
+        ).calculateAndPersist(
+          {
+            inputSetId: inputSet.inputSet.inputSetId,
+            environment: 'non_production',
+            competition: 'AFLM',
+            seasonYear,
+            methodId,
+          },
+          { environment: 'non_production' }
+        );
+        await this.renewClaimInTransaction(transaction, claim);
+        return { inputSet, calculation };
+      }
     );
 
     return {
       state:
         factual.state === 'already_prepared' &&
+        sourceAdmissions.every(({ state }) => state === 'already_admitted') &&
         inputSet.idempotentReplay &&
         calculation.idempotentReplay
           ? 'already_prepared'
@@ -302,6 +345,9 @@ export class PostgresAflTradePrivateValuationHpnPreparation {
       inputSetId: inputSet.inputSet.inputSetId,
       calculationId: calculation.calculation.calculationId,
       captureBindingIds: bindings.map(({ bindingId }) => bindingId),
+      sourceAdmissionIds: sourceAdmissions.map(
+        ({ admission }) => admission.admissionId
+      ),
       publicationEligible: false,
     };
   }
