@@ -20,6 +20,7 @@ import { aflTradePlayerValidationReportSchema } from '@/server/aflTradeIntellige
 import { createGovernedValuationComponentRunManifest } from '@/server/aflTradeIntelligence/valuation/internal/governedValuationComponentRunManifest';
 import { loadGovernedNativeComponentValidationReport } from '@/server/aflTradeIntelligence/valuation/internal/governedNativeComponentExecution';
 import { PostgresGovernedValuationComponentRunRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedValuationComponentRunRepository';
+import { createAflTradePrivateValuationModelOperation } from '@/server/aflTradeIntelligence/valuation/privateValuationModelPair';
 import {
   GovernedValuationModelQualificationRepositoryError,
   PostgresGovernedValuationModelQualificationRepository,
@@ -1458,5 +1459,189 @@ describe('governed model qualification PostgreSQL registry', () => {
       [stale.qualification.qualificationId]
     );
     expect(rolledBack.rowCount).toBe(0);
+
+    const fencedBase = await qualificationFixture(runs, 'dispatch-fence', true);
+    const fencedContent = {
+      ...fencedBase.qualification.content,
+      scopeKey: 'afl-men:2026-dispatch-fence',
+    };
+    const fencedQualification = {
+      qualificationId: createAflTradeContentAddress('model-qualification', fencedContent),
+      content: fencedContent,
+    };
+    const fencedQualificationArtifact = await retain(fencedQualification, evaluatedAt);
+    const fencedGates = createGovernedValuationModelQualificationGateRecords({
+      qualification: fencedQualification,
+      qualificationArtifact: fencedQualificationArtifact,
+      decidedAt: '2026-08-21T09:20:00.000Z',
+      automationPrincipal: 'statly-model-qualification-agent',
+      accountableOwner: 'statly-model-owner',
+      versions: { player: 1, pick: 1 },
+      supersedes: { player: null, pick: null },
+    });
+    const fenced = {
+      qualification: fencedQualification,
+      qualificationArtifact: fencedQualificationArtifact,
+      expectedGateLedgerRevision: 2,
+      expectedCurrentRevision: 0,
+      gateRecords: fencedGates,
+    };
+    const dispatchRequestId = createAflTradeContentAddress(
+      'private-valuation-dispatch',
+      'qualification-fence-request'
+    );
+    const dispatchClaimId = createAflTradeContentAddress(
+      'private-valuation-dispatch-claim',
+      'qualification-fence-claim'
+    );
+    const dispatchLeaseTokenSha256 = 'c'.repeat(64);
+    const dispatchOperation = createAflTradePrivateValuationModelOperation({
+      scopeKey: fenced.qualification.content.scopeKey,
+      factualValuesSha256: 'd'.repeat(64),
+      hpnValuesSha256: 'e'.repeat(64),
+      hpnMethodId: createAflTradeContentAddress('hpn-pav-method', 'qualification-fence'),
+      player: {
+        modelId: runs.playerNativeExecution.content.modelId,
+        modelVersion: runs.playerNativeExecution.content.modelVersion,
+        protocolId: runs.player.content.protocolId,
+        datasetId: runs.player.content.datasetId,
+        datasetAdmissionId: runs.player.content.datasetAdmissionId,
+      },
+      pick: {
+        protocolId: runs.pick.content.protocolId,
+        datasetId: runs.pick.content.datasetId,
+        datasetAdmissionId: runs.pick.content.datasetAdmissionId,
+        policyId: createAflTradeContentAddress('pick-pav-policy', 'qualification-fence'),
+      },
+      qualificationPolicyId: fenced.qualification.content.policy.policyVersion,
+    });
+    const dispatchClock = await pool.query<{ trusted_now: Date }>(
+      'SELECT clock_timestamp() AS trusted_now'
+    );
+    const trustedNow = dispatchClock.rows[0]!.trusted_now;
+    const expiredAt = new Date(trustedNow.getTime() - 1_000);
+    const claimedAt = new Date(trustedNow.getTime() - 10_000);
+    const liveThrough = new Date(trustedNow.getTime() + 300_000);
+    const dispatchSeed = await pool.connect();
+    try {
+      await dispatchSeed.query('BEGIN');
+      await dispatchSeed.query(`SET LOCAL session_replication_role='replica'`);
+      await dispatchSeed.query(
+        `INSERT INTO outcome_private_valuation_dispatch_request
+          (request_id,scope_key,trigger_kind,scheduled_for,authority_key,status,available_at,
+           claim_id,lease_token_sha256,lease_expires_at,claimed_at,request_json,claim_sequence)
+         VALUES ($1,$2,'ad_hoc',$3,'qualification-fence','claimed',$3,$4,$5,$6,$6,'{}'::jsonb,1)`,
+        [
+          dispatchRequestId,
+          fenced.qualification.content.scopeKey,
+          claimedAt,
+          dispatchClaimId,
+          dispatchLeaseTokenSha256,
+          expiredAt,
+        ]
+      );
+      await dispatchSeed.query(
+        `INSERT INTO outcome_private_valuation_dispatch_attempt
+          (claim_id,request_id,attempt_sequence,attempt_number,worker_id,lease_token_sha256,
+           claimed_at,lease_expires_at,heartbeat_at)
+         VALUES ($1,$2,1,1,'system:weekly-valuation-coordinator',$3,$4,$5,$4)`,
+        [dispatchClaimId, dispatchRequestId, dispatchLeaseTokenSha256, claimedAt, expiredAt]
+      );
+      await dispatchSeed.query(
+        `INSERT INTO outcome_private_valuation_model_operation
+          (operation_id,scope_key,factual_values_sha256,hpn_values_sha256,hpn_method_id,
+           player_model_id,player_model_version,player_protocol_id,player_dataset_id,
+           player_dataset_admission_id,pick_protocol_id,pick_dataset_id,
+           pick_dataset_admission_id,pick_policy_id,qualification_policy_id,
+           player_run_id,player_claim_id,player_attempt_number,player_accepted_at,
+           pick_run_id,pick_claim_id,pick_attempt_number,pick_accepted_at,pair_accepted_at,
+           operation_canonical_json,operation_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,1,$18,
+                 $19,$20,1,$21,$21,$22,$23::jsonb)`,
+        [
+          dispatchOperation.operationId,
+          dispatchOperation.content.scopeKey,
+          dispatchOperation.content.factualValuesSha256,
+          dispatchOperation.content.hpnValuesSha256,
+          dispatchOperation.content.hpnMethodId,
+          dispatchOperation.content.player.modelId,
+          dispatchOperation.content.player.modelVersion,
+          dispatchOperation.content.player.protocolId,
+          dispatchOperation.content.player.datasetId,
+          dispatchOperation.content.player.datasetAdmissionId,
+          dispatchOperation.content.pick.protocolId,
+          dispatchOperation.content.pick.datasetId,
+          dispatchOperation.content.pick.datasetAdmissionId,
+          dispatchOperation.content.pick.policyId,
+          dispatchOperation.content.qualificationPolicyId,
+          runs.player.runId,
+          dispatchClaimId,
+          evaluatedAt,
+          runs.pick.runId,
+          dispatchClaimId,
+          evaluatedAt,
+          canonicalizeAflTradeJson(dispatchOperation.content),
+          canonicalizeAflTradeJson(dispatchOperation),
+        ]
+      );
+      await dispatchSeed.query(
+        `INSERT INTO outcome_private_valuation_model_request_binding
+          (request_id,operation_id,factual_output_id,hpn_calculation_id,claim_id,attempt_number)
+         VALUES ($1,$2,$3,$4,$5,1)`,
+        [
+          dispatchRequestId,
+          dispatchOperation.operationId,
+          createAflTradeContentAddress('private-valuation-factual-output', 'qualification-fence'),
+          createAflTradeContentAddress('hpn-pav-season', 'qualification-fence'),
+          dispatchClaimId,
+        ]
+      );
+      await dispatchSeed.query('COMMIT');
+    } catch (error) {
+      await dispatchSeed.query('ROLLBACK');
+      throw error;
+    } finally {
+      dispatchSeed.release();
+    }
+    const dispatchClaimFence = {
+      requestId: dispatchRequestId,
+      claimId: dispatchClaimId,
+      leaseTokenSha256: dispatchLeaseTokenSha256,
+    };
+    await expect(repository.register(fenced, { dispatchClaimFence })).rejects.toThrow(
+      'lost its live claim fence'
+    );
+    const revivedClaim = await pool.connect();
+    try {
+      await revivedClaim.query('BEGIN');
+      await revivedClaim.query(`SET LOCAL session_replication_role='replica'`);
+      await revivedClaim.query(
+        `UPDATE outcome_private_valuation_dispatch_request
+            SET lease_expires_at=$2
+          WHERE request_id=$1`,
+        [dispatchRequestId, liveThrough]
+      );
+      await revivedClaim.query(
+        `UPDATE outcome_private_valuation_dispatch_attempt
+            SET lease_expires_at=$2
+          WHERE claim_id=$1`,
+        [dispatchClaimId, liveThrough]
+      );
+      await revivedClaim.query('COMMIT');
+    } catch (error) {
+      await revivedClaim.query('ROLLBACK');
+      throw error;
+    } finally {
+      revivedClaim.release();
+    }
+    await expect(repository.register(fenced, { dispatchClaimFence })).resolves.toMatchObject({
+      status: 'advanced',
+      idempotentReplay: false,
+      current: {
+        scopeKey: fencedQualification.content.scopeKey,
+        revision: 1,
+        qualificationId: fencedQualification.qualificationId,
+      },
+    });
   }, 120_000);
 });

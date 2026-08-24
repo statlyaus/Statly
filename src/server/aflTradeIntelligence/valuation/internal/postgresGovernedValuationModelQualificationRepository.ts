@@ -636,7 +636,14 @@ export class PostgresGovernedValuationModelQualificationRepository {
   }
 
   async register(
-    input: QualificationRegistrationInput
+    input: QualificationRegistrationInput,
+    options?: Readonly<{
+      dispatchClaimFence?: Readonly<{
+        requestId: string;
+        claimId: string;
+        leaseTokenSha256: string;
+      }>;
+    }>
   ): Promise<GovernedValuationModelQualificationRegistrationResult> {
     const qualification = governedValuationModelQualificationSchema.parse(input.qualification);
     if (
@@ -654,13 +661,28 @@ export class PostgresGovernedValuationModelQualificationRepository {
       qualification,
       qualificationArtifact: input.qualificationArtifact,
     });
-    return this.dependencies.client.transaction((transaction) =>
-      registerQualificationWithinTransaction(
+    return this.dependencies.client.transaction(async (transaction) => {
+      if (options?.dispatchClaimFence !== undefined) {
+        const fence = options.dispatchClaimFence;
+        await transaction.query(
+          `SELECT set_config('statly.private_valuation_request_id',$1,true),
+                  set_config('statly.private_valuation_claim_id',$2,true),
+                  set_config('statly.private_valuation_lease_sha256',$3,true)`,
+          [fence.requestId, fence.claimId, fence.leaseTokenSha256]
+        );
+        await transaction.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
+        await transaction.query(
+          `SELECT load_outcome_private_valuation_dispatch_request_for_claim($1,$2,$3)`,
+          [fence.requestId, fence.claimId, fence.leaseTokenSha256]
+        );
+        await transaction.query('RESET ROLE');
+      }
+      return registerQualificationWithinTransaction(
         transaction,
         { ...input, qualification },
         nativeEvidence
-      )
-    );
+      );
+    });
   }
 
   loadCurrent(scopeKey: string): Promise<GovernedCurrentValuationModelPair | null> {

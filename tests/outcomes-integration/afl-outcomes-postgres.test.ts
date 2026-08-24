@@ -1105,6 +1105,7 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       '0076_role_aware_private_valuation_capture_binding',
       '0077_projected_hpn_pav_input_authority',
       '0078_private_valuation_hpn_source_admission',
+      '0079_dispatch_bound_private_model_pair',
     ]);
 
     const tables = await query<{ table_name: string }>(
@@ -1117,6 +1118,8 @@ describe('isolated AFL outcomes PostgreSQL migration', () => {
       'outcome_current_valuation_cohort_operation',
       'outcome_current_valuation_cohort_operation_result',
       'outcome_governed_pick_pav_model_execution',
+      'outcome_private_valuation_model_operation',
+      'outcome_private_valuation_model_request_binding',
       'outcome_source_capture_attempt',
       'outcome_source_capture_season',
       'outcome_import_row',

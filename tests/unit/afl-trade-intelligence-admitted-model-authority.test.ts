@@ -24,6 +24,7 @@ import {
   AflTradeAdmittedModelRunner,
   AflTradeAdmittedModelRunAuthorityService,
   createAflTradeModelRunOperationalAuthorization,
+  createAflTradePrivateValuationModelRunOperationalAuthorization,
   type AflTradeAdmittedModelRunEvidence,
   type AflTradeModelRunAuthorizationStore,
 } from '@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority';
@@ -1395,5 +1396,70 @@ describe('admitted AFL trade model authority contracts', () => {
         },
       })
     ).toThrow(/authority evidence/i);
+  });
+
+  it('creates exact local non-production authority through the fixed private valuation policy', () => {
+    const fixture = admittedRunFixture();
+    const policyAuthorization = createAflTradePrivateValuationModelRunOperationalAuthorization({
+      runIntentId: fixture.intent.intentId,
+      datasetId: fixture.intent.content.datasetId,
+      datasetAdmissionId: fixture.intent.content.datasetAdmissionId,
+      modelProtocolId: fixture.intent.content.modelProtocolId,
+      observationSetId: fixture.intent.content.observationSetId,
+      dispatchRequestId: `private-valuation-dispatch:${digest('d')}`,
+      substantiveOperationId: `private-valuation-model-operation:${digest('e')}`,
+      dispatchClaimId: `private-valuation-dispatch-claim:${digest('f')}`,
+      dispatchAttemptNumber: 1,
+      dispatchLeaseTokenSha256: digest('a'),
+      factualOutputId: `private-valuation-factual-output:${digest('1')}`,
+      hpnCalculationId: `hpn-pav-season:${digest('2')}`,
+      factualValuesSha256: digest('3'),
+      hpnValuesSha256: digest('4'),
+      authorizedAt: fixture.intent.content.startedAt,
+      validThrough: '2026-08-10T00:03:30.000Z',
+    });
+
+    expect(policyAuthorization.content).toMatchObject({
+      authorityBoundary: 'policy_owned_local_private_valuation_for_one_exact_model_run_intent',
+      principalRef: 'system:weekly-valuation-coordinator',
+      environment: 'non_production',
+      executionMode: 'local',
+      publicationEligible: false,
+      publicationProhibited: true,
+    });
+  });
+
+  it('does not let callers override the private valuation policy authorization', () => {
+    const fixture = admittedRunFixture();
+    const input = {
+      runIntentId: fixture.intent.intentId,
+      datasetId: fixture.intent.content.datasetId,
+      datasetAdmissionId: fixture.intent.content.datasetAdmissionId,
+      modelProtocolId: fixture.intent.content.modelProtocolId,
+      observationSetId: fixture.intent.content.observationSetId,
+      dispatchRequestId: `private-valuation-dispatch:${digest('d')}`,
+      substantiveOperationId: `private-valuation-model-operation:${digest('e')}`,
+      dispatchClaimId: `private-valuation-dispatch-claim:${digest('f')}`,
+      dispatchAttemptNumber: 1,
+      dispatchLeaseTokenSha256: digest('a'),
+      factualOutputId: `private-valuation-factual-output:${digest('1')}`,
+      hpnCalculationId: `hpn-pav-season:${digest('2')}`,
+      factualValuesSha256: digest('3'),
+      hpnValuesSha256: digest('4'),
+      authorizedAt: fixture.intent.content.startedAt,
+      validThrough: '2026-08-10T00:03:30.000Z',
+    };
+
+    const authorization = createAflTradePrivateValuationModelRunOperationalAuthorization({
+      ...input,
+      principalRef: 'caller-controlled-principal',
+      environment: 'production',
+    } as never);
+    expect(authorization.content).toMatchObject({
+      principalRef: 'system:weekly-valuation-coordinator',
+      environment: 'non_production',
+      executionMode: 'local',
+      publicationProhibited: true,
+    });
   });
 });
