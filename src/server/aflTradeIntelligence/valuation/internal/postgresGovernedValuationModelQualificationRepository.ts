@@ -662,8 +662,8 @@ export class PostgresGovernedValuationModelQualificationRepository {
       qualificationArtifact: input.qualificationArtifact,
     });
     return this.dependencies.client.transaction(async (transaction) => {
-      if (options?.dispatchClaimFence !== undefined) {
-        const fence = options.dispatchClaimFence;
+      const fence = options?.dispatchClaimFence;
+      if (fence !== undefined) {
         await transaction.query(
           `SELECT set_config('statly.private_valuation_request_id',$1,true),
                   set_config('statly.private_valuation_claim_id',$2,true),
@@ -677,11 +677,57 @@ export class PostgresGovernedValuationModelQualificationRepository {
         );
         await transaction.query('RESET ROLE');
       }
-      return registerQualificationWithinTransaction(
+      const result = await registerQualificationWithinTransaction(
         transaction,
         { ...input, qualification },
         nativeEvidence
       );
+      if (fence !== undefined) {
+        await transaction.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
+        const bound = await transaction.query(
+          `UPDATE outcome_private_valuation_model_operation operation SET
+             qualification_id=coalesce(operation.qualification_id,$3),
+             qualification_outcome=coalesce(operation.qualification_outcome,$4),
+             qualification_claim_id=coalesce(operation.qualification_claim_id,$2),
+             qualification_bound_at=coalesce(
+               operation.qualification_bound_at,
+               date_trunc('milliseconds',clock_timestamp())
+             )
+           FROM outcome_private_valuation_model_request_binding binding
+           WHERE binding.request_id=$1
+             AND binding.claim_id=$2
+             AND binding.operation_id=operation.operation_id
+             AND operation.scope_key=$5
+             AND operation.player_run_id=$6
+             AND operation.pick_run_id=$7
+             AND operation.pair_accepted_at IS NOT NULL
+             AND (
+               operation.qualification_id IS NULL
+               OR (
+                 operation.qualification_id=$3
+                 AND operation.qualification_outcome=$4
+                 AND operation.qualification_claim_id=$2
+               )
+             )`,
+          [
+            fence.requestId,
+            fence.claimId,
+            qualification.qualificationId,
+            qualification.content.outcome,
+            qualification.content.scopeKey,
+            qualification.content.player.runId,
+            qualification.content.pick.runId,
+          ]
+        );
+        await transaction.query('RESET ROLE');
+        if (bound.rowCount !== 1) {
+          throw new GovernedValuationModelQualificationRepositoryError(
+            'INTEGRITY_MISMATCH',
+            'Dispatch-bound qualification did not bind to its exact accepted operation.'
+          );
+        }
+      }
+      return result;
     });
   }
 

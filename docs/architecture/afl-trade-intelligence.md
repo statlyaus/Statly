@@ -1972,6 +1972,9 @@ and attempt rows through their owning PostgreSQL transactions; immutable artifac
 orphaned after a process failure but cannot acquire accepted authority. Concurrent requests may
 run for different scopes. Requests for the same scope claim serially; after the live claim ends, the
 next request can bind to and resume the same substantive operation without duplicating its components.
+The qualification transaction also binds its exact retained result to that substantive operation;
+failure to bind rolls back the qualification, Gate 3 records, work item, and current-pair advancement
+together.
 
 Acceptance also proves component ancestry rather than trusting the coordinator callback. The player
 component's admitted authorization must name the same request, substantive operation, claim attempt,

@@ -1627,12 +1627,52 @@ describe('governed model qualification PostgreSQL registry', () => {
           WHERE claim_id=$1`,
         [dispatchClaimId, liveThrough]
       );
+      await revivedClaim.query(
+        `UPDATE outcome_private_valuation_model_operation
+            SET pair_accepted_at=NULL
+          WHERE operation_id=$1`,
+        [dispatchOperation.operationId]
+      );
       await revivedClaim.query('COMMIT');
     } catch (error) {
       await revivedClaim.query('ROLLBACK');
       throw error;
     } finally {
       revivedClaim.release();
+    }
+    await expect(repository.register(fenced, { dispatchClaimFence })).rejects.toThrow(
+      'did not bind to its exact accepted operation'
+    );
+    await expect(
+      pool.query(
+        `SELECT
+           (SELECT count(*)::int
+              FROM outcome_governed_valuation_model_qualification
+             WHERE qualification_id=$1) AS qualification_count,
+           (SELECT count(*)::int
+              FROM outcome_current_governed_valuation_model_pair
+             WHERE scope_key=$2) AS current_pair_count`,
+        [fencedQualification.qualificationId, fencedQualification.content.scopeKey]
+      )
+    ).resolves.toMatchObject({
+      rows: [{ qualification_count: 0, current_pair_count: 0 }],
+    });
+    const restoredPair = await pool.connect();
+    try {
+      await restoredPair.query('BEGIN');
+      await restoredPair.query(`SET LOCAL session_replication_role='replica'`);
+      await restoredPair.query(
+        `UPDATE outcome_private_valuation_model_operation
+            SET pair_accepted_at=$2
+          WHERE operation_id=$1`,
+        [dispatchOperation.operationId, evaluatedAt]
+      );
+      await restoredPair.query('COMMIT');
+    } catch (error) {
+      await restoredPair.query('ROLLBACK');
+      throw error;
+    } finally {
+      restoredPair.release();
     }
     await expect(repository.register(fenced, { dispatchClaimFence })).resolves.toMatchObject({
       status: 'advanced',
@@ -1642,6 +1682,24 @@ describe('governed model qualification PostgreSQL registry', () => {
         revision: 1,
         qualificationId: fencedQualification.qualificationId,
       },
+    });
+    await expect(
+      pool.query(
+        `SELECT qualification_id,qualification_outcome,qualification_claim_id,
+                qualification_bound_at
+           FROM outcome_private_valuation_model_operation
+          WHERE operation_id=$1`,
+        [dispatchOperation.operationId]
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          qualification_id: fencedQualification.qualificationId,
+          qualification_outcome: 'qualified',
+          qualification_claim_id: dispatchClaimId,
+          qualification_bound_at: expect.any(Date),
+        },
+      ],
     });
   }, 120_000);
 });
