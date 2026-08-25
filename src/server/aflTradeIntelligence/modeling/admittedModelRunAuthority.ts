@@ -47,6 +47,7 @@ import {
   type AflTradeAcquisitionSpellMetric,
   aflTradeAcquisitionSpellMetricSchema,
 } from '../outcomes/acquisitionSpellMetricContracts';
+import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
 
 const utcInstantSchema = z.iso.datetime({ offset: true });
 
@@ -56,7 +57,7 @@ export const AFL_TRADE_MODEL_RUN_AUTHORIZATION_SCHEMA_VERSION =
 export const AFL_TRADE_MODEL_RUN_OPERATIONAL_AUTHORIZATION_SCHEMA_VERSION =
   'afl-trade-model-run-operational-authorization/v1' as const;
 
-const modelRunOperationalAuthorizationContentSchema = z
+const humanModelRunOperationalAuthorizationContentSchema = z
   .object({
     schemaVersion: z.literal(AFL_TRADE_MODEL_RUN_OPERATIONAL_AUTHORIZATION_SCHEMA_VERSION),
     operation: z.literal('execute_model_run'),
@@ -100,6 +101,52 @@ const modelRunOperationalAuthorizationContentSchema = z
     }
   });
 
+const privateValuationModelRunOperationalAuthorizationContentSchema = z
+  .object({
+    schemaVersion: z.literal(AFL_TRADE_MODEL_RUN_OPERATIONAL_AUTHORIZATION_SCHEMA_VERSION),
+    operation: z.literal('execute_model_run'),
+    authorityBoundary: z.literal(
+      'policy_owned_local_private_valuation_for_one_exact_model_run_intent'
+    ),
+    publicationEligible: z.literal(false),
+    publicationProhibited: z.literal(true),
+    environment: z.literal('non_production'),
+    executionMode: z.literal('local'),
+    runIntentId: aflTradeContentAddressedIdSchema('model-run-intent'),
+    datasetId: aflTradeContentAddressedIdSchema('dataset'),
+    datasetAdmissionId: aflTradeContentAddressedIdSchema('dataset-admission'),
+    modelProtocolId: aflTradeContentAddressedIdSchema('model-protocol'),
+    observationSetId: aflTradeContentAddressedIdSchema('player-observation-set'),
+    dispatchRequestId: aflTradeContentAddressedIdSchema('private-valuation-dispatch'),
+    substantiveOperationId: aflTradeContentAddressedIdSchema('private-valuation-model-operation'),
+    dispatchClaimId: aflTradeContentAddressedIdSchema('private-valuation-dispatch-claim'),
+    dispatchAttemptNumber: z.number().int().min(1).max(3),
+    dispatchLeaseTokenSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    factualOutputId: aflTradeContentAddressedIdSchema('private-valuation-factual-output'),
+    hpnCalculationId: aflTradeContentAddressedIdSchema('hpn-pav-season'),
+    factualValuesSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    hpnValuesSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    authorizedAt: utcInstantSchema,
+    validThrough: utcInstantSchema,
+    principalRef: z.literal(AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID),
+    role: z.literal('afl_trade_private_evaluation_coordinator'),
+  })
+  .strict()
+  .superRefine((authorization, context) => {
+    if (Date.parse(authorization.validThrough) <= Date.parse(authorization.authorizedAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['validThrough'],
+        message: 'Operational authorization requires a bounded positive execution window.',
+      });
+    }
+  });
+
+const modelRunOperationalAuthorizationContentSchema = z.discriminatedUnion('authorityBoundary', [
+  humanModelRunOperationalAuthorizationContentSchema,
+  privateValuationModelRunOperationalAuthorizationContentSchema,
+]);
+
 export const aflTradeModelRunOperationalAuthorizationSchema = z
   .object({
     receiptId: aflTradeContentAddressedIdSchema('architecture-operation-receipt'),
@@ -119,19 +166,55 @@ export const aflTradeModelRunOperationalAuthorizationSchema = z
 export type AflTradeModelRunOperationalAuthorization = z.infer<
   typeof aflTradeModelRunOperationalAuthorizationSchema
 >;
+export type AflTradeHumanModelRunOperationalAuthorization = Readonly<{
+  receiptId: string;
+  content: z.infer<typeof humanModelRunOperationalAuthorizationContentSchema>;
+}>;
 
 export function createAflTradeModelRunOperationalAuthorization(
   input: Omit<
-    z.input<typeof modelRunOperationalAuthorizationContentSchema>,
+    z.input<typeof humanModelRunOperationalAuthorizationContentSchema>,
     'schemaVersion' | 'operation' | 'authorityBoundary' | 'publicationEligible'
   >
-): AflTradeModelRunOperationalAuthorization {
-  const content = modelRunOperationalAuthorizationContentSchema.parse({
+): AflTradeHumanModelRunOperationalAuthorization {
+  const content = humanModelRunOperationalAuthorizationContentSchema.parse({
     ...input,
     schemaVersion: AFL_TRADE_MODEL_RUN_OPERATIONAL_AUTHORIZATION_SCHEMA_VERSION,
     operation: 'execute_model_run',
     authorityBoundary: 'human_operational_authorization_for_one_exact_model_run_intent',
     publicationEligible: false,
+  });
+  return {
+    receiptId: createAflTradeContentAddress('architecture-operation-receipt', content),
+    content,
+  };
+}
+
+export function createAflTradePrivateValuationModelRunOperationalAuthorization(
+  input: Omit<
+    z.input<typeof privateValuationModelRunOperationalAuthorizationContentSchema>,
+    | 'schemaVersion'
+    | 'operation'
+    | 'authorityBoundary'
+    | 'publicationEligible'
+    | 'publicationProhibited'
+    | 'environment'
+    | 'executionMode'
+    | 'principalRef'
+    | 'role'
+  >
+): AflTradeModelRunOperationalAuthorization {
+  const content = privateValuationModelRunOperationalAuthorizationContentSchema.parse({
+    ...input,
+    schemaVersion: AFL_TRADE_MODEL_RUN_OPERATIONAL_AUTHORIZATION_SCHEMA_VERSION,
+    operation: 'execute_model_run',
+    authorityBoundary: 'policy_owned_local_private_valuation_for_one_exact_model_run_intent',
+    publicationEligible: false,
+    publicationProhibited: true,
+    environment: 'non_production',
+    executionMode: 'local',
+    principalRef: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
+    role: 'afl_trade_private_evaluation_coordinator',
   });
   return aflTradeModelRunOperationalAuthorizationSchema.parse({
     receiptId: createAflTradeContentAddress('architecture-operation-receipt', content),
@@ -463,7 +546,7 @@ function operationalAuthorizationIsCurrent(
   evaluatedAt: string
 ): boolean {
   const content = authorization.content;
-  return (
+  const exactIntent =
     content.environment === intent.content.environment &&
     content.runIntentId === intent.intentId &&
     content.datasetId === intent.content.datasetId &&
@@ -471,8 +554,13 @@ function operationalAuthorizationIsCurrent(
     content.modelProtocolId === intent.content.modelProtocolId &&
     content.observationSetId === intent.content.observationSetId &&
     Date.parse(content.authorizedAt) <= Date.parse(intent.content.startedAt) &&
-    Date.parse(content.validThrough) > Date.parse(evaluatedAt)
-  );
+    Date.parse(content.validThrough) > Date.parse(evaluatedAt);
+  if (!exactIntent) return false;
+  return content.authorityBoundary ===
+    'human_operational_authorization_for_one_exact_model_run_intent'
+    ? true
+    : intent.content.job.initiatedBy === AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID &&
+        intent.content.job.workerIdentity === AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID;
 }
 
 function intentMatchesProtocol(

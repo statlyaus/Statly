@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
 import { PostgresAflTradePrivateValuationCaptureBindingRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationCaptureBindingRepository';
@@ -110,6 +110,41 @@ afterAll(async () => {
   }
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Capture-binding PostgreSQL cleanup failed.');
+  }
+});
+
+afterEach(async () => {
+  const connection = await outcomesPool.connect();
+  try {
+    await connection.query('BEGIN');
+    await connection.query('SET LOCAL ROLE afl_trade_private_valuation_scheduler_owner');
+    await connection.query(
+      `UPDATE outcome_private_valuation_dispatch_attempt attempt
+          SET finished_at=date_trunc('milliseconds',statement_timestamp()),
+              outcome='completed',
+              result_json=jsonb_build_object('state','unexpected_failure')
+         FROM outcome_private_valuation_dispatch_request request
+        WHERE request.status='claimed'
+          AND attempt.claim_id=request.claim_id
+          AND attempt.finished_at IS NULL`
+    );
+    await connection.query(
+      `UPDATE outcome_private_valuation_dispatch_request
+          SET status='completed',
+              completed_at=date_trunc('milliseconds',statement_timestamp()),
+              result_json=jsonb_build_object('state','unexpected_failure'),
+              claim_id=NULL,
+              lease_token_sha256=NULL,
+              lease_expires_at=NULL,
+              claimed_at=NULL
+        WHERE status='claimed'`
+    );
+    await connection.query('COMMIT');
+  } catch (error) {
+    await connection.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    connection.release();
   }
 });
 
@@ -299,15 +334,12 @@ describe.sequential('private valuation capture binding in PostgreSQL', () => {
         [requestId]
       );
       const guardedAcceptance = outcomesPool
-        .query(
-          `SELECT accept_outcome_private_valuation_dispatch_capture($1,$2,$3,$4)`,
-          [
-            requestId,
-            claimed.rows[0]!.claim_id,
-            leaseTokenSha256,
-            normalizationRunId,
-          ]
-        )
+        .query(`SELECT accept_outcome_private_valuation_dispatch_capture($1,$2,$3,$4)`, [
+          requestId,
+          claimed.rows[0]!.claim_id,
+          leaseTokenSha256,
+          normalizationRunId,
+        ])
         .then(
           () => ({ state: 'fulfilled' as const, error: null }),
           (error: unknown) => ({ state: 'rejected' as const, error })
@@ -351,6 +383,11 @@ describe.sequential('private valuation capture binding in PostgreSQL', () => {
       claim: { claimId: acceptedClaim!.claimId, leaseToken: acceptedClaim!.leaseToken },
       normalizationRunId,
     });
+    await schedule.reschedule({
+      claimId: acceptedClaim!.claimId,
+      leaseToken: acceptedClaim!.leaseToken,
+      state: 'transient_failure',
+    });
 
     const rejectedRequestId = await enqueueDispatch('capture-binding-during-field-map-change');
     const rejectedClaim = await schedule.claim(
@@ -386,13 +423,7 @@ describe.sequential('private valuation capture binding in PostgreSQL', () => {
           (error: unknown) => ({ state: 'rejected' as const, binding: null, error })
         );
 
-      await expect(
-        repository.accept({
-          request: acceptedClaim!.request,
-          claim: { claimId: acceptedClaim!.claimId, leaseToken: acceptedClaim!.leaseToken },
-          normalizationRunId,
-        })
-      ).resolves.toEqual(acceptedBinding);
+      await expect(repository.load(acceptedClaim!.request)).resolves.toEqual(acceptedBinding);
       await expect(
         Promise.race([
           guardedAcceptance.then(() => 'settled' as const),

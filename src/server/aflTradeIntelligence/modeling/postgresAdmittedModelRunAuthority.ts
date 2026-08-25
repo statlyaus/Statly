@@ -245,6 +245,11 @@ export class PostgresAflTradeAdmittedModelRunAuthority
     const operationalAuthorization = aflTradeModelRunOperationalAuthorizationSchema.parse(
       unparsed.operationalAuthorization
     );
+    const operationalAuthorityEvidenceId =
+      operationalAuthorization.content.authorityBoundary ===
+      'human_operational_authorization_for_one_exact_model_run_intent'
+        ? operationalAuthorization.content.authorityEvidence.id
+        : null;
     const runStartReceipts = unparsed.runStartEvaluationReceipts.map((receipt) =>
       aflTradeGate0AReceiptSchema.parse(receipt)
     );
@@ -278,7 +283,9 @@ export class PostgresAflTradeAdmittedModelRunAuthority
         `valuation-model-protocol:${protocol.protocolId}`,
         `valuation-model-intent:${intent.intentId}`,
         `valuation-model-operation:${operationalAuthorization.receiptId}`,
-        `operational-authority:${operationalAuthorization.content.authorityEvidence.id}`,
+        ...(operationalAuthorityEvidenceId === null
+          ? []
+          : [`operational-authority:${operationalAuthorityEvidenceId}`]),
       ]);
       const admissionResult = await transaction.query<AdmissionRow>(
         `SELECT admission.admission_json,admission.analytical_authority_receipt_id,
@@ -388,7 +395,7 @@ export class PostgresAflTradeAdmittedModelRunAuthority
           operationalAuthorization.content.authorizedAt,
           operationalAuthorization.content.validThrough,
           operationalAuthorization.content.principalRef,
-          operationalAuthorization.content.authorityEvidence.id,
+          operationalAuthorityEvidenceId,
           canonicalizeAflTradeJson(operationalAuthorization.content),
           canonicalizeAflTradeJson(operationalAuthorization),
         ],

@@ -62,7 +62,8 @@ beforeAll(async () => {
   ).match(
     /CREATE FUNCTION "outcome_afl_trade_canonical_json"[\s\S]*?\$\$ LANGUAGE plpgsql IMMUTABLE STRICT;/
   )?.[0];
-  if (canonicalFunction === undefined) throw new Error('Canonical JSON SQL function was not found.');
+  if (canonicalFunction === undefined)
+    throw new Error('Canonical JSON SQL function was not found.');
   await pool.query(canonicalFunction);
   await pool.query(`CREATE TABLE outcome_current_prepared_valuation_input_set (
     scope_key text PRIMARY KEY,prepared_input_set_id text NOT NULL,revision integer NOT NULL
@@ -88,6 +89,19 @@ beforeAll(async () => {
       'utf8'
     )
   );
+  const scopeSerializedClaim = readFileSync(
+    join(
+      process.cwd(),
+      'prisma/afl-trade-outcomes/migrations/0079_dispatch_bound_private_model_pair/migration.sql'
+    ),
+    'utf8'
+  ).match(
+    /CREATE OR REPLACE FUNCTION "claim_outcome_private_valuation_dispatch"[\s\S]*?END \$\$;/
+  )?.[0];
+  if (scopeSerializedClaim === undefined) {
+    throw new Error('Scope-serialized private valuation claim function was not found.');
+  }
+  await pool.query(scopeSerializedClaim);
 });
 
 afterAll(async () => {
@@ -108,12 +122,12 @@ beforeEach(async () => {
 
 describe('private valuation scheduling PostgreSQL boundary', () => {
   it('coalesces startup catch-up and retains newly-qualified immediate work after commit', async () => {
-    await expect(repository.enqueueStartupCatchUp('2026-06-03T03:00:00.000Z')).resolves.toHaveLength(
-      1
-    );
-    await expect(repository.enqueueStartupCatchUp('2026-07-22T03:00:00.000Z')).resolves.toHaveLength(
-      1
-    );
+    await expect(
+      repository.enqueueStartupCatchUp('2026-06-03T03:00:00.000Z')
+    ).resolves.toHaveLength(1);
+    await expect(
+      repository.enqueueStartupCatchUp('2026-07-22T03:00:00.000Z')
+    ).resolves.toHaveLength(1);
 
     await pool.query(`BEGIN`);
     await pool.query(
@@ -173,7 +187,12 @@ describe('private valuation scheduling PostgreSQL boundary', () => {
       dispatcher.dispatchOne(),
       dispatcher.dispatchOne(),
     ]);
-    expect(dispatched.every(({ state }) => state === 'completed')).toBe(true);
+    let completed = dispatched.filter(({ state }) => state === 'completed').length;
+    while (completed < 3) {
+      const next = await dispatcher.dispatchOne();
+      expect(next.state).toBe('completed');
+      completed += 1;
+    }
     expect(run).toHaveBeenCalledTimes(3);
     await expect(dispatcher.dispatchOne()).resolves.toEqual({ state: 'idle' });
     const retained = await pool.query<{ result_json: { state: string } }>(
@@ -186,6 +205,27 @@ describe('private valuation scheduling PostgreSQL boundary', () => {
       'already_current',
     ]);
     expect(first).toMatch(/^private-valuation-dispatch:/);
+  });
+
+  it('allows only one live dispatch claim per valuation scope', async () => {
+    await repository.enqueueAdHoc({
+      scopeKey: 'afl-men:2026-trades',
+      operationKey: 'scope-claim-a',
+    });
+    await repository.enqueueAdHoc({
+      scopeKey: 'afl-men:2026-trades',
+      operationKey: 'scope-claim-b',
+    });
+    const otherRepository = new PostgresAflTradePrivateValuationScheduleRepository(
+      createPgAflOutcomeSqlClient(pool)
+    );
+
+    const claims = await Promise.all([
+      repository.claim('scope-worker-a'),
+      otherRepository.claim('scope-worker-b'),
+    ]);
+
+    expect(claims.filter((claim) => claim !== null)).toHaveLength(1);
   });
 
   it('passes the exact retained request and live claim fence to the coordinator', async () => {
@@ -535,10 +575,11 @@ describe('private valuation scheduling PostgreSQL boundary', () => {
       await restricted.query('BEGIN');
       await restricted.query(`SET LOCAL ROLE afl_trade_private_evaluation_coordinator`);
       await expect(
-        restricted.query(
-          `SELECT complete_outcome_private_valuation_dispatch($1,$2,$3::jsonb)`,
-          [claim!.claimId, 'd'.repeat(64), JSON.stringify({ state: 'already_current' })]
-        )
+        restricted.query(`SELECT complete_outcome_private_valuation_dispatch($1,$2,$3::jsonb)`, [
+          claim!.claimId,
+          'd'.repeat(64),
+          JSON.stringify({ state: 'already_current' }),
+        ])
       ).rejects.toThrow('claim was lost');
       await restricted.query('ROLLBACK');
     } finally {
@@ -608,9 +649,21 @@ describe('private valuation scheduling PostgreSQL boundary', () => {
   }, 10_000);
 
   it('judges completion, reschedule, and heartbeat expiry after their row locks are acquired', async () => {
+    const scopes = [
+      'afl-men:2026-blocked-completion',
+      'afl-men:2026-blocked-reschedule',
+      'afl-men:2026-blocked-heartbeat',
+    ];
+    await pool.query(
+      `INSERT INTO outcome_current_prepared_valuation_input_set
+        (scope_key,prepared_input_set_id,revision)
+       SELECT scope_key,'prepared:'||ordinality,1
+         FROM unnest($1::text[]) WITH ORDINALITY AS scope(scope_key,ordinality)`,
+      [scopes]
+    );
     const requestIds = await Promise.all(
-      ['blocked-completion', 'blocked-reschedule', 'blocked-heartbeat'].map((operationKey) =>
-        repository.enqueueAdHoc({ scopeKey: 'afl-men:2026-trades', operationKey })
+      ['blocked-completion', 'blocked-reschedule', 'blocked-heartbeat'].map((operationKey, index) =>
+        repository.enqueueAdHoc({ scopeKey: scopes[index]!, operationKey })
       )
     );
     const tokenSha256s = ['1'.repeat(64), '2'.repeat(64), '3'.repeat(64)];

@@ -3,11 +3,10 @@ import { createHash } from 'node:crypto';
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { createAflTradePickPavPolicy } from '@/server/aflTradeIntelligence/modeling/pickOutcomeContracts';
-import {
-  computeAflTradePickPavModelExecutionOutputs,
-} from '@/server/aflTradeIntelligence/modeling/pickPavModelExecution';
+import { computeAflTradePickPavModelExecutionOutputs } from '@/server/aflTradeIntelligence/modeling/pickPavModelExecution';
 import { materializeAflTradePickPavObservationSet } from '@/server/aflTradeIntelligence/modeling/pickPavObservationService';
 import {
+  createDispatchBoundGovernedAflTradePickPavModelExecution,
   createGovernedAflTradePickPavModelExecution,
   governedAflTradePickPavModelExecutionSchema,
 } from '@/server/aflTradeIntelligence/modeling/governedPickPavModelExecution';
@@ -126,33 +125,31 @@ describe('governed pick-PAV model execution', () => {
     const set = observationSet();
     const retainedAt = '2015-01-03T00:00:00.000Z';
     const datasetId = addressed('dataset', 'governed-pick-dataset');
-    const datasetAdmissionId = addressed(
-      'dataset-admission',
-      'governed-pick-dataset-admission'
-    );
+    const datasetAdmissionId = addressed('dataset-admission', 'governed-pick-dataset-admission');
     const protocolId = addressed('model-protocol', 'governed-pick-protocol');
+    const outputs = computeAflTradePickPavModelExecutionOutputs({
+      observationSet: set,
+      benchmarkConfig: {
+        schemaVersion: 'afl-trade-pick-pav-distribution-benchmark-config/v1',
+        minimumBlockObservations: 1,
+        eligibility: 'mature_open_access_national_draft_training_observations',
+        informationWeight: 'eligible_selection_count',
+        smoother: 'weighted_non_increasing_isotonic',
+        sparseBlockMergePolicy: 'nearest_adjacent_fitted_mean_left_tie_break',
+        interpolation: 'left_block_carry_forward_within_training_domain',
+        extrapolation: 'prohibited',
+        estimatorStatus: 'benchmark_only_requires_temporal_validation_and_approval',
+      },
+      validationConfig: {
+        schemaVersion: 'afl-trade-pick-pav-validation-config/v1',
+        evaluatedAt: retainedAt,
+        minimumEligibleObservations: 3,
+        minimumPartitionObservations: 1,
+        nominalIntervalCoverage: 0.8,
+      },
+    });
     const execution = createGovernedAflTradePickPavModelExecution({
-      outputs: computeAflTradePickPavModelExecutionOutputs({
-        observationSet: set,
-        benchmarkConfig: {
-          schemaVersion: 'afl-trade-pick-pav-distribution-benchmark-config/v1',
-          minimumBlockObservations: 1,
-          eligibility: 'mature_open_access_national_draft_training_observations',
-          informationWeight: 'eligible_selection_count',
-          smoother: 'weighted_non_increasing_isotonic',
-          sparseBlockMergePolicy: 'nearest_adjacent_fitted_mean_left_tie_break',
-          interpolation: 'left_block_carry_forward_within_training_domain',
-          extrapolation: 'prohibited',
-          estimatorStatus: 'benchmark_only_requires_temporal_validation_and_approval',
-        },
-        validationConfig: {
-          schemaVersion: 'afl-trade-pick-pav-validation-config/v1',
-          evaluatedAt: retainedAt,
-          minimumEligibleObservations: 3,
-          minimumPartitionObservations: 1,
-          nominalIntervalCoverage: 0.8,
-        },
-      }),
+      outputs,
       completedAt: '2015-01-03T00:00:01.000Z',
       authority: {
         datasetId,
@@ -186,10 +183,37 @@ describe('governed pick-PAV model execution', () => {
     });
     expect(execution.content).not.toHaveProperty('grade');
 
-    const {
-      qualificationStatus: _qualificationStatus,
-      ...successorWithoutQualificationStatus
-    } = execution.content;
+    const dispatchExecution = createDispatchBoundGovernedAflTradePickPavModelExecution({
+      outputs,
+      completedAt: '2015-01-03T00:00:01.000Z',
+      authority: {
+        datasetId,
+        datasetArtifact: execution.content.datasetArtifact,
+        datasetAdmissionId,
+        datasetAdmissionArtifact: execution.content.datasetAdmissionArtifact,
+        datasetAdmissionGateLedgerRevision: 7,
+        protocolId,
+        protocolArtifact: execution.content.protocolArtifact,
+      },
+      privateInput: {
+        requestId: addressed('private-valuation-dispatch', 'request'),
+        operationId: addressed('private-valuation-model-operation', 'operation'),
+        claimId: addressed('private-valuation-dispatch-claim', 'claim'),
+        attemptNumber: 2,
+        leaseTokenSha256: sha('lease'),
+        factualOutputId: addressed('private-valuation-factual-output', 'factual'),
+        hpnCalculationId: addressed('hpn-pav-season', 'calculation'),
+        factualValuesSha256: sha('factual-values'),
+        hpnValuesSha256: sha('hpn-values'),
+      },
+    });
+    expect(dispatchExecution.content).toMatchObject({
+      schemaVersion: 'afl-trade-pick-pav-model-execution/v4',
+      privateInput: { attemptNumber: 2 },
+    });
+
+    const { qualificationStatus: _qualificationStatus, ...successorWithoutQualificationStatus } =
+      execution.content;
     const legacyContent = {
       ...successorWithoutQualificationStatus,
       schemaVersion: 'afl-trade-pick-pav-model-execution/v2' as const,

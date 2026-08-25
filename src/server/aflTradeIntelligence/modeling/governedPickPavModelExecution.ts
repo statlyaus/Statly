@@ -62,93 +62,93 @@ function refineGovernedExecution(
   execution: z.infer<typeof sharedGovernedExecutionContentSchema>,
   context: z.RefinementCtx
 ) {
-    const observationSet = execution.observationSet;
-    if (
-      execution.observationSetId !== observationSet.observationSetId ||
-      execution.observationSetSha256 !== observationSet.content.observationSetSha256 ||
-      observationSet.content.environment !== 'non_production' ||
-      execution.competition !== observationSet.content.competition ||
-      execution.releaseId !== observationSet.content.releaseId ||
-      execution.policyId !== observationSet.content.policy.policyId ||
-      execution.methodId !== observationSet.content.policy.content.methodId ||
-      execution.valueUnit !== observationSet.content.policy.content.outcomeValueUnit
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['observationSet'],
-        message: 'Governed pick execution ancestry must match one non-production observation set.',
-      });
-      return;
-    }
+  const observationSet = execution.observationSet;
+  if (
+    execution.observationSetId !== observationSet.observationSetId ||
+    execution.observationSetSha256 !== observationSet.content.observationSetSha256 ||
+    observationSet.content.environment !== 'non_production' ||
+    execution.competition !== observationSet.content.competition ||
+    execution.releaseId !== observationSet.content.releaseId ||
+    execution.policyId !== observationSet.content.policy.policyId ||
+    execution.methodId !== observationSet.content.policy.content.methodId ||
+    execution.valueUnit !== observationSet.content.policy.content.outcomeValueUnit
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['observationSet'],
+      message: 'Governed pick execution ancestry must match one non-production observation set.',
+    });
+    return;
+  }
 
-    const evidenceArtifacts = [
-      execution.datasetArtifact,
-      execution.datasetAdmissionArtifact,
-      execution.protocolArtifact,
-    ];
-    if (
-      new Set(evidenceArtifacts.map(({ artifactId }) => artifactId)).size !==
-        evidenceArtifacts.length ||
-      evidenceArtifacts.some(
-        ({ createdAt }) => Date.parse(createdAt) > Date.parse(execution.completedAt)
-      )
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['datasetArtifact'],
-        message: 'Governed pick execution requires distinct authority artifacts retained in time.',
-      });
-      return;
-    }
+  const evidenceArtifacts = [
+    execution.datasetArtifact,
+    execution.datasetAdmissionArtifact,
+    execution.protocolArtifact,
+  ];
+  if (
+    new Set(evidenceArtifacts.map(({ artifactId }) => artifactId)).size !==
+      evidenceArtifacts.length ||
+    evidenceArtifacts.some(
+      ({ createdAt }) => Date.parse(createdAt) > Date.parse(execution.completedAt)
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['datasetArtifact'],
+      message: 'Governed pick execution requires distinct authority artifacts retained in time.',
+    });
+    return;
+  }
 
-    const createdAt = Date.parse(observationSet.content.createdAt);
-    const finalTestEvaluationStartedAt = Date.parse(execution.finalTestEvaluationStartedAt);
-    const completedAt = Date.parse(execution.completedAt);
-    if (
-      finalTestEvaluationStartedAt < createdAt ||
-      completedAt < finalTestEvaluationStartedAt ||
-      execution.validationConfig.evaluatedAt !== execution.finalTestEvaluationStartedAt
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['finalTestEvaluationStartedAt'],
-        message: 'Governed final-test evaluation chronology is invalid.',
-      });
-      return;
-    }
+  const createdAt = Date.parse(observationSet.content.createdAt);
+  const finalTestEvaluationStartedAt = Date.parse(execution.finalTestEvaluationStartedAt);
+  const completedAt = Date.parse(execution.completedAt);
+  if (
+    finalTestEvaluationStartedAt < createdAt ||
+    completedAt < finalTestEvaluationStartedAt ||
+    execution.validationConfig.evaluatedAt !== execution.finalTestEvaluationStartedAt
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['finalTestEvaluationStartedAt'],
+      message: 'Governed final-test evaluation chronology is invalid.',
+    });
+    return;
+  }
 
-    try {
-      const expectedBenchmark = fitAflTradePickPavDistributionBenchmark(
-        observationSet,
-        execution.benchmarkConfig
-      );
-      const expectedReport = validateAflTradePickPavDistributionBenchmark(
-        observationSet,
-        expectedBenchmark,
-        execution.validationConfig
-      );
-      if (
-        canonicalizeAflTradeJson(expectedBenchmark) !==
-          canonicalizeAflTradeJson(execution.benchmark) ||
-        canonicalizeAflTradeJson(expectedReport) !==
-          canonicalizeAflTradeJson(execution.validationReport)
-      ) {
-        context.addIssue({
-          code: 'custom',
-          path: ['benchmark'],
-          message: 'Governed pick execution must retain its exactly re-derived model outputs.',
-        });
-      }
-    } catch (error) {
+  try {
+    const expectedBenchmark = fitAflTradePickPavDistributionBenchmark(
+      observationSet,
+      execution.benchmarkConfig
+    );
+    const expectedReport = validateAflTradePickPavDistributionBenchmark(
+      observationSet,
+      expectedBenchmark,
+      execution.validationConfig
+    );
+    if (
+      canonicalizeAflTradeJson(expectedBenchmark) !==
+        canonicalizeAflTradeJson(execution.benchmark) ||
+      canonicalizeAflTradeJson(expectedReport) !==
+        canonicalizeAflTradeJson(execution.validationReport)
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['benchmark'],
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Governed pick execution outputs could not be re-derived.',
+        message: 'Governed pick execution must retain its exactly re-derived model outputs.',
       });
     }
+  } catch (error) {
+    context.addIssue({
+      code: 'custom',
+      path: ['benchmark'],
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Governed pick execution outputs could not be re-derived.',
+    });
+  }
 }
 
 const legacyGovernedExecutionContentSchema = sharedGovernedExecutionContentSchema
@@ -171,10 +171,39 @@ const governedExecutionContentSchema = sharedGovernedExecutionContentSchema
   .strict()
   .superRefine(refineGovernedExecution);
 
+const dispatchBoundPrivateInputSchema = z
+  .object({
+    requestId: aflTradeContentAddressedIdSchema('private-valuation-dispatch'),
+    operationId: aflTradeContentAddressedIdSchema('private-valuation-model-operation'),
+    claimId: aflTradeContentAddressedIdSchema('private-valuation-dispatch-claim'),
+    attemptNumber: z.number().int().min(1).max(3),
+    leaseTokenSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    factualOutputId: aflTradeContentAddressedIdSchema('private-valuation-factual-output'),
+    hpnCalculationId: aflTradeContentAddressedIdSchema('hpn-pav-season'),
+    factualValuesSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    hpnValuesSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+  })
+  .strict();
+
+const dispatchBoundGovernedExecutionContentSchema = sharedGovernedExecutionContentSchema
+  .extend({
+    schemaVersion: z.literal('afl-trade-pick-pav-model-execution/v4'),
+    authorityBoundary: z.literal(AUTHORITY_BOUNDARY),
+    qualificationStatus: z.literal('automated_qualification_pending'),
+    privateInput: dispatchBoundPrivateInputSchema,
+    limitation: z.literal(LIMITATION),
+  })
+  .strict()
+  .superRefine(refineGovernedExecution);
+
 export const governedAflTradePickPavModelExecutionSchema = z
   .object({
     executionId: aflTradeContentAddressedIdSchema('pick-pav-model-execution'),
-    content: z.union([legacyGovernedExecutionContentSchema, governedExecutionContentSchema]),
+    content: z.union([
+      legacyGovernedExecutionContentSchema,
+      governedExecutionContentSchema,
+      dispatchBoundGovernedExecutionContentSchema,
+    ]),
   })
   .strict()
   .superRefine((execution, context) => {
@@ -191,7 +220,7 @@ export type GovernedAflTradePickPavModelExecution = z.infer<
   typeof governedAflTradePickPavModelExecutionSchema
 >;
 
-export function createGovernedAflTradePickPavModelExecution(input: {
+type GovernedExecutionFactoryInput = Readonly<{
   readonly outputs: ReturnType<typeof computeAflTradePickPavModelExecutionOutputs>;
   readonly completedAt: string;
   readonly authority: Readonly<{
@@ -203,10 +232,11 @@ export function createGovernedAflTradePickPavModelExecution(input: {
     protocolId: string;
     protocolArtifact: z.input<typeof aflTradeArtifactRefSchema>;
   }>;
-}): GovernedAflTradePickPavModelExecution {
+}>;
+
+function sharedGovernedExecutionContent(input: GovernedExecutionFactoryInput) {
   const observationSet = aflTradePickPavObservationSetSchema.parse(input.outputs.observationSet);
-  const content = governedExecutionContentSchema.parse({
-    schemaVersion: 'afl-trade-pick-pav-model-execution/v3',
+  return {
     authorityBoundary: AUTHORITY_BOUNDARY,
     publicationEligible: false,
     qualificationStatus: 'automated_qualification_pending',
@@ -227,6 +257,31 @@ export function createGovernedAflTradePickPavModelExecution(input: {
     benchmark: input.outputs.benchmark,
     validationReport: input.outputs.validationReport,
     limitation: LIMITATION,
+  } as const;
+}
+
+export function createGovernedAflTradePickPavModelExecution(
+  input: GovernedExecutionFactoryInput
+): GovernedAflTradePickPavModelExecution {
+  const content = governedExecutionContentSchema.parse({
+    schemaVersion: 'afl-trade-pick-pav-model-execution/v3',
+    ...sharedGovernedExecutionContent(input),
+  });
+  return governedAflTradePickPavModelExecutionSchema.parse({
+    executionId: createAflTradeContentAddress('pick-pav-model-execution', content),
+    content,
+  });
+}
+
+export function createDispatchBoundGovernedAflTradePickPavModelExecution(
+  input: GovernedExecutionFactoryInput & {
+    readonly privateInput: z.input<typeof dispatchBoundPrivateInputSchema>;
+  }
+): GovernedAflTradePickPavModelExecution {
+  const content = dispatchBoundGovernedExecutionContentSchema.parse({
+    schemaVersion: 'afl-trade-pick-pav-model-execution/v4',
+    ...sharedGovernedExecutionContent(input),
+    privateInput: input.privateInput,
   });
   return governedAflTradePickPavModelExecutionSchema.parse({
     executionId: createAflTradeContentAddress('pick-pav-model-execution', content),

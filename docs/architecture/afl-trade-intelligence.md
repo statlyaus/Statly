@@ -1185,22 +1185,25 @@ Model execution is a second, separately durable seam. A registered
 set, executable intent, current Gate 2 decision, fresh Gate 0A model-training receipts and retained
 bytes for every dataset, protocol and runtime artifact are authenticated before one short-lived
 `afl-trade-model-run-authorization/v1` is issued. The start boundary also requires a distinct
-`afl-trade-model-run-operational-authorization/v1` receipt from a human operational principal. That
-receipt authorizes `execute_model_run` for one exact intent, dataset, admission, protocol and
-observation set; it cannot reuse the earlier dataset-materialization authorization or authorize a
-different attempt. The receipt must reference a separately retained and currently approved governed
-operator-authority evidence record whose environment, scope, competition, season coverage, principal,
-role and validity cover the exact admitted rows. The model-run writer may consume that trust root but
-cannot create or approve it. Database time owns both authorization windows and expiry.
+`afl-trade-model-run-operational-authorization/v1` receipt for one exact intent, dataset, admission,
+protocol and observation set; it cannot reuse the earlier dataset-materialization authorization or
+authorize a different attempt. The normal path requires a human operational principal and a separately
+retained, currently approved governed operator-authority evidence record whose environment, scope,
+competition, season coverage, principal, role and validity cover the exact admitted rows. The fixed
+non-production dispatch-bound private-valuation path instead derives operational authority from the
+current live dispatch claim and its exact retained factual and HPN input binding. Callers cannot select
+that policy principal, role, environment, execution mode or publication posture. The model-run writer
+may consume either authenticated trust root but cannot create or approve one. Database time owns both
+authorization windows and expiry.
 The authorization is unique per intent and consumed once before execution; the completed
 `afl-trade-model-run/v3` is append-only and binds the same dataset, admission, protocol, observation
 set, intent and authorization. PostgreSQL stores each immutable parent and enforces exact replay,
 current analytical authority, exact current Gate 2 artifacts, the complete admitted Gate 0A source
-set and request/use parity, their exclusive rights and revalidation deadlines, one governed human
+set and request/use parity, their exclusive rights and revalidation deadlines, one governed
 operational receipt, one authorization, one consumption and one completed run. A
 failure after consumption is persisted as an immutable failed run and may also raise an operational
 incident, but the same intent cannot be run again. A new attempt requires a new content-addressed
-intent and a new human operational receipt.
+intent and a new exact operational receipt from the applicable human or dispatch-bound policy path.
 
 This durable authority path remains private and unmounted. It authorizes no model merely because the
 records exist, and it does not fit coefficients, select a champion, issue Gate 3 approval, calculate a
@@ -1946,10 +1949,54 @@ activation authority. Missing or stale source custody, map approval, identity re
 factual-universe coverage, or method authority fails closed before downstream authority changes. The
 current public release pointer and publication Gates remain untouched.
 
+The next boundary composes the existing admitted player runner, governed pick execution, and governed
+qualification service for the exact factual output and finalized HPN calculation returned by that
+preparation. One content-addressed substantive operation excludes dispatch identity, trigger time,
+request identity, capture identity, and other fresh custody metadata. Different requests with the same
+factual values, HPN values, model targets, and qualification policy therefore converge on one model
+pair. PostgreSQL retains only two new bindings: immutable request-to-exact-input lineage and monotonic
+substantive-operation progress. It does not introduce another retry ledger, component-run store,
+qualification store, or current-pair pointer.
+
+The dispatch attempt remains the sole retry number and is capped at three by the scheduling boundary.
+A successful component is retained independently, so a transient failure of the other component does
+not rerun it. Deterministic, stale-authority, and unavailable outcomes return without blind retry.
+Restart reconstructs progress after either component, pair acceptance, or qualification; a failed
+qualification remains immutable evidence and cannot advance the existing current-pair authority.
+The dispatch terminal `already_current` means no authority change is required because the same or a
+newer qualified pair is already current; it never identifies an older retained qualification as the
+current pointer.
+Every operation or authority mutation is fenced by the request's current live claim. Dispatch-bound
+pick execution, component registration, and qualification/current-pair advancement hold the request
+and attempt rows through their owning PostgreSQL transactions; immutable artifact writes may be
+orphaned after a process failure but cannot acquire accepted authority. Concurrent requests may
+run for different scopes. Requests for the same scope claim serially; after the live claim ends, the
+next request can bind to and resume the same substantive operation without duplicating its components.
+The qualification transaction also binds its exact retained result to that substantive operation;
+failure to bind rolls back the qualification, Gate 3 records, work item, and current-pair advancement
+together.
+
+Acceptance also proves component ancestry rather than trusting the coordinator callback. The player
+component's admitted authorization must name the same request, substantive operation, claim attempt,
+lease digest, factual output, HPN calculation, and substantive input digests. The governed pick
+execution uses the dispatch-bound v4 envelope with the same fields; retained v2/v3 executions remain
+valid for their existing flows but cannot satisfy this boundary. Qualification binding verifies the
+retained pair, outcome, scope, and the operation's exact content-addressed qualification policy.
+
+Automated player execution uses the admitted runner's existing rights, dataset, protocol, custody,
+and publication checks. The only new operational-authority branch is a fixed non-production local
+policy for `system:weekly-valuation-coordinator`; callers cannot select its principal, role,
+environment, execution mode, or publication posture. The human-authorized path remains unchanged.
+Operational authority recording and final run-authorization issuance independently recheck the live
+dispatch claim, attempt, lease window, and exact input binding, so a stale claimant cannot begin new
+model spend.
+Neither the exact-input loader nor either new binding reads or writes a public release or publication
+pointer.
+
 This is still not a complete new-game-data pipeline. The deployed weekly runner continues to consume
-whatever exact prepared-v3 head is current. Model observation rebuild, bounded model execution,
-automatic qualification handoff, and prepared-v3 activation still need to be composed after HPN
-preparation before the worker can run raw data through to recalculation without manual orchestration.
+whatever exact prepared-v3 head is current. Observation rebuild and prepared-v3 activation still need
+to be composed around this dispatch-bound model-pair coordinator before the worker can run raw data
+through to recalculation without manual orchestration.
 
 A structurally valid fixture report always retains `publicationReady: false` and the remaining
 external blockers: a real historical-data run, component-model calibration exit criteria, downstream
