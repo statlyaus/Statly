@@ -1091,7 +1091,7 @@ FOR EACH ROW EXECUTE FUNCTION "validate_outcome_private_valuation_model_operatio
 CREATE TRIGGER "outcome_private_valuation_model_operation_no_delete"
 BEFORE DELETE ON "outcome_private_valuation_model_operation"
 FOR EACH ROW EXECUTE FUNCTION "reject_outcome_private_valuation_dispatch_delete"();
-CREATE TRIGGER "outcome_private_valuation_model_request_binding_no_update_or_delete"
+CREATE TRIGGER "outcome_private_model_request_binding_no_write"
 BEFORE UPDATE OR DELETE ON "outcome_private_valuation_model_request_binding"
 FOR EACH ROW EXECUTE FUNCTION "reject_outcome_private_valuation_dispatch_delete"();
 

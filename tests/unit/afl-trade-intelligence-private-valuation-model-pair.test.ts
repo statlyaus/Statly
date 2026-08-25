@@ -562,6 +562,35 @@ describe('private valuation dispatch-bound model pair', () => {
     ]);
   });
 
+  it('rejects a repository no-op instead of qualifying an unaccepted pair', async () => {
+    const fixture = coordinator();
+    const acceptPair = fixture.repository.acceptPair.bind(fixture.repository);
+    fixture.repository.acceptPair = async (input) => ({
+      ...(await acceptPair(input)),
+      pairAccepted: false,
+    });
+
+    await expect(
+      fixture.value.prepare({ requestId: exactInput().requestId, claim })
+    ).rejects.toThrow('Private valuation pair was not accepted with the exact retained runs.');
+  });
+
+  it('rejects a repository no-op instead of returning a null qualification identity', async () => {
+    const fixture = coordinator();
+    const bindQualification = fixture.repository.bindQualification.bind(fixture.repository);
+    fixture.repository.bindQualification = async (input) => ({
+      ...(await bindQualification(input)),
+      qualificationId: null,
+      qualificationOutcome: null,
+    });
+
+    await expect(
+      fixture.value.prepare({ requestId: exactInput().requestId, claim })
+    ).rejects.toThrow(
+      'Private valuation qualification was not bound to the accepted pair exactly once.'
+    );
+  });
+
   it('retains a successful player output when the pick execution fails transiently', async () => {
     const fixture = coordinator({ pickResults: ['transient_failure', 'completed'] });
     const first = await fixture.value.prepare({ requestId: exactInput().requestId, claim });

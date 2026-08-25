@@ -1005,7 +1005,7 @@ describe('durable PostgreSQL model-run authority', () => {
         });
       await policyClient.query('SAVEPOINT stale_policy_input');
       await expect(insertPolicyOperationalAuthorization(staleInputAuthorization)).rejects.toThrow(
-        /input|ancestry|invalid/i
+        'Model-run operational authorization is invalid or misbound'
       );
       await policyClient.query('ROLLBACK TO SAVEPOINT stale_policy_input');
 
@@ -1024,7 +1024,9 @@ describe('durable PostgreSQL model-run authority', () => {
         [policyClaimId, expiredClaimedAt, expiredLeaseAt]
       );
       await policyClient.query(`SET LOCAL session_replication_role='origin'`);
-      await expect(insertPolicyOperationalAuthorization()).rejects.toThrow(/claim|invalid/i);
+      await expect(insertPolicyOperationalAuthorization()).rejects.toThrow(
+        'Private valuation dispatch request lookup lost its live claim fence'
+      );
       await policyClient.query('ROLLBACK TO SAVEPOINT expired_policy_claim');
       await policyClient.query(`SET LOCAL session_replication_role='origin'`);
       await expect(insertPolicyOperationalAuthorization()).resolves.toMatchObject({ rowCount: 1 });
@@ -1085,7 +1087,9 @@ describe('durable PostgreSQL model-run authority', () => {
         [policyRequestId, replacementClaimId, hash('0')]
       );
       await policyClient.query(`SET LOCAL session_replication_role='origin'`);
-      await expect(insertPolicyAuthorization()).rejects.toThrow(/claim|stale|misbound/i);
+      await expect(insertPolicyAuthorization()).rejects.toThrow(
+        'Private valuation dispatch request lookup lost its live claim fence'
+      );
       await policyClient.query('ROLLBACK TO SAVEPOINT reclaimed_policy_claim');
       await policyClient.query(`SET LOCAL session_replication_role='origin'`);
       await expect(insertPolicyAuthorization()).resolves.toMatchObject({ rowCount: 1 });

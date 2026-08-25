@@ -1422,6 +1422,7 @@ describe('admitted AFL trade model authority contracts', () => {
     expect(policyAuthorization.content).toMatchObject({
       authorityBoundary: 'policy_owned_local_private_valuation_for_one_exact_model_run_intent',
       principalRef: 'system:weekly-valuation-coordinator',
+      role: 'afl_trade_private_evaluation_coordinator',
       environment: 'non_production',
       executionMode: 'local',
       publicationEligible: false,
@@ -1453,12 +1454,18 @@ describe('admitted AFL trade model authority contracts', () => {
     const authorization = createAflTradePrivateValuationModelRunOperationalAuthorization({
       ...input,
       principalRef: 'caller-controlled-principal',
+      role: 'afl_trade_model_run_operator',
       environment: 'production',
+      executionMode: 'remote',
+      publicationEligible: true,
+      publicationProhibited: false,
     } as never);
     expect(authorization.content).toMatchObject({
       principalRef: 'system:weekly-valuation-coordinator',
+      role: 'afl_trade_private_evaluation_coordinator',
       environment: 'non_production',
       executionMode: 'local',
+      publicationEligible: false,
       publicationProhibited: true,
     });
   });

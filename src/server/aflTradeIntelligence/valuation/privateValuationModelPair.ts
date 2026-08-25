@@ -278,6 +278,15 @@ export function createAflTradePrivateValuationModelPairCoordinator(dependencies:
           })
         );
       }
+      if (
+        !state.pairAccepted ||
+        state.playerRunId !== playerRunId ||
+        state.pickRunId !== pickRunId
+      ) {
+        throw new TypeError(
+          'Private valuation pair was not accepted with the exact retained runs.'
+        );
+      }
       const qualificationExecution = await dependencies.qualify({
         exactInput,
         operation: state.operation,
@@ -308,6 +317,14 @@ export function createAflTradePrivateValuationModelPairCoordinator(dependencies:
           claim,
         })
       );
+      if (
+        state.qualificationId !== qualification.qualificationId ||
+        state.qualificationOutcome !== qualification.outcome
+      ) {
+        throw new TypeError(
+          'Private valuation qualification was not bound to the accepted pair exactly once.'
+        );
+      }
       return {
         state:
           state.qualificationOutcome === 'qualified'
@@ -315,7 +332,7 @@ export function createAflTradePrivateValuationModelPairCoordinator(dependencies:
             : ('qualification_failed' as const),
         operationId,
         attemptNumber: state.attemptNumber,
-        qualificationId: state.qualificationId!,
+        qualificationId: state.qualificationId,
       };
     },
   };

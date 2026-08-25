@@ -220,7 +220,7 @@ export type GovernedAflTradePickPavModelExecution = z.infer<
   typeof governedAflTradePickPavModelExecutionSchema
 >;
 
-export function createGovernedAflTradePickPavModelExecution(input: {
+type GovernedExecutionFactoryInput = Readonly<{
   readonly outputs: ReturnType<typeof computeAflTradePickPavModelExecutionOutputs>;
   readonly completedAt: string;
   readonly authority: Readonly<{
@@ -232,10 +232,11 @@ export function createGovernedAflTradePickPavModelExecution(input: {
     protocolId: string;
     protocolArtifact: z.input<typeof aflTradeArtifactRefSchema>;
   }>;
-}): GovernedAflTradePickPavModelExecution {
+}>;
+
+function sharedGovernedExecutionContent(input: GovernedExecutionFactoryInput) {
   const observationSet = aflTradePickPavObservationSetSchema.parse(input.outputs.observationSet);
-  const content = governedExecutionContentSchema.parse({
-    schemaVersion: 'afl-trade-pick-pav-model-execution/v3',
+  return {
     authorityBoundary: AUTHORITY_BOUNDARY,
     publicationEligible: false,
     qualificationStatus: 'automated_qualification_pending',
@@ -256,6 +257,15 @@ export function createGovernedAflTradePickPavModelExecution(input: {
     benchmark: input.outputs.benchmark,
     validationReport: input.outputs.validationReport,
     limitation: LIMITATION,
+  } as const;
+}
+
+export function createGovernedAflTradePickPavModelExecution(
+  input: GovernedExecutionFactoryInput
+): GovernedAflTradePickPavModelExecution {
+  const content = governedExecutionContentSchema.parse({
+    schemaVersion: 'afl-trade-pick-pav-model-execution/v3',
+    ...sharedGovernedExecutionContent(input),
   });
   return governedAflTradePickPavModelExecutionSchema.parse({
     executionId: createAflTradeContentAddress('pick-pav-model-execution', content),
@@ -263,44 +273,15 @@ export function createGovernedAflTradePickPavModelExecution(input: {
   });
 }
 
-export function createDispatchBoundGovernedAflTradePickPavModelExecution(input: {
-  readonly outputs: ReturnType<typeof computeAflTradePickPavModelExecutionOutputs>;
-  readonly completedAt: string;
-  readonly authority: Readonly<{
-    datasetId: string;
-    datasetArtifact: z.input<typeof aflTradeArtifactRefSchema>;
-    datasetAdmissionId: string;
-    datasetAdmissionArtifact: z.input<typeof aflTradeArtifactRefSchema>;
-    datasetAdmissionGateLedgerRevision: number;
-    protocolId: string;
-    protocolArtifact: z.input<typeof aflTradeArtifactRefSchema>;
-  }>;
-  readonly privateInput: z.input<typeof dispatchBoundPrivateInputSchema>;
-}): GovernedAflTradePickPavModelExecution {
-  const observationSet = aflTradePickPavObservationSetSchema.parse(input.outputs.observationSet);
+export function createDispatchBoundGovernedAflTradePickPavModelExecution(
+  input: GovernedExecutionFactoryInput & {
+    readonly privateInput: z.input<typeof dispatchBoundPrivateInputSchema>;
+  }
+): GovernedAflTradePickPavModelExecution {
   const content = dispatchBoundGovernedExecutionContentSchema.parse({
     schemaVersion: 'afl-trade-pick-pav-model-execution/v4',
-    authorityBoundary: AUTHORITY_BOUNDARY,
-    publicationEligible: false,
-    qualificationStatus: 'automated_qualification_pending',
-    environment: 'non_production',
-    competition: observationSet.content.competition,
-    ...input.authority,
-    observationSetId: observationSet.observationSetId,
-    observationSetSha256: observationSet.content.observationSetSha256,
-    releaseId: observationSet.content.releaseId,
-    policyId: observationSet.content.policy.policyId,
-    methodId: observationSet.content.policy.content.methodId,
-    valueUnit: observationSet.content.policy.content.outcomeValueUnit,
-    finalTestEvaluationStartedAt: input.outputs.validationConfig.evaluatedAt,
-    completedAt: input.completedAt,
-    observationSet,
-    benchmarkConfig: input.outputs.benchmarkConfig,
-    validationConfig: input.outputs.validationConfig,
-    benchmark: input.outputs.benchmark,
-    validationReport: input.outputs.validationReport,
+    ...sharedGovernedExecutionContent(input),
     privateInput: input.privateInput,
-    limitation: LIMITATION,
   });
   return governedAflTradePickPavModelExecutionSchema.parse({
     executionId: createAflTradeContentAddress('pick-pav-model-execution', content),

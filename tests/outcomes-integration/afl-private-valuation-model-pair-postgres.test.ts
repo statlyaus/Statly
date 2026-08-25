@@ -1005,7 +1005,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
            (SELECT count(*)::int FROM outcome_private_valuation_model_operation
              WHERE operation_id=$1) AS operation_count,
            (SELECT count(*)::int FROM outcome_private_valuation_model_request_binding
-             WHERE operation_id=$1) AS binding_count,
+             WHERE operation_id=$1 AND request_id=ANY($2::text[])) AS binding_count,
            (SELECT array_agg(request.trigger_kind ORDER BY request.trigger_kind)
               FROM outcome_private_valuation_model_request_binding binding
               JOIN outcome_private_valuation_dispatch_request request
@@ -1023,7 +1023,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       rows: [
         {
           operation_count: 1,
-          binding_count: 4,
+          binding_count: 3,
           trigger_kinds: ['ad_hoc', 'model_qualified', 'weekly'],
           pair_accepted: true,
           qualification_outcome: 'qualified',

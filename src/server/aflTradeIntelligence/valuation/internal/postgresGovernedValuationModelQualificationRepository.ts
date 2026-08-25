@@ -675,7 +675,7 @@ export class PostgresGovernedValuationModelQualificationRepository {
           `SELECT load_outcome_private_valuation_dispatch_request_for_claim($1,$2,$3)`,
           [fence.requestId, fence.claimId, fence.leaseTokenSha256]
         );
-        await transaction.query('RESET ROLE');
+        await transaction.query('SET LOCAL ROLE NONE');
       }
       const result = await registerQualificationWithinTransaction(
         transaction,
