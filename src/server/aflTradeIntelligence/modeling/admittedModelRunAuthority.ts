@@ -421,6 +421,7 @@ export type AflTradeAdmittedModelRunAuthorityResult =
       intent: AflTradeModelRunIntent;
       protocol: AflTradePlayerContributionModelProtocolV2;
       observationSet: AflTradePlayerObservationSetV2;
+      executableArtifacts: readonly { artifactId: string; bytes: Uint8Array }[];
       blockers: readonly [];
     }
   | {
@@ -812,6 +813,9 @@ function executableArtifactsMatch(
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
+    ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
+      ? []
+      : [protocol.content.pointInTimeFeatureValuesArtifact]),
     ...protocol.content.validationPlan.baselineDefinitionArtifacts,
     ...protocol.content.validationPlan.metricDefinitionArtifacts,
     protocol.content.validationPlan.intervalCalibrationArtifact,
@@ -989,6 +993,7 @@ export class AflTradeAdmittedModelRunAuthorityService {
       intent: intent.data,
       protocol: protocol.data,
       observationSet: evidence.observationSet,
+      executableArtifacts: evidence.executableArtifacts,
       blockers: [],
     };
   }
@@ -1000,6 +1005,7 @@ export interface AflTradeAuthorizedModelExecutor {
     authorization: AflTradeModelRunAuthorization;
     protocol: AflTradePlayerContributionModelProtocolV2;
     observationSet: AflTradePlayerObservationSetV2;
+    executableArtifacts: readonly { artifactId: string; bytes: Uint8Array }[];
   }): Promise<AflTradeAuthorizedModelRunCompletion>;
 }
 
@@ -1072,6 +1078,7 @@ export class AflTradeAdmittedModelRunner {
         authorization: authorized.authorization,
         protocol: authorized.protocol,
         observationSet: authorized.observationSet,
+        executableArtifacts: authorized.executableArtifacts,
       });
     } catch (cause) {
       try {

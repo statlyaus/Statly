@@ -63,9 +63,7 @@ export class PostgresAflTradePrivateValuationScheduleRepository {
         const latest = planAflTradePrivateValuationStartupCatchUp({
           now: observedAt,
           lastScheduledFor:
-            row.last_scheduled_for === null
-              ? null
-              : new Date(row.last_scheduled_for).toISOString(),
+            row.last_scheduled_for === null ? null : new Date(row.last_scheduled_for).toISOString(),
         });
         if (latest === null) continue;
         const result = await transaction.query<{ readonly request_id: string }>(
@@ -106,14 +104,14 @@ export class PostgresAflTradePrivateValuationScheduleRepository {
     return expected;
   }
 
-  async claim(workerId: string, requestId?: string): Promise<
-    | {
-        readonly request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>;
-        readonly claimId: string;
-        readonly leaseToken: string;
-      }
-    | null
-  > {
+  async claim(
+    workerId: string,
+    requestId?: string
+  ): Promise<{
+    readonly request: z.infer<typeof aflTradePrivateValuationDispatchRequestSchema>;
+    readonly claimId: string;
+    readonly leaseToken: string;
+  } | null> {
     const worker = idSchema.parse(workerId);
     const leaseToken = randomBytes(32).toString('hex');
     const result = await this.client.transaction(async (transaction) => {
@@ -132,7 +130,9 @@ export class PostgresAflTradePrivateValuationScheduleRepository {
     return { request, claimId: row.claim_id, leaseToken };
   }
 
-  async load(requestId: string): Promise<
+  async load(
+    requestId: string
+  ): Promise<
     | { readonly status: 'pending' | 'claimed'; readonly result: null }
     | { readonly status: 'completed'; readonly result: unknown }
     | null
@@ -162,11 +162,14 @@ export class PostgresAflTradePrivateValuationScheduleRepository {
   }): Promise<void> {
     await this.client.transaction(async (transaction) => {
       await transaction.query(`SET LOCAL ROLE ${EXECUTION_DATABASE_ROLE}`);
-      await transaction.query(`SELECT complete_outcome_private_valuation_dispatch($1,$2,$3::jsonb)`, [
-        idSchema.parse(input.claimId),
-        sha256(input.leaseToken),
-        JSON.stringify(terminalResultSchema.parse(input.result)),
-      ]);
+      await transaction.query(
+        `SELECT complete_outcome_private_valuation_dispatch($1,$2,$3::jsonb)`,
+        [
+          idSchema.parse(input.claimId),
+          sha256(input.leaseToken),
+          JSON.stringify(terminalResultSchema.parse(input.result)),
+        ]
+      );
     });
   }
 
@@ -267,7 +270,11 @@ export function createPostgresAflTradePrivateValuationDispatcher(dependencies: {
         leaseToken: claim.leaseToken,
         result: terminal,
       });
-      return { state: 'completed' as const, requestId: claim.request.requestId, result };
+      return {
+        state: 'completed' as const,
+        requestId: claim.request.requestId,
+        result: terminal,
+      };
     } finally {
       clearInterval(heartbeatTimer);
       await heartbeatInFlight;
@@ -275,10 +282,8 @@ export function createPostgresAflTradePrivateValuationDispatcher(dependencies: {
   };
   return {
     enqueueStartupCatchUp: (now: string) => dependencies.repository.enqueueStartupCatchUp(now),
-    enqueueAdHoc: (input: {
-      readonly scopeKey: string;
-      readonly operationKey: string;
-    }) => dependencies.repository.enqueueAdHoc(input),
+    enqueueAdHoc: (input: { readonly scopeKey: string; readonly operationKey: string }) =>
+      dependencies.repository.enqueueAdHoc(input),
     repairCurrent: (scopeKey: string, reason: string, repairOperationId: string) =>
       dependencies.runner.repairCurrent(scopeKey, reason, repairOperationId),
     async dispatchOne(): Promise<

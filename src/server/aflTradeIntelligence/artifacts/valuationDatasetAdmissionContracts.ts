@@ -179,7 +179,7 @@ const factualInputBaseShape = {
   recordedAt: utcInstantSchema,
 };
 
-const factualInputSchema = z
+export const factualInputSchema = z
   .discriminatedUnion('kind', [
     z
       .object({

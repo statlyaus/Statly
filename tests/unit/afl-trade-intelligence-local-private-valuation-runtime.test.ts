@@ -8,6 +8,9 @@ const composition = vi.hoisted(() => ({
   createCohortRunner: vi.fn(),
   createModelPairRunner: vi.fn(),
   createDispatcher: vi.fn(),
+  createAdmittedPlayerExecutor: vi.fn(),
+  createDispatchBoundPlayerExecutor: vi.fn(),
+  admittedModelRunner: vi.fn(),
 }));
 
 vi.mock('@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient', () => ({
@@ -33,6 +36,13 @@ vi.mock('@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortR
 }));
 vi.mock('@/server/aflTradeIntelligence/valuation/postgresPrivateValuationModelPair', () => ({
   createPostgresAflTradePrivateValuationModelPairDispatchRunner: composition.createModelPairRunner,
+  createAflTradeDispatchBoundAdmittedPlayerExecutor: composition.createDispatchBoundPlayerExecutor,
+}));
+vi.mock('@/server/aflTradeIntelligence/modeling/admittedPlayerContributionCandidate', () => ({
+  createAflTradeAdmittedPlayerContributionExecutor: composition.createAdmittedPlayerExecutor,
+}));
+vi.mock('@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority', () => ({
+  AflTradeAdmittedModelRunner: composition.admittedModelRunner,
 }));
 vi.mock('@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling', () => ({
   PostgresAflTradePrivateValuationScheduleRepository: class {},
@@ -80,6 +90,12 @@ describe('local private valuation runtime composition', () => {
       run: vi.fn(),
       repairCurrent: input.repairCurrent,
     }));
+    composition.createAdmittedPlayerExecutor.mockReturnValue({ execute: vi.fn() });
+    composition.admittedModelRunner.mockImplementation(() => ({ run: vi.fn() }));
+    composition.createDispatchBoundPlayerExecutor.mockImplementation((input) => ({
+      execute: vi.fn(),
+      source: input,
+    }));
     composition.createDispatcher.mockReturnValue(runtimeSurface);
   });
 
@@ -121,6 +137,61 @@ describe('local private valuation runtime composition', () => {
       claim,
     });
     expect(composition.runPrivate).toHaveBeenCalledWith({ request, claim });
+  });
+
+  it('constructs the admitted player through the authorized dispatch boundary and durable clock', async () => {
+    const clock = { now: vi.fn(async () => '2026-08-26T11:00:00.000Z') };
+    const admittedPlayer = {
+      authority: {} as never,
+      authorizationStore: {} as never,
+      clock,
+      completedRunStore: {} as never,
+      failureRecorder: {} as never,
+      authorityPreparation: { prepare: vi.fn() },
+      prepareRun: vi.fn(),
+      registerComponent: vi.fn(),
+    };
+    const { playerExecutor: _playerExecutor, ...withoutOverride } = upstream();
+
+    createLocalAflTradePrivateValuationRuntime({
+      pool: {} as never,
+      artifactRoot: '/tmp/statly-private-runtime-admitted-player',
+      upstream: { ...withoutOverride, admittedPlayer },
+    });
+
+    const executorInput = composition.createAdmittedPlayerExecutor.mock.calls[0]?.[0];
+    await expect(executorInput.now()).resolves.toBe('2026-08-26T11:00:00.000Z');
+    expect(clock.now).toHaveBeenCalledOnce();
+    expect(composition.admittedModelRunner).toHaveBeenCalledWith(
+      admittedPlayer.authority,
+      expect.anything(),
+      admittedPlayer.authorizationStore,
+      admittedPlayer.clock,
+      admittedPlayer.completedRunStore,
+      admittedPlayer.failureRecorder
+    );
+    expect(composition.createDispatchBoundPlayerExecutor).toHaveBeenCalledWith({
+      admittedRunner: expect.anything(),
+      authorityPreparation: admittedPlayer.authorityPreparation,
+      prepareRun: admittedPlayer.prepareRun,
+      registerComponent: admittedPlayer.registerComponent,
+    });
+  });
+
+  it('defers a missing admitted player blocker until the player dispatch is attempted', async () => {
+    const { playerExecutor: _playerExecutor, ...withoutPlayer } = upstream();
+
+    const runtime = createLocalAflTradePrivateValuationRuntime({
+      pool: {} as never,
+      artifactRoot: '/tmp/statly-private-runtime-missing-admitted-player',
+      upstream: withoutPlayer,
+    });
+
+    expect(runtime).toEqual(runtimeSurface);
+    const modelPairInput = composition.createModelPairRunner.mock.calls[0]?.[0];
+    await expect(modelPairInput.playerExecutor.execute({} as never)).rejects.toThrow(
+      'Local private valuation execution is not configured: an admitted player composition or dispatch-bound player adapter is required.'
+    );
   });
 
   it('does not enter the cohort after prepared authority becomes stale', async () => {

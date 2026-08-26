@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { canonicalizeAflTradeJson } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
 import { loadGovernedScalarTransform } from '@/server/aflTradeIntelligence/modeling/admittedPlayerContributionCandidate';
 
 const transform = {
@@ -9,18 +10,10 @@ const transform = {
   weights: { brownlow_votes: 2, coaches_votes: 1.5, games: 1, goals: 0.5 },
 };
 
-function repository(reference: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>) {
-  const bytes = new TextEncoder().encode(JSON.stringify(transform));
+function executableArtifact(reference: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>) {
   return {
-    assurance: 'local_non_production_filesystem' as const,
-    artifactClass: 'derived_private' as const,
-    custodyProfile: null,
-    async putIfAbsent() {
-      return { status: 'stored' as const, reference };
-    },
-    async loadExact() {
-      return { reference, bytes };
-    },
+    artifactId: reference.artifactId,
+    bytes: new TextEncoder().encode(canonicalizeAflTradeJson(transform)),
   };
 }
 
@@ -34,13 +27,12 @@ describe('admitted player contribution candidate', () => {
       },
     } as never;
 
-    await expect(
+    expect(
       loadGovernedScalarTransform({
         protocol,
-        artifactRepository: repository(reference),
-        maximumArtifactBytes: 1024,
+        executableArtifacts: [executableArtifact(reference)],
       })
-    ).resolves.toEqual(transform);
+    ).toEqual(transform);
   });
 
   it('rejects a transform whose governed unit differs from the protocol', async () => {
@@ -52,12 +44,11 @@ describe('admitted player contribution candidate', () => {
       },
     } as never;
 
-    await expect(
+    expect(() =>
       loadGovernedScalarTransform({
         protocol,
-        artifactRepository: repository(reference),
-        maximumArtifactBytes: 1024,
+        executableArtifacts: [executableArtifact(reference)],
       })
-    ).rejects.toThrow('does not match the model value unit');
+    ).toThrow('does not match the model value unit');
   });
 });

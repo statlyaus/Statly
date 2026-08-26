@@ -33,6 +33,7 @@ const artifact = (name: string, createdAt: string) =>
 
 export function createAflTradeGateDecisionFixture(input: {
   gate: AflTradeGateCode;
+  environment?: 'test_fixture' | 'non_production';
   decisionKey: string;
   affectedArtifacts?: readonly AflTradeGovernedArtifactRef[];
   scopeDimensions?: ReadonlyArray<{ name: string; values: readonly string[] }>;
@@ -51,7 +52,7 @@ export function createAflTradeGateDecisionFixture(input: {
     gate: input.gate,
     decisionKey: input.decisionKey,
     version: 1,
-    environment: 'test_fixture' as const,
+    environment: input.environment ?? 'test_fixture',
     scope,
     proposal: 'Approve only this fabricated factual-release fixture.',
     alternativesConsidered: ['Keep the fabricated release inactive.'],
@@ -75,10 +76,13 @@ export function createAflTradeGateDecisionFixture(input: {
     gate: input.gate,
     decisionKey: input.decisionKey,
     version: 1,
-    environment: 'test_fixture' as const,
+    environment: input.environment ?? 'test_fixture',
     scope,
     state: 'approved' as const,
-    authorityKind: 'fixture' as const,
+    authorityKind:
+      input.environment === 'non_production'
+        ? ('external_human_record' as const)
+        : ('fixture' as const),
     accountableOwner: 'fixture-owner',
     decidedBy: 'fixture-owner',
     reviewers: [],

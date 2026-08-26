@@ -233,17 +233,23 @@ describe('private valuation scheduling PostgreSQL boundary', () => {
       scopeKey: 'afl-men:2026-trades',
       operationKey: 'exact-claimed-request',
     });
-    const run = vi.fn(async () => ({ state: 'already_current' as const }));
+    const run = vi.fn(async () => ({
+      state: 'already_current' as const,
+      nonterminalDetail: 'must-not-diverge-from-retained-replay',
+    }));
     const dispatcher = createPostgresAflTradePrivateValuationDispatcher({
       repository,
       runner: { run, repairCurrent: vi.fn() },
       workerId: 'system:weekly-valuation-coordinator',
     });
 
-    await expect(dispatcher.dispatchRequest(requestId)).resolves.toMatchObject({
+    const first = await dispatcher.dispatchRequest(requestId);
+    expect(first).toEqual({
       state: 'completed',
       requestId,
+      result: { state: 'already_current' },
     });
+    await expect(dispatcher.dispatchRequest(requestId)).resolves.toEqual(first);
 
     expect(run).toHaveBeenCalledOnce();
     expect(run).toHaveBeenCalledWith({

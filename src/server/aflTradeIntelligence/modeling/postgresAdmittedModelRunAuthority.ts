@@ -176,6 +176,9 @@ function executableReferences(
     protocol.content.contributionAndCensoringPolicy.unavailableObservationTreatmentArtifact,
     protocol.content.contributionAndCensoringPolicy.censoringDefinitionArtifact,
     protocol.content.scalarValueTransformArtifact,
+    ...(protocol.content.pointInTimeFeatureValuesArtifact === undefined
+      ? []
+      : [protocol.content.pointInTimeFeatureValuesArtifact]),
     ...protocol.content.validationPlan.baselineDefinitionArtifacts,
     ...protocol.content.validationPlan.metricDefinitionArtifacts,
     protocol.content.validationPlan.intervalCalibrationArtifact,
