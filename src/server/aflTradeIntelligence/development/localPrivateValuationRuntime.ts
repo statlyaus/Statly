@@ -17,6 +17,7 @@ import {
   createPostgresAflTradePrivateValuationDispatcher,
 } from '../valuation/postgresPrivateValuationScheduling';
 import { createLocalAflTradePrivateDerivedArtifactRepository } from './localFileConditionalObjectStore';
+import { createLocalAflTradePostgresAdmittedPlayerAuthority } from './localPostgresAdmittedPlayerAuthority';
 
 const MAXIMUM_ARTIFACT_BYTES = 4 * 1024 * 1024;
 const MISSING_ADMITTED_PLAYER_CONFIGURATION =
@@ -39,6 +40,9 @@ type LocalPrivateValuationUpstream = Omit<
       readonly clock: ConstructorParameters<typeof AflTradeAdmittedModelRunner>[3];
       readonly completedRunStore: ConstructorParameters<typeof AflTradeAdmittedModelRunner>[4];
       readonly failureRecorder: ConstructorParameters<typeof AflTradeAdmittedModelRunner>[5];
+      readonly postgresAuthority?: Parameters<
+        typeof createLocalAflTradePostgresAdmittedPlayerAuthority
+      >[0];
     };
   }> &
   Omit<
@@ -87,9 +91,20 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
             cohortRunner.repairCurrent(scopeKey, reason, repairOperationId),
         }
       : (() => {
+          const admittedPlayer =
+            input.upstream.admittedPlayer === undefined
+              ? undefined
+              : input.upstream.admittedPlayer.postgresAuthority === undefined
+                ? input.upstream.admittedPlayer
+                : {
+                    ...input.upstream.admittedPlayer,
+                    ...createLocalAflTradePostgresAdmittedPlayerAuthority(
+                      input.upstream.admittedPlayer.postgresAuthority
+                    ),
+                  };
           const playerExecutor =
             input.upstream.playerExecutor ??
-            (input.upstream.admittedPlayer === undefined
+            (admittedPlayer === undefined
               ? {
                   execute: async () => {
                     throw new TypeError(MISSING_ADMITTED_PLAYER_CONFIGURATION);
@@ -97,20 +112,20 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
                 }
               : createAflTradeDispatchBoundAdmittedPlayerExecutor({
                   admittedRunner: new AflTradeAdmittedModelRunner(
-                    input.upstream.admittedPlayer.authority,
+                    admittedPlayer.authority,
                     createAflTradeAdmittedPlayerContributionExecutor({
                       artifactRepository: artifacts,
                       maximumArtifactBytes: MAXIMUM_ARTIFACT_BYTES,
-                      now: () => input.upstream!.admittedPlayer!.clock.now(),
+                      now: () => admittedPlayer.clock.now(),
                     }),
-                    input.upstream.admittedPlayer.authorizationStore,
-                    input.upstream.admittedPlayer.clock,
-                    input.upstream.admittedPlayer.completedRunStore,
-                    input.upstream.admittedPlayer.failureRecorder
+                    admittedPlayer.authorizationStore,
+                    admittedPlayer.clock,
+                    admittedPlayer.completedRunStore,
+                    admittedPlayer.failureRecorder
                   ),
-                  authorityPreparation: input.upstream.admittedPlayer.authorityPreparation,
-                  prepareRun: input.upstream.admittedPlayer.prepareRun,
-                  registerComponent: input.upstream.admittedPlayer.registerComponent,
+                  authorityPreparation: admittedPlayer.authorityPreparation,
+                  prepareRun: admittedPlayer.prepareRun,
+                  registerComponent: admittedPlayer.registerComponent,
                 }));
           const cohortCoordinator = createPostgresAflTradePrivateCurrentValuationCohortCoordinator({
             client,
