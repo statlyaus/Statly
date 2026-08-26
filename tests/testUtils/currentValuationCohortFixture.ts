@@ -4,19 +4,40 @@ import { createAflTradeContentAddress } from '@/server/aflTradeIntelligence/arti
 import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 
 const digest = (character: string) => character.repeat(64);
-const artifact = (character: string) => ({
-  artifactId: `artifact:${digest(character)}`,
-  contentSha256: digest(character),
-  storageUri: `artifact://sha256/${digest(character)}`,
-  mediaType: 'application/json',
-  byteLength: 256,
-  createdAt: '2026-08-20T08:00:00.000Z',
-});
+const fixtureArtifactDocuments = new Map<
+  string,
+  {
+    readonly reference: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+    readonly document: unknown;
+  }
+>();
+const artifact = (character: string) =>
+  (() => {
+    const document = {
+      schemaVersion: 'current-valuation-cohort-fixture-artifact/v1',
+      label: character,
+    };
+    const reference = createAflTradeCanonicalJsonArtifactRef(document, '2026-08-20T08:00:00.000Z');
+    fixtureArtifactDocuments.set(reference.artifactId, { reference, document });
+    return reference;
+  })();
 
 export function createAflTradeCurrentValuationBundleFixture(input: {
   readonly scopeKey: string;
   readonly playerRunId: string;
   readonly pickRunId: string;
+  readonly componentAuthority?: Readonly<{
+    player: Readonly<{
+      protocolId: string;
+      datasetId: string;
+      gate3DecisionId: string;
+    }>;
+    pick: Readonly<{
+      protocolId: string;
+      datasetId: string;
+      gate3DecisionId: string;
+    }>;
+  }>;
 }) {
   const content = {
     schemaVersion: 'afl-trade-valuation-input-bundle/v1' as const,
@@ -29,18 +50,20 @@ export function createAflTradeCurrentValuationBundleFixture(input: {
       {
         role: 'player_contribution_and_availability' as const,
         modelKind: 'player_contribution_and_availability' as const,
-        protocolId: `model-protocol:${digest('1')}`,
+        protocolId: input.componentAuthority?.player.protocolId ?? `model-protocol:${digest('1')}`,
         runId: input.playerRunId,
-        datasetId: `dataset:${digest('2')}`,
-        gate3DecisionId: `gate-decision:${digest('3')}`,
+        datasetId: input.componentAuthority?.player.datasetId ?? `dataset:${digest('2')}`,
+        gate3DecisionId:
+          input.componentAuthority?.player.gate3DecisionId ?? `gate-decision:${digest('3')}`,
       },
       {
         role: 'draft_pick_and_future_pick_distribution' as const,
         modelKind: 'draft_pick_and_future_pick_distribution' as const,
-        protocolId: `model-protocol:${digest('4')}`,
+        protocolId: input.componentAuthority?.pick.protocolId ?? `model-protocol:${digest('4')}`,
         runId: input.pickRunId,
-        datasetId: `dataset:${digest('5')}`,
-        gate3DecisionId: `gate-decision:${digest('6')}`,
+        datasetId: input.componentAuthority?.pick.datasetId ?? `dataset:${digest('5')}`,
+        gate3DecisionId:
+          input.componentAuthority?.pick.gate3DecisionId ?? `gate-decision:${digest('6')}`,
       },
     ],
     viewPolicy: {
@@ -94,6 +117,7 @@ export function createAflTradeCurrentValuationBundleFixture(input: {
       valuationInputBundle,
       content.createdAt
     ),
+    artifactDocuments: Array.from(fixtureArtifactDocuments.values()),
   };
 }
 
@@ -135,7 +159,7 @@ export function createAflTradeCurrentValuationCohortFixture() {
     valuationInputBundleId: bundle.valuationInputBundleId,
     valuationInputBundleArtifact: bundle.valuationInputBundleArtifact,
     capturedAt: '2026-08-21T09:00:00.000Z',
-  } as const;
+  };
   const preparedInputSet = createAflTradePreparedValuationInputSet({
     schemaVersion: 'afl-trade-prepared-valuation-input-set/v3',
     environment: 'non_production',
@@ -152,12 +176,14 @@ export function createAflTradeCurrentValuationCohortFixture() {
     valuationInputBundleId: context.valuationInputBundleId,
     valuationInputBundleArtifact: context.valuationInputBundleArtifact,
     releaseTradeIds: context.releaseTradeIds,
-    entries: [{
-      tradeId: 'trade-a',
-      state: 'ready',
-      materializationManifestId: `private-evaluation-materialization-manifest:${digest('d')}`,
-      materializationManifestArtifact: artifact('e'),
-    }],
+    entries: [
+      {
+        tradeId: 'trade-a',
+        state: 'ready',
+        materializationManifestId: `private-evaluation-materialization-manifest:${digest('d')}`,
+        materializationManifestArtifact: artifact('e'),
+      },
+    ],
     tradeCount: 1,
     readyCount: 1,
     blockedCount: 0,

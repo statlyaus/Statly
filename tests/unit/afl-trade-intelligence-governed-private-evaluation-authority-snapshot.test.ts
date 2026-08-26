@@ -176,8 +176,11 @@ describe('governed private evaluation authority snapshot', () => {
       blockers: [],
     });
     const tampered = structuredClone(retained);
-    tampered.snapshot.content.calculationAuthority.playerModelRunId =
-      `model-run:${'e'.repeat(64)}`;
+    const syntheticAuthority = tampered.snapshot.content.calculationAuthority;
+    if (!('playerModelRunId' in syntheticAuthority)) {
+      throw new Error('Expected synthetic-ready authority.');
+    }
+    syntheticAuthority.playerModelRunId = `model-run:${'e'.repeat(64)}`;
     expect(() => authenticateGovernedPrivateEvaluationAuthorityInspection(tampered)).toThrow();
   });
 
@@ -262,20 +265,73 @@ describe('governed private evaluation authority snapshot', () => {
     expect(authenticateGovernedPrivateEvaluationAuthorityInspection(retained)).toEqual(retained);
 
     const tampered = structuredClone(retained);
-    tampered.inspection.content.calculationAuthority.privateValuationDecisionRevision = 4;
+    const reviewedAuthority = tampered.inspection.content.calculationAuthority;
+    if (!('privateValuationDecisionRevision' in reviewedAuthority)) {
+      throw new Error('Expected reviewed private authority.');
+    }
+    reviewedAuthority.privateValuationDecisionRevision = 4;
     expect(() => authenticateGovernedPrivateEvaluationAuthorityInspection(tampered)).toThrow();
   });
 
-  it('rejects substituted non-production authority and non-canonical component roles', () => {
-    const retained = createReadyGovernedPrivateEvaluationAuthorityInspection(
-      readyAuthorityInput()
+  it('pins ready v3 private authority to the exact dispatch-bound factual and model tuple', () => {
+    const legacy = readyAuthorityInput();
+    const qualifiedComponents = legacy.components.map((component) => ({
+      ...component,
+      qualificationId: `model-qualification:${'a'.repeat(64)}`,
+      qualificationPolicyVersion: `model-qualification-policy:${'b'.repeat(64)}`,
+    }));
+    const privateAuthority = {
+      dispatchRequestId: `private-valuation-dispatch:${'1'.repeat(64)}`,
+      factualOutputId: `private-valuation-factual-output:${'2'.repeat(64)}`,
+      hpnCalculationId: `hpn-pav-season:${'3'.repeat(64)}`,
+      modelOperationId: `private-valuation-model-operation:${'4'.repeat(64)}`,
+      modelQualificationId: `model-qualification:${'a'.repeat(64)}`,
+      modelQualificationWorkId: `model-qualification-work:${'5'.repeat(64)}`,
+      modelQualificationRevision: 3,
+      playerRunId: qualifiedComponents[0]!.runId,
+      pickRunId: qualifiedComponents[1]!.runId,
+    } as const;
+    const retained = createReadyGovernedPrivateEvaluationAuthorityInspectionV3({
+      selector: legacy.selector,
+      capturedAt: legacy.capturedAt,
+      validThrough: legacy.validThrough,
+      head: legacy.head,
+      lastTransitionId: legacy.lastTransitionId,
+      preparationAuthority: 'dispatch_bound_private_factual_output',
+      privateAuthority,
+      preparedInputHeadRevision: 4,
+      preparedInputSetId: legacy.preparedInputSetId,
+      factualReleaseId: legacy.factualReleaseId,
+      materializationManifestId: `private-evaluation-materialization-manifest:${'0'.repeat(64)}`,
+      materializationManifestArtifact: artifact('private-materialization-manifest'),
+      valuationInputBundleId: legacy.valuationInputBundleId,
+      valuationInputBundleArtifact: legacy.valuationInputBundleArtifact,
+      gateLedgerRevision: legacy.gateLedgerRevision,
+      components: qualifiedComponents,
+    });
+
+    expect(retained.snapshot.content.calculationAuthority).toMatchObject({
+      state: 'ready',
+      preparationAuthority: 'dispatch_bound_private_factual_output',
+      privateAuthority,
+      preparedInputHeadRevision: 4,
+      preparedInputSetId: legacy.preparedInputSetId,
+    });
+    expect('activeFactualReleaseRevision' in retained.snapshot.content.calculationAuthority).toBe(
+      false
     );
+    expect(authenticateGovernedPrivateEvaluationAuthorityInspection(retained)).toEqual(retained);
+  });
+
+  it('rejects substituted non-production authority and non-canonical component roles', () => {
+    const retained = createReadyGovernedPrivateEvaluationAuthorityInspection(readyAuthorityInput());
     const substituted = structuredClone(retained);
-    substituted.inspection.content.calculationAuthority.inputTraceId =
-      `private-evaluation-input-trace:${'0'.repeat(64)}`;
-    expect(() =>
-      authenticateGovernedPrivateEvaluationAuthorityInspection(substituted)
-    ).toThrow();
+    const authenticatedAuthority = substituted.inspection.content.calculationAuthority;
+    if (!('inputTraceId' in authenticatedAuthority)) {
+      throw new Error('Expected authenticated calculation authority.');
+    }
+    authenticatedAuthority.inputTraceId = `private-evaluation-input-trace:${'0'.repeat(64)}`;
+    expect(() => authenticateGovernedPrivateEvaluationAuthorityInspection(substituted)).toThrow();
 
     const reordered = readyAuthorityInput();
     reordered.components.reverse();
@@ -290,8 +346,8 @@ describe('governed private evaluation authority snapshot', () => {
     delete (unqualified.components[1] as { qualificationId?: string }).qualificationId;
     delete (unqualified.components[1] as { qualificationPolicyVersion?: string })
       .qualificationPolicyVersion;
-    expect(() =>
-      createReadyGovernedPrivateEvaluationAuthorityInspection(unqualified)
-    ).toThrow(/qualification custody/i);
+    expect(() => createReadyGovernedPrivateEvaluationAuthorityInspection(unqualified)).toThrow(
+      /qualification custody/i
+    );
   });
 });

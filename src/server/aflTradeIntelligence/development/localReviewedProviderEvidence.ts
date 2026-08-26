@@ -364,6 +364,13 @@ async function loadCaptureEvidence(transaction: AflOutcomeSqlTransaction): Promi
           OR (capture.provider='afl_tables'
               AND capture.capability_id='afl-tables-results'
               AND capture.anchor_season_year=2026))
+        AND EXISTS (
+          SELECT 1
+            FROM outcome_provider_normalization_run run
+           WHERE run.capture_id=capture.capture_id
+             AND run.status IN ('staged','needs_review')
+             AND run.finalized_at IS NOT NULL
+        )
       ORDER BY capture.capture_id
       FOR KEY SHARE OF capture,custody,rights`
   );

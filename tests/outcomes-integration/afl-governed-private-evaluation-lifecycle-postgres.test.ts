@@ -60,14 +60,10 @@ const selector = {
 const fixtureGenerationCreatedAt = '2026-08-19T09:00:00.000Z';
 const client = createPgAflOutcomeSqlClient(pool);
 let artifactRoot = '';
-let artifactRepository: ReturnType<
-  typeof createLocalAflTradeArtifactRepository
->;
+let artifactRepository: ReturnType<typeof createLocalAflTradeArtifactRepository>;
 let staging: ReturnType<typeof createPostgresGovernedPrivateEvaluationStagingRepository>;
 let lifecycle: ReturnType<typeof createPostgresGovernedPrivateEvaluationLifecycleRepository>;
-let automatedStaging: ReturnType<
-  typeof createPostgresGovernedPrivateEvaluationStagingRepository
->;
+let automatedStaging: ReturnType<typeof createPostgresGovernedPrivateEvaluationStagingRepository>;
 let automatedArtifactRepository: ReturnType<
   typeof createLocalAflTradePrivateDerivedArtifactRepository
 >;
@@ -191,13 +187,7 @@ async function seedPrivateEvaluationOperator(
          competition,valid_from_season,valid_through_season,valid_from,valid_through)
        VALUES ($1,$2,'afl_trade_private_evaluation_operator',$3,'statly_modeling',
                'manage_private_trade_evaluation','AFLM',1897,2200,$4,$5)`,
-      [
-        authorityEvidenceId,
-        principalId,
-        scopeKey,
-        authorizedAt,
-        validThrough,
-      ]
+      [authorityEvidenceId, principalId, scopeKey, authorizedAt, validThrough]
     );
     await authorityClient.query('COMMIT');
   } catch (error) {
@@ -224,71 +214,71 @@ async function seedInspection(
 ) {
   const validThrough = new Date(Date.parse(inspectedAt) + 300_000).toISOString();
   const lastTransitionId =
-      head.status === 'absent'
-        ? null
-        : (
-            await pool.query<{ last_transition_id: string }>(
-              `SELECT last_transition_id FROM outcome_local_private_trade_evaluation_head
+    head.status === 'absent'
+      ? null
+      : (
+          await pool.query<{ last_transition_id: string }>(
+            `SELECT last_transition_id FROM outcome_local_private_trade_evaluation_head
                 WHERE valuation_scope_key=$1 AND trade_id=$2`,
-              [targetSelector.valuationScopeKey, targetSelector.tradeId]
-            )
-          ).rows[0]!.last_transition_id;
-  const retained = automated === undefined
-    ? createReadyFixtureGovernedPrivateEvaluationAuthorityInspection({
-        selector: targetSelector,
-        head,
-        capturedAt: inspectedAt,
-        validThrough,
-        lastTransitionId,
-        playerModelRunId: `model-run:${'1'.repeat(64)}`,
-        pickModelRunId: `model-run:${'2'.repeat(64)}`,
-      })
-    : createReadyGovernedPrivateEvaluationAuthorityInspectionV3({
-        selector: targetSelector,
-        head,
-        capturedAt: inspectedAt,
-        validThrough,
-        lastTransitionId,
-        preparedInputHeadRevision: 1,
-        preparedInputSetId: `prepared-valuation-input-set:${'3'.repeat(64)}`,
-        factualRegistryRevision: 1,
-        factualReleaseId: `outcome-release:${'4'.repeat(64)}`,
-        activeFactualReleaseRevision: 1,
-        privateValuationDecisionId:
-          `private-valuation-evaluation-decision:${'5'.repeat(64)}`,
-        privateValuationDecisionRevision: 1,
-        materializationManifestId: automated.materializationManifestId,
-        materializationManifestArtifact: automated.materializationManifestArtifact,
-        valuationInputBundleId: `valuation-input-bundle:${'6'.repeat(64)}`,
-        valuationInputBundleArtifact: automated.valuationInputBundleArtifact,
-        gateLedgerRevision: 2,
-        components: [
-          {
-            role: 'player_contribution_and_availability',
-            runId: `model-run:${'7'.repeat(64)}`,
-            protocolId: `model-protocol:${'8'.repeat(64)}`,
-            datasetId: `dataset:${'9'.repeat(64)}`,
-            datasetAdmissionId: `dataset-admission:${'a'.repeat(64)}`,
-            datasetAdmissionGateLedgerRevision: 1,
-            gate3DecisionId: `gate-decision:${'b'.repeat(64)}`,
-            gate3DecisionVersion: 1,
-            qualificationId: `model-qualification:${'c'.repeat(64)}`,
-            qualificationPolicyVersion: `model-qualification-policy:${'d'.repeat(64)}`,
-          },
-          {
-            role: 'draft_pick_and_future_pick_distribution',
-            runId: `model-run:${'e'.repeat(64)}`,
-            protocolId: `model-protocol:${'f'.repeat(64)}`,
-            datasetId: `dataset:${'0'.repeat(64)}`,
-            datasetAdmissionId: `dataset-admission:${'1'.repeat(64)}`,
-            datasetAdmissionGateLedgerRevision: 2,
-            gate3DecisionId: `gate-decision:${'2'.repeat(64)}`,
-            gate3DecisionVersion: 1,
-            qualificationId: `model-qualification:${'c'.repeat(64)}`,
-            qualificationPolicyVersion: `model-qualification-policy:${'d'.repeat(64)}`,
-          },
-        ],
-      });
+            [targetSelector.valuationScopeKey, targetSelector.tradeId]
+          )
+        ).rows[0]!.last_transition_id;
+  const retained =
+    automated === undefined
+      ? createReadyFixtureGovernedPrivateEvaluationAuthorityInspection({
+          selector: targetSelector,
+          head,
+          capturedAt: inspectedAt,
+          validThrough,
+          lastTransitionId,
+          playerModelRunId: `model-run:${'1'.repeat(64)}`,
+          pickModelRunId: `model-run:${'2'.repeat(64)}`,
+        })
+      : createReadyGovernedPrivateEvaluationAuthorityInspectionV3({
+          selector: targetSelector,
+          head,
+          capturedAt: inspectedAt,
+          validThrough,
+          lastTransitionId,
+          preparedInputHeadRevision: 1,
+          preparedInputSetId: `prepared-valuation-input-set:${'3'.repeat(64)}`,
+          factualRegistryRevision: 1,
+          factualReleaseId: `outcome-release:${'4'.repeat(64)}`,
+          activeFactualReleaseRevision: 1,
+          privateValuationDecisionId: `private-valuation-evaluation-decision:${'5'.repeat(64)}`,
+          privateValuationDecisionRevision: 1,
+          materializationManifestId: automated.materializationManifestId,
+          materializationManifestArtifact: automated.materializationManifestArtifact,
+          valuationInputBundleId: `valuation-input-bundle:${'6'.repeat(64)}`,
+          valuationInputBundleArtifact: automated.valuationInputBundleArtifact,
+          gateLedgerRevision: 2,
+          components: [
+            {
+              role: 'player_contribution_and_availability',
+              runId: `model-run:${'7'.repeat(64)}`,
+              protocolId: `model-protocol:${'8'.repeat(64)}`,
+              datasetId: `dataset:${'9'.repeat(64)}`,
+              datasetAdmissionId: `dataset-admission:${'a'.repeat(64)}`,
+              datasetAdmissionGateLedgerRevision: 1,
+              gate3DecisionId: `gate-decision:${'b'.repeat(64)}`,
+              gate3DecisionVersion: 1,
+              qualificationId: `model-qualification:${'c'.repeat(64)}`,
+              qualificationPolicyVersion: `model-qualification-policy:${'d'.repeat(64)}`,
+            },
+            {
+              role: 'draft_pick_and_future_pick_distribution',
+              runId: `model-run:${'e'.repeat(64)}`,
+              protocolId: `model-protocol:${'f'.repeat(64)}`,
+              datasetId: `dataset:${'0'.repeat(64)}`,
+              datasetAdmissionId: `dataset-admission:${'1'.repeat(64)}`,
+              datasetAdmissionGateLedgerRevision: 2,
+              gate3DecisionId: `gate-decision:${'2'.repeat(64)}`,
+              gate3DecisionVersion: 1,
+              qualificationId: `model-qualification:${'c'.repeat(64)}`,
+              qualificationPolicyVersion: `model-qualification-policy:${'d'.repeat(64)}`,
+            },
+          ],
+        });
   const { snapshot, inspection } = retained;
   if (automated !== undefined) {
     const authority = snapshot.content.calculationAuthority;
@@ -297,7 +287,10 @@ async function seedInspection(
     }
     await automatedStaging.retainArtifact({
       reference: authority.materializationManifestArtifact,
-      bytes: canonicalBytes({ manifestId: authority.materializationManifestId, kind: 'authenticated-materialization' }),
+      bytes: canonicalBytes({
+        manifestId: authority.materializationManifestId,
+        kind: 'authenticated-materialization',
+      }),
     });
     await automatedStaging.retainArtifact({
       reference: authority.valuationInputBundleArtifact,
@@ -315,21 +308,33 @@ async function seedInspection(
            prepared_set_canonical_json,prepared_set_json,finalized_at)
          VALUES ($1,$2,'afl-trade-prepared-valuation-input-set/v3','non_production',$3,
                  'fixture-release-scope',$5,$6,1,1,0,$4,
-                 '{}','{}','{}'::jsonb,$4)
+                 '{}','{}',$7::jsonb,$4)
          ON CONFLICT DO NOTHING`,
-        [authority.preparedInputSetId, authority.preparedInputSetId.slice(
-          'prepared-valuation-input-set:'.length
-        ), targetSelector.valuationScopeKey, inspectedAt,
+        [
+          authority.preparedInputSetId,
+          authority.preparedInputSetId.slice('prepared-valuation-input-set:'.length),
+          targetSelector.valuationScopeKey,
+          inspectedAt,
           `outcome-release:${'4'.repeat(64)}`,
-          `valuation-source-qualification:${'5'.repeat(64)}`]
+          `valuation-source-qualification:${'5'.repeat(64)}`,
+          JSON.stringify({
+            content: {
+              valuationInputBundleId: authority.valuationInputBundleId,
+              valuationInputBundleArtifact: authority.valuationInputBundleArtifact,
+            },
+          }),
+        ]
       );
       await seed.query(
         `INSERT INTO outcome_prepared_valuation_input_entry
          (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
          VALUES ($1,1,$2,'ready','{}',$3::jsonb)
          ON CONFLICT DO NOTHING`,
-        [authority.preparedInputSetId, targetSelector.tradeId,
-          JSON.stringify({ materializationManifestId: authority.materializationManifestId })]
+        [
+          authority.preparedInputSetId,
+          targetSelector.tradeId,
+          JSON.stringify({ materializationManifestId: authority.materializationManifestId }),
+        ]
       );
       await seed.query(
         `INSERT INTO outcome_private_evaluation_materialization_manifest
@@ -337,23 +342,33 @@ async function seedInspection(
            artifact_id,created_at,content_canonical_json,manifest_canonical_json,manifest_json)
         VALUES ($1,$2,$3,$4,$5,$6,'{}','{}',$7::jsonb)
         ON CONFLICT DO NOTHING`,
-        [authority.materializationManifestId,
+        [
+          authority.materializationManifestId,
           authority.materializationManifestId.slice(
             'private-evaluation-materialization-manifest:'.length
           ),
-          targetSelector.valuationScopeKey,targetSelector.tradeId,
-          authority.materializationManifestArtifact.artifactId,inspectedAt,
-          JSON.stringify({ content: {
-            valuationInputBundleId: authority.valuationInputBundleId,
-            valuationInputBundleArtifact: authority.valuationInputBundleArtifact,
-          } })]
+          targetSelector.valuationScopeKey,
+          targetSelector.tradeId,
+          authority.materializationManifestArtifact.artifactId,
+          inspectedAt,
+          JSON.stringify({
+            content: {
+              valuationInputBundleId: authority.valuationInputBundleId,
+              valuationInputBundleArtifact: authority.valuationInputBundleArtifact,
+            },
+          }),
+        ]
       );
       await seed.query(
         `INSERT INTO outcome_current_prepared_valuation_input_set
           (scope_key,prepared_input_set_id,revision,activated_at) VALUES ($1,$2,$3,$4)
          ON CONFLICT DO NOTHING`,
-        [targetSelector.valuationScopeKey, authority.preparedInputSetId,
-          authority.preparedInputHeadRevision, inspectedAt]
+        [
+          targetSelector.valuationScopeKey,
+          authority.preparedInputSetId,
+          authority.preparedInputHeadRevision,
+          inspectedAt,
+        ]
       );
       for (const [index, component] of authority.components.entries()) {
         await seed.query(
@@ -393,7 +408,7 @@ async function seedInspection(
           `INSERT INTO outcome_gate_decision
             (decision_id,proposal_id,gate,decision_key,version,environment,state,
              decided_at,effective_at,revalidate_at,supersedes_decision_id,decision_json)
-           VALUES ($1,$2,'gate_3_model_approval',$3,$4,'non_production','approved',
+           VALUES ($1,$2,'gate_3_model_validity',$3,$4,'non_production','approved',
                    $5,$5,'2099-01-01T00:00:00.000Z',NULL,$6::jsonb)
            ON CONFLICT DO NOTHING`,
           [
@@ -407,7 +422,7 @@ async function seedInspection(
               content: {
                 schemaVersion: 'afl-trade-gate-decision/v1',
                 proposalId,
-                gate: 'gate_3_model_approval',
+                gate: 'gate_3_model_validity',
                 decisionKey,
                 version: component.gate3DecisionVersion,
                 environment: 'non_production',
@@ -454,10 +469,16 @@ async function seedInspection(
            player_gate3_decision_id,pick_gate3_decision_id,work_id,advanced_at)
          VALUES ($1,1,$2,$3,$4,$5,$6,$7,$8)
          ON CONFLICT DO NOTHING`,
-        [targetSelector.valuationScopeKey, authority.components[0]!.qualificationId,
-          authority.components[0]!.runId,authority.components[1]!.runId,
-          authority.components[0]!.gate3DecisionId,authority.components[1]!.gate3DecisionId,
-          `model-qualification-work:${'4'.repeat(64)}`,inspectedAt]
+        [
+          targetSelector.valuationScopeKey,
+          authority.components[0]!.qualificationId,
+          authority.components[0]!.runId,
+          authority.components[1]!.runId,
+          authority.components[0]!.gate3DecisionId,
+          authority.components[1]!.gate3DecisionId,
+          `model-qualification-work:${'4'.repeat(64)}`,
+          inspectedAt,
+        ]
       );
       await seed.query('COMMIT');
     } catch (error) {
@@ -638,15 +659,12 @@ afterAll(async () => {
 describe('governed private evaluation PostgreSQL lifecycle', () => {
   it('stages and exactly resumes one automated non-production generation', async () => {
     const trustedAt = await trustedNow();
-    const expiredRequestedAt = new Date(
-      Date.parse(trustedAt) - 10 * 60 * 1_000
-    ).toISOString();
+    const expiredRequestedAt = new Date(Date.parse(trustedAt) - 10 * 60 * 1_000).toISOString();
     const automatedSelector = {
       ...selector,
       valuationScopeKey: 'afl-men:2026-trades',
     };
-    const manifestId =
-      `private-evaluation-materialization-manifest:${'3'.repeat(64)}`;
+    const manifestId = `private-evaluation-materialization-manifest:${'3'.repeat(64)}`;
     const automatedAuthorityEvidence = {
       materializationManifestId: manifestId,
       materializationManifestArtifact: createAflTradeCanonicalJsonArtifactRef(
@@ -666,7 +684,7 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
     );
     const constructionAuthority = {
       kind: 'automated_private_calculation_agent' as const,
-      principalId: 'system:weekly-valuation-coordinator',
+      principalId: 'system:weekly-valuation-coordinator' as const,
     };
     const expiredIntent = createAutomatedGovernedPrivateEvaluationTransitionIntent({
       selector: automatedSelector,
@@ -690,15 +708,10 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
     });
     await automatedStaging.stage({
       intent: expiredIntent,
-      intentArtifact: createAflTradeCanonicalJsonArtifactRef(
-        expiredIntent,
-        expiredRequestedAt
-      ),
+      intentArtifact: createAflTradeCanonicalJsonArtifactRef(expiredIntent, expiredRequestedAt),
       materialization: expiredMaterialization,
     });
-    const expiredTransitionedAt = new Date(
-      Date.parse(expiredRequestedAt) + 1_000
-    ).toISOString();
+    const expiredTransitionedAt = new Date(Date.parse(expiredRequestedAt) + 1_000).toISOString();
     const expiredReceipt = createAutomatedGovernedPrivateEvaluationTransitionReceipt({
       intent: expiredIntent,
       previousTransitionId: null,
@@ -713,28 +726,30 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       reference: expiredReceiptArtifact,
       bytes: canonicalBytes(expiredReceipt),
     });
-    await expect(pool.query(
-      `INSERT INTO outcome_private_evaluation_transition_receipt
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_private_evaluation_transition_receipt
         (transition_id,transition_intent_id,operation_id,valuation_scope_key,trade_id,
          artifact_id,action,from_revision,from_status,from_generation_id,to_revision,
          to_status,to_generation_id,transitioned_at,content_sha256,content_canonical_json,
          receipt_json)
        VALUES ($1,$2,$3,$4,$5,$6,'construct_and_activate',0,'absent',NULL,1,
                'active',$7,$8,$9,$10,$11::jsonb)`,
-      [
-        expiredReceipt.transitionId,
-        expiredIntent.transitionIntentId,
-        expiredIntent.content.operationId,
-        automatedSelector.valuationScopeKey,
-        automatedSelector.tradeId,
-        expiredReceiptArtifact.artifactId,
-        expiredMaterialization.generation.generationId,
-        expiredTransitionedAt,
-        expiredReceipt.transitionId.slice('private-evaluation-transition:'.length),
-        canonicalizeAflTradeJson(expiredReceipt.content),
-        canonicalizeAflTradeJson(expiredReceipt),
-      ]
-    )).rejects.toThrow(/PostgreSQL authority authentication/i);
+        [
+          expiredReceipt.transitionId,
+          expiredIntent.transitionIntentId,
+          expiredIntent.content.operationId,
+          automatedSelector.valuationScopeKey,
+          automatedSelector.tradeId,
+          expiredReceiptArtifact.artifactId,
+          expiredMaterialization.generation.generationId,
+          expiredTransitionedAt,
+          expiredReceipt.transitionId.slice('private-evaluation-transition:'.length),
+          canonicalizeAflTradeJson(expiredReceipt.content),
+          canonicalizeAflTradeJson(expiredReceipt),
+        ]
+      )
+    ).rejects.toThrow(/PostgreSQL authority authentication/i);
     const requestedAt = await trustedNow();
     const inspection = await seedInspection(
       { status: 'absent', revision: 0, generationId: null },
@@ -762,25 +777,29 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       constructionAuthority,
       narrative: createAutomatedNarrativeFixture(),
     });
-    await expect(pool.query<{ authenticated: boolean }>(
-      `SELECT validate_outcome_automated_ready_calculation_authority(
+    await expect(
+      pool.query<{ authenticated: boolean }>(
+        `SELECT validate_outcome_automated_ready_calculation_authority(
         $1::jsonb,$2,$3
       ) AS authenticated`,
-      [
-        canonicalizeAflTradeJson(inspection.snapshot.content.calculationAuthority),
-        automatedSelector.valuationScopeKey,
-        automatedSelector.tradeId,
-      ]
-    )).resolves.toMatchObject({ rows: [{ authenticated: true }] });
+        [
+          canonicalizeAflTradeJson(inspection.snapshot.content.calculationAuthority),
+          automatedSelector.valuationScopeKey,
+          automatedSelector.tradeId,
+        ]
+      )
+    ).resolves.toMatchObject({ rows: [{ authenticated: true }] });
+    const calculationAuthority = inspection.snapshot.content.calculationAuthority;
+    if (!('components' in calculationAuthority)) {
+      throw new Error('Expected exact prepared-v3 calculation authority.');
+    }
     const fabricatedCalculationAuthority = {
-      ...inspection.snapshot.content.calculationAuthority,
-      components: inspection.snapshot.content.calculationAuthority.components.map(
-        (component) => ({
-          ...component,
-          qualificationPolicyVersion: `model-qualification-policy:${'f'.repeat(64)}`,
-          gate3DecisionVersion: component.gate3DecisionVersion + 1,
-        })
-      ),
+      ...calculationAuthority,
+      components: calculationAuthority.components.map((component) => ({
+        ...component,
+        qualificationPolicyVersion: `model-qualification-policy:${'f'.repeat(64)}`,
+        gate3DecisionVersion: component.gate3DecisionVersion + 1,
+      })),
     };
     const fabricatedSnapshotContent = {
       ...inspection.snapshot.content,
@@ -814,9 +833,7 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
         fabricatedSnapshotArtifact.artifactId,
         requestedAt,
         inspection.validThrough,
-        fabricatedSnapshot.snapshotId.slice(
-          'private-evaluation-authority-snapshot:'.length
-        ),
+        fabricatedSnapshot.snapshotId.slice('private-evaluation-authority-snapshot:'.length),
         canonicalizeAflTradeJson(fabricatedSnapshotContent),
         canonicalizeAflTradeJson(fabricatedSnapshot),
       ]
@@ -873,31 +890,31 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       reference: fabricatedIntentArtifact,
       bytes: canonicalBytes(fabricatedIntent),
     });
-    await expect(pool.query(
-      `INSERT INTO outcome_private_evaluation_transition_intent
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_private_evaluation_transition_intent
         (transition_intent_id,inspection_id,authority_snapshot_id,operation_id,
          valuation_scope_key,trade_id,artifact_id,action,expected_head_status,
          expected_head_revision,expected_head_generation_id,target_generation_id,
          requested_at,expires_at,content_sha256,content_canonical_json,intent_json)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'construct_and_activate','absent',0,NULL,NULL,
                $8,$9,$10,$11,$12::jsonb)`,
-      [
-        fabricatedIntent.transitionIntentId,
-        fabricatedInspection.inspectionId,
-        fabricatedSnapshot.snapshotId,
-        fabricatedIntent.content.operationId,
-        automatedSelector.valuationScopeKey,
-        automatedSelector.tradeId,
-        fabricatedIntentArtifact.artifactId,
-        requestedAt,
-        inspection.validThrough,
-        fabricatedIntent.transitionIntentId.slice(
-          'private-evaluation-transition-intent:'.length
-        ),
-        canonicalizeAflTradeJson(fabricatedIntent.content),
-        canonicalizeAflTradeJson(fabricatedIntent),
-      ]
-    )).rejects.toThrow(/invalid inspection authority/i);
+        [
+          fabricatedIntent.transitionIntentId,
+          fabricatedInspection.inspectionId,
+          fabricatedSnapshot.snapshotId,
+          fabricatedIntent.content.operationId,
+          automatedSelector.valuationScopeKey,
+          automatedSelector.tradeId,
+          fabricatedIntentArtifact.artifactId,
+          requestedAt,
+          inspection.validThrough,
+          fabricatedIntent.transitionIntentId.slice('private-evaluation-transition-intent:'.length),
+          canonicalizeAflTradeJson(fabricatedIntent.content),
+          canonicalizeAflTradeJson(fabricatedIntent),
+        ]
+      )
+    ).rejects.toThrow(/invalid inspection authority/i);
     const intentArtifact = createAflTradeCanonicalJsonArtifactRef(intent, requestedAt);
     const forgedIntentContent = {
       ...intent.content,
@@ -977,8 +994,7 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       ...automatedSelector,
       tradeId: 'trade:automated-private-evaluation-peer',
     };
-    const peerManifestId =
-      `private-evaluation-materialization-manifest:${'9'.repeat(64)}`;
+    const peerManifestId = `private-evaluation-materialization-manifest:${'9'.repeat(64)}`;
     const peerAuthorityEvidence = {
       materializationManifestId: peerManifestId,
       materializationManifestArtifact: createAflTradeCanonicalJsonArtifactRef(
@@ -995,14 +1011,14 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
         `UPDATE outcome_prepared_valuation_input_set
             SET trade_count=2,ready_count=2,blocked_count=0
           WHERE prepared_input_set_id=$1`,
-        [inspection.snapshot.content.calculationAuthority.preparedInputSetId]
+        [calculationAuthority.preparedInputSetId]
       );
       await peerPreparedSeed.query(
         `INSERT INTO outcome_prepared_valuation_input_entry
           (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
          VALUES ($1,2,$2,'ready','{}',$3::jsonb)`,
         [
-          inspection.snapshot.content.calculationAuthority.preparedInputSetId,
+          calculationAuthority.preparedInputSetId,
           peerSelector.tradeId,
           canonicalizeAflTradeJson({ materializationManifestId: peerManifestId }),
         ]
@@ -1041,10 +1057,7 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       constructionAuthority,
       narrative: createAutomatedNarrativeFixture(peerSelector.tradeId),
     });
-    const peerIntentArtifact = createAflTradeCanonicalJsonArtifactRef(
-      peerIntent,
-      peerRequestedAt
-    );
+    const peerIntentArtifact = createAflTradeCanonicalJsonArtifactRef(peerIntent, peerRequestedAt);
     await automatedStaging.stage({
       intent: peerIntent,
       intentArtifact: peerIntentArtifact,
@@ -1155,13 +1168,12 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       [peerSelector, peerMaterialization.generation.generationId],
     ] as const) {
       const reads = await Promise.all(
-        (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map(
-          (kind) =>
-            reader.read({
-              selector: targetSelector,
-              selection: { kind: 'current' },
-              document: { kind },
-            })
+        (['archive_summary', 'detail', 'reader_api', 'json_export'] as const).map((kind) =>
+          reader.read({
+            selector: targetSelector,
+            selection: { kind: 'current' },
+            document: { kind },
+          })
         )
       );
       expect(reads).toHaveLength(4);
@@ -1254,30 +1266,30 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       reference: wrongPredecessorArtifact,
       bytes: canonicalBytes(wrongPredecessorReceipt),
     });
-    await expect(pool.query(
-      `INSERT INTO outcome_private_evaluation_transition_receipt
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_private_evaluation_transition_receipt
         (transition_id,transition_intent_id,operation_id,valuation_scope_key,trade_id,
          artifact_id,action,from_revision,from_status,from_generation_id,to_revision,
          to_status,to_generation_id,transitioned_at,content_sha256,content_canonical_json,
          receipt_json)
        VALUES ($1,$2,$3,$4,$5,$6,'construct_and_activate',0,'absent',NULL,1,
                'active',$7,$8,$9,$10,$11::jsonb)`,
-      [
-        wrongPredecessorReceipt.transitionId,
-        intent.transitionIntentId,
-        intent.content.operationId,
-        automatedSelector.valuationScopeKey,
-        automatedSelector.tradeId,
-        wrongPredecessorArtifact.artifactId,
-        materialization.generation.generationId,
-        requestedAt,
-        wrongPredecessorReceipt.transitionId.slice(
-          'private-evaluation-transition:'.length
-        ),
-        canonicalizeAflTradeJson(wrongPredecessorContent),
-        canonicalizeAflTradeJson(wrongPredecessorReceipt),
-      ]
-    )).rejects.toThrow(/PostgreSQL authority authentication/i);
+        [
+          wrongPredecessorReceipt.transitionId,
+          intent.transitionIntentId,
+          intent.content.operationId,
+          automatedSelector.valuationScopeKey,
+          automatedSelector.tradeId,
+          wrongPredecessorArtifact.artifactId,
+          materialization.generation.generationId,
+          requestedAt,
+          wrongPredecessorReceipt.transitionId.slice('private-evaluation-transition:'.length),
+          canonicalizeAflTradeJson(wrongPredecessorContent),
+          canonicalizeAflTradeJson(wrongPredecessorReceipt),
+        ]
+      )
+    ).rejects.toThrow(/PostgreSQL authority authentication/i);
     await expect(
       automatedStaging.stage({ intent, intentArtifact, materialization })
     ).resolves.toMatchObject({
@@ -1292,10 +1304,12 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
         WHERE intent.operation_id=$1`,
       [intent.content.operationId]
     );
-    expect(retained.rows).toEqual([{
-      intent_version: 'private-evaluation-transition-intent/v2',
-      generation_version: 'local-private-trade-evaluation-generation/v2',
-    }]);
+    expect(retained.rows).toEqual([
+      {
+        intent_version: 'private-evaluation-transition-intent/v2',
+        generation_version: 'local-private-trade-evaluation-generation/v2',
+      },
+    ]);
     await expect(
       pool.query(
         `SELECT revision,status,generation_id
@@ -1304,11 +1318,13 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
         [automatedSelector.valuationScopeKey, automatedSelector.tradeId]
       )
     ).resolves.toMatchObject({
-      rows: [{
-        revision: 1,
-        status: 'active',
-        generation_id: materialization.generation.generationId,
-      }],
+      rows: [
+        {
+          revision: 1,
+          status: 'active',
+          generation_id: materialization.generation.generationId,
+        },
+      ],
     });
     await expect(
       pool.query(
@@ -1382,30 +1398,30 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       expiredOperatorReceipt,
       expiredOperatorTransitionedAt
     );
-    await expect(pool.query(
-      `INSERT INTO outcome_private_evaluation_transition_receipt
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_private_evaluation_transition_receipt
         (transition_id,transition_intent_id,operation_id,valuation_scope_key,trade_id,
          artifact_id,action,from_revision,from_status,from_generation_id,to_revision,
          to_status,to_generation_id,transitioned_at,content_sha256,content_canonical_json,
          receipt_json)
        VALUES ($1,$2,$3,$4,$5,$6,'construct_and_activate',0,'absent',NULL,1,
                'active',$7,$8,$9,$10,$11::jsonb)`,
-      [
-        expiredOperatorReceipt.transitionId,
-        expiredOperatorIntent.transitionIntentId,
-        expiredOperatorIntent.content.operationId,
-        selector.valuationScopeKey,
-        selector.tradeId,
-        expiredOperatorReceiptArtifact.artifactId,
-        expiredOperatorMaterialization.generation.generationId,
-        expiredOperatorTransitionedAt,
-        expiredOperatorReceipt.transitionId.slice(
-          'private-evaluation-transition:'.length
-        ),
-        canonicalizeAflTradeJson(expiredOperatorReceipt.content),
-        canonicalizeAflTradeJson(expiredOperatorReceipt),
-      ]
-    )).rejects.toThrow(/Legacy private receipt failed exact test-fixture authentication/i);
+        [
+          expiredOperatorReceipt.transitionId,
+          expiredOperatorIntent.transitionIntentId,
+          expiredOperatorIntent.content.operationId,
+          selector.valuationScopeKey,
+          selector.tradeId,
+          expiredOperatorReceiptArtifact.artifactId,
+          expiredOperatorMaterialization.generation.generationId,
+          expiredOperatorTransitionedAt,
+          expiredOperatorReceipt.transitionId.slice('private-evaluation-transition:'.length),
+          canonicalizeAflTradeJson(expiredOperatorReceipt.content),
+          canonicalizeAflTradeJson(expiredOperatorReceipt),
+        ]
+      )
+    ).rejects.toThrow(/Legacy private receipt failed exact test-fixture authentication/i);
     const operatorAuthorizedAt = new Date(Date.parse(currentTrustedAt) - 1_000).toISOString();
     await seedPrivateEvaluationOperator(operatorAuthorizedAt);
     const forgedAt = await trustedNow();
@@ -1448,31 +1464,33 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       reference: forgedLegacyArtifact,
       bytes: canonicalBytes(forgedLegacyIntent),
     });
-    await expect(pool.query(
-      `INSERT INTO outcome_private_evaluation_transition_intent
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_private_evaluation_transition_intent
         (transition_intent_id,inspection_id,authority_snapshot_id,operation_id,
          valuation_scope_key,trade_id,artifact_id,action,expected_head_status,
          expected_head_revision,expected_head_generation_id,target_generation_id,
          requested_at,expires_at,content_sha256,content_canonical_json,intent_json)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'construct_and_activate','absent',0,NULL,NULL,
                $8,$9,$10,$11,$12::jsonb)`,
-      [
-        forgedLegacyIntent.transitionIntentId,
-        forgedInspection.inspectionId,
-        forgedInspection.snapshotId,
-        validLegacyIntent.content.operationId,
-        selector.valuationScopeKey,
-        selector.tradeId,
-        forgedLegacyArtifact.artifactId,
-        forgedAt,
-        forgedInspection.validThrough,
-        forgedLegacyIntent.transitionIntentId.slice(
-          'private-evaluation-transition-intent:'.length
-        ),
-        canonicalizeAflTradeJson(forgedLegacyContent),
-        canonicalizeAflTradeJson(forgedLegacyIntent),
-      ]
-    )).rejects.toThrow(/Legacy private intent failed exact test-fixture authentication/i);
+        [
+          forgedLegacyIntent.transitionIntentId,
+          forgedInspection.inspectionId,
+          forgedInspection.snapshotId,
+          validLegacyIntent.content.operationId,
+          selector.valuationScopeKey,
+          selector.tradeId,
+          forgedLegacyArtifact.artifactId,
+          forgedAt,
+          forgedInspection.validThrough,
+          forgedLegacyIntent.transitionIntentId.slice(
+            'private-evaluation-transition-intent:'.length
+          ),
+          canonicalizeAflTradeJson(forgedLegacyContent),
+          canonicalizeAflTradeJson(forgedLegacyIntent),
+        ]
+      )
+    ).rejects.toThrow(/Legacy private intent failed exact test-fixture authentication/i);
     const unauthorizedLegacyContent = {
       ...validLegacyIntent.content,
       operationId: createAflTradeContentAddress('private-evaluation-operation', {
@@ -1498,31 +1516,33 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       reference: unauthorizedLegacyArtifact,
       bytes: canonicalBytes(unauthorizedLegacyIntent),
     });
-    await expect(pool.query(
-      `INSERT INTO outcome_private_evaluation_transition_intent
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_private_evaluation_transition_intent
         (transition_intent_id,inspection_id,authority_snapshot_id,operation_id,
          valuation_scope_key,trade_id,artifact_id,action,expected_head_status,
          expected_head_revision,expected_head_generation_id,target_generation_id,
          requested_at,expires_at,content_sha256,content_canonical_json,intent_json)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'construct_and_activate','absent',0,NULL,NULL,
                $8,$9,$10,$11,$12::jsonb)`,
-      [
-        unauthorizedLegacyIntent.transitionIntentId,
-        forgedInspection.inspectionId,
-        forgedInspection.snapshotId,
-        unauthorizedLegacyContent.operationId,
-        selector.valuationScopeKey,
-        selector.tradeId,
-        unauthorizedLegacyArtifact.artifactId,
-        forgedAt,
-        forgedInspection.validThrough,
-        unauthorizedLegacyIntent.transitionIntentId.slice(
-          'private-evaluation-transition-intent:'.length
-        ),
-        canonicalizeAflTradeJson(unauthorizedLegacyContent),
-        canonicalizeAflTradeJson(unauthorizedLegacyIntent),
-      ]
-    )).rejects.toThrow(/Legacy private intent failed exact test-fixture authentication/i);
+        [
+          unauthorizedLegacyIntent.transitionIntentId,
+          forgedInspection.inspectionId,
+          forgedInspection.snapshotId,
+          unauthorizedLegacyContent.operationId,
+          selector.valuationScopeKey,
+          selector.tradeId,
+          unauthorizedLegacyArtifact.artifactId,
+          forgedAt,
+          forgedInspection.validThrough,
+          unauthorizedLegacyIntent.transitionIntentId.slice(
+            'private-evaluation-transition-intent:'.length
+          ),
+          canonicalizeAflTradeJson(unauthorizedLegacyContent),
+          canonicalizeAflTradeJson(unauthorizedLegacyIntent),
+        ]
+      )
+    ).rejects.toThrow(/Legacy private intent failed exact test-fixture authentication/i);
     const activation = await transition({
       marker: 'activate',
       action: { kind: 'construct_and_activate' },
@@ -1570,33 +1590,32 @@ describe('governed private evaluation PostgreSQL lifecycle', () => {
       toGenerationId: activation.generationId,
       transitionedAt: crossIntentAt,
     });
-    const crossIntentReceiptArtifact = await retainJson(
-      crossIntentReceipt,
-      crossIntentAt
-    );
-    await expect(pool.query(
-      `INSERT INTO outcome_private_evaluation_transition_receipt
+    const crossIntentReceiptArtifact = await retainJson(crossIntentReceipt, crossIntentAt);
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_private_evaluation_transition_receipt
         (transition_id,transition_intent_id,operation_id,valuation_scope_key,trade_id,
          artifact_id,action,from_revision,from_status,from_generation_id,to_revision,
          to_status,to_generation_id,transitioned_at,content_sha256,content_canonical_json,
          receipt_json)
        VALUES ($1,$2,$3,$4,$5,$6,'construct_and_activate',1,'active',$7,2,
                'active',$8,$9,$10,$11,$12::jsonb)`,
-      [
-        crossIntentReceipt.transitionId,
-        crossIntentA.transitionIntentId,
-        crossIntentA.content.operationId,
-        selector.valuationScopeKey,
-        selector.tradeId,
-        crossIntentReceiptArtifact.artifactId,
-        activation.generationId,
-        activation.generationId,
-        crossIntentAt,
-        crossIntentReceipt.transitionId.slice('private-evaluation-transition:'.length),
-        canonicalizeAflTradeJson(crossIntentReceipt.content),
-        canonicalizeAflTradeJson(crossIntentReceipt),
-      ]
-    )).rejects.toThrow(/Legacy private receipt failed exact test-fixture authentication/i);
+        [
+          crossIntentReceipt.transitionId,
+          crossIntentA.transitionIntentId,
+          crossIntentA.content.operationId,
+          selector.valuationScopeKey,
+          selector.tradeId,
+          crossIntentReceiptArtifact.artifactId,
+          activation.generationId,
+          activation.generationId,
+          crossIntentAt,
+          crossIntentReceipt.transitionId.slice('private-evaluation-transition:'.length),
+          canonicalizeAflTradeJson(crossIntentReceipt.content),
+          canonicalizeAflTradeJson(crossIntentReceipt),
+        ]
+      )
+    ).rejects.toThrow(/Legacy private receipt failed exact test-fixture authentication/i);
     await expect(
       lifecycle.commit({
         receipt: activation.receipt,

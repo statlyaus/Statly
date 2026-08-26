@@ -21,7 +21,10 @@ import {
 } from '../postgresPreparedValuationInputSetStore';
 import { aflTradeValuationCalculationInputPackageSchema } from '../valuationCalculationInputPackage';
 import { governedPrivateEvaluationInputTraceSchema } from './governedPrivateEvaluationInputTrace';
-import { capturePostgresGovernedPrivateEvaluationCurrentAuthority } from './postgresGovernedPrivateEvaluationCurrentAuthority';
+import {
+  capturePostgresGovernedPrivateEvaluationCurrentAuthority,
+  capturePostgresGovernedPrivateEvaluationPrivateCurrentAuthority,
+} from './postgresGovernedPrivateEvaluationCurrentAuthority';
 import type { GovernedPrivateEvaluationCapturedCalculationAuthority } from './postgresGovernedPrivateEvaluationInspectionRepository';
 import { PostgresGovernedPrivateEvaluationMaterializationManifestRepository } from './postgresGovernedPrivateEvaluationMaterializationManifestRepository';
 
@@ -159,11 +162,14 @@ export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCaptu
       dependencies.maximumArtifactBytes
     );
     const manifest = materialization.manifest.content;
+    const authorityArtifacts =
+      prepared.preparationAuthority === 'authenticated_calculation_evidence_snapshot'
+        ? [prepared.qualificationReportArtifact, ...prepared.sourceQualificationEvidenceRefs]
+        : [];
     const parentArtifacts = [
       prepared.factualReleaseArtifact,
       prepared.releaseMembershipArtifact,
-      prepared.qualificationReportArtifact,
-      ...prepared.sourceQualificationEvidenceRefs,
+      ...authorityArtifacts,
       prepared.valuationInputBundleArtifact,
       manifest.calculationInputArtifact,
       manifest.inputTraceArtifact,
@@ -265,6 +271,23 @@ export function createPostgresGovernedPrivateEvaluationCalculationAuthorityCaptu
       throw new TypeError(
         'Retained prepared inputs, bundle, trace, and calculation package do not share exact ancestry.'
       );
+    }
+    if (prepared.preparationAuthority === 'dispatch_bound_private_factual_output') {
+      return capturePostgresGovernedPrivateEvaluationPrivateCurrentAuthority({
+        transaction: input.transaction,
+        selector: input.selector,
+        capturedAt: input.capturedAt,
+        prepared,
+        trace,
+        materializationManifestId: materialization.manifest.manifestId,
+        materializationManifestArtifact: materialization.artifact,
+        valuationInputBundleId: bundle.valuationInputBundleId,
+        valuationInputBundleArtifact: prepared.valuationInputBundleArtifact,
+        preparedInputHeadRevision: current.head.revision,
+        preparedInputSetId: current.head.preparedInputSetId,
+        artifactRepository: dependencies.artifactRepository,
+        maximumArtifactBytes: dependencies.maximumArtifactBytes,
+      });
     }
     return capturePostgresGovernedPrivateEvaluationCurrentAuthority({
       transaction: input.transaction,

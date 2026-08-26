@@ -1,18 +1,30 @@
 import { createHash } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  createAflTradeCanonicalJsonArtifactRef,
+  type AflTradeArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
 } from '@/server/aflTradeIntelligence/artifacts/contentAddress';
+import { createLocalAflTradePrivateDerivedArtifactRepository } from '@/server/aflTradeIntelligence/development/localFileConditionalObjectStore';
 import {
   AFL_TRADE_HPN_PAV_FINALIZED_CALCULATION_SCHEMA_VERSION,
   aflTradeFinalizedHpnPavCalculationSchema,
 } from '@/server/aflTradeIntelligence/modeling/hpnPavCalculationService';
 import { calculateAflTradeHpnPavCore } from '@/server/aflTradeIntelligence/modeling/hpnPavCore';
 import { createPgAflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient';
+import { createLocalAflTradePrivateValuationRuntime } from '@/server/aflTradeIntelligence/development/localPrivateValuationRuntime';
+import { PostgresAflTradePrivateValuationScheduleRepository } from '@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling';
+import { PostgresGovernedPrivateEvaluationBatchRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
+import { PostgresGovernedValuationModelQualificationRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedValuationModelQualificationRepository';
 import {
   loadAflTradePrivateValuationModelPairExactInput,
   PostgresAflTradePrivateValuationModelPairRepository,
@@ -24,6 +36,13 @@ import {
   type AflTradePrivateValuationModelPairRepository,
 } from '@/server/aflTradeIntelligence/valuation/privateValuationModelPair';
 import { createAflTradePrivateValuationFactualOutput } from '@/server/aflTradeIntelligence/valuation/privateValuationFactualOutput';
+import type { AflTradeConstructedCurrentValuationTrade } from '@/server/aflTradeIntelligence/valuation/currentValuationTradePreparation';
+import { createAflTradeCurrentValuationBundleFixture } from '../testUtils/currentValuationCohortFixture';
+import { createGovernedPrivateEvaluationAuthenticatedCalculationFixture } from '../testUtils/governedPrivateEvaluationAuthenticatedCalculationFixture';
+import {
+  createDispatchBoundGovernedModelPairAuthorityFixture,
+  createDispatchBoundGovernedModelPairTargetsFixture,
+} from '../testUtils/dispatchBoundGovernedModelPairAuthorityFixture';
 
 import { runOutcomesPrismaTestCommand } from './outcomesPrismaTestCli';
 
@@ -39,6 +58,7 @@ const outcomesPool = new Pool({
   options: `-c search_path=${schemaName}`,
   max: 4,
 });
+let privateArtifactRoot = '';
 
 function scopedDatabaseUrl(): string {
   const scoped = new URL(databaseUrl);
@@ -128,24 +148,15 @@ function loaderCalculation(factualRunId: string, custodyKey: string) {
   });
 }
 
-const modelPairTargets = {
-  player: {
-    modelId: addressed('development-grade-model', 'player-model'),
-    modelVersion: 'player-model-v1',
-    protocolId: addressed('model-protocol', 'player-protocol'),
-    datasetId: addressed('dataset', 'player-dataset'),
-    datasetAdmissionId: addressed('dataset-admission', 'player-admission'),
-  },
-  pick: {
-    protocolId: addressed('model-protocol', 'pick-protocol'),
-    datasetId: addressed('dataset', 'pick-dataset'),
-    datasetAdmissionId: addressed('dataset-admission', 'pick-admission'),
-    policyId: addressed('pick-pav-policy', 'pick-policy'),
-  },
-  qualificationPolicyId: addressed('model-qualification-policy', 'qualification-policy'),
-} as const;
+const modelPairTargetsFixture = createDispatchBoundGovernedModelPairTargetsFixture();
+const modelPairTargets = modelPairTargetsFixture.targets;
 
-function loaderFactualOutput(requestId: string, custodyKey: string, factualRunId: string) {
+function loaderFactualOutput(
+  requestId: string,
+  custodyKey: string,
+  factualRunId: string,
+  factualReleaseId = addressed('outcome-release', `${custodyKey}-release`)
+) {
   return createAflTradePrivateValuationFactualOutput({
     requestId,
     valuationScopeKey: 'afl-men:2026-trades',
@@ -174,14 +185,15 @@ function loaderFactualOutput(requestId: string, custodyKey: string, factualRunId
       memberSetSha256: digest('exact-loader-members'),
     },
     factualRelease: {
-      releaseId: addressed('outcome-release', `${custodyKey}-release`),
-      releaseSha256: digest(`${custodyKey}-release`),
+      releaseId: factualReleaseId,
+      releaseSha256: factualReleaseId.slice('outcome-release:'.length),
     },
     preparedAt: '2026-08-24T00:00:01.000Z',
   });
 }
 
 beforeAll(async () => {
+  privateArtifactRoot = await mkdtemp(join(tmpdir(), 'statly-private-model-pair-'));
   await adminPool.query(`CREATE SCHEMA "${schemaName}"`);
   runOutcomesPrismaTestCommand(['migrate', 'deploy'], { databaseUrl: scopedDatabaseUrl() });
 });
@@ -203,28 +215,28 @@ afterAll(async () => {
   } catch (error) {
     failures.push(error);
   }
+  if (privateArtifactRoot !== '') {
+    try {
+      await rm(privateArtifactRoot, { recursive: true, force: true });
+    } catch (error) {
+      failures.push(error);
+    }
+  }
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Private model-pair PostgreSQL cleanup failed.');
   }
 });
 
 describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
-  it('reconstructs after each retained component, pair acceptance, and qualification', async () => {
+  it('resumes retained model-pair work and composes qualified dispatch through atomic activation', async () => {
     const leaseToken = digest('restart-proof-lease-token');
     const requestId = addressed('private-valuation-dispatch', 'request');
     const claimId = addressed('private-valuation-dispatch-claim', 'claim');
-    const playerRunId = addressed('model-run', 'player-component');
-    const pickRunId = addressed('model-run', 'pick-component');
-    const playerNativeRunId = addressed('model-run', 'player-native');
-    const pickNativeExecutionId = addressed('pick-pav-model-execution', 'pick-native');
-    const qualificationId = addressed('model-qualification', 'qualification');
     const factualOutputId = addressed('private-valuation-factual-output', 'factual-output');
     const factualRunId = addressed('factual-reconciliation-run', 'factual-run');
     const hpnCalculation = loaderCalculation(factualRunId, 'restart-proof');
     const hpnCalculationId = hpnCalculation.calculationId;
-    const playerIntentId = addressed('model-run-intent', 'player-intent');
     const operationalReceiptId = addressed('architecture-operation-receipt', 'operation');
-    const playerAuthorizationId = addressed('model-run-authorization', 'authorization');
     const now = new Date();
     const operation = createAflTradePrivateValuationModelOperation({
       scopeKey: 'afl-men:2026-trades',
@@ -247,6 +259,21 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         qualificationPolicyId: operation.content.qualificationPolicyId,
       },
     };
+    const modelAuthority = createDispatchBoundGovernedModelPairAuthorityFixture({
+      operation,
+      exactInput,
+      claim: { claimId, leaseToken },
+      attemptNumber: 1,
+      registeredAt: '2026-08-19T08:00:00.000Z',
+      targetsFixture: modelPairTargetsFixture,
+    });
+    const playerRunId = modelAuthority.playerComponent.runId;
+    const pickRunId = modelAuthority.pickComponent.runId;
+    const playerNativeRunId = modelAuthority.playerNativeExecution.runId;
+    const pickNativeExecutionId = modelAuthority.pickNativeExecution.executionId;
+    const qualificationId = modelAuthority.qualification.qualificationId;
+    const playerIntentId = modelAuthority.playerNativeExecution.content.runIntentId;
+    const playerAuthorizationId = modelAuthority.playerNativeExecution.content.runAuthorizationId;
 
     const seed = await adminPool.connect();
     try {
@@ -344,7 +371,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
           operation.content.player.datasetId,
           operation.content.player.datasetAdmissionId,
           operation.content.player.protocolId,
-          addressed('player-observation-set', 'observation'),
+          modelAuthority.playerNativeExecution.content.observationSetId,
           now,
           JSON.stringify({
             content: {
@@ -379,7 +406,7 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
           operation.content.player.datasetId,
           operation.content.player.datasetAdmissionId,
           operation.content.player.protocolId,
-          addressed('player-observation-set', 'observation'),
+          modelAuthority.playerNativeExecution.content.observationSetId,
           now,
           new Date(now.getTime() + 20_000),
           JSON.stringify({ content: policyContent }),
@@ -402,9 +429,18 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       await seed.query(
         `INSERT INTO outcome_valuation_model_run
           (run_id,intent_id,authorization_id,status,started_at,finished_at,run_canonical_json,run_json)
-         VALUES ($1,$2,$3,'succeeded',$4,$4,'{}','{}'::jsonb)`,
-        [playerNativeRunId, playerIntentId, playerAuthorizationId, now]
+         VALUES ($1,$2,$3,'succeeded',$4,$5,$6,$7::jsonb)`,
+        [
+          playerNativeRunId,
+          playerIntentId,
+          playerAuthorizationId,
+          modelAuthority.playerNativeExecution.content.startedAt,
+          modelAuthority.playerNativeExecution.content.finishedAt,
+          canonicalizeAflTradeJson(modelAuthority.playerNativeExecution.content),
+          canonicalizeAflTradeJson(modelAuthority.playerNativeExecution),
+        ]
       );
+      const pickExecutionContent = modelAuthority.pickNativeExecution.content;
       await seed.query(
         `INSERT INTO outcome_governed_pick_pav_model_execution
           (execution_id,observation_set_id,dataset_id,dataset_artifact_id,
@@ -412,54 +448,36 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
            dataset_admission_gate_ledger_revision,protocol_id,protocol_artifact_id,
            execution_artifact_id,final_test_evaluation_started_at,completed_at,
            content_sha256,content_canonical_json,execution_json)
-         VALUES ($1,$2,$3,$4,$5,$6,1,$7,$8,$9,$10,$10,$11,'{}',$12::jsonb)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
         [
           pickNativeExecutionId,
-          addressed('pick-pav-observation-set', 'pick-observation'),
-          operation.content.pick.datasetId,
-          addressed('artifact', 'pick-dataset-artifact'),
-          operation.content.pick.datasetAdmissionId,
-          addressed('artifact', 'pick-admission-artifact'),
-          operation.content.pick.protocolId,
-          addressed('artifact', 'pick-protocol-artifact'),
-          addressed('artifact', 'pick-execution-artifact'),
-          now,
-          digest('pick-execution'),
-          JSON.stringify({
-            content: {
-              schemaVersion: 'afl-trade-pick-pav-model-execution/v4',
-              policyId: operation.content.pick.policyId,
-              privateInput: {
-                requestId,
-                operationId: operation.operationId,
-                claimId,
-                attemptNumber: 1,
-                leaseTokenSha256: digest(leaseToken),
-                factualOutputId,
-                hpnCalculationId,
-                factualValuesSha256: operation.content.factualValuesSha256,
-                hpnValuesSha256: operation.content.hpnValuesSha256,
-              },
-            },
-          }),
+          pickExecutionContent.observationSetId,
+          pickExecutionContent.datasetId,
+          pickExecutionContent.datasetArtifact.artifactId,
+          pickExecutionContent.datasetAdmissionId,
+          pickExecutionContent.datasetAdmissionArtifact.artifactId,
+          pickExecutionContent.datasetAdmissionGateLedgerRevision,
+          pickExecutionContent.protocolId,
+          pickExecutionContent.protocolArtifact.artifactId,
+          modelAuthority.pickComponent.content.nativeExecution.artifact.artifactId,
+          pickExecutionContent.finalTestEvaluationStartedAt,
+          pickExecutionContent.completedAt,
+          pickNativeExecutionId.slice('pick-pav-model-execution:'.length),
+          canonicalizeAflTradeJson(pickExecutionContent),
+          canonicalizeAflTradeJson(modelAuthority.pickNativeExecution),
         ]
       );
       for (const component of [
         {
-          runId: playerRunId,
-          role: 'player_contribution_and_availability',
-          kind: 'admitted_player_model_run',
-          nativeId: playerNativeRunId,
-          target: operation.content.player,
+          manifest: modelAuthority.playerComponent,
+          artifact: modelAuthority.playerComponentArtifact,
         },
         {
-          runId: pickRunId,
-          role: 'draft_pick_and_future_pick_distribution',
-          kind: 'governed_pick_pav_model_execution',
-          nativeId: pickNativeExecutionId,
-          target: operation.content.pick,
+          manifest: modelAuthority.pickComponent,
+          artifact: modelAuthority.pickComponentArtifact,
         },
       ] as const) {
+        const content = component.manifest.content;
         await seed.query(
           `INSERT INTO outcome_governed_valuation_component_run
             (run_id,role,native_execution_kind,native_execution_id,artifact_id,
@@ -467,50 +485,28 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
              dataset_artifact_id,dataset_admission_id,dataset_admission_artifact_id,
              dataset_admission_gate_ledger_revision,registered_at,content_sha256,
              content_canonical_json,manifest_json)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,$13,$14,'{}','{}'::jsonb)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)`,
           [
-            component.runId,
-            component.role,
-            component.kind,
-            component.nativeId,
-            addressed('artifact', `${component.role}-manifest`),
-            addressed('artifact', `${component.role}-native`),
-            component.target.protocolId,
-            addressed('artifact', `${component.role}-protocol`),
-            component.target.datasetId,
-            addressed('artifact', `${component.role}-dataset`),
-            component.target.datasetAdmissionId,
-            addressed('artifact', `${component.role}-admission`),
-            now,
-            digest(`${component.role}-content`),
+            component.manifest.runId,
+            content.role,
+            content.nativeExecution.kind,
+            content.nativeExecution.executionId,
+            component.artifact.artifactId,
+            content.nativeExecution.artifact.artifactId,
+            content.protocolId,
+            content.protocolArtifact.artifactId,
+            content.datasetId,
+            content.datasetArtifact.artifactId,
+            content.datasetAdmissionId,
+            content.datasetAdmissionArtifact.artifactId,
+            content.datasetAdmissionGateLedgerRevision,
+            content.registeredAt,
+            component.manifest.runId.slice('model-run:'.length),
+            canonicalizeAflTradeJson(content),
+            canonicalizeAflTradeJson(component.manifest),
           ]
         );
       }
-      await seed.query(
-        `INSERT INTO outcome_governed_valuation_model_qualification
-          (qualification_id,scope_key,outcome,artifact_id,player_run_id,pick_run_id,
-           policy_artifact_id,player_criteria_artifact_id,pick_criteria_artifact_id,
-           player_evidence_artifact_id,pick_evidence_artifact_id,evaluated_at,
-           content_sha256,content_canonical_json,qualification_json)
-         VALUES ($1,$2,'qualified',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'{}',$13::jsonb)`,
-        [
-          qualificationId,
-          operation.content.scopeKey,
-          addressed('artifact', 'qualification'),
-          playerRunId,
-          pickRunId,
-          addressed('artifact', 'policy'),
-          addressed('artifact', 'player-criteria'),
-          addressed('artifact', 'pick-criteria'),
-          addressed('artifact', 'player-evidence'),
-          addressed('artifact', 'pick-evidence'),
-          now,
-          digest('qualification-content'),
-          JSON.stringify({
-            content: { policy: { policyVersion: operation.content.qualificationPolicyId } },
-          }),
-        ]
-      );
       await seed.query('COMMIT');
     } catch (error) {
       await seed.query('ROLLBACK');
@@ -567,6 +563,52 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
         connection.release();
       }
     };
+    const governedArtifacts = createLocalAflTradePrivateDerivedArtifactRepository({
+      rootDirectory: privateArtifactRoot,
+      repositoryId: 'governed-private-evaluation',
+      maximumObjectBytes: 4 * 1024 * 1024,
+    });
+    await Promise.all(
+      modelAuthority.artifactDocuments.map(({ reference, document }) =>
+        governedArtifacts.putIfAbsent(
+          reference,
+          new TextEncoder().encode(canonicalizeAflTradeJson(document))
+        )
+      )
+    );
+    for (const { reference } of modelAuthority.artifactDocuments) {
+      await mutateFixture(
+        `INSERT INTO outcome_artifact_custody
+          (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+           environment,created_at,verified_at,custody_json)
+         VALUES ($1,$2,$3,$4,$5,'derived_private','non_production',$6,$7,'{}'::jsonb)
+         ON CONFLICT (artifact_id) DO NOTHING`,
+        [
+          reference.artifactId,
+          reference.contentSha256,
+          reference.storageUri,
+          reference.mediaType,
+          reference.byteLength,
+          reference.createdAt,
+          now,
+        ]
+      );
+    }
+    const registeredAuthority = await new PostgresGovernedValuationModelQualificationRepository({
+      client,
+      artifactRepository: governedArtifacts,
+      maximumArtifactBytes: 4 * 1024 * 1024,
+    }).register({
+      qualification: modelAuthority.qualification,
+      qualificationArtifact: modelAuthority.qualificationArtifact,
+      expectedGateLedgerRevision: 0,
+      expectedCurrentRevision: 0,
+      gateRecords: modelAuthority.gateRecords,
+    });
+    if (registeredAuthority.status !== 'advanced') {
+      throw new Error('Governed model-pair authority did not advance.');
+    }
+    const modelQualificationWorkId = registeredAuthority.work.workId;
 
     const concurrentRepositories = [
       new PostgresAflTradePrivateValuationModelPairRepository(
@@ -717,22 +759,391 @@ describe.sequential('dispatch-bound private model pair in PostgreSQL', () => {
       operationId: operation.operationId,
       qualificationId,
     });
-    await expect(
-      client.transaction(async (transaction) => {
-        await transaction.query('SET LOCAL ROLE afl_trade_private_evaluation_coordinator');
-        await transaction.query(
-          `UPDATE outcome_private_valuation_model_operation SET
-             player_attempt_number=2,
-             qualification_outcome='failed'
-           WHERE operation_id=$1`,
-          [operation.operationId]
-        );
-      })
-    ).rejects.toThrow('immutable after acceptance');
+
+    const [playerGate, pickGate] = modelAuthority.gateRecords;
+    const playerValidityDecisionId = playerGate.decision.decisionId;
+    const pickValidityDecisionId = pickGate.decision.decisionId;
+    const cohortBundle = createAflTradeCurrentValuationBundleFixture({
+      scopeKey: operation.content.scopeKey,
+      playerRunId,
+      pickRunId,
+      componentAuthority: {
+        player: {
+          protocolId: modelAuthority.playerComponent.content.protocolId,
+          datasetId: modelAuthority.playerComponent.content.datasetId,
+          gate3DecisionId: playerValidityDecisionId,
+        },
+        pick: {
+          protocolId: modelAuthority.pickComponent.content.protocolId,
+          datasetId: modelAuthority.pickComponent.content.datasetId,
+          gate3DecisionId: pickValidityDecisionId,
+        },
+      },
+    });
+    const readyTradeId = 'trade:private-cohort-acceptance-ready';
+    const unavailableTradeId = 'trade:private-cohort-acceptance-unavailable';
+    const governedComponentMetadata = [
+      {
+        ...cohortBundle.valuationInputBundle.content.components[0]!,
+        datasetAdmissionId: modelAuthority.playerComponent.content.datasetAdmissionId,
+        evidence: {
+          runManifest: modelAuthority.playerComponentArtifact,
+          protocol: modelAuthority.playerComponent.content.protocolArtifact,
+          datasetAdmission: modelAuthority.playerComponent.content.datasetAdmissionArtifact,
+          gate3Decision: createAflTradeCanonicalJsonArtifactRef(
+            playerGate.decision,
+            playerGate.decision.content.decidedAt!
+          ),
+        },
+      },
+      {
+        ...cohortBundle.valuationInputBundle.content.components[1]!,
+        datasetAdmissionId: modelAuthority.pickComponent.content.datasetAdmissionId,
+        evidence: {
+          runManifest: modelAuthority.pickComponentArtifact,
+          protocol: modelAuthority.pickComponent.content.protocolArtifact,
+          datasetAdmission: modelAuthority.pickComponent.content.datasetAdmissionArtifact,
+          gate3Decision: createAflTradeCanonicalJsonArtifactRef(
+            pickGate.decision,
+            pickGate.decision.content.decidedAt!
+          ),
+        },
+      },
+    ] as const;
+    const canonicalMembers = [readyTradeId, unavailableTradeId].map((canonicalRecordId) => ({
+      recordKind: 'transaction',
+      canonicalRecordId,
+    }));
+    await mutateFixture(
+      `INSERT INTO outcome_artifact_custody
+        (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
+         environment,created_at,verified_at,custody_json)
+       VALUES ($1,$2,$3,$4,$5,'derived_private','non_production',$6,$7,'{}'::jsonb)`,
+      [
+        cohortBundle.valuationInputBundleArtifact.artifactId,
+        cohortBundle.valuationInputBundleArtifact.contentSha256,
+        cohortBundle.valuationInputBundleArtifact.storageUri,
+        cohortBundle.valuationInputBundleArtifact.mediaType,
+        cohortBundle.valuationInputBundleArtifact.byteLength,
+        cohortBundle.valuationInputBundleArtifact.createdAt,
+        now,
+      ]
+    );
     await outcomesPool.query(
       `SELECT complete_outcome_private_valuation_dispatch($1,$2,$3::jsonb)`,
-      [claimId, digest(leaseToken), JSON.stringify({ state: 'activated' })]
+      [claimId, digest(leaseToken), JSON.stringify({ state: 'already_current' })]
     );
+
+    const composedPreparedInputs = new Map<
+      string,
+      Readonly<{ factualOutputId: string; inputSetId: string; calculationId: string }>
+    >();
+    const composedRuntime = createLocalAflTradePrivateValuationRuntime({
+      pool: outcomesPool,
+      artifactRoot: privateArtifactRoot,
+      upstream: {
+        maximumConcurrency: 1,
+        hpnPreparation: {
+          prepare: async ({ requestId: preparedRequestId }) => {
+            const prepared = composedPreparedInputs.get(preparedRequestId);
+            if (prepared === undefined) {
+              throw new Error('The composed acceptance request has no prepared upstream input.');
+            }
+            return {
+              state: 'already_prepared' as const,
+              requestId: preparedRequestId,
+              ...prepared,
+              captureBindingIds: [],
+              sourceAdmissionIds: [],
+              publicationEligible: false as const,
+            };
+          },
+        },
+        targets: modelPairTargets,
+        playerExecutor: {
+          execute: async () => {
+            throw new Error(
+              'The composed acceptance path unexpectedly executed the player adapter.'
+            );
+          },
+        },
+        pickExecutor: {
+          execute: async () => {
+            throw new Error('The composed acceptance path unexpectedly executed the pick adapter.');
+          },
+        },
+        qualificationRegistrar: {
+          register: async () => {
+            throw new Error(
+              'The composed acceptance path unexpectedly executed the qualification adapter.'
+            );
+          },
+        },
+        loadPrivateConstructionEvidence: async () => ({
+          factualReleaseArtifact: composedFactualReleaseArtifact,
+          releaseMembershipArtifact: composedReleaseMembershipArtifact,
+          releaseTradeIds: [readyTradeId, unavailableTradeId],
+          valuationInputBundleId: cohortBundle.valuationInputBundleId,
+          valuationInputBundleArtifact: cohortBundle.valuationInputBundleArtifact,
+          valuationInputBundle: cohortBundle.valuationInputBundle,
+        }),
+        constructTrade: async ({
+          tradeId: constructedTradeId,
+        }): Promise<AflTradeConstructedCurrentValuationTrade> => {
+          if (constructedTradeId !== readyTradeId) {
+            return {
+              state: 'blocked' as const,
+              blockers: [
+                {
+                  code: 'component_output_unavailable',
+                  subject: { kind: 'trade', id: constructedTradeId },
+                  evidenceRefs: [cohortBundle.valuationInputBundleArtifact],
+                },
+              ] as const,
+            };
+          }
+          const manifest = composedCalculationFixture.materializationManifest;
+          const parentDocuments: ReadonlyArray<readonly [AflTradeArtifactRef, unknown]> = [
+            [
+              manifest.content.calculationInputArtifact,
+              composedCalculationFixture.calculationInputPackage,
+            ],
+            [manifest.content.inputTraceArtifact, composedCalculationFixture.trace],
+            [
+              manifest.content.explanationPolicyArtifact,
+              composedCalculationFixture.explanationPolicy,
+            ],
+            [manifest.content.lineageGraphArtifact, composedCalculationFixture.lineageGraph],
+            ...manifest.content.pickBenchmarks.map(
+              ({ artifact }, index) =>
+                [artifact, composedCalculationFixture.pickBenchmarks[index]!] as const
+            ),
+          ];
+          return {
+            state: 'ready' as const,
+            manifest,
+            manifestArtifact: createAflTradeCanonicalJsonArtifactRef(
+              manifest,
+              manifest.content.createdAt
+            ),
+            retainedParents: parentDocuments.map(([reference, document]) => ({
+              reference,
+              bytes: new TextEncoder().encode(canonicalizeAflTradeJson(document)),
+            })),
+          };
+        },
+      },
+    });
+    const schedule = new PostgresAflTradePrivateValuationScheduleRepository(client);
+    const modelDispatch = await outcomesPool.query<{ readonly request_id: string }>(
+      `SELECT request_id FROM outcome_private_valuation_dispatch_request
+        WHERE scope_key=$1 AND trigger_kind='model_qualified' AND authority_key=$2`,
+      [operation.content.scopeKey, modelQualificationWorkId]
+    );
+    const composedRequestId = modelDispatch.rows[0]?.request_id;
+    if (modelDispatch.rows.length !== 1 || composedRequestId === undefined) {
+      throw new Error('Governed model-pair advancement did not schedule exactly one dispatch.');
+    }
+    await expect(schedule.load(composedRequestId)).resolves.toEqual({
+      status: 'pending',
+      result: null,
+    });
+    const composedFactualReleaseId = addressed('outcome-release', 'composed-runtime-release');
+    const composedFactual = loaderFactualOutput(
+      composedRequestId,
+      'composed-factual',
+      factualRunId,
+      composedFactualReleaseId
+    );
+    composedPreparedInputs.set(composedRequestId, {
+      factualOutputId: composedFactual.outputId,
+      inputSetId: hpnCalculation.content.inputSetId,
+      calculationId: hpnCalculationId,
+    });
+    const composedReleaseManifest = { content: { canonicalMembers } };
+    const composedCalculationFixture =
+      createGovernedPrivateEvaluationAuthenticatedCalculationFixture({
+        scopeKey: operation.content.scopeKey,
+        tradeId: readyTradeId,
+        factualReleaseId: composedFactualReleaseId,
+        valuationInputBundleId: cohortBundle.valuationInputBundleId,
+        playerRunId,
+        pickRunId,
+        componentMetadata: governedComponentMetadata,
+      });
+    const composedFactualReleaseArtifact = createAflTradeCanonicalJsonArtifactRef(
+      composedReleaseManifest,
+      now.toISOString()
+    );
+    const composedReleaseMembershipArtifact = createAflTradeCanonicalJsonArtifactRef(
+      canonicalMembers,
+      now.toISOString()
+    );
+    const composedArtifacts = governedArtifacts;
+    const retainComposedArtifact = async (reference: AflTradeArtifactRef, document: unknown) =>
+      composedArtifacts.putIfAbsent(
+        reference,
+        new TextEncoder().encode(canonicalizeAflTradeJson(document))
+      );
+    await retainComposedArtifact(
+      cohortBundle.valuationInputBundleArtifact,
+      cohortBundle.valuationInputBundle
+    );
+    await Promise.all(
+      cohortBundle.artifactDocuments.map(({ reference, document }) =>
+        retainComposedArtifact(reference, document)
+      )
+    );
+    await retainComposedArtifact(composedFactualReleaseArtifact, composedReleaseManifest);
+    await retainComposedArtifact(composedReleaseMembershipArtifact, canonicalMembers);
+    await retainComposedArtifact(
+      createAflTradeCanonicalJsonArtifactRef(
+        composedCalculationFixture.materializationManifest,
+        composedCalculationFixture.materializationManifest.content.createdAt
+      ),
+      composedCalculationFixture.materializationManifest
+    );
+    await retainComposedArtifact(
+      composedCalculationFixture.materializationManifest.content.calculationInputArtifact,
+      composedCalculationFixture.calculationInputPackage
+    );
+    await retainComposedArtifact(
+      composedCalculationFixture.materializationManifest.content.inputTraceArtifact,
+      composedCalculationFixture.trace
+    );
+    await retainComposedArtifact(
+      composedCalculationFixture.materializationManifest.content.explanationPolicyArtifact,
+      composedCalculationFixture.explanationPolicy
+    );
+    await retainComposedArtifact(
+      composedCalculationFixture.materializationManifest.content.lineageGraphArtifact,
+      composedCalculationFixture.lineageGraph
+    );
+    await Promise.all(
+      composedCalculationFixture.artifactDocuments.map(({ reference, document }) =>
+        retainComposedArtifact(reference, document)
+      )
+    );
+    await Promise.all(
+      composedCalculationFixture.materializationManifest.content.pickBenchmarks.map(
+        ({ artifact }, index) =>
+          retainComposedArtifact(artifact, composedCalculationFixture.pickBenchmarks[index]!)
+      )
+    );
+    await mutateFixture(
+      `INSERT INTO outcome_release_manifest
+        (release_id,scope_key,environment,created_at,effective_through,manifest_json)
+       VALUES ($1,'private-afl-draft-trade-outcomes','non_production',$2,$2,$3::jsonb)`,
+      [composedFactualReleaseId, now, canonicalizeAflTradeJson(composedReleaseManifest)]
+    );
+    await mutateFixture(
+      `INSERT INTO outcome_active_release
+        (scope_key,release_id,activated_at,revision)
+       VALUES ('private-afl-draft-trade-outcomes',$1,$2,1)
+       ON CONFLICT (scope_key) DO UPDATE
+         SET release_id=EXCLUDED.release_id,activated_at=EXCLUDED.activated_at,revision=EXCLUDED.revision`,
+      [composedFactualReleaseId, now]
+    );
+    await mutateFixture(
+      `INSERT INTO outcome_private_valuation_factual_output
+        (output_id,request_id,capture_binding_id,source_admission_id,normalization_run_id,fact_batch_id,
+         factual_run_id,candidate_id,factual_release_id,prepared_at,output_json)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+      [
+        composedFactual.outputId,
+        composedRequestId,
+        composedFactual.content.captureBindingId,
+        composedFactual.content.sourceAdmissionId,
+        composedFactual.content.normalizationRunId,
+        composedFactual.content.factBatch.batchId,
+        composedFactual.content.reconciliation.factualRunId,
+        composedFactual.content.candidate.candidateId,
+        composedFactual.content.factualRelease.releaseId,
+        composedFactual.content.preparedAt,
+        canonicalizeAflTradeJson(composedFactual),
+      ]
+    );
+    const composedDispatchResult = await composedRuntime.dispatchRequest(composedRequestId);
+    expect(composedDispatchResult).toMatchObject({
+      state: 'completed',
+      requestId: composedRequestId,
+      result: {
+        state: 'activated',
+        batch: {
+          content: {
+            tradeCount: 2,
+            readyCount: 1,
+            unavailableCount: 1,
+            entries: expect.arrayContaining([
+              expect.objectContaining({ tradeId: readyTradeId, state: 'ready' }),
+              expect.objectContaining({ tradeId: unavailableTradeId, state: 'unavailable' }),
+            ]),
+          },
+        },
+      },
+    });
+    await expect(
+      new PostgresGovernedPrivateEvaluationBatchRepository(client, async () => false).loadCurrent(
+        operation.content.scopeKey
+      )
+    ).resolves.toMatchObject({
+      head: { revision: 1 },
+      batch: { content: { tradeCount: 2, readyCount: 1, unavailableCount: 1 } },
+    });
+
+    const replayRequestId = await composedRuntime.enqueueAdHoc({
+      scopeKey: operation.content.scopeKey,
+      operationKey: 'composed-no-change-replay',
+    });
+    const replayFactualReleaseId = addressed('outcome-release', 'composed-runtime-replay-release');
+    const replayFactual = loaderFactualOutput(
+      replayRequestId,
+      'composed-replay-factual',
+      factualRunId,
+      replayFactualReleaseId
+    );
+    composedPreparedInputs.set(replayRequestId, {
+      factualOutputId: replayFactual.outputId,
+      inputSetId: hpnCalculation.content.inputSetId,
+      calculationId: hpnCalculationId,
+    });
+    await mutateFixture(
+      `INSERT INTO outcome_release_manifest
+        (release_id,scope_key,environment,created_at,effective_through,manifest_json)
+       VALUES ($1,'private-afl-draft-trade-outcomes','non_production',$2,$2,$3::jsonb)`,
+      [
+        replayFactualReleaseId,
+        new Date(now.getTime() + 1_000),
+        canonicalizeAflTradeJson(composedReleaseManifest),
+      ]
+    );
+    await mutateFixture(
+      `INSERT INTO outcome_private_valuation_factual_output
+        (output_id,request_id,capture_binding_id,source_admission_id,normalization_run_id,fact_batch_id,
+         factual_run_id,candidate_id,factual_release_id,prepared_at,output_json)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+      [
+        replayFactual.outputId,
+        replayRequestId,
+        replayFactual.content.captureBindingId,
+        replayFactual.content.sourceAdmissionId,
+        replayFactual.content.normalizationRunId,
+        replayFactual.content.factBatch.batchId,
+        replayFactual.content.reconciliation.factualRunId,
+        replayFactual.content.candidate.candidateId,
+        replayFactual.content.factualRelease.releaseId,
+        replayFactual.content.preparedAt,
+        canonicalizeAflTradeJson(replayFactual),
+      ]
+    );
+    await expect(composedRuntime.dispatchRequest(replayRequestId)).resolves.toMatchObject({
+      state: 'completed',
+      requestId: replayRequestId,
+      result: {
+        state: 'already_current',
+        head: { revision: 1 },
+      },
+    });
   });
 
   it('loads only the exact retained private factual and finalized HPN input', async () => {

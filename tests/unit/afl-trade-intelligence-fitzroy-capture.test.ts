@@ -710,25 +710,6 @@ describe('authorized fitzRoy capture runtime', () => {
       { conditions: [{ kind: 'warning', message: 'One upstream match failed.' }] },
       'OUTPUT_INVALID',
     ],
-    [
-      'field drift',
-      {
-        fields: [
-          {
-            name: 'unexpected',
-            classes: ['numeric'],
-            storageType: 'double',
-            missingCount: 0,
-            nanCount: 0,
-            positiveInfinityCount: 0,
-            negativeInfinityCount: 0,
-            levels: null,
-            timezone: null,
-          },
-        ],
-      },
-      'SCHEMA_DRIFT',
-    ],
     ['out-of-scope season rows', { observedSeasonValues: ['2025'] }, 'OUTPUT_INVALID'],
     [
       'unverifiable season scope',
@@ -753,6 +734,46 @@ describe('authorized fitzRoy capture runtime', () => {
         dependencies(executor)
       )
     ).rejects.toMatchObject({ code: expectedCode });
+  });
+
+  it('reports a bounded, sorted field difference when schema drift fails closed', async () => {
+    const fixture = governanceFixture();
+    const executor: AflTradeFitzRoyProcessExecutor = {
+      executionBoundary: 'fixture_no_network',
+      async execute(invocation) {
+        const baseDiagnostics = diagnostics(invocation);
+        return {
+          sourceBytes: Uint8Array.from([88, 10, 0, 0, 0, 3]),
+          diagnostics: {
+            ...baseDiagnostics,
+            fields: Array.from({ length: 22 }, (_, index) => ({
+              ...baseDiagnostics.fields[0],
+              name: `unexpected_${String(21 - index).padStart(2, '0')}`,
+            })),
+          },
+        };
+      },
+    };
+
+    await expect(
+      captureAuthorizedAflTradeFitzRoyEvidence(
+        { ...fixture, captureRequest: captureRequest() },
+        dependencies(executor)
+      )
+    ).rejects.toMatchObject({
+      code: 'SCHEMA_DRIFT',
+      message:
+        'The exact returned field set differs from the Gate 0A authorization. Missing fields (2): games, goals. Unexpected fields (22): unexpected_00, unexpected_01, unexpected_02, unexpected_03, unexpected_04, unexpected_05, unexpected_06, unexpected_07, unexpected_08, unexpected_09, unexpected_10, unexpected_11, unexpected_12, unexpected_13, unexpected_14, unexpected_15, unexpected_16, unexpected_17, unexpected_18, unexpected_19 (+2 more).',
+      schemaDrift: {
+        missingFieldCount: 2,
+        unexpectedFieldCount: 22,
+        missingFields: ['games', 'goals'],
+        unexpectedFields: Array.from(
+          { length: 20 },
+          (_, index) => `unexpected_${String(index).padStart(2, '0')}`
+        ),
+      },
+    });
   });
 
   it('admits request-scoped official rows only when their schema retains season evidence for decode', () => {

@@ -94,35 +94,74 @@ async function registerCycle(
   cycle: AflTradePrivateEvaluationCohortExecutionCycle,
   tradeIds: readonly string[]
 ): Promise<AflTradePrivateEvaluationCohortExecutionCycle> {
-  await transaction.query(
-    `INSERT INTO outcome_private_evaluation_execution_cycle
+  const authority = cycle.content.authority;
+  if ('factualReleaseRevision' in authority) {
+    await transaction.query(
+      `INSERT INTO outcome_private_evaluation_execution_cycle
+        (cycle_id,input_fingerprint,scope_key,prepared_input_set_id,
+         prepared_input_set_revision,factual_release_revision,
+         model_qualification_work_id,model_pair_revision,repair_sequence,
+         opening_cause,opening_principal_id,repair_operation_id,repair_reason,repairs_cycle_id,
+         maximum_attempts,opened_at,cycle_json)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
+       ON CONFLICT (cycle_id) DO NOTHING`,
+      [
+        cycle.cycleId,
+        cycle.content.inputFingerprint,
+        authority.scopeKey,
+        authority.preparedInputSetId,
+        authority.preparedInputSetRevision,
+        authority.factualReleaseRevision,
+        authority.modelQualificationWorkId,
+        authority.modelPairRevision,
+        cycle.content.repairSequence,
+        cycle.content.openingCause,
+        cycle.content.openingPrincipalId,
+        cycle.content.repairOperationId,
+        cycle.content.repairReason,
+        cycle.content.repairsCycleId,
+        cycle.content.maximumAttemptsPerTrade,
+        cycle.content.openedAt,
+        canonicalizeAflTradeJson(cycle),
+      ]
+    );
+  } else {
+    await transaction.query(
+      `INSERT INTO outcome_private_evaluation_execution_cycle
       (cycle_id,input_fingerprint,scope_key,prepared_input_set_id,
-       prepared_input_set_revision,factual_release_revision,
+       prepared_input_set_revision,preparation_authority,factual_release_revision,
+       dispatch_request_id,factual_output_id,hpn_calculation_id,model_operation_id,
        model_qualification_work_id,model_pair_revision,repair_sequence,
        opening_cause,opening_principal_id,repair_operation_id,repair_reason,repairs_cycle_id,
        maximum_attempts,opened_at,cycle_json)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb)
      ON CONFLICT (cycle_id) DO NOTHING`,
-    [
-      cycle.cycleId,
-      cycle.content.inputFingerprint,
-      cycle.content.authority.scopeKey,
-      cycle.content.authority.preparedInputSetId,
-      cycle.content.authority.preparedInputSetRevision,
-      cycle.content.authority.factualReleaseRevision,
-      cycle.content.authority.modelQualificationWorkId,
-      cycle.content.authority.modelPairRevision,
-      cycle.content.repairSequence,
-      cycle.content.openingCause,
-      cycle.content.openingPrincipalId,
-      cycle.content.repairOperationId,
-      cycle.content.repairReason,
-      cycle.content.repairsCycleId,
-      cycle.content.maximumAttemptsPerTrade,
-      cycle.content.openedAt,
-      canonicalizeAflTradeJson(cycle),
-    ]
-  );
+      [
+        cycle.cycleId,
+        cycle.content.inputFingerprint,
+        authority.scopeKey,
+        authority.preparedInputSetId,
+        authority.preparedInputSetRevision,
+        'dispatch_bound_private_factual_output',
+        null,
+        authority.privateAuthority.dispatchRequestId,
+        authority.privateAuthority.factualOutputId,
+        authority.privateAuthority.hpnCalculationId,
+        authority.privateAuthority.modelOperationId,
+        authority.modelQualificationWorkId,
+        authority.modelPairRevision,
+        cycle.content.repairSequence,
+        cycle.content.openingCause,
+        cycle.content.openingPrincipalId,
+        cycle.content.repairOperationId,
+        cycle.content.repairReason,
+        cycle.content.repairsCycleId,
+        cycle.content.maximumAttemptsPerTrade,
+        cycle.content.openedAt,
+        canonicalizeAflTradeJson(cycle),
+      ]
+    );
+  }
   for (const tradeId of tradeIds) {
     await transaction.query(
       `INSERT INTO outcome_private_evaluation_execution_work

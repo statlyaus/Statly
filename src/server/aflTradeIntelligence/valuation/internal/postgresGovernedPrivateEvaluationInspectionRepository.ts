@@ -8,6 +8,7 @@ import type {
   AflOutcomeSqlClient,
   AflOutcomeSqlTransaction,
 } from '../../outcomes/postgresOutcomeReleaseRepository';
+import type { AflTradePreparedValuationInputSetContent } from '../preparedValuationInputSet';
 import {
   createReadyGovernedPrivateEvaluationAuthorityInspectionV3,
   createUnavailableNonProductionGovernedPrivateEvaluationAuthorityInspection,
@@ -47,29 +48,42 @@ type InspectionBlocker = Readonly<{
   message: string;
 }>;
 
+type PrivatePreparedAuthority = Extract<
+  AflTradePreparedValuationInputSetContent,
+  { readonly preparationAuthority: 'dispatch_bound_private_factual_output' }
+>['privateAuthority'];
+
+type CapturedReadyCalculationAuthorityCommon = Readonly<{
+  state: 'ready';
+  preparedInputHeadRevision: number;
+  preparedInputSetId: string;
+  factualReleaseId: string;
+  materializationManifestId: string;
+  materializationManifestArtifact: AflTradeArtifactRef;
+  valuationInputBundleId: string;
+  valuationInputBundleArtifact: AflTradeArtifactRef;
+  gateLedgerRevision: number;
+  components: readonly GovernedReadyComponentAuthority[];
+}>;
+
 export type GovernedPrivateEvaluationCapturedCalculationAuthority =
   | Readonly<{ state: 'unavailable'; blockers: readonly InspectionBlocker[] }>
-  | Readonly<{
-      state: 'ready';
-      preparedInputHeadRevision: number;
-      preparedInputSetId: string;
-      factualRegistryRevision: number;
-      factualReleaseId: string;
-      activeFactualReleaseRevision: number;
-      privateValuationDecisionId: string;
-      privateValuationDecisionRevision: number;
-      materializationManifestId: string;
-      materializationManifestArtifact: AflTradeArtifactRef;
-      valuationInputBundleId: string;
-      valuationInputBundleArtifact: AflTradeArtifactRef;
-      gateLedgerRevision: number;
-      components: readonly GovernedReadyComponentAuthority[];
-    }>;
+  | (CapturedReadyCalculationAuthorityCommon &
+      (
+        | Readonly<{
+            factualRegistryRevision: number;
+            activeFactualReleaseRevision: number;
+            privateValuationDecisionId: string;
+            privateValuationDecisionRevision: number;
+          }>
+        | Readonly<{
+            preparationAuthority: 'dispatch_bound_private_factual_output';
+            privateAuthority: PrivatePreparedAuthority;
+          }>
+      ));
 
 type RetainedInspection =
-  | ReturnType<
-      typeof createUnavailableNonProductionGovernedPrivateEvaluationAuthorityInspection
-    >
+  | ReturnType<typeof createUnavailableNonProductionGovernedPrivateEvaluationAuthorityInspection>
   | ReturnType<typeof createReadyGovernedPrivateEvaluationAuthorityInspectionV3>;
 
 function parseTime(value: Date | string): string {
@@ -260,10 +274,7 @@ export function createPostgresGovernedPrivateEvaluationInspectionRepository(depe
       const artifacts = [retained.snapshot, retained.inspection].map((document) => ({
         document,
         bytes: new TextEncoder().encode(canonicalizeAflTradeJson(document)),
-        reference: createAflTradeCanonicalJsonArtifactRef(
-          document,
-          capturedState.capturedAt
-        ),
+        reference: createAflTradeCanonicalJsonArtifactRef(document, capturedState.capturedAt),
       }));
       for (const artifact of artifacts) {
         const retainedReference = await dependencies.retainArtifact({

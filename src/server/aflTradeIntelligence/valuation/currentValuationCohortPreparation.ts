@@ -8,6 +8,7 @@ import {
 import { aflTradeValuationInputBundleSchema } from '../artifacts/valuationInputBundle';
 import {
   AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION,
+  aflTradePrivatePreparedValuationAuthoritySchema,
   aflTradePreparedValuationInputEntrySchema,
   createAflTradePreparedValuationInputSet,
   type AflTradePreparedValuationInputSet,
@@ -24,28 +25,68 @@ const publicIdSchema = z
 
 export const aflTradeCurrentValuationCohortPreparationRequestSchema = z
   .object({
-    operationId: aflTradeContentAddressedIdSchema(
-      'valuation-cohort-preparation-operation'
-    ),
+    operationId: aflTradeContentAddressedIdSchema('valuation-cohort-preparation-operation'),
     scopeKey: publicIdSchema,
   })
   .strict();
 
-export const aflTradeCurrentValuationCohortConstructionContextSchema = z
+const currentValuationCohortConstructionContextCommonShape = {
+  operationId: aflTradeContentAddressedIdSchema('valuation-cohort-preparation-operation'),
+  scopeKey: publicIdSchema,
+  factualReleaseScopeKey: publicIdSchema,
+  factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+  factualReleaseArtifact: aflTradeArtifactRefSchema,
+  releaseMembershipArtifact: aflTradeArtifactRefSchema,
+  releaseTradeIds: z.array(publicIdSchema).min(1).max(10_000),
+  expectedPreparedInputRevision: z.number().int().nonnegative(),
+  valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle'),
+  valuationInputBundleArtifact: aflTradeArtifactRefSchema,
+  capturedAt: z.iso.datetime({ offset: true }),
+} as const;
+
+function refineConstructionContext(
+  context: {
+    readonly releaseTradeIds: readonly string[];
+    readonly capturedAt: string;
+    readonly factualReleaseArtifact: z.infer<typeof aflTradeArtifactRefSchema>;
+    readonly releaseMembershipArtifact: z.infer<typeof aflTradeArtifactRefSchema>;
+    readonly valuationInputBundleArtifact: z.infer<typeof aflTradeArtifactRefSchema>;
+  },
+  refinement: z.RefinementCtx,
+  authorityArtifacts: readonly z.infer<typeof aflTradeArtifactRefSchema>[]
+): void {
+  const tradeIds = context.releaseTradeIds;
+  if (
+    new Set(tradeIds).size !== tradeIds.length ||
+    tradeIds.some((tradeId, index) => index > 0 && tradeIds[index - 1]! > tradeId)
+  ) {
+    refinement.addIssue({
+      code: 'custom',
+      path: ['releaseTradeIds'],
+      message: 'Current cohort release trades must be unique and canonically ordered.',
+    });
+  }
+  const capturedAt = Date.parse(context.capturedAt);
+  const parents = [
+    context.factualReleaseArtifact,
+    context.releaseMembershipArtifact,
+    ...authorityArtifacts,
+    context.valuationInputBundleArtifact,
+  ];
+  if (parents.some(({ createdAt }) => Date.parse(createdAt) > capturedAt)) {
+    refinement.addIssue({
+      code: 'custom',
+      path: ['capturedAt'],
+      message: 'Current cohort authority cannot predate retained construction evidence.',
+    });
+  }
+}
+
+const publicCurrentValuationCohortConstructionContextSchema = z
   .object({
-    operationId: aflTradeContentAddressedIdSchema(
-      'valuation-cohort-preparation-operation'
-    ),
-    scopeKey: publicIdSchema,
-    factualReleaseScopeKey: publicIdSchema,
-    factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+    ...currentValuationCohortConstructionContextCommonShape,
     factualReleaseRevision: z.number().int().positive(),
-    factualReleaseArtifact: aflTradeArtifactRefSchema,
-    releaseMembershipArtifact: aflTradeArtifactRefSchema,
-    releaseTradeIds: z.array(publicIdSchema).min(1).max(10_000),
-    sourceQualificationReportId: aflTradeContentAddressedIdSchema(
-      'valuation-source-qualification'
-    ),
+    sourceQualificationReportId: aflTradeContentAddressedIdSchema('valuation-source-qualification'),
     sourceQualificationReportArtifact: aflTradeArtifactRefSchema,
     sourceQualificationEvidenceRefs: z.array(aflTradeArtifactRefSchema).min(1).max(1_000),
     modelQualificationId: aflTradeContentAddressedIdSchema('model-qualification'),
@@ -53,48 +94,37 @@ export const aflTradeCurrentValuationCohortConstructionContextSchema = z
     modelQualificationRevision: z.number().int().positive(),
     playerRunId: aflTradeContentAddressedIdSchema('model-run'),
     pickRunId: aflTradeContentAddressedIdSchema('model-run'),
-    expectedPreparedInputRevision: z.number().int().nonnegative(),
-    valuationInputBundleId: aflTradeContentAddressedIdSchema('valuation-input-bundle'),
-    valuationInputBundleArtifact: aflTradeArtifactRefSchema,
-    capturedAt: z.iso.datetime({ offset: true }),
   })
   .strict()
   .superRefine((context, refinement) => {
-    const tradeIds = context.releaseTradeIds;
-    if (
-      new Set(tradeIds).size !== tradeIds.length ||
-      tradeIds.some((tradeId, index) => index > 0 && tradeIds[index - 1]! > tradeId)
-    ) {
-      refinement.addIssue({
-        code: 'custom',
-        path: ['releaseTradeIds'],
-        message: 'Current cohort release trades must be unique and canonically ordered.',
-      });
-    }
-    const capturedAt = Date.parse(context.capturedAt);
-    const parents = [
-      context.factualReleaseArtifact,
-      context.releaseMembershipArtifact,
+    refineConstructionContext(context, refinement, [
       context.sourceQualificationReportArtifact,
       ...context.sourceQualificationEvidenceRefs,
-      context.valuationInputBundleArtifact,
-    ];
-    if (parents.some(({ createdAt }) => Date.parse(createdAt) > capturedAt)) {
-      refinement.addIssue({
-        code: 'custom',
-        path: ['capturedAt'],
-        message: 'Current cohort authority cannot predate retained construction evidence.',
-      });
-    }
+    ]);
   });
 
-export const aflTradePersistedCurrentValuationCohortConstructionContextSchema =
-  aflTradeCurrentValuationCohortConstructionContextSchema
+const privateCurrentValuationCohortConstructionContextSchema = z
+  .object({
+    ...currentValuationCohortConstructionContextCommonShape,
+    preparationAuthority: z.literal('dispatch_bound_private_factual_output'),
+    privateAuthority: aflTradePrivatePreparedValuationAuthoritySchema,
+  })
+  .strict()
+  .superRefine((context, refinement) => {
+    refineConstructionContext(context, refinement, []);
+  });
+
+export const aflTradeCurrentValuationCohortConstructionContextSchema = z.union([
+  publicCurrentValuationCohortConstructionContextSchema,
+  privateCurrentValuationCohortConstructionContextSchema,
+]);
+
+const persistedPublicCurrentValuationCohortConstructionContextSchema =
+  publicCurrentValuationCohortConstructionContextSchema
     .safeExtend({ valuationInputBundle: aflTradeValuationInputBundleSchema })
     .superRefine((context, refinement) => {
       if (
-        context.valuationInputBundle.valuationInputBundleId !==
-          context.valuationInputBundleId ||
+        context.valuationInputBundle.valuationInputBundleId !== context.valuationInputBundleId ||
         context.valuationInputBundle.content.scopeKey !== context.scopeKey ||
         context.valuationInputBundle.content.components[0]?.runId !== context.playerRunId ||
         context.valuationInputBundle.content.components[1]?.runId !== context.pickRunId
@@ -107,6 +137,31 @@ export const aflTradePersistedCurrentValuationCohortConstructionContextSchema =
       }
     });
 
+const persistedPrivateCurrentValuationCohortConstructionContextSchema =
+  privateCurrentValuationCohortConstructionContextSchema
+    .safeExtend({ valuationInputBundle: aflTradeValuationInputBundleSchema })
+    .superRefine((context, refinement) => {
+      if (
+        context.valuationInputBundle.valuationInputBundleId !== context.valuationInputBundleId ||
+        context.valuationInputBundle.content.scopeKey !== context.scopeKey ||
+        context.valuationInputBundle.content.components[0]?.runId !==
+          context.privateAuthority.playerRunId ||
+        context.valuationInputBundle.content.components[1]?.runId !==
+          context.privateAuthority.pickRunId
+      ) {
+        refinement.addIssue({
+          code: 'custom',
+          path: ['valuationInputBundle'],
+          message: 'Retained cohort valuation bundle must bind the exact scope and model runs.',
+        });
+      }
+    });
+
+export const aflTradePersistedCurrentValuationCohortConstructionContextSchema = z.union([
+  persistedPublicCurrentValuationCohortConstructionContextSchema,
+  persistedPrivateCurrentValuationCohortConstructionContextSchema,
+]);
+
 export type AflTradeCurrentValuationCohortPreparationRequest = z.infer<
   typeof aflTradeCurrentValuationCohortPreparationRequestSchema
 >;
@@ -118,6 +173,16 @@ export function createAflTradeCurrentValuationCohortPreparationOperationId(input
   readonly modelQualificationId: string;
   readonly modelQualificationWorkId: string;
   readonly modelQualificationRevision: number;
+  readonly expectedPreparedInputRevision: number;
+}): string {
+  return createAflTradeContentAddress('valuation-cohort-preparation-operation', input);
+}
+
+export function createAflTradePrivateCurrentValuationCohortPreparationOperationId(input: {
+  readonly scopeKey: string;
+  readonly factualReleaseId: string;
+  readonly privateAuthority: z.infer<typeof aflTradePrivatePreparedValuationAuthoritySchema>;
+  readonly valuationInputBundleId: string;
   readonly expectedPreparedInputRevision: number;
 }): string {
   return createAflTradeContentAddress('valuation-cohort-preparation-operation', input);
@@ -177,9 +242,7 @@ export function createAflTradeCurrentValuationCohortCoordinator(
   }
   return {
     async prepare(unparsedRequest) {
-      const request = aflTradeCurrentValuationCohortPreparationRequestSchema.parse(
-        unparsedRequest
-      );
+      const request = aflTradeCurrentValuationCohortPreparationRequestSchema.parse(unparsedRequest);
       const context = aflTradeCurrentValuationCohortConstructionContextSchema.parse(
         await dependencies.captureCurrent(request)
       );
@@ -220,9 +283,7 @@ export function createAflTradeCurrentValuationCohortCoordinator(
                 }) as AflTradePreparedValuationInputEntryV3;
               }
               if (entry.tradeId !== tradeId) {
-                throw new TypeError(
-                  'Current cohort trade preparation escaped its factual member.'
-                );
+                throw new TypeError('Current cohort trade preparation escaped its factual member.');
               }
               entries[index] = entry;
             }
@@ -235,11 +296,14 @@ export function createAflTradeCurrentValuationCohortCoordinator(
           ? [entry.materializationManifestArtifact]
           : entry.blockers.flatMap(({ evidenceRefs }) => evidenceRefs)
       );
+      const authorityArtifacts =
+        'sourceQualificationReportArtifact' in context
+          ? [context.sourceQualificationReportArtifact, ...context.sourceQualificationEvidenceRefs]
+          : [];
       const preparedAt = [
         context.factualReleaseArtifact,
         context.releaseMembershipArtifact,
-        context.sourceQualificationReportArtifact,
-        ...context.sourceQualificationEvidenceRefs,
+        ...authorityArtifacts,
         context.valuationInputBundleArtifact,
         ...entryEvidence,
       ].reduce(
@@ -255,11 +319,19 @@ export function createAflTradeCurrentValuationCohortCoordinator(
         factualReleaseId: context.factualReleaseId,
         factualReleaseArtifact: context.factualReleaseArtifact,
         releaseMembershipArtifact: context.releaseMembershipArtifact,
-        preparationAuthority: 'authenticated_calculation_evidence_snapshot',
         qualificationOperation: 'valuation_model_training_and_derived_feature_creation',
-        qualificationReportId: context.sourceQualificationReportId,
-        qualificationReportArtifact: context.sourceQualificationReportArtifact,
-        sourceQualificationEvidenceRefs: context.sourceQualificationEvidenceRefs,
+        ...('privateAuthority' in context
+          ? {
+              preparationAuthority: 'dispatch_bound_private_factual_output' as const,
+              preparationOperationId: context.operationId,
+              privateAuthority: context.privateAuthority,
+            }
+          : {
+              preparationAuthority: 'authenticated_calculation_evidence_snapshot' as const,
+              qualificationReportId: context.sourceQualificationReportId,
+              qualificationReportArtifact: context.sourceQualificationReportArtifact,
+              sourceQualificationEvidenceRefs: context.sourceQualificationEvidenceRefs,
+            }),
         valuationInputBundleId: context.valuationInputBundleId,
         valuationInputBundleArtifact: context.valuationInputBundleArtifact,
         releaseTradeIds: context.releaseTradeIds,

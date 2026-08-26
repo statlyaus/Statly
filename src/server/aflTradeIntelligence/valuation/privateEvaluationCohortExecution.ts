@@ -5,9 +5,10 @@ import {
   aflTradeContentAddressedIdSchema,
   createAflTradeContentAddress,
 } from '../artifacts/contentAddress';
+import { aflTradePrivatePreparedValuationAuthoritySchema } from './preparedValuationInputSet';
 
 const idSchema = z.string().trim().min(1).max(400);
-const authoritySchema = z
+const publicAuthoritySchema = z
   .object({
     scopeKey: idSchema,
     preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
@@ -17,6 +18,32 @@ const authoritySchema = z
     modelPairRevision: z.number().int().positive(),
   })
   .strict();
+
+const privateAuthoritySchema = z
+  .object({
+    preparationAuthority: z.literal('dispatch_bound_private_factual_output'),
+    scopeKey: idSchema,
+    preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
+    preparedInputSetRevision: z.number().int().positive(),
+    modelQualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
+    modelPairRevision: z.number().int().positive(),
+    privateAuthority: aflTradePrivatePreparedValuationAuthoritySchema,
+  })
+  .strict()
+  .superRefine((authority, context) => {
+    if (
+      authority.modelQualificationWorkId !== authority.privateAuthority.modelQualificationWorkId ||
+      authority.modelPairRevision !== authority.privateAuthority.modelQualificationRevision
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['privateAuthority'],
+        message: 'Execution authority must preserve the exact prepared private model authority.',
+      });
+    }
+  });
+
+const authoritySchema = z.union([publicAuthoritySchema, privateAuthoritySchema]);
 
 export const AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY = {
   schemaVersion: 'private-evaluation-cohort-execution-policy/v1',

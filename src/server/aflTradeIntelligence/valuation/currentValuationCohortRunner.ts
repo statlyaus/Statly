@@ -15,6 +15,7 @@ import type {
   GovernedPrivateEvaluationBatchHead,
   GovernedPrivateEvaluationBatchTransitionResult,
 } from './internal/postgresGovernedPrivateEvaluationBatchRepository';
+import { aflTradePrivatePreparedValuationAuthoritySchema } from './preparedValuationInputSet';
 
 const idSchema = z.string().trim().min(1).max(400);
 const blockerCodeSchema = z.enum([
@@ -55,34 +56,66 @@ const capturedEntrySchema = z.discriminatedUnion('state', [
     .strict(),
 ]);
 
-const capturedSchema = z
+const capturedCommonShape = {
+  scopeKey: idSchema,
+  preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
+  preparedInputSetRevision: z.number().int().positive(),
+  factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+  modelQualificationId: aflTradeContentAddressedIdSchema('model-qualification'),
+  modelQualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
+  modelPairRevision: z.number().int().positive(),
+  expectedBatchRevision: z.number().int().nonnegative(),
+  entries: z.array(capturedEntrySchema).min(1).max(10_000),
+  capturedAt: z.iso.datetime({ offset: true }),
+} as const;
+
+function refineCapturedEntries(
+  capture: { readonly entries: readonly z.infer<typeof capturedEntrySchema>[] },
+  context: z.RefinementCtx
+): void {
+  const ids = capture.entries.map(({ tradeId }) => tradeId);
+  if (
+    new Set(ids).size !== ids.length ||
+    ids.some((id, index) => index > 0 && ids[index - 1]! > id)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['entries'],
+      message: 'Cohort trades must be unique and ordered.',
+    });
+  }
+}
+
+const publicCapturedSchema = z
   .object({
-    scopeKey: idSchema,
-    preparedInputSetId: aflTradeContentAddressedIdSchema('prepared-valuation-input-set'),
-    preparedInputSetRevision: z.number().int().positive(),
-    factualReleaseId: aflTradeContentAddressedIdSchema('outcome-release'),
+    ...capturedCommonShape,
     factualReleaseRevision: z.number().int().positive(),
-    modelQualificationId: aflTradeContentAddressedIdSchema('model-qualification'),
-    modelQualificationWorkId: aflTradeContentAddressedIdSchema('model-qualification-work'),
-    modelPairRevision: z.number().int().positive(),
-    expectedBatchRevision: z.number().int().nonnegative(),
-    entries: z.array(capturedEntrySchema).min(1).max(10_000),
-    capturedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+  .superRefine(refineCapturedEntries);
+
+const privateCapturedSchema = z
+  .object({
+    ...capturedCommonShape,
+    privateAuthority: aflTradePrivatePreparedValuationAuthoritySchema,
   })
   .strict()
   .superRefine((capture, context) => {
-    const ids = capture.entries.map(({ tradeId }) => tradeId);
+    refineCapturedEntries(capture, context);
     if (
-      new Set(ids).size !== ids.length ||
-      ids.some((id, index) => index > 0 && ids[index - 1]! > id)
+      capture.modelQualificationId !== capture.privateAuthority.modelQualificationId ||
+      capture.modelQualificationWorkId !== capture.privateAuthority.modelQualificationWorkId ||
+      capture.modelPairRevision !== capture.privateAuthority.modelQualificationRevision
     ) {
       context.addIssue({
         code: 'custom',
-        path: ['entries'],
-        message: 'Cohort trades must be unique and ordered.',
+        path: ['privateAuthority'],
+        message: 'Private cohort model authority must match the captured qualified pair.',
       });
     }
   });
+
+const capturedSchema = z.union([publicCapturedSchema, privateCapturedSchema]);
 
 type Request = z.infer<typeof requestSchema>;
 type Capture = z.infer<typeof capturedSchema>;
@@ -119,10 +152,10 @@ function boundedDiagnosticField(value: unknown, fallback: string, maximumLength:
 type CurrentBatch = Readonly<{
   batch: GovernedPrivateEvaluationBatch;
   head: GovernedPrivateEvaluationBatchHead;
-  authority: Readonly<{
-    factualReleaseRevision: number;
-    modelPairRevision: number;
-  }> | null;
+  authority:
+    | Readonly<{ factualReleaseRevision: number; modelPairRevision: number }>
+    | Readonly<{ factualOutputId: string; modelOperationId: string; modelPairRevision: number }>
+    | null;
 }>;
 
 interface Dependencies {
@@ -166,24 +199,45 @@ interface Dependencies {
   }) => Promise<GovernedPrivateEvaluationBatchTransitionResult>;
 }
 
-export function createAflTradePrivateEvaluationCohortRunOperationId(input: {
-  readonly scopeKey: string;
-  readonly preparedInputSetId: string;
-  readonly preparedInputSetRevision: number;
-  readonly modelQualificationWorkId: string;
-  readonly factualReleaseRevision: number;
-  readonly modelPairRevision: number;
-  readonly expectedBatchRevision: number;
-}): string {
+export function createAflTradePrivateEvaluationCohortRunOperationId(
+  input:
+    | {
+        readonly scopeKey: string;
+        readonly preparedInputSetId: string;
+        readonly preparedInputSetRevision: number;
+        readonly modelQualificationWorkId: string;
+        readonly factualReleaseRevision: number;
+        readonly modelPairRevision: number;
+        readonly expectedBatchRevision: number;
+      }
+    | {
+        readonly scopeKey: string;
+        readonly preparedInputSetId: string;
+        readonly preparedInputSetRevision: number;
+        readonly privateAuthority: z.input<typeof aflTradePrivatePreparedValuationAuthoritySchema>;
+        readonly expectedBatchRevision: number;
+      }
+): string {
   return createAflTradeContentAddress('private-evaluation-cohort-run', input);
 }
 
 function isAlreadyCurrent(capture: Capture, current: CurrentBatch | null): current is CurrentBatch {
+  const exactFactualAuthority =
+    'privateAuthority' in capture
+      ? current !== null &&
+        current.authority !== null &&
+        'factualOutputId' in current.authority &&
+        current.authority.factualOutputId === capture.privateAuthority.factualOutputId &&
+        current.authority.modelOperationId === capture.privateAuthority.modelOperationId
+      : current !== null &&
+        current.authority !== null &&
+        'factualReleaseRevision' in current.authority &&
+        current.authority.factualReleaseRevision === capture.factualReleaseRevision;
   return (
     current !== null &&
     current.head.revision === capture.expectedBatchRevision &&
     current.authority !== null &&
-    current.authority.factualReleaseRevision === capture.factualReleaseRevision &&
+    exactFactualAuthority &&
     current.authority.modelPairRevision === capture.modelPairRevision &&
     current.batch.content.scopeKey === capture.scopeKey &&
     current.batch.content.preparedInputSetId === capture.preparedInputSetId &&
@@ -215,9 +269,13 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
         scopeKey: capture.scopeKey,
         preparedInputSetId: capture.preparedInputSetId,
         preparedInputSetRevision: capture.preparedInputSetRevision,
-        modelQualificationWorkId: capture.modelQualificationWorkId,
-        factualReleaseRevision: capture.factualReleaseRevision,
-        modelPairRevision: capture.modelPairRevision,
+        ...('privateAuthority' in capture
+          ? { privateAuthority: capture.privateAuthority }
+          : {
+              modelQualificationWorkId: capture.modelQualificationWorkId,
+              factualReleaseRevision: capture.factualReleaseRevision,
+              modelPairRevision: capture.modelPairRevision,
+            }),
         expectedBatchRevision: capture.expectedBatchRevision,
       });
       if (request.operationId !== expectedOperationId) {
@@ -320,9 +378,7 @@ export function createAflTradePrivateEvaluationCohortRunner(dependencies: Depend
         })
       );
 
-      diagnostics.sort((left, right) =>
-        compareAflTradeCodeUnits(left.tradeId, right.tradeId)
-      );
+      diagnostics.sort((left, right) => compareAflTradeCodeUnits(left.tradeId, right.tradeId));
       if (diagnostics.length > 0) {
         const retained = await dependencies.retainUnexpectedDiagnostics({
           request,

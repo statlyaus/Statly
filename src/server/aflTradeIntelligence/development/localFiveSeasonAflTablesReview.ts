@@ -37,7 +37,7 @@ export interface LocalFiveSeasonAflTablesReviewEvidence {
 
 const EXPECTED_APPEARANCE_COUNT = 48_769;
 export const LOCAL_FIVE_SEASON_AFL_TABLES_EVIDENCE_SET_SHA256 =
-  'aef663452e66a433048605a71fb4178ed1a5e1d9610c6d3ed75bfb796308b5cb';
+  '7ef741add1ae94133c597581f8a2175118058bedd2ffe8a107213630e1b0fd10';
 const DECIDED_AT = '2026-08-14T12:15:00.000Z';
 
 const REVIEWED_ROWS_CTE = `WITH reviewed_rows AS (

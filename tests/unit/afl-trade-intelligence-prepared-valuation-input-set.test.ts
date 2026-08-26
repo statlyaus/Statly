@@ -11,6 +11,7 @@ import {
   createAflTradePreparedValuationInputSet,
 } from '@/server/aflTradeIntelligence/valuation/preparedValuationInputSet';
 import { PostgresAflTradePreparedValuationInputSetStore } from '@/server/aflTradeIntelligence/valuation/postgresPreparedValuationInputSetStore';
+import type { AflOutcomeSqlQueryResult } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 
 const digest = (character: string) => character.repeat(64);
 type PreparedInput = Parameters<typeof createAflTradePreparedValuationInputSet>[0];
@@ -37,8 +38,7 @@ function content() {
     factualReleaseArtifact: artifact('2'),
     releaseMembershipArtifact: artifact('3'),
     preparationAuthority: 'source_policy_preflight_only' as const,
-    qualificationOperation:
-      'valuation_model_training_and_derived_feature_creation' as const,
+    qualificationOperation: 'valuation_model_training_and_derived_feature_creation' as const,
     qualificationReportId: `valuation-source-qualification:${digest('4')}`,
     qualificationReportArtifact: artifact('5'),
     sourceQualificationEvidenceRefs: [artifact('6'), artifact('8')],
@@ -111,8 +111,11 @@ function v2Content() {
 }
 
 function v3Content() {
+  const v2 = v2Content();
+  const blocked = v2.entries[1];
+  if (blocked?.state !== 'blocked') throw new Error('Expected blocked v2 fixture entry.');
   return {
-    ...v2Content(),
+    ...v2,
     schemaVersion: AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION,
     entries: [
       {
@@ -121,8 +124,33 @@ function v3Content() {
         materializationManifestId: `private-evaluation-materialization-manifest:${digest('7')}`,
         materializationManifestArtifact: artifact('b'),
       },
-      v2Content().entries[1]!,
+      blocked,
     ],
+  };
+}
+
+function privateV3Content() {
+  const {
+    qualificationReportId: _qualificationReportId,
+    qualificationReportArtifact: _qualificationReportArtifact,
+    sourceQualificationEvidenceRefs: _sourceQualificationEvidenceRefs,
+    ...publicContent
+  } = v3Content();
+  return {
+    ...publicContent,
+    preparationAuthority: 'dispatch_bound_private_factual_output' as const,
+    preparationOperationId: `valuation-cohort-preparation-operation:${digest('f')}`,
+    privateAuthority: {
+      dispatchRequestId: `private-valuation-dispatch:${digest('0')}`,
+      factualOutputId: `private-valuation-factual-output:${digest('1')}`,
+      hpnCalculationId: `hpn-pav-season:${digest('2')}`,
+      modelOperationId: `private-valuation-model-operation:${digest('3')}`,
+      modelQualificationId: `model-qualification:${digest('4')}`,
+      modelQualificationWorkId: `model-qualification-work:${digest('5')}`,
+      modelQualificationRevision: 7,
+      playerRunId: `model-run:${digest('6')}`,
+      pickRunId: `model-run:${digest('7')}`,
+    },
   };
 }
 
@@ -130,8 +158,7 @@ describe('AFL trade prepared valuation input set', () => {
   it('keeps current prepared authority behind explicit CAS and coherent read methods', () => {
     const store = new PostgresAflTradePreparedValuationInputSetStore({
       query: async () => ({ rows: [], rowCount: 0 }),
-      transaction: async (work) =>
-        work({ query: async () => ({ rows: [], rowCount: 0 }) }),
+      transaction: async (work) => work({ query: async () => ({ rows: [], rowCount: 0 }) }),
     });
 
     expect(store.activateCurrent).toEqual(expect.any(Function));
@@ -141,9 +168,13 @@ describe('AFL trade prepared valuation input set', () => {
 
   it('rejects relational ancestry that disagrees with finalized v3 bytes', async () => {
     const prepared = createAflTradePreparedValuationInputSet(v3Content());
+    if (!('qualificationReportId' in prepared.content)) {
+      throw new Error('Expected authenticated public prepared-v3 authority.');
+    }
+    const publicContent = prepared.content;
     let queryIndex = 0;
     const store = new PostgresAflTradePreparedValuationInputSetStore({
-      async query() {
+      async query<Row>() {
         queryIndex += 1;
         if (queryIndex === 1) {
           return {
@@ -154,7 +185,7 @@ describe('AFL trade prepared valuation input set', () => {
                 scope_key: prepared.content.scopeKey,
                 factual_release_scope_key: prepared.content.factualReleaseScopeKey,
                 factual_release_id: prepared.content.factualReleaseId,
-                qualification_report_id: prepared.content.qualificationReportId,
+                qualification_report_id: publicContent.qualificationReportId,
                 prepared_at: prepared.content.preparedAt,
                 prepared_set_json: prepared,
                 content_canonical_json: canonicalizeAflTradeJson(prepared.content),
@@ -169,7 +200,7 @@ describe('AFL trade prepared valuation input set', () => {
               },
             ],
             rowCount: 1,
-          };
+          } as unknown as AflOutcomeSqlQueryResult<Row>;
         }
         return {
           rows: prepared.content.entries.map((entry, index) => ({
@@ -180,7 +211,7 @@ describe('AFL trade prepared valuation input set', () => {
             entry_json: entry,
           })),
           rowCount: prepared.content.entries.length,
-        };
+        } as unknown as AflOutcomeSqlQueryResult<Row>;
       },
       async transaction(work) {
         return work(this);
@@ -255,9 +286,7 @@ describe('AFL trade prepared valuation input set', () => {
 
     expect(() =>
       createAflTradePreparedValuationInputSet(invalid as unknown as PreparedInput)
-    ).toThrow(
-      'accepts only exact source-policy blockers'
-    );
+    ).toThrow('accepts only exact source-policy blockers');
   });
 
   it('v2 classifies every release trade as authenticated ready or factual blocked', () => {
@@ -287,11 +316,14 @@ describe('AFL trade prepared valuation input set', () => {
   });
 
   it('v3 classifies each trade through one bounded materialization manifest or blocker', () => {
-    const prepared = createAflTradePreparedValuationInputSet(v3Content());
+    const input = v3Content();
+    const prepared = createAflTradePreparedValuationInputSet(input);
 
     expect(prepared.content.schemaVersion).toBe(
       AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION
     );
+    expect(canonicalizeAflTradeJson(prepared.content)).toBe(canonicalizeAflTradeJson(input));
+    expect(prepared.content).not.toHaveProperty('privateAuthority');
     expect(prepared.content.entries[0]).toEqual({
       tradeId: 'trade-a',
       state: 'ready',
@@ -301,5 +333,77 @@ describe('AFL trade prepared valuation input set', () => {
     expect(prepared.content.readyCount + prepared.content.blockedCount).toBe(
       prepared.content.tradeCount
     );
+  });
+
+  it('v3 accepts exact dispatch-bound private factual and model authority', () => {
+    const input = privateV3Content();
+    const prepared = createAflTradePreparedValuationInputSet(input as unknown as PreparedInput);
+
+    expect(prepared.content).toMatchObject({
+      schemaVersion: AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION,
+      preparationAuthority: 'dispatch_bound_private_factual_output',
+      privateAuthority: input.privateAuthority,
+    });
+    expect(prepared.content).not.toHaveProperty('qualificationReportId');
+    expect(prepared.content).not.toHaveProperty('sourceQualificationEvidenceRefs');
+    expect(prepared.preparedInputSetId).toBe(
+      createAflTradeContentAddress('prepared-valuation-input-set', prepared.content)
+    );
+  });
+
+  it('loads private v3 custody without inventing a public qualification report', async () => {
+    const prepared = createAflTradePreparedValuationInputSet(
+      privateV3Content() as unknown as PreparedInput
+    );
+    let queryIndex = 0;
+    const store = new PostgresAflTradePreparedValuationInputSetStore({
+      async query<Row>() {
+        queryIndex += 1;
+        if (queryIndex === 1) {
+          return {
+            rows: [
+              {
+                content_sha256: prepared.preparedInputSetId.slice(
+                  'prepared-valuation-input-set:'.length
+                ),
+                schema_version: prepared.content.schemaVersion,
+                environment: prepared.content.environment,
+                scope_key: prepared.content.scopeKey,
+                factual_release_scope_key: prepared.content.factualReleaseScopeKey,
+                factual_release_id: prepared.content.factualReleaseId,
+                qualification_report_id: null,
+                prepared_at: prepared.content.preparedAt,
+                prepared_set_json: prepared,
+                content_canonical_json: canonicalizeAflTradeJson(prepared.content),
+                prepared_set_canonical_json: canonicalizeAflTradeJson(prepared),
+                finalized_at: prepared.content.preparedAt,
+                trade_count: prepared.content.tradeCount,
+                ready_count: prepared.content.readyCount,
+                blocked_count: prepared.content.blockedCount,
+                actual_count: prepared.content.tradeCount,
+                actual_ready_count: prepared.content.readyCount,
+                actual_blocked_count: prepared.content.blockedCount,
+              },
+            ],
+            rowCount: 1,
+          } as unknown as AflOutcomeSqlQueryResult<Row>;
+        }
+        return {
+          rows: prepared.content.entries.map((entry, index) => ({
+            ordinal: index + 1,
+            trade_id: entry.tradeId,
+            state: entry.state,
+            entry_canonical_json: canonicalizeAflTradeJson(entry),
+            entry_json: entry,
+          })),
+          rowCount: prepared.content.entries.length,
+        } as unknown as AflOutcomeSqlQueryResult<Row>;
+      },
+      async transaction(work) {
+        return work(this);
+      },
+    });
+
+    await expect(store.loadExact(prepared.preparedInputSetId)).resolves.toEqual(prepared);
   });
 });

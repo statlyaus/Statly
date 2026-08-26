@@ -17,6 +17,26 @@ const authority = {
   modelPairRevision: 5,
 } as const;
 
+const privateAuthority = {
+  preparationAuthority: 'dispatch_bound_private_factual_output',
+  scopeKey: 'afl-men:2026-trades',
+  preparedInputSetId: `prepared-valuation-input-set:${digest('3')}`,
+  preparedInputSetRevision: 5,
+  modelQualificationWorkId: `model-qualification-work:${digest('4')}`,
+  modelPairRevision: 6,
+  privateAuthority: {
+    dispatchRequestId: `private-valuation-dispatch:${digest('5')}`,
+    factualOutputId: `private-valuation-factual-output:${digest('6')}`,
+    hpnCalculationId: `hpn-pav-season:${digest('7')}`,
+    modelOperationId: `private-valuation-model-operation:${digest('8')}`,
+    modelQualificationId: `model-qualification:${digest('9')}`,
+    modelQualificationWorkId: `model-qualification-work:${digest('4')}`,
+    modelQualificationRevision: 6,
+    playerRunId: `model-run:${digest('a')}`,
+    pickRunId: `model-run:${digest('b')}`,
+  },
+} as const;
+
 describe('private evaluation cohort durable execution policy', () => {
   it('fixes bounded local execution to three persisted attempts', () => {
     expect(AFL_TRADE_PRIVATE_EVALUATION_COHORT_EXECUTION_POLICY).toEqual({
@@ -82,6 +102,20 @@ describe('private evaluation cohort durable execution policy', () => {
       repairReason: 'Retry after the retained upstream outage was corrected.',
       repairsCycleId: original.cycleId,
     });
+  });
+
+  it('binds a private cycle to exact dispatch authority without inventing a release revision', () => {
+    const cycle = createAflTradePrivateEvaluationCohortExecutionCycle({
+      authority: privateAuthority,
+      repairSequence: 0,
+      openedAt: '2026-08-21T10:00:00.000Z',
+    });
+
+    expect(cycle.content.authority).toEqual(privateAuthority);
+    expect(cycle.content.authority).not.toHaveProperty('factualReleaseRevision');
+    expect(createAflTradePrivateEvaluationCohortInputFingerprint(privateAuthority)).not.toBe(
+      createAflTradePrivateEvaluationCohortInputFingerprint(authority)
+    );
   });
 
   it('classifies only bounded infrastructure failures as transient', () => {

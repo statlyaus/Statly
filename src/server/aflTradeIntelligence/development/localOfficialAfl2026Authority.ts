@@ -58,13 +58,7 @@ const logical = (name: string): LocalOfficialAflFieldDescriptor => ({
 });
 
 export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
-  ...[
-    'providerId',
-    'utcStartTime',
-    'status',
-    'compSeason.shortName',
-    'round.name',
-  ].map(character),
+  ...['providerId', 'utcStartTime', 'status', 'compSeason.shortName', 'round.name'].map(character),
   integer('round.roundNumber'),
   ...[
     'venue.name',
@@ -83,11 +77,7 @@ export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
   character('player.player.player.surname'),
   character('teamId'),
   logical('gamesPlayed'),
-  ...[
-    'timeOnGroundPercentage',
-    'goals',
-    'behinds',
-  ].map(number),
+  ...['timeOnGroundPercentage', 'goals', 'behinds'].map(number),
   logical('superGoals'),
   ...[
     'kicks',
@@ -116,12 +106,7 @@ export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
   ].map(number),
   logical('ranking'),
   logical('lastUpdated'),
-  ...[
-    'turnovers',
-    'intercepts',
-    'tacklesInside50',
-    'shotsAtGoal',
-  ].map(number),
+  ...['turnovers', 'intercepts', 'tacklesInside50', 'shotsAtGoal'].map(number),
   logical('goalEfficiency'),
   logical('shotEfficiency'),
   logical('interchangeCounts'),
@@ -164,7 +149,6 @@ export const LOCAL_OFFICIAL_AFL_2026_PLAYER_STATS_FIELD_SCHEMA = [
   character('player.givenName'),
   character('player.surname'),
   character('teamStatus'),
-  logical('extendedStats'),
   character('team.name'),
 ] satisfies readonly LocalOfficialAflFieldDescriptor[];
 
@@ -285,8 +269,7 @@ export function createLocalAflTradeOfficialAfl2026Authority() {
       },
       {
         conditionId: 'concluded-match-status-review',
-        description:
-          'Promote appearances only from rows whose official match status is concluded.',
+        description: 'Promote appearances only from rows whose official match status is concluded.',
         appliesToOperations: ['internal_quality_evaluation' as const],
         verificationEvidenceIds: [artifact('concluded-match-review')],
       },

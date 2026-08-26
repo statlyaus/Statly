@@ -333,8 +333,10 @@ transaction-shaped factual release contract. Migration
 `0051_private_reviewed_evidence_evaluation` therefore adds a separate
 `retained_private_review` lane instead of inventing factual-release ancestry. Its content-addressed
 bundle authenticates the two exact current review sets, every deterministic current review receipt,
-the six retained 2021–2026 source captures and their immutable source artifacts, and the two exact
-source-rights artifacts. The current rehearsal bundle contains 48,781 reviewed candidates and
+the seven eligible retained 2021–2026 source captures and their immutable source artifacts, and the
+three exact source-rights artifacts. Eligibility requires a successfully finalized normalization;
+failed attempts and their raw custody remain retained but cannot enter the bundle. The current
+rehearsal bundle contains 48,781 reviewed candidates and
 146,343 current decisions. PostgreSQL rechecks the complete review-set health and exact artifact
 custody when the bundle is registered, whenever the append-only authorization head changes, and
 whenever calculation admission is assessed. One missing, superseded, or altered receipt invalidates
@@ -429,12 +431,13 @@ projection, service, API, archive response, and authenticated JSON, CSV and OOXM
 byte. This is disposable local recovery evidence only; it is not evidence for hosted retention,
 point-in-time recovery, cross-host recovery, disaster recovery, or production restore authority.
 
-A separate development-only evidence rehearsal retains six one-off governed captures in a
-caller-owned disposable `statly_outcomes_test` PostgreSQL database: completed AFL Tables seasons
-2021–2025 and official AFL current-season evidence for 2026. The retained captures contain 57,621
-staged player-match rows. Capture rights, field maps, receipts, decoder provenance, raw-object
-digests, and staging outcomes remain independently attributable to their source decisions. Local raw
-custody uses the explicit `local_non_production_filesystem` profile and confers no hosted durability,
+A separate development-only evidence rehearsal retains seven one-off governed captures in a
+caller-owned disposable `statly_outcomes_test` PostgreSQL database: completed AFL Tables player-stat
+seasons 2021–2025, official AFL current-season player evidence for 2026, and AFL Tables concluded
+results for 2026. The retained captures contain 58,386 staged player-match rows and 207 separate
+results rows. Capture rights, field maps, receipts, decoder provenance, raw-object digests, and
+staging outcomes remain independently attributable to their source decisions. Local raw custody uses
+the explicit `local_non_production_filesystem` profile and confers no hosted durability,
 redistribution, production, or recurring-capture authority.
 
 Those local capture-rights artifacts permit bounded capture, raw/hash retention and internal quality
@@ -1900,9 +1903,13 @@ admitted end-to-end model release must automatically calculate its supported his
 every transaction outside that cohort remains explicitly unavailable rather than inheriting a score
 from a different model version or evidence set.
 
-The local private runtime now performs automatic cohort calculation after an exact current prepared-v3
-input set and an automatically qualified player/pick model pair exist. It captures the factual-release,
-prepared-head, model-pair, and current-batch revisions; attempts every ready trade with bounded
+The durable private cohort path performs automatic cohort calculation after an exact current
+prepared-v3 input set and an automatically qualified player/pick model pair exist. Public prepared-v3
+captures retain the factual-release revision tuple byte-for-byte. Dispatch-bound private prepared-v3
+captures instead retain the exact request, accepted factual output and HPN calculation, substantive
+model operation, accepted player and pick runs, qualification/work revision, prepared-head revision,
+and current-batch revision; they do not invent a public factual-release revision. It attempts every
+ready trade with bounded
 concurrency; retains expected unavailability per trade; and refuses the whole candidate batch when an
 unexpected construction or custody failure occurs. Each ready calculation is staged under the fixed
 `system:weekly-valuation-coordinator` principal. Only after exhaustive membership and ancestry checks
@@ -1993,10 +2000,28 @@ model spend.
 Neither the exact-input loader nor either new binding reads or writes a public release or publication
 pointer.
 
-This is still not a complete new-game-data pipeline. The deployed weekly runner continues to consume
-whatever exact prepared-v3 head is current. Observation rebuild and prepared-v3 activation still need
-to be composed around this dispatch-bound model-pair coordinator before the worker can run raw data
-through to recalculation without manual orchestration.
+Runtime composition now routes qualification success through the existing current-cohort preparation
+and atomic batch runner rather than translating it directly to `activated`. Migrated PostgreSQL
+acceptance traverses the real schedule repository and dispatcher, model-pair dispatch runner, private
+prepared-v3 coordinator, governed workspace, cohort runner, and atomic current-batch boundary as one
+claimed path. That proof uses deterministic adapters only at the externally unconfigured HPN, model,
+qualification, and construction seams and therefore proves orchestration and fail-closed unavailable
+preservation, not a genuine source-to-calculated-trade run. Within the implemented path, unchanged exact
+private authority returns the retained prepared head or current batch without repeating model execution,
+preparation, trade calculation, or batch registration. Every private prepared-head commit and final
+batch compare-and-swap revalidates the live dispatch claim.
+
+This is still not a complete configured local new-game-data pipeline. The repository does not contain
+one concrete runtime factory for the admitted player executor, governed pick executor, qualification
+preparation, model targets, and HPN construction dependencies. The local launcher can compose durable
+scheduling and current-batch repair, but valuation dispatch fails with that explicit configuration
+blocker unless the genuine upstream adapters are supplied; it no longer falls through to the unrelated
+public/current prepared head. The runtime itself owns the existing dispatcher, model-pair coordinator,
+private prepared-v3 coordinator, cohort runner, durable execution, and atomic batch repository. Do not
+replace the missing upstream adapters with fixtures or another coordinator. The per-trade calculation
+snapshot, inspection contract, and PostgreSQL validator accept
+the same discriminated private authority and revalidate its exact current dispatch, factual, HPN,
+operation, qualification/work, and model-run tuple before ready calculation can proceed.
 
 A structurally valid fixture report always retains `publicationReady: false` and the remaining
 external blockers: a real historical-data run, component-model calibration exit criteria, downstream

@@ -43,6 +43,38 @@ function requestFor(authority: ReturnType<typeof capture>) {
   };
 }
 
+function privateCapture(tradeIds: string[]) {
+  const publicCapture = capture(tradeIds);
+  const { factualReleaseRevision: _factualReleaseRevision, ...common } = publicCapture;
+  return {
+    ...common,
+    privateAuthority: {
+      dispatchRequestId: `private-valuation-dispatch:${digest('5')}`,
+      factualOutputId: `private-valuation-factual-output:${digest('6')}`,
+      hpnCalculationId: `hpn-pav-season:${digest('7')}`,
+      modelOperationId: `private-valuation-model-operation:${digest('8')}`,
+      modelQualificationId: common.modelQualificationId,
+      modelQualificationWorkId: common.modelQualificationWorkId,
+      modelQualificationRevision: common.modelPairRevision,
+      playerRunId: `model-run:${digest('9')}`,
+      pickRunId: `model-run:${digest('a')}`,
+    },
+  };
+}
+
+function privateRequestFor(authority: ReturnType<typeof privateCapture>) {
+  return {
+    scopeKey,
+    operationId: createAflTradePrivateEvaluationCohortRunOperationId({
+      scopeKey,
+      preparedInputSetId: authority.preparedInputSetId,
+      preparedInputSetRevision: authority.preparedInputSetRevision,
+      privateAuthority: authority.privateAuthority,
+      expectedBatchRevision: authority.expectedBatchRevision,
+    }),
+  };
+}
+
 describe('automatic private evaluation cohort runner', () => {
   it('leaves the batch unchanged while durable transient work is waiting for retry', async () => {
     const authority = capture(['trade-a', 'trade-b']);
@@ -304,6 +336,57 @@ describe('automatic private evaluation cohort runner', () => {
     });
 
     await expect(runner.run(requestFor(authority))).resolves.toMatchObject({
+      state: 'already_current',
+      batch: { batchId: current.batchId },
+    });
+    expect(stageTrade).not.toHaveBeenCalled();
+  });
+
+  it('no-ops an unchanged private factual-output cohort without a synthetic release revision', async () => {
+    const authority = privateCapture(['trade-a']);
+    const current = createGovernedPrivateEvaluationBatch({
+      scopeKey: authority.scopeKey,
+      preparedInputSetId: authority.preparedInputSetId,
+      preparedInputSetRevision: authority.preparedInputSetRevision,
+      factualReleaseId: authority.factualReleaseId,
+      modelQualificationId: authority.modelQualificationId,
+      modelQualificationWorkId: authority.modelQualificationWorkId,
+      entries: [
+        {
+          tradeId: 'trade-a',
+          state: 'ready',
+          generationId: `local-private-trade-evaluation-generation:${digest('a')}`,
+        },
+      ],
+      createdAt: authority.capturedAt,
+    });
+    const stageTrade = vi.fn();
+    const runner = createAflTradePrivateEvaluationCohortRunner({
+      captureCurrent: async () => ({
+        capture: authority,
+        currentBatch: {
+          batch: current,
+          head: {
+            scopeKey,
+            batchId: current.batchId,
+            revision: authority.expectedBatchRevision,
+            transitionId: `private-evaluation-batch-transition:${digest('b')}`,
+            activatedAt: authority.capturedAt,
+          },
+          authority: {
+            factualOutputId: authority.privateAuthority.factualOutputId,
+            modelOperationId: authority.privateAuthority.modelOperationId,
+            modelPairRevision: authority.modelPairRevision,
+          },
+        },
+      }),
+      stageTrade,
+      retainUnexpectedDiagnostics: async () => undefined,
+      registerBatch: async (batch) => batch,
+      advanceBatch: vi.fn(),
+    });
+
+    await expect(runner.run(privateRequestFor(authority))).resolves.toMatchObject({
       state: 'already_current',
       batch: { batchId: current.batchId },
     });

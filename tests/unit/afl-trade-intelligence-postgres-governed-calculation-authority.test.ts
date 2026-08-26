@@ -1,5 +1,8 @@
 import { createAflTradeFixtureArtifactRepository } from '@/server/aflTradeIntelligence/artifacts/immutableArtifactRepository';
-import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import {
+  createAflTradeCanonicalJsonArtifactRef,
+  type AflTradeArtifactRef,
+} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -77,11 +80,84 @@ function readyPreparedFixture() {
   return { calculation, prepared };
 }
 
+function readyPrivatePreparedFixture() {
+  const calculation = createGovernedPrivateEvaluationAuthenticatedCalculationFixture();
+  const createdAt = '2026-08-19T11:00:00.000Z';
+  const evidence = (label: string) =>
+    createAflTradeCanonicalJsonArtifactRef({ fixture: label }, '2026-08-19T08:00:00.000Z');
+  const playerRunId = calculation.trace.content.components[0]!.runId;
+  const pickRunId = calculation.trace.content.components[1]!.runId;
+  const prepared = createAflTradePreparedValuationInputSet({
+    schemaVersion: 'afl-trade-prepared-valuation-input-set/v3',
+    environment: 'non_production',
+    scopeKey: calculation.trace.content.selector.valuationScopeKey,
+    factualReleaseScopeKey: 'public-afl-draft-trade-outcomes',
+    factualReleaseId: calculation.trace.content.factualReleaseId,
+    factualReleaseArtifact: evidence('release'),
+    releaseMembershipArtifact: evidence('membership'),
+    preparationAuthority: 'dispatch_bound_private_factual_output',
+    preparationOperationId: createAflTradeContentAddress('valuation-cohort-preparation-operation', {
+      fixture: 'preparation-operation',
+    }),
+    privateAuthority: {
+      dispatchRequestId: createAflTradeContentAddress('private-valuation-dispatch', {
+        fixture: 'dispatch',
+      }),
+      factualOutputId: createAflTradeContentAddress('private-valuation-factual-output', {
+        fixture: 'factual-output',
+      }),
+      hpnCalculationId: createAflTradeContentAddress('hpn-pav-season', {
+        fixture: 'hpn',
+      }),
+      modelOperationId: createAflTradeContentAddress('private-valuation-model-operation', {
+        fixture: 'model-operation',
+      }),
+      modelQualificationId: createAflTradeContentAddress('model-qualification', {
+        fixture: 'qualification',
+      }),
+      modelQualificationWorkId: createAflTradeContentAddress('model-qualification-work', {
+        fixture: 'qualification-work',
+      }),
+      modelQualificationRevision: 3,
+      playerRunId,
+      pickRunId,
+    },
+    qualificationOperation: 'valuation_model_training_and_derived_feature_creation',
+    valuationInputBundleId: calculation.trace.content.valuationInputBundleId,
+    valuationInputBundleArtifact: evidence('valuation-input-bundle'),
+    releaseTradeIds: [calculation.trace.content.selector.tradeId],
+    entries: [
+      {
+        tradeId: calculation.trace.content.selector.tradeId,
+        state: 'ready',
+        materializationManifestId: calculation.materializationManifest.manifestId,
+        materializationManifestArtifact: createAflTradeCanonicalJsonArtifactRef(
+          calculation.materializationManifest,
+          calculation.materializationManifest.content.createdAt
+        ),
+      },
+    ],
+    tradeCount: 1,
+    readyCount: 1,
+    blockedCount: 0,
+    preparedAt: createdAt,
+    publicationEligible: false,
+    limitation:
+      'Private preparation evidence only; not a valuation result, publication approval, or activation authority.',
+  });
+  return { calculation, prepared };
+}
+
 class ReadyPreparedAuthorityTransaction implements AflOutcomeSqlTransaction {
   readonly calls: { sql: string; parameters: readonly unknown[] }[] = [];
-  readonly fixture = readyPreparedFixture();
+  readonly fixture;
 
-  constructor(private readonly retainManifestRow = false) {}
+  constructor(
+    private readonly retainManifestRow = false,
+    authority: 'public' | 'private' = 'public'
+  ) {
+    this.fixture = authority === 'public' ? readyPreparedFixture() : readyPrivatePreparedFixture();
+  }
 
   async query<Row>(
     sql: string,
@@ -89,6 +165,9 @@ class ReadyPreparedAuthorityTransaction implements AflOutcomeSqlTransaction {
   ): Promise<AflOutcomeSqlQueryResult<Row>> {
     this.calls.push({ sql, parameters });
     const { prepared } = this.fixture;
+    if (prepared.content.schemaVersion !== 'afl-trade-prepared-valuation-input-set/v3') {
+      throw new Error('Expected prepared-v3 fixture.');
+    }
     if (sql.includes('FROM outcome_current_prepared_valuation_input_set')) {
       return {
         rows: [
@@ -112,7 +191,10 @@ class ReadyPreparedAuthorityTransaction implements AflOutcomeSqlTransaction {
             scope_key: prepared.content.scopeKey,
             factual_release_scope_key: prepared.content.factualReleaseScopeKey,
             factual_release_id: prepared.content.factualReleaseId,
-            qualification_report_id: prepared.content.qualificationReportId,
+            qualification_report_id:
+              'qualificationReportId' in prepared.content
+                ? prepared.content.qualificationReportId
+                : null,
             prepared_at: prepared.content.preparedAt,
             prepared_set_json: prepared,
             content_canonical_json: canonicalizeAflTradeJson(prepared.content),
@@ -187,14 +269,23 @@ async function retainReadyFixtureArtifacts(
   repository: ReturnType<typeof createAflTradeFixtureArtifactRepository>
 ) {
   const { calculation, prepared } = transaction.fixture;
+  if (prepared.content.schemaVersion !== 'afl-trade-prepared-valuation-input-set/v3') {
+    throw new Error('Expected prepared-v3 fixture.');
+  }
   const readyEntry = prepared.content.entries[0];
   if (readyEntry?.state !== 'ready') throw new Error('Expected ready fixture entry.');
-  const documents = [
+  const authorityArtifacts: ReadonlyArray<readonly [AflTradeArtifactRef, unknown]> =
+    prepared.content.preparationAuthority === 'authenticated_calculation_evidence_snapshot'
+      ? [
+          [prepared.content.qualificationReportArtifact, { fixture: 'qualification' }],
+          [prepared.content.sourceQualificationEvidenceRefs[0]!, { fixture: 'source' }],
+        ]
+      : [];
+  const documents: ReadonlyArray<readonly [AflTradeArtifactRef, unknown]> = [
     [readyEntry.materializationManifestArtifact, calculation.materializationManifest],
     [prepared.content.factualReleaseArtifact, { fixture: 'release' }],
     [prepared.content.releaseMembershipArtifact, { fixture: 'membership' }],
-    [prepared.content.qualificationReportArtifact, { fixture: 'qualification' }],
-    [prepared.content.sourceQualificationEvidenceRefs[0]!, { fixture: 'source' }],
+    ...authorityArtifacts,
     [prepared.content.valuationInputBundleArtifact, { fixture: 'valuation-input-bundle' }],
     [
       calculation.materializationManifest.content.calculationInputArtifact,
@@ -210,7 +301,7 @@ async function retainReadyFixtureArtifacts(
       calculation.materializationManifest.content.pickBenchmarks[0]!.artifact,
       calculation.pickBenchmarks[0],
     ],
-  ] as const;
+  ];
   for (const [reference, document] of documents) {
     await repository.putIfAbsent(
       reference,
@@ -280,6 +371,24 @@ describe('PostgreSQL governed calculation-authority capture', () => {
 
   it('refuses a ready prepared entry whose retained materialization manifest is absent', async () => {
     const transaction = new ReadyPreparedAuthorityTransaction();
+    const capture = createPostgresGovernedPrivateEvaluationCalculationAuthorityCapture({
+      artifactRepository: createAflTradeFixtureArtifactRepository({
+        artifactClass: 'derived_private',
+      }),
+      maximumArtifactBytes: 1024 * 1024,
+    });
+
+    await expect(
+      capture({
+        transaction,
+        selector: transaction.fixture.calculation.trace.content.selector,
+        capturedAt: '2026-08-20T10:00:00.000Z',
+      })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('continues private prepared authority into exact manifest authentication', async () => {
+    const transaction = new ReadyPreparedAuthorityTransaction(false, 'private');
     const capture = createPostgresGovernedPrivateEvaluationCalculationAuthorityCapture({
       artifactRepository: createAflTradeFixtureArtifactRepository({
         artifactClass: 'derived_private',

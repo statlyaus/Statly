@@ -141,9 +141,7 @@ function authenticateConstructionAncestry(input: {
     content.lineageGraphArtifact
   ) as AflTradeLineageGraph;
   const pickBenchmarks = content.pickBenchmarks.map(({ artifact }) =>
-    aflTradePickPavDistributionBenchmarkSchema.parse(
-      parentValue(input.parents, artifact)
-    )
+    aflTradePickPavDistributionBenchmarkSchema.parse(parentValue(input.parents, artifact))
   );
   const playerObservations = content.playerObservations.map(({ artifact }) =>
     aflTradePlayerPavObservationSchema.parse(parentValue(input.parents, artifact))
@@ -154,6 +152,14 @@ function authenticateConstructionAncestry(input: {
   const pick = trace.content.components.find(
     ({ role }) => role === 'draft_pick_and_future_pick_distribution'
   );
+  const expectedPlayerRunId =
+    'privateAuthority' in input.context
+      ? input.context.privateAuthority.playerRunId
+      : input.context.playerRunId;
+  const expectedPickRunId =
+    'privateAuthority' in input.context
+      ? input.context.privateAuthority.pickRunId
+      : input.context.pickRunId;
   if (
     trace.content.selector.valuationScopeKey !== input.context.scopeKey ||
     trace.content.selector.tradeId !== input.tradeId ||
@@ -162,8 +168,8 @@ function authenticateConstructionAncestry(input: {
     calculationInputPackage.content.tradeId !== input.tradeId ||
     calculationInputPackage.content.valuationInputBundleId !==
       input.context.valuationInputBundleId ||
-    player?.runId !== input.context.playerRunId ||
-    pick?.runId !== input.context.pickRunId
+    player?.runId !== expectedPlayerRunId ||
+    pick?.runId !== expectedPickRunId
   ) {
     throw new TypeError(
       'Current trade construction does not match the captured release, model, or bundle authority.'
@@ -206,17 +212,13 @@ export function createAflTradeCurrentValuationTradePreparer(
       const manifest = governedPrivateEvaluationMaterializationManifestSchema.parse(
         constructed.manifest
       );
-      const manifestArtifact = aflTradeArtifactRefSchema.parse(
-        constructed.manifestArtifact
-      );
+      const manifestArtifact = aflTradeArtifactRefSchema.parse(constructed.manifestArtifact);
       const parents = constructed.retainedParents
         .map(({ reference, bytes }) => ({
           reference: aflTradeArtifactRefSchema.parse(reference),
           bytes,
         }))
-        .sort((left, right) =>
-          left.reference.artifactId.localeCompare(right.reference.artifactId)
-        );
+        .sort((left, right) => left.reference.artifactId.localeCompare(right.reference.artifactId));
       if (
         manifest.content.selector.valuationScopeKey !== input.context.scopeKey ||
         manifest.content.selector.tradeId !== input.tradeId ||

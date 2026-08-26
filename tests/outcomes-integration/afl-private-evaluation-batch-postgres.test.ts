@@ -5,9 +5,7 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  createAflTradeCanonicalJsonArtifactRef,
-} from '@/server/aflTradeIntelligence/artifacts/artifactReference';
+import { createAflTradeCanonicalJsonArtifactRef } from '@/server/aflTradeIntelligence/artifacts/artifactReference';
 import {
   canonicalizeAflTradeJson,
   createAflTradeContentAddress,
@@ -19,12 +17,14 @@ import type {
   AflOutcomeSqlTransaction,
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '@/server/aflTradeIntelligence/valuation/automatedPrivateEvaluationPolicy';
+import type { GovernedPrivateEvaluationWorkspace } from '@/server/aflTradeIntelligence/valuation/governedPrivateEvaluationWorkspace';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortRunner';
 import { createAutomatedGovernedPrivateEvaluationStagingService } from '@/server/aflTradeIntelligence/valuation/internal/automatedGovernedPrivateEvaluationStagingService';
 import { createReadyGovernedPrivateEvaluationAuthorityInspectionV3 } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationAuthoritySnapshot';
 import { createPostgresGovernedPrivateEvaluationLifecycleRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationLifecycleRepository';
 import { createPostgresGovernedPrivateEvaluationStagingRepository } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationStagingRepository';
 import { automatedGovernedPrivateEvaluationTransitionIntentSchema } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationLifecycle';
+import { governedPrivateEvaluationAutomatedStageResultSchema } from '@/server/aflTradeIntelligence/valuation/internal/governedPrivateEvaluationWorkspaceContracts';
 import {
   createGovernedPrivateEvaluationBatch,
   createGovernedPrivateEvaluationBatchOperationId,
@@ -119,7 +119,7 @@ beforeAll(async () => {
          ready_count,blocked_count,prepared_at,content_canonical_json,
          prepared_set_canonical_json,prepared_set_json,finalized_at)
        VALUES ($1,$2,'afl-trade-prepared-valuation-input-set/v3','non_production',$3,
-               'fixture-release-scope',$4,$5,2,0,2,$6,'{}','{}','{}'::jsonb,$6)`,
+               'fixture-release-scope',$4,$5,2,0,2,$6,'{}','{}',$7::jsonb,$6)`,
       [
         preparedInputSetId,
         '1'.repeat(64),
@@ -127,6 +127,12 @@ beforeAll(async () => {
         factualReleaseId,
         `valuation-source-qualification:${'f'.repeat(64)}`,
         createdAt,
+        canonicalizeAflTradeJson({
+          content: {
+            valuationInputBundleId: `valuation-input-bundle:${'8'.repeat(64)}`,
+            valuationInputBundleArtifact: artifactRef('shared-ready-bundle', createdAt),
+          },
+        }),
       ]
     );
     for (const [ordinal, tradeId] of ['trade-a', 'trade-b'].entries()) {
@@ -462,8 +468,7 @@ async function seedReadyRunnerAuthority(input: {
     factualRegistryRevision: input.factualReleaseRevision,
     factualReleaseId,
     activeFactualReleaseRevision: input.factualReleaseRevision,
-    privateValuationDecisionId:
-      `private-valuation-evaluation-decision:${'a'.repeat(64)}`,
+    privateValuationDecisionId: `private-valuation-evaluation-decision:${'a'.repeat(64)}`,
     privateValuationDecisionRevision: 1,
     materializationManifestId: manifestId,
     materializationManifestArtifact: manifestArtifact,
@@ -493,12 +498,7 @@ async function seedReadyRunnerAuthority(input: {
   try {
     await seed.query('BEGIN');
     await seed.query(`SET LOCAL session_replication_role='replica'`);
-    for (const ref of [
-      manifestArtifact,
-      bundleArtifact,
-      snapshotArtifact,
-      inspectionArtifact,
-    ]) {
+    for (const ref of [manifestArtifact, bundleArtifact, snapshotArtifact, inspectionArtifact]) {
       await seed.query(
         `INSERT INTO outcome_artifact_custody
           (artifact_id,content_sha256,storage_uri,media_type,byte_length,artifact_class,
@@ -557,7 +557,7 @@ async function seedReadyRunnerAuthority(input: {
         `INSERT INTO outcome_gate_decision
           (decision_id,proposal_id,gate,decision_key,version,environment,state,
            decided_at,effective_at,revalidate_at,supersedes_decision_id,decision_json)
-         VALUES ($1,$2,'gate_3_model_approval',$3,1,'non_production','approved',
+         VALUES ($1,$2,'gate_3_model_validity',$3,1,'non_production','approved',
                  $4,$4,'2099-01-01T00:00:00.000Z',NULL,'{}'::jsonb)
          ON CONFLICT DO NOTHING`,
         [
@@ -631,9 +631,7 @@ async function seedReadyRunnerAuthority(input: {
         input.head?.status ?? 'absent',
         input.head?.revision ?? 0,
         input.head?.generationId ?? null,
-        authorityInspection.inspection.inspectionId.slice(
-          'private-evaluation-inspection:'.length
-        ),
+        authorityInspection.inspection.inspectionId.slice('private-evaluation-inspection:'.length),
         canonicalizeAflTradeJson(authorityInspection.inspection.content),
         canonicalizeAflTradeJson(authorityInspection.inspection),
       ]
@@ -814,9 +812,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       expectedRevision: 4,
       authorityEvidenceId: `reviewer-authority-evidence:${'0'.repeat(64)}`,
       authorizedAt: missingEvidenceAuthorizedAt,
-      expiresAt: new Date(
-        Date.parse(missingEvidenceAuthorizedAt) + 15 * 60 * 1_000
-      ).toISOString(),
+      expiresAt: new Date(Date.parse(missingEvidenceAuthorizedAt) + 15 * 60 * 1_000).toISOString(),
     });
     await expect(repository.rollback(missingEvidenceRollback)).rejects.toThrow(
       /governed operator authority/i
@@ -837,29 +833,23 @@ describe('PostgreSQL atomic private evaluation batches', () => {
           principalId: expiredPrincipalId,
           authorityEvidenceId: expiredEvidenceId,
           authorizedAt: expiredAuthorizedAt,
-          expiresAt: new Date(
-            Date.parse(expiredAuthorizedAt) + 15 * 60 * 1_000
-          ).toISOString(),
+          expiresAt: new Date(Date.parse(expiredAuthorizedAt) + 15 * 60 * 1_000).toISOString(),
         })
       )
     ).rejects.toThrow(/governed operator authority/i);
-    const forgedOperationId = createAflTradeContentAddress(
-      'private-evaluation-batch-operation',
-      { forged: true }
-    );
-    const forgedTransitionId = createAflTradeContentAddress(
-      'private-evaluation-batch-transition',
-      {
-        operationId: forgedOperationId,
-        scopeKey,
-        action: 'rollback',
-        principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
-        fromRevision: 4,
-        fromBatchId: first.batchId,
-        toRevision: 5,
-        toBatchId: second.batchId,
-      }
-    );
+    const forgedOperationId = createAflTradeContentAddress('private-evaluation-batch-operation', {
+      forged: true,
+    });
+    const forgedTransitionId = createAflTradeContentAddress('private-evaluation-batch-transition', {
+      operationId: forgedOperationId,
+      scopeKey,
+      action: 'rollback',
+      principalId: AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID,
+      fromRevision: 4,
+      fromBatchId: first.batchId,
+      toRevision: 5,
+      toBatchId: second.batchId,
+    });
     await expect(
       pool.query(
         `INSERT INTO outcome_private_evaluation_batch_transition
@@ -1113,7 +1103,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       client: createPgAflOutcomeSqlClient(pool),
       batchRepository: repository,
       workspace: {
-        stageAutomated: async ({ selector }) => {
+        stageAutomated: async ({ selector, operationId }) => {
           if (selector.tradeId === 'trade-a') {
             throw new TypeError('retained despite the authority race');
           }
@@ -1130,7 +1120,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
           } finally {
             shift.release();
           }
-          return { state: 'stale_authority' as const };
+          return { state: 'stale_authority' as const, selector, operationId };
         },
         inspect: async () => {
           throw new Error('Not used by the cohort runner.');
@@ -1187,12 +1177,14 @@ describe('PostgreSQL atomic private evaluation batches', () => {
           async () => true
         ),
         workspace: {
-          stageAutomated: async ({ selector }) => {
+          stageAutomated: async ({ selector, operationId }) => {
             if (selector.tradeId === 'trade-a') {
               throw Object.assign(new Error('serialization conflict'), { code: '40001' });
             }
             return {
               state: 'unavailable' as const,
+              selector,
+              operationId,
               blockers: [{ code: 'insufficient_data', message: 'No retained observations.' }],
             };
           },
@@ -1287,7 +1279,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         client: createPgAflOutcomeSqlClient(pool),
         batchRepository: repository,
         workspace: {
-          stageAutomated: async ({ selector }) => {
+          stageAutomated: async ({ selector, operationId }) => {
             if (!shifted && selector.tradeId === 'trade-a') {
               shifted = true;
               const authority = await pool.connect();
@@ -1309,6 +1301,8 @@ describe('PostgreSQL atomic private evaluation batches', () => {
             }
             return {
               state: 'unavailable' as const,
+              selector,
+              operationId,
               blockers: [
                 {
                   code: 'engineering_unavailable',
@@ -1344,9 +1338,11 @@ describe('PostgreSQL atomic private evaluation batches', () => {
     interruptedRepository.advance = async () => {
       throw new Error('simulated interruption before batch CAS');
     };
-    const workspace = {
-      stageAutomated: async () => ({
+    const workspace: GovernedPrivateEvaluationWorkspace = {
+      stageAutomated: async ({ selector, operationId }) => ({
         state: 'unavailable' as const,
+        selector,
+        operationId,
         blockers: [
           {
             code: 'engineering_unavailable',
@@ -1446,7 +1442,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       playerObservations: [],
     });
     if (baseReplay.state !== 'ready') throw new Error('Expected ready fixture replay.');
-    const replays = new Map(
+    const replays = new Map<string, typeof baseReplay>(
       [...clubCounts].map(([tradeId, clubCount]) => {
         const source =
           clubCount === 2
@@ -1579,8 +1575,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
         const intent = automatedGovernedPrivateEvaluationTransitionIntentSchema.parse(
           retained.rows[0].intent_json
         );
-        const previousTransitionId =
-          retained.rows[0].receipt_json.content?.lastTransitionId;
+        const previousTransitionId = retained.rows[0].receipt_json.content?.lastTransitionId;
         if (previousTransitionId !== null && typeof previousTransitionId !== 'string') {
           throw new TypeError('Fixture replay lost its exact predecessor.');
         }
@@ -1623,8 +1618,9 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       retainArtifact: (input) => stagingRepository.retainArtifact(input),
       commit: (input) => lifecycleRepository.commitAutomated(input),
     });
-    const workspace = {
-      stageAutomated: (input: Parameters<typeof automated.stage>[0]) => automated.stage(input),
+    const workspace: GovernedPrivateEvaluationWorkspace = {
+      stageAutomated: async (input) =>
+        governedPrivateEvaluationAutomatedStageResultSchema.parse(await automated.stage(input)),
       inspect: async () => {
         throw new Error('Not used by the cohort proof.');
       },
@@ -1710,8 +1706,7 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       );
       expect(
         reads.every(
-          (read) =>
-            read.state === 'available' && read.generationId === currentRead.generationId
+          (read) => read.state === 'available' && read.generationId === currentRead.generationId
         )
       ).toBe(true);
     }
@@ -1794,9 +1789,9 @@ describe('PostgreSQL atomic private evaluation batches', () => {
       );
     }
     const attempts = new Map<string, number>();
-    const failureWorkspace = {
+    const failureWorkspace: GovernedPrivateEvaluationWorkspace = {
       ...workspace,
-      stageAutomated: async (input: Parameters<typeof automated.stage>[0]) => {
+      stageAutomated: async (input) => {
         const attempt = (attempts.get(input.selector.tradeId) ?? 0) + 1;
         attempts.set(input.selector.tradeId, attempt);
         if (input.selector.tradeId === 'trade-a' && attempt === 1) {
@@ -1816,7 +1811,9 @@ describe('PostgreSQL atomic private evaluation batches', () => {
           conflict.code = '40P01';
           throw conflict;
         }
-        return automated.stage(input);
+        return governedPrivateEvaluationAutomatedStageResultSchema.parse(
+          await automated.stage(input)
+        );
       },
     };
     const failureRunner = createPostgresAflTradePrivateEvaluationCohortRunner({

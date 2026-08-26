@@ -40,16 +40,22 @@ const benchmarkContributions = new Map<number, number>([
   [2012, 6],
 ]);
 
+const fixtureArtifactDocuments = new Map<
+  string,
+  {
+    readonly reference: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+    readonly document: unknown;
+  }
+>();
+
 function artifact(label: string) {
-  const contentSha256 = createAflTradeContentAddress('artifact', label).split(':')[1]!;
-  return {
-    artifactId: `artifact:${contentSha256}`,
-    contentSha256,
-    storageUri: `artifact://sha256/${contentSha256}`,
-    mediaType: 'application/json',
-    byteLength: 128,
-    createdAt: CREATED_AT,
+  const document = {
+    schemaVersion: 'authenticated-calculation-fixture-artifact/v1',
+    label,
   };
+  const reference = createAflTradeCanonicalJsonArtifactRef(document, CREATED_AT);
+  fixtureArtifactDocuments.set(reference.artifactId, { reference, document });
+  return reference;
 }
 
 function addressed(prefix: string, label: string) {
@@ -179,11 +185,33 @@ function createPickBenchmark() {
   });
 }
 
-export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture() {
+export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture(
+  input: {
+    readonly scopeKey?: string;
+    readonly tradeId?: string;
+    readonly factualReleaseId?: string;
+    readonly valuationInputBundleId?: string;
+    readonly playerRunId?: string;
+    readonly pickRunId?: string;
+    readonly componentMetadata?: readonly Readonly<{
+      readonly role: string;
+      readonly protocolId: string;
+      readonly datasetId: string;
+      readonly datasetAdmissionId?: string;
+      readonly gate3DecisionId: string;
+      readonly evidence?: Readonly<{
+        runManifest: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+        protocol: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+        datasetAdmission: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+        gate3Decision: ReturnType<typeof createAflTradeCanonicalJsonArtifactRef>;
+      }>;
+    }>[];
+  } = {}
+) {
   const definition = {
     schemaVersion: 'local-synthetic-trade-definition/v1' as const,
     basis: { kind: 'private_workbook' as const, basisId: 'authenticated-contract-fixture' },
-    tradeId: 'trade:authenticated-three-club',
+    tradeId: input.tradeId ?? 'trade:authenticated-three-club',
     effectiveAt: '2023-10-18T00:00:00.000Z',
     effectiveThrough: '2026-08-19T00:00:00.000Z',
     parties: [
@@ -237,11 +265,24 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     scenario: 'baseline',
     assessedAt: CREATED_AT,
   });
-  const valuationInputBundleId = addressed('valuation-input-bundle', 'authenticated-calculation');
+  const valuationInputBundleId =
+    input.valuationInputBundleId ??
+    addressed('valuation-input-bundle', 'authenticated-calculation');
   const componentDrawSet = createAflTradeComponentDrawSet({
     ...scenario.componentDrawSet.content,
     valuationInputBundleId,
     valueUnitId: 'fixed_horizon_pav',
+    components: scenario.componentDrawSet.content.components.map((component, index) => ({
+      ...component,
+      protocolId: input.componentMetadata?.[index]?.protocolId ?? component.protocolId,
+      datasetId: input.componentMetadata?.[index]?.datasetId ?? component.datasetId,
+      gate3DecisionId:
+        input.componentMetadata?.[index]?.gate3DecisionId ?? component.gate3DecisionId,
+      runId:
+        component.role === 'player_contribution_and_availability'
+          ? (input.playerRunId ?? component.runId)
+          : (input.pickRunId ?? component.runId),
+    })),
   });
   const realizedContributionLedger = createAflTradeRealizedContributionLedger({
     ...scenario.realizedContributionLedger.content,
@@ -266,9 +307,11 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     runId: component.runId,
     protocolId: component.protocolId,
     datasetId: component.datasetId,
-    datasetAdmissionId: addressed('dataset-admission', `component-${index}`),
+    datasetAdmissionId:
+      input.componentMetadata?.[index]?.datasetAdmissionId ??
+      addressed('dataset-admission', `component-${index}`),
     gate3DecisionId: component.gate3DecisionId,
-    evidence: {
+    evidence: input.componentMetadata?.[index]?.evidence ?? {
       runManifest: artifact(`run-${index}`),
       protocol: artifact(`protocol-${index}`),
       datasetAdmission: artifact(`admission-${index}`),
@@ -276,10 +319,7 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     },
   }));
   const pickBenchmark = createPickBenchmark();
-  const pickBenchmarkArtifact = createAflTradeCanonicalJsonArtifactRef(
-    pickBenchmark,
-    CREATED_AT
-  );
+  const pickBenchmarkArtifact = createAflTradeCanonicalJsonArtifactRef(pickBenchmark, CREATED_AT);
   const selectionByAssetId = new Map([
     ['asset:01', 25],
     ['asset:02', 14],
@@ -292,8 +332,9 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
       return definition.transfers.find((transfer) => transfer.assetId === rootAssetId)!
         .displayLabel;
     }
-    const assetType = scenario.lineageGraph.assets.find((asset) => asset.assetId === assetId)!
-      .assetType;
+    const assetType = scenario.lineageGraph.assets.find(
+      (asset) => asset.assetId === assetId
+    )!.assetType;
     if (assetType === 'current_pick_entitlement') return `Pick ${selectionNumber}`;
     if (assetType === 'draft_selection') return `Pick ${selectionNumber} draft selection`;
     return `Player selected with Pick ${selectionNumber}`;
@@ -332,10 +373,11 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     schemaVersion: 'private-evaluation-input-trace/v1',
     environment: 'non_production',
     selector: {
-      valuationScopeKey: 'afl-men:authenticated-contract-fixture',
+      valuationScopeKey: input.scopeKey ?? 'afl-men:authenticated-contract-fixture',
       tradeId: definition.tradeId,
     },
-    factualReleaseId: addressed('outcome-release', 'authenticated-calculation'),
+    factualReleaseId:
+      input.factualReleaseId ?? addressed('outcome-release', 'authenticated-calculation'),
     valuationInputBundleId,
     components: traceComponents,
     transaction: {
@@ -460,13 +502,8 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
       CREATED_AT
     ),
     lineageGraphId: createAflTradeLineageGraphId(scenario.lineageGraph),
-    lineageGraphArtifact: createAflTradeCanonicalJsonArtifactRef(
-      scenario.lineageGraph,
-      DERIVED_AT
-    ),
-    pickBenchmarks: [
-      { benchmarkId: pickBenchmark.benchmarkId, artifact: pickBenchmarkArtifact },
-    ],
+    lineageGraphArtifact: createAflTradeCanonicalJsonArtifactRef(scenario.lineageGraph, DERIVED_AT),
+    pickBenchmarks: [{ benchmarkId: pickBenchmark.benchmarkId, artifact: pickBenchmarkArtifact }],
     playerObservations: [],
     createdAt: DERIVED_AT,
     publicationEligible: false,
@@ -480,5 +517,6 @@ export function createGovernedPrivateEvaluationAuthenticatedCalculationFixture()
     pickBenchmarks: [pickBenchmark],
     lineageGraph: scenario.lineageGraph,
     materializationManifest,
+    artifactDocuments: Array.from(fixtureArtifactDocuments.values()),
   };
 }

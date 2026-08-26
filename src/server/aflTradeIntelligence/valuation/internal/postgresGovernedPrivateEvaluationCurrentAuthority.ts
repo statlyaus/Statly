@@ -9,6 +9,7 @@ import {
   type AflDraftTradeOutcomeReleaseRegistry,
 } from '../../outcomes/outcomeReleaseState';
 import type { AflOutcomeSqlTransaction } from '../../outcomes/postgresOutcomeReleaseRepository';
+import { loadPostgresAflTradePrivateCurrentValuationCohortAuthority } from '../postgresCurrentValuationCohortPreparation';
 import {
   parseAflTradePrivateValuationEvaluationDecision,
   type AflTradePrivateValuationEvaluationDecision,
@@ -18,6 +19,7 @@ import type { GovernedPrivateEvaluationCapturedCalculationAuthority } from './po
 import { loadCurrentGovernedComponentAuthority } from './postgresGovernedPrivateEvaluationComponentAuthority';
 
 export { loadCurrentGovernedComponentAuthority } from './postgresGovernedPrivateEvaluationComponentAuthority';
+export { loadPostgresAflTradePrivateCurrentValuationCohortAuthority };
 
 interface FactualHeadRow {
   readonly revision: number | string;
@@ -63,6 +65,23 @@ type CurrentAuthorityInput = Readonly<{
   maximumArtifactBytes: number;
 }>;
 
+type PrivateCurrentAuthorityInput = Omit<CurrentAuthorityInput, 'prepared'> &
+  Readonly<{
+    prepared: Pick<
+      CurrentAuthorityInput['prepared'],
+      | 'factualReleaseScopeKey'
+      | 'factualReleaseId'
+      | 'factualReleaseArtifact'
+      | 'releaseMembershipArtifact'
+    > &
+      Readonly<{
+        preparationAuthority: 'dispatch_bound_private_factual_output';
+        privateAuthority: Parameters<
+          typeof loadPostgresAflTradePrivateCurrentValuationCohortAuthority
+        >[1]['privateAuthority'];
+      }>;
+  }>;
+
 function instant(value: Date | string): string {
   const parsed = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(parsed.getTime())) {
@@ -106,7 +125,8 @@ export async function loadCurrentPrivateValuationDecision(
       blockers: [
         {
           code: 'source_blocked',
-          message: 'No current authorized private derived-calculation decision covers this release.',
+          message:
+            'No current authorized private derived-calculation decision covers this release.',
         },
       ],
     };
@@ -150,7 +170,8 @@ export async function loadCurrentPrivateValuationDecision(
       blockers: [
         {
           code: 'source_blocked',
-          message: 'No current authorized private derived-calculation decision covers this release.',
+          message:
+            'No current authorized private derived-calculation decision covers this release.',
         },
       ],
     };
@@ -245,6 +266,77 @@ export async function capturePostgresGovernedPrivateEvaluationCurrentAuthority(
     activeFactualReleaseRevision: pointer.revision,
     privateValuationDecisionId: privateAuthority.decision.decisionId,
     privateValuationDecisionRevision: privateAuthority.decision.content.revision,
+    materializationManifestId: input.materializationManifestId,
+    materializationManifestArtifact: input.materializationManifestArtifact,
+    valuationInputBundleId: input.valuationInputBundleId,
+    valuationInputBundleArtifact: input.valuationInputBundleArtifact,
+    gateLedgerRevision: componentAuthority.gateLedgerRevision,
+    components: componentAuthority.components,
+  };
+}
+
+export async function capturePostgresGovernedPrivateEvaluationPrivateCurrentAuthority(
+  input: PrivateCurrentAuthorityInput
+): Promise<GovernedPrivateEvaluationCapturedCalculationAuthority> {
+  const authorityIsCurrent = await loadPostgresAflTradePrivateCurrentValuationCohortAuthority(
+    input.transaction,
+    {
+      scopeKey: input.selector.valuationScopeKey,
+      factualReleaseScopeKey: input.prepared.factualReleaseScopeKey,
+      factualReleaseId: input.prepared.factualReleaseId,
+      privateAuthority: input.prepared.privateAuthority,
+    }
+  );
+  if (!authorityIsCurrent) {
+    return {
+      state: 'unavailable',
+      blockers: [
+        {
+          code: 'source_blocked',
+          message:
+            'The exact dispatch-bound factual output and qualified model pair are no longer current.',
+        },
+      ],
+    };
+  }
+  const componentAuthority = await loadCurrentGovernedComponentAuthority({
+    transaction: input.transaction,
+    trace: input.trace,
+    capturedAt: input.capturedAt,
+    artifactRepository: input.artifactRepository,
+    maximumArtifactBytes: input.maximumArtifactBytes,
+  });
+  if (componentAuthority.state === 'unavailable') return componentAuthority;
+  const player = componentAuthority.components.find(
+    ({ role }) => role === 'player_contribution_and_availability'
+  );
+  const pick = componentAuthority.components.find(
+    ({ role }) => role === 'draft_pick_and_future_pick_distribution'
+  );
+  if (
+    player?.runId !== input.prepared.privateAuthority.playerRunId ||
+    pick?.runId !== input.prepared.privateAuthority.pickRunId ||
+    player.qualificationId !== input.prepared.privateAuthority.modelQualificationId ||
+    pick.qualificationId !== input.prepared.privateAuthority.modelQualificationId
+  ) {
+    return {
+      state: 'unavailable',
+      blockers: [
+        {
+          code: 'model_not_approved',
+          message:
+            'The exact current automated qualification is unavailable for both governed model components.',
+        },
+      ],
+    };
+  }
+  return {
+    state: 'ready',
+    preparationAuthority: input.prepared.preparationAuthority,
+    privateAuthority: input.prepared.privateAuthority,
+    preparedInputHeadRevision: input.preparedInputHeadRevision,
+    preparedInputSetId: input.preparedInputSetId,
+    factualReleaseId: input.prepared.factualReleaseId,
     materializationManifestId: input.materializationManifestId,
     materializationManifestArtifact: input.materializationManifestArtifact,
     valuationInputBundleId: input.valuationInputBundleId,

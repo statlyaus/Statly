@@ -16,7 +16,7 @@ interface PreparedSetRow {
   scope_key: string;
   factual_release_scope_key: string;
   factual_release_id: string;
-  qualification_report_id: string;
+  qualification_report_id: string | null;
   prepared_at: Date | string;
   prepared_set_json: unknown;
   content_canonical_json: string;
@@ -105,6 +105,12 @@ function digestFromId(identifier: string, prefix: string): string {
   return identifier.slice(expectedPrefix.length);
 }
 
+function publicQualificationReportId(prepared: AflTradePreparedValuationInputSet): string | null {
+  return 'qualificationReportId' in prepared.content
+    ? prepared.content.qualificationReportId
+    : null;
+}
+
 async function loadExactFromClient(
   client: AflOutcomeSqlTransaction,
   preparedInputSetId: string
@@ -155,7 +161,7 @@ async function loadExactFromClient(
     row.scope_key !== prepared.content.scopeKey ||
     row.factual_release_scope_key !== prepared.content.factualReleaseScopeKey ||
     row.factual_release_id !== prepared.content.factualReleaseId ||
-    row.qualification_report_id !== prepared.content.qualificationReportId ||
+    row.qualification_report_id !== publicQualificationReportId(prepared) ||
     preparedAt !== prepared.content.preparedAt ||
     !row.finalized_at ||
     row.content_canonical_json !== canonicalizeAflTradeJson(prepared.content) ||
@@ -324,86 +330,93 @@ export interface AflTradePreparedValuationInputSetStore {
   }): Promise<AflTradeCurrentPreparedValuationInputTrade | null>;
 }
 
+export async function registerAflTradePreparedValuationInputSetFromTransaction(
+  transaction: AflOutcomeSqlTransaction,
+  input: AflTradePreparedValuationInputSet
+): Promise<AflTradePreparedValuationInputSet> {
+  const prepared = aflTradePreparedValuationInputSetSchema.parse(input);
+  await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+    `outcome-prepared-valuation-input-set:${prepared.preparedInputSetId}`,
+  ]);
+
+  const existing = await transaction.query(
+    `SELECT prepared_input_set_id FROM outcome_prepared_valuation_input_set
+      WHERE prepared_input_set_id=$1`,
+    [prepared.preparedInputSetId]
+  );
+  if (existing.rowCount) {
+    const replay = await loadExactFromClient(transaction, prepared.preparedInputSetId);
+    if (canonicalizeAflTradeJson(replay) !== canonicalizeAflTradeJson(prepared)) {
+      throw new AflTradePreparedValuationInputSetStoreError(
+        'REPLAY_CONFLICT',
+        'Prepared valuation input-set replay differs from stored evidence.'
+      );
+    }
+    return replay;
+  }
+
+  const contentCanonicalJson = canonicalizeAflTradeJson(prepared.content);
+  const preparedSetCanonicalJson = canonicalizeAflTradeJson(prepared);
+  await transaction.query(
+    `INSERT INTO outcome_prepared_valuation_input_set
+      (prepared_input_set_id,content_sha256,schema_version,environment,scope_key,
+       factual_release_scope_key,factual_release_id,qualification_report_id,
+       trade_count,ready_count,blocked_count,prepared_at,content_canonical_json,
+       prepared_set_canonical_json,prepared_set_json)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
+    [
+      prepared.preparedInputSetId,
+      digestFromId(prepared.preparedInputSetId, 'prepared-valuation-input-set'),
+      prepared.content.schemaVersion,
+      prepared.content.environment,
+      prepared.content.scopeKey,
+      prepared.content.factualReleaseScopeKey,
+      prepared.content.factualReleaseId,
+      publicQualificationReportId(prepared),
+      prepared.content.tradeCount,
+      prepared.content.readyCount,
+      prepared.content.blockedCount,
+      prepared.content.preparedAt,
+      contentCanonicalJson,
+      preparedSetCanonicalJson,
+      preparedSetCanonicalJson,
+    ]
+  );
+
+  for (const [index, entry] of prepared.content.entries.entries()) {
+    const entryCanonicalJson = canonicalizeAflTradeJson(entry);
+    await transaction.query(
+      `INSERT INTO outcome_prepared_valuation_input_entry
+        (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+      [
+        prepared.preparedInputSetId,
+        index + 1,
+        entry.tradeId,
+        entry.state,
+        entryCanonicalJson,
+        entryCanonicalJson,
+      ]
+    );
+  }
+  await transaction.query(
+    `UPDATE outcome_prepared_valuation_input_set
+        SET finalized_at=transaction_timestamp()
+      WHERE prepared_input_set_id=$1 AND finalized_at IS NULL`,
+    [prepared.preparedInputSetId]
+  );
+  return loadExactFromClient(transaction, prepared.preparedInputSetId);
+}
+
 export class PostgresAflTradePreparedValuationInputSetStore implements AflTradePreparedValuationInputSetStore {
   constructor(private readonly client: AflOutcomeSqlClient) {}
 
   async register(
     input: AflTradePreparedValuationInputSet
   ): Promise<AflTradePreparedValuationInputSet> {
-    const prepared = aflTradePreparedValuationInputSetSchema.parse(input);
-    return this.client.transaction(async (transaction) => {
-      await transaction.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
-        `outcome-prepared-valuation-input-set:${prepared.preparedInputSetId}`,
-      ]);
-
-      const existing = await transaction.query(
-        `SELECT prepared_input_set_id FROM outcome_prepared_valuation_input_set
-          WHERE prepared_input_set_id=$1`,
-        [prepared.preparedInputSetId]
-      );
-      if (existing.rowCount) {
-        const replay = await loadExactFromClient(transaction, prepared.preparedInputSetId);
-        if (canonicalizeAflTradeJson(replay) !== canonicalizeAflTradeJson(prepared)) {
-          throw new AflTradePreparedValuationInputSetStoreError(
-            'REPLAY_CONFLICT',
-            'Prepared valuation input-set replay differs from stored evidence.'
-          );
-        }
-        return replay;
-      }
-
-      const contentCanonicalJson = canonicalizeAflTradeJson(prepared.content);
-      const preparedSetCanonicalJson = canonicalizeAflTradeJson(prepared);
-      await transaction.query(
-        `INSERT INTO outcome_prepared_valuation_input_set
-          (prepared_input_set_id,content_sha256,schema_version,environment,scope_key,
-           factual_release_scope_key,factual_release_id,qualification_report_id,
-           trade_count,ready_count,blocked_count,prepared_at,content_canonical_json,
-           prepared_set_canonical_json,prepared_set_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
-        [
-          prepared.preparedInputSetId,
-          digestFromId(prepared.preparedInputSetId, 'prepared-valuation-input-set'),
-          prepared.content.schemaVersion,
-          prepared.content.environment,
-          prepared.content.scopeKey,
-          prepared.content.factualReleaseScopeKey,
-          prepared.content.factualReleaseId,
-          prepared.content.qualificationReportId,
-          prepared.content.tradeCount,
-          prepared.content.readyCount,
-          prepared.content.blockedCount,
-          prepared.content.preparedAt,
-          contentCanonicalJson,
-          preparedSetCanonicalJson,
-          preparedSetCanonicalJson,
-        ]
-      );
-
-      for (const [index, entry] of prepared.content.entries.entries()) {
-        const entryCanonicalJson = canonicalizeAflTradeJson(entry);
-        await transaction.query(
-          `INSERT INTO outcome_prepared_valuation_input_entry
-            (prepared_input_set_id,ordinal,trade_id,state,entry_canonical_json,entry_json)
-           VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
-          [
-            prepared.preparedInputSetId,
-            index + 1,
-            entry.tradeId,
-            entry.state,
-            entryCanonicalJson,
-            entryCanonicalJson,
-          ]
-        );
-      }
-      await transaction.query(
-        `UPDATE outcome_prepared_valuation_input_set
-            SET finalized_at=transaction_timestamp()
-          WHERE prepared_input_set_id=$1 AND finalized_at IS NULL`,
-        [prepared.preparedInputSetId]
-      );
-      return loadExactFromClient(transaction, prepared.preparedInputSetId);
-    });
+    return this.client.transaction((transaction) =>
+      registerAflTradePreparedValuationInputSetFromTransaction(transaction, input)
+    );
   }
 
   loadExact(preparedInputSetId: string): Promise<AflTradePreparedValuationInputSet> {

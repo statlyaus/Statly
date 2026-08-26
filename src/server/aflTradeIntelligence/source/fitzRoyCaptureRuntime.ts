@@ -46,6 +46,7 @@ import type { AflTradeSourceRightsProposal } from './sourceRights';
 
 const execFileAsync = promisify(execFile);
 const CAPTURE_AUTHORIZATION_MAX_AGE_MS = 15 * 60 * 1000;
+const SCHEMA_DRIFT_FIELD_NAME_LIMIT = 20;
 
 export const AFL_TRADE_FITZROY_CAPTURE_ERROR_CODES = [
   'INVALID_REQUEST',
@@ -62,10 +63,20 @@ export const AFL_TRADE_FITZROY_CAPTURE_ERROR_CODES = [
 export type AflTradeFitzRoyCaptureErrorCode =
   (typeof AFL_TRADE_FITZROY_CAPTURE_ERROR_CODES)[number];
 
+export interface AflTradeFitzRoySchemaDrift {
+  authorizedFieldCount: number;
+  returnedFieldCount: number;
+  missingFieldCount: number;
+  unexpectedFieldCount: number;
+  missingFields: readonly string[];
+  unexpectedFields: readonly string[];
+}
+
 export class AflTradeFitzRoyCaptureError extends Error {
   constructor(
     public readonly code: AflTradeFitzRoyCaptureErrorCode,
-    message: string
+    message: string,
+    public readonly schemaDrift: AflTradeFitzRoySchemaDrift | null = null
   ) {
     super(message);
     this.name = 'AflTradeFitzRoyCaptureError';
@@ -210,11 +221,47 @@ function validateRuntimeResult(
     returnedFields.length !== authorizedFields.length ||
     returnedFields.some((field, index) => field !== authorizedFields[index])
   ) {
+    const returnedFieldSet = new Set(returnedFields);
+    const authorizedFieldSet = new Set(authorizedFields);
+    const missingFields = authorizedFields.filter((field) => !returnedFieldSet.has(field));
+    const unexpectedFields = returnedFields.filter((field) => !authorizedFieldSet.has(field));
+    const schemaDrift = {
+      authorizedFieldCount: authorizedFields.length,
+      returnedFieldCount: returnedFields.length,
+      missingFieldCount: missingFields.length,
+      unexpectedFieldCount: unexpectedFields.length,
+      missingFields: missingFields.slice(0, SCHEMA_DRIFT_FIELD_NAME_LIMIT),
+      unexpectedFields: unexpectedFields.slice(0, SCHEMA_DRIFT_FIELD_NAME_LIMIT),
+    } satisfies AflTradeFitzRoySchemaDrift;
     throw new AflTradeFitzRoyCaptureError(
       'SCHEMA_DRIFT',
-      'The exact returned field set differs from the Gate 0A authorization.'
+      [
+        'The exact returned field set differs from the Gate 0A authorization.',
+        formatSchemaDriftFields(
+          'Missing',
+          schemaDrift.missingFieldCount,
+          schemaDrift.missingFields
+        ),
+        formatSchemaDriftFields(
+          'Unexpected',
+          schemaDrift.unexpectedFieldCount,
+          schemaDrift.unexpectedFields
+        ),
+      ].join(' '),
+      schemaDrift
     );
   }
+}
+
+function formatSchemaDriftFields(
+  label: 'Missing' | 'Unexpected',
+  fieldCount: number,
+  fields: readonly string[]
+) {
+  const names = fields.length === 0 ? 'none' : fields.join(', ');
+  const omittedCount = fieldCount - fields.length;
+  const omittedSuffix = omittedCount > 0 ? ` (+${omittedCount} more)` : '';
+  return `${label} fields (${fieldCount}): ${names}${omittedSuffix}.`;
 }
 
 function requireProductionCaptureBoundary(
@@ -253,8 +300,7 @@ function requireLocalNonProductionCaptureBoundary(
     dependencies.egressExecutionVerifier === undefined ||
     dependencies.executor.executionBoundary !== 'local_rate_limited_docker' ||
     dependencies.rawArtifactRepository.assurance !== 'local_non_production_filesystem' ||
-    dependencies.metadataArtifactRepository.assurance !==
-      'local_non_production_filesystem' ||
+    dependencies.metadataArtifactRepository.assurance !== 'local_non_production_filesystem' ||
     dependencies.rawArtifactRepository.artifactClass !== 'raw_source' ||
     dependencies.metadataArtifactRepository.artifactClass !== 'capture_metadata' ||
     dependencies.rawArtifactRepository.custodyProfile !== null ||
@@ -521,15 +567,16 @@ export async function captureAuthorizedAflTradeFitzRoyEvidence(
       'Gate 0A did not authorize this fitzRoy capture.'
     );
   }
-  const captureLease = fixtureCapture || localNonProductionExecution
-    ? null
-    : await acquireProductionLease({
-        command: authorizedCommand,
-        dependencies,
-        invocation,
-        invocationSha256: invocationReference.contentSha256,
-        evaluatedAt,
-      });
+  const captureLease =
+    fixtureCapture || localNonProductionExecution
+      ? null
+      : await acquireProductionLease({
+          command: authorizedCommand,
+          dependencies,
+          invocation,
+          invocationSha256: invocationReference.contentSha256,
+          evaluatedAt,
+        });
   let completed = false;
   try {
     const invocationCustody = await storeAndVerify(

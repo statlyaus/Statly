@@ -638,15 +638,20 @@ alerting, scheduling, deployment, or production-activation requirements.
 
 Use this development-only path only after a separately authorized one-off capture has completed. It
 does not perform capture, grant source rights, or turn the workbook into factual authority. The
-retained disposable database must contain exactly one governed AFL Tables capture for each completed
-season from 2021 through 2025 and one separately governed official AFL current-season capture for 2026. Preserve the capture receipts and local artifact roots; do not substitute workbook values for
-missing or review-blocked observations.
+retained disposable database must contain exactly one successfully normalized governed AFL Tables
+player-stat capture for each completed season from 2021 through 2025, one separately governed
+official AFL current-season player-stat capture for 2026, and one governed AFL Tables results capture
+for 2026. Preserve the capture receipts, failed normalization attempts and local artifact roots; do
+not substitute workbook values for missing or review-blocked observations.
 
-Before launch, verify the six captures are finalized in the caller-owned loopback PostgreSQL database
-named exactly `statly_outcomes_test`. Expected staged coverage for the current rehearsal is 57,621
-player-match rows: 9,522 each for 2021 and 2022, 9,936 each for 2023–2025, and 8,769 for official 2026. A count mismatch, duplicate season capture, changed field map, unresolved custody object, or
-non-loopback database is a stop condition. Do not repeat provider requests merely to start the UI;
-the interactive path reads retained PostgreSQL staging and fails closed when it is absent.
+Before launch, verify the seven eligible captures are finalized in the caller-owned loopback
+PostgreSQL database named exactly `statly_outcomes_test`. Expected staged player-match coverage for
+the current rehearsal is 58,386 rows: 9,522 each for 2021 and 2022, 9,936 each for 2023–2025, and
+9,534 for official 2026. The AFL Tables results capture contributes a separate 207 concluded-match
+rows. A count mismatch, duplicate eligible capture, changed field map, unresolved custody object, or
+non-loopback database is a stop condition. Do not repeat provider requests merely to retry
+normalization; preserve a retained failed attempt, review the field-map correction, and use a fresh
+explicitly authorized capture rehearsal. The staging path fails closed when such an attempt exists.
 
 Set the private workbook path and its independently computed SHA-256 only in the invoking shell. Do
 not write either value to Git, logs, documentation, or a shared environment file. Then run:
@@ -660,22 +665,34 @@ npm run dev:outcomes:review-official-2026
 IFS= read -r STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE < .statly-local/afl-trade-outcomes-runtime-nonce
 export STATLY_LOCAL_OUTCOMES_RUNTIME_NONCE
 
+npm run outcomes:modeling:record-private-reviewed-evaluation-authority -- \
+  --scope afl-men:2025-trades \
+  --expected-current none \
+  --decision authorized \
+  --reviewer '<reviewed-local-principal>' \
+  --rationale '<reviewed retained-evidence calculation rationale>'
+
 npm run outcomes:modeling:review-local-hpn-field-maps
 npm run outcomes:modeling:review-local-hpn-season-universes
 npm run outcomes:modeling:calculate-local-private-reviewed-hpn
+```
+
+Review the exact retained reviewed-evidence bundle before making its private authority decision. The
+HPN field-map review requires that current authority and therefore follows it. If the reviewed result
+does not justify authorization, stop and leave the readiness report blocked. An authorized first
+decision uses `none` as the expected current decision; a successor must name the exact current
+decision ID returned by the preceding command. Never copy these examples into a production
+environment or treat running them as model-run, Gate 3, publication, or production approval.
+
+The release-backed private lane is separate. Exercise it only when the named active factual release
+already exists, then review its exact source-qualification report before recording that lane's
+authority:
+
+```sh
 npm run outcomes:modeling:prepare-local-source-qualification -- \
   --scope afl-men:2025-trades \
   --release-scope public-afl-trades-current
-```
 
-Review the exact source-qualification report and the retained reviewed-evidence bundle before making
-either private authority decision. If the reviewed result does not justify authorization, stop and
-leave the readiness report blocked. An authorized first decision uses `none` as the expected current
-decision; a successor must name the exact current decision ID returned by the preceding command.
-Never copy these examples into a production environment or treat running them as model-run, Gate 3,
-publication, or production approval.
-
-```sh
 npm run outcomes:modeling:record-private-evaluation-authority -- \
   --scope afl-men:2025-trades \
   --release-scope public-afl-trades-current \
@@ -683,13 +700,6 @@ npm run outcomes:modeling:record-private-evaluation-authority -- \
   --decision authorized \
   --reviewer '<reviewed-local-principal>' \
   --rationale '<reviewed private non-production source-use rationale>'
-
-npm run outcomes:modeling:record-private-reviewed-evaluation-authority -- \
-  --scope afl-men:2025-trades \
-  --expected-current none \
-  --decision authorized \
-  --reviewer '<reviewed-local-principal>' \
-  --rationale '<reviewed retained-evidence calculation rationale>'
 
 AFL_OUTCOMES_DEV_WORKBOOK_PATH='<absolute-private-workbook-path>' \
 AFL_OUTCOMES_DEV_WORKBOOK_SHA256='<verified-sha256>' \
@@ -861,13 +871,25 @@ cross-scope reads. Remove only the container/schema and artifact directory creat
 
 ### Operating automatic local private valuation
 
-The local full-stack launcher starts one backend valuation worker. It authenticates the exact loopback
-`statly_outcomes_test` runtime nonce and private artifact root, performs startup catch-up, and then polls
+The local full-stack launcher can compose durable scheduling and current-batch repair without private
+execution adapters. Attempting to dispatch valuation work remains blocked until admitted player
+execution, governed pick execution, model qualification, model targets, HPN preparation, and
+prepared-cohort construction have been composed into one dispatch runner. The checked-in runtime
+reports that exact dispatch-time configuration blocker instead of running the old public/current
+prepared head or substituting fixtures. Once supplied, it authenticates the exact loopback
+`statly_outcomes_test` runtime nonce and private artifact root, performs startup catch-up, and polls
 durable dispatch work. The schedule is Monday 19:00 in `Australia/Melbourne`, calculated as a calendar
 occurrence rather than a 604800-second interval, so daylight-saving changes do not move the local time.
 Startup coalesces missed weeks to the latest occurrence. A newly committed qualified model pair also
 enqueues immediate work. Neither trigger promotes factual data or prepares model evidence: execution
 begins only from the exact current authenticated prepared-v3 head.
+
+Do not treat private prepared-head activation alone as a successful calculated cohort. The calculation
+snapshot/inspection boundary revalidates the exact dispatch-bound private authority before a ready
+member can execute, and final batch registration repeats that currentness check. A stale dispatch,
+factual output, HPN calculation, substantive model operation, qualification/work revision, model run,
+or prepared head returns `stale_authority` and leaves the previous complete batch current. Expected
+unavailable evidence remains explicit and does not prevent eligible peers from completing.
 
 The repository now also contains a backend-only HPN preparation seam for the next upstream cutover.
 It accepts an exact retained dispatch plus its live claim, requires the exact immutable factual output
@@ -924,8 +946,11 @@ The command is backend-only and fails closed unless the database is loopback Pos
 `statly_outcomes_test`. Reusing the operation key returns or completes the exact retained request; do
 not substitute a random key merely because the first command lost its response.
 
-For each cohort, verify the retained capture names the expected factual-release revision, model-pair
-revision, prepared-v3 revision, and prior batch revision. Expected unavailable members remain explicit
+For a public-authority cohort, verify the retained capture names the expected factual-release revision,
+model-pair revision, prepared-v3 revision, and prior batch revision. For a dispatch-bound private
+cohort, verify the same prepared/model/batch revisions plus the exact dispatch request, factual output,
+HPN calculation, substantive model operation, accepted player and pick runs, and qualification/work;
+there is no synthetic factual-release revision. Expected unavailable members remain explicit
 batch entries. Ready members use durable work cycles with at most eight concurrent executions, a
 three-attempt budget, fenced leases and heartbeats. `retry_pending` and `stale_authority` dispatches are
 rescheduled rather than marked complete. An unexpected construction, custody, or programming failure

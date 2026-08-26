@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { stageLocalAflTradeFiveSeasonAflTablesOutcomes } from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesStaging';
+import {
+  assertNoRetainedAflTablesResultsNormalizationFailure,
+  stageLocalAflTradeFiveSeasonAflTablesOutcomes,
+} from '@/server/aflTradeIntelligence/development/localFiveSeasonAflTablesStaging';
 import { stageLocalAflTradeOfficialAfl2026Outcomes } from '@/server/aflTradeIntelligence/development/localOfficialAfl2026Staging';
 import type { AflOutcomeSqlClient } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 
@@ -37,5 +40,25 @@ describe('local capture staging database guard', () => {
     expect(statements).toHaveLength(1);
     expect(statements[0]).toContain('statly_local_runtime.outcomes_process_identity');
     expect(statements[0]).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b/i);
+  });
+
+  it('blocks recapture when a retained results normalization failure exists', async () => {
+    const statements: string[] = [];
+    const client: AflOutcomeSqlClient = {
+      async query<Row>(sql) {
+        statements.push(sql);
+        return { rows: [{ capture_id: 'retained-results-capture' }] as Row[], rowCount: 1 };
+      },
+      async transaction(work) {
+        return work(this);
+      },
+    };
+
+    await expect(assertNoRetainedAflTablesResultsNormalizationFailure(client)).rejects.toThrow(
+      /preserve it and use a fresh explicitly authorized capture rehearsal/i
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain('outcome_provider_normalization_attempt');
+    expect(statements[0]).toContain('run.finalized_at IS NOT NULL');
   });
 });

@@ -4402,7 +4402,7 @@ model OutcomePreparedValuationInputSet {
   scopeKey                     String                                        @map("scope_key")
   factualReleaseScopeKey       String                                        @map("factual_release_scope_key")
   factualReleaseId             String                                        @map("factual_release_id")
-  qualificationReportId        String                                        @map("qualification_report_id")
+  qualificationReportId        String?                                       @map("qualification_report_id")
   tradeCount                   Int                                           @map("trade_count")
   readyCount                   Int                                           @map("ready_count")
   blockedCount                 Int                                           @map("blocked_count")
@@ -4414,7 +4414,7 @@ model OutcomePreparedValuationInputSet {
   registeredAt                 DateTime                                      @default(dbgenerated("transaction_timestamp()")) @map("registered_at") @outcomes.Timestamptz(3)
   registeredBy                 String                                        @default(dbgenerated("CURRENT_USER")) @map("registered_by")
   factualRelease               OutcomeReleaseManifest                        @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict)
-  qualificationReport          OutcomeValuationSourceQualificationReport     @relation(fields: [qualificationReportId], references: [qualificationReportId], onDelete: Restrict)
+  qualificationReport          OutcomeValuationSourceQualificationReport?    @relation(fields: [qualificationReportId], references: [qualificationReportId], onDelete: Restrict)
   entries                      OutcomePreparedValuationInputEntry[]
   currentHeads                 OutcomeCurrentPreparedValuationInputSet[]
   currentValuationCohortResult OutcomeCurrentValuationCohortOperationResult?
@@ -5045,7 +5045,7 @@ model OutcomeCurrentValuationCohortOperation {
   operationId                   String                                        @id @map("operation_id") @outcomes.Text
   scopeKey                      String                                        @map("scope_key") @outcomes.Text
   factualReleaseId              String                                        @map("factual_release_id") @outcomes.Text
-  factualReleaseRevision        Int                                           @map("factual_release_revision")
+  factualReleaseRevision        Int?                                          @map("factual_release_revision")
   modelQualificationId          String                                        @map("model_qualification_id") @outcomes.Text
   modelQualificationWorkId      String                                        @map("model_qualification_work_id") @outcomes.Text
   modelQualificationRevision    Int                                           @map("model_qualification_revision")
@@ -5054,6 +5054,11 @@ model OutcomeCurrentValuationCohortOperation {
   contextSha256                 String                                        @map("context_sha256") @outcomes.Char(64)
   contextCanonicalJson          String                                        @map("context_canonical_json") @outcomes.Text
   contextJson                   Json                                          @map("context_json")
+  preparationAuthority          String                                        @default("authenticated_calculation_evidence_snapshot") @map("preparation_authority") @outcomes.Text
+  dispatchRequestId             String?                                       @map("dispatch_request_id") @outcomes.Text
+  factualOutputId               String?                                       @map("factual_output_id") @outcomes.Text
+  hpnCalculationId              String?                                       @map("hpn_calculation_id") @outcomes.Text
+  modelOperationId              String?                                       @map("model_operation_id") @outcomes.Text
   factualRelease                OutcomeReleaseManifest                        @relation(fields: [factualReleaseId], references: [releaseId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_release_fkey")
   modelQualification            OutcomeGovernedValuationModelQualification    @relation(fields: [modelQualificationId], references: [qualificationId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_qualification_fkey")
   modelQualificationWork        OutcomeGovernedModelQualificationWork         @relation(fields: [modelQualificationWorkId], references: [workId], onDelete: Restrict, map: "outcome_current_valuation_cohort_operation_work_fkey")
@@ -5286,7 +5291,11 @@ model OutcomePrivateEvaluationCohortCapture {
   preparedInputSetId        String   @map("prepared_input_set_id") @outcomes.Text
   preparedInputSetRevision  Int      @map("prepared_input_set_revision")
   modelQualificationWorkId String   @map("model_qualification_work_id") @outcomes.Text
-  factualReleaseRevision   Int      @map("factual_release_revision")
+  factualReleaseRevision   Int?                                   @map("factual_release_revision")
+  preparationAuthority     String                                 @default("authenticated_calculation_evidence_snapshot") @map("preparation_authority") @outcomes.Text
+  dispatchRequestId        String?                                @map("dispatch_request_id") @outcomes.Text
+  factualOutputId          String?                                @map("factual_output_id") @outcomes.Text
+  modelOperationId         String?                                @map("model_operation_id") @outcomes.Text
   modelPairRevision        Int      @map("model_pair_revision")
   expectedBatchRevision     Int      @map("expected_batch_revision")
   capturedAt                DateTime @map("captured_at") @outcomes.Timestamptz(3)
@@ -5326,7 +5335,12 @@ model OutcomePrivateEvaluationExecutionCycle {
   scopeKey                 String                                   @map("scope_key") @outcomes.Text
   preparedInputSetId       String                                   @map("prepared_input_set_id") @outcomes.Text
   preparedInputSetRevision Int                                      @map("prepared_input_set_revision")
-  factualReleaseRevision   Int                                      @map("factual_release_revision")
+  factualReleaseRevision   Int?                                     @map("factual_release_revision")
+  preparationAuthority     String                                   @default("authenticated_calculation_evidence_snapshot") @map("preparation_authority") @outcomes.Text
+  dispatchRequestId        String?                                  @map("dispatch_request_id") @outcomes.Text
+  factualOutputId          String?                                  @map("factual_output_id") @outcomes.Text
+  hpnCalculationId         String?                                  @map("hpn_calculation_id") @outcomes.Text
+  modelOperationId         String?                                  @map("model_operation_id") @outcomes.Text
   modelQualificationWorkId String                                   @map("model_qualification_work_id") @outcomes.Text
   modelPairRevision        Int                                      @map("model_pair_revision")
   repairSequence           Int                                      @map("repair_sequence")

@@ -14,10 +14,11 @@ import { ingestAuthorizedAflTradeFitzRoyProviderSeason } from '../source/fitzRoy
 import { PostgresAflTradeSourceCaptureRepository } from '../source/postgresSourceCaptureRepository';
 import { createLocalAflTradeDockerFitzRoyCaptureExecutor } from './localDockerFitzRoyCaptureExecutor';
 import { createLocalAflTradeDockerFitzRoyDecodeExecutor } from './localDockerFitzRoyDecodeExecutor';
+import { createLocalAflTradeNonProductionArtifactRepository } from './localFileConditionalObjectStore';
 import {
-  createLocalAflTradeNonProductionArtifactRepository,
-} from './localFileConditionalObjectStore';
-import { createLocalAflTradeFiveSeasonAflTablesAuthority } from './localFiveSeasonAflTablesAuthority';
+  createLocalAflTradeAflTablesResultsAuthority,
+  createLocalAflTradeFiveSeasonAflTablesAuthority,
+} from './localFiveSeasonAflTablesAuthority';
 import {
   assertLocalAflTradeOutcomesRuntimeIdentity,
   requireLocalAflTradeOutcomesRuntimeNonce,
@@ -45,6 +46,10 @@ interface ExistingStagedCaptureRow {
   normalization_run_id: string;
   anchor_season_year: number;
   observed_seasons: string[];
+}
+
+interface RetainedFailedResultsCaptureRow {
+  capture_id: string;
 }
 
 async function ensureFieldMapReview(
@@ -95,6 +100,37 @@ function exactNow(): string {
   return new Date().toISOString();
 }
 
+export async function assertNoRetainedAflTablesResultsNormalizationFailure(
+  client: AflOutcomeSqlClient
+): Promise<void> {
+  const retainedFailures = await client.query<RetainedFailedResultsCaptureRow>(
+    `SELECT capture.capture_id
+       FROM outcome_source_capture capture
+      WHERE capture.environment='non_production'
+        AND capture.provider='afl_tables'
+        AND capture.capability_id='afl-tables-results'
+        AND capture.anchor_season_year=2026
+        AND capture.status='staged'
+        AND EXISTS (
+          SELECT 1 FROM outcome_provider_normalization_attempt attempt
+           WHERE attempt.capture_id=capture.capture_id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM outcome_provider_normalization_run run
+           WHERE run.capture_id=capture.capture_id
+             AND run.status IN ('staged','needs_review')
+             AND run.finalized_at IS NOT NULL
+        )
+      ORDER BY capture.captured_at DESC
+      LIMIT 1`
+  );
+  if (retainedFailures.rows.length !== 0) {
+    throw new TypeError(
+      'A retained AFL Tables results capture failed normalization; preserve it and use a fresh explicitly authorized capture rehearsal after reviewing the field map.'
+    );
+  }
+}
+
 export async function stageLocalAflTradeFiveSeasonAflTablesOutcomes(
   client: AflOutcomeSqlClient,
   options: LocalAflTradeFiveSeasonStagingOptions
@@ -112,7 +148,7 @@ export async function stageLocalAflTradeFiveSeasonAflTablesOutcomes(
      SELECT 'AFLM',season_year
        FROM unnest($1::smallint[]) AS seasons(season_year)
      ON CONFLICT DO NOTHING`,
-    [[...LOCAL_AFL_TRADE_FIVE_SEASON_WINDOW]]
+    [[...LOCAL_AFL_TRADE_FIVE_SEASON_WINDOW, 2026]]
   );
   await client.query(
     `INSERT INTO outcome_metric_definition
@@ -164,16 +200,18 @@ export async function stageLocalAflTradeFiveSeasonAflTablesOutcomes(
   const egressExecutionVerifier = createAflTradeEd25519EgressExecutionVerifier({
     [signingKeyId]: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
   });
-  const captureExecutor = createLocalAflTradeDockerFitzRoyCaptureExecutor({
-    imageReference,
-    runtimeIdentity: LOCAL_AFL_TRADE_FITZROY_RUNTIME,
-    admittedPolicy: {
-      upstreamRate: { requests: 1, perSeconds: 2, burst: 1 },
-      cacheSeconds: 86_400,
-      egressPolicyEvidenceId,
-    },
-    signingKey: { keyId: signingKeyId, privateKey },
-  });
+  const captureExecutorFor = (policyEvidenceId: string) =>
+    createLocalAflTradeDockerFitzRoyCaptureExecutor({
+      imageReference,
+      runtimeIdentity: LOCAL_AFL_TRADE_FITZROY_RUNTIME,
+      admittedPolicy: {
+        upstreamRate: { requests: 1, perSeconds: 2, burst: 1 },
+        cacheSeconds: 86_400,
+        egressPolicyEvidenceId: policyEvidenceId,
+      },
+      signingKey: { keyId: signingKeyId, privateKey },
+    });
+  const captureExecutor = captureExecutorFor(egressPolicyEvidenceId);
   const decoderExecutor = createLocalAflTradeDockerFitzRoyDecodeExecutor({ imageReference });
   const sourceCaptureRepository = new PostgresAflTradeSourceCaptureRepository(client);
   const providerObservationRepository = new PostgresAflTradeProviderObservationRepository(client);
@@ -258,5 +296,106 @@ export async function stageLocalAflTradeFiveSeasonAflTablesOutcomes(
     });
   }
   const coverage = await assertLocalAflTradeFiveSeasonPostgresStagingCoverage(client, captures);
-  return { captures, coverage };
+  const resultsAuthority = createLocalAflTradeAflTablesResultsAuthority(2026);
+  if (
+    !gateLedger.ledger.decisions.some(
+      ({ decisionId }) => decisionId === resultsAuthority.gateDecisionId
+    )
+  ) {
+    gateLedger = await gateRepository.append({
+      expectedRevision: gateLedger.revision,
+      sourceRights: resultsAuthority.capture.sourceRights,
+      proposal: resultsAuthority.capture.ledger.proposals[0]!,
+      decision: resultsAuthority.capture.ledger.decisions[0]!,
+    });
+  }
+  await ensureFieldMapReview(client, resultsAuthority.fieldMap);
+  const existingResults = await client.query<ExistingStagedCaptureRow>(
+    `SELECT capture.capture_id,run.normalization_run_id,capture.anchor_season_year,
+            array_agg(DISTINCT row.season_year::text ORDER BY row.season_year::text)
+              AS observed_seasons
+       FROM outcome_source_capture capture
+       JOIN outcome_provider_normalization_run run USING (capture_id)
+       JOIN outcome_provider_decoded_row row USING (capture_id,normalization_run_id)
+      WHERE capture.environment='non_production'
+        AND capture.provider='afl_tables'
+        AND capture.capability_id='afl-tables-results'
+        AND capture.anchor_season_year=2026
+        AND capture.status='staged'
+        AND run.status IN ('staged','needs_review')
+        AND run.finalized_at IS NOT NULL
+      GROUP BY capture.capture_id,run.normalization_run_id,capture.anchor_season_year,
+               capture.captured_at
+      ORDER BY capture.captured_at DESC
+      LIMIT 1`
+  );
+  let resultsCapture: LocalAflTradeFiveSeasonStagedCapture | undefined =
+    existingResults.rows[0] === undefined
+      ? undefined
+      : {
+          authorizationSeason: existingResults.rows[0].anchor_season_year,
+          observedSeasonValues: existingResults.rows[0].observed_seasons,
+          captureId: existingResults.rows[0].capture_id,
+          normalizationRunId: existingResults.rows[0].normalization_run_id,
+        };
+  if (resultsCapture === undefined) {
+    await assertNoRetainedAflTablesResultsNormalizationFailure(client);
+    const resultsEgressPolicyEvidenceId =
+      resultsAuthority.capture.sourceRights.content.conditions.find(
+        ({ conditionId }) => conditionId === 'provider-egress-control'
+      )?.verificationEvidenceIds[0];
+    if (!resultsEgressPolicyEvidenceId) {
+      throw new TypeError('The local AFL Tables results authority is missing egress evidence.');
+    }
+    const ingestion = await ingestAuthorizedAflTradeFitzRoyProviderSeason(
+      {
+        capture: resultsAuthority.capture,
+        fieldMapId: resultsAuthority.fieldMap.mapId,
+        fieldMap: resultsAuthority.fieldMap,
+        effectiveAt: exactNow(),
+      },
+      {
+        capture: {
+          rawArtifactRepository,
+          metadataArtifactRepository,
+          executor: captureExecutorFor(resultsEgressPolicyEvidenceId),
+          egressExecutionVerifier,
+          authorizationResolver: {
+            resolveAuthorization: (rightsArtifactId) =>
+              gateRepository.resolveAuthorization(rightsArtifactId),
+          },
+          clock: { now: exactNow },
+          runtimeIdentity: LOCAL_AFL_TRADE_FITZROY_RUNTIME,
+          timeoutMs: 180_000,
+          maximumSourceBytes: 128 * 1024 * 1024,
+          maximumDiagnosticsBytes: 4 * 1024 * 1024,
+        },
+        staging: {
+          rawArtifactRepository,
+          sourceCaptureRepository,
+          providerObservationRepository,
+          decoderExecutor,
+          clock: { now: exactNow },
+          dependencyLockSha256: LOCAL_AFL_TRADE_FITZROY_RUNTIME.dependencyLockSha256,
+          imageDigest: LOCAL_AFL_TRADE_FITZROY_RUNTIME.imageDigest,
+          timeoutMs: 180_000,
+          maximumSourceBytes: 128 * 1024 * 1024,
+          maximumRows: 2_000,
+          maximumFields: 100,
+          maximumCells: 200_000,
+          maximumCellBytes: 8_192,
+          maximumOutputBytes: 64 * 1024 * 1024,
+          egressExecutionVerifier,
+        },
+        clock: { now: exactNow },
+      }
+    );
+    resultsCapture = {
+      authorizationSeason: 2026,
+      observedSeasonValues: ingestion.receipt.content.diagnostics.observedSeasonValues,
+      captureId: ingestion.staging.capture.captureId,
+      normalizationRunId: ingestion.staging.normalization.normalizationRunId,
+    };
+  }
+  return { captures, resultsCapture, coverage };
 }

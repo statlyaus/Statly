@@ -5,9 +5,22 @@ import type {
 } from '@/server/aflTradeIntelligence/outcomes/postgresOutcomeReleaseRepository';
 import {
   capturePostgresGovernedPrivateEvaluationCurrentAuthority,
+  loadPostgresAflTradePrivateCurrentValuationCohortAuthority,
   loadCurrentGovernedComponentAuthority,
   loadCurrentPrivateValuationDecision,
 } from '@/server/aflTradeIntelligence/valuation/internal/postgresGovernedPrivateEvaluationCurrentAuthority';
+
+const privateAuthority = {
+  dispatchRequestId: `private-valuation-dispatch:${'1'.repeat(64)}`,
+  factualOutputId: `private-valuation-factual-output:${'2'.repeat(64)}`,
+  hpnCalculationId: `hpn-pav-season:${'3'.repeat(64)}`,
+  modelOperationId: `private-valuation-model-operation:${'4'.repeat(64)}`,
+  modelQualificationId: `model-qualification:${'5'.repeat(64)}`,
+  modelQualificationWorkId: `model-qualification-work:${'6'.repeat(64)}`,
+  modelQualificationRevision: 7,
+  playerRunId: `model-run:${'7'.repeat(64)}`,
+  pickRunId: `model-run:${'8'.repeat(64)}`,
+} as const;
 
 class InactiveFactualAuthorityTransaction implements AflOutcomeSqlTransaction {
   async query<Row>(
@@ -34,6 +47,78 @@ class InactiveFactualAuthorityTransaction implements AflOutcomeSqlTransaction {
 }
 
 describe('PostgreSQL governed current calculation authority', () => {
+  it('authenticates the exact dispatch-bound private factual and current model tuple', async () => {
+    const transaction: AflOutcomeSqlTransaction = {
+      async query<Row>(sql: string, parameters = []): Promise<AflOutcomeSqlQueryResult<Row>> {
+        if (!sql.includes('FROM outcome_private_valuation_model_request_binding')) {
+          throw new Error(`Unexpected SQL: ${sql}`);
+        }
+        expect(parameters).toEqual([privateAuthority.dispatchRequestId]);
+        return {
+          rows: [
+            {
+              scope_key: 'afl-men:2026-trades',
+              factual_release_scope_key: 'private-afl-draft-trade-outcomes',
+              factual_release_id: `outcome-release:${'9'.repeat(64)}`,
+              factual_output_id: privateAuthority.factualOutputId,
+              hpn_calculation_id: privateAuthority.hpnCalculationId,
+              model_operation_id: privateAuthority.modelOperationId,
+              model_qualification_id: privateAuthority.modelQualificationId,
+              model_qualification_work_id: privateAuthority.modelQualificationWorkId,
+              model_qualification_revision: privateAuthority.modelQualificationRevision,
+              player_run_id: privateAuthority.playerRunId,
+              pick_run_id: privateAuthority.pickRunId,
+            },
+          ] as Row[],
+          rowCount: 1,
+        };
+      },
+    };
+
+    await expect(
+      loadPostgresAflTradePrivateCurrentValuationCohortAuthority(transaction, {
+        scopeKey: 'afl-men:2026-trades',
+        factualReleaseScopeKey: 'private-afl-draft-trade-outcomes',
+        factualReleaseId: `outcome-release:${'9'.repeat(64)}`,
+        privateAuthority,
+      })
+    ).resolves.toBe(true);
+  });
+
+  it('rejects a superseded dispatch-bound model-pair work revision', async () => {
+    const transaction: AflOutcomeSqlTransaction = {
+      async query<Row>(): Promise<AflOutcomeSqlQueryResult<Row>> {
+        return {
+          rows: [
+            {
+              scope_key: 'afl-men:2026-trades',
+              factual_release_scope_key: 'private-afl-draft-trade-outcomes',
+              factual_release_id: `outcome-release:${'9'.repeat(64)}`,
+              factual_output_id: privateAuthority.factualOutputId,
+              hpn_calculation_id: privateAuthority.hpnCalculationId,
+              model_operation_id: privateAuthority.modelOperationId,
+              model_qualification_id: privateAuthority.modelQualificationId,
+              model_qualification_work_id: privateAuthority.modelQualificationWorkId,
+              model_qualification_revision: privateAuthority.modelQualificationRevision + 1,
+              player_run_id: privateAuthority.playerRunId,
+              pick_run_id: privateAuthority.pickRunId,
+            },
+          ] as Row[],
+          rowCount: 1,
+        };
+      },
+    };
+
+    await expect(
+      loadPostgresAflTradePrivateCurrentValuationCohortAuthority(transaction, {
+        scopeKey: 'afl-men:2026-trades',
+        factualReleaseScopeKey: 'private-afl-draft-trade-outcomes',
+        factualReleaseId: `outcome-release:${'9'.repeat(64)}`,
+        privateAuthority,
+      })
+    ).resolves.toBe(false);
+  });
+
   it('fails closed when the prepared factual release is no longer active', async () => {
     await expect(
       capturePostgresGovernedPrivateEvaluationCurrentAuthority({
@@ -97,7 +182,8 @@ describe('PostgreSQL governed current calculation authority', () => {
       blockers: [
         {
           code: 'source_blocked',
-          message: 'No current authorized private derived-calculation decision covers this release.',
+          message:
+            'No current authorized private derived-calculation decision covers this release.',
         },
       ],
     });

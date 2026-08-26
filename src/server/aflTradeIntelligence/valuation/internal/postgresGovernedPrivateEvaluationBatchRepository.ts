@@ -122,7 +122,7 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
          SELECT 1 FROM outcome_current_prepared_valuation_input_set prepared_head
          JOIN outcome_prepared_valuation_input_set prepared
            ON prepared.prepared_input_set_id=prepared_head.prepared_input_set_id
-         JOIN outcome_active_release active_release
+         LEFT JOIN outcome_active_release active_release
            ON active_release.scope_key=prepared.factual_release_scope_key
           AND active_release.release_id=prepared.factual_release_id
          JOIN outcome_current_governed_valuation_model_pair model_head
@@ -133,6 +133,50 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
           AND prepared.factual_release_id=$4
           AND model_head.qualification_id=$5
           AND model_head.work_id=$6
+          AND (
+            (
+              prepared.prepared_set_json->'content'->>'preparationAuthority'=
+                'authenticated_calculation_evidence_snapshot'
+              AND active_release.release_id IS NOT NULL
+            ) OR (
+              prepared.prepared_set_json->'content'->>'preparationAuthority'='dispatch_bound_private_factual_output'
+              AND prepared.prepared_set_json->'content'->'privateAuthority'->>'modelQualificationId'=$5
+              AND prepared.prepared_set_json->'content'->'privateAuthority'->>'modelQualificationWorkId'=$6
+              AND (prepared.prepared_set_json->'content'->'privateAuthority'->>'modelQualificationRevision')::INTEGER=
+                  model_head.revision
+              AND prepared.prepared_set_json->'content'->'privateAuthority'->>'playerRunId'=
+                  model_head.player_run_id
+              AND prepared.prepared_set_json->'content'->'privateAuthority'->>'pickRunId'=
+                  model_head.pick_run_id
+              AND EXISTS (
+                SELECT 1 FROM outcome_private_valuation_model_request_binding binding
+                JOIN outcome_private_valuation_dispatch_request request
+                  ON request.request_id=binding.request_id
+                 AND request.scope_key=prepared_head.scope_key
+                JOIN outcome_private_valuation_factual_output factual
+                  ON factual.request_id=binding.request_id
+                 AND factual.output_id=binding.factual_output_id
+                 AND factual.factual_release_id=prepared.factual_release_id
+                JOIN outcome_release_manifest release
+                  ON release.release_id=factual.factual_release_id
+                 AND release.scope_key=prepared.factual_release_scope_key
+                JOIN outcome_private_valuation_model_operation operation
+                  ON operation.operation_id=binding.operation_id
+                 AND operation.qualification_outcome='qualified'
+                 AND operation.qualification_id=model_head.qualification_id
+                 AND operation.player_run_id=model_head.player_run_id
+                 AND operation.pick_run_id=model_head.pick_run_id
+               WHERE binding.request_id=
+                       prepared.prepared_set_json->'content'->'privateAuthority'->>'dispatchRequestId'
+                 AND binding.factual_output_id=
+                       prepared.prepared_set_json->'content'->'privateAuthority'->>'factualOutputId'
+                 AND binding.hpn_calculation_id=
+                       prepared.prepared_set_json->'content'->'privateAuthority'->>'hpnCalculationId'
+                 AND binding.operation_id=
+                       prepared.prepared_set_json->'content'->'privateAuthority'->>'modelOperationId'
+              )
+            )
+          )
        ) AS is_current`,
       [
         batch.content.scopeKey,
@@ -270,6 +314,11 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     readonly operationId: string;
     readonly action: 'activate';
     readonly cohortOperationId?: string;
+    readonly dispatchClaim?: {
+      readonly requestId: string;
+      readonly claimId: string;
+      readonly leaseToken: string;
+    };
   }): Promise<GovernedPrivateEvaluationBatchTransitionResult> {
     if (
       input.operationId !==
@@ -285,6 +334,16 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     try {
       return await this.client.transaction(async (transaction) => {
         await transaction.query(`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`);
+        if (input.dispatchClaim !== undefined) {
+          await transaction.query(
+            `SELECT load_outcome_private_valuation_dispatch_request_for_claim($1,$2,$3)`,
+            [
+              input.dispatchClaim.requestId,
+              input.dispatchClaim.claimId,
+              createHash('sha256').update(input.dispatchClaim.leaseToken, 'utf8').digest('hex'),
+            ]
+          );
+        }
         const captured = input.cohortOperationId !== undefined;
         const result = await transaction.query<TransitionRow>(
           captured
@@ -394,3 +453,4 @@ export class PostgresGovernedPrivateEvaluationBatchRepository {
     return governedPrivateEvaluationBatchWithdrawalSchema.parse(retained.rows[0]!.withdrawal_json);
   }
 }
+import { createHash } from 'node:crypto';

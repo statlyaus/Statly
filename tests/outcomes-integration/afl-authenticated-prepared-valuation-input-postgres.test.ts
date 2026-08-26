@@ -193,10 +193,7 @@ function materializationManifest() {
     ],
     playerObservations: [
       {
-        observationId: createAflTradeContentAddress(
-          'player-pav-observation',
-          playerObservation
-        ),
+        observationId: createAflTradeContentAddress('player-pav-observation', playerObservation),
         artifact: retainedJson(playerObservation),
       },
     ],
@@ -209,6 +206,11 @@ function materializationManifest() {
 
 function preparedSetV3() {
   const base = preparedSet().content;
+  if (base.schemaVersion !== 'afl-trade-prepared-valuation-input-set/v2') {
+    throw new Error('Expected authenticated prepared-v2 fixture.');
+  }
+  const blockedEntry = base.entries[1];
+  if (blockedEntry?.state !== 'blocked') throw new Error('Expected blocked fixture peer.');
   const manifest = materializationManifest();
   return createAflTradePreparedValuationInputSet({
     ...base,
@@ -223,7 +225,7 @@ function preparedSetV3() {
           materializationManifestCreatedAt
         ),
       },
-      base.entries[1]!,
+      blockedEntry,
     ],
   });
 }
@@ -246,9 +248,10 @@ async function registerMaterializationManifest() {
   const repository = new PostgresGovernedPrivateEvaluationMaterializationManifestRepository(
     createPgAflOutcomeSqlClient(pool)
   );
-  await expect(
-    repository.register({ manifest, artifact: manifestArtifact })
-  ).resolves.toEqual({ manifest, artifact: manifestArtifact });
+  await expect(repository.register({ manifest, artifact: manifestArtifact })).resolves.toEqual({
+    manifest,
+    artifact: manifestArtifact,
+  });
   await expect(repository.loadExact(manifest.manifestId)).resolves.toEqual({
     manifest,
     artifact: manifestArtifact,
@@ -349,16 +352,18 @@ beforeAll(async () => {
   await new PostgresAflTradeValuationSourceQualificationReportStore(
     createPgAflOutcomeSqlClient(pool)
   ).register(qualificationReport);
-  await Promise.all([
-    ...['0', '1', '2', '3'].map((character) => artifact(character)),
-    qualificationReport.content.factualReleaseArtifact,
-    qualificationReport.content.releaseMembershipArtifact,
-    createAflTradeCanonicalJsonArtifactRef(
-      qualificationReport,
-      qualificationReport.content.evaluatedAt
-    ),
-    ...qualificationReport.content.sourceRightsEvidenceRefs,
-  ].map(retainArtifact));
+  await Promise.all(
+    [
+      ...['0', '1', '2', '3'].map((character) => artifact(character)),
+      qualificationReport.content.factualReleaseArtifact,
+      qualificationReport.content.releaseMembershipArtifact,
+      createAflTradeCanonicalJsonArtifactRef(
+        qualificationReport,
+        qualificationReport.content.evaluatedAt
+      ),
+      ...qualificationReport.content.sourceRightsEvidenceRefs,
+    ].map(retainArtifact)
+  );
 });
 
 afterAll(async () => {
@@ -404,6 +409,13 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
       createPgAflOutcomeSqlClient(pool)
     );
     const first = preparedSetV3();
+    if (
+      first.content.schemaVersion !== AFL_TRADE_PREPARED_VALUATION_INPUT_SET_V3_SCHEMA_VERSION ||
+      first.content.preparationAuthority !== 'authenticated_calculation_evidence_snapshot'
+    ) {
+      throw new Error('Expected public authenticated prepared-v3 fixture.');
+    }
+    const publicContent = first.content;
     await expect(store.register(first)).resolves.toEqual(first);
 
     await expect(
@@ -441,16 +453,19 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
       playerRunId,
       pickRunId,
     });
-    await Promise.all([
-      valuationBundle.valuationInputBundleArtifact,
-      valuationBundle.valuationInputBundle.content.packagePolicy.listSpotPolicyArtifact,
-      valuationBundle.valuationInputBundle.content.packagePolicy.scarcityPolicyArtifact,
-      valuationBundle.valuationInputBundle.content.packagePolicy.roleCongestionPolicyArtifact,
-      valuationBundle.valuationInputBundle.content.simulation.lowReturnDefinitionArtifact,
-      valuationBundle.valuationInputBundle.content.simulation.eliteOutcomeDefinitionArtifact,
-      valuationBundle.valuationInputBundle.content.simulation.practicalEquivalenceDefinitionArtifact,
-      valuationBundle.valuationInputBundle.content.explanationPolicyArtifact,
-    ].map(retainArtifact));
+    await Promise.all(
+      [
+        valuationBundle.valuationInputBundleArtifact,
+        valuationBundle.valuationInputBundle.content.packagePolicy.listSpotPolicyArtifact,
+        valuationBundle.valuationInputBundle.content.packagePolicy.scarcityPolicyArtifact,
+        valuationBundle.valuationInputBundle.content.packagePolicy.roleCongestionPolicyArtifact,
+        valuationBundle.valuationInputBundle.content.simulation.lowReturnDefinitionArtifact,
+        valuationBundle.valuationInputBundle.content.simulation.eliteOutcomeDefinitionArtifact,
+        valuationBundle.valuationInputBundle.content.simulation
+          .practicalEquivalenceDefinitionArtifact,
+        valuationBundle.valuationInputBundle.content.explanationPolicyArtifact,
+      ].map(retainArtifact)
+    );
     const modelQualificationId = `model-qualification:${digest('9')}`;
     const modelQualificationWorkId = `model-qualification-work:${digest('0')}`;
     const authoritySeed = await pool.connect();
@@ -460,11 +475,16 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
       await authoritySeed.query(
         `INSERT INTO outcome_active_release
           (scope_key,release_id,activated_at,revision) VALUES ($1,$2,$3,1)`,
-        [first.content.factualReleaseScopeKey, first.content.factualReleaseId,
-          '2026-08-15T04:00:00.000Z']
+        [
+          first.content.factualReleaseScopeKey,
+          first.content.factualReleaseId,
+          '2026-08-15T04:00:00.000Z',
+        ]
       );
-      for (const [index, component] of
-        valuationBundle.valuationInputBundle.content.components.entries()) {
+      for (const [
+        index,
+        component,
+      ] of valuationBundle.valuationInputBundle.content.components.entries()) {
         await authoritySeed.query(
           `INSERT INTO outcome_governed_valuation_component_run
             (run_id,role,native_execution_kind,native_execution_id,artifact_id,
@@ -555,8 +575,8 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
       authoritySeed.release();
     }
     const operationId = createAflTradeCurrentValuationCohortPreparationOperationId({
-      scopeKey: first.content.scopeKey,
-      factualReleaseId: first.content.factualReleaseId,
+      scopeKey: publicContent.scopeKey,
+      factualReleaseId: publicContent.factualReleaseId,
       factualReleaseRevision: 1,
       modelQualificationId,
       modelQualificationWorkId,
@@ -567,15 +587,17 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
     const coordinator = createAflTradeCurrentValuationCohortCoordinator({
       captureCurrent: createPostgresAflTradeCurrentValuationCohortAuthorityCapture({
         client: postgresClient,
-        factualReleaseScopeKey: first.content.factualReleaseScopeKey,
+        factualReleaseScopeKey: publicContent.factualReleaseScopeKey,
         loadConstructionEvidence: async () => ({
-          factualReleaseArtifact: first.content.factualReleaseArtifact,
-          releaseMembershipArtifact: first.content.releaseMembershipArtifact,
-          releaseTradeIds: first.content.releaseTradeIds,
-          sourceQualificationReportId: first.content.qualificationReportId,
-          sourceQualificationReportArtifact: first.content.qualificationReportArtifact,
-          sourceQualificationEvidenceRefs: first.content.sourceQualificationEvidenceRefs,
-          ...valuationBundle,
+          factualReleaseArtifact: publicContent.factualReleaseArtifact,
+          releaseMembershipArtifact: publicContent.releaseMembershipArtifact,
+          releaseTradeIds: publicContent.releaseTradeIds,
+          sourceQualificationReportId: publicContent.qualificationReportId,
+          sourceQualificationReportArtifact: publicContent.qualificationReportArtifact,
+          sourceQualificationEvidenceRefs: publicContent.sourceQualificationEvidenceRefs,
+          valuationInputBundle: valuationBundle.valuationInputBundle,
+          valuationInputBundleId: valuationBundle.valuationInputBundleId,
+          valuationInputBundleArtifact: valuationBundle.valuationInputBundleArtifact,
         }),
       }),
       prepareTrade: async ({ tradeId }) =>
@@ -592,29 +614,33 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
           : {
               tradeId,
               state: 'blocked',
-              blockers: [{
-                code: 'lineage_unresolved',
-                subject: { kind: 'lineage', id: 'asset:pick-12' },
-                evidenceRefs: [successorBlockerArtifact],
-              }],
+              blockers: [
+                {
+                  code: 'lineage_unresolved',
+                  subject: { kind: 'lineage', id: 'asset:pick-12' },
+                  evidenceRefs: [successorBlockerArtifact],
+                },
+              ],
             },
       commitIfCurrent: createPostgresAflTradeCurrentValuationCohortCommitter({
         client: postgresClient,
         registerPreparedInputSet: (prepared) => store.register(prepared),
       }),
     });
-    await expect(coordinator.prepare({ operationId, scopeKey: first.content.scopeKey }))
-      .resolves.toMatchObject({
-        state: 'advanced',
-        head: { revision: 2 },
-        preparedInputSet: {
-          content: {
-            entries: [{ state: 'ready' }, { state: 'blocked' }],
-          },
+    await expect(
+      coordinator.prepare({ operationId, scopeKey: first.content.scopeKey })
+    ).resolves.toMatchObject({
+      state: 'advanced',
+      head: { revision: 2 },
+      preparedInputSet: {
+        content: {
+          entries: [{ state: 'ready' }, { state: 'blocked' }],
         },
-      });
-    await expect(coordinator.prepare({ operationId, scopeKey: first.content.scopeKey }))
-      .resolves.toMatchObject({ state: 'already_current', head: { revision: 2 } });
+      },
+    });
+    await expect(
+      coordinator.prepare({ operationId, scopeKey: first.content.scopeKey })
+    ).resolves.toMatchObject({ state: 'already_current', head: { revision: 2 } });
 
     const retainedOperation = await pool.query<{ context_json: Record<string, unknown> }>(
       `SELECT context_json FROM outcome_current_valuation_cohort_operation
@@ -630,8 +656,9 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
       modelQualificationRevision: 1,
       expectedPreparedInputRevision: 2,
     });
-    const retainedBundle = retainedOperation.rows[0]!.context_json
-      .valuationInputBundle as { content: Record<string, unknown> };
+    const retainedBundle = retainedOperation.rows[0]!.context_json.valuationInputBundle as {
+      content: Record<string, unknown>;
+    };
     const retainedBundleContent = retainedBundle.content;
     const forgedBundleContent = {
       ...retainedBundleContent,
@@ -649,37 +676,40 @@ describe('PostgreSQL authenticated prepared valuation inputs', () => {
     };
     const forgedBundleArtifact = createAflTradeCanonicalJsonArtifactRef(
       forgedBundle,
-      forgedBundleContent.createdAt as string
+      retainedBundleContent.createdAt as string
     );
     await retainArtifact(forgedBundleArtifact);
     const forgedContext = {
       ...retainedOperation.rows[0]!.context_json,
       operationId: poisonedOperationId,
       expectedPreparedInputRevision: 2,
+      capturedAt: String(retainedOperation.rows[0]!.context_json.capturedAt),
       valuationInputBundleId: forgedBundle.valuationInputBundleId,
       valuationInputBundleArtifact: forgedBundleArtifact,
       valuationInputBundle: forgedBundle,
     };
     const forgedCanonical = canonicalizeAflTradeJson(forgedContext);
-    await expect(pool.query(
-      `INSERT INTO outcome_current_valuation_cohort_operation
+    await expect(
+      pool.query(
+        `INSERT INTO outcome_current_valuation_cohort_operation
         (operation_id,scope_key,factual_release_id,factual_release_revision,
          model_qualification_id,model_qualification_work_id,model_qualification_revision,
          expected_prepared_input_revision,captured_at,context_sha256,context_canonical_json,
          context_json)
        VALUES ($1,$2,$3,1,$4,$5,1,2,$6,$7,$8,$9::jsonb)`,
-      [
-        poisonedOperationId,
-        first.content.scopeKey,
-        first.content.factualReleaseId,
-        modelQualificationId,
-        modelQualificationWorkId,
-        forgedContext.capturedAt,
-        sha256AflTradeCanonicalJson(forgedContext),
-        forgedCanonical,
-        forgedCanonical,
-      ]
-    )).rejects.toThrow(/identity disagrees with its context/i);
+        [
+          poisonedOperationId,
+          first.content.scopeKey,
+          first.content.factualReleaseId,
+          modelQualificationId,
+          modelQualificationWorkId,
+          forgedContext.capturedAt,
+          sha256AflTradeCanonicalJson(forgedContext),
+          forgedCanonical,
+          forgedCanonical,
+        ]
+      )
+    ).rejects.toThrow(/identity disagrees with its context/i);
 
     await expect(
       pool.query(

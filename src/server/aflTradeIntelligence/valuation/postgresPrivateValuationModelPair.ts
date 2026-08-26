@@ -403,6 +403,10 @@ export function createPostgresAflTradePrivateValuationModelPairCoordinator(input
 
 export function createPostgresAflTradePrivateValuationModelPairDispatchRunner(
   input: Parameters<typeof createPostgresAflTradePrivateValuationModelPairCoordinator>[0] & {
+    readonly continueQualified: (value: {
+      readonly request: { readonly requestId: string; readonly scopeKey: string };
+      readonly claim: { readonly claimId: string; readonly leaseToken: string };
+    }) => Promise<unknown>;
     readonly repairCurrent: (
       scopeKey: string,
       reason: string,
@@ -413,7 +417,7 @@ export function createPostgresAflTradePrivateValuationModelPairDispatchRunner(
   const coordinator = createPostgresAflTradePrivateValuationModelPairCoordinator(input);
   return {
     async run(value: {
-      readonly request: { readonly requestId: string };
+      readonly request: { readonly requestId: string; readonly scopeKey: string };
       readonly claim: { readonly claimId: string; readonly leaseToken: string };
     }) {
       const result = await coordinator.prepare({
@@ -422,9 +426,8 @@ export function createPostgresAflTradePrivateValuationModelPairDispatchRunner(
       });
       switch (result.state) {
         case 'qualified':
-          return { ...result, state: 'activated' as const };
         case 'already_qualified':
-          return { state: 'already_current' as const };
+          return input.continueQualified(value);
         case 'qualification_failed':
         case 'deterministic_failure':
           return { ...result, state: 'unexpected_failure' as const };
