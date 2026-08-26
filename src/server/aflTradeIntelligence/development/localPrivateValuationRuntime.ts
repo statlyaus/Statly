@@ -1,12 +1,17 @@
 import type { Pool } from 'pg';
 
+import { createAflTradeAdmittedPlayerContributionExecutor } from '../modeling/admittedPlayerContributionCandidate';
+import { AflTradeAdmittedModelRunner } from '../modeling/admittedModelRunAuthority';
 import { createPgAflOutcomeSqlClient } from '../outcomes/pgOutcomeSqlClient';
 import { AUTOMATED_PRIVATE_EVALUATION_PRINCIPAL_ID } from '../valuation/automatedPrivateEvaluationPolicy';
 import { createPostgresAflTradePrivateCurrentValuationCohortCoordinator } from '../valuation/postgresCurrentValuationCohortPreparation';
 import { createPostgresAflTradePrivateEvaluationCohortRunner } from '../valuation/postgresCurrentValuationCohortRunner';
 import { createPostgresGovernedPrivateEvaluationWorkspace } from '../valuation/internal/createPostgresGovernedPrivateEvaluationWorkspace';
 import { PostgresGovernedPrivateEvaluationBatchRepository } from '../valuation/internal/postgresGovernedPrivateEvaluationBatchRepository';
-import { createPostgresAflTradePrivateValuationModelPairDispatchRunner } from '../valuation/postgresPrivateValuationModelPair';
+import {
+  createAflTradeDispatchBoundAdmittedPlayerExecutor,
+  createPostgresAflTradePrivateValuationModelPairDispatchRunner,
+} from '../valuation/postgresPrivateValuationModelPair';
 import {
   PostgresAflTradePrivateValuationScheduleRepository,
   createPostgresAflTradePrivateValuationDispatcher,
@@ -17,8 +22,23 @@ const MAXIMUM_ARTIFACT_BYTES = 4 * 1024 * 1024;
 
 type LocalPrivateValuationUpstream = Omit<
   Parameters<typeof createPostgresAflTradePrivateValuationModelPairDispatchRunner>[0],
-  'client' | 'continueQualified' | 'repairCurrent'
+  'client' | 'continueQualified' | 'repairCurrent' | 'playerExecutor'
 > &
+  Readonly<{
+    readonly playerExecutor?: Parameters<
+      typeof createPostgresAflTradePrivateValuationModelPairDispatchRunner
+    >[0]['playerExecutor'];
+    readonly admittedPlayer?: Omit<
+      Parameters<typeof createAflTradeDispatchBoundAdmittedPlayerExecutor>[0],
+      'admittedRunner'
+    > & {
+      readonly authority: ConstructorParameters<typeof AflTradeAdmittedModelRunner>[0];
+      readonly authorizationStore: ConstructorParameters<typeof AflTradeAdmittedModelRunner>[2];
+      readonly clock: ConstructorParameters<typeof AflTradeAdmittedModelRunner>[3];
+      readonly completedRunStore: ConstructorParameters<typeof AflTradeAdmittedModelRunner>[4];
+      readonly failureRecorder: ConstructorParameters<typeof AflTradeAdmittedModelRunner>[5];
+    };
+  }> &
   Omit<
     Parameters<typeof createPostgresAflTradePrivateCurrentValuationCohortCoordinator>[0],
     'client' | 'artifactRepository' | 'maximumArtifactBytes'
@@ -65,6 +85,32 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
             cohortRunner.repairCurrent(scopeKey, reason, repairOperationId),
         }
       : (() => {
+          const playerExecutor =
+            input.upstream.playerExecutor ??
+            (input.upstream.admittedPlayer === undefined
+              ? null
+              : createAflTradeDispatchBoundAdmittedPlayerExecutor({
+                  admittedRunner: new AflTradeAdmittedModelRunner(
+                    input.upstream.admittedPlayer.authority,
+                    createAflTradeAdmittedPlayerContributionExecutor({
+                      artifactRepository: artifacts,
+                      maximumArtifactBytes: MAXIMUM_ARTIFACT_BYTES,
+                      now: () => new Date().toISOString(),
+                    }),
+                    input.upstream.admittedPlayer.authorizationStore,
+                    input.upstream.admittedPlayer.clock,
+                    input.upstream.admittedPlayer.completedRunStore,
+                    input.upstream.admittedPlayer.failureRecorder
+                  ),
+                  authorityPreparation: input.upstream.admittedPlayer.authorityPreparation,
+                  prepareRun: input.upstream.admittedPlayer.prepareRun,
+                  registerComponent: input.upstream.admittedPlayer.registerComponent,
+                }));
+          if (playerExecutor === null) {
+            throw new TypeError(
+              'Local private valuation execution is not configured: an admitted player composition or dispatch-bound player adapter is required.'
+            );
+          }
           const cohortCoordinator = createPostgresAflTradePrivateCurrentValuationCohortCoordinator({
             client,
             artifactRepository: artifacts,
@@ -77,7 +123,7 @@ export function createLocalAflTradePrivateValuationRuntime(input: {
             client,
             hpnPreparation: input.upstream.hpnPreparation,
             targets: input.upstream.targets,
-            playerExecutor: input.upstream.playerExecutor,
+            playerExecutor,
             pickExecutor: input.upstream.pickExecutor,
             qualificationRegistrar: input.upstream.qualificationRegistrar,
             continueQualified: async ({ request, claim }) => {

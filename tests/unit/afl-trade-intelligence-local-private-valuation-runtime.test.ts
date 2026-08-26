@@ -8,6 +8,9 @@ const composition = vi.hoisted(() => ({
   createCohortRunner: vi.fn(),
   createModelPairRunner: vi.fn(),
   createDispatcher: vi.fn(),
+  createAdmittedPlayerExecutor: vi.fn(),
+  createDispatchBoundPlayerExecutor: vi.fn(),
+  admittedModelRunner: vi.fn(),
 }));
 
 vi.mock('@/server/aflTradeIntelligence/outcomes/pgOutcomeSqlClient', () => ({
@@ -33,6 +36,13 @@ vi.mock('@/server/aflTradeIntelligence/valuation/postgresCurrentValuationCohortR
 }));
 vi.mock('@/server/aflTradeIntelligence/valuation/postgresPrivateValuationModelPair', () => ({
   createPostgresAflTradePrivateValuationModelPairDispatchRunner: composition.createModelPairRunner,
+  createAflTradeDispatchBoundAdmittedPlayerExecutor: composition.createDispatchBoundPlayerExecutor,
+}));
+vi.mock('@/server/aflTradeIntelligence/modeling/admittedPlayerContributionCandidate', () => ({
+  createAflTradeAdmittedPlayerContributionExecutor: composition.createAdmittedPlayerExecutor,
+}));
+vi.mock('@/server/aflTradeIntelligence/modeling/admittedModelRunAuthority', () => ({
+  AflTradeAdmittedModelRunner: composition.admittedModelRunner,
 }));
 vi.mock('@/server/aflTradeIntelligence/valuation/postgresPrivateValuationScheduling', () => ({
   PostgresAflTradePrivateValuationScheduleRepository: class {},
@@ -80,6 +90,12 @@ describe('local private valuation runtime composition', () => {
       run: vi.fn(),
       repairCurrent: input.repairCurrent,
     }));
+    composition.createAdmittedPlayerExecutor.mockReturnValue({ execute: vi.fn() });
+    composition.admittedModelRunner.mockImplementation(() => ({ run: vi.fn() }));
+    composition.createDispatchBoundPlayerExecutor.mockImplementation((input) => ({
+      execute: vi.fn(),
+      source: input,
+    }));
     composition.createDispatcher.mockReturnValue(runtimeSurface);
   });
 
@@ -121,6 +137,46 @@ describe('local private valuation runtime composition', () => {
       claim,
     });
     expect(composition.runPrivate).toHaveBeenCalledWith({ request, claim });
+  });
+
+  it('constructs the concrete admitted player through the authorized dispatch boundary', () => {
+    const admittedPlayer = {
+      authority: {} as never,
+      authorizationStore: {} as never,
+      clock: {} as never,
+      completedRunStore: {} as never,
+      failureRecorder: {} as never,
+      authorityPreparation: { prepare: vi.fn() },
+      prepareRun: vi.fn(),
+      registerComponent: vi.fn(),
+    };
+    const { playerExecutor: _playerExecutor, ...withoutOverride } = upstream();
+
+    createLocalAflTradePrivateValuationRuntime({
+      pool: {} as never,
+      artifactRoot: '/tmp/statly-private-runtime-admitted-player',
+      upstream: { ...withoutOverride, admittedPlayer },
+    });
+
+    expect(composition.createAdmittedPlayerExecutor).toHaveBeenCalledWith({
+      artifactRepository: expect.anything(),
+      maximumArtifactBytes: 4 * 1024 * 1024,
+      now: expect.any(Function),
+    });
+    expect(composition.admittedModelRunner).toHaveBeenCalledWith(
+      admittedPlayer.authority,
+      expect.anything(),
+      admittedPlayer.authorizationStore,
+      admittedPlayer.clock,
+      admittedPlayer.completedRunStore,
+      admittedPlayer.failureRecorder
+    );
+    expect(composition.createDispatchBoundPlayerExecutor).toHaveBeenCalledWith({
+      admittedRunner: expect.anything(),
+      authorityPreparation: admittedPlayer.authorityPreparation,
+      prepareRun: admittedPlayer.prepareRun,
+      registerComponent: admittedPlayer.registerComponent,
+    });
   });
 
   it('does not enter the cohort after prepared authority becomes stale', async () => {

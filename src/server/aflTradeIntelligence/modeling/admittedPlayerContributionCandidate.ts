@@ -13,10 +13,11 @@ import type { AflTradeImmutableArtifactRepository } from '../artifacts/immutable
 import type { AflTradePlayerContributionModelProtocolV2 } from '../artifacts/modelProtocol';
 import {
   createAflTradePlayerPredictionSet,
-  aflTradePlayerValidationReportSchema,
+  evaluateAflTradePlayerPredictions,
 } from './playerContributionValidation';
+import { fitAflTradePlayerContributionBaseline } from './playerContributionBaseline';
 import {
-  aflTradePlayerBaselineFitSchema,
+  aflTradePlayerBaselineConfigSchema,
   aflTradePlayerObservationSetV2Schema,
   type AflTradePlayerObservationSetV2,
 } from './playerContributionContracts';
@@ -105,102 +106,6 @@ function materializeContributionSet(input: {
   };
 }
 
-function fitAdmittedBaseline(input: {
-  observationSet: AflTradePlayerObservationSetV2;
-  transformed: ReturnType<typeof materializeContributionSet>;
-}) {
-  const training = input.transformed.content.observations.filter(
-    (observation) => observation.partition === 'train' && observation.gamesPlayed > 0
-  );
-  const groupMeans = new Map<string, number>();
-  for (const observation of training) {
-    const key = observation.role;
-    const current = groupMeans.get(key) ?? 0;
-    groupMeans.set(key, current + observation.contribution.total / observation.gamesPlayed);
-  }
-  const groupCounts = new Map<string, number>();
-  for (const observation of training) {
-    const key = observation.role;
-    groupCounts.set(key, (groupCounts.get(key) ?? 0) + 1);
-  }
-  const replacement = [...groupMeans.entries()].map(([key, sum]) => {
-    const role = key;
-    return {
-      role,
-      era: 'all-eras',
-      eligibleTrainingObservations: groupCounts.get(key)!,
-      totalGamesWeight: training
-        .filter((item) => item.role === key)
-        .reduce((total, item) => total + item.gamesPlayed, 0),
-      replacementContributionPerGame: sum / groupCounts.get(key)!,
-    };
-  });
-  const scores = input.transformed.content.observations
-    .filter((observation) => observation.gamesPlayed > 0)
-    .map((observation) => {
-      const replacementContributionPerGame =
-        groupMeans.get(observation.role)! / groupCounts.get(observation.role)!;
-      const perGame = observation.contribution.total / observation.gamesPlayed;
-      const impact = perGame - replacementContributionPerGame;
-      return {
-        observationId: observation.observationId,
-        playerId: observation.playerId,
-        season: observation.season,
-        partition: observation.partition,
-        role: observation.role,
-        era: observation.era,
-        gamesPlayed: observation.gamesPlayed,
-        gamesAvailable: observation.gamesAvailable,
-        observedContribution: observation.contribution.total,
-        observedContributionPerGame: perGame,
-        replacementContributionPerGame,
-        impactAboveReplacementPerGame: impact,
-        availabilityRate: observation.gamesPlayed / observation.gamesAvailable,
-        observedContributionAboveReplacement: impact * observation.gamesPlayed,
-        careerTreatment: observation.career.state,
-      };
-    });
-  const unscored = input.transformed.content.observations
-    .filter((observation) => observation.gamesPlayed === 0)
-    .map((observation) => ({
-      observationId: observation.observationId,
-      reason: 'zero_games' as const,
-    }));
-  const content = {
-    schemaVersion: 'afl-trade-player-baseline-fit/v1' as const,
-    modelKind: 'player_contribution_and_availability' as const,
-    observationSetId: input.observationSet.observationSetId,
-    valueUnitId: input.transformed.content.valueUnitId,
-    config: {
-      schemaVersion: 'afl-trade-player-baseline-config/v1' as const,
-      replacementQuantile: 0.2,
-      minimumGamesForReplacementFit: 1,
-      minimumTrainingObservationsPerGroup: 1,
-      weighting: 'games_played' as const,
-      replacementStratification: 'role_and_era' as const,
-      unavailableAndZeroTreatment: 'distinct' as const,
-      activeCareerTreatment: 'right_censored' as const,
-    },
-    inputObservationIds: input.transformed.content.observations.map(
-      ({ observationId }) => observationId
-    ),
-    replacementLevels: replacement,
-    scores,
-    unscored,
-    diagnostics: {
-      eligibleTrainingObservations: training.length,
-      supportedRoleEraGroups: replacement.length,
-      unsupportedRoleEraGroups: 0,
-      scoredObservations: scores.length,
-      unscoredObservations: unscored.length,
-    },
-  };
-  return aflTradePlayerBaselineFitSchema.parse({
-    baselineFitId: createAflTradeContentAddress('player-baseline-fit', content),
-    content,
-  });
-}
-
 export async function loadGovernedScalarTransform(input: {
   protocol: AflTradePlayerContributionModelProtocolV2;
   artifactRepository: AflTradeImmutableArtifactRepository;
@@ -240,12 +145,36 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         maximumArtifactBytes: input.maximumArtifactBytes,
       });
       const observationSet = aflTradePlayerObservationSetV2Schema.parse(request.observationSet);
-      const transformed = materializeContributionSet({ observationSet, transform });
-      const baseline = fitAdmittedBaseline({ observationSet, transformed });
+      const materialized = materializeContributionSet({ observationSet, transform });
+      const transformed = {
+        observationSetId: createAflTradeContentAddress(
+          'player-observation-set',
+          materialized.content
+        ),
+        content: materialized.content,
+      };
+      const baselineConfig = aflTradePlayerBaselineConfigSchema.parse({
+        schemaVersion: 'afl-trade-player-baseline-config/v1',
+        replacementQuantile: 0.2,
+        minimumGamesForReplacementFit: 1,
+        minimumTrainingObservationsPerGroup: 1,
+        weighting: 'games_played',
+        replacementStratification: 'role_and_era',
+        unavailableAndZeroTreatment: 'distinct',
+        activeCareerTreatment: 'right_censored',
+      });
+      const baseline = fitAflTradePlayerContributionBaseline(transformed, baselineConfig);
+      const replacementByGroup = new Map(
+        baseline.content.replacementLevels.map((level) => [
+          `${level.role}\u0000${level.era}`,
+          level.replacementContributionPerGame,
+        ])
+      );
       const predictions = transformed.content.observations
         .filter(({ partition }) => partition === 'final_test')
         .map((observation) => {
-          const rate = baseline.content.replacementLevels[0]?.replacementContributionPerGame ?? 0;
+          const rate = replacementByGroup.get(`${observation.role}\u0000${observation.era}`);
+          if (rate === undefined) return null;
           return {
             observationId: observation.observationId,
             partition: 'final_test' as const,
@@ -253,13 +182,14 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
             candidatePredictedContributionAboveReplacement: observation.gamesAvailable * rate,
             gamesOnlyPredictedContributionAboveReplacement: observation.gamesPlayed * rate,
           };
-        });
+        })
+        .filter((prediction): prediction is NonNullable<typeof prediction> => prediction !== null);
       if (predictions.length === 0)
         throw new RangeError('Admitted player evidence has no final-test observations.');
       const predictionSet = createAflTradePlayerPredictionSet({
         schemaVersion: 'afl-trade-player-prediction-set/v1',
         publicIdentityBoundary: 'source_native_no_fantasy_ownership',
-        observationSetId: observationSet.observationSetId,
+        observationSetId: transformed.observationSetId,
         baselineFitId: baseline.baselineFitId,
         valueUnitId: transform.valueUnitId,
         evaluatedPartition: 'final_test',
@@ -279,77 +209,12 @@ export function createAflTradeAdmittedPlayerContributionExecutor(input: {
         incompletePredictionCoverage: 'fail_closed' as const,
         governanceEffect: 'evidence_only_no_gate_or_source_approval' as const,
       };
-      const comparable = transformed.content.observations.filter(
-        ({ partition, gamesPlayed }) => partition === 'final_test' && gamesPlayed > 0
+      const report = evaluateAflTradePlayerPredictions(
+        transformed,
+        baseline,
+        predictionSet,
+        config
       );
-      const errors = comparable.map((observation) => {
-        const prediction = predictions.find(
-          ({ observationId }) => observationId === observation.observationId
-        )!;
-        const actual =
-          observation.contribution.total -
-          (baseline.content.replacementLevels[0]?.replacementContributionPerGame ?? 0) *
-            observation.gamesPlayed;
-        const candidate = prediction.candidatePredictedContributionAboveReplacement - actual;
-        const gamesOnly = prediction.gamesOnlyPredictedContributionAboveReplacement - actual;
-        return { candidate, gamesOnly };
-      });
-      const summary = (values: readonly number[]) => ({
-        meanAbsoluteError: values.reduce((sum, value) => sum + Math.abs(value), 0) / values.length,
-        rootMeanSquaredError: Math.sqrt(
-          values.reduce((sum, value) => sum + value ** 2, 0) / values.length
-        ),
-        meanError: values.reduce((sum, value) => sum + value, 0) / values.length,
-      });
-      const candidateMetrics = summary(errors.map(({ candidate }) => candidate));
-      const gamesOnlyMetrics = summary(errors.map(({ gamesOnly }) => gamesOnly));
-      const mae =
-        gamesOnlyMetrics.meanAbsoluteError === 0
-          ? null
-          : (gamesOnlyMetrics.meanAbsoluteError - candidateMetrics.meanAbsoluteError) /
-            gamesOnlyMetrics.meanAbsoluteError;
-      const rmse =
-        gamesOnlyMetrics.rootMeanSquaredError === 0
-          ? null
-          : (gamesOnlyMetrics.rootMeanSquaredError - candidateMetrics.rootMeanSquaredError) /
-            gamesOnlyMetrics.rootMeanSquaredError;
-      const reportContent = {
-        schemaVersion: 'afl-trade-player-validation-report/v1' as const,
-        publicIdentityBoundary: 'source_native_no_fantasy_ownership' as const,
-        observationSetId: observationSet.observationSetId,
-        baselineFitId: baseline.baselineFitId,
-        predictionSetId: predictionSet.predictionSetId,
-        valueUnitId: transform.valueUnitId,
-        evaluatedPartition: 'final_test' as const,
-        candidateModelId: request.intent.content.modelId,
-        config,
-        comparableObservationIds: comparable.map(({ observationId }) => observationId),
-        excludedObservations: [],
-        metrics: {
-          candidate: candidateMetrics,
-          gamesOnly: gamesOnlyMetrics,
-          candidateMinusGamesOnly: {
-            meanAbsoluteError:
-              candidateMetrics.meanAbsoluteError - gamesOnlyMetrics.meanAbsoluteError,
-            rootMeanSquaredError:
-              candidateMetrics.rootMeanSquaredError - gamesOnlyMetrics.rootMeanSquaredError,
-          },
-          relativeImprovement: { meanAbsoluteError: mae, rootMeanSquaredError: rmse },
-        },
-        acceptanceOutcome:
-          mae !== null &&
-          rmse !== null &&
-          mae >= config.minimumRelativeMaeImprovement &&
-          rmse >= config.minimumRelativeRmseImprovement
-            ? ('meets_declared_predictive_thresholds' as const)
-            : ('does_not_meet_declared_predictive_thresholds' as const),
-        evidenceLimitation:
-          'report_is_reproducible_evidence_not_source_approval_gate_approval_or_production_readiness' as const,
-      };
-      const report = aflTradePlayerValidationReportSchema.parse({
-        validationReportId: createAflTradeContentAddress('player-validation-report', reportContent),
-        content: reportContent,
-      });
       const createdAt = input.now();
       const retained = new Map<string, unknown>();
       const ref = (value: unknown) => {
